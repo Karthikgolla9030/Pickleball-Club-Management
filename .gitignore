@@ -1,0 +1,89 @@
+# ============================================================
+# AUGHT2 PICKLEBALL — .gitignore
+# ============================================================
+
+# ─── SECRETS & ENVIRONMENT ──────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ─── PYTHON ─────────────────────────────────────────────────
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+*.egg-info
+.installed.cfg
+MANIFEST
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+*.pyo
+
+# ─── NODE / NPM ──────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp
+.pnp.js
+
+# ─── EXPO / REACT NATIVE ────────────────────────────────────
+.expo/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+ios/
+android/
+
+# ─── TYPESCRIPT ──────────────────────────────────────────────
+*.tsbuildinfo
+
+# ─── IDEs ────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── LOGS ────────────────────────────────────────────────────
+logs/
+*.log
+pip-log.txt
+
+# ─── ALEMBIC ─────────────────────────────────────────────────
+# Keep migrations committed — do NOT ignore alembic/versions/
+
+# ─── COVERAGE ────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── BUILD ARTIFACTS ─────────────────────────────────────────
+.next/
+out/
+build/

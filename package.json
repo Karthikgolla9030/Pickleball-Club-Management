@@ -1,0 +1,13 @@
+{
+  "name": "aught2-pickleball",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "mobile"
+  ],
+  "scripts": {
+    "mobile": "npm run --workspace=mobile start",
+    "mobile:ios": "npm run --workspace=mobile ios",
+    "mobile:android": "npm run --workspace=mobile android"
+  }
+}
