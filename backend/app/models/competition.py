@@ -322,11 +322,16 @@ class TeamMember(Base):
         index=True,
     )
 
-    player_membership_id: Mapped[uuid.UUID] = mapped_column(
+    player_membership_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("club_player_memberships.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
+    )
+
+    guest_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
@@ -337,7 +342,7 @@ class TeamMember(Base):
 
     # ─── Relationships ────────────────────────────────────────────────────────
     team: Mapped["Team"] = relationship("Team", back_populates="members")
-    player_membership: Mapped["ClubPlayerMembership"] = relationship(  # noqa: F821
+    player_membership: Mapped["ClubPlayerMembership | None"] = relationship(  # noqa: F821
         "ClubPlayerMembership"
     )
 

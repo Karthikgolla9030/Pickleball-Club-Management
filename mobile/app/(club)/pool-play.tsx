@@ -638,6 +638,12 @@ export default function PoolPlayManagementScreen() {
         variant: 'secondary' as const,
       };
     }
+    if (tournament?.status === 'completed') {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     if (matches.length > 0 && !isPoolPlayComplete) {
       return {
         label: 'Enter Scores',

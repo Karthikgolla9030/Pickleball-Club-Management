@@ -17,6 +17,8 @@ import type {
   LeagueTeam,
   LeagueWeek,
   LeagueWeeklyStandingSnapshot,
+  LeagueEligiblePartner,
+  PlayerLeagueRegisterPayload,
 } from '@/types';
 
 const clubLeagueBase = (clubId: string) => `${API_ENDPOINTS.CLUBS}/${clubId}/leagues`;
@@ -222,13 +224,23 @@ export const leagueApi = {
 
   registerPlayerLeague(
     leagueId: string,
-    teamName: string,
-    partnerMembershipId: string
+    payload: PlayerLeagueRegisterPayload | { teamName: string; partnerMembershipId?: string | null; partnerName?: string | null }
   ): Promise<LeagueTeam> {
     return apiClient.post<LeagueTeam>(`${playerLeagueBase()}/${leagueId}/register`, {
-      team_name: teamName,
-      partner_membership_id: partnerMembershipId,
+      team_name: payload.teamName,
+      partner_membership_id: payload.partnerMembershipId || null,
+      partner_name: payload.partnerName || null,
     });
+  },
+
+  getEligiblePartners(
+    leagueId: string,
+    query?: string
+  ): Promise<LeagueEligiblePartner[]> {
+    const qs = query ? `?query=${encodeURIComponent(query)}` : '';
+    return apiClient.get<LeagueEligiblePartner[]>(
+      `${playerLeagueBase()}/${leagueId}/eligible-partners${qs}`
+    );
   },
 
   cancelPlayerRegistration(leagueId: string): Promise<{ message: string }> {

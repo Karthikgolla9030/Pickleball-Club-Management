@@ -348,6 +348,12 @@ export default function ScrambleWorkspaceScreen() {
         variant: 'secondary' as const,
       };
     }
+    if (tournament?.status === 'completed') {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     if (state?.round_status === 'setup' && (state?.available_players_count ?? 0) >= 4) {
       return {
         label: 'Create Round Matchups',

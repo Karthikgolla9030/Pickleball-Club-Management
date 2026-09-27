@@ -94,11 +94,9 @@ export default function PlayerProfileScreen() {
   const [editError, setEditError] = useState<string | null>(null);
 
   // ─── Derived Player Data ───────────────────────────────────────────────────
-  const displayName = profile?.display_name || user?.full_name || 'Player Pete';
-  const email = user?.email || 'player@demo.local';
-  const bio =
-    profile?.bio ||
-    'Recreational 3.5 player looking for weekend tournaments.';
+  const displayName = profile?.display_name || user?.full_name || 'Player';
+  const email = user?.email || '';
+  const bio = profile?.bio || '';
 
   // Player Initials for avatar fallback (e.g. "Player Pete" -> "PP")
   const initials = useMemo(() => {

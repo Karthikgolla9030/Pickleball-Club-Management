@@ -40,6 +40,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    LeagueEligiblePartnerResponse,
     PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
 )
@@ -433,11 +434,14 @@ class LeagueService:
                 disp_name = m.player_membership.user.player_profile.display_name
             elif m.player_membership and m.player_membership.user:
                 disp_name = m.player_membership.user.full_name
+            elif m.guest_name:
+                disp_name = m.guest_name
             members.append(
                 LeagueTeamMemberResponse(
                     id=m.id,
                     player_membership_id=m.player_membership_id,
                     display_name=disp_name,
+                    is_guest=m.player_membership_id is None,
                 )
             )
         return LeagueTeamResponse(
@@ -602,6 +606,28 @@ class LeagueService:
         week_num = m.league_week.week_number if m.league_week else m.round_number
         is_bye = bool(m.status == MatchStatus.COMPLETED and m.score_a is None and m.score_b is None)
 
+        team_a_members: list[str] = []
+        if m.team_a and hasattr(m.team_a, "members") and m.team_a.members:
+            for member in m.team_a.members:
+                name = None
+                if member.player_membership and member.player_membership.user:
+                    name = member.player_membership.user.full_name or member.player_membership.user.email
+                elif member.guest_name:
+                    name = member.guest_name
+                if name:
+                    team_a_members.append(name)
+
+        team_b_members: list[str] = []
+        if m.team_b and hasattr(m.team_b, "members") and m.team_b.members:
+            for member in m.team_b.members:
+                name = None
+                if member.player_membership and member.player_membership.user:
+                    name = member.player_membership.user.full_name or member.player_membership.user.email
+                elif member.guest_name:
+                    name = member.guest_name
+                if name:
+                    team_b_members.append(name)
+
         return LeagueMatchResponse(
             id=m.id,
             league_id=m.league_id,
@@ -616,6 +642,8 @@ class LeagueService:
             team_b_id=m.team_b_id,
             team_a_name=team_a_name,
             team_b_name=team_b_name,
+            team_a_members=team_a_members,
+            team_b_members=team_b_members,
             score_a=m.score_a,
             score_b=m.score_b,
             status=m.status,
@@ -927,6 +955,16 @@ class LeagueService:
 
         # Return live cumulative standings
         teams = await self.league_repo.list_teams_by_league(league.id)
+        team_members_map: dict[uuid.UUID, list[str]] = {}
+        for t in teams:
+            m_names: list[str] = []
+            for m in t.members:
+                if m.player_membership and m.player_membership.user:
+                    m_names.append(m.player_membership.user.full_name or m.player_membership.user.email)
+                elif m.guest_name:
+                    m_names.append(m.guest_name)
+            team_members_map[t.id] = m_names
+
         team_dicts = [{"id": t.id, "name": t.name, "seed": t.seed} for t in teams]
         reg_matches = await self.league_repo.list_league_matches(
             league.id, stage=MatchStage.REGULAR_SEASON
@@ -948,6 +986,7 @@ class LeagueService:
                 team_id=s.team_id,
                 team_name=s.team_name,
                 rank=s.rank,
+                members=team_members_map.get(s.team_id, []),
                 matches_played=s.matches_played,
                 wins=s.wins,
                 losses=s.losses,
@@ -1230,27 +1269,47 @@ class LeagueService:
                 detail=f"You are already registered for this league in team '{caller_existing_team.name}'.",
             )
 
-        # 3. Partner must exist, belong to this club, and be active
-        if payload.partner_membership_id == caller_pm.id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You cannot select yourself as your doubles partner.",
-            )
+        # 3. Validate partner (either member or manual guest name)
+        partner_member_data: dict[str, Any]
+        if payload.partner_membership_id is not None:
+            if payload.partner_membership_id == caller_pm.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You cannot select yourself as your doubles partner.",
+                )
 
-        partner_pm = await self.member_repo.get_by_id(payload.partner_membership_id)
-        if not partner_pm or partner_pm.club_id != league.club_id or partner_pm.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Selected partner is not an active player member of this club.",
-            )
+            partner_pm = await self.member_repo.get_by_id(payload.partner_membership_id)
+            if not partner_pm or partner_pm.club_id != league.club_id or partner_pm.status != PlayerMembershipStatus.ACTIVE:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Selected partner is not an active player member of this club.",
+                )
 
-        partner_existing_team = await self.league_repo.find_player_team_in_league(
-            league_id, partner_pm.id
-        )
-        if partner_existing_team:
+            partner_existing_team = await self.league_repo.find_player_team_in_league(
+                league_id, partner_pm.id
+            )
+            if partner_existing_team:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Selected partner is already registered in team '{partner_existing_team.name}'.",
+                )
+            partner_member_data = {"player_membership_id": partner_pm.id, "guest_name": None}
+        elif payload.partner_name and payload.partner_name.strip():
+            clean_partner_name = payload.partner_name.strip()
+            # Prevent registering player from entering themselves as partner
+            caller_names = [user.full_name.lower().strip() if user.full_name else ""]
+            if hasattr(user, "player_profile") and user.player_profile and user.player_profile.display_name:
+                caller_names.append(user.player_profile.display_name.lower().strip())
+            if clean_partner_name.lower() in [n for n in caller_names if n]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You cannot enter yourself as your doubles partner.",
+                )
+            partner_member_data = {"player_membership_id": None, "guest_name": clean_partner_name}
+        else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Selected partner is already registered in team '{partner_existing_team.name}'.",
+                detail="Please enter a doubles partner name or select an active club member.",
             )
 
         # 4. Check team name uniqueness
@@ -1265,7 +1324,10 @@ class LeagueService:
         team = await self.league_repo.create_team(
             league_id=league_id,
             name=clean_name,
-            member_membership_ids=[caller_pm.id, partner_pm.id],
+            members_data=[
+                {"player_membership_id": caller_pm.id, "guest_name": None},
+                partner_member_data,
+            ],
         )
         await self.db.commit()
         return self._format_team_response(team)
@@ -1316,3 +1378,70 @@ class LeagueService:
             is_registered=True,
             team=self._format_team_response(team),
         )
+
+    async def get_eligible_partners(
+        self,
+        league_id: uuid.UUID,
+        user_id: uuid.UUID,
+        search_query: str | None = None,
+    ) -> list[LeagueEligiblePartnerResponse]:
+        """List active club members eligible to be selected as doubles partner for this league."""
+        league = await self._get_league_or_404(league_id)
+        caller_membership = await self.member_repo.get_by_user_and_club(
+            user_id=user_id, club_id=league.club_id
+        )
+        if not caller_membership or caller_membership.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You must have an active player membership in this club",
+            )
+
+        teams = await self.league_repo.list_teams_by_league(league_id)
+        active_registered_ids = {
+            m.player_membership_id
+            for t in teams
+            for m in t.members
+            if m.player_membership_id is not None
+        }
+
+        members = await self.member_repo.get_club_player_memberships(league.club_id)
+        q = (search_query or "").strip().lower()
+
+        results: list[LeagueEligiblePartnerResponse] = []
+        for m in members:
+            if m.status != PlayerMembershipStatus.ACTIVE:
+                continue
+            if m.user_id == user_id or m.id == caller_membership.id:
+                continue
+            if m.id in active_registered_ids:
+                continue
+
+            user = m.user
+            profile = getattr(user, "player_profile", None) if user else None
+            full_name = (user.full_name if user and user.full_name else (profile.display_name if profile else "Member")).strip()
+            email = (user.email if user else "").strip()
+            mem_num = m.membership_number or ""
+
+            if q:
+                matches_q = (
+                    q in full_name.lower()
+                    or q in email.lower()
+                    or q in mem_num.lower()
+                )
+                if not matches_q:
+                    continue
+
+            results.append(
+                LeagueEligiblePartnerResponse(
+                    membership_id=m.id,
+                    user_id=m.user_id,
+                    full_name=full_name,
+                    email=email,
+                    membership_number=m.membership_number,
+                    gender=getattr(profile, "gender", None),
+                    profile_image_url=getattr(profile, "profile_image_url", None),
+                    skill_rating=getattr(profile, "skill_rating", None),
+                )
+            )
+
+        return results

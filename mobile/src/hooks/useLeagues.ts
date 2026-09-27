@@ -18,6 +18,8 @@ import type {
   LeagueTeam,
   LeagueWeek,
   LeagueWeeklyStandingSnapshot,
+  LeagueEligiblePartner,
+  PlayerLeagueRegisterPayload,
 } from '@/types';
 
 // ─── Club Staff Hooks ────────────────────────────────────────────────────────
@@ -451,23 +453,36 @@ export function usePlayerRegisterLeague(leagueId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({
-      teamName,
-      partnerMembershipId,
-    }: {
+    mutationFn: (payload: PlayerLeagueRegisterPayload | {
       teamName: string;
-      partnerMembershipId: string;
+      partnerMembershipId?: string | null;
+      partnerName?: string | null;
     }) => {
       if (!leagueId) throw new Error('League ID required');
-      return leagueApi.registerPlayerLeague(leagueId, teamName, partnerMembershipId);
+      return leagueApi.registerPlayerLeague(leagueId, payload);
     },
     onSuccess: () => {
       if (leagueId) {
         queryClient.invalidateQueries({ queryKey: ['leagues', leagueId, 'my-registration'] });
+        queryClient.invalidateQueries({ queryKey: ['leagues', leagueId, 'eligible-partners'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUE_DETAIL(leagueId) });
       }
     },
+  });
+}
+
+export function useLeagueEligiblePartners(leagueId: string | null, searchQuery?: string) {
+  return useQuery<LeagueEligiblePartner[], Error>({
+    queryKey: leagueId
+      ? ['leagues', leagueId, 'eligible-partners', searchQuery ?? '']
+      : ['leagues', 'none', 'eligible-partners'],
+    queryFn: () => {
+      if (!leagueId) throw new Error('League ID required');
+      return leagueApi.getEligiblePartners(leagueId, searchQuery);
+    },
+    enabled: Boolean(leagueId),
+    staleTime: 30 * 1000,
   });
 }
 

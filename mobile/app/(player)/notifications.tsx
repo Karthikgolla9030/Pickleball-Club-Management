@@ -166,19 +166,6 @@ export default function PlayerNotificationsScreen() {
       });
     }
 
-    // 4. Fallback welcome & orientation notification if list is short
-    if (list.length === 0) {
-      list.push({
-        id: 'welcome-notice',
-        category: 'general',
-        title: 'Welcome to Aught2 Pickleball!',
-        message: 'Explore courts, upcoming tournaments, weekly leagues, and club events from your dashboard.',
-        timestamp: new Date().toISOString(),
-        read: readIds.has('welcome-notice'),
-        route: '/(player)/',
-      });
-    }
-
     // Sort by timestamp descending
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [backendNotifs, activities, bookingsData, readIds]);

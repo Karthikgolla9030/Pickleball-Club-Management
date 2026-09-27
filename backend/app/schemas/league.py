@@ -65,7 +65,19 @@ class LeagueResponse(BaseModel):
 
 class PlayerLeagueRegisterRequest(BaseModel):
     team_name: str = Field(..., min_length=1, max_length=255, description="Name for the registered team")
-    partner_membership_id: uuid.UUID = Field(..., description="Active club player membership ID of the partner")
+    partner_membership_id: uuid.UUID | None = Field(None, description="Active club player membership ID if selected from club")
+    partner_name: str | None = Field(None, max_length=255, description="Manual doubles partner name if not selecting an existing member")
+
+
+class LeagueEligiblePartnerResponse(BaseModel):
+    membership_id: uuid.UUID
+    user_id: uuid.UUID
+    full_name: str
+    email: str
+    membership_number: str | None = None
+    gender: str | None = None
+    profile_image_url: str | None = None
+    skill_rating: float | None = None
 
 
 class LeagueRegistrationStatusResponse(BaseModel):
@@ -79,8 +91,9 @@ class LeagueTeamMemberResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    player_membership_id: uuid.UUID
+    player_membership_id: uuid.UUID | None = None
     display_name: str | None = None
+    is_guest: bool = False
 
 
 class LeagueTeamResponse(BaseModel):
@@ -132,6 +145,8 @@ class LeagueMatchResponse(BaseModel):
     winner_team_name: str | None = None
     completed_at: datetime | None
     is_bye: bool = False
+    team_a_members: list[str] = []
+    team_b_members: list[str] = []
     court_id: uuid.UUID | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
@@ -154,6 +169,7 @@ class LeagueStandingRowResponse(BaseModel):
     team_id: uuid.UUID
     team_name: str
     rank: int
+    members: list[str] = []
     matches_played: int
     wins: int
     losses: int

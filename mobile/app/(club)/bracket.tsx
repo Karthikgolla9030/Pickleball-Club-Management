@@ -439,6 +439,12 @@ export default function BracketWorkspaceScreen() {
         variant: 'secondary' as const,
       };
     }
+    if (tournament?.status === 'completed') {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     if (canGenerate) {
       return {
         label: 'Generate Bracket',

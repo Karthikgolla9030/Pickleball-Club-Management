@@ -924,6 +924,7 @@ export interface LeagueStandingRow {
   rank: number;
   team_id: string;
   team_name: string;
+  members?: string[];
   matches_played: number;
   wins: number;
   losses: number;
@@ -957,13 +958,32 @@ export interface LeagueWeeklyStandingSnapshot {
 
 export interface LeagueTeamMember {
   id: string;
-  team_id: string;
-  player_membership_id: string;
+  team_id?: string;
+  player_membership_id?: string | null;
+  display_name?: string | null;
+  is_guest?: boolean;
   user?: {
     full_name: string | null;
     display_name: string | null;
     email: string;
   } | null;
+}
+
+export interface LeagueEligiblePartner {
+  membership_id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  membership_number?: string | null;
+  gender?: string | null;
+  profile_image_url?: string | null;
+  skill_rating?: number | null;
+}
+
+export interface PlayerLeagueRegisterPayload {
+  teamName: string;
+  partnerMembershipId?: string | null;
+  partnerName?: string | null;
 }
 
 export interface LeagueTeam {
@@ -987,6 +1007,10 @@ export interface LeagueMatch {
   status: 'pending' | 'in_progress' | 'completed' | 'bye';
   team_a_id: string | null;
   team_b_id: string | null;
+  team_a_name?: string | null;
+  team_b_name?: string | null;
+  team_a_members?: string[];
+  team_b_members?: string[];
   team_a?: { id: string; name: string; seed?: number | null } | null;
   team_b?: { id: string; name: string; seed?: number | null } | null;
   score_a: number | null;

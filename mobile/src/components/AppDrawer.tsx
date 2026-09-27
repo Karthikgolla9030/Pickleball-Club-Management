@@ -126,8 +126,8 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     }
   };
 
-  const displayName = user?.full_name || (user as any)?.display_name || (isPlayer ? 'Demo Player' : 'Staff User');
-  const email = user?.email || (isPlayer ? 'player@demo.local' : 'staff@aught2.com');
+  const displayName = user?.full_name || (user as any)?.display_name || (isPlayer ? 'Player' : 'Staff Member');
+  const email = user?.email || '';
   const initial = displayName.charAt(0).toUpperCase() || (isPlayer ? 'P' : 'S');
 
   // Role Badge configuration

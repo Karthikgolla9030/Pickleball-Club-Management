@@ -417,6 +417,12 @@ export default function RoundRobinWorkspaceScreen() {
         variant: 'secondary' as const,
       };
     }
+    if (tournament?.status === 'completed') {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     const remaining = Math.max(0, progress.totalMatches - progress.completedMatches);
     if (canGenerate) {
       return {

@@ -97,30 +97,35 @@ export default function ClubHomeScreen() {
     setRefreshing(false);
   };
 
-  // Compute counts (fallbacks to reference screenshot numbers: 17, 12, 5, 12)
-  const memberCount = playerMembers && playerMembers.length > 0 ? playerMembers.length : 17;
-  const bookingCount = bookings && bookings.length > 0 ? bookings.length : 12;
-  const eventCount = eventsData && eventsData.length > 0 ? eventsData.length : 5;
-  const tournamentCount = tournaments && tournaments.length > 0 ? tournaments.length : 12;
+  // Compute counts directly from real API queries (no hardcoded fallback values)
+  const memberCount = playerMembers?.length ?? 0;
+  const bookingCount = bookings?.length ?? 0;
+  const eventCount = eventsData?.length ?? 0;
+  const tournamentCount = tournaments?.length ?? 0;
 
-  // Today's schedule item from real data or reference clinic
+  // Today's schedule item from real event data (null if none exist)
   const todayItem = useMemo(() => {
-    if (eventsData && eventsData.length > 0) {
-      const activeEvent = eventsData.find((e) => e.status === 'published') || eventsData[0];
-      return {
-        title: activeEvent.title,
-        status: activeEvent.status === 'published' ? 'Happening Now' : 'Upcoming',
-        time: '10:00 – 11:30',
-        courts: 'Courts 2–3',
-        capacity: `${activeEvent.registered_count || 2} / ${activeEvent.capacity || 8}`,
-      };
+    if (!eventsData || eventsData.length === 0) {
+      return null;
     }
+    const activeEvent = eventsData.find((e) => e.status === 'published') || eventsData[0];
+    let timeStr = 'All Day';
+    try {
+      const s = new Date(activeEvent.start_at);
+      const e = new Date(activeEvent.end_at);
+      timeStr = `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      timeStr = activeEvent.start_at;
+    }
+
     return {
-      title: 'Beginner Pickleball Clinic',
-      status: 'Happening Now',
-      time: '10:00 – 11:30',
-      courts: 'Courts 2–3',
-      capacity: '2 / 8',
+      title: activeEvent.title,
+      status: activeEvent.status_label || (activeEvent.status === 'published' ? 'Happening Now' : 'Upcoming'),
+      time: timeStr,
+      courts: activeEvent.location || 'Club Courts',
+      capacity: activeEvent.capacity
+        ? `${activeEvent.registered_count ?? 0} / ${activeEvent.capacity}`
+        : `${activeEvent.registered_count ?? 0} registered`,
     };
   }, [eventsData]);
 
@@ -388,52 +393,71 @@ export default function ClubHomeScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.scheduleCard}
-          onPress={() => router.push('/(club)/events' as any)}
-          activeOpacity={0.85}
-          accessibilityLabel={`Event: ${todayItem.title}`}
-        >
-          {/* Event thumbnail photo */}
-          <Image
-            source={require('../../assets/events/clinic_thumbnail.jpg')}
-            style={styles.scheduleThumb}
-            resizeMode="cover"
-          />
+        {todayItem ? (
+          <TouchableOpacity
+            style={styles.scheduleCard}
+            onPress={() => router.push('/(club)/events' as any)}
+            activeOpacity={0.85}
+            accessibilityLabel={`Event: ${todayItem.title}`}
+          >
+            {/* Event thumbnail photo */}
+            <Image
+              source={require('../../assets/events/clinic_thumbnail.jpg')}
+              style={styles.scheduleThumb}
+              resizeMode="cover"
+            />
 
-          <View style={styles.scheduleContent}>
-            <AppText style={styles.scheduleTitle} numberOfLines={1}>
-              {todayItem.title}
-            </AppText>
+            <View style={styles.scheduleContent}>
+              <AppText style={styles.scheduleTitle} numberOfLines={1}>
+                {todayItem.title}
+              </AppText>
 
-            {/* Status Pill Badge */}
-            <View style={styles.scheduleBadgePill}>
-              <View style={styles.scheduleBadgeDot} />
-              <AppText style={styles.scheduleBadgeText}>{todayItem.status}</AppText>
+              {/* Status Pill Badge */}
+              <View style={styles.scheduleBadgePill}>
+                <View style={styles.scheduleBadgeDot} />
+                <AppText style={styles.scheduleBadgeText}>{todayItem.status}</AppText>
+              </View>
+
+              {/* Meta Info Row */}
+              <View style={styles.scheduleMetaRow}>
+                <View style={styles.scheduleMetaItem}>
+                  <Clock size={11} color="#667773" />
+                  <AppText style={styles.scheduleMetaText}>{todayItem.time}</AppText>
+                </View>
+
+                <View style={styles.scheduleMetaItem}>
+                  <MapPin size={11} color="#667773" />
+                  <AppText style={styles.scheduleMetaText}>{todayItem.courts}</AppText>
+                </View>
+
+                <View style={styles.scheduleMetaItem}>
+                  <Users size={11} color="#667773" />
+                  <AppText style={styles.scheduleMetaText}>{todayItem.capacity}</AppText>
+                </View>
+              </View>
             </View>
 
-            {/* Meta Info Row */}
-            <View style={styles.scheduleMetaRow}>
-              <View style={styles.scheduleMetaItem}>
-                <Clock size={11} color="#667773" />
-                <AppText style={styles.scheduleMetaText}>{todayItem.time}</AppText>
-              </View>
-
-              <View style={styles.scheduleMetaItem}>
-                <MapPin size={11} color="#667773" />
-                <AppText style={styles.scheduleMetaText}>{todayItem.courts}</AppText>
-              </View>
-
-              <View style={styles.scheduleMetaItem}>
-                <Users size={11} color="#667773" />
-                <AppText style={styles.scheduleMetaText}>{todayItem.capacity}</AppText>
-              </View>
+            {/* Right Chevron */}
+            <ChevronRight size={16} color="#9CAAA5" strokeWidth={2} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.emptyScheduleCard}>
+            <View style={styles.emptyScheduleIconBox}>
+              <Calendar size={18} color="#667773" />
             </View>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.emptyScheduleTitle}>No events scheduled today</AppText>
+              <AppText style={styles.emptyScheduleSubtitle}>Plan a clinic, tournament, or open play</AppText>
+            </View>
+            <TouchableOpacity
+              style={styles.emptyScheduleBtn}
+              onPress={() => router.push('/(club)/events' as any)}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.emptyScheduleBtnText}>Create +</AppText>
+            </TouchableOpacity>
           </View>
-
-          {/* Right Chevron */}
-          <ChevronRight size={16} color="#9CAAA5" strokeWidth={2} />
-        </TouchableOpacity>
+        )}
 
         {/* 6. CLUB OVERVIEW SECTION */}
         <View style={styles.sectionHeaderRow}>
@@ -900,5 +924,44 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#667773',
     textAlign: 'center',
+  },
+  emptyScheduleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E6ECE9',
+    gap: 12,
+  },
+  emptyScheduleIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#F0F5F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyScheduleTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#102F2B',
+  },
+  emptyScheduleSubtitle: {
+    fontSize: 11,
+    color: '#667773',
+    marginTop: 2,
+  },
+  emptyScheduleBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#E8F5EE',
+    borderRadius: 8,
+  },
+  emptyScheduleBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#18794E',
   },
 });

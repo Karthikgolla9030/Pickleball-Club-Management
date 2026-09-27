@@ -873,3 +873,151 @@ class TestLeaguePlayerRegistrationAPI:
         assert r_snap.status_code == 200
         assert r_snap.json()["week_number"] == 1
         assert "created standing snapshot" in r_snap.json()["message"]
+
+    @pytest.mark.asyncio
+    async def test_manual_guest_partner_registration(self, async_client: AsyncClient, league_setup: dict):
+        """Verify doubles registration with a manually entered guest partner name (no account created)."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        player_headers = make_auth_header(data["player_users_a"][2])  # player 3
+
+        # Create league and open registration
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Guest Partner Test League", "number_of_weeks": 3, "playoff_team_count": 2},
+        )
+        lid = r_league.json()["id"]
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration",
+            headers=staff_headers,
+        )
+
+        # 1. Register with manual guest partner name
+        r_reg = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_headers,
+            json={
+                "team_name": "Pickle Guests",
+                "partner_name": "Guest Partner Jordan",
+            },
+        )
+        assert r_reg.status_code == 201
+        body = r_reg.json()
+        assert body["name"] == "Pickle Guests"
+        assert len(body["members"]) == 2
+
+        # Check member 1 is authenticated player, member 2 is guest
+        caller_member = [m for m in body["members"] if not m["is_guest"]][0]
+        guest_member = [m for m in body["members"] if m["is_guest"]][0]
+        assert guest_member["display_name"] == "Guest Partner Jordan"
+        assert guest_member["player_membership_id"] is None
+        assert caller_member["player_membership_id"] is not None
+
+        # 2. Verify status endpoint preserves guest partner display name
+        r_status = await async_client.get(f"/api/v1/leagues/{lid}/registration-status", headers=player_headers)
+        assert r_status.status_code == 200
+        assert r_status.json()["is_registered"] is True
+        members = r_status.json()["team"]["members"]
+        assert any(m["display_name"] == "Guest Partner Jordan" and m["is_guest"] for m in members)
+
+        # 3. Verify club-side team roster view includes guest partner display name
+        r_teams = await async_client.get(f"/api/v1/clubs/{club.id}/leagues/{lid}/teams", headers=staff_headers)
+        assert r_teams.status_code == 200
+        team = [t for t in r_teams.json() if t["name"] == "Pickle Guests"][0]
+        assert any(m["display_name"] == "Guest Partner Jordan" and m["is_guest"] for m in team["members"])
+
+    @pytest.mark.asyncio
+    async def test_manual_partner_name_validations(self, async_client: AsyncClient, league_setup: dict):
+        """Verify validations: empty partner name, self-as-partner, and duplicate registrations."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        player_user = data["player_users_a"][3]
+        player_headers = make_auth_header(player_user)
+
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Validation Test League", "number_of_weeks": 3, "playoff_team_count": 2},
+        )
+        lid = r_league.json()["id"]
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration",
+            headers=staff_headers,
+        )
+
+        # 1. Empty partner name and no member selected
+        r_empty = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_headers,
+            json={"team_name": "Solo Attempt"},
+        )
+        assert r_empty.status_code == 400
+        assert "partner" in r_empty.json()["detail"].lower()
+
+        # 2. Whitespace-only partner name
+        r_white = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_headers,
+            json={"team_name": "Solo Attempt", "partner_name": "   "},
+        )
+        assert r_white.status_code == 400
+
+        # 3. Entering own full name as manual partner
+        r_self_name = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_headers,
+            json={"team_name": "Self Attempt", "partner_name": player_user.full_name},
+        )
+        assert r_self_name.status_code == 400
+        assert "cannot enter yourself" in r_self_name.json()["detail"].lower()
+
+        # 4. Ineligible registering player (user from different club with no membership)
+        outsider_user = data["owner_b"]  # only in club_b
+        outsider_headers = make_auth_header(outsider_user)
+        r_ineligible = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=outsider_headers,
+            json={"team_name": "Outsider Team", "partner_name": "Guest Someone"},
+        )
+        assert r_ineligible.status_code in (400, 403)
+
+    @pytest.mark.asyncio
+    async def test_eligible_partners_endpoint(self, async_client: AsyncClient, league_setup: dict):
+        """Verify GET /api/v1/leagues/{league_id}/eligible-partners returns active members excluding caller."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        caller_user = data["player_users_a"][0]
+        caller_headers = make_auth_header(caller_user)
+
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Eligible Partner League", "number_of_weeks": 3, "playoff_team_count": 2},
+        )
+        lid = r_league.json()["id"]
+
+        r_partners = await async_client.get(
+            f"/api/v1/leagues/{lid}/eligible-partners",
+            headers=caller_headers,
+        )
+        assert r_partners.status_code == 200
+        partners = r_partners.json()
+        assert isinstance(partners, list)
+        assert len(partners) > 0
+
+        # Caller must NOT be in eligible partners
+        assert not any(p["user_id"] == str(caller_user.id) for p in partners)
+
+        # Search filtering
+        target_name = partners[0]["full_name"][:4]
+        r_filtered = await async_client.get(
+            f"/api/v1/leagues/{lid}/eligible-partners?q={target_name}",
+            headers=caller_headers,
+        )
+        assert r_filtered.status_code == 200
+        for p in r_filtered.json():
+            assert target_name.lower() in p["full_name"].lower() or target_name.lower() in p["email"].lower()

@@ -167,7 +167,8 @@ class LeagueRepository:
         self,
         league_id: uuid.UUID,
         name: str,
-        member_membership_ids: list[uuid.UUID],
+        member_membership_ids: list[uuid.UUID] | None = None,
+        members_data: list[dict[str, Any]] | None = None,
         seed: int | None = None,
     ) -> Team:
         team = Team(
@@ -179,10 +180,25 @@ class LeagueRepository:
         self.db.add(team)
         await self.db.flush()
 
-        members = [
-            TeamMember(team_id=team.id, player_membership_id=pm_id)
-            for pm_id in member_membership_ids
-        ]
+        members = []
+        if members_data:
+            for md in members_data:
+                members.append(
+                    TeamMember(
+                        team_id=team.id,
+                        player_membership_id=md.get("player_membership_id"),
+                        guest_name=md.get("guest_name"),
+                    )
+                )
+        elif member_membership_ids:
+            for pm_id in member_membership_ids:
+                members.append(
+                    TeamMember(
+                        team_id=team.id,
+                        player_membership_id=pm_id,
+                        guest_name=None,
+                    )
+                )
         self.db.add_all(members)
         await self.db.flush()
 

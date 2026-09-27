@@ -66,6 +66,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    LeagueEligiblePartnerResponse,
     PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
 )
@@ -649,3 +650,17 @@ async def player_league_registration_status(
     db: AsyncSession = Depends(get_db),
 ) -> LeagueRegistrationStatusResponse:
     return await LeagueService(db).get_player_registration_status(league_id, current_user)
+
+
+@player_league_router.get(
+    "/{league_id}/eligible-partners",
+    response_model=list[LeagueEligiblePartnerResponse],
+    summary="List eligible partners for doubles league registration",
+)
+async def player_league_eligible_partners(
+    league_id: uuid.UUID,
+    query: str | None = Query(None, description="Search term by name, email, or member number"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[LeagueEligiblePartnerResponse]:
+    return await LeagueService(db).get_eligible_partners(league_id, current_user.id, search_query=query)
