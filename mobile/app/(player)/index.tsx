@@ -421,6 +421,15 @@ export default function PlayerHomeScreen() {
                           Confirmed
                         </AppText>
                       </View>
+                      <View style={styles.pricePill}>
+                        <AppText style={styles.pricePillText}>
+                          {nextBooking.total_price != null
+                            ? `₹${Number(nextBooking.total_price).toLocaleString('en-IN')}`
+                            : nextBooking.court?.price_per_hour != null
+                              ? `₹${Number(nextBooking.court.price_per_hour).toLocaleString('en-IN')}`
+                              : 'Free'}
+                        </AppText>
+                      </View>
                     </View>
                   </View>
 
@@ -876,6 +885,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bookingBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 2,
   },
   confirmedPill: {
@@ -889,6 +901,20 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#167B48',
+  },
+  pricePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  pricePillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#15803D',
   },
   chevronSlot: {
     paddingLeft: 4,

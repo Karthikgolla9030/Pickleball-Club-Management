@@ -220,8 +220,19 @@ export default function PlayerBookingsScreen() {
             </AppText>
           </View>
 
-          <View style={styles.confirmedBadge}>
-            <AppText style={styles.confirmedBadgeText}>Confirmed</AppText>
+          <View style={styles.badgeRow}>
+            <View style={styles.confirmedBadge}>
+              <AppText style={styles.confirmedBadgeText}>Confirmed</AppText>
+            </View>
+            <View style={styles.playerPriceBadge}>
+              <AppText style={styles.playerPriceBadgeText}>
+                {booking.total_price != null
+                  ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                  : booking.court?.price_per_hour != null
+                    ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                    : 'Free'}
+              </AppText>
+            </View>
           </View>
         </View>
 
@@ -256,8 +267,19 @@ export default function PlayerBookingsScreen() {
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
             <AppText style={styles.cardTitle}>Court Booking</AppText>
-            <View style={styles.completedBadge}>
-              <AppText style={styles.completedBadgeText}>Completed</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.playerPriceBadge}>
+                <AppText style={styles.playerPriceBadgeText}>
+                  {booking.total_price != null
+                    ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                    : booking.court?.price_per_hour != null
+                      ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                      : 'Free'}
+                </AppText>
+              </View>
+              <View style={styles.completedBadge}>
+                <AppText style={styles.completedBadgeText}>Completed</AppText>
+              </View>
             </View>
           </View>
 
@@ -308,8 +330,19 @@ export default function PlayerBookingsScreen() {
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
             <AppText style={styles.cardTitle}>Court Booking</AppText>
-            <View style={styles.cancelledBadge}>
-              <AppText style={styles.cancelledBadgeText}>Cancelled</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.playerPriceBadge}>
+                <AppText style={styles.playerPriceBadgeText}>
+                  {booking.total_price != null
+                    ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                    : booking.court?.price_per_hour != null
+                      ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                      : 'Free'}
+                </AppText>
+              </View>
+              <View style={styles.cancelledBadge}>
+                <AppText style={styles.cancelledBadgeText}>Cancelled</AppText>
+              </View>
             </View>
           </View>
 
@@ -722,13 +755,31 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     flexShrink: 1,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  playerPriceBadge: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  playerPriceBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
   confirmedBadge: {
     backgroundColor: '#E5F5EC',
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 6,
     alignSelf: 'flex-start',
-    marginTop: 4,
   },
   confirmedBadgeText: {
     fontSize: 11,

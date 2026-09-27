@@ -7,6 +7,7 @@ Prevention (via row-level locks and DB exclusion constraints), and Cancellation 
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 import zoneinfo
 
@@ -127,6 +128,7 @@ class BookingService:
                 display_name=b.court.display_name,
                 surface_type=b.court.surface_type,
                 indoor_outdoor=b.court.indoor_outdoor,
+                price_per_hour=getattr(b.court, "price_per_hour", None),
             )
 
         player_info = None
@@ -162,6 +164,9 @@ class BookingService:
             cancellation_reason=b.cancellation_reason,
             created_at=b.created_at,
             updated_at=b.updated_at,
+            price_per_hour=b.price_per_hour,
+            total_price=b.total_price,
+            currency=getattr(b, "currency", "INR") or "INR",
             court=court_info,
             player=player_info,
             club_name=b.club.name if getattr(b, "club", None) else None,
@@ -365,7 +370,14 @@ class BookingService:
                 detail="Court has a scheduled competition match during this time",
             )
 
-        # 8. Create booking record
+        # 8. Calculate price snapshot from locked_court
+        rate_snapshot = locked_court.price_per_hour
+        total_price_snapshot = None
+        if rate_snapshot is not None:
+            hours = Decimal(duration) / Decimal(60)
+            total_price_snapshot = (hours * rate_snapshot).quantize(Decimal("0.01"))
+
+        # 9. Create booking record
         try:
             booking = await self.booking_repo.create(
                 club_id=club_id,
@@ -377,6 +389,9 @@ class BookingService:
                 end_at=payload.end_at,
                 status=BookingStatus.CONFIRMED,
                 notes=payload.notes,
+                price_per_hour=rate_snapshot,
+                total_price=total_price_snapshot,
+                currency="INR",
             )
         except IntegrityError:
             await self.db.rollback()
@@ -531,6 +546,13 @@ class BookingService:
                 detail="Court has a scheduled competition match during this time",
             )
 
+        # Calculate pricing snapshot from locked_court
+        rate_snapshot = locked_court.price_per_hour
+        total_price_snapshot = None
+        if rate_snapshot is not None:
+            hours = Decimal(duration) / Decimal(60)
+            total_price_snapshot = (hours * rate_snapshot).quantize(Decimal("0.01"))
+
         # Create staff booking
         try:
             booking = await self.booking_repo.create(
@@ -543,6 +565,9 @@ class BookingService:
                 end_at=payload.end_at,
                 status=BookingStatus.CONFIRMED,
                 notes=notes,
+                price_per_hour=rate_snapshot,
+                total_price=total_price_snapshot,
+                currency="INR",
             )
         except IntegrityError:
             await self.db.rollback()
@@ -1031,6 +1056,7 @@ class BookingService:
                     display_name=court.display_name,
                     surface_type=court.surface_type,
                     indoor_outdoor=court.indoor_outdoor,
+                    price_per_hour=court.price_per_hour,
                     slots=slots,
                 )
             )

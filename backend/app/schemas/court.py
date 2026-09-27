@@ -8,6 +8,7 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,6 +37,7 @@ class CourtCreateRequest(BaseModel):
     status: CourtStatus = Field(default=CourtStatus.ACTIVE, description="Active or inactive status")
     is_active: bool = Field(default=True, description="Active flag")
     display_order: int | None = Field(None, ge=0, description="Manual display sort order")
+    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
 
 
 class CourtUpdateRequest(BaseModel):
@@ -48,6 +50,7 @@ class CourtUpdateRequest(BaseModel):
     status: CourtStatus | None = None
     is_active: bool | None = None
     display_order: int | None = Field(None, ge=0)
+    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
 
 
 class CourtReorderRequest(BaseModel):
@@ -72,6 +75,7 @@ class CourtResponse(BaseModel):
     display_order: int
     created_at: datetime
     updated_at: datetime
+    price_per_hour: Decimal | None = None
 
 
 class PlayerCourtResponse(BaseModel):
@@ -87,3 +91,4 @@ class PlayerCourtResponse(BaseModel):
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
     display_order: int
+    price_per_hour: Decimal | None = None

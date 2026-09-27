@@ -220,19 +220,22 @@ export function BookingFlowModal({
           <AppText variant="caption" color="tertiary">No courts available on this date.</AppText>
         ) : (
           <View style={styles.timeGrid}>
-            {availableCourts.map(c => (
-              <Button
-                key={c.court_id}
-                label={c.display_name || c.court_name}
-                variant={courtId === c.court_id ? 'primary' : 'secondary'}
-                size="sm"
-                fullWidth={false}
-                onPress={() => {
-                  setCourtId(c.court_id);
-                  setSlotIso('');
-                }}
-              />
-            ))}
+            {availableCourts.map(c => {
+              const priceTag = c.price_per_hour != null ? ` (₹${Number(c.price_per_hour)}/hr)` : '';
+              return (
+                <Button
+                  key={c.court_id}
+                  label={`${c.display_name || c.court_name}${priceTag}`}
+                  variant={courtId === c.court_id ? 'primary' : 'secondary'}
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => {
+                    setCourtId(c.court_id);
+                    setSlotIso('');
+                  }}
+                />
+              );
+            })}
           </View>
         )}
       </View>
@@ -307,6 +310,9 @@ export function BookingFlowModal({
       ? (playerId ? playerMembers.find(m => m.user_id === playerId)?.user_full_name : customerText.trim())
       : 'You';
 
+    const rateText = court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN')}/hour` : 'Free / Included';
+    const totalText = court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)';
+
     return (
       <View style={styles.formContainer}>
         <Card style={styles.summaryCard}>
@@ -321,10 +327,11 @@ export function BookingFlowModal({
             value={`${new Date(slot?.start_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – ${new Date(slot?.end_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`} 
           />
           <SummaryRow label="Duration" value="1 hour" />
+          <SummaryRow label="Rate" value={rateText} />
           <SummaryRow label="Players" value={playersCount} />
           
           <View style={styles.divider} />
-          <SummaryRow label="Total" value="$0.00 (Included)" isTotal />
+          <SummaryRow label="Total" value={totalText} isTotal />
         </Card>
         
         {formError && (
@@ -336,26 +343,35 @@ export function BookingFlowModal({
     );
   };
 
-  const renderStage3 = () => (
-    <View style={styles.formContainer}>
-      <AppText variant="heading3" style={{ marginBottom: Spacing[2] }}>Payment</AppText>
-      <Card style={styles.summaryCard}>
-        <AppText variant="body" color="secondary" style={{ marginBottom: Spacing[2] }}>
-          Amount Due
-        </AppText>
-        <AppText variant="heading2" style={{ marginBottom: Spacing[4] }}>$0.00</AppText>
-        
-        <AppText variant="caption" color="tertiary">
-          This booking is fully covered by membership or internal staff credit. No external payment required at this time.
-        </AppText>
-      </Card>
-      {formError && (
-        <View style={styles.errorBox}>
-          <AppText variant="caption" color="error">{formError}</AppText>
-        </View>
-      )}
-    </View>
-  );
+  const renderStage3 = () => {
+    const court = availableCourts.find(c => c.court_id === courtId);
+    const totalAmount = court?.price_per_hour != null 
+      ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+      : '₹0.00';
+
+    return (
+      <View style={styles.formContainer}>
+        <AppText variant="heading3" style={{ marginBottom: Spacing[2] }}>Payment</AppText>
+        <Card style={styles.summaryCard}>
+          <AppText variant="body" color="secondary" style={{ marginBottom: Spacing[2] }}>
+            Amount Due
+          </AppText>
+          <AppText variant="heading2" style={{ marginBottom: Spacing[4] }}>{totalAmount}</AppText>
+          
+          <AppText variant="caption" color="tertiary">
+            {court?.price_per_hour != null 
+              ? `Court rate is ₹${Number(court.price_per_hour)}/hour. Price is calculated and confirmed by the server.` 
+              : 'This booking is fully covered by membership or internal staff credit. No external payment required at this time.'}
+          </AppText>
+        </Card>
+        {formError && (
+          <View style={styles.errorBox}>
+            <AppText variant="caption" color="error">{formError}</AppText>
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const renderStage4 = () => {
     const court = availableCourts.find(c => c.court_id === courtId);
@@ -365,6 +381,10 @@ export function BookingFlowModal({
     const pName = mode === 'staff' 
       ? (playerId ? playerMembers.find(m => m.user_id === playerId)?.user_full_name : customerText.trim())
       : 'You';
+
+    const priceText = court?.price_per_hour != null 
+      ? `Total: ₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      : 'Free Booking';
 
     return (
       <View style={styles.successContainer}>
@@ -382,6 +402,9 @@ export function BookingFlowModal({
           </AppText>
           <AppText variant="body" color="secondary">
             {new Date(slot?.start_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – {new Date(slot?.end_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+          </AppText>
+          <AppText variant="body" color="primary" bold style={{ marginTop: Spacing[1] }}>
+            {priceText}
           </AppText>
         </Card>
       </View>
@@ -403,7 +426,7 @@ export function BookingFlowModal({
       case 3:
         return [
           { label: 'Back', variant: 'secondary' as const, onPress: () => setStage(2), disabled: isSubmitting },
-          { label: 'Confirm & Pay', variant: 'primary' as const, onPress: handleCompletePayment, loading: isSubmitting, disabled: isSubmitting }
+          { label: isSubmitting ? 'Booking...' : 'Confirm & Book', variant: 'primary' as const, onPress: handleCompletePayment, loading: isSubmitting, disabled: isSubmitting }
         ];
       case 4:
         return [

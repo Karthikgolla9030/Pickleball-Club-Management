@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -75,6 +76,7 @@ class BookingCourtInfo(BaseModel):
     display_name: str | None = None
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
+    price_per_hour: Decimal | None = None
 
 
 class BookingPlayerInfo(BaseModel):
@@ -108,6 +110,9 @@ class BookingResponse(BaseModel):
     cancellation_reason: str | None = None
     created_at: datetime
     updated_at: datetime
+    price_per_hour: Decimal | None = None
+    total_price: Decimal | None = None
+    currency: str = "INR"
     court: BookingCourtInfo | None = None
     player: BookingPlayerInfo | None = None
     club_name: str | None = None
@@ -129,6 +134,7 @@ class CourtAvailability(BaseModel):
     display_name: str | None = None
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
+    price_per_hour: Decimal | None = None
     slots: list[TimeSlotAvailability]
 
 

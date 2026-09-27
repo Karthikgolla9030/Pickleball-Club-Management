@@ -10,11 +10,14 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Numeric,
+    String,
     Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -155,6 +158,24 @@ class Booking(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+    price_per_hour: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        default=None,
+    )
+
+    total_price: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        default=None,
+    )
+
+    currency: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="INR",
     )
 
     # ─── Relationships ────────────────────────────────────────────────────────

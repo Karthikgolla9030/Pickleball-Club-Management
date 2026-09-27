@@ -5,6 +5,7 @@ Database access layer for Courts. Strictly club-tenant scoped.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -66,6 +67,7 @@ class CourtRepository:
         status: CourtStatus = CourtStatus.ACTIVE,
         is_active: bool = True,
         display_order: int = 0,
+        price_per_hour: Decimal | None = None,
     ) -> Court:
         court = Court(
             club_id=club_id,
@@ -78,6 +80,7 @@ class CourtRepository:
             status=status,
             is_active=is_active,
             display_order=display_order,
+            price_per_hour=price_per_hour,
         )
         self.db.add(court)
         await self.db.flush()

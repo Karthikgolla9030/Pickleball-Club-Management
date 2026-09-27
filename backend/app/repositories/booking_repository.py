@@ -7,6 +7,7 @@ Strictly scoped by club tenant and/or player.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -204,6 +205,9 @@ class BookingRepository:
         end_at: datetime,
         status: BookingStatus = BookingStatus.CONFIRMED,
         notes: str | None = None,
+        price_per_hour: Decimal | None = None,
+        total_price: Decimal | None = None,
+        currency: str = "INR",
     ) -> Booking:
         booking = Booking(
             club_id=club_id,
@@ -215,6 +219,9 @@ class BookingRepository:
             start_at=start_at,
             end_at=end_at,
             notes=notes.strip() if notes else None,
+            price_per_hour=price_per_hour,
+            total_price=total_price,
+            currency=currency,
         )
         self.db.add(booking)
         await self.db.flush()

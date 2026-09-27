@@ -597,11 +597,22 @@ export default function ClubStaffBookingsScreen() {
             </View>
           )}
 
-          {/* Row 2: Compact Player Count on Left | View Details Button on Right */}
+          {/* Row 2: Compact Player Count & Price on Left | View Details Button on Right */}
           <View style={styles.metaRowBottom}>
-            <View style={styles.playersCol}>
-              <Users size={16} color="#667773" strokeWidth={1.8} />
-              <AppText style={styles.playersText}>{playersLabel}</AppText>
+            <View style={styles.bottomLeftGroup}>
+              <View style={styles.playersCol}>
+                <Users size={16} color="#667773" strokeWidth={1.8} />
+                <AppText style={styles.playersText}>{playersLabel}</AppText>
+              </View>
+              <View style={styles.priceBadgeMini}>
+                <AppText style={styles.priceBadgeMiniText}>
+                  {b.total_price != null
+                    ? `₹${Number(b.total_price).toLocaleString('en-IN')}`
+                    : b.court?.price_per_hour != null
+                      ? `₹${Number(b.court.price_per_hour).toLocaleString('en-IN')}`
+                      : 'Free'}
+                </AppText>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -1351,6 +1362,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 2,
+  },
+  bottomLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  priceBadgeMini: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  priceBadgeMiniText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
   },
   courtCol: {
     flexDirection: 'row',

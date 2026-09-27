@@ -217,6 +217,7 @@ export default function ClubCourtsScreen() {
   const [formEnvironment, setFormEnvironment] = useState<CourtEnvironment>('indoor');
   const [formSurface, setFormSurface] = useState('Acrylic');
   const [formDescription, setFormDescription] = useState('');
+  const [formPrice, setFormPrice] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -279,6 +280,7 @@ export default function ClubCourtsScreen() {
     setFormEnvironment('indoor');
     setFormSurface('Acrylic');
     setFormDescription('');
+    setFormPrice('');
     setFormError(null);
     setIsCreateModalOpen(true);
   };
@@ -291,6 +293,7 @@ export default function ClubCourtsScreen() {
     setFormEnvironment(court.indoor_outdoor);
     setFormSurface(court.surface_type || 'Acrylic');
     setFormDescription(court.description || '');
+    setFormPrice(court.price_per_hour !== null && court.price_per_hour !== undefined ? String(court.price_per_hour) : '');
     setFormError(null);
   };
 
@@ -298,6 +301,15 @@ export default function ClubCourtsScreen() {
     if (!formName.trim()) {
       setFormError('Court name is required');
       return;
+    }
+    let parsedPrice: number | null = null;
+    if (formPrice.trim()) {
+      const num = parseFloat(formPrice.trim());
+      if (isNaN(num) || num < 0) {
+        setFormError('Price must be a valid non-negative amount (₹)');
+        return;
+      }
+      parsedPrice = Math.round(num * 100) / 100;
     }
     setFormError(null);
     setIsSubmitting(true);
@@ -309,6 +321,7 @@ export default function ClubCourtsScreen() {
         indoor_outdoor: formEnvironment,
         surface_type: formSurface.trim() || null,
         description: formDescription.trim() || null,
+        price_per_hour: parsedPrice,
       };
       await createCourt(payload);
       setIsCreateModalOpen(false);
@@ -327,6 +340,15 @@ export default function ClubCourtsScreen() {
       setFormError('Court name is required');
       return;
     }
+    let parsedPrice: number | null = null;
+    if (formPrice.trim()) {
+      const num = parseFloat(formPrice.trim());
+      if (isNaN(num) || num < 0) {
+        setFormError('Price must be a valid non-negative amount (₹)');
+        return;
+      }
+      parsedPrice = Math.round(num * 100) / 100;
+    }
     setFormError(null);
     setIsSubmitting(true);
     try {
@@ -337,6 +359,7 @@ export default function ClubCourtsScreen() {
         indoor_outdoor: formEnvironment,
         surface_type: formSurface.trim() || null,
         description: formDescription.trim() || null,
+        price_per_hour: parsedPrice,
       };
       await courtApi.updateCourt(clubId, editingCourt.id, payload);
       setEditingCourt(null);
@@ -730,6 +753,27 @@ export default function ClubCourtsScreen() {
                           </AppText>
                         </View>
 
+                        {/* Metadata Row 3: Price */}
+                        <View style={styles.metadataRowPrice}>
+                          <View
+                            style={[
+                              styles.priceBadge,
+                              item.price_per_hour == null && styles.priceBadgeUnpriced,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.priceBadgeText,
+                                item.price_per_hour == null && styles.priceBadgeTextUnpriced,
+                              ]}
+                            >
+                              {item.price_per_hour != null
+                                ? `₹${Number(item.price_per_hour).toLocaleString('en-IN')}/hr`
+                                : 'Unpriced'}
+                            </AppText>
+                          </View>
+                        </View>
+
                         {/* Bottom Actions Row: Edit + Deactivate / Activate */}
                         {canManageCourts && (
                           <View style={styles.actionsRow}>
@@ -829,6 +873,14 @@ export default function ClubCourtsScreen() {
             onChangeText={setFormCourtNumber}
             keyboardType="numeric"
             placeholder="e.g. 6"
+          />
+
+          <Input
+            label="Court Booking Price (₹ / hour)"
+            value={formPrice}
+            onChangeText={setFormPrice}
+            keyboardType="numeric"
+            placeholder="e.g. 400"
           />
 
           <AppText variant="caption" style={styles.fieldLabel}>
@@ -941,6 +993,14 @@ export default function ClubCourtsScreen() {
             onChangeText={setFormCourtNumber}
             keyboardType="numeric"
             placeholder="e.g. 1"
+          />
+
+          <Input
+            label="Court Booking Price (₹ / hour)"
+            value={formPrice}
+            onChangeText={setFormPrice}
+            keyboardType="numeric"
+            placeholder="e.g. 400"
           />
 
           <AppText variant="caption" style={styles.fieldLabel}>
@@ -1608,6 +1668,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     marginTop: 2,
+  },
+  metadataRowPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  priceBadge: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  priceBadgeUnpriced: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  priceBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  priceBadgeTextUnpriced: {
+    color: '#6B7280',
+    fontWeight: '500',
   },
   metaItem: {
     flexDirection: 'row',

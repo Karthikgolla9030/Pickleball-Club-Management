@@ -86,6 +86,14 @@ export function BookingDetailsModal({
           <DetailRow label="Court" value={booking.court?.display_name || booking.court?.name || 'Court'} />
           <DetailRow label="Date" value={dateStr} />
           <DetailRow label="Time" value={timeStr} />
+          <DetailRow 
+            label="Rate" 
+            value={booking.price_per_hour != null ? `₹${Number(booking.price_per_hour).toLocaleString('en-IN')}/hr` : 'Unpriced / Free'} 
+          />
+          <DetailRow 
+            label="Total Price" 
+            value={booking.total_price != null ? `₹${Number(booking.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)'} 
+          />
           <DetailRow label="Payment" value="Settled" />
         </View>
 

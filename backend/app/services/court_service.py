@@ -6,6 +6,7 @@ uniqueness constraints, deterministic ordering, and lifecycle transitions.
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -43,7 +44,7 @@ class CourtService:
     async def create_court(self, club_id: UUID, payload: CourtCreateRequest) -> Court:
         """
         Create a new court for the specified club.
-        Validates duplicate names and court numbers within the club.
+        Validates duplicate names, court numbers within the club, and price rules.
         """
         await self._require_club(club_id)
 
@@ -63,6 +64,17 @@ class CourtService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"A court named '{payload.name.strip()}' already exists in this club",
             )
+
+        # Validate price_per_hour if provided
+        validated_price = None
+        if payload.price_per_hour is not None:
+            if payload.price_per_hour < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Court price cannot be negative",
+                )
+            # Max 2 decimal places
+            validated_price = Decimal(str(payload.price_per_hour)).quantize(Decimal("0.01"))
 
         # Calculate display_order if not provided
         if payload.display_order is None:
@@ -90,6 +102,7 @@ class CourtService:
             status=final_status,
             is_active=final_is_active,
             display_order=display_order,
+            price_per_hour=validated_price,
         )
 
     async def get_court(self, club_id: UUID, court_id: UUID) -> Court:
@@ -163,6 +176,17 @@ class CourtService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"A court named '{new_name.strip()}' already exists in this club",
                 )
+
+        # Validate price_per_hour if being changed
+        if "price_per_hour" in update_data:
+            val = update_data["price_per_hour"]
+            if val is not None:
+                if val < 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Court price cannot be negative",
+                    )
+                update_data["price_per_hour"] = Decimal(str(val)).quantize(Decimal("0.01"))
 
         # Synchronize status and is_active if either is modified
         if "status" in update_data or "is_active" in update_data:

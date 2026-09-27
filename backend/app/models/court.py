@@ -9,12 +9,14 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
     ForeignKey,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -144,6 +146,12 @@ class Court(Base):
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+
+    price_per_hour: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        default=None,
     )
 
     # ─── Relationships ────────────────────────────────────────────────────────

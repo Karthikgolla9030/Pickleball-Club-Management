@@ -1040,6 +1040,7 @@ export interface Court {
   court_number: number | null;
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
+  price_per_hour?: number | string | null;
   status: CourtStatus;
   is_active: boolean;
   display_order: number;
@@ -1055,6 +1056,7 @@ export interface PlayerCourt {
   court_number: number | null;
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
+  price_per_hour?: number | string | null;
   display_order: number;
   description: string | null;
 }
@@ -1066,6 +1068,7 @@ export interface CourtCreateRequest {
   court_number?: number | null;
   surface_type?: string | null;
   indoor_outdoor?: CourtEnvironment;
+  price_per_hour?: number | string | null;
   is_active?: boolean;
   display_order?: number | null;
 }
@@ -1077,6 +1080,7 @@ export interface CourtUpdateRequest {
   court_number?: number | null;
   surface_type?: string | null;
   indoor_outdoor?: CourtEnvironment;
+  price_per_hour?: number | string | null;
   is_active?: boolean;
   display_order?: number | null;
 }
@@ -1096,6 +1100,7 @@ export interface BookingCourtInfo {
   display_name: string | null;
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
+  price_per_hour?: number | string | null;
 }
 
 export interface BookingPlayerInfo {
@@ -1117,6 +1122,9 @@ export interface Booking {
   start_at: string;
   end_at: string;
   duration_minutes: number;
+  price_per_hour?: number | string | null;
+  total_price?: number | string | null;
+  currency?: string;
   notes: string | null;
   cancelled_at: string | null;
   cancelled_by_user_id: string | null;
@@ -1144,6 +1152,7 @@ export interface CourtAvailability {
   display_name: string | null;
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
+  price_per_hour?: number | string | null;
   slots: TimeSlotAvailability[];
 }
 

@@ -276,7 +276,9 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                       {court.court_name}
                     </AppText>
                     <AppText style={styles.courtSubtitle} numberOfLines={1}>
-                      {`${formatEnv(court.indoor_outdoor)} • ${formatSurface(court.surface_type)}`}
+                      {`${formatEnv(court.indoor_outdoor)} • ${formatSurface(court.surface_type)}${
+                        court.price_per_hour != null ? ` • ₹${Number(court.price_per_hour)}/hr` : ''
+                      }`}
                     </AppText>
                   </View>
                 );

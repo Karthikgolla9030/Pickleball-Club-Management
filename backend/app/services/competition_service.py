@@ -1859,6 +1859,21 @@ class CompetitionService:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_supports_match_scoring(tournament)
 
+        match = await self.competition_repo.get_match(match_id, tournament_id)
+        if not match:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Match not found in this tournament",
+            )
+
+        if match.stage == MatchStage.CHAMPIONSHIP and match.next_match_id:
+            next_m = await self.competition_repo.get_match(match.next_match_id)
+            if next_m and next_m.status == MatchStatus.COMPLETED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot correct match result: subsequent championship match has already been completed.",
+                )
+
         if tournament.status == TournamentStatus.COMPLETED:
             format_cfg = tournament.format_configuration or {}
             match_meta = format_cfg.get("bracket_data", {}).get("matches", {}).get(str(match_id), {})
@@ -1875,13 +1890,6 @@ class CompetitionService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot edit match result: tournament is already completed. Only final match results may be corrected.",
                 )
-
-        match = await self.competition_repo.get_match(match_id, tournament_id)
-        if not match:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Match not found in this tournament",
-            )
 
         if match.status != MatchStatus.COMPLETED:
             raise HTTPException(
