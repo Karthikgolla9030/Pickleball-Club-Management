@@ -42,7 +42,7 @@ export function Screen({
   safeArea = true,
   edges = DEFAULT_EDGES,
   scrollable = false,
-  scrollPaddingBottom = 85,
+  scrollPaddingBottom = 110,
   scrollProps,
   children,
   style,

@@ -57,6 +57,29 @@ async function extractErrorDetail(response: Response): Promise<string> {
   }
 }
 
+function isJwtExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const binaryStr = typeof atob === 'function' ? atob(base64) : '';
+    if (!binaryStr) return false;
+    const jsonPayload = decodeURIComponent(
+      binaryStr
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const parsed = JSON.parse(jsonPayload);
+    if (!parsed.exp) return false;
+    // 30s buffer before expiration
+    return Date.now() >= (parsed.exp * 1000 - 30000);
+  } catch {
+    return false;
+  }
+}
+
 // ─── Token Provider & Refresh Interceptor ─────────────────────────────────────
 // Injected from the auth store — avoids circular imports.
 
@@ -108,10 +131,31 @@ async function request<T>(
       ...(options.headers as Record<string, string>),
     };
 
-    if (requireAuth && _getAccessToken) {
-      const token = await _getAccessToken();
+    if (requireAuth) {
+      let token = _getAccessToken ? await _getAccessToken() : null;
+
+      // Proactive refresh: if token is missing or expired, attempt refresh before sending request
+      if ((!token || isJwtExpired(token)) && _refreshTokenHandler && !isRetry) {
+        try {
+          if (!_refreshPromise) {
+            _refreshPromise = _refreshTokenHandler().finally(() => {
+              _refreshPromise = null;
+            });
+          }
+          const refreshed = await _refreshPromise;
+          if (refreshed) {
+            token = refreshed;
+          }
+        } catch (e) {
+          console.warn('[AUTH] Proactive token refresh failed:', e);
+        }
+      }
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+      } else if (!isRetry) {
+        // If auth is strictly required and no token could be obtained, fail early with clear message
+        throw new ApiClientError('Not authenticated. Please sign in to continue.', 'UNAUTHORIZED', 401);
       }
     }
 
@@ -135,7 +179,14 @@ async function request<T>(
         const newToken = await _refreshPromise;
         if (newToken) {
           console.log(`[AUTH] Token refreshed successfully. Retrying ${url}...`);
-          return await request<T>(url, options, requireAuth, true);
+          const retryOptions: RequestInit = {
+            ...options,
+            headers: {
+              ...(options.headers as Record<string, string>),
+              Authorization: `Bearer ${newToken}`,
+            },
+          };
+          return await request<T>(url, retryOptions, requireAuth, true);
         }
       } catch (refreshErr) {
         console.warn(`[AUTH] Token refresh failed for ${url}:`, refreshErr);

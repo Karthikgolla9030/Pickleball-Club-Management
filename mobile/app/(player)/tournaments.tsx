@@ -1080,7 +1080,7 @@ const styles = StyleSheet.create({
 
   /* ─── List ─── */
   listContent: {
-    paddingBottom: 95,
+    paddingBottom: 110,
   },
 
   /* ─── Modal Sheet ─── */

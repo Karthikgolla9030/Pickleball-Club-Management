@@ -74,9 +74,9 @@ export function setupAlertPolyfill(): void {
     const card = document.createElement('div');
     Object.assign(card.style, {
       backgroundColor: '#FFFFFF',
-      borderRadius: '18px',
+      borderRadius: '20px',
       padding: '24px',
-      maxWidth: '420px',
+      maxWidth: '380px',
       width: '100%',
       maxHeight: '90vh',
       overflowY: 'auto',
@@ -94,12 +94,13 @@ export function setupAlertPolyfill(): void {
     titleEl.id = 'rn-web-alert-title';
     titleEl.innerText = title || '';
     Object.assign(titleEl.style, {
-      margin: '0 0 8px 0',
+      margin: '0 0 10px 0',
       fontSize: '18px',
       fontWeight: '700',
       color: '#0F172A',
       textAlign: 'center',
-      lineHeight: '1.3',
+      lineHeight: '1.35',
+      letterSpacing: '-0.2px',
     });
     card.appendChild(titleEl);
 
@@ -108,17 +109,17 @@ export function setupAlertPolyfill(): void {
       const msgEl = document.createElement('div');
       msgEl.innerText = message;
       Object.assign(msgEl.style, {
-        margin: '0 0 20px 0',
-        fontSize: '14px',
+        margin: '0 0 24px 0',
+        fontSize: '14.5px',
         fontWeight: '400',
         color: '#475569',
         textAlign: 'center',
-        lineHeight: '1.5',
+        lineHeight: '1.55',
         whiteSpace: 'pre-line',
       });
       card.appendChild(msgEl);
     } else {
-      titleEl.style.marginBottom = '20px';
+      titleEl.style.marginBottom = '24px';
     }
 
     const closeOverlay = (callback?: () => void) => {
@@ -165,7 +166,7 @@ export function setupAlertPolyfill(): void {
       Object.assign(btnContainer.style, {
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '10px',
         width: '100%',
       });
     } else {
@@ -195,7 +196,7 @@ export function setupAlertPolyfill(): void {
       const isCancel = btn.style === 'cancel';
       const isDestructive = btn.style === 'destructive';
 
-      let bg = '#087A60'; // Primary brand green
+      let bg = '#087A60'; // Primary brand forest green
       let textCol = '#FFFFFF';
       let border = 'none';
 
@@ -226,25 +227,28 @@ export function setupAlertPolyfill(): void {
 
       Object.assign(b.style, {
         flex: isMultiButton ? 'none' : '1',
-        height: '42px',
-        borderRadius: '10px',
+        minHeight: '48px',
+        height: '48px',
+        borderRadius: '12px',
         backgroundColor: bg,
         color: textCol,
         border: border,
-        fontSize: '14px',
+        fontSize: '15px',
         fontWeight: isCancel ? '600' : '700',
+        letterSpacing: '0.2px',
         cursor: 'pointer',
         outline: 'none',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
+        padding: '0 20px',
         transition: 'background-color 0.1s, opacity 0.1s',
         boxSizing: 'border-box',
-        width: isMultiButton ? '100%' : 'auto',
+        width: '100%',
       });
 
       b.onmouseover = () => {
-        b.style.opacity = '0.85';
+        b.style.opacity = '0.88';
       };
       b.onmouseout = () => {
         b.style.opacity = '1';

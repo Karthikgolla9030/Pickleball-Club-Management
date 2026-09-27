@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 110,
   },
   headerContentContainer: {
     marginBottom: 10,

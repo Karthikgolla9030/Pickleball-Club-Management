@@ -49,15 +49,17 @@ export function BookingFlowModal({
   const [formError, setFormError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  // Queries
-  const { availability, isLoading: isAvailLoading } = useClubCourtAvailability(clubId, dateStr, 60);
+  // Queries & Mutations
+  const {
+    availability,
+    isLoading: isAvailLoading,
+    createBooking,
+    isBooking: isPlayerBooking,
+  } = useClubCourtAvailability(clubId, dateStr, 60);
+
   const staffClubId = mode === 'staff' ? clubId : null;
   const { playerMembers, isLoading: isMembersLoading } = useClubPlayerMembers(staffClubId);
-  
-  // Mutations
   const { createStaffBooking, isCreating: isStaffCreating } = useClubStaffBookings(staffClubId);
-  // We use useClubCourtAvailability's createBooking for player booking
-  const { createBooking, isBooking: isPlayerBooking } = useClubCourtAvailability(clubId, dateStr, 60);
 
   const isSubmitting = isStaffCreating || isPlayerBooking;
 
@@ -143,13 +145,24 @@ export function BookingFlowModal({
     } catch (err: any) {
       const isConflict =
         err?.response?.status === 409 ||
+        err?.status === 409 ||
         err?.message?.toLowerCase().includes('conflict') ||
         err?.message?.toLowerCase().includes('already booked');
+      const isAuth =
+        err?.response?.status === 401 ||
+        err?.status === 401 ||
+        err?.type === 'UNAUTHORIZED' ||
+        err?.message?.toLowerCase().includes('authenticated');
+
       const msg = isConflict
         ? 'This time slot is no longer available. Another player has just booked it. Please choose another slot.'
-        : err?.response?.data?.detail || err?.message || 'Failed to create booking. The slot may no longer be available.';
+        : isAuth
+        ? 'Your session has expired. Please sign in again to complete your booking.'
+        : err?.response?.data?.detail || err?.detail || err?.message || 'Failed to create booking. The slot may no longer be available.';
       setFormError(msg);
-      setStage(1); // Return to stage 1 so player can select another slot
+      if (isConflict) {
+        setStage(1); // Return to stage 1 only on slot conflict so player can select another slot
+      }
     }
   };
 

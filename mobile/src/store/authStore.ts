@@ -36,76 +36,138 @@ interface AuthStoreState extends AuthSession {
 }
 
 // ─── Secure Token Helpers ─────────────────────────────────────────────────────
-// Tokens are stored in SecureStore on native, and localStorage on Web.
+// Tokens are stored in memory for instant synchronous access, and persisted to
+// SecureStore on native or localStorage on Web.
 
+let _memoryAccessToken: string | null = null;
+let _memoryRefreshToken: string | null = null;
 const memoryStorage: Record<string, string> = {};
 
-function getWebStorage() {
-  const g = typeof globalThis !== 'undefined' ? (globalThis as Record<string, unknown>) : {};
-  const win = g.window as { localStorage?: { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void; removeItem: (k: string) => void } } | undefined;
-  if (win && typeof win !== 'undefined' && 'localStorage' in win) {
-    try {
-      return win.localStorage;
-    } catch {
-      return null;
+function getWebStorage(): Storage | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage;
     }
+    if (typeof localStorage !== 'undefined') {
+      return localStorage;
+    }
+  } catch {
+    return null;
   }
   return null;
 }
 
-async function saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+export async function saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+  _memoryAccessToken = accessToken;
+  _memoryRefreshToken = refreshToken;
+  memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] = accessToken;
+  memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] = refreshToken;
+
   if (Platform.OS === 'web') {
     const storage = getWebStorage();
     if (storage) {
-      storage.setItem(SECURE_STORE_KEYS.ACCESS_TOKEN, accessToken);
-      storage.setItem(SECURE_STORE_KEYS.REFRESH_TOKEN, refreshToken);
-    } else {
-      memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] = accessToken;
-      memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] = refreshToken;
+      try {
+        storage.setItem(SECURE_STORE_KEYS.ACCESS_TOKEN, accessToken);
+        storage.setItem(SECURE_STORE_KEYS.REFRESH_TOKEN, refreshToken);
+      } catch (err) {
+        console.warn('[AUTH] Failed to write tokens to localStorage:', err);
+      }
     }
     return;
   }
-  await Promise.all([
-    SecureStore.setItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN, accessToken),
-    SecureStore.setItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN, refreshToken),
-  ]);
+
+  try {
+    await Promise.all([
+      SecureStore.setItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN, accessToken),
+      SecureStore.setItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN, refreshToken),
+    ]);
+  } catch (err) {
+    console.warn('[AUTH] Failed to write tokens to SecureStore:', err);
+  }
 }
 
-async function clearTokens(): Promise<void> {
+export async function clearTokens(): Promise<void> {
+  _memoryAccessToken = null;
+  _memoryRefreshToken = null;
+  delete memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN];
+  delete memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN];
+
   if (Platform.OS === 'web') {
     const storage = getWebStorage();
     if (storage) {
-      storage.removeItem(SECURE_STORE_KEYS.ACCESS_TOKEN);
-      storage.removeItem(SECURE_STORE_KEYS.REFRESH_TOKEN);
-    } else {
-      delete memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN];
-      delete memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN];
+      try {
+        storage.removeItem(SECURE_STORE_KEYS.ACCESS_TOKEN);
+        storage.removeItem(SECURE_STORE_KEYS.REFRESH_TOKEN);
+      } catch {}
     }
     return;
   }
-  await Promise.all([
-    SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN),
-    SecureStore.deleteItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN),
-  ]);
+
+  try {
+    await Promise.all([
+      SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN),
+      SecureStore.deleteItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN),
+    ]);
+  } catch {}
 }
 
-async function getStoredAccessToken(): Promise<string | null> {
+export async function getStoredAccessToken(): Promise<string | null> {
+  if (_memoryAccessToken) return _memoryAccessToken;
+
   if (Platform.OS === 'web') {
     const storage = getWebStorage();
-    return storage ? storage.getItem(SECURE_STORE_KEYS.ACCESS_TOKEN) : (memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] ?? null);
+    if (storage) {
+      try {
+        const val = storage.getItem(SECURE_STORE_KEYS.ACCESS_TOKEN);
+        if (val) {
+          _memoryAccessToken = val;
+          memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] = val;
+          return val;
+        }
+      } catch {}
+    }
+    return memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] ?? null;
   }
-  return SecureStore.getItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN);
+
+  try {
+    const val = await SecureStore.getItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN);
+    if (val) {
+      _memoryAccessToken = val;
+      return val;
+    }
+  } catch {}
+  return memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN] ?? null;
 }
 
-async function getStoredRefreshToken(): Promise<string | null> {
+export async function getStoredRefreshToken(): Promise<string | null> {
+  if (_memoryRefreshToken) return _memoryRefreshToken;
+
   if (Platform.OS === 'web') {
     const storage = getWebStorage();
-    return storage ? storage.getItem(SECURE_STORE_KEYS.REFRESH_TOKEN) : (memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] ?? null);
+    if (storage) {
+      try {
+        const val = storage.getItem(SECURE_STORE_KEYS.REFRESH_TOKEN);
+        if (val) {
+          _memoryRefreshToken = val;
+          memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] = val;
+          return val;
+        }
+      } catch {}
+    }
+    return memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] ?? null;
   }
-  return SecureStore.getItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN);
+
+  try {
+    const val = await SecureStore.getItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN);
+    if (val) {
+      _memoryRefreshToken = val;
+      return val;
+    }
+  } catch {}
+  return memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN] ?? null;
 }
 
-// Register SecureStore as the token provider for the API client
+// Register SecureStore / Memory provider for the API client
 setTokenProvider(getStoredAccessToken);
 
 // Register token refresh interceptor for 401 recovery
@@ -120,7 +182,8 @@ setTokenRefreshHandler(async () => {
     const newRefreshToken = (response as any).refresh_token || refreshToken;
     await saveTokens(response.access_token, newRefreshToken);
     return response.access_token;
-  } catch {
+  } catch (err) {
+    console.warn('[AUTH] Token refresh handler failed:', err);
     await useAuthStore.getState().logout();
     return null;
   }
@@ -149,12 +212,27 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   /**
    * Called once on app launch.
-   * Tries to restore session using stored access token.
+   * Tries to restore session using stored access token or refresh token.
    */
   initialize: async () => {
     set({ isLoading: true, error: null });
     try {
-      const accessToken = await getStoredAccessToken();
+      let accessToken = await getStoredAccessToken();
+      if (!accessToken) {
+        // Attempt refresh if access token is missing but refresh token exists
+        const refreshToken = await getStoredRefreshToken();
+        if (refreshToken) {
+          try {
+            const refreshRes = await authApi.refreshToken(refreshToken);
+            const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
+            await saveTokens(refreshRes.access_token, newRefreshToken);
+            accessToken = refreshRes.access_token;
+          } catch {
+            accessToken = null;
+          }
+        }
+      }
+
       if (!accessToken) {
         set({ isLoading: false, isAuthenticated: false });
         return;
@@ -175,7 +253,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         isLoading: false,
       });
     } catch {
-      // Token invalid or expired — clear and force re-login
+      // Token invalid or expired and refresh failed — clear and force re-login
       await clearTokens();
       set({
         user: null,

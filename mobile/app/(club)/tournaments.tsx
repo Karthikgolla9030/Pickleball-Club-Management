@@ -19,6 +19,7 @@ import {
   FlatList,
   Modal,
   RefreshControl,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TextInput,
@@ -482,13 +483,21 @@ export default function ClubTournamentsScreen() {
   const renderListHeader = () => (
     <>
       {/* 1. TOURNAMENT FILTER TABS */}
-      <View style={styles.statusTabsRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.statusTabsRow}
+        style={styles.statusTabsScrollView}
+      >
         <TouchableOpacity
           style={[styles.statusTab, statusTab === 'all' && styles.statusTabActive]}
           onPress={() => setStatusTab('all')}
           activeOpacity={0.75}
         >
-          <AppText style={[styles.statusTabText, statusTab === 'all' && styles.statusTabTextActive]}>
+          <AppText
+            numberOfLines={1}
+            style={[styles.statusTabText, statusTab === 'all' && styles.statusTabTextActive]}
+          >
             All
           </AppText>
         </TouchableOpacity>
@@ -499,7 +508,10 @@ export default function ClubTournamentsScreen() {
           activeOpacity={0.75}
         >
           <Clock size={14} color={statusTab === 'upcoming' ? '#FFFFFF' : '#3D544F'} />
-          <AppText style={[styles.statusTabText, statusTab === 'upcoming' && styles.statusTabTextActive]}>
+          <AppText
+            numberOfLines={1}
+            style={[styles.statusTabText, statusTab === 'upcoming' && styles.statusTabTextActive]}
+          >
             Upcoming
           </AppText>
         </TouchableOpacity>
@@ -510,7 +522,10 @@ export default function ClubTournamentsScreen() {
           activeOpacity={0.75}
         >
           <Zap size={14} color={statusTab === 'in_progress' ? '#FFFFFF' : '#3D544F'} />
-          <AppText style={[styles.statusTabText, statusTab === 'in_progress' && styles.statusTabTextActive]}>
+          <AppText
+            numberOfLines={1}
+            style={[styles.statusTabText, statusTab === 'in_progress' && styles.statusTabTextActive]}
+          >
             In Progress
           </AppText>
         </TouchableOpacity>
@@ -521,11 +536,14 @@ export default function ClubTournamentsScreen() {
           activeOpacity={0.75}
         >
           <Check size={14} color={statusTab === 'completed' ? '#FFFFFF' : '#3D544F'} />
-          <AppText style={[styles.statusTabText, statusTab === 'completed' && styles.statusTabTextActive]}>
+          <AppText
+            numberOfLines={1}
+            style={[styles.statusTabText, statusTab === 'completed' && styles.statusTabTextActive]}
+          >
             Completed
           </AppText>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       {/* 3. SEARCH + FILTER ROW */}
       <View style={styles.searchFilterRow}>
@@ -904,7 +922,7 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 40,
+    paddingBottom: 110, // Generous padding so last card scrolls cleanly above AppBottomNav
   },
 
   // Top Mobile Header Button
@@ -929,33 +947,38 @@ const styles = StyleSheet.create({
   },
 
   // Status Filter Tabs
+  statusTabsScrollView: {
+    marginBottom: 12,
+  },
   statusTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    paddingRight: 16,
   },
   statusTab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2EAE6',
     borderRadius: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    height: 38,
+    minHeight: 38,
+    paddingHorizontal: 14,
+    flexShrink: 0,
   },
   statusTabActive: {
     backgroundColor: '#176B57',
     borderColor: '#176B57',
   },
   statusTabText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '500',
     color: '#3D544F',
+    letterSpacing: 0.1,
   },
   statusTabTextActive: {
     color: '#FFFFFF',

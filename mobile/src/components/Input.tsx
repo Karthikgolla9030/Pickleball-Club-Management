@@ -10,6 +10,7 @@
 
 import React, { useState } from 'react';
 import {
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -72,15 +73,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.surface.border,      // #E5E7EB
     paddingHorizontal: Spacing[4],           // 16px horizontal
-    paddingVertical: Spacing[3],             // 12px vertical
+    paddingVertical: Platform.OS === 'web' ? 0 : Spacing[2.5],
     fontSize: Typography.size.base,
     color: Colors.text.primary,
-    lineHeight: 22,
+    overflow: 'hidden',
+    ...(Platform.OS === 'web'
+      ? ({ outlineStyle: 'none', boxSizing: 'border-box' } as any)
+      : {}),
   },
   inputMultiline: {
     height: undefined,
     minHeight: Dimensions.inputHeight * 2,
     paddingTop: Spacing[3],
+    paddingVertical: Spacing[3],
   },
   inputFocused: {
     borderColor: Colors.brand.primary,       // #1B6B45 on focus

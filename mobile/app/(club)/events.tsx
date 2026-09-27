@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F8F5',
   },
   listContent: {
-    paddingBottom: 85,
+    paddingBottom: 110,
   },
 
   // Header Button

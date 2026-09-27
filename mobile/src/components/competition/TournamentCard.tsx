@@ -204,7 +204,7 @@ export function TournamentCard({
         {/* Content & Action Row */}
         <View style={styles.heroContentRow}>
           <View style={styles.heroTextContainer}>
-            <AppText style={styles.tournamentTitle} numberOfLines={1}>
+            <AppText style={styles.tournamentTitle} numberOfLines={2}>
               {tournament.name}
             </AppText>
 

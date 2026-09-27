@@ -117,5 +117,5 @@ export const Layout = {
   inputGap: Spacing[3],     // 12px
   buttonGap: 10,            // 10px
   badgeGap: Spacing[1.5],   // 6px
-  bottomScrollPadding: 80,  // 80px to clear bottom overlays & safe area
+  bottomScrollPadding: 110, // 110px to clear fixed AppBottomNav, floating FAB & safe area
 } as const;

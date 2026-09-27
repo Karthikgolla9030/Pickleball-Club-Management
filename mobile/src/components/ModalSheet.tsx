@@ -300,11 +300,13 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
-    height: 46,
+    height: 48,
+    minHeight: 48,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+    paddingHorizontal: Spacing[4],
     ...Shadows.sm,
   },
   footerButtonLabel: {
