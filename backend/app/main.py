@@ -127,7 +127,15 @@ def create_app() -> FastAPI:
             content={"detail": "An internal server error occurred"},
         )
 
-    # ─── Health Check ─────────────────────────────────────────────────────────
+    # ─── Health & Root ────────────────────────────────────────────────────────
+    @app.get("/", tags=["Root"], include_in_schema=False)
+    async def root():
+        return {
+            "name": settings.APP_NAME,
+            "status": "online",
+            "version": settings.APP_VERSION,
+        }
+
     @app.get("/health", tags=["Health"], include_in_schema=False)
     async def health_check():
         return {"status": "ok", "version": settings.APP_VERSION}
