@@ -28,6 +28,7 @@ from app.models.club_membership import ClubMembership, ClubRole
 from app.models.user import User
 from app.permissions import Permission, has_permission
 from app.repositories.club_membership_repository import ClubMembershipRepository
+from app.repositories.club_repository import ClubRepository
 from app.repositories.user_repository import UserRepository
 
 _bearer_scheme = HTTPBearer(auto_error=False)
@@ -85,18 +86,32 @@ async def get_club_membership(
 ) -> ClubMembership:
     """
     Dependency: verify that the current user has an active membership in the given club.
-    Returns the ClubMembership or raises 403.
+    Returns the ClubMembership or raises 404 (club not found) or 403 (forbidden/inactive).
     """
+    club = await ClubRepository(db).get_by_id(club_id)
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Club not found",
+        )
+
     membership = await ClubMembershipRepository(db).get_by_user_and_club(
         user_id=current_user.id,
         club_id=club_id,
+        include_inactive=True,
     )
     if not membership:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You are not a member of this club",
         )
+    if not membership.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your membership in this club is inactive",
+        )
     return membership
+
 
 
 def require_permission(permission: Permission):

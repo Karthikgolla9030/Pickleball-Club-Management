@@ -7,6 +7,8 @@
   ],
   "scripts": {
     "mobile": "npm run --workspace=mobile start",
+    "mobile:tunnel": "npm run --workspace=mobile start:tunnel",
+    "mobile:lan": "npm run --workspace=mobile start:lan",
     "mobile:ios": "npm run --workspace=mobile ios",
     "mobile:android": "npm run --workspace=mobile android"
   }

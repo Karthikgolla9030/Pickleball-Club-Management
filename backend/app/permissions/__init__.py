@@ -40,6 +40,8 @@ class Permission(str, enum.Enum):
     MANAGE_BOOKINGS = "manage_bookings"
     MANAGE_COURTS = "manage_courts"
     MANAGE_REPORTS = "manage_reports"
+    MANAGE_EVENTS = "manage_events"
+    MANAGE_LESSONS = "manage_lessons"
 
     # Tournaments & Leagues
     MANAGE_TOURNAMENTS = "manage_tournaments"
@@ -49,6 +51,7 @@ class Permission(str, enum.Enum):
     MANAGE_SCORES = "manage_scores"
     MANAGE_STANDINGS = "manage_standings"
     MANAGE_RESULTS = "manage_results"
+    MANAGE_SCHEDULES = "manage_schedules"
 
 
 # ─── Role → Permission Mapping ────────────────────────────────────────────────
@@ -62,6 +65,9 @@ _CLUB_MANAGER_PERMISSIONS: FrozenSet[Permission] = frozenset({
     Permission.MANAGE_BOOKINGS,
     Permission.MANAGE_COURTS,
     Permission.MANAGE_MEMBERSHIPS,
+    Permission.MANAGE_PAYMENTS,
+    Permission.MANAGE_EVENTS,
+    Permission.MANAGE_LESSONS,
     Permission.MANAGE_TOURNAMENTS,
     Permission.MANAGE_LEAGUES,
     Permission.MANAGE_TEAMS,
@@ -69,9 +75,9 @@ _CLUB_MANAGER_PERMISSIONS: FrozenSet[Permission] = frozenset({
     Permission.MANAGE_SCORES,
     Permission.MANAGE_STANDINGS,
     Permission.MANAGE_RESULTS,
+    Permission.MANAGE_SCHEDULES,
     Permission.MANAGE_REPORTS,
-    # NOT: MANAGE_ROLES, MANAGE_USERS, MANAGE_PAYMENTS,
-    #      MANAGE_SETTINGS, MANAGE_CLUB
+    # NOT: MANAGE_ROLES, MANAGE_USERS, MANAGE_SETTINGS, MANAGE_CLUB
 })
 
 _TOURNAMENT_DIRECTOR_PERMISSIONS: FrozenSet[Permission] = frozenset({
@@ -82,6 +88,7 @@ _TOURNAMENT_DIRECTOR_PERMISSIONS: FrozenSet[Permission] = frozenset({
     Permission.MANAGE_SCORES,
     Permission.MANAGE_STANDINGS,
     Permission.MANAGE_RESULTS,
+    Permission.MANAGE_SCHEDULES,
     # NOT: MANAGE_USERS, MANAGE_ROLES, MANAGE_PAYMENTS,
     #      MANAGE_SETTINGS, MANAGE_CLUB, MANAGE_MEMBERS,
     #      MANAGE_BOOKINGS, MANAGE_COURTS, MANAGE_MEMBERSHIPS

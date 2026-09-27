@@ -6,15 +6,18 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", str(_BACKEND_DIR / ".env")),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -28,7 +31,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ─── Database ───────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql+psycopg://postgres:password@localhost:5432/aught2_pickleball"
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:9030@localhost:5432/aught2_pickleball"
 
     # ─── JWT / Security ─────────────────────────────────────────
     JWT_SECRET_KEY: str = "CHANGE-THIS-IN-PRODUCTION"

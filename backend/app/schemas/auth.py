@@ -12,10 +12,13 @@ The auth response includes:
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr
+import re
+from pydantic import BaseModel, field_validator
 
 from app.schemas.club_membership import MembershipInfo
 from app.schemas.user import UserResponse
+
+_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class LoginRequest(BaseModel):
@@ -23,8 +26,56 @@ class LoginRequest(BaseModel):
     Login request — email and password only.
     The client NEVER specifies a role. Backend is authoritative.
     """
-    email: EmailStr
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not _EMAIL_REGEX.match(v):
+            raise ValueError("Invalid email address format")
+        return v
+
+
+class ClubLoginRequest(LoginRequest):
+    """Club management login — email and password only."""
+    pass
+
+
+class PlayerLoginRequest(LoginRequest):
+    """Player portal login — email and password only."""
+    pass
+
+
+class PlayerRegisterRequest(BaseModel):
+    """Player self-registration request."""
+    email: str
+    password: str
+    full_name: str
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not _EMAIL_REGEX.match(v):
+            raise ValueError("Invalid email address format")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        if len(v) < 6:
+            raise ValueError("Password must be at least 6 characters")
+        return v
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Full name cannot be empty")
+        return v
 
 
 class TokenRefreshRequest(BaseModel):

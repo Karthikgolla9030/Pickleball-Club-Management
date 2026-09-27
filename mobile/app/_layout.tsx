@@ -14,11 +14,12 @@
  */
 
 import { useEffect } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useAuthStore } from '@/store';
+import { useAuthStore, registerLogoutHandler } from '@/store';
+import { WebSocketProvider } from '@/context/WebSocketContext';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,10 +36,24 @@ const queryClient = new QueryClient({
 
 function RootLayoutContent() {
   const initialize = useAuthStore((s) => s.initialize);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const segments = useSegments();
+  const router = useRouter();
 
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Auth route guard: prevent access to authenticated screens when session is terminated
+  useEffect(() => {
+    if (isLoading) return;
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      router.replace('/(auth)/login');
+    }
+  }, [isLoading, isAuthenticated, segments, router]);
 
   return (
     <>
@@ -54,10 +69,19 @@ function RootLayoutContent() {
 }
 
 export default function RootLayout() {
+  // Register queryClient cache clearing on logout
+  useEffect(() => {
+    return registerLogoutHandler(() => {
+      queryClient.clear();
+    });
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <RootLayoutContent />
+        <WebSocketProvider>
+          <RootLayoutContent />
+        </WebSocketProvider>
       </SafeAreaProvider>
     </QueryClientProvider>
   );

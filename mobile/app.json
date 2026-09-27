@@ -7,35 +7,42 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "scheme": "aught2",
-    "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0A0E1A"
-    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.aught2.pickleball"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#0A0E1A"
       },
       "package": "com.aught2.pickleball"
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/favicon.png"
+      "output": "single",
+      "favicon": "./public/favicon.png",
+      "name": "Aught2 Pickleball",
+      "shortName": "Aught2",
+      "backgroundColor": "#F4F8F5",
+      "themeColor": "#176B57",
+      "display": "standalone",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0A0E1A"
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": false
     }
   }
 }

@@ -56,6 +56,51 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    player_profile: Mapped["PlayerProfile | None"] = relationship(  # noqa: F821
+        "PlayerProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    club_player_memberships: Mapped[list["ClubPlayerMembership"]] = relationship(  # noqa: F821
+        "ClubPlayerMembership",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    payments: Mapped[list["Payment"]] = relationship(  # noqa: F821
+        "Payment",
+        foreign_keys="Payment.player_id",
+        back_populates="player",
+        cascade="all, delete-orphan",
+    )
+    event_registrations: Mapped[list["EventRegistration"]] = relationship(  # noqa: F821
+        "EventRegistration",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    created_events: Mapped[list["Event"]] = relationship(  # noqa: F821
+        "Event",
+        foreign_keys="Event.created_by_user_id",
+        back_populates="created_by",
+        cascade="all, delete-orphan",
+    )
+    coach_profiles: Mapped[list["Coach"]] = relationship(  # noqa: F821
+        "Coach",
+        foreign_keys="Coach.user_id",
+        back_populates="user",
+    )
+    lesson_registrations: Mapped[list["LessonRegistration"]] = relationship(  # noqa: F821
+        "LessonRegistration",
+        foreign_keys="LessonRegistration.user_id",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    created_lessons: Mapped[list["Lesson"]] = relationship(  # noqa: F821
+        "Lesson",
+        foreign_keys="Lesson.created_by_user_id",
+        back_populates="created_by",
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} email={self.email}>"
+

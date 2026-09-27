@@ -1,4 +1,4 @@
 /**
  * Store barrel export
  */
-export { useAuthStore } from './authStore';
+export { useAuthStore, registerLogoutHandler } from './authStore';

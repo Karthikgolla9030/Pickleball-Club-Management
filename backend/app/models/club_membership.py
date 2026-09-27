@@ -19,7 +19,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,9 @@ class ClubRole(str, enum.Enum):
 
 class ClubMembership(Base):
     __tablename__ = "club_memberships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "club_id", name="uq_club_memberships_user_club"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

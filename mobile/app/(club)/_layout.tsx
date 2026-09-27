@@ -1,83 +1,107 @@
 /**
- * Club Group Layout — Phase 1 Foundation
+ * Club Group Layout — Stack + Drawer Navigation
  *
- * Shared club management navigation for all three roles:
- *   - Club Owner
- *   - Club Manager
- *   - Tournament Director
+ * Replaces the overcrowded 14-tab bottom nav with:
+ *   - Stack navigator (no visible headers — screens render AppHeader)
+ *   - Slide-out AppDrawer + DrawerOverlay rendered as siblings
+ *   - Permission-based nav item filtering is handled inside AppDrawer
  *
- * Navigation items are permission-aware — each role sees different items.
- * Tab visibility is controlled by the active membership role (from backend).
+ * IMPORTANT: Tab-level permission gating has moved into
+ * src/navigation/navigationConfig.ts + AppDrawer. The Stack
+ * registers all screens — AppDrawer controls which are visible.
  *
- * IMPORTANT: Navigation hiding is UX only.
- * All API calls enforce permissions server-side.
- *
- * Phase 1: Placeholder tabs with role-aware foundation.
- * Phase 2+: Full permission-aware navigation with actual screens.
+ * Direct URL access to hidden screens is UX only.
+ * Backend always enforces authorization server-side.
  */
 
-import { Tabs } from 'expo-router';
-import { useActiveClub } from '@/hooks';
-import { Colors, Typography } from '@/theme';
+import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Stack, useRouter, usePathname } from 'expo-router';
+
+import { AppDrawer, AppBottomNav, DrawerOverlay } from '@/components';
+import { useAuthStore } from '@/store';
+import { Colors } from '@/theme';
 
 export default function ClubLayout() {
-  const { role } = useActiveClub();
+  const router = useRouter();
+  const pathname = usePathname();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const memberships = useAuthStore((s) => s.memberships);
+  const activeMembership = useAuthStore((s) => s.activeMembership);
 
-  // Permission-aware tab visibility (UX only — backend enforces actual permissions)
-  const canManageTournaments =
-    role === 'club_owner' ||
-    role === 'club_manager' ||
-    role === 'tournament_director';
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+      return;
+    }
+    if (memberships.length === 0 || !activeMembership) {
+      // Unauthorized: player accounts cannot access club management
+      router.replace('/(player)');
+      return;
+    }
 
-  const canManageMembers =
-    role === 'club_owner' || role === 'club_manager';
-
-  const canManageSettings = role === 'club_owner';
+    // Role-specific route enforcement
+    if (activeMembership.role === 'tournament_director') {
+      const tdRestricted = [
+        '/(club)/members',
+        '/(club)/courts',
+        '/(club)/bookings',
+        '/(club)/memberships',
+        '/(club)/payments',
+        '/(club)/lessons',
+      ];
+      if (tdRestricted.some((r) => pathname.startsWith(r))) {
+        router.replace('/(club)/tournaments');
+      }
+    }
+  }, [isAuthenticated, isLoading, memberships, activeMembership, pathname, router]);
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: Colors.background.secondary,
-          borderTopColor: Colors.surface.border,
-          borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
-        },
-        tabBarActiveTintColor: Colors.brand.primary,
-        tabBarInactiveTintColor: Colors.text.tertiary,
-        tabBarLabelStyle: {
-          fontSize: Typography.size.xs,
-          fontWeight: Typography.weight.medium,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Dashboard', tabBarLabel: 'Dashboard' }}
-      />
+    <View style={styles.container}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.background.primary },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="members" />
+        <Stack.Screen name="tournaments" />
+        <Stack.Screen name="tournament-details" />
+        <Stack.Screen name="pool-play" />
+        <Stack.Screen name="round-robin" />
+        <Stack.Screen name="bracket" />
+        <Stack.Screen name="scramble" />
+        <Stack.Screen name="leagues" />
+        <Stack.Screen name="league-details" />
+        <Stack.Screen name="courts" />
+        <Stack.Screen name="bookings" />
+        <Stack.Screen name="memberships" />
+        <Stack.Screen name="payments" />
+        <Stack.Screen name="events" />
+        <Stack.Screen name="lessons" />
+        <Stack.Screen name="competition-schedule" />
+        <Stack.Screen name="notifications" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="profile" />
+      </Stack>
 
-      {canManageTournaments && (
-        <Tabs.Screen
-          name="tournaments"
-          options={{ title: 'Tournaments', tabBarLabel: 'Tournaments' }}
-        />
-      )}
+      {/* Global Fixed Bottom Navigation */}
+      <AppBottomNav mode="club" />
 
-      {canManageMembers && (
-        <Tabs.Screen
-          name="members"
-          options={{ title: 'Members', tabBarLabel: 'Members' }}
-        />
-      )}
-
-      {canManageSettings && (
-        <Tabs.Screen
-          name="settings"
-          options={{ title: 'Settings', tabBarLabel: 'Settings' }}
-        />
-      )}
-    </Tabs>
+      {/* Drawer system — renders above the Stack & Bottom Nav */}
+      <DrawerOverlay />
+      <AppDrawer mode="club" />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background.primary,
+  },
+});

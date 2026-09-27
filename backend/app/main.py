@@ -13,6 +13,19 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
+# On Windows, psycopg async mode requires the Selector event loop policy
+if sys.platform == "win32":
+    import asyncio
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# Allow .local domain for development / demo seed accounts
+try:
+    import email_validator
+    if "local" in email_validator.SPECIAL_USE_DOMAIN_NAMES:
+        email_validator.SPECIAL_USE_DOMAIN_NAMES.remove("local")
+except Exception:
+    pass
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -70,13 +83,31 @@ def create_app() -> FastAPI:
     )
 
     # ─── CORS ─────────────────────────────────────────────────────────────────
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    if settings.is_development:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origin_regex=r"^https?://.*",
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    else:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.CORS_ORIGINS,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+
+    # ─── Static Files for Uploads ─────────────────────────────────────────────
+    import os
+    from fastapi.staticfiles import StaticFiles
+
+    backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    uploads_dir = os.path.join(backend_dir, "uploads")
+    os.makedirs(os.path.join(uploads_dir, "avatars"), exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
     # ─── Routers ──────────────────────────────────────────────────────────────
     app.include_router(api_router)

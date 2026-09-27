@@ -25,14 +25,15 @@ app/
 │   └── reset-password.tsx
 │
 ├── (player)/              # Player experience
-│   ├── index.tsx          # Home
+│   ├── index.tsx          # Player Dashboard
+│   ├── clubs.tsx          # Enrolled clubs list
 │   ├── events.tsx
-│   └── profile.tsx
+│   └── profile.tsx        # View & edit player profile
 │
 └── (club)/                # Club management experience
     ├── index.tsx          # Dashboard
     ├── tournaments.tsx
-    ├── members.tsx
+    ├── members.tsx        # Member administration (Staff Roles & Club Players)
     └── settings.tsx
 ```
 
@@ -73,14 +74,16 @@ app/
 │   ├── database.py        # SQLAlchemy engine + session
 │   └── security.py        # Password hashing + JWT
 ├── api/
-│   ├── deps.py            # FastAPI dependencies (auth, permissions)
+│   ├── deps.py            # FastAPI dependencies (auth, permissions, club context)
 │   └── v1/
-│       └── auth.py        # Auth endpoints
-├── models/                # SQLAlchemy models
-├── schemas/               # Pydantic schemas
+│       ├── auth.py        # Auth endpoints
+│       ├── clubs.py       # Club & membership endpoints (Phases 2 & 3)
+│       └── player.py      # Player identity & player club endpoints (Phase 3)
+├── models/                # SQLAlchemy models (User, Club, ClubMembership, PlayerProfile, ClubPlayerMembership)
+├── schemas/               # Pydantic schemas (auth, club, club_membership, player_profile, club_player_membership)
 ├── permissions/           # Centralized permission registry
 ├── repositories/          # Database query layer
-└── services/              # Business logic layer
+└── services/              # Business logic layer (AuthService, ClubService, PlayerService)
 ```
 
 ### Layered Architecture
@@ -133,6 +136,31 @@ club_memberships
   is_active    BOOLEAN
   created_at   TIMESTAMPTZ
   updated_at   TIMESTAMPTZ
+
+player_profiles
+  id           UUID PK
+  user_id      UUID FK → users.id UNIQUE
+  display_name VARCHAR(100) NOT NULL
+  first_name   VARCHAR(100) NULL
+  last_name    VARCHAR(100) NULL
+  phone        VARCHAR(30) NULL
+  date_of_birth DATE NULL
+  profile_image_url VARCHAR(500) NULL
+  bio          TEXT NULL
+  created_at   TIMESTAMPTZ
+  updated_at   TIMESTAMPTZ
+
+club_player_memberships
+  id           UUID PK
+  user_id      UUID FK → users.id
+  club_id      UUID FK → clubs.id
+  status       ENUM(player_membership_status) ← active | inactive | suspended | expired
+  membership_number VARCHAR(100) NULL
+  joined_at    TIMESTAMPTZ NOT NULL
+  expires_at   TIMESTAMPTZ NULL
+  created_at   TIMESTAMPTZ
+  updated_at   TIMESTAMPTZ
+  CONSTRAINT uq_club_player_memberships_user_club UNIQUE (user_id, club_id)
 ```
 
 ### Migration Strategy
@@ -262,3 +290,84 @@ async def create_tournament(
 ):
     ...
 ```
+
+---
+
+## Phase 4: Tournament Foundation Architecture
+
+See [tournaments.md](./tournaments.md) for full competition specification.
+
+### Data Model Hierarchy
+```
+Club (Tenant Boundary)
+└── Tournament (scoped to club_id)
+    ├── format: round_robin | pool_play | scramble | bracket
+    ├── status: draft | registration_open | registration_closed | in_progress | completed | cancelled
+    ├── visibility: public | private
+    ├── scoring_rules (JSON): single_game, target_score 11, win_by 2
+    ├── tiebreaker_rules (JSON): wins, points_diff, total_points, deterministic
+    └── TournamentRegistration (Unique per tournament_id + player_membership_id)
+        └── ClubPlayerMembership (Active player in this club)
+            └── User
+```
+
+### Key Principles
+1. **Club-Scoped Tenancy**: Every tournament belongs strictly to one club. Cross-club tournament access is blocked at the SQL query level.
+2. **Structural Locking**: Once registration is open or closed, tournament format and player capacity are immutably locked against casual edits.
+3. **Player Eligibility**: Self-registration strictly requires an active `ClubPlayerMembership` in the tournament's club.
+4. **Deterministic Defaults**: Deterministic single-game scoring rules and ordered tiebreaker rules stored directly with the competition record.
+
+---
+
+## Phase 5: Round Robin Competition Engine Architecture
+
+See [round-robin.md](./round-robin.md) for full competition specification.
+
+### Data Model Hierarchy
+```
+Tournament (format: round_robin, status: in_progress)
+├── Team (doubles partner team scoped to tournament_id)
+│   ├── seed: optional integer
+│   └── TeamMember (exactly 2 members per team)
+│       └── ClubPlayerMembership
+└── Match (pairwise fixture)
+    ├── round_number, match_number
+    ├── team_a_id, team_b_id
+    ├── score_a, score_b (validated first to 11, win by 2)
+    ├── winner_team_id (derived server-side)
+    └── status: pending | completed | cancelled
+```
+
+### Key Architectural Principles
+1. **Pure Engine Separation**: Schedule generation and standings calculation logic live in `app/services/competition/round_robin_engine.py` as pure functions with zero DB I/O.
+2. **Server-Derived Outcomes**: Winner is derived by `ScoreValidator` based on pickleball rules (first to 11, win by 2); the client never transmits the winner.
+3. **Immutability Invariants**: Match generation automatically advances the tournament to `in_progress`. Team modifications and schedule regenerations are strictly blocked once any match is completed.
+4. **Dynamic Standings**: Division standings are computed on-the-fly from official match results using the exact tiebreaker hierarchy (Wins → Diff → Points → Lexicographic Name).
+
+---
+
+## Phase 6: Pool Play Competition Engine Architecture
+
+See [pool-play.md](./pool-play.md) for full competition specification.
+
+### Data Model Hierarchy
+```
+Tournament (format: pool_play)
+├── Pool (ordered partitions: "Pool A", "Pool B")
+│   └── PoolTeam (many-to-many team assignment with seed_in_pool)
+│       └── Team (doubles partner team)
+├── Match (stage: pool)
+│   ├── pool_id (foreign key)
+│   └── score_a, score_b, winner_team_id
+└── Match (stage: championship)
+    ├── bracket_round, bracket_position
+    ├── next_match_id, next_match_slot (1 or 2)
+    └── team_a_id, team_b_id (nullable, populated on advancement)
+```
+
+### Key Architectural Principles
+1. **Pure Engine Isolation**: Snake team distribution, pool scheduling, pool standings with qualification badges, and single-elimination bracket generation live in `app/services/competition/pool_play_engine.py` as pure, deterministic algorithms with zero randomness.
+2. **Stage Boundary Enforcement**: Pool matches and Championship matches are isolated via `stage` enum (`pool` vs `championship`). Championship bracket generation is gated until 100% of pool matches are completed.
+3. **Deterministic Seeding & Pairings**: Serpentine snake seeding balances pools. Top qualifiers advance into standard tournament bracket seeds (1v8, 4v5, 2v7, 3v6) with automatic BYE progression.
+4. **Recursive Auto-Advancement**: Scoring a championship match instantly advances the winning team to `next_match_id` at `next_match_slot`. Completing the championship final automatically marks the tournament `completed`.
+

@@ -3,7 +3,7 @@
  */
 
 import React from 'react';
-import { Text as RNText, StyleSheet, TextProps as RNTextProps } from 'react-native';
+import { Text as RNText, TextProps as RNTextProps } from 'react-native';
 import { Colors, Typography } from '@/theme';
 
 type TextVariant =

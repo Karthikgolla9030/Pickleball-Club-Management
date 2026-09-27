@@ -22,6 +22,12 @@ export const Spacing = {
   16: 64,
   20: 80,
   24: 96,
+  // Semantic aliases
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
 } as const;
 
 export const Radius = {
@@ -44,40 +50,40 @@ export const Shadows = {
     elevation: 0,
   },
   sm: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
   },
   md: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
     elevation: 4,
   },
   lg: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
+    shadowOpacity: 0.10,
+    shadowRadius: 20,
     elevation: 8,
   },
   brand: {
-    shadowColor: '#00C896',
+    shadowColor: '#1B6B45',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.20,
     shadowRadius: 12,
-    elevation: 6,
+    elevation: 4,
   },
 } as const;
 
 export const Dimensions = {
   buttonHeight: {
-    sm: 36,
+    sm: 40,
     md: 48,
-    lg: 56,
+    lg: 48,
   },
   inputHeight: 52,
   headerHeight: 56,
@@ -94,4 +100,22 @@ export const Dimensions = {
     lg: 28,
     xl: 36,
   },
+} as const;
+
+export const Layout = {
+  screenHorizontal: 16,     // 16dp
+  sectionSpacing: 20,       // 20dp
+  cardPadding: 20,          // 20px internal card padding (exact)
+  cardGap: 16,              // 16px card-to-card gap
+  cardTitleBadgeGap: 12,    // 12px between title and badges
+  cardBadgeDescGap: 12,     // 12px between badges and description/divider
+  cardDescDividerGap: 12,   // 12px
+  cardDividerMetaGap: 12,   // 12px between divider and meta rows
+  cardMetaRowGap: 12,       // 12px between meta rows
+  headingGap: Spacing[1.5], // 6px
+  labelGap: Spacing[1.5],   // 6px
+  inputGap: Spacing[3],     // 12px
+  buttonGap: 10,            // 10px
+  badgeGap: Spacing[1.5],   // 6px
+  bottomScrollPadding: 80,  // 80px to clear bottom overlays & safe area
 } as const;

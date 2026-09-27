@@ -1,6 +1,14 @@
 /**
  * Button — Premium interactive button using design system tokens.
- * Supports multiple variants, loading states, and disabled states.
+ * Supports multiple variants, loading states, icons, and disabled states.
+ *
+ * Light theme updates:
+ * - 'primary': deep forest green, pill-shaped (full radius)
+ * - 'secondary': white bg, 1px border, dark text
+ * - 'danger': soft red — tinted bg (#FEE2E2) + red text (NOT solid red block)
+ * - 'ghost': transparent + forest green border/text
+ * - 'outline': white bg + border (same as secondary, alias kept for compat)
+ * - Minimum tap height 44pt enforced on md/lg
  */
 
 import React from 'react';
@@ -9,14 +17,17 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextStyle,
+  View,
   ViewStyle,
+  StyleProp,
 } from 'react-native';
 import { Colors, Dimensions, Radius, Shadows, Spacing, Typography } from '@/theme';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+export type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps {
+export interface ButtonProps {
   onPress: () => void;
   label: string;
   variant?: ButtonVariant;
@@ -24,8 +35,15 @@ interface ButtonProps {
   loading?: boolean;
   disabled?: boolean;
   fullWidth?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  labelStyle?: StyleProp<TextStyle>;
   testID?: string;
+  /** Icon element rendered before the label */
+  leftIcon?: React.ReactNode;
+  /** Icon element rendered after the label */
+  rightIcon?: React.ReactNode;
+  /** Optional badge count number rendered after label (e.g. active filter count) */
+  badgeCount?: number;
 }
 
 export function Button({
@@ -35,11 +53,17 @@ export function Button({
   size = 'md',
   loading = false,
   disabled = false,
-  fullWidth = true,
+  fullWidth,
   style,
+  labelStyle,
   testID,
+  leftIcon,
+  rightIcon,
+  badgeCount,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const hasFlex = style && typeof style === 'object' && ('flex' in style || 'flexGrow' in style);
+  const isFullWidth = fullWidth !== undefined ? fullWidth : (!hasFlex && size !== 'sm');
 
   return (
     <Pressable
@@ -50,7 +74,7 @@ export function Button({
         styles.base,
         styles[variant],
         styles[`size_${size}`],
-        fullWidth && styles.fullWidth,
+        isFullWidth && styles.fullWidth,
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
         style,
@@ -61,13 +85,49 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === 'primary' ? Colors.text.inverse : Colors.brand.primary}
+          color={
+            variant === 'primary'
+              ? Colors.text.inverse
+              : variant === 'danger'
+              ? Colors.status.error
+              : Colors.brand.primary
+          }
           size="small"
         />
       ) : (
-        <Text style={[styles.label, styles[`label_${variant}`], styles[`labelSize_${size}`]]}>
-          {label}
-        </Text>
+        <View style={styles.content}>
+          {leftIcon && <View style={styles.iconLeft}>{leftIcon}</View>}
+          <Text
+            style={[
+              styles.label,
+              styles[`label_${variant}`],
+              styles[`labelSize_${size}`],
+              labelStyle,
+            ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit={false}
+          >
+            {label}
+          </Text>
+          {badgeCount !== undefined && badgeCount > 0 && (
+            <View
+              style={[
+                styles.badgePill,
+                variant === 'primary' ? styles.badgePillInverse : styles.badgePillBrand,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.badgePillText,
+                  variant === 'primary' ? styles.badgePillTextInverse : styles.badgePillTextBrand,
+                ]}
+              >
+                {badgeCount}
+              </Text>
+            </View>
+          )}
+          {rightIcon && <View style={styles.iconRight}>{rightIcon}</View>}
+        </View>
       )}
     </Pressable>
   );
@@ -75,46 +135,95 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: Radius.lg,
+    borderRadius: Radius.lg, // 12px rounded rect
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.sm,
+    flexShrink: 1,
   },
   fullWidth: { width: '100%' },
-  pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
+  pressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   disabled: { opacity: 0.4 },
 
-  // Variants
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconLeft: {
+    marginRight: Spacing[1.5],
+  },
+  iconRight: {
+    marginLeft: Spacing[1.5],
+  },
+
+  badgePill: {
+    marginLeft: Spacing[1.5],
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePillBrand: {
+    backgroundColor: Colors.brand.primaryLight,
+    borderWidth: 1,
+    borderColor: Colors.brand.primary,
+  },
+  badgePillInverse: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  badgePillText: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.bold,
+  },
+  badgePillTextBrand: {
+    color: Colors.brand.primary,
+  },
+  badgePillTextInverse: {
+    color: Colors.text.inverse,
+  },
+
+  // ─── Variants ─────────────────────────────────────────────────────────────
   primary: {
     backgroundColor: Colors.brand.primary,
     ...Shadows.brand,
   },
   secondary: {
-    backgroundColor: Colors.surface.elevated,
+    backgroundColor: Colors.surface.default,  // white
     borderWidth: 1,
     borderColor: Colors.surface.border,
+    ...Shadows.sm,
   },
   ghost: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.brand.primary,
   },
+  outline: {
+    backgroundColor: Colors.surface.default,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  // Soft danger: tinted bg + red text (no solid red block)
   danger: {
-    backgroundColor: Colors.status.error,
+    backgroundColor: Colors.status.errorBg,
+    borderWidth: 1,
+    borderColor: Colors.status.error,
   },
 
-  // Sizes
+  // ─── Sizes ────────────────────────────────────────────────────────────────
   size_sm: { height: Dimensions.buttonHeight.sm, paddingHorizontal: Spacing[3] },
-  size_md: { height: Dimensions.buttonHeight.md, paddingHorizontal: Spacing[5] },
-  size_lg: { height: Dimensions.buttonHeight.lg, paddingHorizontal: Spacing[6] },
+  size_md: { height: Dimensions.buttonHeight.md, paddingHorizontal: Spacing[4] },
+  size_lg: { height: Dimensions.buttonHeight.lg, paddingHorizontal: Spacing[5] },
 
-  // Labels
+  // ─── Label Colors ─────────────────────────────────────────────────────────
   label: { fontWeight: Typography.weight.semibold },
   label_primary: { color: Colors.text.inverse },
   label_secondary: { color: Colors.text.primary },
   label_ghost: { color: Colors.brand.primary },
-  label_danger: { color: Colors.white },
+  label_outline: { color: Colors.text.primary },
+  label_danger: { color: Colors.status.error },
   labelSize_sm: { fontSize: Typography.size.sm },
-  labelSize_md: { fontSize: Typography.size.base },
-  labelSize_lg: { fontSize: Typography.size.md },
+  labelSize_md: { fontSize: Typography.size.sm + 1 }, // 14px
+  labelSize_lg: { fontSize: Typography.size.base },
 });

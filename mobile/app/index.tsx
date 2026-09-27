@@ -12,19 +12,21 @@
  */
 
 import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { useAuthStore } from '@/store';
 import { LoadingState } from '@/components';
 import { Screen } from '@/components';
 
 export default function IndexScreen() {
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const memberships = useAuthStore((s) => s.memberships);
 
   useEffect(() => {
     if (isLoading) return;
+    if (!rootNavigationState?.key) return; // Wait for layout to mount
 
     if (!isAuthenticated) {
       router.replace('/(auth)/login');
@@ -37,7 +39,7 @@ export default function IndexScreen() {
     } else {
       router.replace('/(player)');
     }
-  }, [isLoading, isAuthenticated, memberships, router]);
+  }, [isLoading, isAuthenticated, memberships, router, rootNavigationState?.key]);
 
   return (
     <Screen>

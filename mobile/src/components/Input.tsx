@@ -1,5 +1,11 @@
 /**
  * Input — Styled text input following the design system.
+ *
+ * Light theme:
+ * - White background, #E5E7EB border (1px)
+ * - Focus state: forest green border #1B6B45
+ * - 14px padding, 12px radius
+ * - Label in near-black, hint/error in appropriate muted colors
  */
 
 import React, { useState } from 'react';
@@ -19,7 +25,7 @@ interface InputProps extends TextInputProps {
   testID?: string;
 }
 
-export function Input({ label, error, hint, style, testID, ...props }: InputProps) {
+export function Input({ label, error, hint, style, testID, multiline, ...props }: InputProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -29,6 +35,7 @@ export function Input({ label, error, hint, style, testID, ...props }: InputProp
         testID={testID}
         style={[
           styles.input,
+          multiline && styles.inputMultiline,
           focused && styles.inputFocused,
           !!error && styles.inputError,
           style,
@@ -38,6 +45,8 @@ export function Input({ label, error, hint, style, testID, ...props }: InputProp
         onBlur={() => setFocused(false)}
         autoCapitalize="none"
         autoCorrect={false}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
         {...props}
       />
       {error ? (
@@ -50,38 +59,45 @@ export function Input({ label, error, hint, style, testID, ...props }: InputProp
 }
 
 const styles = StyleSheet.create({
-  container: { gap: Spacing[1] },
+  container: { gap: Spacing[1.5] },
   label: {
     fontSize: Typography.size.sm,
     fontWeight: Typography.weight.medium,
-    color: Colors.text.secondary,
-    marginBottom: Spacing[1],
+    color: Colors.text.primary, // near-black label
   },
   input: {
     height: Dimensions.inputHeight,
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.surface.border,
-    paddingHorizontal: Spacing[4],
+    backgroundColor: Colors.surface.default, // white
+    borderRadius: Radius.lg,                 // 12px
+    borderWidth: 1,
+    borderColor: Colors.surface.border,      // #E5E7EB
+    paddingHorizontal: Spacing[4],           // 16px horizontal
+    paddingVertical: Spacing[3],             // 12px vertical
     fontSize: Typography.size.base,
     color: Colors.text.primary,
+    lineHeight: 22,
+  },
+  inputMultiline: {
+    height: undefined,
+    minHeight: Dimensions.inputHeight * 2,
+    paddingTop: Spacing[3],
   },
   inputFocused: {
-    borderColor: Colors.brand.primary,
-    backgroundColor: Colors.surface.elevated,
+    borderColor: Colors.brand.primary,       // #1B6B45 on focus
+    borderWidth: 1.5,
   },
   inputError: {
     borderColor: Colors.status.error,
+    borderWidth: 1.5,
   },
   errorText: {
     fontSize: Typography.size.xs,
     color: Colors.status.error,
-    marginTop: Spacing[0.5],
+    lineHeight: 16,
   },
   hintText: {
     fontSize: Typography.size.xs,
     color: Colors.text.tertiary,
-    marginTop: Spacing[0.5],
+    lineHeight: 16,
   },
 });

@@ -1,46 +1,72 @@
 /**
- * Player Group Layout — Phase 1 Foundation
+ * Player Group Layout — Stack + Drawer Navigation
  *
- * The player experience is separate from club management.
- * A user without club memberships enters here.
- * Phase 1: Placeholder tabs. Phase 2+ adds actual screens.
+ * Replaces the overcrowded 12-tab bottom nav with:
+ *   - Stack navigator (no visible headers — screens render AppHeader)
+ *   - Slide-out AppDrawer + DrawerOverlay rendered as siblings
+ *
+ * All screens still live in the (player)/ directory.
+ * File-based routing is preserved — only the layout wrapper changes.
  */
 
-import { Tabs } from 'expo-router';
-import { Colors, Typography } from '@/theme';
+import React, { useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
+
+import { AppDrawer, AppBottomNav, DrawerOverlay } from '@/components';
+import { useAuthStore } from '@/store';
+import { Colors } from '@/theme';
 
 export default function PlayerLayout() {
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated) {
+      router.replace('/(auth)/login');
+    }
+  }, [isAuthenticated, isLoading, router]);
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: Colors.background.secondary,
-          borderTopColor: Colors.surface.border,
-          borderTopWidth: 1,
-          height: 64,
-          paddingBottom: 8,
-        },
-        tabBarActiveTintColor: Colors.brand.primary,
-        tabBarInactiveTintColor: Colors.text.tertiary,
-        tabBarLabelStyle: {
-          fontSize: Typography.size.xs,
-          fontWeight: Typography.weight.medium,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{ title: 'Home', tabBarLabel: 'Home' }}
-      />
-      <Tabs.Screen
-        name="events"
-        options={{ title: 'Events', tabBarLabel: 'Events' }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{ title: 'Profile', tabBarLabel: 'Profile' }}
-      />
-    </Tabs>
+    <View style={styles.container}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: Colors.background.primary },
+          animation: 'fade',
+        }}
+      >
+        <Stack.Screen name="index" />
+        <Stack.Screen name="profile" />
+        <Stack.Screen name="clubs" />
+        <Stack.Screen name="courts" />
+        <Stack.Screen name="bookings" />
+        <Stack.Screen name="membership" />
+        <Stack.Screen name="payments" />
+        <Stack.Screen name="tournaments" />
+        <Stack.Screen name="tournament-details" />
+        <Stack.Screen name="leagues" />
+        <Stack.Screen name="competition-schedule" />
+        <Stack.Screen name="events" />
+        <Stack.Screen name="lessons" />
+        <Stack.Screen name="notifications" />
+      </Stack>
+
+      {/* Global Fixed Bottom Navigation for Player */}
+      <AppBottomNav mode="player" />
+
+      {/* Drawer system — renders above the Stack & Bottom Nav */}
+      <DrawerOverlay />
+      <AppDrawer mode="player" />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background.primary,
+  },
+});

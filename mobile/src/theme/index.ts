@@ -4,5 +4,5 @@
 
 export { Colors } from './colors';
 export type { ColorKey } from './colors';
-export { Dimensions, Radius, Shadows, Spacing } from './spacing';
+export { Dimensions, Layout, Radius, Shadows, Spacing } from './spacing';
 export { Typography } from './typography';

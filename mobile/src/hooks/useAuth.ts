@@ -13,6 +13,9 @@ export function useAuth() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
   const login = useAuthStore((s) => s.login);
+  const loginClub = useAuthStore((s) => s.loginClub);
+  const loginPlayer = useAuthStore((s) => s.loginPlayer);
+  const registerPlayer = useAuthStore((s) => s.registerPlayer);
   const logout = useAuthStore((s) => s.logout);
   const setActiveMembership = useAuthStore((s) => s.setActiveMembership);
   const clearError = useAuthStore((s) => s.clearError);
@@ -25,6 +28,9 @@ export function useAuth() {
     isLoading,
     error,
     login,
+    loginClub,
+    loginPlayer,
+    registerPlayer,
     logout,
     setActiveMembership,
     clearError,

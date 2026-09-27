@@ -87,3 +87,11 @@ coverage/
 .next/
 out/
 build/
+
+# ─── LOCAL DATABASES & UPLOADS ──────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+backend/uploads/
+

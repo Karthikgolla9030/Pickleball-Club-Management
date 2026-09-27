@@ -1,15 +1,26 @@
 """User schemas — request and response models."""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, field_validator
+
+_EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class UserBase(BaseModel):
-    email: EmailStr
+    email: str
     full_name: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not _EMAIL_REGEX.match(v):
+            raise ValueError("Invalid email address format")
+        return v
 
 
 class UserResponse(UserBase):

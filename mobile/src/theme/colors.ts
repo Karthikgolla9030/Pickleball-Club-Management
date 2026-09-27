@@ -1,63 +1,92 @@
 /**
  * Aught2 Pickleball — Color Design System
  *
- * Pickleball-inspired palette: court green accents, dark professional base.
+ * Premium light-theme palette: soft off-white backgrounds, deep forest green
+ * brand accents, muted status colors with tinted backgrounds.
  * All colors are defined as constants — never use raw hex values in components.
  */
 
 export const Colors = {
   // ─── Brand ─────────────────────────────────────────────────────────────────
   brand: {
-    primary: '#00C896',      // Pickleball court green — main CTA
-    primaryDark: '#00A87C',  // Pressed / hover state
-    primaryLight: '#33D4A9', // Light variant
-    accent: '#F5A623',       // Warm amber — highlights, badges
-    accentDark: '#D4891A',
+    primary: '#176B57',      // Dark forest green
+    primaryDark: '#104A3C',  // Hover / pressed state
+    primaryLight: '#E5F6EC', // Soft pale green tint
+    accent: '#2E8069',       // Secondary green
+    accentDark: '#176B57',
   },
 
   // ─── Backgrounds ────────────────────────────────────────────────────────────
   background: {
-    primary: '#0A0E1A',    // Deep navy — main app background
-    secondary: '#111827',  // Slightly lighter — cards, panels
-    tertiary: '#1A2235',   // Surface elevation
-    overlay: 'rgba(10, 14, 26, 0.85)',
+    primary: '#F4F8F5',    // Page background (soft light green-gray)
+    secondary: '#FFFFFF',  // Card background
+    tertiary: '#EDF2F7',
+    overlay: 'rgba(0, 0, 0, 0.4)',
   },
 
   // ─── Surface / Cards ─────────────────────────────────────────────────────────
   surface: {
-    default: '#141C2E',
-    elevated: '#1E2A40',
-    border: '#2A3650',
-    borderLight: '#354060',
+    default: '#FFFFFF',
+    elevated: '#F4F8F5',
+    border: '#E2EAE6',
+    borderLight: '#EDF2F7',
   },
 
   // ─── Text ──────────────────────────────────────────────────────────────────
   text: {
-    primary: '#F0F4FF',    // Near-white, slight blue tint
-    secondary: '#9BA8C0',  // Muted text
-    tertiary: '#6B7A99',   // Placeholder, disabled
-    inverse: '#0A0E1A',    // Text on light/brand backgrounds
-    link: '#00C896',
+    primary: '#102B2A',    // Dark navy/forest green
+    secondary: '#667776',  // Muted gray-green
+    tertiary: '#9CA3AF',
+    inverse: '#FFFFFF',
+    link: '#176B57',
   },
 
-  // ─── Status ────────────────────────────────────────────────────────────────
+  // ─── Status (tinted bg + solid text — never solid fill blocks) ─────────────
   status: {
-    success: '#22C55E',
-    successBg: 'rgba(34, 197, 94, 0.12)',
-    warning: '#F59E0B',
-    warningBg: 'rgba(245, 158, 11, 0.12)',
-    error: '#EF4444',
-    errorBg: 'rgba(239, 68, 68, 0.12)',
-    info: '#3B82F6',
-    infoBg: 'rgba(59, 130, 246, 0.12)',
+    // In Progress / Bracket / Pool Play
+    inProgressBg: '#E7F0FB',
+    inProgress: '#2563A8',
+    // Completed
+    completedBg: '#E7F0FB',
+    completed: '#2563A8',
+    // Cancelled
+    cancelledBg: '#FDE8E8',
+    cancelled: '#B42318',
+    // Draft
+    draftBg: '#FFF5D8',
+    draft: '#9A6B00',
+    // Active / Registration Open
+    registrationOpenBg: '#E5F6EC',
+    registrationOpen: '#18794E',
+    // Playoffs
+    playoffsBg: '#E9D7FE',
+    playoffs: '#6941C6',
+    // Generic success / warning / error / info
+    success: '#18794E',
+    successBg: '#E5F6EC',
+    warning: '#9A6B00',
+    warningBg: '#FFF5D8',
+    error: '#B42318',
+    errorBg: '#FDE8E8',
+    info: '#2563A8',
+    infoBg: '#E7F0FB',
   },
 
   // ─── Role Colors ───────────────────────────────────────────────────────────
   roles: {
-    clubOwner: '#F5A623',          // Amber — ownership
-    clubManager: '#3B82F6',        // Blue — operations
-    tournamentDirector: '#8B5CF6', // Purple — competition
-    player: '#00C896',             // Green — player
+    clubOwner: '#B45309',          // Amber — ownership (dark enough for light bg)
+    clubManager: '#1D4ED8',        // Blue — operations
+    tournamentDirector: '#7C3AED', // Purple — competition
+    player: '#1B6B45',             // Green — player
+  },
+
+  // ─── Drawer Navigation ─────────────────────────────────────────────────────
+  drawer: {
+    background: '#FFFFFF',
+    itemHover: '#F7F8FA',
+    itemActive: '#E7F5EC',
+    sectionLabel: '#9CA3AF',
+    separator: '#E5E7EB',
   },
 
   // ─── Transparent ───────────────────────────────────────────────────────────

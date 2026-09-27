@@ -1,16 +1,6 @@
 /**
- * Club Settings — Phase 1 Placeholder (Club Owner only)
+ * Club Settings Screen — Maps to Profile Screen
  */
+import ClubProfileScreen from './profile';
 
-import { Screen, EmptyState } from '@/components';
-
-export default function ClubSettingsScreen() {
-  return (
-    <Screen>
-      <EmptyState
-        title="Settings"
-        description="Club settings, billing, and user management coming in Phase 2."
-      />
-    </Screen>
-  );
-}
+export default ClubProfileScreen;

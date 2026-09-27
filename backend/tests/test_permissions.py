@@ -77,9 +77,9 @@ def test_club_manager_cannot_manage_users():
     assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_USERS) is False
 
 
-def test_club_manager_cannot_manage_payments():
-    """Test 12c: Club Manager does NOT have MANAGE_PAYMENTS permission."""
-    assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_PAYMENTS) is False
+def test_club_manager_can_manage_payments():
+    """Test 12c: Club Manager CAN manage payments (Phase 13 requirement)."""
+    assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_PAYMENTS) is True
 
 
 def test_club_manager_cannot_manage_club():
@@ -154,3 +154,35 @@ def test_tournament_director_cannot_manage_payments():
 def test_tournament_director_cannot_manage_roles():
     """Test 15f: Tournament Director does NOT have MANAGE_ROLES permission."""
     assert has_permission(ClubRole.TOURNAMENT_DIRECTOR, Permission.MANAGE_ROLES) is False
+
+
+def test_club_manager_can_manage_events():
+    """Test 16a: Club Manager has MANAGE_EVENTS permission."""
+    assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_EVENTS) is True
+
+
+def test_tournament_director_cannot_manage_events():
+    """Test 16b: Tournament Director does NOT have MANAGE_EVENTS permission."""
+    assert has_permission(ClubRole.TOURNAMENT_DIRECTOR, Permission.MANAGE_EVENTS) is False
+
+
+def test_club_manager_can_manage_lessons():
+    """Test 17a: Club Manager has MANAGE_LESSONS permission."""
+    assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_LESSONS) is True
+
+
+def test_tournament_director_cannot_manage_lessons():
+    """Test 17b: Tournament Director does NOT have MANAGE_LESSONS permission."""
+    assert has_permission(ClubRole.TOURNAMENT_DIRECTOR, Permission.MANAGE_LESSONS) is False
+
+
+def test_club_manager_can_manage_schedules():
+    """Test 18a: Club Manager has MANAGE_SCHEDULES permission."""
+    assert has_permission(ClubRole.CLUB_MANAGER, Permission.MANAGE_SCHEDULES) is True
+
+
+def test_tournament_director_can_manage_schedules():
+    """Test 18b: Tournament Director has MANAGE_SCHEDULES permission."""
+    assert has_permission(ClubRole.TOURNAMENT_DIRECTOR, Permission.MANAGE_SCHEDULES) is True
+
+
