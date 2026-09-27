@@ -377,7 +377,11 @@ export function BracketViewTab({
         {isWaiting && !isCancelled && !isBye && (
           <View style={styles.waitingBanner}>
             <AppText variant="caption" style={styles.waitingBannerText}>
-              ⏳ Waiting: {placeholderA} vs {placeholderB}
+              {match.team_a_id && !match.team_b_id
+                ? `⏳ Awaiting Opponent: ${placeholderB}`
+                : !match.team_a_id && match.team_b_id
+                ? `⏳ Awaiting Opponent: ${placeholderA}`
+                : `⏳ Waiting: ${placeholderA} vs ${placeholderB}`}
             </AppText>
           </View>
         )}

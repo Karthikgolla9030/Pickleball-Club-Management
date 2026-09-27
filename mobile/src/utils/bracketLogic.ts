@@ -172,11 +172,16 @@ export function getFeederPlaceholder(match: Match, slot: 'team_a' | 'team_b', al
   if (slot === 'team_a') {
     if (match.feeder_a_label) return match.feeder_a_label;
     if (allMatches && allMatches.length > 0) {
-      const up = allMatches.find(
+      let up = allMatches.find(
         (m) =>
-          (m.next_match_id === match.id && m.next_match_slot === 'team_a') ||
+          (m.next_match_id === match.id && (m.next_match_slot === 'team_a' || (!m.next_match_slot && (m.bracket_position ?? 1) % 2 === 1))) ||
           (m.loser_next_match_id === match.id && m.loser_next_match_slot === 'team_a')
       );
+      if (!up && match.bracket_round && match.bracket_round > 1) {
+        const prevRound = match.bracket_round - 1;
+        const targetPos = (match.bracket_position ?? 1) * 2 - 1;
+        up = allMatches.find((m) => m.bracket_round === prevRound && m.bracket_position === targetPos);
+      }
       if (up) {
         const isLoser = up.loser_next_match_id === match.id && up.loser_next_match_slot === 'team_a';
         const num = up.match_number ?? up.bracket_position ?? '?';
@@ -189,11 +194,16 @@ export function getFeederPlaceholder(match: Match, slot: 'team_a' | 'team_b', al
   } else {
     if (match.feeder_b_label) return match.feeder_b_label;
     if (allMatches && allMatches.length > 0) {
-      const up = allMatches.find(
+      let up = allMatches.find(
         (m) =>
-          (m.next_match_id === match.id && m.next_match_slot === 'team_b') ||
+          (m.next_match_id === match.id && (m.next_match_slot === 'team_b' || (!m.next_match_slot && (m.bracket_position ?? 1) % 2 === 0))) ||
           (m.loser_next_match_id === match.id && m.loser_next_match_slot === 'team_b')
       );
+      if (!up && match.bracket_round && match.bracket_round > 1) {
+        const prevRound = match.bracket_round - 1;
+        const targetPos = (match.bracket_position ?? 1) * 2;
+        up = allMatches.find((m) => m.bracket_round === prevRound && m.bracket_position === targetPos);
+      }
       if (up) {
         const isLoser = up.loser_next_match_id === match.id && up.loser_next_match_slot === 'team_b';
         const num = up.match_number ?? up.bracket_position ?? '?';

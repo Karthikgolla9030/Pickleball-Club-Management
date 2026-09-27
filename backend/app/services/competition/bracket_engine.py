@@ -1053,9 +1053,22 @@ class BracketEngine:
             None,
         )
         main_final = next(
-            (m for m in matches if m.get("label") == "Final" and m.get("status") == "completed"),
+            (m for m in matches if str(m.get("label", "")).lower() in ("final", "finals", "championship") and m.get("status") == "completed"),
             None,
         )
+        if not main_final:
+            completed_finals = [
+                m for m in matches
+                if m.get("status") == "completed"
+                and m.get("winner_team_id")
+                and (
+                    not m.get("next_match_id")
+                    and m.get("bracket_section") in (None, "main", "")
+                )
+            ]
+            if completed_finals:
+                main_final = max(completed_finals, key=lambda x: x.get("bracket_round") or 1)
+
         cons_match = next(
             (m for m in matches if ("consolation" in str(m.get("bracket_section", "")).lower() or "3rd place" in str(m.get("label", "")).lower()) and m.get("status") == "completed"),
             None,

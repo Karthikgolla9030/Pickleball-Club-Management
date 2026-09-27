@@ -1646,14 +1646,17 @@ class CompetitionService:
             )
             meta["is_bye"] = True
 
-            if target_match.next_match_id and target_match.next_match_slot:
+            bye_slot = target_match.next_match_slot or (
+                "team_a" if target_match.bracket_position and target_match.bracket_position % 2 == 1 else "team_b"
+            )
+            if target_match.next_match_id and advancing_team_id:
                 await self.competition_repo.advance_team_to_next_match(
-                    target_match.next_match_id, target_match.next_match_slot, advancing_team_id
+                    target_match.next_match_id, bye_slot, advancing_team_id
                 )
                 next_m = await self.competition_repo.get_match(target_match.next_match_id, tournament_id)
                 if next_m:
                     await self._handle_bye_auto_advancement(
-                        tournament_id, next_m, target_match.next_match_slot, advancing_team_id, matches_meta
+                        tournament_id, next_m, bye_slot, advancing_team_id, matches_meta
                     )
 
     async def record_match_result(
@@ -1731,9 +1734,12 @@ class CompetitionService:
 
         # Championship bracket auto-advance (Pool Play championship stage)
         if match.stage == MatchStage.CHAMPIONSHIP:
-            if match.next_match_id and match.next_match_slot:
+            champ_slot = match.next_match_slot
+            if not champ_slot and match.bracket_position:
+                champ_slot = "team_a" if match.bracket_position % 2 == 1 else "team_b"
+            if match.next_match_id and winner_id:
                 await self.competition_repo.advance_team_to_next_match(
-                    match.next_match_id, match.next_match_slot, winner_id
+                    match.next_match_id, champ_slot, winner_id
                 )
 
         # Standalone Bracket auto-advance
@@ -1744,14 +1750,20 @@ class CompetitionService:
             match_meta = matches_meta.get(str(match.id), {})
 
             # 1. Advance winner
-            if match.next_match_id and match.next_match_slot and winner_id:
+            next_slot = match.next_match_slot or match_meta.get("next_match_slot")
+            if not next_slot and match.bracket_position:
+                next_slot = "team_a" if match.bracket_position % 2 == 1 else "team_b"
+            if match.next_match_id and winner_id:
+                if not match.next_match_slot and next_slot:
+                    match.next_match_slot = next_slot
+                    await self.competition_repo.update_match(match, next_match_slot=next_slot)
                 await self.competition_repo.advance_team_to_next_match(
-                    match.next_match_id, match.next_match_slot, winner_id
+                    match.next_match_id, next_slot, winner_id
                 )
                 next_m = await self.competition_repo.get_match(match.next_match_id, tournament_id)
                 if next_m:
                     await self._handle_bye_auto_advancement(
-                        tournament_id, next_m, match.next_match_slot, winner_id, matches_meta
+                        tournament_id, next_m, next_slot, winner_id, matches_meta
                     )
 
             # 2. Advance loser (for consolation and double elimination)
@@ -1932,9 +1944,12 @@ class CompetitionService:
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail="Cannot correct match result: subsequent championship match has already been completed.",
                     )
-                if next_m and match.next_match_slot:
+                champ_slot = match.next_match_slot or (
+                    "team_a" if match.bracket_position and match.bracket_position % 2 == 1 else "team_b"
+                )
+                if next_m and winner_id:
                     await self.competition_repo.advance_team_to_next_match(
-                        match.next_match_id, match.next_match_slot, winner_id
+                        match.next_match_id, champ_slot, winner_id
                     )
 
             # In standalone Bracket, safety check and progression update
@@ -1997,9 +2012,15 @@ class CompetitionService:
                                     status=TournamentStatus.IN_PROGRESS,
                                     format_configuration=cfg,
                                 )
-                    elif next_m and match.next_match_slot and winner_id:
+                    elif next_m and winner_id:
+                        next_slot = match.next_match_slot or match_meta.get("next_match_slot")
+                        if not next_slot and match.bracket_position:
+                            next_slot = "team_a" if match.bracket_position % 2 == 1 else "team_b"
+                        if not match.next_match_slot and next_slot:
+                            match.next_match_slot = next_slot
+                            await self.competition_repo.update_match(match, next_match_slot=next_slot)
                         await self.competition_repo.advance_team_to_next_match(
-                            match.next_match_id, match.next_match_slot, winner_id
+                            match.next_match_id, next_slot, winner_id
                         )
 
                 loser_id = match.team_b_id if winner_id == match.team_a_id else match.team_a_id

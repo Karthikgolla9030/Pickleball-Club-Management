@@ -400,7 +400,7 @@ class CompetitionRepository:
         return result.scalar_one()
 
     async def advance_team_to_next_match(
-        self, next_match_id: uuid.UUID, next_match_slot: str, winner_team_id: uuid.UUID
+        self, next_match_id: uuid.UUID, next_match_slot: str | None, winner_team_id: uuid.UUID
     ) -> Match | None:
         """Populate team slot in next match of championship bracket.
         
@@ -417,6 +417,18 @@ class CompetitionRepository:
             target.team_a_id = winner_team_id
         elif next_match_slot == "team_b":
             target.team_b_id = winner_team_id
+        else:
+            # Fallback if slot string was None or not recognized
+            if target.team_a_id is None:
+                target.team_a_id = winner_team_id
+            elif target.team_b_id is None and target.team_a_id != winner_team_id:
+                target.team_b_id = winner_team_id
+
+        # When both teams are filled, ensure status is PENDING (ready for play)
+        if target.team_a_id is not None and target.team_b_id is not None:
+            if target.status != MatchStatus.COMPLETED and target.status != MatchStatus.IN_PROGRESS:
+                target.status = MatchStatus.PENDING
+
         await self.db.flush()
         return target
 
