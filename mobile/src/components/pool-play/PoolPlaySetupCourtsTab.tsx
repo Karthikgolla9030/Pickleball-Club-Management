@@ -36,8 +36,9 @@ import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Spacing } from '@/theme';
+import type { Court } from '@/types';
 import type { BracketType, CourtConfig, PoolPlayConfig } from '@/types/poolPlay';
-import { DEFAULT_COURTS, TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
+import { TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
 
 const BRACKET_OPTIONS: { type: BracketType; label: string; desc: string }[] = [
   {
@@ -63,6 +64,8 @@ interface PoolPlaySetupCourtsTabProps {
   canManage?: boolean;
   registeredCount?: number;
   maxParticipants?: number | null;
+  clubCourts?: Court[];
+  clubName?: string;
 }
 
 export function PoolPlaySetupCourtsTab({
@@ -71,12 +74,14 @@ export function PoolPlaySetupCourtsTab({
   canManage = true,
   registeredCount = 0,
   maxParticipants = 16,
+  clubCourts,
+  clubName,
 }: PoolPlaySetupCourtsTabProps) {
   const [numPools, setNumPools] = useState<number>(config.numPools || 2);
   const [tolerance, setTolerance] = useState<number>(config.balanceTolerance);
   const [qualifiers, setQualifiers] = useState<number>(config.qualifierCount);
   const [bracketType, setBracketType] = useState<BracketType>(config.bracketType);
-  const [selectedCourts, setSelectedCourts] = useState<CourtConfig[]>(config.courts || DEFAULT_COURTS);
+  const [numCourts, setNumCourts] = useState<number>(config.numCourts || 4);
   const [hasSaved, setHasSaved] = useState(false);
 
   // Sync if config.numPools updates externally
@@ -129,30 +134,14 @@ export function PoolPlaySetupCourtsTab({
       balanceTolerance: tolerance,
       qualifierCount: qualifiers,
       bracketType,
-      courts: selectedCourts,
-      numCourts: selectedCourts.length,
+      numCourts,
     });
     setHasSaved(true);
     Alert.alert(
       'Setup Saved',
-      `Pool Play configuration saved: ${numPools} pools, ${qualifiers} championship qualifiers, and ${selectedCourts.length} active courts.`
+      `Pool Play configuration saved: ${numPools} pools, ${qualifiers} championship qualifiers, and ${numCourts} court capacity.`
     );
     setTimeout(() => setHasSaved(false), 3000);
-  };
-
-
-  const toggleCourt = (court: CourtConfig) => {
-    if (!canManage) return;
-    const exists = selectedCourts.some((c) => c.id === court.id);
-    if (exists) {
-      if (selectedCourts.length <= 1) {
-        Alert.alert('Required Court', 'At least one court must remain assigned to the tournament.');
-        return;
-      }
-      setSelectedCourts(selectedCourts.filter((c) => c.id !== court.id));
-    } else {
-      setSelectedCourts([...selectedCourts, court]);
-    }
   };
 
   return (
@@ -353,37 +342,78 @@ export function PoolPlaySetupCourtsTab({
         </View>
       </Card>
 
-      {/* ─── 5. Court Allocation ───────────────────────────────────────────── */}
+      {/* ─── 5. Court Availability & Club Facilities ────────────────────────── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <LayoutGrid size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Assigned Courts ({selectedCourts.length})</AppText>
+          <AppText style={styles.sectionTitle}>
+            Courts Available for this Tournament: {numCourts}
+          </AppText>
         </View>
         <AppText style={styles.sectionDesc}>
-          Select which club courts are reserved for concurrent intra-pool and championship matches.
+          This is the configured concurrent court capacity for tournament scheduling, not an assignment to named physical courts. Matches will rotate across available courts.
         </AppText>
 
-        <View style={styles.courtsGrid}>
-          {DEFAULT_COURTS.map((court) => {
-            const isAssigned = selectedCourts.some((c) => c.id === court.id);
-            return (
+        {canManage && (
+          <View style={styles.courtCapacityBox}>
+            <View style={styles.counterInfo}>
+              <AppText style={styles.counterLabel}>Concurrent Court Capacity</AppText>
+              <AppText style={styles.counterDesc}>
+                Number of matches that can run simultaneously
+              </AppText>
+            </View>
+            <View style={styles.stepperContainerInline}>
               <TouchableOpacity
-                key={court.id}
-                onPress={() => toggleCourt(court)}
-                style={[styles.courtBox, isAssigned && styles.courtBoxActive]}
-                activeOpacity={0.8}
+                onPress={() => numCourts > 1 && setNumCourts((prev) => prev - 1)}
+                disabled={numCourts <= 1}
+                style={[styles.smallStepBtn, numCourts <= 1 && styles.smallStepBtnDisabled]}
+                accessibilityLabel="Decrease courts"
               >
-                <AppText style={[styles.courtName, isAssigned && styles.courtNameActive]}>
-                  {court.name}
-                </AppText>
-                <View style={[styles.courtIndicator, isAssigned && styles.courtIndicatorActive]}>
-                  {isAssigned ? (
-                    <Check size={12} color="#FFFFFF" strokeWidth={3} />
-                  ) : null}
-                </View>
+                <Minus size={15} color={numCourts <= 1 ? '#94A3B8' : '#0F172A'} />
               </TouchableOpacity>
-            );
-          })}
+              <AppText style={styles.counterValueInline}>{numCourts}</AppText>
+              <TouchableOpacity
+                onPress={() => numCourts < 16 && setNumCourts((prev) => prev + 1)}
+                disabled={numCourts >= 16}
+                style={[styles.smallStepBtn, numCourts >= 16 && styles.smallStepBtnDisabled]}
+                accessibilityLabel="Increase courts"
+              >
+                <Plus size={15} color={numCourts >= 16 ? '#94A3B8' : '#0F172A'} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.clubCourtsSection}>
+          <AppText style={styles.clubCourtsTitle}>
+            Active Club Courts at {clubName || 'Club'} ({clubCourts?.length || 0})
+          </AppText>
+          <AppText style={styles.clubCourtsSub}>
+            Physical courts registered and active in the database for this club facility:
+          </AppText>
+
+          {(!clubCourts || clubCourts.length === 0) ? (
+            <View style={styles.emptyCourtsBox}>
+              <AppText style={styles.emptyCourtsText}>
+                No active courts found for this club.
+              </AppText>
+            </View>
+          ) : (
+            <View style={styles.courtsGrid}>
+              {clubCourts.map((court) => {
+                const courtName = court.display_name || court.name;
+                const surface = court.surface_type ? ` • ${court.surface_type}` : '';
+                return (
+                  <View key={court.id} style={styles.clubCourtPill}>
+                    <View style={styles.clubCourtPillDot} />
+                    <AppText style={styles.clubCourtPillText}>
+                      {courtName}{surface}
+                    </AppText>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
       </Card>
 
@@ -567,9 +597,106 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  courtIndicatorActive: {
+  courtCapacityBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+  },
+  counterInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  counterLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  counterDesc: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  stepperContainerInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  smallStepBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  smallStepBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  counterValueInline: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F766E',
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  clubCourtsSection: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 12,
+  },
+  clubCourtsTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  clubCourtsSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  emptyCourtsBox: {
+    padding: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+  },
+  emptyCourtsText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontStyle: 'italic',
+  },
+  clubCourtPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 20,
+  },
+  clubCourtPillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
+  },
+  clubCourtPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F766E',
   },
   actionContainer: {
     marginTop: Spacing[2],

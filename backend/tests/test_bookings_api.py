@@ -656,6 +656,37 @@ async def test_staff_can_book_for_player_and_override_limit(async_client: AsyncC
 
 
 @pytest.mark.asyncio
+async def test_staff_can_book_for_walkin_guest_without_player_id(async_client: AsyncClient, db_session: AsyncSession):
+    """Staff can create a booking for a walk-in guest without a player_id."""
+    staff = await create_user(db_session, full_name="Manager Dave")
+    club = await create_club(db_session)
+    court = await create_court(db_session, club)
+    await add_staff(db_session, club, staff, role=ClubRole.CLUB_MANAGER)
+
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+    start_at = datetime.combine(tomorrow, time(10, 0), tzinfo=timezone.utc)
+    end_at = datetime.combine(tomorrow, time(11, 0), tzinfo=timezone.utc)
+
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/bookings/staff",
+        json={
+            "court_id": str(court.id),
+            "guest_name": "Walk-in John",
+            "start_at": start_at.isoformat(),
+            "end_at": end_at.isoformat(),
+            "notes": "Walk-in guest booking",
+        },
+        headers=make_auth_header(staff),
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["court_id"] == str(court.id)
+    assert data["player_id"] is None
+    assert "Walk-in Guest: Walk-in John" in data["notes"]
+
+
+
+@pytest.mark.asyncio
 async def test_tournament_director_denied_booking_management(async_client: AsyncClient, db_session: AsyncSession):
     """Tournament Director is denied access to club booking management (403 Forbidden)."""
     director = await create_user(db_session, full_name="Director Dan")

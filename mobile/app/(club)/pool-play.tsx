@@ -36,6 +36,7 @@ import {
 } from '@/components';
 import {
   useActiveClub,
+  useClubCourts,
   usePermission,
   useTeams,
   useTournamentDetails,
@@ -66,7 +67,9 @@ import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 export default function PoolPlayManagementScreen() {
   const router = useRouter();
   const { tournamentId } = useLocalSearchParams<{ tournamentId: string }>();
-  const { clubId } = useActiveClub();
+  const { clubId, clubName } = useActiveClub();
+  const { courts: clubCourts } = useClubCourts(clubId);
+  const activeClubCourts = useMemo(() => (clubCourts || []).filter(c => c.is_active), [clubCourts]);
   const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
   const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
 
@@ -635,12 +638,6 @@ export default function PoolPlayManagementScreen() {
         variant: 'secondary' as const,
       };
     }
-    if (teams.length >= 2 && matches.length === 0) {
-      return {
-        label: 'Create Matchups',
-        onPress: handleCreateMatchups,
-      };
-    }
     if (matches.length > 0 && !isPoolPlayComplete) {
       return {
         label: 'Enter Scores',
@@ -805,6 +802,9 @@ export default function PoolPlayManagementScreen() {
             matches={matches}
             qualifierCountPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
             onGoToMatchups={() => setActiveTab('matchups')}
+            hasChampionshipBracket={championshipMatches.length > 0}
+            isTournamentCompleted={isTournamentCompleted}
+            onNavigateToBracket={() => setActiveTab('championship')}
             onAdvanceToBracket={() => {
               handleGenerateChampionshipBracket();
               setActiveTab('championship');
@@ -835,6 +835,8 @@ export default function PoolPlayManagementScreen() {
             canManage={canManage}
             registeredCount={updatedTeams.length}
             maxParticipants={tournament?.max_participants}
+            clubCourts={activeClubCourts}
+            clubName={clubName ?? undefined}
           />
         )}
 

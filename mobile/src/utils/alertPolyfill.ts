@@ -168,14 +168,25 @@ export function setupAlertPolyfill(): void {
         flexDirection: 'column',
         gap: '10px',
         width: '100%',
+        boxSizing: 'border-box',
       });
-    } else {
-      // Side-by-side or single button
+    } else if (dialogButtons.length === 1) {
+      // Single button: informational alerts (Registration Closed, Success, etc.)
       Object.assign(btnContainer.style, {
         display: 'flex',
-        flexDirection: dialogButtons.length === 1 ? 'column' : 'row',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        width: '100%',
+        boxSizing: 'border-box',
+      });
+    } else {
+      // Side-by-side 2-button confirmations
+      Object.assign(btnContainer.style, {
+        display: 'flex',
+        flexDirection: 'row',
         gap: '12px',
         width: '100%',
+        boxSizing: 'border-box',
       });
     }
 
@@ -226,9 +237,11 @@ export function setupAlertPolyfill(): void {
       }
 
       Object.assign(b.style, {
-        flex: isMultiButton ? 'none' : '1',
+        flex: dialogButtons.length === 2 ? '1 1 0px' : '0 0 auto',
+        flexShrink: '0',
         minHeight: '48px',
         height: '48px',
+        lineHeight: '20px',
         borderRadius: '12px',
         backgroundColor: bg,
         color: textCol,
@@ -244,7 +257,8 @@ export function setupAlertPolyfill(): void {
         padding: '0 20px',
         transition: 'background-color 0.1s, opacity 0.1s',
         boxSizing: 'border-box',
-        width: '100%',
+        width: dialogButtons.length === 2 ? 'auto' : '100%',
+        minWidth: '0',
       });
 
       b.onmouseover = () => {

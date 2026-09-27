@@ -302,6 +302,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     minHeight: 48,
+    flexShrink: 0,
     borderRadius: Radius.lg,
     alignItems: 'center',
     justifyContent: 'center',

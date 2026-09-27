@@ -970,8 +970,8 @@ class BookingService:
         closing = club.closing_time or DEFAULT_CLUB_CLOSING_TIME
         club_tz = self._get_club_tz(club.timezone)
 
-        # All club courts (ordered by display order)
-        courts = await self.court_repo.list_by_club(club_id)
+        # Active club courts only (ordered by display order)
+        courts = await self.court_repo.list_by_club(club_id, is_active=True)
 
         # Construct start and end datetimes for the target date in club timezone
         day_start = datetime.combine(target_date, opening, tzinfo=club_tz).astimezone(timezone.utc)

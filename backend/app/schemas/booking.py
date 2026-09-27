@@ -97,7 +97,7 @@ class BookingResponse(BaseModel):
     id: uuid.UUID
     club_id: uuid.UUID
     court_id: uuid.UUID
-    player_id: uuid.UUID
+    player_id: uuid.UUID | None = None
     created_by_user_id: uuid.UUID
     booking_type: BookingType
     status: BookingStatus

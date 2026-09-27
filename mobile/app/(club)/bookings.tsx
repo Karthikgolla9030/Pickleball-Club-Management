@@ -137,148 +137,7 @@ function formatBookingDate(isoString: string): string {
   }
 }
 
-function getReferenceFallbackBookings(clubId: string | null): Booking[] {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const datePrefix = `${y}-${m}-${day}`;
 
-  return [
-    {
-      id: '78291',
-      club_id: clubId || 'club-1',
-      court_id: 'court-2',
-      player_id: 'player-1',
-      created_by_user_id: 'user-1',
-      booking_type: 'player',
-      status: 'confirmed',
-      start_at: `${datePrefix}T21:00:00`,
-      end_at: `${datePrefix}T22:00:00`,
-      duration_minutes: 60,
-      notes: null,
-      cancelled_at: null,
-      cancelled_by_user_id: null,
-      cancellation_reason: null,
-      created_at: `${datePrefix}T10:00:00`,
-      updated_at: `${datePrefix}T10:00:00`,
-      court: {
-        id: 'court-2',
-        name: 'Court 2',
-        display_name: 'Court 2',
-        surface_type: 'Acrylic',
-        indoor_outdoor: 'OUTDOOR' as any,
-      },
-      player: {
-        id: 'player-1',
-        user_id: 'user-1',
-        display_name: 'John Doe',
-        first_name: 'John',
-        last_name: 'Doe',
-      },
-      ...({ player_count: 1 } as any),
-    },
-    {
-      id: '78290',
-      club_id: clubId || 'club-1',
-      court_id: 'court-1',
-      player_id: 'player-2',
-      created_by_user_id: 'user-2',
-      booking_type: 'player',
-      status: 'completed',
-      start_at: `${datePrefix}T19:30:00`,
-      end_at: `${datePrefix}T20:30:00`,
-      duration_minutes: 60,
-      notes: null,
-      cancelled_at: null,
-      cancelled_by_user_id: null,
-      cancellation_reason: null,
-      created_at: `${datePrefix}T10:00:00`,
-      updated_at: `${datePrefix}T10:00:00`,
-      court: {
-        id: 'court-1',
-        name: 'Court 1',
-        display_name: 'Court 1',
-        surface_type: 'Acrylic',
-        indoor_outdoor: 'OUTDOOR' as any,
-      },
-      player: {
-        id: 'player-2',
-        user_id: 'user-2',
-        display_name: 'Sarah Lin',
-        first_name: 'Sarah',
-        last_name: 'Lin',
-      },
-      ...({ player_count: 2 } as any),
-    },
-    {
-      id: '78289',
-      club_id: clubId || 'club-1',
-      court_id: 'court-3',
-      player_id: 'player-3',
-      created_by_user_id: 'user-3',
-      booking_type: 'player',
-      status: 'cancelled',
-      start_at: `${datePrefix}T18:00:00`,
-      end_at: `${datePrefix}T19:00:00`,
-      duration_minutes: 60,
-      notes: null,
-      cancelled_at: `${datePrefix}T15:00:00`,
-      cancelled_by_user_id: 'user-staff',
-      cancellation_reason: 'Cancelled by staff',
-      created_at: `${datePrefix}T10:00:00`,
-      updated_at: `${datePrefix}T15:00:00`,
-      court: {
-        id: 'court-3',
-        name: 'Court 3',
-        display_name: 'Court 3',
-        surface_type: 'Acrylic',
-        indoor_outdoor: 'OUTDOOR' as any,
-      },
-      player: {
-        id: 'player-3',
-        user_id: 'user-3',
-        display_name: 'Mike Ross',
-        first_name: 'Mike',
-        last_name: 'Ross',
-      },
-      ...({ player_count: 1 } as any),
-    },
-    {
-      id: '78288',
-      club_id: clubId || 'club-1',
-      court_id: 'court-1',
-      player_id: 'player-4',
-      created_by_user_id: 'user-4',
-      booking_type: 'player',
-      status: 'confirmed',
-      start_at: `${datePrefix}T17:00:00`,
-      end_at: `${datePrefix}T18:00:00`,
-      duration_minutes: 60,
-      notes: null,
-      cancelled_at: null,
-      cancelled_by_user_id: null,
-      cancellation_reason: null,
-      created_at: `${datePrefix}T10:00:00`,
-      updated_at: `${datePrefix}T10:00:00`,
-      court: {
-        id: 'court-1',
-        name: 'Court 1',
-        display_name: 'Court 1',
-        surface_type: 'Acrylic',
-        indoor_outdoor: 'OUTDOOR' as any,
-      },
-      player: {
-        id: 'player-4',
-        user_id: 'user-4',
-        display_name: 'Emma Wilson',
-        first_name: 'Emma',
-        last_name: 'Wilson',
-      },
-      ...({ player_count: 4 } as any),
-    },
-  ];
-}
 
 export default function ClubStaffBookingsScreen() {
   const insets = useSafeAreaInsets();
@@ -362,7 +221,7 @@ export default function ClubStaffBookingsScreen() {
 
   // Filter & Sort Bookings
   const processedBookings = useMemo(() => {
-    let list = bookings && bookings.length > 0 ? [...bookings] : getReferenceFallbackBookings(clubId);
+    let list = bookings && bookings.length > 0 ? [...bookings] : [];
 
     const nowMs = new Date().getTime();
     const today = new Date();

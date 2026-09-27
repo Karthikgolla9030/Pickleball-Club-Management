@@ -24,6 +24,9 @@ interface StandingsTabProps {
   matches?: Match[];
   qualifierCountPerPool?: number;
   onGoToMatchups?: () => void;
+  hasChampionshipBracket?: boolean;
+  isTournamentCompleted?: boolean;
+  onNavigateToBracket?: () => void;
 }
 
 export function StandingsTab({
@@ -35,6 +38,9 @@ export function StandingsTab({
   matches,
   qualifierCountPerPool = 2,
   onGoToMatchups,
+  hasChampionshipBracket = false,
+  isTournamentCompleted = false,
+  onNavigateToBracket,
 }: StandingsTabProps) {
   // ─── Section 2 Empty State: Before Matchups Are Generated ────────────────
   if (!hasMatchups) {
@@ -67,22 +73,56 @@ export function StandingsTab({
   return (
     <View style={styles.container}>
       {/* ─── Celebratory Completion Card ───────────────────────────── */}
-      {isPoolPlayComplete && (
+      {isPoolPlayComplete && !isTournamentCompleted && (
         <Card style={styles.completeBanner}>
           <View style={styles.completeContent}>
             <AppText variant="heading2" style={styles.completeTitle}>
               🎉 POOL PLAY COMPLETE!
             </AppText>
             <AppText variant="bodySmall" style={styles.completeDesc}>
-              All pool matches have finished! The top qualified teams are ready to advance to the Championship Bracket.
+              {hasChampionshipBracket
+                ? 'All pool matches have finished and the Championship Bracket is underway.'
+                : 'All pool matches have finished! The top qualified teams are ready to advance to the Championship Bracket.'}
             </AppText>
-            <Button
-              label="Start Championship Bracket ➔"
-              variant="primary"
-              size="sm"
-              onPress={onAdvanceToBracket}
-              style={styles.bracketAdvanceBtn}
-            />
+            {hasChampionshipBracket ? (
+              <Button
+                label="View Championship Bracket ➔"
+                variant="primary"
+                size="sm"
+                onPress={onNavigateToBracket || onAdvanceToBracket}
+                style={styles.bracketAdvanceBtn}
+              />
+            ) : (
+              <Button
+                label="Start Championship Bracket ➔"
+                variant="primary"
+                size="sm"
+                onPress={onAdvanceToBracket}
+                style={styles.bracketAdvanceBtn}
+              />
+            )}
+          </View>
+        </Card>
+      )}
+
+      {isTournamentCompleted && (
+        <Card style={styles.completeBanner}>
+          <View style={styles.completeContent}>
+            <AppText variant="heading2" style={styles.completeTitle}>
+              🏆 TOURNAMENT COMPLETED
+            </AppText>
+            <AppText variant="bodySmall" style={styles.completeDesc}>
+              All pool and championship playoff matches have concluded. Here are the final pool stage standings.
+            </AppText>
+            {onNavigateToBracket && (
+              <Button
+                label="View Championship Results ➔"
+                variant="secondary"
+                size="sm"
+                onPress={onNavigateToBracket}
+                style={styles.bracketAdvanceBtn}
+              />
+            )}
           </View>
         </Card>
       )}

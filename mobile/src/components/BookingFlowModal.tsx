@@ -62,9 +62,11 @@ export function BookingFlowModal({
   const { createStaffBooking, isCreating: isStaffCreating } = useClubStaffBookings(staffClubId);
 
   const isSubmitting = isStaffCreating || isPlayerBooking;
+  const prevVisibleRef = React.useRef(false);
 
   useEffect(() => {
-    if (visible) {
+    // Only reset state when modal transitions from closed to open
+    if (visible && !prevVisibleRef.current) {
       setStage(1);
       setFormError(null);
       setShowDatePicker(false);
@@ -78,7 +80,8 @@ export function BookingFlowModal({
         setPlayerId('self');
       }
     }
-  }, [visible, initialDate, initialCourtId, initialSlot, playerMembers, mode]);
+    prevVisibleRef.current = visible;
+  }, [visible, initialDate, initialCourtId, initialSlot, mode]);
 
   const availableCourts = React.useMemo(() => {
     if (!availability?.courts) return [];
@@ -90,6 +93,13 @@ export function BookingFlowModal({
       return true;
     });
   }, [availability?.courts, mode]);
+
+  // Auto-select first available court if none selected
+  useEffect(() => {
+    if (availableCourts.length > 0 && !courtId) {
+      setCourtId(availableCourts[0].court_id);
+    }
+  }, [availableCourts, courtId]);
   
   // Only show slots for selected court that are actually available
   const selectedCourtSlots = availableCourts.find(c => c.court_id === courtId)?.slots || [];
@@ -116,6 +126,7 @@ export function BookingFlowModal({
   };
 
   const handleCompletePayment = async () => {
+    if (isSubmitting) return; // Prevent duplicate submissions
     setFormError(null);
     try {
       const slot = selectedCourtSlots.find(
@@ -146,6 +157,7 @@ export function BookingFlowModal({
       const isConflict =
         err?.response?.status === 409 ||
         err?.status === 409 ||
+        err?.type === 'CONFLICT' ||
         err?.message?.toLowerCase().includes('conflict') ||
         err?.message?.toLowerCase().includes('already booked');
       const isAuth =
@@ -153,12 +165,24 @@ export function BookingFlowModal({
         err?.status === 401 ||
         err?.type === 'UNAUTHORIZED' ||
         err?.message?.toLowerCase().includes('authenticated');
+      const isForbidden =
+        err?.response?.status === 403 ||
+        err?.status === 403 ||
+        err?.type === 'FORBIDDEN';
 
-      const msg = isConflict
-        ? 'This time slot is no longer available. Another player has just booked it. Please choose another slot.'
-        : isAuth
-        ? 'Your session has expired. Please sign in again to complete your booking.'
-        : err?.response?.data?.detail || err?.detail || err?.message || 'Failed to create booking. The slot may no longer be available.';
+      let msg =
+        err?.response?.data?.detail ||
+        err?.detail ||
+        err?.message ||
+        'Failed to create booking.';
+
+      if (isConflict) {
+        msg = 'This court is no longer available for that time. Another player has just booked it. Please choose another slot.';
+      } else if (isAuth) {
+        msg = 'Your session has expired. Please sign in again to complete your booking.';
+      } else if (isForbidden) {
+        msg = err?.detail || 'You do not have permission to book this court.';
+      }
       setFormError(msg);
       if (isConflict) {
         setStage(1); // Return to stage 1 only on slot conflict so player can select another slot
