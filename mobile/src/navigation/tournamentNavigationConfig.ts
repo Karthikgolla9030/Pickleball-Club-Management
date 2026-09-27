@@ -164,38 +164,40 @@ export function getTournamentNavigationTabs(
       ];
 
     // ─── D. POOL PLAY TOURNAMENT ────────────────────────────────────────────
+    // Required workflow: 1. Overview, 2. Setup & Courts, 3. Teams, 4. Pools, 5. Championship Bracket, 6. Standings
     case 'pool_play':
       return [
         { id: 'overview', label: 'Overview', iconName: 'LayoutDashboard' },
-        {
-          id: 'participants',
-          label: isSingles ? 'Players & Pools' : 'Teams & Pools',
-          iconName: 'Users',
-          badge: isSingles ? counts?.participantsCount : counts?.teamsCount,
-        },
-        {
-          id: 'matchups',
-          label: 'Matchups',
-          iconName: 'Swords',
-          badge: counts?.matchesCount,
-          isCompetitionTab: true,
-        },
-        { id: 'standings', label: 'Standings', iconName: 'Award' },
-        {
-          id: 'championship',
-          label: 'Championship Bracket',
-          iconName: 'Trophy',
-          isCompetitionTab: true,
-        },
         {
           id: 'setup_courts',
           label: 'Setup & Courts',
           iconName: 'SlidersHorizontal',
           badge: counts?.poolsCount ? `${counts.poolsCount} Pools` : undefined,
         },
+        {
+          id: 'participants',
+          label: isSingles ? 'Players' : 'Teams',
+          iconName: 'Users',
+          badge: isSingles ? counts?.participantsCount : counts?.teamsCount,
+        },
+        {
+          id: 'matchups',
+          label: 'Pools',
+          iconName: 'Swords',
+          badge: counts?.matchesCount,
+          isCompetitionTab: true,
+        },
+        {
+          id: 'championship',
+          label: 'Championship Bracket',
+          iconName: 'Trophy',
+          isCompetitionTab: true,
+        },
+        { id: 'standings', label: 'Standings', iconName: 'Award' },
         { id: 'results', label: 'Results', iconName: 'CheckCircle2' },
         { id: 'settings', label: 'Settings', iconName: 'Settings' },
       ];
+
 
     default:
       return [

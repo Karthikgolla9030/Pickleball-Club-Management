@@ -19,13 +19,18 @@ import {
   View,
 } from 'react-native';
 import {
+  AlertCircle,
   Check,
   GitFork,
+  Info,
   LayoutGrid,
+  Minus,
+  Plus,
   Scale,
   SlidersHorizontal,
   Trophy,
 } from 'lucide-react-native';
+
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
@@ -34,43 +39,91 @@ import { Spacing } from '@/theme';
 import type { BracketType, CourtConfig, PoolPlayConfig } from '@/types/poolPlay';
 import { DEFAULT_COURTS, TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
 
-interface PoolPlaySetupCourtsTabProps {
-  config: PoolPlayConfig;
-  onSaveConfig: (updated: Partial<PoolPlayConfig>) => void;
-  canManage?: boolean;
-}
-
 const BRACKET_OPTIONS: { type: BracketType; label: string; desc: string }[] = [
   {
     type: 'Single Elimination',
     label: 'Single Elimination',
-    desc: 'Standard sudden-death knockout bracket for top qualifiers.',
+    desc: 'Standard knockout bracket — winner advances, loser is eliminated.',
   },
   {
     type: 'Single Elimination + Consolation',
-    label: 'Single Elimination + 3rd Place Match',
-    desc: 'Semifinal losers compete in a dedicated 3rd place bronze match.',
+    label: 'Single Elimination + Consolation',
+    desc: 'Main bracket plus 3rd place consolation playoff match.',
   },
   {
     type: 'Double Elimination',
     label: 'Double Elimination',
-    desc: 'Winners and losers bracket where teams must lose twice to be eliminated.',
+    desc: 'Winners and losers bracket — requires 2 losses for elimination.',
   },
 ];
+
+interface PoolPlaySetupCourtsTabProps {
+  config: PoolPlayConfig;
+  onSaveConfig: (updated: Partial<PoolPlayConfig>) => void;
+  canManage?: boolean;
+  registeredCount?: number;
+  maxParticipants?: number | null;
+}
 
 export function PoolPlaySetupCourtsTab({
   config,
   onSaveConfig,
   canManage = true,
+  registeredCount = 0,
+  maxParticipants = 16,
 }: PoolPlaySetupCourtsTabProps) {
-  const [numPools, setNumPools] = useState<number>(config.numPools);
+  const [numPools, setNumPools] = useState<number>(config.numPools || 2);
   const [tolerance, setTolerance] = useState<number>(config.balanceTolerance);
   const [qualifiers, setQualifiers] = useState<number>(config.qualifierCount);
   const [bracketType, setBracketType] = useState<BracketType>(config.bracketType);
   const [selectedCourts, setSelectedCourts] = useState<CourtConfig[]>(config.courts || DEFAULT_COURTS);
   const [hasSaved, setHasSaved] = useState(false);
 
+  // Sync if config.numPools updates externally
+  React.useEffect(() => {
+    if (config.numPools && config.numPools !== numPools) {
+      setNumPools(config.numPools);
+    }
+  }, [config.numPools]);
+
+  // Compute domain bounds:
+  // Minimum pools is always 2 (Pool Play invariant)
+  const minPools = 2;
+  // Maximum pools: each pool requires at least 2 teams by backend engine rules.
+  // If registered teams >= 4, limit max pools to floor(registered / 2).
+  // Otherwise use tournament max_participants / 2 (default max 8 pools).
+  const effectiveCapacity = registeredCount >= 4 ? registeredCount : (maxParticipants || 16);
+  const maxPools = Math.max(minPools, Math.min(12, Math.floor(effectiveCapacity / 2)));
+
+  const handleDecrementPools = () => {
+    if (!canManage || numPools <= minPools) return;
+    setNumPools((prev) => Math.max(minPools, prev - 1));
+  };
+
+  const handleIncrementPools = () => {
+    if (!canManage || numPools >= maxPools) return;
+    setNumPools((prev) => Math.min(maxPools, prev + 1));
+  };
+
+  // Validation feedback
+  const teamsPerPool = registeredCount > 0 ? (registeredCount / numPools).toFixed(1) : (effectiveCapacity / numPools).toFixed(1);
+  const hasInvalidTeamRatio = registeredCount > 0 && registeredCount < numPools * 2;
+  const qualifiersPerPool = Math.max(1, Math.floor(qualifiers / numPools));
+  const hasExcessQualifiers = registeredCount > 0 && qualifiersPerPool > Math.floor(registeredCount / numPools);
+
   const handleSave = () => {
+    if (numPools < minPools) {
+      Alert.alert('Invalid Configuration', `Pool Play requires at least ${minPools} pools.`);
+      return;
+    }
+    if (hasInvalidTeamRatio) {
+      Alert.alert(
+        'Insufficient Teams',
+        `Backend rules require at least 2 teams per pool. You have ${registeredCount} registered teams, which supports at most ${Math.floor(registeredCount / 2)} pools.`
+      );
+      return;
+    }
+
     onSaveConfig({
       numPools,
       balanceTolerance: tolerance,
@@ -86,6 +139,7 @@ export function PoolPlaySetupCourtsTab({
     );
     setTimeout(() => setHasSaved(false), 3000);
   };
+
 
   const toggleCourt = (court: CourtConfig) => {
     if (!canManage) return;
@@ -121,11 +175,40 @@ export function PoolPlaySetupCourtsTab({
           <AppText style={styles.sectionTitle}>Number of Pools</AppText>
         </View>
         <AppText style={styles.sectionDesc}>
-          Participants will be split evenly across these pools using snake seeding.
+          Configure the desired pool partition count. Participants are distributed evenly across pools via snake seeding.
         </AppText>
 
-        <View style={styles.chipRow}>
-          {[2, 3, 4].map((n) => {
+        {/* Responsive Numeric Stepper */}
+        <View style={styles.stepperContainer}>
+          <TouchableOpacity
+            style={[styles.stepperBtn, (!canManage || numPools <= minPools) && styles.stepperBtnDisabled]}
+            onPress={handleDecrementPools}
+            disabled={!canManage || numPools <= minPools}
+            activeOpacity={0.7}
+            accessibilityLabel="Decrease number of pools"
+          >
+            <Minus size={18} color={numPools <= minPools ? '#94A3B8' : '#0F766E'} strokeWidth={2.4} />
+          </TouchableOpacity>
+
+          <View style={styles.stepperValueBox}>
+            <AppText style={styles.stepperValueNum}>{numPools}</AppText>
+            <AppText style={styles.stepperValueLabel}>Pools</AppText>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.stepperBtn, (!canManage || numPools >= maxPools) && styles.stepperBtnDisabled]}
+            onPress={handleIncrementPools}
+            disabled={!canManage || numPools >= maxPools}
+            activeOpacity={0.7}
+            accessibilityLabel="Increase number of pools"
+          >
+            <Plus size={18} color={numPools >= maxPools ? '#94A3B8' : '#0F766E'} strokeWidth={2.4} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Selection Presets */}
+        <View style={styles.presetRow}>
+          {Array.from({ length: maxPools - minPools + 1 }, (_, i) => minPools + i).map((n) => {
             const isSelected = numPools === n;
             return (
               <TouchableOpacity
@@ -139,11 +222,28 @@ export function PoolPlaySetupCourtsTab({
                 >
                   {n} Pools
                 </AppText>
-                {isSelected && <Check size={14} color="#0F766E" strokeWidth={2.5} />}
+                {isSelected && <Check size={13} color="#0F766E" strokeWidth={2.5} />}
               </TouchableOpacity>
             );
           })}
         </View>
+
+        {/* Real-time Guidance & Invariant Validation */}
+        {hasInvalidTeamRatio ? (
+          <View style={styles.warningBox}>
+            <AlertCircle size={15} color="#DC2626" />
+            <AppText style={styles.warningText}>
+              Backend rules require at least 2 teams per pool. You have {registeredCount} teams registered, which supports at most {Math.floor(registeredCount / 2)} pools.
+            </AppText>
+          </View>
+        ) : (
+          <View style={styles.infoStrip}>
+            <Info size={14} color="#0284C7" />
+            <AppText style={styles.infoStripText}>
+              {registeredCount > 0 ? `${registeredCount} teams registered` : `Capacity: up to ${effectiveCapacity} entries`} • ~{teamsPerPool} teams per pool • Top {qualifiersPerPool} advance ({numPools * qualifiersPerPool} bracket qualifiers)
+            </AppText>
+          </View>
+        )}
       </Card>
 
       {/* ─── 2. Rating Balance Tolerance ──────────────────────────────────── */}
@@ -474,4 +574,98 @@ const styles = StyleSheet.create({
   actionContainer: {
     marginTop: Spacing[2],
   },
+  // Stepper Styles
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 8,
+  },
+  stepperBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  stepperBtnDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.5,
+  },
+  stepperValueBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 100,
+  },
+  stepperValueNum: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0F766E',
+    lineHeight: 30,
+  },
+  stepperValueLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    marginTop: 1,
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    alignItems: 'center',
+  },
+  infoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  infoStripText: {
+    fontSize: 12,
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 16,
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 10,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#B91C1C',
+    flex: 1,
+    lineHeight: 16,
+  },
 });
+

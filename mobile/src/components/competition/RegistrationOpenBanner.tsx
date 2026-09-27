@@ -24,7 +24,7 @@ interface RegistrationOpenBannerProps {
   tournamentName?: string;
   participantCount?: number;
   maxParticipants?: number | null;
-  onCloseRegistration: () => void | Promise<void>;
+  onCloseRegistration?: () => void | Promise<void>;
   isClosing?: boolean;
   style?: StyleProp<ViewStyle>;
 }
@@ -33,8 +33,6 @@ export function RegistrationOpenBanner({
   tournamentName,
   participantCount = 0,
   maxParticipants,
-  onCloseRegistration,
-  isClosing = false,
   style,
 }: RegistrationOpenBannerProps) {
   const countText = maxParticipants ? `${participantCount} / ${maxParticipants}` : `${participantCount}`;
@@ -49,37 +47,21 @@ export function RegistrationOpenBanner({
         <View style={styles.textWrap}>
           <View style={styles.badgeRow}>
             <View style={styles.statusBadge}>
+              <View style={styles.liveDot} />
               <AppText variant="caption" style={styles.statusBadgeText}>
                 REGISTRATION OPEN
               </AppText>
             </View>
-            <AppText variant="caption" color="secondary" style={styles.countText}>
-              {countText} registered
-            </AppText>
+            <View style={styles.countPill}>
+              <AppText variant="caption" style={styles.countText}>
+                {countText} registered
+              </AppText>
+            </View>
           </View>
-          <AppText variant="caption" color="secondary" style={styles.descText} numberOfLines={2}>
-            Players can register in the Player App. Close registration to lock rosters & proceed.
+          <AppText variant="caption" style={styles.descText}>
+            Players can register in the Player App. Use the Close Registration action above when rosters are finalized.
           </AppText>
         </View>
-
-        <TouchableOpacity
-          style={[styles.closeButton, isClosing && styles.closeButtonDisabled]}
-          onPress={onCloseRegistration}
-          disabled={isClosing}
-          activeOpacity={0.8}
-          accessibilityLabel="Close registration and finalize rosters"
-        >
-          {isClosing ? (
-            <ActivityIndicator size="small" color="#E11D48" />
-          ) : (
-            <>
-              <Lock size={13} color="#E11D48" style={styles.lockIcon} />
-              <AppText variant="caption" bold style={styles.closeButtonText}>
-                Close Reg
-              </AppText>
-            </>
-          )}
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -91,81 +73,79 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BBF7D0', // Green 200 border
     borderRadius: Radius.lg,
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2.5],
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[3],
     marginHorizontal: Spacing[4],
     marginTop: Spacing[2],
-    marginBottom: Spacing[2],
+    marginBottom: Spacing[3],
     shadowColor: '#087A60',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
   },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2.5],
+    gap: Spacing[3],
   },
   iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   textWrap: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing[2],
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 1,
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: 2,
     borderRadius: Radius.sm,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#16A34A',
   },
   statusBadgeText: {
     color: '#087A60',
     fontWeight: '800',
-    fontSize: 9.5,
+    fontSize: 10,
     letterSpacing: 0.5,
+  },
+  countPill: {
+    backgroundColor: '#E7F7ED',
+    paddingHorizontal: Spacing[2],
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#C6F0D3',
   },
   countText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#15803D',
   },
   descText: {
-    fontSize: 11,
-    color: '#475569',
-    lineHeight: 14,
-  },
-  closeButton: {
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-    borderRadius: Radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  closeButtonDisabled: {
-    opacity: 0.6,
-  },
-  lockIcon: {
-    marginRight: 2,
-  },
-  closeButtonText: {
-    color: '#E11D48',
     fontSize: 11.5,
-    fontWeight: '700',
+    color: '#334155',
+    lineHeight: 16,
   },
 });
+

@@ -148,7 +148,7 @@ export function TournamentManagementHeader({
         </TouchableOpacity>
 
         <View style={styles.titleContainer}>
-          <AppText style={styles.headerTitle} numberOfLines={1}>
+          <AppText style={styles.headerTitle} numberOfLines={2}>
             {tournament?.name ?? 'Tournament Management'}
           </AppText>
         </View>
@@ -336,12 +336,16 @@ const styles = StyleSheet.create({
   titleContainer: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.2,
+    textAlign: 'center',
+    lineHeight: 21,
   },
   infoSection: {
     paddingHorizontal: Spacing[4],

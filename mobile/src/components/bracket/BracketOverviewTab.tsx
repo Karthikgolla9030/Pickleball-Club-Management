@@ -217,7 +217,8 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[4],
-    gap: Spacing[3],
+    paddingBottom: Spacing[8],
+    gap: Spacing[4],
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -225,7 +226,7 @@ const styles = StyleSheet.create({
     borderColor: '#DDE8E2',
     borderRadius: 16,
     padding: Spacing[4],
-    gap: 12,
+    gap: 14,
   },
   cardHeader: {
     flexDirection: 'row',

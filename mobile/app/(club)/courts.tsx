@@ -482,61 +482,63 @@ export default function ClubCourtsScreen() {
       />
 
       <View style={styles.contentContainer}>
-        {/* ─── Schedule / Management Switcher ──────────────────────────────── */}
-        <View style={styles.switcherWrapper}>
-          <View style={styles.switcher}>
-            {/* LEFT: Schedule */}
-            <TouchableOpacity
-              style={[styles.switcherTab, topTab === 'schedule' && styles.switcherTabActive]}
-              onPress={() => setTopTab('schedule')}
-              activeOpacity={0.8}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: topTab === 'schedule' }}
-            >
-              <Calendar
-                size={17}
-                color={topTab === 'schedule' ? '#FFFFFF' : '#102B2A'}
-                strokeWidth={2}
-              />
-              <AppText
-                style={[
-                  styles.switcherTabText,
-                  topTab === 'schedule' && styles.switcherTabTextActive,
-                ]}
+        {/* ─── Schedule / Management Switcher (Only visible to court managers) ─── */}
+        {canManageCourts && (
+          <View style={styles.switcherWrapper}>
+            <View style={styles.switcher}>
+              {/* LEFT: Schedule */}
+              <TouchableOpacity
+                style={[styles.switcherTab, topTab === 'schedule' && styles.switcherTabActive]}
+                onPress={() => setTopTab('schedule')}
+                activeOpacity={0.8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: topTab === 'schedule' }}
               >
-                Schedule
-              </AppText>
-            </TouchableOpacity>
+                <Calendar
+                  size={17}
+                  color={topTab === 'schedule' ? '#FFFFFF' : '#102B2A'}
+                  strokeWidth={2}
+                />
+                <AppText
+                  style={[
+                    styles.switcherTabText,
+                    topTab === 'schedule' && styles.switcherTabTextActive,
+                  ]}
+                >
+                  Schedule
+                </AppText>
+              </TouchableOpacity>
 
-            {/* RIGHT: Management (Selected by default) */}
-            <TouchableOpacity
-              style={[styles.switcherTab, topTab === 'management' && styles.switcherTabActive]}
-              onPress={() => setTopTab('management')}
-              activeOpacity={0.8}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: topTab === 'management' }}
-            >
-              <CourtGlyph
-                size={17}
-                color={topTab === 'management' ? '#FFFFFF' : '#102B2A'}
-                strokeWidth={1.7}
-              />
-              <AppText
-                style={[
-                  styles.switcherTabText,
-                  topTab === 'management' && styles.switcherTabTextActive,
-                ]}
+              {/* RIGHT: Management */}
+              <TouchableOpacity
+                style={[styles.switcherTab, topTab === 'management' && styles.switcherTabActive]}
+                onPress={() => setTopTab('management')}
+                activeOpacity={0.8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: topTab === 'management' }}
               >
-                Management
-              </AppText>
-            </TouchableOpacity>
+                <CourtGlyph
+                  size={17}
+                  color={topTab === 'management' ? '#FFFFFF' : '#102B2A'}
+                  strokeWidth={1.7}
+                />
+                <AppText
+                  style={[
+                    styles.switcherTabText,
+                    topTab === 'management' && styles.switcherTabTextActive,
+                  ]}
+                >
+                  Management
+                </AppText>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        )}
 
         {/* ─── Schedule Tab View ───────────────────────────────────────────── */}
-        {topTab === 'schedule' ? (
+        {(!canManageCourts || topTab === 'schedule') ? (
           <View style={{ flex: 1 }}>
-            <CourtSchedule onSlotPress={handleSlotPress} />
+            <CourtSchedule clubId={clubId || undefined} onSlotPress={handleSlotPress} />
           </View>
         ) : (
           /* ─── Management Tab View ─────────────────────────────────────────── */

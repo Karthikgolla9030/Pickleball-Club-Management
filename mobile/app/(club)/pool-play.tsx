@@ -42,9 +42,11 @@ import {
   useTournamentRegistrations,
 } from '@/hooks';
 import { competitionApi } from '@/services/api/competition';
+import { tournamentApi } from '@/services/api/tournaments';
 import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation';
 import { Colors, Spacing } from '@/theme';
 import type {
+  BracketType,
   ChampionshipMatch,
   Match,
   PoolPlayConfig,
@@ -108,8 +110,58 @@ export default function PoolPlayManagementScreen() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [championshipMatches, setChampionshipMatches] = useState<ChampionshipMatch[]>([]);
   const [showSetupModal, setShowSetupModal] = useState(false);
-
   const tournamentConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+
+  // Synchronize persisted format configuration from backend
+  React.useEffect(() => {
+    if (tournament?.format_configuration) {
+      const fc = tournament.format_configuration as Record<string, any>;
+      setConfig((prev) => ({
+        ...prev,
+        numPools: typeof fc.pool_count === 'number' && fc.pool_count >= 2 ? fc.pool_count : prev.numPools,
+        numCourts: typeof fc.courts_count === 'number' && fc.courts_count >= 1 ? fc.courts_count : prev.numCourts,
+        qualifierCount: typeof fc.qualifier_count === 'number' && fc.qualifier_count >= 2 ? fc.qualifier_count : prev.qualifierCount,
+        bracketType: (fc.bracket_type as BracketType) || prev.bracketType,
+        balanceTolerance: typeof fc.balance_tolerance === 'number' ? fc.balance_tolerance : prev.balanceTolerance,
+      }));
+    }
+  }, [tournament?.format_configuration]);
+
+  const handleSavePoolConfig = async (updated: Partial<PoolPlayConfig>) => {
+    setConfig((prev) => ({ ...prev, ...updated }));
+    if (clubId && tournamentId) {
+      try {
+        const nextPoolCount = updated.numPools ?? config.numPools;
+        const nextCourts = updated.courts ?? config.courts;
+        const nextQualifierCount = updated.qualifierCount ?? config.qualifierCount;
+        const nextBracketType = updated.bracketType ?? config.bracketType;
+        const nextTolerance = updated.balanceTolerance ?? config.balanceTolerance;
+
+        await tournamentApi.updateTournament(clubId, tournamentId, {
+          format_configuration: {
+            ...(tournament?.format_configuration || {}),
+            pool_count: nextPoolCount,
+            courts_count: nextCourts?.length || config.numCourts,
+            qualifier_count: nextQualifierCount,
+            bracket_type: nextBracketType,
+            balance_tolerance: nextTolerance,
+          },
+        });
+
+        try {
+          await competitionApi.configurePools(clubId, tournamentId, {
+            number_of_pools: nextPoolCount,
+            qualifiers_per_pool: Math.max(1, Math.floor(nextQualifierCount / nextPoolCount)),
+          });
+        } catch {
+          // non-critical if pool stage hasn't reached configuration
+        }
+        void refetchTournament();
+      } catch (err) {
+        console.warn('Failed to persist pool configuration:', err);
+      }
+    }
+  };
 
   // Synchronize actual teams and registrations into Pool Play state
   React.useEffect(() => {
@@ -779,7 +831,10 @@ export default function PoolPlayManagementScreen() {
         {activeTab === 'setup_courts' && (
           <PoolPlaySetupCourtsTab
             config={config}
-            onSaveConfig={(updated) => setConfig((prev) => ({ ...prev, ...updated }))}
+            onSaveConfig={handleSavePoolConfig}
+            canManage={canManage}
+            registeredCount={updatedTeams.length}
+            maxParticipants={tournament?.max_participants}
           />
         )}
 
@@ -808,7 +863,9 @@ export default function PoolPlayManagementScreen() {
         visible={showSetupModal}
         onClose={() => setShowSetupModal(false)}
         config={config}
-        onSaveConfig={(updated) => setConfig((prev) => ({ ...prev, ...updated }))}
+        onSaveConfig={handleSavePoolConfig}
+        registeredCount={updatedTeams.length}
+        maxParticipants={tournament?.max_participants}
       />
     </Screen>
   );

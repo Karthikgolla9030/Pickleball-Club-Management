@@ -39,6 +39,7 @@ export function useClubCourts(clubId: string | null, status?: CourtStatus) {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
     },
   });
@@ -52,6 +53,7 @@ export function useClubCourts(clubId: string | null, status?: CourtStatus) {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
     },
   });
@@ -90,6 +92,7 @@ export function useCourtDetails(clubId: string | null, courtId: string | null) {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
     },
   });
@@ -103,6 +106,7 @@ export function useCourtDetails(clubId: string | null, courtId: string | null) {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
     },
   });
@@ -116,6 +120,7 @@ export function useCourtDetails(clubId: string | null, courtId: string | null) {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
     },
   });

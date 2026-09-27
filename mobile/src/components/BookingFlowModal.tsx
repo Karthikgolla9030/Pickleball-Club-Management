@@ -5,7 +5,9 @@ import { AppText } from './AppText';
 import { Button } from './Button';
 import { Card } from './Card';
 
+import { Calendar } from 'lucide-react-native';
 import { FilterChips } from './FilterChips';
+import { DateCalendar } from './DateCalendar';
 import { Input } from './Input';
 import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } from '@/hooks';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
@@ -45,6 +47,7 @@ export function BookingFlowModal({
   const [playersCount, setPlayersCount] = useState<string>('4');
   const [notes, setNotes] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
   // Queries
   const { availability, isLoading: isAvailLoading } = useClubCourtAvailability(clubId, dateStr, 60);
@@ -62,6 +65,7 @@ export function BookingFlowModal({
     if (visible) {
       setStage(1);
       setFormError(null);
+      setShowDatePicker(false);
       if (initialDate) setDateStr(initialDate);
       if (initialCourtId) setCourtId(initialCourtId);
       if (initialSlot) setSlotIso(initialSlot);
@@ -74,15 +78,16 @@ export function BookingFlowModal({
     }
   }, [visible, initialDate, initialCourtId, initialSlot, playerMembers, mode]);
 
-  const dateOptions = Array.from({ length: 14 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    const iso = d.toISOString().split('T')[0];
-    const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow' : `${d.toLocaleDateString(undefined, { weekday: 'short' })} ${d.getDate()}`;
-    return { key: iso, label };
-  });
-
-  const availableCourts = availability?.courts.filter(c => c.slots.length > 0) || [];
+  const availableCourts = React.useMemo(() => {
+    if (!availability?.courts) return [];
+    return availability.courts.filter((c) => {
+      if (!c.slots || c.slots.length === 0) return false;
+      if (mode === 'player') {
+        return c.slots.some((s) => s.status !== 'BLOCKED');
+      }
+      return true;
+    });
+  }, [availability?.courts, mode]);
   
   // Only show slots for selected court that are actually available
   const selectedCourtSlots = availableCourts.find(c => c.court_id === courtId)?.slots || [];
@@ -136,7 +141,14 @@ export function BookingFlowModal({
       }
       setStage(4);
     } catch (err: any) {
-      setFormError(err.message || 'Failed to create booking. The slot may no longer be available.');
+      const isConflict =
+        err?.response?.status === 409 ||
+        err?.message?.toLowerCase().includes('conflict') ||
+        err?.message?.toLowerCase().includes('already booked');
+      const msg = isConflict
+        ? 'This time slot is no longer available. Another player has just booked it. Please choose another slot.'
+        : err?.response?.data?.detail || err?.message || 'Failed to create booking. The slot may no longer be available.';
+      setFormError(msg);
       setStage(1); // Return to stage 1 so player can select another slot
     }
   };
@@ -199,17 +211,54 @@ export function BookingFlowModal({
       )}
 
       <View style={styles.fieldSection}>
-        <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>Date</AppText>
-        <FilterChips
-          chips={dateOptions}
-          activeChip={dateStr}
-          onChipPress={(d) => {
-            setDateStr(d);
-            setSlotIso('');
-          }}
-          style={{ marginHorizontal: -Spacing[4] }}
-          contentContainerStyle={{ paddingHorizontal: Spacing[4] }}
-        />
+        <View style={styles.dateHeaderRow}>
+          <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>Date</AppText>
+          <TouchableOpacity
+            onPress={() => setShowDatePicker((prev) => !prev)}
+            style={styles.datePickerToggle}
+            accessibilityRole="button"
+          >
+            <Calendar size={14} color="#0F766E" />
+            <AppText style={styles.datePickerToggleText}>
+              {showDatePicker ? 'Hide Calendar' : 'Change Date'}
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          onPress={() => setShowDatePicker((prev) => !prev)}
+          style={styles.selectedDateCard}
+          activeOpacity={0.8}
+        >
+          <Calendar size={18} color="#0F766E" />
+          <View style={styles.selectedDateInfo}>
+            <AppText style={styles.selectedDateMainText}>
+              {new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+                weekday: 'long',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </AppText>
+            <AppText style={styles.selectedDateSubText}>
+              {dateStr === new Date().toISOString().split('T')[0] ? 'Today' : 'Selected Date'}
+            </AppText>
+          </View>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <View style={styles.calendarContainer}>
+            <DateCalendar
+              selectedDate={dateStr}
+              minDate={new Date().toISOString().split('T')[0]}
+              onSelectDate={(newDate) => {
+                setDateStr(newDate);
+                setSlotIso('');
+                setShowDatePicker(false);
+              }}
+            />
+          </View>
+        )}
       </View>
 
       <View style={styles.fieldSection}>
@@ -596,6 +645,59 @@ const styles = StyleSheet.create({
   formContainer: { gap: Spacing[4], paddingHorizontal: Spacing[4] },
   fieldSection: { marginBottom: Spacing[2], zIndex: 1 },
   fieldLabel: { marginBottom: Spacing[2] },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing[2],
+  },
+  datePickerToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  datePickerToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F766E',
+  },
+  selectedDateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+    padding: Spacing[3],
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  selectedDateInfo: {
+    flex: 1,
+  },
+  selectedDateMainText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  selectedDateSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  calendarContainer: {
+    marginTop: Spacing[2],
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[2],
+  },
   timeGrid: {
     flexDirection: 'row', flexWrap: 'wrap', gap: Spacing[3]
   },
