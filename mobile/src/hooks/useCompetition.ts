@@ -179,8 +179,15 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.recordMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
         });
@@ -205,8 +212,15 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.correctMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
         });
@@ -441,8 +455,15 @@ export function usePoolMatches(
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.recordMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_POOL_MATCHES(clubId, tournamentId, poolId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments', tournamentId, 'pools'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
@@ -455,8 +476,15 @@ export function usePoolMatches(
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.correctMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_POOL_MATCHES(clubId, tournamentId, poolId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments', tournamentId, 'pools'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId) });
       }
@@ -531,8 +559,15 @@ export function useChampionship(clubId: string | null, tournamentId: string | nu
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.recordMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
@@ -545,8 +580,15 @@ export function useChampionship(clubId: string | null, tournamentId: string | nu
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.correctMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_CHAMPIONSHIP_MATCHES(clubId, tournamentId) });
       }
     },
@@ -775,7 +817,18 @@ export function useScramble(clubId: string | null, tournamentId: string | null) 
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.recordMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: invalidateAll,
+    onSuccess: (updatedMatch: Match) => {
+      if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_SCRAMBLE_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
+      }
+      invalidateAll();
+    },
   });
 
   const correctResultMutation = useMutation({
@@ -783,7 +836,18 @@ export function useScramble(clubId: string | null, tournamentId: string | null) 
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.correctMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: invalidateAll,
+    onSuccess: (updatedMatch: Match) => {
+      if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_SCRAMBLE_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
+      }
+      invalidateAll();
+    },
   });
 
   return {
@@ -974,8 +1038,15 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.recordMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_SUMMARY(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
@@ -989,8 +1060,15 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.correctMatchResult(clubId, tournamentId, matchId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (updatedMatch: Match) => {
       if (clubId && tournamentId) {
+        queryClient.setQueryData<Match[]>(
+          QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId),
+          (old) => {
+            if (!old) return old;
+            return old.map((m) => (m.id === updatedMatch.id ? { ...m, ...updatedMatch } : m));
+          }
+        );
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_SUMMARY(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });

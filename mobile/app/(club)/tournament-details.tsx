@@ -710,18 +710,23 @@ export default function TournamentDetailsScreen() {
         } else {
           await recordChampionshipResult({ matchId: selectedMatch.id, payload });
         }
+        void refetchChampionship();
       } else if (selectedMatch.stage === 'pool') {
         if (selectedMatch.status === 'completed') {
           await correctPoolMatchResult({ matchId: selectedMatch.id, payload });
         } else {
           await recordPoolMatchResult({ matchId: selectedMatch.id, payload });
         }
+        void refetchPoolMatches();
+        void refetchPoolStandings();
       } else {
         if (selectedMatch.status === 'completed') {
           await correctResult({ matchId: selectedMatch.id, payload });
         } else {
           await recordResult({ matchId: selectedMatch.id, payload });
         }
+        void refetchMatches();
+        void refetchStandings();
       }
       setShowScoreModal(false);
       void refetchTournament();

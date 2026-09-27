@@ -41,6 +41,7 @@ import {
   useTournamentDetails,
   useTournamentRegistrations,
 } from '@/hooks';
+import { competitionApi } from '@/services/api/competition';
 import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation';
 import { Colors, Spacing } from '@/theme';
 import type {
@@ -378,7 +379,7 @@ export default function PoolPlayManagementScreen() {
     Alert.alert('Round Started', `Courts are active! Showing live matches.`);
   };
 
-  const handleRecordPoolScore = (matchId: string, score1: number, score2: number) => {
+  const handleRecordPoolScore = async (matchId: string, score1: number, score2: number) => {
     setMatches((prev) =>
       prev.map((m) => {
         if (m.id !== matchId) return m;
@@ -392,6 +393,23 @@ export default function PoolPlayManagementScreen() {
         };
       })
     );
+    if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
+      try {
+        await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
+          score_a: score1,
+          score_b: score2,
+        });
+      } catch {
+        try {
+          await competitionApi.correctMatchResult(clubId, tournamentId, matchId, {
+            score_a: score1,
+            score_b: score2,
+          });
+        } catch {
+          // Keep local state update
+        }
+      }
+    }
   };
 
   const handleGenerateChampionshipBracket = () => {
@@ -415,12 +433,29 @@ export default function PoolPlayManagementScreen() {
     );
   };
 
-  const handleRecordBracketScore = (
+  const handleRecordBracketScore = async (
     matchId: string,
     score1: number,
     score2: number
   ) => {
     setChampionshipMatches((prev) => advanceBracketWinner(prev, matchId, score1, score2));
+    if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
+      try {
+        await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
+          score_a: score1,
+          score_b: score2,
+        });
+      } catch {
+        try {
+          await competitionApi.correctMatchResult(clubId, tournamentId, matchId, {
+            score_a: score1,
+            score_b: score2,
+          });
+        } catch {
+          // Keep local state update
+        }
+      }
+    }
   };
 
   const handlePublishTournament = async () => {

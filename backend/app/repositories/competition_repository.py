@@ -258,6 +258,13 @@ class CompetitionRepository:
         )
         return list(result.scalars().all())
 
+    async def get_match_number_map(self, tournament_id: uuid.UUID) -> dict[uuid.UUID, int]:
+        """Fetch dictionary mapping match id to match number without loading heavy joins."""
+        result = await self.db.execute(
+            select(Match.id, Match.match_number).where(Match.tournament_id == tournament_id)
+        )
+        return {row[0]: row[1] for row in result.all() if row[1] is not None}
+
     async def list_match_statuses_by_tournament(
         self, tournament_id: uuid.UUID
     ) -> list[Match]:

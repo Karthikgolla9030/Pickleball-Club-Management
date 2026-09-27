@@ -53,6 +53,15 @@ export const leagueApi = {
     leagueId: string,
     status: LeagueStatus
   ): Promise<LeagueSummary> {
+    if (status === 'registration_open') {
+      return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/open-registration`, {});
+    }
+    if (status === 'registration_closed') {
+      return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/close-registration`, {});
+    }
+    if (status === 'cancelled') {
+      return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/cancel`, {});
+    }
     return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/status`, {
       status,
     });

@@ -1831,8 +1831,7 @@ class CompetitionService:
         format_cfg = tournament.format_configuration or {}
         meta = format_cfg.get("bracket_data", {}).get("matches", {}).get(str(match_id), {})
         if meta:
-            all_m = await self.competition_repo.list_matches_by_tournament(tournament_id)
-            id_map = {m.id: m.match_number for m in all_m}
+            id_map = await self.competition_repo.get_match_number_map(tournament_id)
             resp.bracket_section = meta.get("bracket_section")
             resp.label = meta.get("label")
             loser_id_str = meta.get("loser_next_match_id")
@@ -2028,8 +2027,7 @@ class CompetitionService:
         format_cfg = tournament.format_configuration or {}
         meta = format_cfg.get("bracket_data", {}).get("matches", {}).get(str(match_id), {})
         if meta:
-            all_m = await self.competition_repo.list_matches_by_tournament(tournament_id)
-            id_map = {m.id: m.match_number for m in all_m}
+            id_map = await self.competition_repo.get_match_number_map(tournament_id)
             resp.bracket_section = meta.get("bracket_section")
             resp.label = meta.get("label")
             loser_id_str = meta.get("loser_next_match_id")

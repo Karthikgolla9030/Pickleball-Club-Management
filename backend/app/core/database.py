@@ -30,6 +30,7 @@ def _build_engine() -> any:
         pool_pre_ping=True,            # Detect stale connections
         pool_size=10,
         max_overflow=20,
+        pool_recycle=300,              # Recycle connections every 5m for Neon serverless
     )
 
 

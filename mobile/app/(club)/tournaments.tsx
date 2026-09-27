@@ -367,6 +367,7 @@ export default function ClubTournamentsScreen() {
     try {
       const updated = await openRegistration();
       setSelectedTournament(updated);
+      void refetch();
       Alert.alert('Registration Opened', 'Registration is now open for players.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to open registration';
@@ -379,6 +380,7 @@ export default function ClubTournamentsScreen() {
     try {
       const updated = await closeRegistration();
       setSelectedTournament(updated);
+      void refetch();
       Alert.alert('Registration Closed', 'Registration has been closed.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to close registration';

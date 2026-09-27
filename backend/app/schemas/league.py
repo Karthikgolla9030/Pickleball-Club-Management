@@ -36,6 +36,10 @@ class LeagueUpdateRequest(BaseModel):
     scoring_rules: dict[str, Any] | None = None
 
 
+class LeagueStatusUpdateRequest(BaseModel):
+    status: LeagueStatus
+
+
 class LeagueResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

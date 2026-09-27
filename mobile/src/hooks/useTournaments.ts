@@ -56,10 +56,15 @@ export function useClubTournaments(clubId: string | null, status?: TournamentSta
       if (!clubId) throw new Error('Club ID required');
       return tournamentApi.openRegistration(clubId, tournamentId);
     },
-    onSuccess: (_data, tournamentId) => {
+    onSuccess: (updated: Tournament, tournamentId: string) => {
       if (clubId) {
+        queryClient.setQueryData<Tournament[]>(QUERY_KEYS.CLUB_TOURNAMENTS(clubId), (old) => {
+          if (!old) return old;
+          return old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t));
+        });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
       }
+      queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
     },
@@ -70,10 +75,15 @@ export function useClubTournaments(clubId: string | null, status?: TournamentSta
       if (!clubId) throw new Error('Club ID required');
       return tournamentApi.closeRegistration(clubId, tournamentId);
     },
-    onSuccess: (_data, tournamentId) => {
+    onSuccess: (updated: Tournament, tournamentId: string) => {
       if (clubId) {
+        queryClient.setQueryData<Tournament[]>(QUERY_KEYS.CLUB_TOURNAMENTS(clubId), (old) => {
+          if (!old) return old;
+          return old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t));
+        });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
       }
+      queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
     },
@@ -157,7 +167,12 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return tournamentApi.updateTournament(clubId, tournamentId, payload);
     },
-    onSuccess: invalidateTournament,
+    onSuccess: (updated: Tournament) => {
+      if (tournamentId) {
+        queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
+      }
+      invalidateTournament();
+    },
   });
 
   const openRegistrationMutation = useMutation({
@@ -165,7 +180,12 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return tournamentApi.openRegistration(clubId, tournamentId);
     },
-    onSuccess: invalidateTournament,
+    onSuccess: (updated: Tournament) => {
+      if (tournamentId) {
+        queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
+      }
+      invalidateTournament();
+    },
   });
 
   const closeRegistrationMutation = useMutation({
@@ -173,7 +193,12 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return tournamentApi.closeRegistration(clubId, tournamentId);
     },
-    onSuccess: invalidateTournament,
+    onSuccess: (updated: Tournament) => {
+      if (tournamentId) {
+        queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
+      }
+      invalidateTournament();
+    },
   });
 
   const cancelTournamentMutation = useMutation({

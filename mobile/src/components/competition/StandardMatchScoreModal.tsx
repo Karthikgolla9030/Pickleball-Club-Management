@@ -344,6 +344,7 @@ export function StandardMatchScoreModal({
   const [scoreB, setScoreB] = useState<number>(0);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const targetScore = scoringRules?.target_score ?? match?.tournament?.scoring_rules?.target_score ?? 11;
   const winBy = scoringRules?.win_by ?? match?.tournament?.scoring_rules?.win_by ?? 2;
@@ -364,6 +365,7 @@ export function StandardMatchScoreModal({
       setScoreB(sB);
       setHasInteracted(Boolean(isCompleted));
       setServerError(null);
+      setSubmitting(false);
     }
   }, [visible, match, isCompleted]);
 
@@ -405,16 +407,27 @@ export function StandardMatchScoreModal({
     setScoreB(isNaN(val) ? 0 : val);
   };
 
+  const isBusy = isSaving || submitting;
+
   const handleSubmit = async () => {
-    if (!validation.isValid || isSaving) return;
+    if (!validation.isValid || isBusy) return;
     try {
+      setSubmitting(true);
       setServerError(null);
       await onSave(scoreA, scoreB);
       onClose();
     } catch (err: any) {
-      // Detect timeout / network errors and show specific guidance
-      // (The API client already shows a clean message for these cases)
       const msg: string = err?.message || err?.detail || '';
+      // If the backend indicates the score was already recorded or completed, treat as success
+      if (
+        msg.toLowerCase().includes('already recorded') ||
+        msg.toLowerCase().includes('already completed')
+      ) {
+        onClose();
+        return;
+      }
+
+      // Detect timeout / network errors and show specific guidance
       const isNetworkError =
         err?.type === 'NETWORK_ERROR' ||
         msg.toLowerCase().includes('network') ||
@@ -429,7 +442,8 @@ export function StandardMatchScoreModal({
       } else {
         setServerError(msg || 'Failed to save match result. Please try again.');
       }
-      // Do NOT call onClose() — keep the sheet open so the user can retry safely
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -444,13 +458,14 @@ export function StandardMatchScoreModal({
           label: 'Cancel',
           variant: 'secondary',
           onPress: onClose,
+          disabled: isBusy,
         },
         {
-          label: isSaving ? 'Saving...' : 'Save Result',
+          label: isBusy ? 'Saving...' : 'Save Result',
           variant: 'primary',
           onPress: handleSubmit,
-          disabled: !validation.isValid || isSaving,
-          loading: isSaving,
+          disabled: !validation.isValid || isBusy,
+          loading: isBusy,
         },
       ]}
     >

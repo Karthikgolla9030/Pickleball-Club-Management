@@ -59,6 +59,7 @@ from app.schemas.league import (
     LeagueResponse,
     LeagueSnapshotResponse,
     LeagueStandingsResponse,
+    LeagueStatusUpdateRequest,
     LeagueTeamCreateRequest,
     LeagueTeamResponse,
     LeagueTeamUpdateRequest,
@@ -177,6 +178,33 @@ async def cancel_league(
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_LEAGUES)),
 ) -> LeagueResponse:
     return await LeagueService(db).cancel_league(club_id, league_id)
+
+
+@club_league_router.post(
+    "/{league_id}/status",
+    response_model=LeagueResponse,
+    summary="Update league status",
+)
+async def update_league_status(
+    club_id: uuid.UUID,
+    league_id: uuid.UUID,
+    payload: LeagueStatusUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_LEAGUES)),
+) -> LeagueResponse:
+    from app.models.league import LeagueStatus
+    service = LeagueService(db)
+    if payload.status == LeagueStatus.REGISTRATION_OPEN:
+        return await service.open_registration(club_id, league_id)
+    elif payload.status == LeagueStatus.REGISTRATION_CLOSED:
+        return await service.close_registration(club_id, league_id)
+    elif payload.status == LeagueStatus.CANCELLED:
+        return await service.cancel_league(club_id, league_id)
+    else:
+        league = await service._get_league_or_404(league_id, club_id=club_id)
+        league = await service.league_repo.update_league(league, status=payload.status)
+        await db.commit()
+        return await service.get_league(club_id, league_id)
 
 
 # ─── Club Staff Team Operations ───────────────────────────────────────────────
