@@ -287,7 +287,6 @@ export const ROLE_PERMISSIONS: Record<ClubRole, readonly ClubPermission[]> = {
     'manage_scores',
     'manage_standings',
     'manage_results',
-    'manage_schedules',
   ],
 } as const;
 

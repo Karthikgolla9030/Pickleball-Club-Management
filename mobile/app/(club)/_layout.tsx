@@ -51,6 +51,7 @@ export default function ClubLayout() {
         '/(club)/memberships',
         '/(club)/payments',
         '/(club)/lessons',
+        '/(club)/competition-schedule',
       ];
       if (tdRestricted.some((r) => pathname.startsWith(r))) {
         router.replace('/(club)/tournaments');

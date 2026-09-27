@@ -227,7 +227,6 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
         { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' },
         { key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' },
-        { key: 'schedules', label: 'Competition Schedule', icon: CalendarDays, route: '/(club)/competition-schedule' },
       ];
       clubSection2 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
