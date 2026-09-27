@@ -263,6 +263,7 @@ async def league_setup(db_session: AsyncSession):
 
     # 8 Player memberships in Club A
     pms_a = []
+    player_users_a = []
     for i in range(1, 9):
         u = User(email=f"lplayer{i}+{uuid.uuid4().hex[:6]}@test.local", hashed_password=hash_password("Pass123!"), full_name=f"Player {chr(64 + i)}", is_active=True, is_verified=True)
         db_session.add(u)
@@ -271,6 +272,7 @@ async def league_setup(db_session: AsyncSession):
         pm = ClubPlayerMembership(user_id=u.id, club_id=club_a.id, membership_number=f"A-{i:03d}", status=PlayerMembershipStatus.ACTIVE)
         db_session.add(pm)
         pms_a.append(pm)
+        player_users_a.append(u)
 
     # 2 Player memberships in Club B
     pms_b = []
@@ -294,6 +296,7 @@ async def league_setup(db_session: AsyncSession):
         "player": player,
         "owner_b": owner_b,
         "pms_a": pms_a,
+        "player_users_a": player_users_a,
         "pms_b": pms_b,
     }
 
@@ -501,14 +504,14 @@ class TestLeagueScheduleAndMatchesAPI:
         weeks = r_sched.json()
         assert len(weeks) == 3
 
-        # Weeks 1 and 2 are regular_season with 2 matches each
+        # Weeks 1 and 2 contain all 6 unique pairings distributed across the 2 regular season weeks
         assert weeks[0]["week_type"] == "regular_season"
         assert weeks[0]["status"] == "in_progress"
-        assert len(weeks[0]["matches"]) == 2
+        assert len(weeks[0]["matches"]) == 4  # 2 rounds
 
         assert weeks[1]["week_type"] == "regular_season"
         assert weeks[1]["status"] == "pending"
-        assert len(weeks[1]["matches"]) == 2
+        assert len(weeks[1]["matches"]) == 2  # 1 round (total 6 matches for 4 teams)
 
         # Week 3 is playoffs
         assert weeks[2]["week_type"] == "playoffs"
@@ -553,10 +556,12 @@ class TestLeagueCompetitionFlowAPI:
         # List matches
         r_matches = await async_client.get(f"/api/v1/clubs/{club.id}/leagues/{lid}/matches", headers=headers)
         matches = r_matches.json()
-        assert len(matches) == 4  # 2 weeks * 2 matches
+        assert len(matches) == 6  # 4 teams round-robin = 4 * 3 // 2 = 6 unique matches
 
         week1_matches = [m for m in matches if m["week_number"] == 1]
         week2_matches = [m for m in matches if m["week_number"] == 2]
+        assert len(week1_matches) == 4
+        assert len(week2_matches) == 2
 
         # Score Week 1 matches
         # Invalid score rejected
@@ -567,7 +572,7 @@ class TestLeagueCompetitionFlowAPI:
         )
         assert r_inv.status_code == 422
 
-        # Valid scores
+        # Valid scores for all Week 1 matches
         await async_client.post(
             f"/api/v1/clubs/{club.id}/leagues/{lid}/matches/{week1_matches[0]['id']}/score",
             headers=headers,
@@ -577,6 +582,16 @@ class TestLeagueCompetitionFlowAPI:
             f"/api/v1/clubs/{club.id}/leagues/{lid}/matches/{week1_matches[1]['id']}/score",
             headers=headers,
             json={"score_a": 11, "score_b": 9},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/matches/{week1_matches[2]['id']}/score",
+            headers=headers,
+            json={"score_a": 11, "score_b": 6},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/matches/{week1_matches[3]['id']}/score",
+            headers=headers,
+            json={"score_a": 11, "score_b": 8},
         )
 
         # Week 1 is now completed, snapshots saved
@@ -694,3 +709,167 @@ class TestLeaguePlayerReadAPI:
             json={"name": "Illegal Team", "member_player_membership_ids": [str(pms[2].id), str(pms[3].id)]},
         )
         assert r_forbidden.status_code == 403
+
+
+class TestLeagueEqualMatchSchedulingUnit:
+    """Validate equal regular-season matches for 6-team, 8-team, and 10-team leagues."""
+
+    def setup_method(self):
+        from app.services.competition.league_engine import LeagueEngine
+        self.engine = LeagueEngine()
+
+    @pytest.mark.parametrize("n_teams,num_reg_weeks", [
+        (6, 3),   # 6 teams, 3 regular weeks (fewer weeks than 5 rounds)
+        (6, 5),   # 6 teams, 5 regular weeks (exact 1 round/week)
+        (8, 4),   # 8 teams, 4 regular weeks (fewer weeks than 7 rounds)
+        (8, 7),   # 8 teams, 7 regular weeks (exact 1 round/week)
+        (10, 5),  # 10 teams, 5 regular weeks (fewer weeks than 9 rounds)
+        (10, 9),  # 10 teams, 9 regular weeks (exact 1 round/week)
+        (7, 7),   # Odd 7 teams, 7 regular weeks (BYEs handled)
+    ])
+    def test_equal_matches_and_complete_round_robin(self, n_teams: int, num_reg_weeks: int):
+        teams = [{"id": uuid.uuid4(), "name": f"Team {i}", "seed": i} for i in range(1, n_teams + 1)]
+        slots = self.engine.generate_regular_season_schedule(teams, num_regular_weeks=num_reg_weeks)
+
+        expected_total_matches = n_teams * (n_teams - 1) // 2
+        assert len(slots) == expected_total_matches, f"Expected {expected_total_matches} matches for {n_teams} teams"
+
+        # Count matches played per team
+        team_match_counts = {t["id"]: 0 for t in teams}
+        pairings = set()
+
+        for s in slots:
+            assert s.team_a_id is not None
+            assert s.team_b_id is not None
+            assert s.team_a_id != s.team_b_id
+            assert 1 <= s.week_number <= num_reg_weeks
+
+            team_match_counts[s.team_a_id] += 1
+            team_match_counts[s.team_b_id] += 1
+
+            pair = tuple(sorted([str(s.team_a_id), str(s.team_b_id)]))
+            assert pair not in pairings, f"Duplicate pairing generated: {pair}"
+            pairings.add(pair)
+
+        # Every single pair must meet exactly once
+        assert len(pairings) == expected_total_matches
+
+        # Central Requirement: EVERY team must have the EXACT SAME number of regular season matches (N - 1)
+        expected_per_team = n_teams - 1
+        for team_id, count in team_match_counts.items():
+            assert count == expected_per_team, (
+                f"Team {team_id} played {count} matches, expected {expected_per_team}"
+            )
+
+
+class TestLeaguePlayerRegistrationAPI:
+    """Test player self-registration, status check, and cancellation."""
+
+    @pytest.mark.asyncio
+    async def test_player_self_registration_flow(self, async_client: AsyncClient, league_setup: dict):
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        player_a_headers = make_auth_header(data["player_users_a"][0])
+        player_b = data["pms_a"][1]
+        player_c = data["pms_a"][2]
+
+        # 1. Create league and open registration
+        r = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Open Doubles League", "number_of_weeks": 4, "playoff_team_count": 2},
+        )
+        lid = r.json()["id"]
+
+        # Cannot register while DRAFT
+        r_draft = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_a_headers,
+            json={"team_name": "Dynamic Duo", "partner_membership_id": str(player_b.id)},
+        )
+        assert r_draft.status_code == 400
+
+        # Open registration
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=staff_headers)
+
+        # Status before registration: not registered
+        r_status0 = await async_client.get(f"/api/v1/leagues/{lid}/registration-status", headers=player_a_headers)
+        assert r_status0.status_code == 200
+        assert r_status0.json()["is_registered"] is False
+
+        # Cannot register with self
+        caller_pm = data["pms_a"][0]
+        r_self = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_a_headers,
+            json={"team_name": "Solo Team", "partner_membership_id": str(caller_pm.id)},
+        )
+        assert r_self.status_code == 400
+
+        # Valid registration
+        r_reg = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_a_headers,
+            json={"team_name": "Dynamic Duo", "partner_membership_id": str(player_b.id)},
+        )
+        assert r_reg.status_code == 201
+        assert r_reg.json()["name"] == "Dynamic Duo"
+
+        # Status after registration: registered
+        r_status1 = await async_client.get(f"/api/v1/leagues/{lid}/registration-status", headers=player_a_headers)
+        assert r_status1.status_code == 200
+        assert r_status1.json()["is_registered"] is True
+        assert r_status1.json()["team"]["name"] == "Dynamic Duo"
+
+        # Duplicate registration blocked
+        r_dup = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_a_headers,
+            json={"team_name": "Another Team", "partner_membership_id": str(player_c.id)},
+        )
+        assert r_dup.status_code == 400
+
+        # Partner cannot register another team either
+        player_b_headers = make_auth_header(data["player_users_a"][1])
+        r_partner_dup = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_b_headers,
+            json={"team_name": "Partner Team", "partner_membership_id": str(player_c.id)},
+        )
+        assert r_partner_dup.status_code == 400
+
+        # Cancel registration
+        r_cancel = await async_client.delete(f"/api/v1/leagues/{lid}/register", headers=player_a_headers)
+        assert r_cancel.status_code == 200
+
+        # Status after cancellation
+        r_status2 = await async_client.get(f"/api/v1/leagues/{lid}/registration-status", headers=player_a_headers)
+        assert r_status2.status_code == 200
+        assert r_status2.json()["is_registered"] is False
+
+    @pytest.mark.asyncio
+    async def test_manual_snapshot_endpoint(self, async_client: AsyncClient, league_setup: dict):
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+
+        r = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Snapshot Test League", "number_of_weeks": 3, "playoff_team_count": 2},
+        )
+        lid = r.json()["id"]
+
+        # Get week 1
+        r_weeks = await async_client.get(f"/api/v1/clubs/{club.id}/leagues/{lid}/weeks", headers=staff_headers)
+        w1_id = r_weeks.json()[0]["id"]
+
+        # Trigger snapshot
+        r_snap = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/weeks/{w1_id}/snapshot",
+            headers=staff_headers,
+        )
+        assert r_snap.status_code == 200
+        assert r_snap.json()["week_number"] == 1
+        assert "created standing snapshot" in r_snap.json()["message"]

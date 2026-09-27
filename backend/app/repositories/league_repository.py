@@ -198,6 +198,24 @@ class LeagueRepository:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
+    async def count_teams_by_league(self, league_id: uuid.UUID) -> int:
+        stmt = select(func.count(Team.id)).where(Team.league_id == league_id)
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_team_counts_for_leagues(
+        self, league_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, int]:
+        if not league_ids:
+            return {}
+        stmt = (
+            select(Team.league_id, func.count(Team.id))
+            .where(Team.league_id.in_(league_ids))
+            .group_by(Team.league_id)
+        )
+        result = await self.db.execute(stmt)
+        return {row[0]: row[1] for row in result.all()}
+
     async def get_team_by_id(
         self,
         team_id: uuid.UUID,

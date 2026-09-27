@@ -48,6 +48,7 @@ class LeagueResponse(BaseModel):
     name: str
     description: str | None
     status: LeagueStatus
+    status_display: str | None = None
     number_of_weeks: int
     current_week: int
     team_size: int
@@ -55,8 +56,21 @@ class LeagueResponse(BaseModel):
     scoring_rules: dict[str, Any] | None
     start_date: datetime | None
     champion_team_id: uuid.UUID | None = None
+    champion_team: dict[str, Any] | None = None
+    teams_count: int = 0
+    weeks_count: int = 0
     created_at: datetime
     updated_at: datetime
+
+
+class PlayerLeagueRegisterRequest(BaseModel):
+    team_name: str = Field(..., min_length=1, max_length=255, description="Name for the registered team")
+    partner_membership_id: uuid.UUID = Field(..., description="Active club player membership ID of the partner")
+
+
+class LeagueRegistrationStatusResponse(BaseModel):
+    is_registered: bool
+    team: LeagueTeamResponse | None = None
 
 
 # ─── League Team Schemas ──────────────────────────────────────────────────────

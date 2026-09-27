@@ -195,11 +195,21 @@ class LeagueEngine:
         slots: list[LeagueMatchSlot] = []
         global_match_number = 1
 
-        for week_num in range(1, num_regular_weeks + 1):
-            cycle_round = (week_num - 1) % rounds_in_cycle
+        # Every round-robin cycle requires exactly rounds_in_cycle rounds so every team
+        # plays every other team exactly once (total N * (N - 1) / 2 matches).
+        # We distribute these rounds across the available num_regular_weeks.
+        for round_idx in range(rounds_in_cycle):
+            if num_regular_weeks >= rounds_in_cycle:
+                week_num = 1 + round_idx
+            else:
+                # Distribute rounds evenly across the fewer available regular-season weeks
+                week_num = 1 + min(
+                    num_regular_weeks - 1,
+                    (round_idx * num_regular_weeks) // rounds_in_cycle,
+                )
 
-            # Rotate elements: shift by cycle_round
-            current_rotating = rotating[cycle_round:] + rotating[:cycle_round]
+            # Rotate elements: shift by round_idx
+            current_rotating = rotating[round_idx:] + rotating[:round_idx]
             current_round_teams = [pivot] + current_rotating
 
             for i in range(matches_per_round):
@@ -225,6 +235,8 @@ class LeagueEngine:
                 )
                 global_match_number += 1
 
+        # Sort slots deterministically by (week_number, match_number)
+        slots.sort(key=lambda s: (s.week_number, s.match_number))
         return slots
 
     # ─── Cumulative Standings ─────────────────────────────────────────────────

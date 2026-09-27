@@ -23,11 +23,13 @@ from app.models.league import (
     LeagueWeekType,
     LeagueWeeklyStanding,
 )
+from app.models.user import User
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
 from app.repositories.league_repository import LeagueRepository
 from app.schemas.league import (
     LeagueCreateRequest,
     LeagueMatchResponse,
+    LeagueRegistrationStatusResponse,
     LeagueResponse,
     LeagueSnapshotResponse,
     LeagueStandingRowResponse,
@@ -38,6 +40,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
 )
 from app.services.competition.bracket_engine import BracketEngine
@@ -135,21 +138,66 @@ class LeagueService:
 
         return await self.get_league(club_id, league.id)
 
+    async def _format_league_response(
+        self,
+        league: League,
+        teams_count: int | None = None,
+    ) -> LeagueResponse:
+        if teams_count is None:
+            teams_count = await self.league_repo.count_teams_by_league(league.id)
+
+        champion_team_dict = None
+        if league.champion_team:
+            champion_team_dict = {"id": str(league.champion_team.id), "name": league.champion_team.name}
+        elif league.champion_team_id:
+            champ = await self.league_repo.get_team_by_id(league.champion_team_id, league_id=league.id)
+            if champ:
+                champion_team_dict = {"id": str(champ.id), "name": champ.name}
+
+        return LeagueResponse(
+            id=league.id,
+            club_id=league.club_id,
+            name=league.name,
+            description=league.description,
+            status=league.status,
+            status_display=league.status.display_label,
+            number_of_weeks=league.number_of_weeks,
+            current_week=league.current_week,
+            team_size=league.team_size,
+            playoff_team_count=league.playoff_team_count,
+            scoring_rules=league.scoring_rules,
+            start_date=league.start_date,
+            champion_team_id=league.champion_team_id,
+            champion_team=champion_team_dict,
+            teams_count=teams_count,
+            weeks_count=league.number_of_weeks,
+            created_at=league.created_at,
+            updated_at=league.updated_at,
+        )
+
     async def get_league(
         self,
         club_id: uuid.UUID | None,
         league_id: uuid.UUID,
     ) -> LeagueResponse:
         league = await self._get_league_or_404(league_id, club_id=club_id)
-        return LeagueResponse.model_validate(league)
+        return await self._format_league_response(league)
 
     async def list_club_leagues(self, club_id: uuid.UUID) -> list[LeagueResponse]:
         leagues = await self.league_repo.list_leagues_by_club(club_id)
-        return [LeagueResponse.model_validate(l) for l in leagues]
+        counts = await self.league_repo.get_team_counts_for_leagues([l.id for l in leagues])
+        return [
+            await self._format_league_response(l, teams_count=counts.get(l.id, 0))
+            for l in leagues
+        ]
 
     async def list_public_leagues(self) -> list[LeagueResponse]:
         leagues = await self.league_repo.list_public_leagues()
-        return [LeagueResponse.model_validate(l) for l in leagues]
+        counts = await self.league_repo.get_team_counts_for_leagues([l.id for l in leagues])
+        return [
+            await self._format_league_response(l, teams_count=counts.get(l.id, 0))
+            for l in leagues
+        ]
 
     async def update_league(
         self,
@@ -1096,4 +1144,175 @@ class LeagueService:
             matches=formatted_matches,
             champion_team_id=league.champion_team_id,
             champion_team_name=champ_name,
+        )
+
+    # ─── Manual Snapshot Operations ───────────────────────────────────────────
+
+    async def snapshot_week(
+        self,
+        club_id: uuid.UUID,
+        league_id: uuid.UUID,
+        week_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        """Manually trigger or refresh standing snapshot for a specific week."""
+        league = await self._get_league_or_404(league_id, club_id=club_id)
+        weeks = await self.league_repo.list_league_weeks(league_id)
+        target_week = next((w for w in weeks if w.id == week_id), None)
+        if not target_week:
+            raise HTTPException(status_code=404, detail="Week not found in this league.")
+
+        teams = await self.league_repo.list_teams_by_league(league_id)
+        team_dicts = [{"id": t.id, "name": t.name, "seed": t.seed} for t in teams]
+
+        reg_matches = await self.league_repo.list_league_matches(
+            league_id, stage=MatchStage.REGULAR_SEASON
+        )
+        completed_matches = [
+            {
+                "status": m.status.value,
+                "score_a": m.score_a,
+                "score_b": m.score_b,
+                "team_a_id": m.team_a_id,
+                "team_b_id": m.team_b_id,
+                "week_number": m.league_week.week_number if m.league_week else m.round_number,
+            }
+            for m in reg_matches
+            if (m.league_week.week_number if m.league_week else m.round_number or 0) <= target_week.week_number
+        ]
+
+        standings_w = self.engine.calculate_standings(team_dicts, completed_matches)
+        await self.league_repo.save_weekly_snapshots(
+            league_id=league.id,
+            league_week_id=target_week.id,
+            week_number=target_week.week_number,
+            standings_rows=standings_w,
+        )
+        await self.db.commit()
+
+        return {
+            "league_id": str(league_id),
+            "week_id": str(week_id),
+            "week_number": target_week.week_number,
+            "count": len(standings_w),
+            "message": f"Successfully created standing snapshot for Week {target_week.week_number}.",
+        }
+
+    # ─── Player Registration Operations ───────────────────────────────────────
+
+    async def register_player_team(
+        self,
+        league_id: uuid.UUID,
+        user: User,
+        payload: PlayerLeagueRegisterRequest,
+    ) -> LeagueTeamResponse:
+        """Allow an authenticated active club member to register a doubles team with a partner."""
+        league = await self._get_league_or_404(league_id)
+        self._assert_status(league, [LeagueStatus.REGISTRATION_OPEN], "register for league")
+
+        # 1. Caller must have an active player membership in this club
+        caller_pm = await self.member_repo.get_by_user_and_club(
+            user_id=user.id,
+            club_id=league.club_id,
+        )
+        if not caller_pm or caller_pm.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must have an active player membership in this club to register.",
+            )
+
+        # 2. Check caller not already registered
+        caller_existing_team = await self.league_repo.find_player_team_in_league(
+            league_id, caller_pm.id
+        )
+        if caller_existing_team:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"You are already registered for this league in team '{caller_existing_team.name}'.",
+            )
+
+        # 3. Partner must exist, belong to this club, and be active
+        if payload.partner_membership_id == caller_pm.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot select yourself as your doubles partner.",
+            )
+
+        partner_pm = await self.member_repo.get_by_id(payload.partner_membership_id)
+        if not partner_pm or partner_pm.club_id != league.club_id or partner_pm.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Selected partner is not an active player member of this club.",
+            )
+
+        partner_existing_team = await self.league_repo.find_player_team_in_league(
+            league_id, partner_pm.id
+        )
+        if partner_existing_team:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Selected partner is already registered in team '{partner_existing_team.name}'.",
+            )
+
+        # 4. Check team name uniqueness
+        clean_name = payload.team_name.strip()
+        existing_named = await self.league_repo.get_team_by_name(league_id, clean_name)
+        if existing_named:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A team named '{clean_name}' already exists in this league.",
+            )
+
+        team = await self.league_repo.create_team(
+            league_id=league_id,
+            name=clean_name,
+            member_membership_ids=[caller_pm.id, partner_pm.id],
+        )
+        await self.db.commit()
+        return self._format_team_response(team)
+
+    async def cancel_player_registration(
+        self,
+        league_id: uuid.UUID,
+        user: User,
+    ) -> dict[str, str]:
+        """Allow a registered player to cancel their registration while registration is still open."""
+        league = await self._get_league_or_404(league_id)
+        self._assert_status(league, [LeagueStatus.REGISTRATION_OPEN], "cancel registration")
+
+        caller_pm = await self.member_repo.get_by_user_and_club(
+            user_id=user.id,
+            club_id=league.club_id,
+        )
+        if not caller_pm:
+            raise HTTPException(status_code=400, detail="No membership found.")
+
+        team = await self.league_repo.find_player_team_in_league(league_id, caller_pm.id)
+        if not team:
+            raise HTTPException(status_code=404, detail="You are not registered in this league.")
+
+        await self.league_repo.delete_team(team)
+        await self.db.commit()
+        return {"message": "Registration cancelled successfully."}
+
+    async def get_player_registration_status(
+        self,
+        league_id: uuid.UUID,
+        user: User,
+    ) -> LeagueRegistrationStatusResponse:
+        """Get authenticated player's registration status in this league."""
+        league = await self._get_league_or_404(league_id)
+        caller_pm = await self.member_repo.get_by_user_and_club(
+            user_id=user.id,
+            club_id=league.club_id,
+        )
+        if not caller_pm:
+            return LeagueRegistrationStatusResponse(is_registered=False, team=None)
+
+        team = await self.league_repo.find_player_team_in_league(league_id, caller_pm.id)
+        if not team:
+            return LeagueRegistrationStatusResponse(is_registered=False, team=None)
+
+        return LeagueRegistrationStatusResponse(
+            is_registered=True,
+            team=self._format_team_response(team),
         )

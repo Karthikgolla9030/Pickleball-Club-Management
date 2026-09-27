@@ -434,3 +434,57 @@ export function usePlayerLeaguePlayoffs(leagueId: string | null) {
     staleTime: 15 * 1000,
   });
 }
+
+export function usePlayerLeagueRegistrationStatus(leagueId: string | null) {
+  return useQuery<{ is_registered: boolean; team?: LeagueTeam | null }, Error>({
+    queryKey: leagueId ? ['leagues', leagueId, 'my-registration'] : ['leagues', 'none', 'my-registration'],
+    queryFn: () => {
+      if (!leagueId) throw new Error('League ID required');
+      return leagueApi.getPlayerRegistrationStatus(leagueId);
+    },
+    enabled: Boolean(leagueId),
+    staleTime: 15 * 1000,
+  });
+}
+
+export function usePlayerRegisterLeague(leagueId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      teamName,
+      partnerMembershipId,
+    }: {
+      teamName: string;
+      partnerMembershipId: string;
+    }) => {
+      if (!leagueId) throw new Error('League ID required');
+      return leagueApi.registerPlayerLeague(leagueId, teamName, partnerMembershipId);
+    },
+    onSuccess: () => {
+      if (leagueId) {
+        queryClient.invalidateQueries({ queryKey: ['leagues', leagueId, 'my-registration'] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUE_DETAIL(leagueId) });
+      }
+    },
+  });
+}
+
+export function usePlayerCancelLeagueRegistration(leagueId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => {
+      if (!leagueId) throw new Error('League ID required');
+      return leagueApi.cancelPlayerRegistration(leagueId);
+    },
+    onSuccess: () => {
+      if (leagueId) {
+        queryClient.invalidateQueries({ queryKey: ['leagues', leagueId, 'my-registration'] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUE_DETAIL(leagueId) });
+      }
+    },
+  });
+}

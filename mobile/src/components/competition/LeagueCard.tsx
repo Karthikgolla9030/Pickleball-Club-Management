@@ -167,9 +167,9 @@ export function LeagueCard({
           <View style={styles.metaRow}>
             <Users size={13} color="#61736F" style={styles.metaIcon} />
             <AppText style={styles.metaText}>
-              {league.teams_count > 0
+              {league.teams_count && league.teams_count > 0
                 ? `${league.teams_count} Teams (Top ${league.playoff_team_count || 4} Playoffs)`
-                : `Teams (Top ${league.playoff_team_count || 4} Playoffs)`}
+                : `Teams not finalized (Top ${league.playoff_team_count || 4} Playoffs)`}
             </AppText>
           </View>
 

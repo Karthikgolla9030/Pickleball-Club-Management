@@ -56,6 +56,7 @@ from app.repositories.club_player_membership_repository import ClubPlayerMembers
 from app.schemas.league import (
     LeagueCreateRequest,
     LeagueMatchResponse,
+    LeagueRegistrationStatusResponse,
     LeagueResponse,
     LeagueSnapshotResponse,
     LeagueStandingsResponse,
@@ -65,6 +66,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
 )
 from app.services.league_service import LeagueService
@@ -293,6 +295,12 @@ async def delete_league_team(
     status_code=status.HTTP_201_CREATED,
     summary="Generate regular season schedule",
 )
+@club_league_router.post(
+    "/{league_id}/schedule",
+    response_model=list[LeagueWeekResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate regular season schedule (alias)",
+)
 async def generate_schedule(
     club_id: uuid.UUID,
     league_id: uuid.UUID,
@@ -414,6 +422,21 @@ async def list_snapshots(
     return await LeagueService(db).list_snapshots(club_id, league_id)
 
 
+@club_league_router.post(
+    "/{league_id}/weeks/{week_id}/snapshot",
+    status_code=status.HTTP_200_OK,
+    summary="Trigger manual weekly snapshot",
+)
+async def snapshot_week(
+    club_id: uuid.UUID,
+    league_id: uuid.UUID,
+    week_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_STANDINGS)),
+) -> dict[str, Any]:
+    return await LeagueService(db).snapshot_week(club_id, league_id, week_id)
+
+
 # ─── Club Staff Playoffs ──────────────────────────────────────────────────────
 
 @club_league_router.post(
@@ -421,6 +444,12 @@ async def list_snapshots(
     response_model=PlayoffSummaryResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Generate playoff bracket",
+)
+@club_league_router.post(
+    "/{league_id}/playoffs/generate",
+    response_model=PlayoffSummaryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate playoff bracket (alias)",
 )
 async def generate_playoffs(
     club_id: uuid.UUID,
@@ -577,3 +606,46 @@ async def player_get_playoffs(
     db: AsyncSession = Depends(get_db),
 ) -> PlayoffSummaryResponse:
     return await LeagueService(db).get_playoffs(None, league_id)
+
+
+# ─── Player Registration Endpoints ───────────────────────────────────────────
+
+@player_league_router.post(
+    "/{league_id}/register",
+    response_model=LeagueTeamResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Player self-registration for league",
+)
+async def player_register_league(
+    league_id: uuid.UUID,
+    payload: PlayerLeagueRegisterRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LeagueTeamResponse:
+    return await LeagueService(db).register_player_team(league_id, current_user, payload)
+
+
+@player_league_router.delete(
+    "/{league_id}/register",
+    status_code=status.HTTP_200_OK,
+    summary="Player cancel league registration",
+)
+async def player_cancel_league_registration(
+    league_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    return await LeagueService(db).cancel_player_registration(league_id, current_user)
+
+
+@player_league_router.get(
+    "/{league_id}/registration-status",
+    response_model=LeagueRegistrationStatusResponse,
+    summary="Check current player's registration status in league",
+)
+async def player_league_registration_status(
+    league_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LeagueRegistrationStatusResponse:
+    return await LeagueService(db).get_player_registration_status(league_id, current_user)

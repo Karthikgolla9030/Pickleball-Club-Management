@@ -217,4 +217,29 @@ export const leagueApi = {
   getPlayerPlayoffs(leagueId: string): Promise<LeaguePlayoffsResponse> {
     return apiClient.get<LeaguePlayoffsResponse>(`${playerLeagueBase()}/${leagueId}/playoffs`);
   },
+
+  // ─── Player Registration ────────────────────────────────────────────────────
+
+  registerPlayerLeague(
+    leagueId: string,
+    teamName: string,
+    partnerMembershipId: string
+  ): Promise<LeagueTeam> {
+    return apiClient.post<LeagueTeam>(`${playerLeagueBase()}/${leagueId}/register`, {
+      team_name: teamName,
+      partner_membership_id: partnerMembershipId,
+    });
+  },
+
+  cancelPlayerRegistration(leagueId: string): Promise<{ message: string }> {
+    return apiClient.delete<{ message: string }>(`${playerLeagueBase()}/${leagueId}/register`);
+  },
+
+  getPlayerRegistrationStatus(
+    leagueId: string
+  ): Promise<{ is_registered: boolean; team?: LeagueTeam | null }> {
+    return apiClient.get<{ is_registered: boolean; team?: LeagueTeam | null }>(
+      `${playerLeagueBase()}/${leagueId}/registration-status`
+    );
+  },
 };

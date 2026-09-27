@@ -172,6 +172,7 @@ export default function ClubLeaguesScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={styles.filterScrollView}
           contentContainerStyle={styles.filterScroll}
         >
           {/* Tab: All Leagues */}
@@ -550,6 +551,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
     gap: 6,
+  },
+  filterScrollView: {
+    flex: 1,
   },
   filterScroll: {
     flexDirection: 'row',

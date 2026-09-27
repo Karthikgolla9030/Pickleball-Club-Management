@@ -114,7 +114,7 @@ export function CreateLeagueModal({
 
             <View style={styles.stepTitleRow}>
               <AppText variant="heading3" style={styles.stepTitle}>
-                Step 1 — League Details
+                League & Season Setup
               </AppText>
             </View>
           </View>
@@ -150,13 +150,18 @@ export function CreateLeagueModal({
                 numberOfLines={2}
               />
 
-              <Input
-                label="Total Weeks (Regular Season + 1 Playoff Week) *"
-                placeholder="4"
-                keyboardType="numeric"
-                value={numberOfWeeks}
-                onChangeText={setNumberOfWeeks}
-              />
+              <View>
+                <Input
+                  label="Total Weeks (Regular Season + 1 Playoff Week) *"
+                  placeholder="4"
+                  keyboardType="numeric"
+                  value={numberOfWeeks}
+                  onChangeText={setNumberOfWeeks}
+                />
+                <AppText style={styles.helperText}>
+                  {Math.max(1, (parseInt(numberOfWeeks, 10) || 4) - 1)} regular-season week{Math.max(1, (parseInt(numberOfWeeks, 10) || 4) - 1) > 1 ? 's' : ''} + final playoff week.
+                </AppText>
+              </View>
 
               <Input
                 label="Playoff Qualifying Teams Count (2, 4, 8) *"
@@ -170,8 +175,9 @@ export function CreateLeagueModal({
                 <AppText style={styles.infoTitle}>League Engine Invariants:</AppText>
                 <AppText style={styles.infoText}>
                   • Fixed doubles teams (2 players per team){'\n'}
-                  • Weeks 1 to {parseInt(numberOfWeeks, 10) > 1 ? parseInt(numberOfWeeks, 10) - 1 : 1}: Regular Season round-robin{'\n'}
-                  • Week {numberOfWeeks || 'N'}: Championship Single-Elimination Playoffs{'\n'}
+                  • Weeks 1 to {Math.max(1, (parseInt(numberOfWeeks, 10) || 4) - 1)}: Regular Season round-robin{'\n'}
+                  • Week {parseInt(numberOfWeeks, 10) || 4}: Top {playoffTeamCount || 4} Single-Elimination Playoffs{'\n'}
+                  • Equal match scheduling: every team plays every other team once{'\n'}
                   • Games played to 11 (win by 2)
                 </AppText>
               </View>
@@ -294,5 +300,12 @@ const styles = StyleSheet.create({
     fontSize: Typography.size.xs,
     color: Colors.text.secondary,
     lineHeight: 18,
+  },
+  helperText: {
+    fontSize: Typography.size.xs,
+    color: Colors.text.tertiary,
+    marginTop: -Spacing[2],
+    marginBottom: Spacing[3],
+    marginHorizontal: Spacing[1],
   },
 });

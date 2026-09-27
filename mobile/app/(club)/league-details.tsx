@@ -283,7 +283,7 @@ export default function ClubLeagueDetailsScreen() {
       {/* Stats + Status badge — AppHeader already shows league name */}
       <ScreenHeader
         title=""
-        subtitle={`${league.number_of_weeks} Weeks • ${league.teams_count} Teams • Top ${league.playoff_team_count} to Playoffs`}
+        subtitle={`${league.number_of_weeks} Weeks • ${(league.teams_count ?? 0) > 0 ? `${league.teams_count} Teams` : 'Teams not finalized'} • Top ${league.playoff_team_count} to Playoffs`}
         rightElement={
           <Badge
             label={league.status_display || LEAGUE_STATUS_LABELS[league.status]}
@@ -371,7 +371,7 @@ export default function ClubLeagueDetailsScreen() {
       {/* Tab Content */}
       <ScrollView
         style={styles.tabContent}
-        contentContainerStyle={{ paddingBottom: Spacing[8] }}
+        contentContainerStyle={{ paddingBottom: Spacing[16] }}
         refreshControl={
           <RefreshControl
             refreshing={isLeagueLoading || isMatchesLoading || isStandingsLoading}
@@ -398,9 +398,29 @@ export default function ClubLeagueDetailsScreen() {
             {/* Snapshot button for staff */}
             {canManageTournaments && activeWeek && activeWeek.week_type === 'regular_season' ? (
               <View style={styles.snapshotRow}>
-                <AppText style={styles.weekStatusText}>
-                  Week {activeWeek.week_number} Status: {activeWeek.status_display}
-                </AppText>
+                <View style={styles.weekStatusContainer}>
+                  <AppText style={styles.weekStatusLabel}>
+                    Week {activeWeek.week_number} Status:
+                  </AppText>
+                  <Badge
+                    label={
+                      activeWeek.status_display ||
+                      (activeWeek.status === 'completed'
+                        ? 'Completed'
+                        : activeWeek.status === 'in_progress'
+                        ? 'In Progress'
+                        : 'Pending')
+                    }
+                    variant={
+                      activeWeek.status === 'completed'
+                        ? 'success'
+                        : activeWeek.status === 'in_progress'
+                        ? 'info'
+                        : 'default'
+                    }
+                    size="sm"
+                  />
+                </View>
                 <Button
                   label="Snapshot Standings"
                   size="sm"
@@ -410,8 +430,9 @@ export default function ClubLeagueDetailsScreen() {
                     try {
                       await snapshotStandings(activeWeek.id);
                       Alert.alert('Success', `Standings snapshotted for Week ${activeWeek.week_number}`);
+                      handleRefreshAll();
                     } catch (err: any) {
-                      Alert.alert('Error', err?.message || 'Failed to snapshot standings');
+                      Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to snapshot standings');
                     }
                   }}
                   loading={isSnapshotting}
@@ -875,16 +896,27 @@ const styles = StyleSheet.create({
   },
   snapshotRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[2],
-    padding: Spacing[1],
-    backgroundColor: Colors.surface.default,
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surface.elevated,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
     borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    marginBottom: Spacing[3],
+    flexWrap: 'wrap',
+    gap: Spacing[2],
   },
-  weekStatusText: {
+  weekStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  weekStatusLabel: {
     fontSize: Typography.size.xs,
     color: Colors.text.secondary,
+    fontWeight: Typography.weight.semibold,
   },
   matchesList: {
     gap: Spacing[2],
