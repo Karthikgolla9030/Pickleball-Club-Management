@@ -576,8 +576,8 @@ async def seed(session: AsyncSession) -> None:
 
     print(f"  Created {len(player_memberships) + len(dt_player_memberships)} club player memberships")
 
-    # 5. Tournaments & Leagues (Guarded by SEED_DEMO_COMPETITIONS = False to maintain clean testing state)
-    SEED_DEMO_COMPETITIONS = False
+    # 5. Tournaments & Leagues
+    SEED_DEMO_COMPETITIONS = True
     if SEED_DEMO_COMPETITIONS:
         now = datetime.now(timezone.utc)
         director_user = users_by_email["director@demo.local"]
