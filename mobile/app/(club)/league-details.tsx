@@ -831,7 +831,7 @@ export default function ClubLeagueDetailsScreen() {
           {/* Court Hero Image */}
           <View style={styles.heroImageWrapper}>
             <Image
-              source={require('../../../assets/leagues/hero_banner.jpg')}
+              source={require('../../assets/leagues/hero_banner.jpg')}
               style={styles.heroImage}
               resizeMode="cover"
             />
