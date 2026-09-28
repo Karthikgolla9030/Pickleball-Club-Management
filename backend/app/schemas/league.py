@@ -21,9 +21,14 @@ class LeagueCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="League display name")
     description: str | None = Field(None, max_length=2000)
     number_of_weeks: int = Field(4, ge=2, le=52, description="Total duration (Weeks 1..N-1 Regular Season, Week N Playoffs)")
-    team_size: int = Field(2, ge=1, le=4, description="Default 2 for doubles")
+    team_size: int = Field(2, ge=1, le=4, description="Default 2 for doubles, 1 for singles")
     playoff_team_count: int = Field(4, ge=2, le=32, description="Number of teams qualifying for playoffs")
+    max_teams: int | None = Field(None, ge=2, le=64, description="Configured team capacity")
     start_date: datetime | None = None
+    end_date: datetime | None = None
+    registration_open_at: datetime | None = None
+    registration_close_at: datetime | None = None
+    registration_fee: float | None = Field(None, ge=0)
     scoring_rules: dict[str, Any] | None = None
 
 
@@ -31,8 +36,14 @@ class LeagueUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=2000)
     number_of_weeks: int | None = Field(None, ge=2, le=52)
+    team_size: int | None = Field(None, ge=1, le=4)
     playoff_team_count: int | None = Field(None, ge=2, le=32)
+    max_teams: int | None = Field(None, ge=2, le=64)
     start_date: datetime | None = None
+    end_date: datetime | None = None
+    registration_open_at: datetime | None = None
+    registration_close_at: datetime | None = None
+    registration_fee: float | None = Field(None, ge=0)
     scoring_rules: dict[str, Any] | None = None
 
 
@@ -53,8 +64,13 @@ class LeagueResponse(BaseModel):
     current_week: int
     team_size: int
     playoff_team_count: int
+    max_teams: int | None = None
+    registration_fee: float | None = None
+    registration_open_at: datetime | None = None
+    registration_close_at: datetime | None = None
     scoring_rules: dict[str, Any] | None
     start_date: datetime | None
+    end_date: datetime | None = None
     champion_team_id: uuid.UUID | None = None
     champion_team: dict[str, Any] | None = None
     teams_count: int = 0
@@ -94,6 +110,7 @@ class LeagueTeamMemberResponse(BaseModel):
     player_membership_id: uuid.UUID | None = None
     display_name: str | None = None
     is_guest: bool = False
+    skill_rating: float | None = None
 
 
 class LeagueTeamResponse(BaseModel):
@@ -103,6 +120,7 @@ class LeagueTeamResponse(BaseModel):
     league_id: uuid.UUID | None
     name: str
     seed: int | None
+    avg_skill_level: float | None = None
     members: list[LeagueTeamMemberResponse] = []
     created_at: datetime
 
@@ -148,8 +166,14 @@ class LeagueMatchResponse(BaseModel):
     team_a_members: list[str] = []
     team_b_members: list[str] = []
     court_id: uuid.UUID | None = None
+    court_name: str | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
+
+
+class LeagueWeekUpdateRequest(BaseModel):
+    start_date: datetime | None = None
+    end_date: datetime | None = None
 
 
 class LeagueWeekResponse(BaseModel):
@@ -160,6 +184,8 @@ class LeagueWeekResponse(BaseModel):
     week_number: int
     week_type: LeagueWeekType
     status: LeagueWeekStatus
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     matches: list[LeagueMatchResponse] = []
 
 

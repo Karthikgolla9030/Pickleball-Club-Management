@@ -40,6 +40,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    LeagueWeekUpdateRequest,
     LeagueEligiblePartnerResponse,
     PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
@@ -120,8 +121,13 @@ class LeagueService:
             current_week=1,
             team_size=payload.team_size,
             playoff_team_count=payload.playoff_team_count,
+            max_teams=payload.max_teams,
+            registration_fee=payload.registration_fee,
+            registration_open_at=payload.registration_open_at,
+            registration_close_at=payload.registration_close_at,
             scoring_rules=scoring_rules,
             start_date=payload.start_date,
+            end_date=payload.end_date,
         )
 
         # Create LeagueWeek records: 1..N-1 Regular Season, N Playoffs
@@ -166,8 +172,13 @@ class LeagueService:
             current_week=league.current_week,
             team_size=league.team_size,
             playoff_team_count=league.playoff_team_count,
+            max_teams=league.max_teams,
+            registration_fee=float(league.registration_fee) if league.registration_fee is not None else None,
+            registration_open_at=league.registration_open_at,
+            registration_close_at=league.registration_close_at,
             scoring_rules=league.scoring_rules,
             start_date=league.start_date,
+            end_date=league.end_date,
             champion_team_id=league.champion_team_id,
             champion_team=champion_team_dict,
             teams_count=teams_count,
@@ -218,8 +229,20 @@ class LeagueService:
             if payload.playoff_team_count < 2:
                 raise HTTPException(status_code=400, detail="Playoff team count must be at least 2.")
             updates["playoff_team_count"] = payload.playoff_team_count
+        if payload.team_size is not None:
+            updates["team_size"] = payload.team_size
+        if payload.max_teams is not None:
+            updates["max_teams"] = payload.max_teams
+        if payload.registration_fee is not None:
+            updates["registration_fee"] = payload.registration_fee
+        if payload.registration_open_at is not None:
+            updates["registration_open_at"] = payload.registration_open_at
+        if payload.registration_close_at is not None:
+            updates["registration_close_at"] = payload.registration_close_at
         if payload.start_date is not None:
             updates["start_date"] = payload.start_date
+        if payload.end_date is not None:
+            updates["end_date"] = payload.end_date
         if payload.scoring_rules is not None:
             updates["scoring_rules"] = payload.scoring_rules
 
@@ -428,27 +451,40 @@ class LeagueService:
 
     def _format_team_response(self, team: Team) -> LeagueTeamResponse:
         members = []
+        skill_ratings: list[float] = []
         for m in team.members:
             disp_name = None
-            if m.player_membership and m.player_membership.user and m.player_membership.user.player_profile:
-                disp_name = m.player_membership.user.player_profile.display_name
-            elif m.player_membership and m.player_membership.user:
-                disp_name = m.player_membership.user.full_name
+            rating: float | None = None
+            if m.player_membership and m.player_membership.user:
+                if m.player_membership.user.player_profile:
+                    disp_name = m.player_membership.user.player_profile.display_name or m.player_membership.user.full_name
+                    if m.player_membership.user.player_profile.skill_rating is not None:
+                        rating = float(m.player_membership.user.player_profile.skill_rating)
+                if not disp_name:
+                    disp_name = m.player_membership.user.full_name
             elif m.guest_name:
                 disp_name = m.guest_name
+
+            member_rating = rating if rating is not None else 3.5
+            skill_ratings.append(member_rating)
+
             members.append(
                 LeagueTeamMemberResponse(
                     id=m.id,
                     player_membership_id=m.player_membership_id,
                     display_name=disp_name,
                     is_guest=m.player_membership_id is None,
+                    skill_rating=round(member_rating, 1),
                 )
             )
+
+        avg_skill = round(sum(skill_ratings) / len(skill_ratings), 1) if skill_ratings else 3.5
         return LeagueTeamResponse(
             id=team.id,
             league_id=team.league_id,
             name=team.name,
             seed=team.seed,
+            avg_skill_level=avg_skill,
             members=members,
             created_at=team.created_at,
         )
@@ -556,6 +592,8 @@ class LeagueService:
                     week_number=w.week_number,
                     week_type=w.week_type,
                     status=w.status,
+                    start_date=w.start_date,
+                    end_date=w.end_date,
                     matches=matches_by_week.get(w.id, []),
                 )
             )
@@ -579,8 +617,34 @@ class LeagueService:
             week_number=lw.week_number,
             week_type=lw.week_type,
             status=lw.status,
+            start_date=lw.start_date,
+            end_date=lw.end_date,
             matches=[self._format_match_response(m) for m in matches],
         )
+
+    async def update_week(
+        self,
+        club_id: uuid.UUID | None,
+        league_id: uuid.UUID,
+        week_number: int,
+        payload: LeagueWeekUpdateRequest,
+    ) -> LeagueWeekResponse:
+        await self._get_league_or_404(league_id, club_id=club_id)
+        lw = await self.league_repo.get_league_week_by_number(league_id, week_number)
+        if not lw:
+            raise HTTPException(status_code=404, detail=f"Week {week_number} not found.")
+
+        updates: dict[str, Any] = {}
+        if payload.start_date is not None:
+            updates["start_date"] = payload.start_date
+        if payload.end_date is not None:
+            updates["end_date"] = payload.end_date
+
+        if updates:
+            await self.league_repo.update_league_week(lw, **updates)
+            await self.db.commit()
+
+        return await self.get_week(club_id, league_id, week_number)
 
     async def list_matches(
         self,
@@ -651,6 +715,10 @@ class LeagueService:
             winner_team_name=winner_name,
             completed_at=m.completed_at,
             is_bye=is_bye,
+            court_id=m.court_id,
+            court_name=m.court.name if m.court else None,
+            scheduled_start_at=m.scheduled_start_at,
+            scheduled_end_at=m.scheduled_end_at,
         )
 
     # ─── Match Scoring & Result Correction ────────────────────────────────────
@@ -1259,6 +1327,26 @@ class LeagueService:
                 detail="You must have an active player membership in this club to register.",
             )
 
+        # 1b. Validate registration dates and capacity
+        now = datetime.now(timezone.utc)
+        if league.registration_open_at and now < league.registration_open_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration for this league is not open yet.",
+            )
+        if league.registration_close_at and now > league.registration_close_at:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Registration for this league has closed.",
+            )
+        if league.max_teams:
+            current_teams = await self.league_repo.count_teams_by_league(league_id)
+            if current_teams >= league.max_teams:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="League has reached maximum team capacity.",
+                )
+
         # 2. Check caller not already registered
         caller_existing_team = await self.league_repo.find_player_team_in_league(
             league_id, caller_pm.id
@@ -1269,51 +1357,60 @@ class LeagueService:
                 detail=f"You are already registered for this league in team '{caller_existing_team.name}'.",
             )
 
-        # 3. Validate partner (either member or manual guest name)
-        partner_member_data: dict[str, Any]
-        if payload.partner_membership_id is not None:
-            if payload.partner_membership_id == caller_pm.id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You cannot select yourself as your doubles partner.",
-                )
-
-            partner_pm = await self.member_repo.get_by_id(payload.partner_membership_id)
-            if not partner_pm or partner_pm.club_id != league.club_id or partner_pm.status != PlayerMembershipStatus.ACTIVE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected partner is not an active player member of this club.",
-                )
-
-            partner_existing_team = await self.league_repo.find_player_team_in_league(
-                league_id, partner_pm.id
-            )
-            if partner_existing_team:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Selected partner is already registered in team '{partner_existing_team.name}'.",
-                )
-            partner_member_data = {"player_membership_id": partner_pm.id, "guest_name": None}
-        elif payload.partner_name and payload.partner_name.strip():
-            clean_partner_name = payload.partner_name.strip()
-            # Prevent registering player from entering themselves as partner
-            caller_names = [user.full_name.lower().strip() if user.full_name else ""]
-            if hasattr(user, "player_profile") and user.player_profile and user.player_profile.display_name:
-                caller_names.append(user.player_profile.display_name.lower().strip())
-            if clean_partner_name.lower() in [n for n in caller_names if n]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You cannot enter yourself as your doubles partner.",
-                )
-            partner_member_data = {"player_membership_id": None, "guest_name": clean_partner_name}
+        # 3. Format-specific member list
+        if league.team_size == 1:
+            clean_name = payload.team_name.strip() if payload.team_name else (user.full_name or "Player")
+            members_data = [{"player_membership_id": caller_pm.id, "guest_name": None}]
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Please enter a doubles partner name or select an active club member.",
-            )
+            # Doubles: validate partner (either member or manual guest name)
+            partner_member_data: dict[str, Any]
+            if payload.partner_membership_id is not None:
+                if payload.partner_membership_id == caller_pm.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You cannot select yourself as your doubles partner.",
+                    )
+
+                partner_pm = await self.member_repo.get_by_id(payload.partner_membership_id)
+                if not partner_pm or partner_pm.club_id != league.club_id or partner_pm.status != PlayerMembershipStatus.ACTIVE:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected partner is not an active player member of this club.",
+                    )
+
+                partner_existing_team = await self.league_repo.find_player_team_in_league(
+                    league_id, partner_pm.id
+                )
+                if partner_existing_team:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Selected partner is already registered in team '{partner_existing_team.name}'.",
+                    )
+                partner_member_data = {"player_membership_id": partner_pm.id, "guest_name": None}
+            elif payload.partner_name and payload.partner_name.strip():
+                clean_partner_name = payload.partner_name.strip()
+                # Prevent registering player from entering themselves as partner
+                caller_names = [user.full_name.lower().strip() if user.full_name else ""]
+                if hasattr(user, "player_profile") and user.player_profile and user.player_profile.display_name:
+                    caller_names.append(user.player_profile.display_name.lower().strip())
+                if clean_partner_name.lower() in [n for n in caller_names if n]:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You cannot enter yourself as your doubles partner.",
+                    )
+                partner_member_data = {"player_membership_id": None, "guest_name": clean_partner_name}
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Please enter a doubles partner name or select an active club member.",
+                )
+            clean_name = payload.team_name.strip()
+            members_data = [
+                {"player_membership_id": caller_pm.id, "guest_name": None},
+                partner_member_data,
+            ]
 
         # 4. Check team name uniqueness
-        clean_name = payload.team_name.strip()
         existing_named = await self.league_repo.get_team_by_name(league_id, clean_name)
         if existing_named:
             raise HTTPException(
@@ -1324,10 +1421,7 @@ class LeagueService:
         team = await self.league_repo.create_team(
             league_id=league_id,
             name=clean_name,
-            members_data=[
-                {"player_membership_id": caller_pm.id, "guest_name": None},
-                partner_member_data,
-            ],
+            members_data=members_data,
         )
         await self.db.commit()
         return self._format_team_response(team)

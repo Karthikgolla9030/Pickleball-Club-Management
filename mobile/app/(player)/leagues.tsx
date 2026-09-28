@@ -56,17 +56,21 @@ import {
   type LeagueEligiblePartner,
   type LeagueSummary,
 } from '@/types';
+import { formatDate, formatDateTime } from '@/utils/formatters';
 
-const LEAGUE_DETAIL_TABS: { key: 'standings' | 'schedule' | 'playoffs'; label: string }[] = [
+type PlayerDetailTabKey = 'standings' | 'schedule' | 'playoffs' | 'results';
+
+const LEAGUE_DETAIL_TABS: { key: PlayerDetailTabKey; label: string }[] = [
   { key: 'standings', label: 'Standings' },
   { key: 'schedule', label: 'Schedule' },
   { key: 'playoffs', label: 'Playoffs' },
+  { key: 'results', label: 'Results' },
 ];
 
 export default function PlayerLeaguesScreen() {
   const { user } = useAuth();
   const [selectedLeague, setSelectedLeague] = useState<LeagueSummary | null>(null);
-  const [detailTab, setDetailTab] = useState<'standings' | 'schedule' | 'playoffs'>('standings');
+  const [detailTab, setDetailTab] = useState<PlayerDetailTabKey>('standings');
   const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
 
   // Player registration modal state
@@ -134,38 +138,41 @@ export default function PlayerLeaguesScreen() {
   };
 
   const handleRegisterSubmit = async () => {
-    const trimmedTeam = regTeamName.trim();
-    const trimmedPartner = regPartnerName.trim();
+    const isSingles = selectedLeague?.team_size === 1;
+    const trimmedTeam = regTeamName.trim() || (isSingles ? (user?.full_name || 'My Entry') : '');
+    const trimmedPartner = isSingles ? '' : regPartnerName.trim();
 
     if (!trimmedTeam) {
-      setRegError('Please enter a team name');
+      setRegError('Please enter an entry name');
       return;
     }
-    if (!trimmedPartner) {
+    if (!isSingles && !trimmedPartner) {
       setRegError('Please enter a partner name or select a club member');
       return;
     }
 
-    // Prevent selecting or typing oneself as partner
-    const myName = (user?.full_name || '').toLowerCase().trim();
-    const myEmail = (user?.email || '').toLowerCase().trim();
-    const partnerNameLower = trimmedPartner.toLowerCase();
+    if (!isSingles) {
+      // Prevent selecting or typing oneself as partner
+      const myName = (user?.full_name || '').toLowerCase().trim();
+      const myEmail = (user?.email || '').toLowerCase().trim();
+      const partnerNameLower = trimmedPartner.toLowerCase();
 
-    if (
-      (myName && partnerNameLower === myName) ||
-      (myEmail && partnerNameLower === myEmail) ||
-      (selectedPartner && selectedPartner.user_id === user?.id)
-    ) {
-      setRegError('You cannot select yourself as your doubles partner');
-      return;
+      if (
+        (myName && partnerNameLower === myName) ||
+        (myEmail && partnerNameLower === myEmail) ||
+        (selectedPartner && selectedPartner.user_id === user?.id)
+      ) {
+        setRegError('You cannot select yourself as your doubles partner');
+        return;
+      }
     }
 
     try {
       setRegError(null);
       await registerTeam({
         teamName: trimmedTeam,
-        partnerMembershipId: selectedPartner ? selectedPartner.membership_id : null,
-        partnerName: trimmedPartner,
+        partnerMembershipId: isSingles ? null : (selectedPartner ? selectedPartner.membership_id : null),
+        partnerName: isSingles ? null : trimmedPartner,
       });
       setIsRegisterModalOpen(false);
       setRegTeamName('');
@@ -175,7 +182,7 @@ export default function PlayerLeaguesScreen() {
       setMemberSearchQuery('');
       refetchRegStatus();
       refetch();
-      Alert.alert('Registration Confirmed', `Team "${trimmedTeam}" has been successfully registered!`);
+      Alert.alert('Registration Confirmed', `Registration for "${trimmedTeam}" has been confirmed!`);
     } catch (err: any) {
       setRegError(err?.response?.data?.detail || err?.message || 'Failed to register team');
     }
@@ -305,15 +312,33 @@ export default function PlayerLeaguesScreen() {
               <View style={styles.openRegRow}>
                 <View style={{ flex: 1 }}>
                   <AppText style={styles.openRegPrompt}>Registration is currently open</AppText>
-                  <AppText style={styles.openRegSubtitle}>Register a 2-player doubles team</AppText>
+                  <AppText style={styles.openRegSubtitle}>
+                    {selectedLeague?.team_size === 1 ? 'Singles (1 Player)' : 'Doubles (2 Players)'} •{' '}
+                    {selectedLeague?.registration_fee && selectedLeague.registration_fee > 0
+                      ? `$${selectedLeague.registration_fee.toFixed(2)} Fee`
+                      : 'Free Entry'}
+                  </AppText>
+                  {selectedLeague?.max_teams ? (
+                    <AppText style={{ fontSize: 11, color: Colors.text.tertiary, marginTop: 2 }}>
+                      Capacity: {selectedLeague.teams_count || 0} / {selectedLeague.max_teams} Teams
+                      {(selectedLeague.teams_count || 0) >= selectedLeague.max_teams ? ' (Full)' : ''}
+                    </AppText>
+                  ) : null}
                 </View>
                 <Button
-                  label="Register Team"
+                  label={
+                    selectedLeague?.max_teams && (selectedLeague.teams_count || 0) >= selectedLeague.max_teams
+                      ? 'Full'
+                      : 'Register'
+                  }
                   variant="primary"
                   size="sm"
                   fullWidth={false}
+                  disabled={Boolean(
+                    selectedLeague?.max_teams && (selectedLeague.teams_count || 0) >= selectedLeague.max_teams
+                  )}
                   onPress={() => {
-                    setRegTeamName('');
+                    setRegTeamName(selectedLeague?.team_size === 1 ? (user?.full_name || 'My Entry') : '');
                     setRegPartnerName('');
                     setSelectedPartner(null);
                     setShowMemberPicker(false);
@@ -479,6 +504,13 @@ export default function PlayerLeaguesScreen() {
                             </AppText>
                           </View>
                         </View>
+                        {m.court_name && m.scheduled_start_at ? (
+                          <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.surface.border }}>
+                            <AppText style={{ fontSize: 11, color: Colors.brand.primary, fontWeight: '600' }}>
+                              📍 {m.court_name} • {formatDateTime(m.scheduled_start_at)}
+                            </AppText>
+                          </View>
+                        ) : null}
                       </Card>
                     ))}
                   </View>
@@ -511,6 +543,30 @@ export default function PlayerLeaguesScreen() {
                       </View>
                     ) : null}
                   </Card>
+                )}
+              </View>
+            )}
+
+            {/* ─── RESULTS ─── */}
+            {detailTab === 'results' && (
+              <View style={styles.tabPane}>
+                {selectedLeague?.champion_team || playoffs?.champion_team_name ? (
+                  <Card style={styles.playoffCard}>
+                    <AppText style={styles.playoffTitle}>🏆 League Champion</AppText>
+                    <View style={styles.championBox}>
+                      <AppText style={styles.championBoxText}>
+                        👑 {selectedLeague?.champion_team?.name || playoffs?.champion_team_name}
+                      </AppText>
+                    </View>
+                    <AppText style={styles.playoffMeta}>
+                      Congratulations to the champion of {selectedLeague?.name}!
+                    </AppText>
+                  </Card>
+                ) : (
+                  <EmptyState
+                    title="Season in Progress"
+                    description="Final league results and crowned champion will appear here once playoffs conclude."
+                  />
                 )}
               </View>
             )}
@@ -558,129 +614,171 @@ export default function PlayerLeaguesScreen() {
                 </View>
               ) : null}
 
+              {/* Format, Fee & Capacity Information Card */}
+              <View style={{ backgroundColor: Colors.surface.elevated, padding: Spacing[3], borderRadius: Radius.md, marginBottom: Spacing[3], gap: 6, borderWidth: 1, borderColor: Colors.surface.border }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>Competition Format</AppText>
+                  <Badge
+                    label={selectedLeague?.team_size === 1 ? 'Singles (1 Player)' : 'Doubles (2 Players)'}
+                    variant="info"
+                    size="sm"
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>Registration Fee</AppText>
+                  <AppText style={{ fontSize: 13, fontWeight: '700', color: Colors.brand.primary }}>
+                    {selectedLeague?.registration_fee && selectedLeague.registration_fee > 0
+                      ? `$${selectedLeague.registration_fee.toFixed(2)}`
+                      : 'Free Entry'}
+                  </AppText>
+                </View>
+                {selectedLeague?.max_teams ? (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>League Capacity</AppText>
+                    <AppText style={{ fontSize: 13, fontWeight: '600', color: Colors.text.primary }}>
+                      {selectedLeague.teams_count || 0} / {selectedLeague.max_teams} Teams
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
+
               <Input
-                label="Team Name *"
-                placeholder="e.g., The Dinkers"
+                label={selectedLeague?.team_size === 1 ? 'Entry / Player Name *' : 'Team Name *'}
+                placeholder={selectedLeague?.team_size === 1 ? (user?.full_name || 'My Entry') : 'e.g., The Dinkers'}
                 value={regTeamName}
                 onChangeText={setRegTeamName}
                 autoFocus
               />
 
-              <Input
-                label="Doubles Partner Name *"
-                placeholder="Enter partner's full name"
-                value={regPartnerName}
-                onChangeText={handlePartnerNameChange}
-              />
+              {/* Only show partner fields if doubles format */}
+              {selectedLeague?.team_size !== 1 && (
+                <>
+                  <Input
+                    label="Doubles Partner Name *"
+                    placeholder="Enter partner's full name"
+                    value={regPartnerName}
+                    onChangeText={handlePartnerNameChange}
+                  />
 
-              {/* Linked Member Card or Optional Club Search */}
-              {selectedPartner ? (
-                <View style={styles.selectedPartnerCard}>
-                  <View style={{ flex: 1 }}>
-                    <AppText style={styles.selectedPartnerLabel}>Linked Club Member</AppText>
-                    <AppText style={styles.selectedPartnerName}>
-                      {selectedPartner.full_name}
-                      {selectedPartner.membership_number ? ` (#${selectedPartner.membership_number})` : ''}
-                    </AppText>
-                  </View>
-                  <TouchableOpacity
-                    onPress={handleClearPartner}
-                    style={styles.clearPartnerBtn}
-                    accessibilityLabel="Remove selected member"
-                  >
-                    <AppText style={styles.clearPartnerBtnText}>✕ Remove</AppText>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.optionalSearchContainer}>
-                  <AppText style={styles.helperText}>
-                    Selecting a club member is optional. You can enter any guest partner name above, or link an active club member below.
-                  </AppText>
-                  <TouchableOpacity
-                    style={styles.togglePickerButton}
-                    onPress={() => setShowMemberPicker(!showMemberPicker)}
-                  >
-                    <AppText style={styles.togglePickerButtonText}>
-                      {showMemberPicker ? 'Hide Club Member Search ▲' : 'Search Club Members (Optional) ▼'}
-                    </AppText>
-                  </TouchableOpacity>
-
-                  {showMemberPicker && (
-                    <View style={styles.memberPickerCard}>
-                      <Input
-                        placeholder="Search member by name..."
-                        value={memberSearchQuery}
-                        onChangeText={setMemberSearchQuery}
-                      />
-                      <View style={styles.playerSelectList}>
-                        <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                          {isLoadingPartners ? (
-                            <LoadingState message="Loading club members..." />
-                          ) : eligiblePartners && eligiblePartners.length > 0 ? (
-                            eligiblePartners.map((partner) => (
-                              <TouchableOpacity
-                                key={partner.membership_id}
-                                style={styles.playerOption}
-                                onPress={() => handleSelectPartner(partner)}
-                              >
-                                <View style={{ flex: 1 }}>
-                                  <AppText style={styles.playerOptionText}>
-                                    {partner.full_name}
-                                  </AppText>
-                                  {partner.membership_number ? (
-                                    <AppText style={styles.playerOptionSubtext}>
-                                      Member #{partner.membership_number}
-                                    </AppText>
-                                  ) : null}
-                                </View>
-                                <AppText style={styles.selectActionText}>Select ›</AppText>
-                              </TouchableOpacity>
-                            ))
-                          ) : (
-                            <View style={{ padding: Spacing[3] }}>
-                              <AppText style={styles.emptyMembersText}>
-                                {memberSearchQuery ? 'No matching members found.' : 'No other eligible active members found.'}
-                              </AppText>
-                            </View>
-                          )}
-                        </ScrollView>
+                  {/* Linked Member Card or Optional Club Search */}
+                  {selectedPartner ? (
+                    <View style={styles.selectedPartnerCard}>
+                      <View style={{ flex: 1 }}>
+                        <AppText style={styles.selectedPartnerLabel}>Linked Club Member</AppText>
+                        <AppText style={styles.selectedPartnerName}>
+                          {selectedPartner.full_name}
+                          {selectedPartner.membership_number ? ` (#${selectedPartner.membership_number})` : ''}
+                        </AppText>
                       </View>
+                      <TouchableOpacity
+                        onPress={handleClearPartner}
+                        style={styles.clearPartnerBtn}
+                        accessibilityLabel="Remove selected member"
+                      >
+                        <AppText style={styles.clearPartnerBtnText}>✕ Remove</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.optionalSearchContainer}>
+                      <AppText style={styles.helperText}>
+                        Selecting a club member is optional. You can enter any guest partner name above, or link an active club member below.
+                      </AppText>
+                      <TouchableOpacity
+                        style={styles.togglePickerButton}
+                        onPress={() => setShowMemberPicker(!showMemberPicker)}
+                      >
+                        <AppText style={styles.togglePickerButtonText}>
+                          {showMemberPicker ? 'Hide Club Member Search ▲' : 'Search Club Members (Optional) ▼'}
+                        </AppText>
+                      </TouchableOpacity>
+
+                      {showMemberPicker && (
+                        <View style={styles.memberPickerCard}>
+                          <Input
+                            placeholder="Search member by name..."
+                            value={memberSearchQuery}
+                            onChangeText={setMemberSearchQuery}
+                          />
+                          <View style={styles.playerSelectList}>
+                            <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                              {isLoadingPartners ? (
+                                <LoadingState message="Loading club members..." />
+                              ) : eligiblePartners && eligiblePartners.length > 0 ? (
+                                eligiblePartners.map((partner) => (
+                                  <TouchableOpacity
+                                    key={partner.membership_id}
+                                    style={styles.playerOption}
+                                    onPress={() => handleSelectPartner(partner)}
+                                  >
+                                    <View style={{ flex: 1 }}>
+                                      <AppText style={styles.playerOptionText}>
+                                        {partner.full_name}
+                                      </AppText>
+                                      {partner.membership_number ? (
+                                        <AppText style={styles.playerOptionSubtext}>
+                                          Member #{partner.membership_number}
+                                        </AppText>
+                                      ) : null}
+                                    </View>
+                                    <AppText style={styles.selectActionText}>Select ›</AppText>
+                                  </TouchableOpacity>
+                                ))
+                              ) : (
+                                <View style={{ padding: Spacing[3] }}>
+                                  <AppText style={styles.emptyMembersText}>
+                                    {memberSearchQuery ? 'No matching members found.' : 'No other eligible active members found.'}
+                                  </AppText>
+                                </View>
+                              )}
+                            </ScrollView>
+                          </View>
+                        </View>
+                      )}
                     </View>
                   )}
-                </View>
+                </>
               )}
 
               {/* Team Roster Preview Summary */}
               <View style={styles.rosterCard}>
-                <AppText style={styles.rosterCardTitle}>Team Roster Preview (Doubles — 2 Players)</AppText>
+                <AppText style={styles.rosterCardTitle}>
+                  {selectedLeague?.team_size === 1
+                    ? 'Entry Roster (Singles — 1 Player)'
+                    : 'Team Roster Preview (Doubles — 2 Players)'}
+                </AppText>
 
                 <View style={styles.rosterRow}>
                   <View style={styles.rosterBadgeYou}>
-                    <AppText style={styles.rosterBadgeText}>Player 1 (You)</AppText>
+                    <AppText style={styles.rosterBadgeText}>
+                      {selectedLeague?.team_size === 1 ? 'Player' : 'Player 1 (You)'}
+                    </AppText>
                   </View>
                   <AppText style={styles.rosterNameText} numberOfLines={1}>
                     {user?.full_name || user?.email || 'Authenticated Player'}
                   </AppText>
                 </View>
 
-                <View style={styles.rosterDivider} />
-
-                <View style={styles.rosterRow}>
-                  <View style={selectedPartner ? styles.rosterBadgeMember : styles.rosterBadgeGuest}>
-                    <AppText style={styles.rosterBadgeText}>
-                      {selectedPartner ? 'Player 2 (Member)' : 'Player 2 (Partner)'}
-                    </AppText>
-                  </View>
-                  <AppText
-                    style={[
-                      styles.rosterNameText,
-                      !regPartnerName.trim() && styles.rosterPlaceholderText,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {regPartnerName.trim() || 'Enter partner name above'}
-                  </AppText>
-                </View>
+                {selectedLeague?.team_size !== 1 && (
+                  <>
+                    <View style={styles.rosterDivider} />
+                    <View style={styles.rosterRow}>
+                      <View style={selectedPartner ? styles.rosterBadgeMember : styles.rosterBadgeGuest}>
+                        <AppText style={styles.rosterBadgeText}>
+                          {selectedPartner ? 'Player 2 (Member)' : 'Player 2 (Partner)'}
+                        </AppText>
+                      </View>
+                      <AppText
+                        style={[
+                          styles.rosterNameText,
+                          !regPartnerName.trim() && styles.rosterPlaceholderText,
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {regPartnerName.trim() || 'Enter partner name above'}
+                      </AppText>
+                    </View>
+                  </>
+                )}
               </View>
 
               <View style={styles.regFooterActions}>

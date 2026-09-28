@@ -10,6 +10,7 @@ A League is a distinct competition domain featuring:
 """
 from __future__ import annotations
 
+from decimal import Decimal
 import enum
 import uuid
 from datetime import datetime, timezone
@@ -20,6 +21,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     JSON,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -148,6 +150,28 @@ class League(Base):
         default=4,
     )
 
+    max_teams: Mapped[int | None] = mapped_column(
+        SmallInteger,
+        nullable=True,
+        default=8,
+    )
+
+    registration_fee: Mapped[Decimal | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True,
+        default=0,
+    )
+
+    registration_open_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    registration_close_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     scoring_rules: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
@@ -155,6 +179,11 @@ class League(Base):
     )
 
     start_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    end_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -245,6 +274,15 @@ class LeagueWeek(Base):
         Enum(LeagueWeekStatus, name="league_week_status", native_enum=True),
         nullable=False,
         default=LeagueWeekStatus.PENDING,
+    )
+
+    start_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    end_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(

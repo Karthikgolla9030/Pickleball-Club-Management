@@ -897,8 +897,13 @@ export interface LeagueSummary {
   current_week: number;
   team_size: number;
   playoff_team_count: number;
+  max_teams?: number | null;
+  registration_fee?: number | null;
+  registration_open_at?: string | null;
+  registration_close_at?: string | null;
   scoring_rules: ScoringRules | null;
   start_date: string | null;
+  end_date?: string | null;
   champion_team_id: string | null;
   champion_team?: { id: string; name: string } | null;
   teams_count: number;
@@ -915,6 +920,9 @@ export interface LeagueWeek {
   week_type_display: string;
   status: LeagueWeekStatus;
   status_display: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  matches?: LeagueMatch[];
   created_at: string;
   updated_at: string;
 }
@@ -961,6 +969,7 @@ export interface LeagueTeamMember {
   player_membership_id?: string | null;
   display_name?: string | null;
   is_guest?: boolean;
+  skill_rating?: number | null;
   user?: {
     full_name: string | null;
     display_name: string | null;
@@ -990,6 +999,7 @@ export interface LeagueTeam {
   league_id: string | null;
   name: string;
   seed: number | null;
+  avg_skill_level?: number | null;
   members: LeagueTeamMember[];
 }
 
@@ -998,6 +1008,7 @@ export interface LeagueMatch {
   tournament_id: string | null;
   league_id: string | null;
   league_week_id: string | null;
+  week_number?: number | null;
   stage: string;
   round_number: number;
   match_number: number;
@@ -1015,11 +1026,17 @@ export interface LeagueMatch {
   score_a: number | null;
   score_b: number | null;
   winner_team_id: string | null;
+  winner_team_name?: string | null;
   winner_team?: { id: string; name: string } | null;
   next_match_id: string | null;
   next_match_slot: number | null;
   is_bye: boolean;
+  court_id?: string | null;
+  court_name?: string | null;
   court_number: number | null;
+  duration_minutes?: number | null;
+  scheduled_start_at?: string | null;
+  scheduled_end_at?: string | null;
   completed_at: string | null;
 }
 
@@ -1039,8 +1056,13 @@ export interface CreateLeaguePayload {
   number_of_weeks?: number;
   team_size?: number;
   playoff_team_count?: number;
+  max_teams?: number | null;
+  registration_fee?: number | null;
+  registration_open_at?: string | null;
+  registration_close_at?: string | null;
   scoring_rules?: ScoringRules | null;
   start_date?: string | null;
+  end_date?: string | null;
 }
 
 export interface CreateLeagueTeamPayload {

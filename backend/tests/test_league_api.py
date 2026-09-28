@@ -1021,3 +1021,160 @@ class TestLeaguePlayerRegistrationAPI:
         assert r_filtered.status_code == 200
         for p in r_filtered.json():
             assert target_name.lower() in p["full_name"].lower() or target_name.lower() in p["email"].lower()
+
+    @pytest.mark.asyncio
+    async def test_singles_league_registration_and_avg_skill(self, async_client: AsyncClient, league_setup: dict):
+        """Verify singles league (team_size=1) registration without partner and avg_skill_level matching player rating."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        player = data["player_users_a"][0]
+        player_headers = make_auth_header(player)
+
+        # Create singles league
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={
+                "name": "Singles Championship",
+                "team_size": 1,
+                "number_of_weeks": 4,
+                "playoff_team_count": 2,
+                "max_teams": 8,
+            },
+        )
+        assert r_league.status_code == 201
+        lid = r_league.json()["id"]
+        assert r_league.json()["team_size"] == 1
+        assert r_league.json()["max_teams"] == 8
+
+        # Open registration
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=staff_headers)
+
+        # Register singles player (no partner needed)
+        r_reg = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=player_headers,
+            json={"team_name": "Solo Ace"},
+        )
+        assert r_reg.status_code == 201
+        reg_data = r_reg.json()
+        assert reg_data["name"] == "Solo Ace"
+        assert len(reg_data["members"]) == 1
+        assert reg_data["avg_skill_level"] is not None
+
+    @pytest.mark.asyncio
+    async def test_doubles_avg_skill_level_calculation(self, async_client: AsyncClient, league_setup: dict):
+        """Verify doubles team avg_skill_level is calculated correctly from partners."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        p1 = data["player_users_a"][0]
+        p2_pm = data["pms_a"][1]
+        p1_headers = make_auth_header(p1)
+
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Premier Doubles", "team_size": 2, "number_of_weeks": 4, "playoff_team_count": 4},
+        )
+        lid = r_league.json()["id"]
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=staff_headers)
+
+        r_reg = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=p1_headers,
+            json={
+                "team_name": "Dink Dynasty",
+                "partner_membership_id": str(p2_pm.id),
+            },
+        )
+        assert r_reg.status_code == 201
+        team = r_reg.json()
+        assert team["avg_skill_level"] is not None
+        assert len(team["members"]) == 2
+        for m in team["members"]:
+            assert m["skill_rating"] is not None
+
+    @pytest.mark.asyncio
+    async def test_update_week_dates(self, async_client: AsyncClient, league_setup: dict):
+        """Verify club manager can set and update start_date and end_date on a league week."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["manager"])
+
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={"name": "Date Managed League", "number_of_weeks": 4, "playoff_team_count": 2},
+        )
+        lid = r_league.json()["id"]
+
+        now = datetime.now(timezone.utc)
+        w1_start = (now + timedelta(days=7)).isoformat()
+        w1_end = (now + timedelta(days=14)).isoformat()
+
+        r_update = await async_client.patch(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/weeks/1",
+            headers=staff_headers,
+            json={"start_date": w1_start, "end_date": w1_end},
+        )
+        assert r_update.status_code == 200
+        w_data = r_update.json()
+        assert w_data["week_number"] == 1
+        assert w_data["start_date"] is not None
+        assert w_data["end_date"] is not None
+
+    @pytest.mark.asyncio
+    async def test_capacity_and_registration_window_validation(self, async_client: AsyncClient, league_setup: dict):
+        """Verify max_teams capacity limit and registration window dates are enforced."""
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        p1 = data["player_users_a"][0]
+        p2 = data["player_users_a"][1]
+        p3 = data["player_users_a"][2]
+        p1_headers = make_auth_header(p1)
+        p2_headers = make_auth_header(p2)
+        p3_headers = make_auth_header(p3)
+
+        # League with max 2 teams
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={
+                "name": "Tight Capacity League",
+                "team_size": 1,
+                "number_of_weeks": 3,
+                "playoff_team_count": 2,
+                "max_teams": 2,
+            },
+        )
+        assert r_league.status_code == 201
+        lid = r_league.json()["id"]
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=staff_headers)
+
+        # 1st registration succeeds
+        r1 = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=p1_headers,
+            json={"team_name": "First In"},
+        )
+        assert r1.status_code == 201
+
+        # 2nd registration succeeds (capacity reached)
+        r2 = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=p2_headers,
+            json={"team_name": "Second In"},
+        )
+        assert r2.status_code == 201
+
+        # 3rd registration rejected due to capacity
+        r3 = await async_client.post(
+            f"/api/v1/leagues/{lid}/register",
+            headers=p3_headers,
+            json={"team_name": "Third Tries"},
+        )
+        assert r3.status_code == 400
+        assert "capacity" in r3.json()["detail"].lower()

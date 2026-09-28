@@ -184,7 +184,9 @@ export function useLeagueTeams(clubId: string | null, leagueId: string | null) {
 }
 
 export function useLeagueWeeks(clubId: string | null, leagueId: string | null) {
-  return useQuery<LeagueWeek[], Error>({
+  const queryClient = useQueryClient();
+
+  const weeksQuery = useQuery<LeagueWeek[], Error>({
     queryKey: clubId && leagueId
       ? QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId)
       : ['clubs', 'none', 'leagues', 'none', 'weeks'],
@@ -195,6 +197,35 @@ export function useLeagueWeeks(clubId: string | null, leagueId: string | null) {
     enabled: Boolean(clubId && leagueId),
     staleTime: 30 * 1000,
   });
+
+  const updateWeekMutation = useMutation({
+    mutationFn: ({
+      weekNumber,
+      payload,
+    }: {
+      weekNumber: number;
+      payload: { start_date?: string | null; end_date?: string | null };
+    }) => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.updateWeek(clubId, leagueId, weekNumber, payload);
+    },
+    onSuccess: () => {
+      if (clubId && leagueId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
+        });
+      }
+    },
+  });
+
+  return {
+    ...weeksQuery,
+    updateWeek: updateWeekMutation.mutateAsync,
+    isUpdatingWeek: updateWeekMutation.isPending,
+  };
 }
 
 export function useLeagueMatches(
@@ -278,12 +309,64 @@ export function useLeagueMatches(
     },
   });
 
+  const scheduleMatchMutation = useMutation({
+    mutationFn: ({
+      matchId,
+      court_id,
+      start_at,
+      duration_minutes,
+    }: {
+      matchId: string;
+      court_id: string;
+      start_at: string;
+      duration_minutes: number;
+    }) => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.scheduleMatch(clubId, leagueId, matchId, {
+        court_id,
+        start_at,
+        duration_minutes,
+      });
+    },
+    onSuccess: () => {
+      if (clubId && leagueId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
+        });
+      }
+    },
+  });
+
+  const unscheduleMatchMutation = useMutation({
+    mutationFn: (matchId: string) => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.unscheduleMatch(clubId, leagueId, matchId);
+    },
+    onSuccess: () => {
+      if (clubId && leagueId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
+        });
+      }
+    },
+  });
+
   return {
     ...matchesQuery,
     recordScore: recordScoreMutation.mutateAsync,
     isRecordingScore: recordScoreMutation.isPending,
     correctScore: correctScoreMutation.mutateAsync,
     isCorrectingScore: correctScoreMutation.isPending,
+    scheduleMatch: scheduleMatchMutation.mutateAsync,
+    isSchedulingMatch: scheduleMatchMutation.isPending,
+    unscheduleMatch: unscheduleMatchMutation.mutateAsync,
+    isUnschedulingMatch: unscheduleMatchMutation.isPending,
   };
 }
 

@@ -50,6 +50,7 @@ def _match_eager_options():
         selectinload(Match.winner_team),
         selectinload(Match.league_week),
         selectinload(Match.next_match),
+        selectinload(Match.court),
     ]
 
 

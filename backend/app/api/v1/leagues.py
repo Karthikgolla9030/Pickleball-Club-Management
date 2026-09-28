@@ -66,6 +66,7 @@ from app.schemas.league import (
     LeagueTeamUpdateRequest,
     LeagueUpdateRequest,
     LeagueWeekResponse,
+    LeagueWeekUpdateRequest,
     LeagueEligiblePartnerResponse,
     PlayerLeagueRegisterRequest,
     PlayoffSummaryResponse,
@@ -338,6 +339,22 @@ async def get_week(
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
 ) -> LeagueWeekResponse:
     return await LeagueService(db).get_week(club_id, league_id, week_number)
+
+
+@club_league_router.patch(
+    "/{league_id}/weeks/{week_number}",
+    response_model=LeagueWeekResponse,
+    summary="Update league week dates",
+)
+async def update_week(
+    club_id: uuid.UUID,
+    league_id: uuid.UUID,
+    week_number: int,
+    payload: LeagueWeekUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+) -> LeagueWeekResponse:
+    return await LeagueService(db).update_week(club_id, league_id, week_number, payload)
 
 
 @club_league_router.get(

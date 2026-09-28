@@ -138,6 +138,40 @@ export const leagueApi = {
     );
   },
 
+  updateWeek(
+    clubId: string,
+    leagueId: string,
+    weekNumber: number,
+    payload: { start_date?: string | null; end_date?: string | null }
+  ): Promise<LeagueWeek> {
+    return apiClient.patch<LeagueWeek>(
+      `${clubLeagueBase(clubId)}/${leagueId}/weeks/${weekNumber}`,
+      payload
+    );
+  },
+
+  scheduleMatch(
+    clubId: string,
+    leagueId: string,
+    matchId: string,
+    payload: { court_id: string; start_at: string; duration_minutes: number }
+  ): Promise<any> {
+    return apiClient.post(
+      `${API_ENDPOINTS.CLUBS}/${clubId}/leagues/${leagueId}/matches/${matchId}/schedule`,
+      payload
+    );
+  },
+
+  unscheduleMatch(
+    clubId: string,
+    leagueId: string,
+    matchId: string
+  ): Promise<any> {
+    return apiClient.delete(
+      `${API_ENDPOINTS.CLUBS}/${clubId}/leagues/${leagueId}/matches/${matchId}/schedule`
+    );
+  },
+
   // ─── Standings & Snapshots (Staff) ──────────────────────────────────────────
 
   getStandings(clubId: string, leagueId: string): Promise<LeagueStandingsResponse> {
