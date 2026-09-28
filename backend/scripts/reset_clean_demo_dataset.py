@@ -448,7 +448,9 @@ async def reset_database(target_url: str):
             format_configuration={
                 "category": "Open Scramble",
                 "scramble_type": "Individual Rotating Doubles",
-                "rounds_count": 7,
+                "planned_rounds": 3,
+                "rounds": 3,
+                "rounds_count": 3,
             },
         )
         session.add(t_scramble)
@@ -471,7 +473,7 @@ async def reset_database(target_url: str):
             {"id": p.id, "player_membership_id": p.id, "display_name": f"Player {idx}"}
             for idx, p in enumerate(scramble_players, start=1)
         ]
-        scramble_matchups = scramble_engine.generate_matchups(scramble_pdicts, num_rounds=7)
+        scramble_matchups = scramble_engine.generate_matchups(scramble_pdicts, num_rounds=3)
 
         match_count = 0
         for sm in scramble_matchups:

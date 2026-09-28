@@ -50,11 +50,24 @@ export function ChampionshipBracketTab({
     useState<ChampionshipMatch | null>(null);
 
   // Check if finals are complete to determine champion
-  const finalsMatch = championshipMatches.find(
-    (m) => m.roundName === 'Finals' && m.status === 'completed'
-  );
-  const championTeam: Team | null = finalsMatch?.winner ?? null;
-  const isBracketComplete = isTournamentCompleted || Boolean(championTeam);
+  const finalsMatch =
+    championshipMatches.find(
+      (m) => (m.roundName === 'Finals' || m.roundName === 'Final') && m.id !== 'CB-3RD'
+    ) ||
+    (championshipMatches.length > 0
+      ? championshipMatches
+          .filter((m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd'))
+          .find((m) => (m.roundIndex ?? 0) === Math.max(...championshipMatches.map((x) => x.roundIndex ?? 0)))
+      : null);
+
+  const championTeam: Team | null =
+    finalsMatch && finalsMatch.status === 'completed' && finalsMatch.winner
+      ? finalsMatch.winner
+      : null;
+
+  const isBracketComplete = finalsMatch
+    ? finalsMatch.status === 'completed' && Boolean(championTeam)
+    : isTournamentCompleted;
 
   // Group matches by round
   const roundsMap: Record<string, ChampionshipMatch[]> = {};

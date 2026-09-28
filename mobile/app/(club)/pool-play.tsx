@@ -291,11 +291,18 @@ export default function PoolPlayManagementScreen() {
 
   const isChampionshipComplete = useMemo(() => {
     if (championshipMatches.length === 0) return false;
-    const finals = championshipMatches.find(
-      (m) => m.roundName === 'Finals' || m.roundName?.toLowerCase().includes('final')
+    const titleMatches = championshipMatches.filter(
+      (m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd')
     );
+    const finals =
+      titleMatches.find((m) => m.roundName === 'Finals' || m.roundName === 'Final') ||
+      (titleMatches.length > 0
+        ? titleMatches.find(
+            (m) => (m.roundIndex ?? 0) === Math.max(...titleMatches.map((x) => x.roundIndex ?? 0))
+          )
+        : null);
     if (finals) {
-      return finals.status === 'completed';
+      return finals.status === 'completed' && Boolean(finals.winner);
     }
     return championshipMatches.every((m) => m.status === 'completed');
   }, [championshipMatches]);

@@ -34,15 +34,17 @@ export function PoolPlayResultsTab({
   standingsByPool,
   isSingles = false,
 }: PoolPlayResultsTabProps) {
-  // Find final match in championship bracket
+  // Find final match in championship bracket (strictly excluding semifinals and 3rd place matches)
   const finalMatch = useMemo(() => {
-    return championshipMatches.find(
-      (m) =>
-        m.roundName === 'Finals' ||
-        m.roundName?.toLowerCase().includes('final') ||
-        (championshipMatches.length > 0 &&
-          m.roundIndex === Math.max(...championshipMatches.map((x) => x.roundIndex)))
+    if (championshipMatches.length === 0) return null;
+    const titleMatches = championshipMatches.filter(
+      (m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd')
     );
+    if (titleMatches.length === 0) return null;
+    const namedFinal = titleMatches.find((m) => m.roundName === 'Finals' || m.roundName === 'Final');
+    if (namedFinal) return namedFinal;
+    const maxRound = Math.max(...titleMatches.map((x) => x.roundIndex ?? 0));
+    return titleMatches.find((m) => (m.roundIndex ?? 0) === maxRound) ?? null;
   }, [championshipMatches]);
 
   const championTeam = useMemo(() => {
@@ -73,8 +75,8 @@ export function PoolPlayResultsTab({
     <View style={styles.container}>
       <AppText style={styles.headingTitle}>Results</AppText>
 
-      {/* ─── 1. Champion Podium Card ─────────────────────────────────────── */}
-      {championTeam && (
+      {/* ─── 1. Champion Podium Card or Neutral Pending Card ──────────────── */}
+      {championTeam ? (
         <Card style={styles.championCard}>
           <View style={styles.championBadge}>
             <Trophy size={20} color="#D97706" />
@@ -102,7 +104,48 @@ export function PoolPlayResultsTab({
             )}
           </View>
         </Card>
-      )}
+      ) : championshipMatches.length > 0 ? (
+        <Card style={styles.pendingChampionCard}>
+          <View style={styles.pendingChampionBadge}>
+            <Trophy size={18} color="#0F766E" />
+            <AppText style={styles.pendingChampionBadgeText}>CHAMPIONSHIP PENDING</AppText>
+          </View>
+
+          <AppText style={styles.pendingChampionTitle}>Champion will be decided in the final</AppText>
+
+          {finalMatch ? (
+            <View style={styles.pendingFinalMatchRow}>
+              <View style={styles.pendingFinalMatchInfo}>
+                <AppText style={styles.pendingFinalMatchLabel}>Championship Final</AppText>
+                <AppText style={styles.pendingFinalMatchTeams} numberOfLines={1}>
+                  {finalMatch.t1 && finalMatch.t2
+                    ? `${finalMatch.t1.name} vs ${finalMatch.t2.name}`
+                    : finalMatch.t1
+                    ? `${finalMatch.t1.name} vs Awaiting SF2 Winner`
+                    : finalMatch.t2
+                    ? `Awaiting SF1 Winner vs ${finalMatch.t2.name}`
+                    : 'Awaiting Semifinal Winners'}
+                </AppText>
+              </View>
+              <View style={[
+                styles.finalStatusPill,
+                finalMatch.status === 'playing' ? styles.statusPillPlaying : styles.statusPillScheduled,
+              ]}>
+                <AppText style={[
+                  styles.finalStatusPillText,
+                  finalMatch.status === 'playing' ? styles.statusTextPlaying : styles.statusTextScheduled,
+                ]}>
+                  {finalMatch.status === 'playing' ? 'In Progress' : 'Scheduled'}
+                </AppText>
+              </View>
+            </View>
+          ) : (
+            <AppText style={styles.pendingFinalSubtext}>
+              Championship final match will take place following semifinal elimination.
+            </AppText>
+          )}
+        </Card>
+      ) : null}
 
       {/* ─── 2. Championship Elimination Results ───────────────────────────── */}
       {completedChampMatches.length > 0 && (
@@ -116,12 +159,24 @@ export function PoolPlayResultsTab({
             {completedChampMatches.map((m) => {
               const isT1Winner = m.winner?.id === m.t1?.id;
               const isT2Winner = m.winner?.id === m.t2?.id;
+              const isFinal = m.id === finalMatch?.id || m.roundName === 'Finals' || m.roundName === 'Final';
+              const isSemi = m.roundName === 'Semifinals' || m.roundName === 'Semifinal';
 
               return (
                 <View key={m.id} style={styles.resultMatchRow}>
                   <View style={styles.matchMetaRow}>
                     <AppText style={styles.roundNameBadge}>{m.roundName}</AppText>
                     {m.court && <AppText style={styles.courtNameText}>{m.court}</AppText>}
+                    {isFinal && m.winner && (
+                      <View style={[styles.outcomeBadge, styles.outcomeChampionBadge]}>
+                        <AppText style={styles.outcomeChampionText}>Champion: {m.winner.name}</AppText>
+                      </View>
+                    )}
+                    {isSemi && m.winner && (
+                      <View style={[styles.outcomeBadge, styles.outcomeFinalistBadge]}>
+                        <AppText style={styles.outcomeFinalistText}>Finalist: {m.winner.name}</AppText>
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.teamsScoreRow}>
@@ -496,5 +551,108 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 260,
+  },
+  pendingChampionCard: {
+    backgroundColor: '#F8FAF9',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: Radius.lg,
+    padding: Spacing[4],
+    marginBottom: Spacing[4],
+    gap: 8,
+  },
+  pendingChampionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E6FFFA',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  pendingChampionBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    letterSpacing: 0.5,
+  },
+  pendingChampionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  pendingFinalMatchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+  },
+  pendingFinalMatchInfo: {
+    flex: 1,
+    gap: 2,
+    marginRight: 8,
+  },
+  pendingFinalMatchLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  pendingFinalMatchTeams: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  finalStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusPillPlaying: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillScheduled: {
+    backgroundColor: '#F1F5F9',
+  },
+  finalStatusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusTextPlaying: {
+    color: '#15803D',
+  },
+  statusTextScheduled: {
+    color: '#64748B',
+  },
+  pendingFinalSubtext: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  outcomeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  outcomeChampionBadge: {
+    backgroundColor: '#FEF3C7',
+  },
+  outcomeFinalistBadge: {
+    backgroundColor: '#E0F2FE',
+  },
+  outcomeChampionText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D97706',
+  },
+  outcomeFinalistText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0284C7',
   },
 });

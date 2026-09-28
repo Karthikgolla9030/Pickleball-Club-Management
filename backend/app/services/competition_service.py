@@ -2100,6 +2100,35 @@ class CompetitionService:
 
         # Short-circuit: if not all completed, skip the expensive full load
         if not all_completed_quick and not force_scramble_end:
+            if tournament.status == TournamentStatus.COMPLETED:
+                cfg = dict(tournament.format_configuration or {})
+                cfg.pop("winner", None)
+                cfg.pop("podium", None)
+                cfg.pop("final_results", None)
+                cfg.pop("completed_at", None)
+                tournament.format_configuration = cfg
+                tournament.status = TournamentStatus.IN_PROGRESS
+                flag_modified(tournament, "format_configuration")
+                await self.tournament_repo.update(
+                    tournament,
+                    status=TournamentStatus.IN_PROGRESS,
+                    format_configuration=cfg,
+                )
+                try:
+                    await dispatch_event(
+                        event_type=EventType.TOURNAMENT_UPDATED,
+                        data={
+                            "tournament_id": str(tournament.id),
+                            "status": TournamentStatus.IN_PROGRESS.value,
+                            "winner": None,
+                            "podium": [],
+                        },
+                        club_id=tournament.club_id,
+                    )
+                except Exception:
+                    pass
+                return False
+
             # For scramble with rounds_data, check round completion even if not all done
             if tournament.format == TournamentFormat.SCRAMBLE:
                 config = dict(tournament.format_configuration or {})
@@ -2230,11 +2259,24 @@ class CompetitionService:
             pool_done = bool(pool_matches) and all(m.status == MatchStatus.COMPLETED for m in pool_matches)
 
             if champ_matches:
+                # Championship final is the match in championship stage with the highest bracket_round and next_match_id is None
+                title_matches = [m for m in champ_matches if m.stage == MatchStage.CHAMPIONSHIP]
+                max_bracket_round = max((m.bracket_round or 1) for m in title_matches) if title_matches else 1
+                final_candidates = [
+                    m for m in title_matches
+                    if (m.bracket_round or 1) == max_bracket_round and m.next_match_id is None
+                ]
+                final_match = final_candidates[0] if final_candidates else (title_matches[-1] if title_matches else None)
+
                 champ_done = all(m.status == MatchStatus.COMPLETED for m in champ_matches)
-                if pool_done and champ_done:
+                final_done = (
+                    final_match is not None
+                    and final_match.status == MatchStatus.COMPLETED
+                    and final_match.winner_team_id is not None
+                )
+
+                if pool_done and champ_done and final_done:
                     is_finished = True
-                    finals = [m for m in champ_matches if m.next_match_id is None]
-                    final_match = finals[-1] if finals else champ_matches[-1]
                     winner_team_id = final_match.winner_team_id
                     runner_up_id = final_match.team_b_id if winner_team_id == final_match.team_a_id else final_match.team_a_id
 
@@ -2346,6 +2388,34 @@ class CompetitionService:
             except Exception:
                 pass
             return True
+        elif not is_finished and tournament.status == TournamentStatus.COMPLETED:
+            cfg = dict(tournament.format_configuration or {})
+            cfg.pop("winner", None)
+            cfg.pop("podium", None)
+            cfg.pop("final_results", None)
+            cfg.pop("completed_at", None)
+            tournament.format_configuration = cfg
+            tournament.status = TournamentStatus.IN_PROGRESS
+            flag_modified(tournament, "format_configuration")
+            await self.tournament_repo.update(
+                tournament,
+                status=TournamentStatus.IN_PROGRESS,
+                format_configuration=cfg,
+            )
+            try:
+                await dispatch_event(
+                    event_type=EventType.TOURNAMENT_UPDATED,
+                    data={
+                        "tournament_id": str(tournament.id),
+                        "status": TournamentStatus.IN_PROGRESS.value,
+                        "winner": None,
+                        "podium": [],
+                    },
+                    club_id=tournament.club_id,
+                )
+            except Exception:
+                pass
+            return False
 
         return False
 
@@ -2857,12 +2927,22 @@ class CompetitionService:
     async def list_scramble_matches(
         self, club_id: uuid.UUID, tournament_id: uuid.UUID
     ) -> list[MatchResponse]:
-        """List all scramble matches for tournament."""
+        """List all scramble matches for tournament within planned rounds."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
         matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        config = dict(tournament.format_configuration or {})
+        raw_planned = config.get("planned_rounds") or config.get("rounds")
+        try:
+            planned_rounds = int(raw_planned) if raw_planned is not None else 3
+        except (ValueError, TypeError):
+            planned_rounds = 3
+        if planned_rounds < 1:
+            planned_rounds = 1
+
+        valid_matches = [m for m in matches if m.round_number is None or m.round_number <= planned_rounds]
         sit_outs = self._get_sit_out_map(tournament)
-        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in matches]
+        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in valid_matches]
 
     async def get_scramble_standings(
         self, club_id: uuid.UUID | None, tournament_id: uuid.UUID
@@ -2907,9 +2987,19 @@ class CompetitionService:
                     "registered_at": r.registered_at.isoformat() if r.registered_at else "",
                 })
 
+        config = dict(tournament.format_configuration or {})
+        raw_planned = config.get("planned_rounds") or config.get("rounds")
+        try:
+            planned_rounds = int(raw_planned) if raw_planned is not None else 3
+        except (ValueError, TypeError):
+            planned_rounds = 3
+        if planned_rounds < 1:
+            planned_rounds = 1
+
         matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        valid_matches = [m for m in matches if m.round_number is None or m.round_number <= planned_rounds]
         match_dicts = []
-        for m in matches:
+        for m in valid_matches:
             side_a = [
                 {"id": p.player_membership_id, "player_membership_id": p.player_membership_id}
                 for p in (m.participants or [])
@@ -2953,20 +3043,10 @@ class CompetitionService:
             standings=standing_rows,
         )
 
-    async def list_scramble_matches(
-        self, club_id: uuid.UUID, tournament_id: uuid.UUID
-    ) -> list[MatchResponse]:
-        """Staff list of scramble matches for a tournament."""
-        tournament = await self._get_tournament_or_404(tournament_id, club_id)
-        self._assert_scramble(tournament)
-        matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
-        sit_outs = self._get_sit_out_map(tournament)
-        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in matches]
-
     async def list_scramble_matches_public(
         self, tournament_id: uuid.UUID
     ) -> list[MatchResponse]:
-        """Player read-only list of scramble matches."""
+        """Player read-only list of scramble matches within planned rounds."""
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise HTTPException(
@@ -2975,8 +3055,18 @@ class CompetitionService:
             )
         self._assert_scramble(tournament)
         matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        config = dict(tournament.format_configuration or {})
+        raw_planned = config.get("planned_rounds") or config.get("rounds")
+        try:
+            planned_rounds = int(raw_planned) if raw_planned is not None else 3
+        except (ValueError, TypeError):
+            planned_rounds = 3
+        if planned_rounds < 1:
+            planned_rounds = 1
+
+        valid_matches = [m for m in matches if m.round_number is None or m.round_number <= planned_rounds]
         sit_outs = self._get_sit_out_map(tournament)
-        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in matches]
+        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in valid_matches]
 
     async def get_scramble_standings_public(
         self, tournament_id: uuid.UUID
@@ -3098,7 +3188,9 @@ class CompetitionService:
             courts_count=config.get("courts_count"),
         )
 
-        all_matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        all_matches_raw = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        # Constrain matches strictly to valid planned rounds
+        all_matches = [m for m in all_matches_raw if m.round_number is None or m.round_number <= planned_rounds]
         total_games = len(all_matches)
         games_completed = sum(1 for m in all_matches if m.status == MatchStatus.COMPLETED)
         games_remaining = total_games - games_completed
@@ -3420,6 +3512,10 @@ class CompetitionService:
 
         all_matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
         current_round_matches = [m for m in all_matches if m.round_number == current_round]
+        if round_status == "matchups_created" and current_round_matches:
+            # Idempotent safeguard: return existing round state to prevent duplicate generation
+            return await self.get_scramble_state(club_id, tournament_id)
+
         if any(m.status == MatchStatus.COMPLETED for m in current_round_matches):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

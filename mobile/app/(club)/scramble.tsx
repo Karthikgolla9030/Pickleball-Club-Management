@@ -355,13 +355,21 @@ export default function ScrambleWorkspaceScreen() {
     }
   };
 
+  const validMatches = useMemo(() => {
+    const planned = state?.planned_rounds ?? 3;
+    return matches.filter((m) => {
+      const r = m.round_number ?? m.round;
+      return !r || r <= planned;
+    });
+  }, [matches, state?.planned_rounds]);
+
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {
       participantsCount: state?.registered_players_count ?? registrations.length,
       roundsCount: state?.planned_rounds ?? state?.current_round,
-      matchesCount: matches.length,
+      matchesCount: validMatches.length,
     });
-  }, [tournament, state?.registered_players_count, registrations.length, state?.planned_rounds, state?.current_round, matches.length]);
+  }, [tournament, state?.registered_players_count, registrations.length, state?.planned_rounds, state?.current_round, validMatches.length]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
@@ -562,7 +570,7 @@ export default function ScrambleWorkspaceScreen() {
         {activeTab === 'rounds' && (
           <ScrambleRoundsTab
             state={state}
-            matches={matches}
+            matches={validMatches}
             canManage={canManage}
             onOpenScoreModal={handleOpenScoreModal}
             onStartRound={handleStartRound}

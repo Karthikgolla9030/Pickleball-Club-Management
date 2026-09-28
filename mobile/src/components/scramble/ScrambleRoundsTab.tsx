@@ -78,26 +78,21 @@ export function ScrambleRoundsTab({
   isCreatingMatchups = false,
 }: ScrambleRoundsTabProps) {
   const currentRound = state?.current_round ?? 1;
-  const plannedRounds = state?.planned_rounds ?? 5;
+  const plannedRounds = Math.max(1, state?.planned_rounds ?? 3);
   const isFinalRound = state?.is_final_round ?? (currentRound >= plannedRounds);
   const isTournamentCompleted = state?.tournament_status === 'completed';
-  const [selectedRound, setSelectedRound] = useState<number>(currentRound);
+  const [selectedRound, setSelectedRound] = useState<number>(() => Math.min(currentRound, plannedRounds));
   const [isRoundPickerOpen, setIsRoundPickerOpen] = useState(false);
 
-  // Group existing rounds
+  // Keep selectedRound clamped within valid planned rounds
+  React.useEffect(() => {
+    setSelectedRound((prev) => Math.min(Math.max(1, prev), plannedRounds));
+  }, [plannedRounds]);
+
+  // Authoritative planned rounds: strictly 1..plannedRounds
   const roundNumbers = useMemo(() => {
-    const rounds = new Set<number>();
-    if (state?.current_round) {
-      for (let r = 1; r <= state.current_round; r++) {
-        rounds.add(r);
-      }
-    }
-    matches.forEach((m) => {
-      const r = m.round_number ?? m.round;
-      if (r) rounds.add(r);
-    });
-    return Array.from(rounds).sort((a, b) => a - b);
-  }, [state?.current_round, matches]);
+    return Array.from({ length: plannedRounds }, (_, i) => i + 1);
+  }, [plannedRounds]);
 
   const roundMatches = useMemo(() => {
     return matches.filter((m) => ((m.round_number ?? m.round) ?? 1) === selectedRound);
@@ -110,26 +105,29 @@ export function ScrambleRoundsTab({
 
   const isCurrentRound = selectedRound === currentRound;
 
-  // Round badge
-  const getRoundStatusBadge = () => {
-    if (!isCurrentRound) {
+  // Round status badge helper
+  const getRoundStatusInfo = (r: number) => {
+    if (r < currentRound) {
       return { label: 'COMPLETED', bg: '#E5F4EC', text: '#08785E' };
     }
-    switch (state?.round_status) {
-      case 'setup':
-        return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
-      case 'matchups_created':
-        return { label: 'READY', bg: '#E0F2FE', text: '#0284C7' };
-      case 'in_progress':
-        return { label: 'IN PROGRESS', bg: '#DCFCE7', text: '#15803D' };
-      case 'completed':
-        return { label: 'COMPLETED', bg: '#E5F4EC', text: '#08785E' };
-      default:
-        return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
+    if (r === currentRound) {
+      switch (state?.round_status) {
+        case 'setup':
+          return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
+        case 'matchups_created':
+          return { label: 'READY', bg: '#E0F2FE', text: '#0284C7' };
+        case 'in_progress':
+          return { label: 'IN PROGRESS', bg: '#DCFCE7', text: '#15803D' };
+        case 'completed':
+          return { label: 'COMPLETED', bg: '#E5F4EC', text: '#08785E' };
+        default:
+          return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
+      }
     }
+    return { label: 'UPCOMING', bg: '#F1F5F9', text: '#64748B' };
   };
 
-  const statusBadge = getRoundStatusBadge();
+  const statusBadge = getRoundStatusInfo(selectedRound);
 
   // Partition validation for button enabling
   const partition = validateCourtPartition(state?.available_players_count ?? 0);
@@ -146,7 +144,7 @@ export function ScrambleRoundsTab({
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── 1. Top Round Selector Row: Pill "Round 1 of 5 ∨" + Status Badge ── */}
+      {/* ── 1. Top Round Selector Row: Pill "Round 1 of 3 ∨" + Status Badge ── */}
       <View style={styles.topSelectorRow}>
         <TouchableOpacity
           style={styles.roundDropdownPill}
@@ -184,25 +182,36 @@ export function ScrambleRoundsTab({
         >
           <View style={styles.modalCard}>
             <AppText style={styles.modalTitle}>Select Round</AppText>
-            {roundNumbers.map((r) => (
-              <TouchableOpacity
-                key={r}
-                style={[styles.modalOption, r === selectedRound && styles.modalOptionSelected]}
-                onPress={() => {
-                  setSelectedRound(r);
-                  setIsRoundPickerOpen(false);
-                }}
-              >
-                <AppText
-                  style={[
-                    styles.modalOptionText,
-                    r === selectedRound && styles.modalOptionTextSelected,
-                  ]}
+            {roundNumbers.map((r) => {
+              const rStatus = getRoundStatusInfo(r);
+              const isSelected = r === selectedRound;
+              return (
+                <TouchableOpacity
+                  key={r}
+                  style={[styles.modalOption, isSelected && styles.modalOptionSelected]}
+                  onPress={() => {
+                    setSelectedRound(r);
+                    setIsRoundPickerOpen(false);
+                  }}
                 >
-                  Round {r} of {plannedRounds} {r === currentRound ? '(Current)' : ''}
-                </AppText>
-              </TouchableOpacity>
-            ))}
+                  <View style={styles.modalRoundRow}>
+                    <AppText
+                      style={[
+                        styles.modalOptionText,
+                        isSelected && styles.modalOptionTextSelected,
+                      ]}
+                    >
+                      Round {r} of {plannedRounds} {r === currentRound ? '(Current)' : ''}
+                    </AppText>
+                    <View style={[styles.modalRoundBadge, { backgroundColor: rStatus.bg }]}>
+                      <AppText style={[styles.modalRoundBadgeText, { color: rStatus.text }]}>
+                        {rStatus.label}
+                      </AppText>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </TouchableOpacity>
       </Modal>
@@ -217,51 +226,73 @@ export function ScrambleRoundsTab({
 
       {/* ── 3. Content: Empty State vs Court Cards ── */}
       {roundMatches.length === 0 ? (
-        // Empty State matching Screen 3
-        <View style={styles.emptyCard}>
-          <View style={styles.emptyIconCircle}>
-            <Calendar size={32} color="#71817E" />
+        selectedRound > currentRound ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Clock size={32} color="#71817E" />
+            </View>
+            <AppText style={styles.emptyTitle}>Round {selectedRound} (Upcoming)</AppText>
+            <AppText style={styles.emptyDescription}>
+              Matchups for Round {selectedRound} will become available once Round {selectedRound - 1} is completed.
+            </AppText>
           </View>
+        ) : selectedRound < currentRound ? (
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Calendar size={32} color="#71817E" />
+            </View>
+            <AppText style={styles.emptyTitle}>No Games Found</AppText>
+            <AppText style={styles.emptyDescription}>
+              No matches are recorded for Round {selectedRound}.
+            </AppText>
+          </View>
+        ) : (
+          // Empty State matching Screen 3 for current round
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Calendar size={32} color="#71817E" />
+            </View>
 
-          <AppText style={styles.emptyTitle}>No Matchups Generated Yet</AppText>
-          <AppText style={styles.emptyDescription}>
-            Select player availability in the Players tab, then generate round matchups.
-          </AppText>
+            <AppText style={styles.emptyTitle}>No Matchups Generated Yet</AppText>
+            <AppText style={styles.emptyDescription}>
+              Select player availability in the Players tab, then generate round matchups.
+            </AppText>
 
-          {canManage && (
-            <TouchableOpacity
-              style={[
-                styles.generateMatchupsButton,
-                canGenerate ? styles.generateButtonActive : styles.generateButtonDisabled,
-              ]}
-              onPress={onCreateMatchups}
-              disabled={isCreatingMatchups || !canGenerate}
-              activeOpacity={0.8}
-            >
-              {isCreatingMatchups ? (
-                <ActivityIndicator size="small" color={canGenerate ? '#FFFFFF' : '#71817E'} />
-              ) : (
-                <Play
-                  size={16}
-                  color={canGenerate ? '#FFFFFF' : '#71817E'}
-                  fill={canGenerate ? '#FFFFFF' : '#71817E'}
-                />
-              )}
-              <AppText
+            {canManage && (
+              <TouchableOpacity
                 style={[
-                  styles.generateButtonText,
-                  canGenerate ? styles.generateButtonTextActive : styles.generateButtonTextDisabled,
+                  styles.generateMatchupsButton,
+                  canGenerate ? styles.generateButtonActive : styles.generateButtonDisabled,
                 ]}
+                onPress={onCreateMatchups}
+                disabled={isCreatingMatchups || !canGenerate}
+                activeOpacity={0.8}
               >
-                {isCreatingMatchups ? 'Generating...' : 'Generate Round Matchups'}
-              </AppText>
-            </TouchableOpacity>
-          )}
+                {isCreatingMatchups ? (
+                  <ActivityIndicator size="small" color={canGenerate ? '#FFFFFF' : '#71817E'} />
+                ) : (
+                  <Play
+                    size={16}
+                    color={canGenerate ? '#FFFFFF' : '#71817E'}
+                    fill={canGenerate ? '#FFFFFF' : '#71817E'}
+                  />
+                )}
+                <AppText
+                  style={[
+                    styles.generateButtonText,
+                    canGenerate ? styles.generateButtonTextActive : styles.generateButtonTextDisabled,
+                  ]}
+                >
+                  {isCreatingMatchups ? 'Generating...' : 'Generate Round Matchups'}
+                </AppText>
+              </TouchableOpacity>
+            )}
 
-          <AppText style={styles.emptyFootnote}>
-            You need at least 4 players and a valid 4/5-player court partition to generate matchups.
-          </AppText>
-        </View>
+            <AppText style={styles.emptyFootnote}>
+              You need at least 4 players and a valid 4/5-player court partition to generate matchups.
+            </AppText>
+          </View>
+        )
       ) : (
         // Populated Court Cards
         <View style={styles.courtsList}>
@@ -868,6 +899,21 @@ const styles = StyleSheet.create({
   },
   modalOptionTextSelected: {
     color: '#08785E',
+    fontWeight: '700',
+  },
+  modalRoundRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalRoundBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  modalRoundBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
   },
 });
