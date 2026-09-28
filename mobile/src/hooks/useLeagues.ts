@@ -50,10 +50,112 @@ export function useClubLeagues(clubId: string | null, status?: LeagueStatus) {
     },
   });
 
+  const openRegistrationMutation = useMutation({
+    mutationFn: (leagueId: string) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.openRegistration(clubId, leagueId);
+    },
+    onSuccess: (_, leagueId) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
+  const closeRegistrationMutation = useMutation({
+    mutationFn: (leagueId: string) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.closeRegistration(clubId, leagueId);
+    },
+    onSuccess: (_, leagueId) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
+  const startLeagueMutation = useMutation({
+    mutationFn: (leagueId: string) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.startLeague(clubId, leagueId);
+    },
+    onSuccess: (_, leagueId) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
+  const completeLeagueMutation = useMutation({
+    mutationFn: (leagueId: string) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.completeLeague(clubId, leagueId);
+    },
+    onSuccess: (_, leagueId) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_STANDINGS(clubId, leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
+  const cancelLeagueMutation = useMutation({
+    mutationFn: (leagueId: string) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.cancelLeague(clubId, leagueId);
+    },
+    onSuccess: (_, leagueId) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
+  const generateScheduleMutation = useMutation({
+    mutationFn: ({ leagueId, force }: { leagueId: string; force?: boolean }) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.generateSchedule(clubId, leagueId, Boolean(force));
+    },
+    onSuccess: (_, variables) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, variables.leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, variables.leagueId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, variables.leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
   return {
     ...leaguesQuery,
     createLeague: createLeagueMutation.mutateAsync,
     isCreating: createLeagueMutation.isPending,
+    openRegistration: openRegistrationMutation.mutateAsync,
+    isOpeningRegistration: openRegistrationMutation.isPending,
+    closeRegistration: closeRegistrationMutation.mutateAsync,
+    isClosingRegistration: closeRegistrationMutation.isPending,
+    startLeague: startLeagueMutation.mutateAsync,
+    isStartingLeague: startLeagueMutation.isPending,
+    completeLeague: completeLeagueMutation.mutateAsync,
+    isCompletingLeague: completeLeagueMutation.isPending,
+    cancelLeague: cancelLeagueMutation.mutateAsync,
+    isCancellingLeague: cancelLeagueMutation.isPending,
+    generateSchedule: generateScheduleMutation.mutateAsync,
+    isGeneratingSchedule: generateScheduleMutation.isPending,
   };
 }
 
@@ -72,42 +174,40 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
     staleTime: 15 * 1000,
   });
 
+  const invalidateAll = () => {
+    if (clubId && leagueId) {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_STANDINGS(clubId, leagueId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_PLAYOFFS(clubId, leagueId) });
+    }
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+  };
+
   const updateStatusMutation = useMutation({
     mutationFn: (status: LeagueStatus) => {
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
       return leagueApi.updateLeagueStatus(clubId, leagueId, status);
     },
-    onSuccess: () => {
-      if (clubId && leagueId) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
-      }
-    },
+    onSuccess: invalidateAll,
   });
 
-  const generateScheduleMutation = useMutation({
-    mutationFn: (force?: boolean) => {
+  const openRegistrationMutation = useMutation({
+    mutationFn: () => {
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
-      return leagueApi.generateSchedule(clubId, leagueId, Boolean(force));
+      return leagueApi.openRegistration(clubId, leagueId);
     },
-    onSuccess: () => {
-      if (clubId && leagueId) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_STANDINGS(clubId, leagueId),
-        });
-      }
+    onSuccess: invalidateAll,
+  });
+
+  const closeRegistrationMutation = useMutation({
+    mutationFn: () => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.closeRegistration(clubId, leagueId);
     },
+    onSuccess: invalidateAll,
   });
 
   const startLeagueMutation = useMutation({
@@ -115,20 +215,31 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
       return leagueApi.startLeague(clubId, leagueId);
     },
-    onSuccess: () => {
-      if (clubId && leagueId) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
-      }
+    onSuccess: invalidateAll,
+  });
+
+  const completeLeagueMutation = useMutation({
+    mutationFn: () => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.completeLeague(clubId, leagueId);
     },
+    onSuccess: invalidateAll,
+  });
+
+  const cancelLeagueMutation = useMutation({
+    mutationFn: () => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.cancelLeague(clubId, leagueId);
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const generateScheduleMutation = useMutation({
+    mutationFn: (force?: boolean) => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.generateSchedule(clubId, leagueId, Boolean(force));
+    },
+    onSuccess: invalidateAll,
   });
 
   const generatePlayoffsMutation = useMutation({
@@ -136,32 +247,25 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
       return leagueApi.generatePlayoffs(clubId, leagueId);
     },
-    onSuccess: () => {
-      if (clubId && leagueId) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_PLAYOFFS(clubId, leagueId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
-        });
-      }
-    },
+    onSuccess: invalidateAll,
   });
 
   return {
     ...leagueQuery,
     updateStatus: updateStatusMutation.mutateAsync,
     isUpdatingStatus: updateStatusMutation.isPending,
-    generateSchedule: generateScheduleMutation.mutateAsync,
-    isGeneratingSchedule: generateScheduleMutation.isPending,
+    openRegistration: openRegistrationMutation.mutateAsync,
+    isOpeningRegistration: openRegistrationMutation.isPending,
+    closeRegistration: closeRegistrationMutation.mutateAsync,
+    isClosingRegistration: closeRegistrationMutation.isPending,
     startLeague: startLeagueMutation.mutateAsync,
     isStartingLeague: startLeagueMutation.isPending,
+    completeLeague: completeLeagueMutation.mutateAsync,
+    isCompletingLeague: completeLeagueMutation.isPending,
+    cancelLeague: cancelLeagueMutation.mutateAsync,
+    isCancellingLeague: cancelLeagueMutation.isPending,
+    generateSchedule: generateScheduleMutation.mutateAsync,
+    isGeneratingSchedule: generateScheduleMutation.isPending,
     generatePlayoffs: generatePlayoffsMutation.mutateAsync,
     isGeneratingPlayoffs: generatePlayoffsMutation.isPending,
   };

@@ -52,10 +52,12 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  LeagueOptionsMenuModal,
   LoadingState,
   ModalSheet,
   Screen,
 } from '@/components';
+import { getLeagueStatusBadgeDetails } from '@/components/competition/LeagueOptionsMenuModal';
 import {
   useActiveClub,
   useClubCourts,
@@ -163,13 +165,31 @@ export default function ClubLeagueDetailsScreen() {
     refetch: refetchLeague,
     updateStatus,
     isUpdatingStatus,
+    openRegistration,
+    isOpeningRegistration,
+    closeRegistration,
+    isClosingRegistration,
     generateSchedule,
     isGeneratingSchedule,
     startLeague,
     isStartingLeague,
     generatePlayoffs,
     isGeneratingPlayoffs,
+    completeLeague,
+    isCompletingLeague,
+    cancelLeague,
+    isCancellingLeague,
   } = useLeagueDetails(clubId, leagueId);
+
+  const isActionProcessing =
+    Boolean(isUpdatingStatus) ||
+    Boolean(isStartingLeague) ||
+    Boolean(isGeneratingSchedule) ||
+    Boolean(isGeneratingPlayoffs) ||
+    Boolean(isOpeningRegistration) ||
+    Boolean(isClosingRegistration) ||
+    Boolean(isCompletingLeague) ||
+    Boolean(isCancellingLeague);
 
   const {
     data: weeks,
@@ -267,14 +287,72 @@ export default function ClubLeagueDetailsScreen() {
 
   // ─── Lifecycle Actions ───────────────────────────────────────────────────────
 
-  const handleStatusTransition = async (nextStatus: LeagueStatus) => {
+  const handlePublishLeague = async () => {
     try {
       setIsOverflowOpen(false);
-      await updateStatus(nextStatus);
+      await openRegistration();
       handleRefreshAll();
+      Alert.alert(
+        'Registration Opened!',
+        `Registration is now open for "${league?.name}". Players can now discover and register their entries in the Player App.`
+      );
     } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to update status');
+      Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to open registration');
     }
+  };
+
+  const handleConfirmCloseRegistration = () => {
+    Alert.alert(
+      'Close Registration',
+      `Are you sure you want to close registration for "${league?.name}"? No new teams or players will be able to register. Current entries will be finalized.`,
+      [
+        { text: 'Keep Open', style: 'cancel' },
+        {
+          text: 'Close Registration',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setIsOverflowOpen(false);
+              await closeRegistration();
+              handleRefreshAll();
+              Alert.alert(
+                'Registration Closed',
+                `Registration has been closed for "${league?.name}". You may now review rosters and generate regular season fixtures.`
+              );
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to close registration');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirmStartLeague = () => {
+    Alert.alert(
+      'Start League Play',
+      `Are you sure you want to start "${league?.name}"? This transitions the league to Live / In Progress and marks Week 1 as active.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start League',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setIsOverflowOpen(false);
+              await startLeague();
+              handleRefreshAll();
+              Alert.alert(
+                'League Started!',
+                `"${league?.name}" is now live! Week 1 matches can now be scored and tracked.`
+              );
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to start league');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleGenerateSchedule = async (force: boolean = false) => {
@@ -306,30 +384,6 @@ export default function ClubLeagueDetailsScreen() {
     }
   };
 
-  const handleStartLeague = async () => {
-    Alert.alert(
-      'Start League Play?',
-      'This will start Week 1 and advance the league to In Progress. Matches can now be played and scores recorded.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start League',
-          style: 'default',
-          onPress: async () => {
-            try {
-              setIsOverflowOpen(false);
-              await startLeague();
-              handleRefreshAll();
-              Alert.alert('League Started', 'League is now In Progress and Week 1 matches are live.');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to start league');
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleGeneratePlayoffs = async () => {
     try {
       setIsOverflowOpen(false);
@@ -339,6 +393,58 @@ export default function ClubLeagueDetailsScreen() {
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to generate playoffs');
     }
+  };
+
+  const handleConfirmCompleteLeague = () => {
+    Alert.alert(
+      'Complete League Competition',
+      `Are you sure you want to mark "${league?.name}" as completed? This will finalize all standings and results.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete League',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setIsOverflowOpen(false);
+              await completeLeague();
+              handleRefreshAll();
+              setActiveTab('results');
+              Alert.alert(
+                'League Completed!',
+                `"${league?.name}" has been finalized! Final standings and champion results are now locked.`
+              );
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to complete league');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirmCancelLeague = () => {
+    Alert.alert(
+      'Cancel League',
+      `Are you sure you want to cancel "${league?.name}"? This action marks the league as cancelled and halts all competition activity. Existing records will be preserved for history.`,
+      [
+        { text: 'Keep League', style: 'cancel' },
+        {
+          text: 'Cancel League',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsOverflowOpen(false);
+              await cancelLeague();
+              handleRefreshAll();
+              Alert.alert('League Cancelled', `"${league?.name}" has been marked as cancelled.`);
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to cancel league');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ─── Scoring Actions ────────────────────────────────────────────────────────
@@ -532,10 +638,8 @@ export default function ClubLeagueDetailsScreen() {
   }
 
   const teamCount = teams?.length ?? league.teams_count ?? 0;
-  const statusLabel =
-    league.status === 'in_progress'
-      ? 'IN PROGRESS'
-      : (league.status_display || LEAGUE_STATUS_LABELS[league.status] || league.status).toUpperCase();
+  const statusBadge = getLeagueStatusBadgeDetails(league.status);
+  const statusLabel = statusBadge.label;
 
   return (
     <Screen style={styles.container}>
@@ -556,7 +660,7 @@ export default function ClubLeagueDetailsScreen() {
             {league.name}
           </AppText>
           <AppText style={styles.headerSubtitle} numberOfLines={1}>
-            {`${league.number_of_weeks} Weeks • ${teamCount} Teams • Top ${league.playoff_team_count} to Playoffs`}
+            {`${league.number_of_weeks} Weeks • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${teamCount}/${league.max_teams || 12} Teams • Top ${league.playoff_team_count} to Playoffs`}
           </AppText>
         </View>
 
@@ -565,28 +669,22 @@ export default function ClubLeagueDetailsScreen() {
           <View
             style={[
               styles.statusPill,
-              league.status === 'in_progress' && styles.statusPillGreen,
-              league.status === 'playoffs' && styles.statusPillAmber,
-              league.status === 'completed' && styles.statusPillBlue,
+              { backgroundColor: statusBadge.bg },
             ]}
           >
             <View
               style={[
                 styles.statusDot,
-                league.status === 'in_progress' && styles.statusDotGreen,
-                league.status === 'playoffs' && styles.statusDotAmber,
-                league.status === 'completed' && styles.statusDotBlue,
+                { backgroundColor: statusBadge.text },
               ]}
             />
             <AppText
               style={[
                 styles.statusPillText,
-                league.status === 'in_progress' && styles.statusPillTextGreen,
-                league.status === 'playoffs' && styles.statusPillTextAmber,
-                league.status === 'completed' && styles.statusPillTextBlue,
+                { color: statusBadge.text },
               ]}
             >
-              {statusLabel}
+              {statusBadge.label}
             </AppText>
           </View>
 
@@ -594,6 +692,7 @@ export default function ClubLeagueDetailsScreen() {
             style={styles.overflowButton}
             onPress={() => setIsOverflowOpen(true)}
             accessibilityLabel="League options"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <MoreVertical size={20} color="#1F2937" strokeWidth={2} />
           </TouchableOpacity>
@@ -879,7 +978,7 @@ export default function ClubLeagueDetailsScreen() {
                       size="sm"
                       variant="primary"
                       fullWidth={false}
-                      onPress={handleStartLeague}
+                      onPress={handleConfirmStartLeague}
                       loading={isStartingLeague}
                     />
                   </Card>
@@ -1527,8 +1626,8 @@ export default function ClubLeagueDetailsScreen() {
                   <Button
                     label="Finalize & Complete League"
                     variant="primary"
-                    onPress={() => handleStatusTransition('completed')}
-                    loading={isUpdatingStatus}
+                    onPress={handleConfirmCompleteLeague}
+                    loading={isCompletingLeague}
                     style={{ marginTop: Spacing[4] }}
                   />
                 )}
@@ -1578,93 +1677,28 @@ export default function ClubLeagueDetailsScreen() {
       </ScrollView>
 
       {/* ─── MODAL: LIFECYCLE OVERFLOW ACTIONS (⋮) ─── */}
-      <ModalSheet
+      <LeagueOptionsMenuModal
         visible={isOverflowOpen}
         onClose={() => setIsOverflowOpen(false)}
-        title="League Actions"
-        subtitle={`Current Status: ${statusLabel}`}
-      >
-        <View style={styles.overflowMenuContainer}>
-          {league.status === 'draft' && (
-            <TouchableOpacity
-              style={styles.overflowMenuItem}
-              onPress={() => handleStatusTransition('registration_open')}
-            >
-              <AppText style={styles.overflowMenuTextPrimary}>Open Registration</AppText>
-            </TouchableOpacity>
-          )}
-
-          {league.status === 'registration_open' && (
-            <TouchableOpacity
-              style={styles.overflowMenuItem}
-              onPress={() => handleStatusTransition('registration_closed')}
-            >
-              <AppText style={styles.overflowMenuText}>Close Registration</AppText>
-            </TouchableOpacity>
-          )}
-
-          {league.status === 'registration_closed' && (
-            <>
-              <TouchableOpacity
-                style={styles.overflowMenuItem}
-                onPress={() => handleGenerateSchedule(false)}
-              >
-                <AppText style={styles.overflowMenuTextPrimary}>
-                  {hasSchedule ? 'Regenerate Regular Season Schedule' : 'Generate Regular Season Schedule'}
-                </AppText>
-              </TouchableOpacity>
-              {hasSchedule && (
-                <TouchableOpacity
-                  style={styles.overflowMenuItem}
-                  onPress={handleStartLeague}
-                >
-                  <AppText style={styles.overflowMenuTextPrimary}>
-                    Start League Play
-                  </AppText>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
-
-          {league.status === 'in_progress' && (
-            <>
-              <TouchableOpacity
-                style={styles.overflowMenuItem}
-                onPress={() => handleGenerateSchedule(false)}
-              >
-                <AppText style={styles.overflowMenuText}>
-                  Regenerate Regular Season Schedule
-                </AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.overflowMenuItem}
-                onPress={handleGeneratePlayoffs}
-              >
-                <AppText style={styles.overflowMenuTextPrimary}>Generate Playoffs Bracket</AppText>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {league.status === 'playoffs' && (
-            <TouchableOpacity
-              style={styles.overflowMenuItem}
-              onPress={() => handleStatusTransition('completed')}
-            >
-              <AppText style={styles.overflowMenuTextPrimary}>Complete League</AppText>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.overflowMenuItem}
-            onPress={() => {
-              setIsOverflowOpen(false);
-              handleRefreshAll();
-            }}
-          >
-            <AppText style={styles.overflowMenuText}>Refresh All Data</AppText>
-          </TouchableOpacity>
-        </View>
-      </ModalSheet>
+        league={league}
+        canManage={canManageLeague}
+        isProcessing={isActionProcessing}
+        onPublishPress={handlePublishLeague}
+        onCloseRegistrationPress={handleConfirmCloseRegistration}
+        onStartLeaguePress={handleConfirmStartLeague}
+        onGenerateSchedulePress={() => handleGenerateSchedule(false)}
+        onGeneratePlayoffsPress={handleGeneratePlayoffs}
+        onCompletePress={handleConfirmCompleteLeague}
+        onViewResultsPress={() => {
+          setIsOverflowOpen(false);
+          setActiveTab('results');
+        }}
+        onManagePress={() => {
+          setIsOverflowOpen(false);
+          setActiveTab('teams');
+        }}
+        onCancelPress={handleConfirmCancelLeague}
+      />
 
       {/* ─── MODAL: TEAM DETAILS ─── */}
       <ModalSheet

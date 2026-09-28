@@ -279,6 +279,13 @@ class LeagueService:
     async def open_registration(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
         league = await self._get_league_or_404(league_id, club_id=club_id)
         self._assert_status(league, [LeagueStatus.DRAFT], "open registration")
+        if not league.name or not league.name.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="League name is required before opening registration.")
+        if (league.number_of_weeks or 0) < 2:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="League must have at least 2 weeks configured before opening registration.")
+        if (league.max_teams or 0) < 2:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="League must allow at least 2 teams before opening registration.")
+
         league = await self.league_repo.update_league(league, status=LeagueStatus.REGISTRATION_OPEN)
         await self.db.commit()
         return await self.get_league(club_id, league_id)
@@ -324,6 +331,69 @@ class LeagueService:
                 week1,
                 status=LeagueWeekStatus.IN_PROGRESS,
             )
+
+        await self.db.commit()
+        return await self.get_league(club_id, league_id)
+
+    async def complete_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
+        league = await self._get_league_or_404(league_id, club_id=club_id)
+        if league.status == LeagueStatus.COMPLETED:
+            return await self.get_league(club_id, league_id)
+        self._assert_status(
+            league,
+            [LeagueStatus.IN_PROGRESS, LeagueStatus.PLAYOFFS],
+            "complete league",
+        )
+
+        # 1. Check if playoffs are configured for this league
+        if league.playoff_team_count and league.playoff_team_count > 0:
+            playoff_matches = await self.league_repo.list_league_matches(
+                league_id, stage=MatchStage.PLAYOFFS
+            )
+            if not playoff_matches:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot complete league: playoff bracket has not been generated yet. Conclude regular season and generate playoffs first.",
+                )
+            unfinished_playoffs = [m for m in playoff_matches if m.status != MatchStatus.COMPLETED]
+            if unfinished_playoffs:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot complete league: {len(unfinished_playoffs)} playoff match(es) remain unfinished.",
+                )
+            total_rounds = max(m.bracket_round or 0 for m in playoff_matches)
+            final_matches = [m for m in playoff_matches if m.bracket_round == total_rounds]
+            champion_id = final_matches[0].winner_team_id if final_matches else None
+        else:
+            # No playoffs configured: all regular season matches must be completed
+            reg_matches = await self.league_repo.list_league_matches(
+                league_id, stage=MatchStage.REGULAR_SEASON
+            )
+            if not reg_matches:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot complete league: no matches have been generated or played.",
+                )
+            unfinished_reg = [m for m in reg_matches if m.status != MatchStatus.COMPLETED]
+            if unfinished_reg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot complete league: {len(unfinished_reg)} regular season match(es) remain unfinished.",
+                )
+            standings_resp = await self.get_standings(club_id, league_id)
+            champion_id = standings_resp.standings[0].team_id if standings_resp.standings else None
+
+        await self.league_repo.update_league(
+            league,
+            status=LeagueStatus.COMPLETED,
+            champion_team_id=champion_id,
+        )
+
+        # Mark all league weeks as completed
+        weeks = await self.league_repo.list_league_weeks(league_id)
+        for w in weeks:
+            if w.status != LeagueWeekStatus.COMPLETED:
+                await self.league_repo.update_league_week(w, status=LeagueWeekStatus.COMPLETED)
 
         await self.db.commit()
         return await self.get_league(club_id, league_id)

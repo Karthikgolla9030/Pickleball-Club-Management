@@ -42,49 +42,58 @@ interface StatusBadgeConfig {
   text: string;
 }
 
-function getStatusBadgeConfig(status: LeagueStatus, display?: string): StatusBadgeConfig {
-  switch (status) {
-    case 'draft':
+export function getStatusBadgeConfig(status: LeagueStatus | string, display?: string): StatusBadgeConfig {
+  const norm = String(status || '').toLowerCase();
+  switch (norm) {
+    case 'in_progress':
       return {
-        label: 'DRAFT',
-        bg: '#FFF3D0',
-        text: '#8C6500',
+        label: 'LIVE / IN PROGRESS',
+        bg: '#D4E5FC',
+        text: '#1D4ED8',
       };
     case 'playoffs':
       return {
         label: 'PLAYOFFS',
-        bg: '#E8F1FB',
-        text: '#1D4ED8',
-      };
-    case 'in_progress':
-      return {
-        label: 'IN PROGRESS',
-        bg: '#E5F5EC',
-        text: '#176B59',
+        bg: '#EAE4FC',
+        text: '#7C3AED',
       };
     case 'registration_open':
+    case 'open':
       return {
-        label: 'OPEN',
-        bg: '#E5F5EC',
-        text: '#176B59',
+        label: 'REGISTRATION OPEN',
+        bg: '#E3F3EA',
+        text: '#18794E',
+      };
+    case 'registration_closed':
+    case 'closed':
+      return {
+        label: 'REGISTRATION CLOSED',
+        bg: '#F1F5F9',
+        text: '#475569',
+      };
+    case 'draft':
+      return {
+        label: 'DRAFT',
+        bg: '#FFF3D6',
+        text: '#B45309',
       };
     case 'completed':
       return {
         label: 'COMPLETED',
-        bg: '#E2EAE6',
-        text: '#475569',
+        bg: '#5A6F82',
+        text: '#FFFFFF',
       };
     case 'cancelled':
       return {
         label: 'CANCELLED',
-        bg: '#FEE2E2',
-        text: '#B91C1C',
+        bg: '#FFD8D8',
+        text: '#DC2626',
       };
     default:
       return {
         label: (display || status || 'LEAGUE').toUpperCase(),
-        bg: '#E8F5E9',
-        text: '#176B59',
+        bg: '#E2EAE6',
+        text: '#475569',
       };
   }
 }
@@ -97,6 +106,10 @@ export function LeagueCard({
   onManagePress,
   onOptionsPress,
 }: LeagueCardProps) {
+  const isCompleted = league.status === 'completed';
+  const defaultActionLabel = isCompleted ? 'View Results' : 'Manage';
+  const resolvedActionLabel = actionLabel || defaultActionLabel;
+
   const regWeeks = Math.max(0, (league.number_of_weeks || 4) - 1);
   const totalWeeks = league.number_of_weeks || 4;
   const currentWeek = league.current_week || (league.status === 'draft' ? 1 : 1);
@@ -142,15 +155,17 @@ export function LeagueCard({
             <AppText style={styles.leagueName}>
               {league.name}
             </AppText>
-            <TouchableOpacity
-              onPress={onOptionsPress || onPress}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.optionsButton}
-              accessibilityRole="button"
-              accessibilityLabel="Options"
-            >
-              <MoreVertical size={16} color="#61736F" />
-            </TouchableOpacity>
+            {onOptionsPress && (
+              <TouchableOpacity
+                onPress={onOptionsPress}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                style={styles.optionsButton}
+                accessibilityRole="button"
+                accessibilityLabel="League options"
+              >
+                <MoreVertical size={16} color="#61736F" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Metadata Row 1: Duration */}
@@ -221,7 +236,7 @@ export function LeagueCard({
           accessibilityLabel="Manage League"
         >
           <AppText style={styles.manageButtonText}>
-            {actionLabel.replace(/[›>]/g, '').trim()}
+            {resolvedActionLabel.replace(/[›>]/g, '').trim()}
           </AppText>
         </TouchableOpacity>
       </View>

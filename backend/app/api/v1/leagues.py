@@ -205,6 +205,8 @@ async def update_league_status(
         return await service.close_registration(club_id, league_id)
     elif payload.status == LeagueStatus.IN_PROGRESS:
         return await service.start_league(club_id, league_id)
+    elif payload.status == LeagueStatus.COMPLETED:
+        return await service.complete_league(club_id, league_id)
     elif payload.status == LeagueStatus.CANCELLED:
         return await service.cancel_league(club_id, league_id)
     else:
@@ -226,6 +228,20 @@ async def start_league(
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_LEAGUES)),
 ) -> LeagueResponse:
     return await LeagueService(db).start_league(club_id, league_id)
+
+
+@club_league_router.post(
+    "/{league_id}/complete",
+    response_model=LeagueResponse,
+    summary="Complete league competition",
+)
+async def complete_league(
+    club_id: uuid.UUID,
+    league_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_LEAGUES)),
+) -> LeagueResponse:
+    return await LeagueService(db).complete_league(club_id, league_id)
 
 
 # ─── Club Staff Team Operations ───────────────────────────────────────────────

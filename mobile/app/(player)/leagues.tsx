@@ -38,6 +38,7 @@ import {
   AppHeader,
   LeagueCard,
 } from '@/components';
+import { getLeagueStatusBadgeDetails } from '@/components/competition/LeagueOptionsMenuModal';
 import {
   useAuth,
   useLeagueEligiblePartners,
@@ -142,6 +143,11 @@ export default function PlayerLeaguesScreen() {
     const trimmedTeam = regTeamName.trim() || (isSingles ? (user?.full_name || 'My Entry') : '');
     const trimmedPartner = isSingles ? '' : regPartnerName.trim();
 
+    if (selectedLeague?.status !== 'registration_open') {
+      setRegError('Registration is not currently open for this league.');
+      return;
+    }
+
     if (!trimmedTeam) {
       setRegError('Please enter an entry name');
       return;
@@ -213,13 +219,45 @@ export default function PlayerLeaguesScreen() {
   };
 
   const renderLeagueCard = ({ item }: { item: LeagueSummary }) => {
+    let actionLabel = 'View Details ›';
+    if (item.status === 'registration_open') {
+      actionLabel = 'Register Entry →';
+    } else if (item.status === 'registration_closed') {
+      actionLabel = 'Registration Closed';
+    } else if (item.status === 'in_progress') {
+      actionLabel = 'View Live League ›';
+    } else if (item.status === 'playoffs') {
+      actionLabel = 'View Playoffs ›';
+    } else if (item.status === 'completed') {
+      actionLabel = 'View Results ›';
+    } else if (item.status === 'cancelled') {
+      actionLabel = 'Cancelled';
+    }
+
     return (
       <LeagueCard
         league={item}
-        actionLabel="Details ›"
+        actionLabel={actionLabel}
         onPress={() => {
           setSelectedLeague(item);
-          setDetailTab('standings');
+          setDetailTab(item.status === 'completed' ? 'results' : 'standings');
+          setSelectedWeekId(undefined);
+        }}
+        onManagePress={() => {
+          setSelectedLeague(item);
+          if (item.status === 'registration_open') {
+            setRegTeamName(item.team_size === 1 ? (user?.full_name || 'My Entry') : '');
+            setRegPartnerName('');
+            setSelectedPartner(null);
+            setShowMemberPicker(false);
+            setMemberSearchQuery('');
+            setRegError(null);
+            setIsRegisterModalOpen(true);
+          } else if (item.status === 'completed') {
+            setDetailTab('results');
+          } else {
+            setDetailTab('standings');
+          }
           setSelectedWeekId(undefined);
         }}
       />
@@ -277,15 +315,37 @@ export default function PlayerLeaguesScreen() {
               <AppText style={styles.closeBtnText}>✕ Close</AppText>
             </TouchableOpacity>
 
-            <AppText style={styles.modalTitle}>{selectedLeague?.name}</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <AppText style={[styles.modalTitle, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
+                {selectedLeague?.name}
+              </AppText>
+              {selectedLeague && (
+                <View
+                  style={[
+                    styles.statusPill,
+                    { backgroundColor: getLeagueStatusBadgeDetails(selectedLeague.status).bg },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: getLeagueStatusBadgeDetails(selectedLeague.status).text },
+                    ]}
+                  />
+                  <AppText
+                    style={[
+                      styles.statusPillText,
+                      { color: getLeagueStatusBadgeDetails(selectedLeague.status).text },
+                    ]}
+                  >
+                    {getLeagueStatusBadgeDetails(selectedLeague.status).label}
+                  </AppText>
+                </View>
+              )}
+            </View>
+
             <AppText style={styles.modalSubtitle}>
-              {selectedLeague?.number_of_weeks} Weeks •{' '}
-              {(selectedLeague?.teams_count ?? 0) > 0
-                ? `${selectedLeague?.teams_count} Teams`
-                : 'Teams not finalized'}{' '}
-              •{' '}
-              {selectedLeague?.status_display ||
-                (selectedLeague?.status ? LEAGUE_STATUS_LABELS[selectedLeague.status] : '')}
+              {`${selectedLeague?.number_of_weeks} Weeks • ${(selectedLeague?.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${(selectedLeague?.teams_count ?? 0) > 0 ? `${selectedLeague?.teams_count}/${selectedLeague?.max_teams || 12} Teams` : 'Teams not finalized'} • Top ${selectedLeague?.playoff_team_count || 4} to Playoffs`}
             </AppText>
 
             {/* Registration Banner / Action for Player */}
@@ -347,6 +407,24 @@ export default function PlayerLeaguesScreen() {
                     setIsRegisterModalOpen(true);
                   }}
                 />
+              </View>
+            ) : selectedLeague?.status === 'registration_closed' && !regStatus?.is_registered ? (
+              <View style={styles.closedRegBanner}>
+                <View>
+                  <AppText style={styles.closedRegText}>🔒 Registration is Closed</AppText>
+                  <AppText style={styles.closedRegSub}>
+                    Team entries have been closed and finalized for this league.
+                  </AppText>
+                </View>
+              </View>
+            ) : selectedLeague?.status === 'cancelled' ? (
+              <View style={styles.cancelledRegBanner}>
+                <View>
+                  <AppText style={styles.cancelledRegText}>⚠️ League Cancelled</AppText>
+                  <AppText style={styles.cancelledRegSub}>
+                    This league was cancelled by the club organizer.
+                  </AppText>
+                </View>
               </View>
             ) : null}
           </View>
@@ -928,6 +1006,60 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: Typography.size.xs,
     color: Colors.text.secondary,
+    marginTop: 2,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  closedRegBanner: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: Spacing[3],
+    marginTop: Spacing[2],
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  closedRegText: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.semibold,
+    color: '#475569',
+  },
+  closedRegSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  cancelledRegBanner: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    padding: Spacing[3],
+    marginTop: Spacing[2],
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelledRegText: {
+    fontSize: Typography.size.xs,
+    fontWeight: Typography.weight.bold,
+    color: '#DC2626',
+  },
+  cancelledRegSub: {
+    fontSize: 11,
+    color: '#B91C1C',
     marginTop: 2,
   },
   modalTabs: {

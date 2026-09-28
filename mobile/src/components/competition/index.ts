@@ -17,5 +17,6 @@ export { LiveTournamentView } from './LiveTournamentView';
 export { DraftTournamentBanner } from './DraftTournamentBanner';
 export { RegistrationOpenBanner } from './RegistrationOpenBanner';
 export { TournamentOptionsMenuModal } from './TournamentOptionsMenuModal';
+export { LeagueOptionsMenuModal } from './LeagueOptionsMenuModal';
 export { TournamentSettingsRosterModal } from './TournamentSettingsRosterModal';
 export * from './StandardMatchScoreModal';

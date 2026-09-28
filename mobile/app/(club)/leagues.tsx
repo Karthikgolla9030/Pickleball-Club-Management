@@ -34,6 +34,7 @@ import {
   EmptyState,
   ErrorState,
   LeagueCard,
+  LeagueOptionsMenuModal,
   LoadingState,
   Screen,
 } from '@/components';
@@ -65,8 +66,10 @@ export default function ClubLeaguesScreen() {
   const [selectedStatus, setSelectedStatus] = useState<LeagueStatus | undefined>(undefined);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [optionsMenuLeague, setOptionsMenuLeague] = useState<LeagueSummary | null>(null);
+  const [isActionProcessing, setIsActionProcessing] = useState(false);
 
-  // Fetch all leagues for active club
+  // Fetch all leagues for active club with lifecycle action mutations
   const {
     data: leagues,
     isLoading,
@@ -76,6 +79,12 @@ export default function ClubLeaguesScreen() {
     isRefetching,
     createLeague,
     isCreating,
+    openRegistration,
+    closeRegistration,
+    startLeague,
+    completeLeague,
+    cancelLeague,
+    generateSchedule,
   } = useClubLeagues(clubId);
 
   // Compute status counts dynamically
@@ -133,18 +142,158 @@ export default function ClubLeaguesScreen() {
     });
   };
 
-  const handleLeagueOptions = (league: LeagueSummary) => {
+  const handleOpenOptionsMenu = (league: LeagueSummary) => {
+    setOptionsMenuLeague(league);
+  };
+
+  // ─── Lifecycle Actions ──────────────────────────────────────────────────────
+
+  const handlePublishLeague = async (league: LeagueSummary) => {
+    setIsActionProcessing(true);
+    try {
+      await openRegistration(league.id);
+      void refetch();
+      Alert.alert(
+        'Registration Opened!',
+        `Registration is now open for "${league.name}". Players can now discover and register their entries in the Player App.`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to open registration';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsActionProcessing(false);
+    }
+  };
+
+  const handleConfirmCloseRegistration = (league: LeagueSummary) => {
     Alert.alert(
-      league.name,
-      `Status: ${league.status_display || league.status.toUpperCase()}\nWeeks: ${league.number_of_weeks}`,
+      'Close Registration',
+      `Are you sure you want to close registration for "${league.name}"? No new teams or players will be able to register. Current entries will be finalized.`,
       [
+        { text: 'Keep Open', style: 'cancel' },
         {
-          text: 'Manage League',
-          onPress: () => handleLeaguePress(league.id),
+          text: 'Close Registration',
+          style: 'default',
+          onPress: async () => {
+            setIsActionProcessing(true);
+            try {
+              await closeRegistration(league.id);
+              void refetch();
+              Alert.alert(
+                'Registration Closed',
+                `Registration has been closed for "${league.name}". You may now review rosters and generate regular season fixtures.`
+              );
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Failed to close registration';
+              Alert.alert('Error', msg);
+            } finally {
+              setIsActionProcessing(false);
+            }
+          },
         },
+      ]
+    );
+  };
+
+  const handleConfirmStartLeague = (league: LeagueSummary) => {
+    Alert.alert(
+      'Start League Play',
+      `Are you sure you want to start "${league.name}"? This transitions the league to Live / In Progress and marks Week 1 as active.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Cancel',
-          style: 'cancel',
+          text: 'Start League',
+          style: 'default',
+          onPress: async () => {
+            setIsActionProcessing(true);
+            try {
+              await startLeague(league.id);
+              void refetch();
+              Alert.alert(
+                'League Started!',
+                `"${league.name}" is now live! Players can view match fixtures, schedule, and live standings.`
+              );
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Failed to start league';
+              Alert.alert('Error', msg);
+            } finally {
+              setIsActionProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleGenerateSchedule = async (league: LeagueSummary) => {
+    setIsActionProcessing(true);
+    try {
+      await generateSchedule({ leagueId: league.id, force: true });
+      void refetch();
+      Alert.alert(
+        'Schedule Generated',
+        `Regular season round-robin fixtures have been generated across all weeks for "${league.name}".`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate schedule';
+      Alert.alert('Error', msg);
+    } finally {
+      setIsActionProcessing(false);
+    }
+  };
+
+  const handleConfirmCompleteLeague = (league: LeagueSummary) => {
+    Alert.alert(
+      'Complete League Competition',
+      `Are you sure you want to mark "${league.name}" as completed? This will finalize all standings and results.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Complete League',
+          style: 'default',
+          onPress: async () => {
+            setIsActionProcessing(true);
+            try {
+              await completeLeague(league.id);
+              void refetch();
+              Alert.alert(
+                'League Completed!',
+                `"${league.name}" has been finalized! Final standings and champion results are now locked.`
+              );
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Failed to complete league';
+              Alert.alert('Error', msg);
+            } finally {
+              setIsActionProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleConfirmCancelLeague = (league: LeagueSummary) => {
+    Alert.alert(
+      'Cancel League',
+      `Are you sure you want to cancel "${league.name}"? This action marks the league as cancelled and halts all competition activity. Existing records will be preserved for history.`,
+      [
+        { text: 'Keep League', style: 'cancel' },
+        {
+          text: 'Cancel League',
+          style: 'destructive',
+          onPress: async () => {
+            setIsActionProcessing(true);
+            try {
+              await cancelLeague(league.id);
+              void refetch();
+              Alert.alert('League Cancelled', `"${league.name}" has been marked as cancelled.`);
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Failed to cancel league';
+              Alert.alert('Error', msg);
+            } finally {
+              setIsActionProcessing(false);
+            }
+          },
         },
       ]
     );
@@ -420,7 +569,7 @@ export default function ClubLeaguesScreen() {
               actionLabel="Manage"
               onPress={() => handleLeaguePress(item.id)}
               onManagePress={() => handleLeaguePress(item.id)}
-              onOptionsPress={() => handleLeagueOptions(item)}
+              onOptionsPress={canManageTournaments ? () => handleOpenOptionsMenu(item) : undefined}
             />
           )}
           ListEmptyComponent={
@@ -448,6 +597,23 @@ export default function ClubLeaguesScreen() {
           }
         />
       )}
+
+      {/* League Options Menu Modal (3-dots overflow) */}
+      <LeagueOptionsMenuModal
+        visible={Boolean(optionsMenuLeague)}
+        onClose={() => setOptionsMenuLeague(null)}
+        league={optionsMenuLeague}
+        canManage={canManageTournaments}
+        isProcessing={isActionProcessing}
+        onPublishPress={handlePublishLeague}
+        onCloseRegistrationPress={handleConfirmCloseRegistration}
+        onStartLeaguePress={handleConfirmStartLeague}
+        onGenerateSchedulePress={handleGenerateSchedule}
+        onCompletePress={handleConfirmCompleteLeague}
+        onCancelPress={handleConfirmCancelLeague}
+        onManagePress={(l) => handleLeaguePress(l.id)}
+        onViewResultsPress={(l) => handleLeaguePress(l.id)}
+      />
 
       {/* Create League Modal */}
       <CreateLeagueModal

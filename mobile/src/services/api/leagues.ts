@@ -64,12 +64,35 @@ export const leagueApi = {
     if (status === 'in_progress') {
       return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/start`, {});
     }
+    if (status === 'completed') {
+      return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/complete`, {});
+    }
     if (status === 'cancelled') {
       return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/cancel`, {});
     }
     return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/status`, {
       status,
     });
+  },
+
+  openRegistration(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/open-registration`, {});
+  },
+
+  closeRegistration(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/close-registration`, {});
+  },
+
+  startLeague(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/start`, {});
+  },
+
+  completeLeague(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/complete`, {});
+  },
+
+  cancelLeague(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/cancel`, {});
   },
 
   // ─── Teams (Staff) ──────────────────────────────────────────────────────────
@@ -99,10 +122,6 @@ export const leagueApi = {
     return apiClient.post(`${clubLeagueBase(clubId)}/${leagueId}/schedule?force=${force}`, {
       force,
     });
-  },
-
-  startLeague(clubId: string, leagueId: string): Promise<LeagueSummary> {
-    return apiClient.post(`${clubLeagueBase(clubId)}/${leagueId}/start`, {});
   },
 
   listWeeks(clubId: string, leagueId: string): Promise<LeagueWeek[]> {
