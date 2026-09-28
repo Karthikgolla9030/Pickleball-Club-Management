@@ -1,21 +1,20 @@
 /**
  * Aught2 Pickleball — Club Leagues Management Screen
  *
- * Exact visual match to reference design:
- * - Top header with bold title, subtitle, hamburger menu, and compact + Create button
- * - Club Information Card with "Play. Learn. Get Better." slogan and "♛ CLUB OWNER >" badge
- * - Large promotional Hero Banner ("Play More Compete Together")
- * - Single-row horizontal Status Filter Bar with dynamic counts ("All Leagues [3]", "Active [0]", "Draft [2]", "Completed [1]") + Filter Options button
- * - Two-column League Cards with left thumbnail + status badge, metadata, progress bar, "View Details >", and "Manage" button
- * - Bottom CTA Card ("Start a New League" + "+ Create League")
- * - Real data, filtering, creation modal, and details navigation preserved
+ * Exact visual match to Screen 1 of reference mockup:
+ * - Top header with hamburger menu [☰], "Leagues" bold title, "Manage and run your club leagues" subtitle,
+ *   and "+ Create League" green button on the right
+ * - Horizontal Status Filter Pills matching reference:
+ *     "All (N)", "Registration Open (N)", "Live (N)", "Completed (N)"
+ * - Direct, clean list of League Cards with zero distracting banners
+ * - Three-dot overflow menu on every card with valid lifecycle actions
+ * - Real backend data and synchronization
  */
 
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
-  Image,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -24,12 +23,11 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
-import { SlidersHorizontal, Trophy } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Menu } from 'lucide-react-native';
 
 import {
-  AppHeader,
   AppText,
-  CompetitionFilterSheet,
   CreateLeagueModal,
   EmptyState,
   ErrorState,
@@ -39,32 +37,24 @@ import {
   Screen,
 } from '@/components';
 import { useActiveClub, useClubLeagues, usePermission } from '@/hooks';
+import { useDrawerStore } from '@/navigation';
 import type {
   CreateLeaguePayload,
   LeagueStatus,
   LeagueSummary,
 } from '@/types';
 
-type FilterTabKey = 'all' | 'active' | 'draft' | 'completed';
-
-const STATUS_FILTERS: { status: LeagueStatus | undefined; label: string }[] = [
-  { status: undefined, label: 'All Leagues' },
-  { status: 'draft', label: 'Draft' },
-  { status: 'registration_open', label: 'Open' },
-  { status: 'in_progress', label: 'In Progress' },
-  { status: 'playoffs', label: 'Playoffs' },
-  { status: 'completed', label: 'Completed' },
-  { status: 'cancelled', label: 'Cancelled' },
-];
+type FilterTabKey = 'all' | 'registration_open' | 'live' | 'completed';
 
 export default function ClubLeaguesScreen() {
+  const insets = useSafeAreaInsets();
+  const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId } = useActiveClub();
-  const { canManageTournaments } = usePermission();
+  const { canManageTournaments, canManageLeagues } = usePermission();
+  const canManage = canManageTournaments || canManageLeagues;
 
   // Filter state
   const [activeTab, setActiveTab] = useState<FilterTabKey>('all');
-  const [selectedStatus, setSelectedStatus] = useState<LeagueStatus | undefined>(undefined);
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [optionsMenuLeague, setOptionsMenuLeague] = useState<LeagueSummary | null>(null);
   const [isActionProcessing, setIsActionProcessing] = useState(false);
@@ -87,44 +77,36 @@ export default function ClubLeaguesScreen() {
     generateSchedule,
   } = useClubLeagues(clubId);
 
-  // Compute status counts dynamically
+  // Compute status counts dynamically matching Screen 1 in mockup
   const counts = useMemo(() => {
     const all = leagues?.length ?? 0;
-    const active = leagues?.filter(
-      (l) => l.status === 'in_progress' || l.status === 'registration_open' || l.status === 'playoffs'
+    const regOpen = leagues?.filter((l) => l.status === 'registration_open').length ?? 0;
+    const live = leagues?.filter(
+      (l) => l.status === 'in_progress' || l.status === 'playoffs'
     ).length ?? 0;
-    const draft = leagues?.filter((l) => l.status === 'draft').length ?? 0;
     const completed = leagues?.filter((l) => l.status === 'completed').length ?? 0;
 
-    return { all, active, draft, completed };
+    return { all, regOpen, live, completed };
   }, [leagues]);
 
-  // Compute filtered list based on active tab and optional sheet filter
+  // Compute filtered list based on active tab
   const filteredLeagues = useMemo(() => {
     if (!leagues) return [];
 
-    let list = leagues;
-
-    // Apply sheet filter if explicitly set
-    if (selectedStatus) {
-      return list.filter((l) => l.status === selectedStatus);
-    }
-
-    // Apply quick tab filter
     switch (activeTab) {
-      case 'active':
-        return list.filter(
-          (l) => l.status === 'in_progress' || l.status === 'registration_open' || l.status === 'playoffs'
+      case 'registration_open':
+        return leagues.filter((l) => l.status === 'registration_open');
+      case 'live':
+        return leagues.filter(
+          (l) => l.status === 'in_progress' || l.status === 'playoffs'
         );
-      case 'draft':
-        return list.filter((l) => l.status === 'draft');
       case 'completed':
-        return list.filter((l) => l.status === 'completed');
+        return leagues.filter((l) => l.status === 'completed');
       case 'all':
       default:
-        return list;
+        return leagues;
     }
-  }, [leagues, activeTab, selectedStatus]);
+  }, [leagues, activeTab]);
 
   const handleOpenCreateModal = () => {
     setIsCreateModalOpen(true);
@@ -211,7 +193,7 @@ export default function ClubLeaguesScreen() {
               void refetch();
               Alert.alert(
                 'League Started!',
-                `"${league.name}" is now live! Players can view match fixtures, schedule, and live standings.`
+                `"${league.name}" is now live! Week 1 matches can now be scored and tracked.`
               );
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : 'Failed to start league';
@@ -225,27 +207,10 @@ export default function ClubLeaguesScreen() {
     );
   };
 
-  const handleGenerateSchedule = async (league: LeagueSummary) => {
-    setIsActionProcessing(true);
-    try {
-      await generateSchedule({ leagueId: league.id, force: true });
-      void refetch();
-      Alert.alert(
-        'Schedule Generated',
-        `Regular season round-robin fixtures have been generated across all weeks for "${league.name}".`
-      );
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate schedule';
-      Alert.alert('Error', msg);
-    } finally {
-      setIsActionProcessing(false);
-    }
-  };
-
   const handleConfirmCompleteLeague = (league: LeagueSummary) => {
     Alert.alert(
       'Complete League Competition',
-      `Are you sure you want to mark "${league.name}" as completed? This will finalize all standings and results.`,
+      `Are you sure you want to mark "${league.name}" as completed? This will lock final standings and record results permanently.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -258,7 +223,7 @@ export default function ClubLeaguesScreen() {
               void refetch();
               Alert.alert(
                 'League Completed!',
-                `"${league.name}" has been finalized! Final standings and champion results are now locked.`
+                `"${league.name}" has been marked as completed! Final standings and championship results are locked.`
               );
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : 'Failed to complete league';
@@ -275,7 +240,7 @@ export default function ClubLeaguesScreen() {
   const handleConfirmCancelLeague = (league: LeagueSummary) => {
     Alert.alert(
       'Cancel League',
-      `Are you sure you want to cancel "${league.name}"? This action marks the league as cancelled and halts all competition activity. Existing records will be preserved for history.`,
+      `Are you sure you want to cancel "${league.name}"? This action halts all league play and marks it as cancelled. Existing records will be preserved for history.`,
       [
         { text: 'Keep League', style: 'cancel' },
         {
@@ -299,253 +264,125 @@ export default function ClubLeaguesScreen() {
     );
   };
 
-  const handleTabPress = (tab: FilterTabKey) => {
-    setActiveTab(tab);
-    setSelectedStatus(undefined);
-  };
-
-  // Header Component for FlatList
+  // Header Component for FlatList matching Screen 1 of reference mockup
   const renderHeader = () => (
-    <View style={styles.headerContentContainer}>
-      {/* 1. Hero Promotional Banner */}
-      <View style={styles.heroBannerWrapper}>
-        <Image
-          source={require('../../assets/leagues/hero_banner.jpg')}
-          style={styles.heroBannerImage}
-          resizeMode="cover"
-        />
-      </View>
-
-      {/* 3. Horizontal Filter Bar */}
-      <View style={styles.filterBarContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScrollView}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {/* Tab: All Leagues */}
-          <TouchableOpacity
-            style={[
-              styles.filterTab,
-              activeTab === 'all' && !selectedStatus && styles.filterTabActive,
-            ]}
-            onPress={() => handleTabPress('all')}
-            activeOpacity={0.8}
-          >
-            <AppText
-              style={[
-                styles.filterTabText,
-                activeTab === 'all' && !selectedStatus && styles.filterTabTextActive,
-              ]}
-            >
-              All Leagues
-            </AppText>
-            <View
-              style={[
-                styles.countBadge,
-                activeTab === 'all' && !selectedStatus && styles.countBadgeActive,
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.countBadgeText,
-                  activeTab === 'all' && !selectedStatus && styles.countBadgeTextActive,
-                ]}
-              >
-                {counts.all}
-              </AppText>
-            </View>
-          </TouchableOpacity>
-
-          {/* Tab: Active */}
-          <TouchableOpacity
-            style={[
-              styles.filterTab,
-              activeTab === 'active' && !selectedStatus && styles.filterTabActive,
-            ]}
-            onPress={() => handleTabPress('active')}
-            activeOpacity={0.8}
-          >
-            <AppText
-              style={[
-                styles.filterTabText,
-                activeTab === 'active' && !selectedStatus && styles.filterTabTextActive,
-              ]}
-            >
-              Active
-            </AppText>
-            <View
-              style={[
-                styles.countBadge,
-                activeTab === 'active' && !selectedStatus && styles.countBadgeActive,
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.countBadgeText,
-                  activeTab === 'active' && !selectedStatus && styles.countBadgeTextActive,
-                ]}
-              >
-                {counts.active}
-              </AppText>
-            </View>
-          </TouchableOpacity>
-
-          {/* Tab: Draft */}
-          <TouchableOpacity
-            style={[
-              styles.filterTab,
-              activeTab === 'draft' && !selectedStatus && styles.filterTabActive,
-            ]}
-            onPress={() => handleTabPress('draft')}
-            activeOpacity={0.8}
-          >
-            <AppText
-              style={[
-                styles.filterTabText,
-                activeTab === 'draft' && !selectedStatus && styles.filterTabTextActive,
-              ]}
-            >
-              Draft
-            </AppText>
-            <View
-              style={[
-                styles.countBadge,
-                activeTab === 'draft' && !selectedStatus && styles.countBadgeActive,
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.countBadgeText,
-                  activeTab === 'draft' && !selectedStatus && styles.countBadgeTextActive,
-                ]}
-              >
-                {counts.draft}
-              </AppText>
-            </View>
-          </TouchableOpacity>
-
-          {/* Tab: Completed */}
-          <TouchableOpacity
-            style={[
-              styles.filterTab,
-              activeTab === 'completed' && !selectedStatus && styles.filterTabActive,
-            ]}
-            onPress={() => handleTabPress('completed')}
-            activeOpacity={0.8}
-          >
-            <AppText
-              style={[
-                styles.filterTabText,
-                activeTab === 'completed' && !selectedStatus && styles.filterTabTextActive,
-              ]}
-            >
-              Completed
-            </AppText>
-            <View
-              style={[
-                styles.countBadge,
-                activeTab === 'completed' && !selectedStatus && styles.countBadgeActive,
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.countBadgeText,
-                  activeTab === 'completed' && !selectedStatus && styles.countBadgeTextActive,
-                ]}
-              >
-                {counts.completed}
-              </AppText>
-            </View>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Filter Sheet Trigger Button */}
+    <View style={styles.filterSectionContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterScroll}
+      >
+        {/* Tab: All */}
         <TouchableOpacity
           style={[
-            styles.filterOptionsButton,
-            selectedStatus && styles.filterOptionsButtonActive,
+            styles.filterPill,
+            activeTab === 'all' && styles.filterPillActive,
           ]}
-          onPress={() => setIsFilterSheetOpen(true)}
+          onPress={() => setActiveTab('all')}
           activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Open Filters"
         >
-          <SlidersHorizontal
-            size={15}
-            color={selectedStatus ? '#FFFFFF' : '#102F2A'}
-          />
-        </TouchableOpacity>
-      </View>
-
-      {/* Optional Active Filter Tag Indicator */}
-      {selectedStatus && (
-        <View style={styles.activeFilterNotice}>
-          <AppText style={styles.activeFilterNoticeText}>
-            Filtered: {STATUS_FILTERS.find((f) => f.status === selectedStatus)?.label}
-          </AppText>
-          <TouchableOpacity onPress={() => setSelectedStatus(undefined)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-            <AppText style={styles.clearFilterText}>✕ Clear</AppText>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-
-  // Footer Component with Bottom CTA Card
-  const renderFooter = () => (
-    <View style={styles.bottomCtaWrapper}>
-      <View style={styles.ctaCard}>
-        <View style={styles.ctaIconContainer}>
-          <Trophy size={18} color="#176B59" />
-        </View>
-
-        <View style={styles.ctaTextContainer}>
-          <AppText style={styles.ctaTitle}>Start a New League</AppText>
-          <AppText style={styles.ctaSubtitle}>
-            Create a league, set the format, invite teams and keep the competition going.
-          </AppText>
-        </View>
-
-        {canManageTournaments && (
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={handleOpenCreateModal}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Create League"
+          <AppText
+            style={[
+              styles.filterPillText,
+              activeTab === 'all' && styles.filterPillTextActive,
+            ]}
           >
-            <AppText style={styles.ctaButtonText}>+ Create League</AppText>
-          </TouchableOpacity>
-        )}
-      </View>
+            All ({counts.all})
+          </AppText>
+        </TouchableOpacity>
+
+        {/* Tab: Registration Open */}
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            activeTab === 'registration_open' && styles.filterPillActive,
+          ]}
+          onPress={() => setActiveTab('registration_open')}
+          activeOpacity={0.8}
+        >
+          <AppText
+            style={[
+              styles.filterPillText,
+              activeTab === 'registration_open' && styles.filterPillTextActive,
+            ]}
+          >
+            Registration Open ({counts.regOpen})
+          </AppText>
+        </TouchableOpacity>
+
+        {/* Tab: Live */}
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            activeTab === 'live' && styles.filterPillActive,
+          ]}
+          onPress={() => setActiveTab('live')}
+          activeOpacity={0.8}
+        >
+          <AppText
+            style={[
+              styles.filterPillText,
+              activeTab === 'live' && styles.filterPillTextActive,
+            ]}
+          >
+            Live ({counts.live})
+          </AppText>
+        </TouchableOpacity>
+
+        {/* Tab: Completed */}
+        <TouchableOpacity
+          style={[
+            styles.filterPill,
+            activeTab === 'completed' && styles.filterPillActive,
+          ]}
+          onPress={() => setActiveTab('completed')}
+          activeOpacity={0.8}
+        >
+          <AppText
+            style={[
+              styles.filterPillText,
+              activeTab === 'completed' && styles.filterPillTextActive,
+            ]}
+          >
+            Completed ({counts.completed})
+          </AppText>
+        </TouchableOpacity>
+      </ScrollView>
     </View>
   );
 
   return (
     <Screen style={styles.screenContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* Top Mobile Header */}
-      <AppHeader
-        title="Leagues"
-        subtitle="Multi-week regular seasons & championship playoffs"
-        borderless
-        rightElement={
-          canManageTournaments ? (
-            <TouchableOpacity
-              style={styles.topCreateButton}
-              onPress={handleOpenCreateModal}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Create League"
-            >
-              <AppText style={styles.topCreateButtonText}>+ Create</AppText>
-            </TouchableOpacity>
-          ) : undefined
-        }
-      />
+      {/* Top Header matching Screen 1: Hamburger Menu, Title, Subtitle, + Create League Button */}
+      <View style={[styles.topHeader, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          style={styles.drawerButton}
+          onPress={openDrawer}
+          accessibilityLabel="Open drawer menu"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Menu size={22} color="#111827" strokeWidth={2.4} />
+        </TouchableOpacity>
+
+        <View style={styles.titleContainer}>
+          <AppText style={styles.screenTitle}>Leagues</AppText>
+          <AppText style={styles.screenSubtitle}>Manage and run your club leagues</AppText>
+        </View>
+
+        {canManage && (
+          <TouchableOpacity
+            style={styles.createButton}
+            onPress={handleOpenCreateModal}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Create League"
+          >
+            <AppText style={styles.createButtonText}>+ Create League</AppText>
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Main List Area */}
       {isLoading ? (
@@ -560,62 +397,48 @@ export default function ClubLeaguesScreen() {
           data={filteredLeagues}
           keyExtractor={(item) => item.id}
           ListHeaderComponent={renderHeader}
-          ListFooterComponent={renderFooter}
           contentContainerStyle={styles.listContentContainer}
           renderItem={({ item, index }) => (
             <LeagueCard
               league={item}
               imageIndex={index}
-              actionLabel="Manage"
               onPress={() => handleLeaguePress(item.id)}
-              onManagePress={() => handleLeaguePress(item.id)}
-              onOptionsPress={canManageTournaments ? () => handleOpenOptionsMenu(item) : undefined}
+              onOptionsPress={() => handleOpenOptionsMenu(item)}
             />
           )}
           ListEmptyComponent={
             <EmptyState
               title={
-                selectedStatus || activeTab !== 'all'
-                  ? 'No Leagues Found'
-                  : 'No leagues created yet.'
+                activeTab === 'all'
+                  ? 'No Leagues Created Yet'
+                  : `No ${
+                      activeTab === 'registration_open'
+                        ? 'Open'
+                        : activeTab === 'live'
+                        ? 'Live'
+                        : 'Completed'
+                    } Leagues`
               }
               description={
-                selectedStatus || activeTab !== 'all'
-                  ? 'No leagues match the selected status filter.'
-                  : 'Create your first league to get started.'
+                activeTab === 'all'
+                  ? 'Create your first league to run multi-week regular season round-robins and championship playoffs.'
+                  : 'Check back later or switch filter tabs to view other leagues.'
               }
-              actionLabel={canManageTournaments ? 'Create League' : undefined}
-              onAction={canManageTournaments ? handleOpenCreateModal : undefined}
+              actionLabel={canManage && activeTab === 'all' ? '+ Create League' : undefined}
+              onAction={canManage && activeTab === 'all' ? handleOpenCreateModal : undefined}
             />
           }
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor="#176B59"
+              tintColor="#064E3B"
             />
           }
         />
       )}
 
-      {/* League Options Menu Modal (3-dots overflow) */}
-      <LeagueOptionsMenuModal
-        visible={Boolean(optionsMenuLeague)}
-        onClose={() => setOptionsMenuLeague(null)}
-        league={optionsMenuLeague}
-        canManage={canManageTournaments}
-        isProcessing={isActionProcessing}
-        onPublishPress={handlePublishLeague}
-        onCloseRegistrationPress={handleConfirmCloseRegistration}
-        onStartLeaguePress={handleConfirmStartLeague}
-        onGenerateSchedulePress={handleGenerateSchedule}
-        onCompletePress={handleConfirmCompleteLeague}
-        onCancelPress={handleConfirmCancelLeague}
-        onManagePress={(l) => handleLeaguePress(l.id)}
-        onViewResultsPress={(l) => handleLeaguePress(l.id)}
-      />
-
-      {/* Create League Modal */}
+      {/* Create League Modal Sheet */}
       <CreateLeagueModal
         visible={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
@@ -623,21 +446,48 @@ export default function ClubLeaguesScreen() {
         isCreating={isCreating}
       />
 
-      {/* League Filter Sheet */}
-      <CompetitionFilterSheet
-        visible={isFilterSheetOpen}
-        onClose={() => setIsFilterSheetOpen(false)}
-        title="Filter Leagues"
-        statusOptions={STATUS_FILTERS.map((f) => ({
-          value: f.status,
-          label: f.label,
-        }))}
-        selectedStatus={selectedStatus}
-        onApply={(newStatus) => {
-          setSelectedStatus(newStatus as LeagueStatus | undefined);
+      {/* Standardized League Options Action Sheet (3-dot menu) */}
+      <LeagueOptionsMenuModal
+        visible={Boolean(optionsMenuLeague)}
+        onClose={() => setOptionsMenuLeague(null)}
+        league={optionsMenuLeague}
+        canManage={canManage}
+        isProcessing={isActionProcessing}
+        onPublishPress={(l) => {
+          setOptionsMenuLeague(null);
+          void handlePublishLeague(l);
         }}
-        onReset={() => {
-          setSelectedStatus(undefined);
+        onCloseRegistrationPress={(l) => {
+          setOptionsMenuLeague(null);
+          handleConfirmCloseRegistration(l);
+        }}
+        onStartLeaguePress={(l) => {
+          setOptionsMenuLeague(null);
+          handleConfirmStartLeague(l);
+        }}
+        onGenerateSchedulePress={(l) => {
+          setOptionsMenuLeague(null);
+          handleLeaguePress(l.id);
+        }}
+        onGeneratePlayoffsPress={(l) => {
+          setOptionsMenuLeague(null);
+          handleLeaguePress(l.id);
+        }}
+        onCompletePress={(l) => {
+          setOptionsMenuLeague(null);
+          handleConfirmCompleteLeague(l);
+        }}
+        onViewResultsPress={(l) => {
+          setOptionsMenuLeague(null);
+          handleLeaguePress(l.id);
+        }}
+        onManagePress={(l) => {
+          setOptionsMenuLeague(null);
+          handleLeaguePress(l.id);
+        }}
+        onCancelPress={(l) => {
+          setOptionsMenuLeague(null);
+          handleConfirmCancelLeague(l);
         }}
       />
     </Screen>
@@ -647,211 +497,81 @@ export default function ClubLeaguesScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F3F8F5',
+    backgroundColor: '#F8FAFC',
   },
-  topHeaderBar: {
+  topHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: '#F3F8F5',
+    paddingBottom: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
     gap: 12,
   },
-  menuButton: {
-    padding: 4,
+  drawerButton: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
   },
-  headerTitles: {
+  titleContainer: {
     flex: 1,
   },
-  headerMainTitle: {
-    fontSize: 24,
+  screenTitle: {
+    fontSize: 20,
     fontWeight: '700',
-    color: '#102F2A',
-    lineHeight: 28,
+    color: '#111827',
+    lineHeight: 24,
   },
-  headerSubtitle: {
-    fontSize: 11.5,
-    color: '#61736F',
+  screenSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
     marginTop: 1,
-    lineHeight: 15,
   },
-  topCreateButton: {
-    backgroundColor: '#176B59',
-    paddingHorizontal: 14,
+  createButton: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
   },
-  topCreateButtonText: {
+  createButtonText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  filterSectionContainer: {
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 10,
+  },
+  filterScroll: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  filterPillActive: {
+    backgroundColor: '#064E3B',
+    borderColor: '#064E3B',
+  },
+  filterPillText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
   },
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 110,
-  },
-  headerContentContainer: {
-    marginBottom: 10,
-  },
-  clubCardWrapper: {
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  heroBannerWrapper: {
-    width: '100%',
-    aspectRatio: 422 / 116,
-    borderRadius: 14,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E1E8E4',
-    marginBottom: 12,
-    backgroundColor: '#E7F0EB',
-  },
-  heroBannerImage: {
-    width: '100%',
-    height: '100%',
-  },
-  filterBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-    gap: 6,
-  },
-  filterScrollView: {
-    flex: 1,
-  },
-  filterScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 4,
-  },
-  filterTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E8E4',
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingLeft: 12,
-    paddingRight: 6,
-    marginRight: 8,
-    gap: 6,
-  },
-  filterTabActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
-  },
-  filterTabText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#102F2A',
-  },
-  filterTabTextActive: {
-    color: '#FFFFFF',
-  },
-  countBadge: {
-    backgroundColor: '#EAF0EC',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    minWidth: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countBadgeActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  countBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#61736F',
-  },
-  countBadgeTextActive: {
-    color: '#176B59',
-  },
-  filterOptionsButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E1E8E4',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  filterOptionsButtonActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
-  },
-  activeFilterNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#E8F5EE',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: '#CBE5D7',
-  },
-  activeFilterNoticeText: {
-    fontSize: 11.5,
-    color: '#176B59',
-    fontWeight: '500',
-  },
-  clearFilterText: {
-    fontSize: 11.5,
-    color: '#176B59',
-    fontWeight: '700',
-  },
-  bottomCtaWrapper: {
-    marginTop: 6,
-    marginBottom: 20,
-  },
-  ctaCard: {
-    backgroundColor: '#EDF7F2',
-    borderWidth: 1,
-    borderColor: '#CBE5D7',
-    borderRadius: 14,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  ctaIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#D7EDE0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ctaTextContainer: {
-    flex: 1,
-  },
-  ctaTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#102F2A',
-  },
-  ctaSubtitle: {
-    fontSize: 10.5,
-    color: '#516862',
-    lineHeight: 14,
-    marginTop: 2,
-  },
-  ctaButton: {
-    backgroundColor: '#176B59',
-    paddingVertical: 7,
-    paddingHorizontal: 11,
-    borderRadius: 8,
-  },
-  ctaButtonText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    paddingBottom: 32,
   },
 });

@@ -1,11 +1,16 @@
 /**
- * Aught2 Pickleball — Redesigned LeagueCard Component
+ * Aught2 Pickleball — LeagueCard Component
  *
- * Exact visual match to reference design:
- * - Left column: Court thumbnail with overlaid status badge (DRAFT, PLAYOFFS, IN PROGRESS, COMPLETED)
- * - Right column: Title, three-dot menu, calendar duration, users team count, progress bar with percentage and stage
- * - Bottom action row: "View Details >" touchable link + outlined "Manage" button
- * - Zero text truncation / no ellipsis on titles or metadata
+ * Exact visual match to Screen 1 of reference mockup:
+ * - Left column: Square court thumbnail image (rounded corners)
+ * - Right column:
+ *   - Top row: Status pill (● REGISTRATION OPEN / CLOSED / IN PROGRESS / COMPLETED) + 3-dot ⋮ menu
+ *   - League title (bold navy text)
+ *   - Subtitle: {weeks} Weeks • {teams} Teams • {Singles/Doubles}
+ *   - Trophy line: Top {N} to Playoffs
+ *   - Registration / Week Progress bar
+ *   - Calendar date line (e.g. Closes May 15, 2026 / Registration closed / Active Week 1 of 4 / Completed)
+ * - Entire card touchable with comfortable touch target and soft shadow
  */
 
 import React from 'react';
@@ -16,7 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Calendar, ChevronRight, MoreVertical, Users } from 'lucide-react-native';
+import { Calendar, MoreVertical, Trophy, Users } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import type { LeagueStatus, LeagueSummary } from '@/types';
@@ -47,9 +52,9 @@ export function getStatusBadgeConfig(status: LeagueStatus | string, display?: st
   switch (norm) {
     case 'in_progress':
       return {
-        label: 'LIVE / IN PROGRESS',
-        bg: '#D4E5FC',
-        text: '#1D4ED8',
+        label: 'IN PROGRESS',
+        bg: '#FEF3C7',
+        text: '#D97706',
       };
     case 'playoffs':
       return {
@@ -68,8 +73,8 @@ export function getStatusBadgeConfig(status: LeagueStatus | string, display?: st
     case 'closed':
       return {
         label: 'REGISTRATION CLOSED',
-        bg: '#F1F5F9',
-        text: '#475569',
+        bg: '#DBEAFE',
+        text: '#1D4ED8',
       };
     case 'draft':
       return {
@@ -80,8 +85,8 @@ export function getStatusBadgeConfig(status: LeagueStatus | string, display?: st
     case 'completed':
       return {
         label: 'COMPLETED',
-        bg: '#5A6F82',
-        text: '#FFFFFF',
+        bg: '#F1F5F9',
+        text: '#475569',
       };
     case 'cancelled':
       return {
@@ -106,307 +111,286 @@ export function LeagueCard({
   onManagePress,
   onOptionsPress,
 }: LeagueCardProps) {
-  const isCompleted = league.status === 'completed';
-  const defaultActionLabel = isCompleted ? 'View Results' : 'Manage';
-  const resolvedActionLabel = actionLabel || defaultActionLabel;
-
-  const regWeeks = Math.max(0, (league.number_of_weeks || 4) - 1);
   const totalWeeks = league.number_of_weeks || 4;
-  const currentWeek = league.current_week || (league.status === 'draft' ? 1 : 1);
+  const currentWeek = league.current_week || 1;
+  const teamCount = league.teams_count ?? 0;
+  const maxTeams = league.max_teams || 8;
+  const formatLabel = (league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles';
 
   // Compute progress percentage
   let progressPct = 0;
   if (league.status === 'completed' || league.status === 'playoffs') {
     progressPct = 100;
+  } else if (league.status === 'registration_open') {
+    progressPct = maxTeams > 0 ? Math.min(100, Math.round((teamCount / maxTeams) * 100)) : 50;
+  } else if (league.status === 'registration_closed') {
+    progressPct = 100;
   } else if (totalWeeks > 0) {
-    progressPct = Math.min(100, Math.max(0, Math.round((currentWeek / totalWeeks) * 100)));
-  }
-
-  // Compute stage label
-  let stageLabel = `Week ${currentWeek} of ${totalWeeks}`;
-  if (league.status === 'playoffs') {
-    stageLabel = 'Playoffs';
-  } else if (league.status === 'completed') {
-    stageLabel = 'Completed';
+    progressPct = Math.min(100, Math.round((currentWeek / totalWeeks) * 100));
   }
 
   // Image source cycle
   const imgSource = LEAGUE_CARD_IMAGES[Math.abs(imageIndex) % LEAGUE_CARD_IMAGES.length];
   const badgeConfig = getStatusBadgeConfig(league.status, league.status_display);
 
+  const formatCardDate = (dateStr?: string | null): string => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getDaysRemaining = (dateStr?: string | null): number | null => {
+    if (!dateStr) return null;
+    try {
+      const diffMs = new Date(dateStr).getTime() - Date.now();
+      return Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    } catch {
+      return null;
+    }
+  };
+
+  const daysLeft = getDaysRemaining(league.registration_close_at);
+  const closeDateFormatted = formatCardDate(league.registration_close_at);
+
   return (
-    <View style={styles.cardContainer}>
-      {/* Top Section: Left Thumbnail + Right Metadata */}
+    <TouchableOpacity
+      style={styles.cardContainer}
+      onPress={onPress}
+      activeOpacity={0.88}
+      accessibilityRole="button"
+      accessibilityLabel={`League: ${league.name}`}
+    >
       <View style={styles.topSection}>
-        {/* Left Column: Image Thumbnail with Status Badge */}
+        {/* Left Column: Image Thumbnail */}
         <View style={styles.imageWrapper}>
           <Image source={imgSource} style={styles.thumbnail} resizeMode="cover" />
-          <View style={[styles.statusBadge, { backgroundColor: badgeConfig.bg }]}>
-            <AppText style={[styles.statusBadgeText, { color: badgeConfig.text }]}>
-              {badgeConfig.label}
-            </AppText>
-          </View>
         </View>
 
-        {/* Right Column: Title, Metadata, Progress Bar */}
+        {/* Right Column: Title, Status, Metadata, Progress Bar */}
         <View style={styles.detailsColumn}>
-          {/* Header Row: Title & Options Menu */}
-          <View style={styles.titleRow}>
-            <AppText style={styles.leagueName}>
-              {league.name}
-            </AppText>
+          {/* Status Pill & 3-Dot Options Trigger */}
+          <View style={styles.headerRow}>
+            <View style={[styles.statusPill, { backgroundColor: badgeConfig.bg }]}>
+              <View style={[styles.statusDot, { backgroundColor: badgeConfig.text }]} />
+              <AppText style={[styles.statusPillText, { color: badgeConfig.text }]}>
+                {badgeConfig.label}
+              </AppText>
+            </View>
+
             {onOptionsPress && (
               <TouchableOpacity
                 onPress={onOptionsPress}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={styles.optionsButton}
                 accessibilityRole="button"
-                accessibilityLabel="League options"
+                accessibilityLabel="League options menu"
               >
-                <MoreVertical size={16} color="#61736F" />
+                <MoreVertical size={16} color="#6B7280" strokeWidth={2.2} />
               </TouchableOpacity>
             )}
           </View>
 
-          {/* Metadata Row 1: Duration */}
+          {/* League Title */}
+          <AppText style={styles.leagueName} numberOfLines={1}>
+            {league.name}
+          </AppText>
+
+          {/* Subtitle: Weeks • Teams • Format */}
+          <AppText style={styles.subtitleText} numberOfLines={1}>
+            {`${totalWeeks} Weeks • ${maxTeams} Teams • ${formatLabel}`}
+          </AppText>
+
+          {/* Playoff Spots line */}
           <View style={styles.metaRow}>
-            <Calendar size={13} color="#61736F" style={styles.metaIcon} />
+            <Trophy size={11} color="#6B7280" style={styles.metaIcon} />
             <AppText style={styles.metaText}>
-              {regWeeks > 0
-                ? `${totalWeeks} Weeks (${regWeeks} Reg + 1 Playoff)`
-                : `${totalWeeks} Weeks`}
+              Top {league.playoff_team_count || 4} to Playoffs
             </AppText>
           </View>
 
-          {/* Metadata Row 2: Teams */}
-          <View style={styles.metaRow}>
-            <Users size={13} color="#61736F" style={styles.metaIcon} />
-            <AppText style={styles.metaText}>
-              {league.teams_count && league.teams_count > 0
-                ? `${league.teams_count} Teams (Top ${league.playoff_team_count || 4} Playoffs)`
-                : `Teams not finalized (Top ${league.playoff_team_count || 4} Playoffs)`}
-            </AppText>
-          </View>
+          {/* Registration / Active Progress Section */}
+          {league.status === 'registration_open' ? (
+            <View style={styles.progressBlock}>
+              <View style={styles.metaRow}>
+                <Users size={11} color="#6B7280" style={styles.metaIcon} />
+                <AppText style={styles.metaText}>
+                  {`${teamCount} / ${maxTeams} Teams Registered`}
+                </AppText>
+              </View>
 
-          {/* Progress Section */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <AppText style={styles.progressLabel}>Progress</AppText>
-              <AppText style={styles.progressPctText}>{progressPct}%</AppText>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+              </View>
+
+              <View style={styles.metaRow}>
+                <Calendar size={11} color={daysLeft && daysLeft <= 3 ? '#DC2626' : '#6B7280'} style={styles.metaIcon} />
+                <AppText
+                  style={[
+                    styles.dateText,
+                    Boolean(daysLeft !== null && daysLeft <= 3) && styles.urgentDateText,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {closeDateFormatted
+                    ? `Closes ${closeDateFormatted}${daysLeft !== null ? ` (${daysLeft} days left)` : ''}`
+                    : 'Open for Registration'}
+                </AppText>
+              </View>
             </View>
-
-            {/* Progress Bar Track */}
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+          ) : league.status === 'registration_closed' ? (
+            <View style={styles.progressBlock}>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: '100%' }]} />
+              </View>
+              <View style={styles.metaRow}>
+                <Calendar size={11} color="#6B7280" style={styles.metaIcon} />
+                <AppText style={styles.dateText}>
+                  {closeDateFormatted ? `Registration closed ${closeDateFormatted}` : 'Registration closed'}
+                </AppText>
+              </View>
             </View>
-
-            {/* Stage Indicator */}
-            <AppText style={styles.stageText}>{stageLabel}</AppText>
-          </View>
+          ) : league.status === 'in_progress' ? (
+            <View style={styles.progressBlock}>
+              <View style={styles.progressBarTrack}>
+                <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+              </View>
+              <View style={styles.metaRow}>
+                <Calendar size={11} color="#6B7280" style={styles.metaIcon} />
+                <AppText style={styles.dateText}>
+                  Active Week {currentWeek} of {totalWeeks}
+                </AppText>
+              </View>
+            </View>
+          ) : league.status === 'completed' ? (
+            <View style={styles.progressBlock}>
+              <View style={styles.metaRow}>
+                <Calendar size={11} color="#6B7280" style={styles.metaIcon} />
+                <AppText style={styles.dateText}>
+                  {league.updated_at ? `Completed on ${formatCardDate(league.updated_at)}` : 'Completed'}
+                </AppText>
+              </View>
+            </View>
+          ) : null}
         </View>
       </View>
-
-      {/* Champion Banner (Concluded League) */}
-      {league.champion_team ? (
-        <View style={styles.championBanner}>
-          <AppText style={styles.championText}>
-            🏆 Champion: {league.champion_team.name}
-          </AppText>
-        </View>
-      ) : null}
-
-      {/* Bottom Action Row: View Details Link & Manage Button */}
-      <View style={styles.bottomActionRow}>
-        <TouchableOpacity
-          onPress={onPress}
-          style={styles.viewDetailsTouchable}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="View League Details"
-        >
-          <AppText style={styles.viewDetailsText}>View Details</AppText>
-          <ChevronRight size={14} color="#102F2A" style={styles.chevronIcon} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={onManagePress || onPress}
-          style={styles.manageButton}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Manage League"
-        >
-          <AppText style={styles.manageButtonText}>
-            {resolvedActionLabel.replace(/[›>]/g, '').trim()}
-          </AppText>
-        </TouchableOpacity>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   cardContainer: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E1E8E4',
+    borderColor: '#E5E7EB',
     padding: 12,
     marginBottom: 12,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
   },
   topSection: {
     flexDirection: 'row',
     gap: 12,
   },
   imageWrapper: {
-    width: 114,
-    height: 106,
+    width: 90,
+    height: 90,
     borderRadius: 10,
     overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#EAF0EC',
+    backgroundColor: '#E5E7EB',
   },
   thumbnail: {
     width: '100%',
     height: '100%',
   },
-  statusBadge: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-  },
-  statusBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
   detailsColumn: {
     flex: 1,
     justifyContent: 'space-between',
   },
-  titleRow: {
+  headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
     marginBottom: 4,
   },
-  leagueName: {
-    flex: 1,
-    fontSize: 16,
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    gap: 4.5,
+  },
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  statusPillText: {
+    fontSize: 9.5,
     fontWeight: '700',
-    color: '#102F2A',
-    lineHeight: 20,
+    letterSpacing: 0.4,
   },
   optionsButton: {
     padding: 2,
   },
+  leagueName: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 20,
+    marginBottom: 2,
+  },
+  subtitleText: {
+    fontSize: 12,
+    color: '#4B5563',
+    fontWeight: '400',
+    marginBottom: 3,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 3,
+    gap: 5,
+    marginTop: 2,
   },
   metaIcon: {
     flexShrink: 0,
   },
   metaText: {
-    flex: 1,
     fontSize: 11.5,
-    color: '#61736F',
+    color: '#4B5563',
     fontWeight: '400',
-    lineHeight: 15,
   },
-  progressSection: {
+  progressBlock: {
     marginTop: 4,
   },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  progressLabel: {
-    fontSize: 11,
-    color: '#61736F',
-    fontWeight: '500',
-  },
-  progressPctText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#102F2A',
-  },
-  progressTrack: {
-    height: 5,
-    backgroundColor: '#E5EAE7',
-    borderRadius: 2.5,
+  progressBarTrack: {
+    height: 4,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 2,
     overflow: 'hidden',
-    marginVertical: 3.5,
+    marginVertical: 4,
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    backgroundColor: '#176B59',
-    borderRadius: 2.5,
+    backgroundColor: '#10B981',
+    borderRadius: 2,
   },
-  stageText: {
-    fontSize: 10.5,
-    color: '#61736F',
-    textAlign: 'right',
+  dateText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '400',
   },
-  championBanner: {
-    marginTop: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 8,
-    backgroundColor: '#E7F5EC',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#CBE5D7',
-  },
-  championText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#176B59',
-  },
-  bottomActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F6F4',
-  },
-  viewDetailsTouchable: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 4,
-  },
-  viewDetailsText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#102F2A',
-  },
-  chevronIcon: {
-    marginTop: 1,
-  },
-  manageButton: {
-    backgroundColor: '#F3F9F6',
-    borderWidth: 1,
-    borderColor: '#C6DFD2',
-    borderRadius: 8,
-    paddingVertical: 5,
-    paddingHorizontal: 16,
-  },
-  manageButtonText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#176B59',
+  urgentDateText: {
+    color: '#DC2626',
+    fontWeight: '500',
   },
 });

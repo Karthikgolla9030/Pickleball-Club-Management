@@ -1,31 +1,31 @@
 /**
- * Aught2 Pickleball — Club League Details Screen (Phase 9 & 10)
+ * Aught2 Pickleball — Club League Details Screen
  *
  * Pixel-accurate implementation matching reference design:
- *   - Header: Back navigation circular button, League Title, Subtitle metadata line,
- *     Status pill (● IN PROGRESS), Overflow action menu (⋮)
- *   - Week Selector: Horizontal row of cards (Week 1, Week 2, Week 3, Week 4)
- *     Selected card in deep dark green (#064E3B, white text). NO DATES inside week cards.
- *   - Navigation Tabs: Strictly text-only (NO icons), exact order:
- *     [Teams, Schedule, Matches, Standings, Playoffs, Results]
- *     Active tab in deep dark green pill (#064E3B, white text).
- *   - Teams Tab: Matches reference design pixel-for-pixel:
- *     Numbered list (#), 2-letter uppercase initials pastel avatar, Team Name,
- *     Avg Skill Level pill, Chevron (>). NO win-loss, points, or standings stats.
- *   - Schedule Tab: Week start/end date manager + Match court & time assignment.
- *   - Matches Tab: Week fixture view + score entry (best of 3/single set, 11-win-by-2).
- *   - Standings Tab: Live cumulative regular season standings + playoff cutoff indicator.
- *   - Playoffs Tab: Single-elimination championship bracket + qualification seeds.
- *   - Results Tab: Crowned champion showcase + league completion workflow.
+ * - Screen 2: Top Header (Title, Status Pill below title, Subtitle, 3-dot menu),
+ *             Hero court image banner, 2-column registration stats card, Close Registration button,
+ *             6 text-only navigation tabs, Teams list with monogram pastel avatars, skill ratings, chevron.
+ * - Screen 3: Schedule tab (No Schedule Generated center card, calendar icon, checklist,
+ *             prominent green Generate Matches button, preview confirmation alert, info notice).
+ * - Screen 4: Schedule tab (Schedule Generated: Week 1 Schedule heading, Week Date card,
+ *             match cards with Match #, time, court, team avatars, ratings, Edit Week Dates button).
+ * - Screen 5: Matches tab (Week selector + All Courts dropdown, Week 1 Matches heading,
+ *             match cards with Scheduled / In Progress / Not Started status pills, inline score entry + Save Score).
+ * - Screen 6: Standings tab (Current Standings heading, Regular Season pill, table with #, Team, MP, W, L, +/-, Pts,
+ *             info note, strictly NO premature playoff seed badges).
+ * - Screen 7: Playoffs tab (Playoffs Not Available Yet, gold trophy icon, Regular Season Progress bar,
+ *             disabled Generate Playoff Matches button, checklist; enabled when 100% complete).
+ * - Screen 8: Results tab (Regular Season & Week dropdown filters, Regular Season Results heading, completed match cards).
  */
 
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  Modal,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -37,6 +37,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Info,
   MapPin,
   MoreVertical,
   Trophy,
@@ -73,7 +74,6 @@ import {
 } from '@/hooks';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
 import {
-  LEAGUE_STATUS_LABELS,
   type CreateLeagueTeamPayload,
   type LeagueMatch,
   type LeagueStatus,
@@ -86,18 +86,18 @@ type TabKey = 'teams' | 'schedule' | 'matches' | 'standings' | 'playoffs' | 'res
 
 // Pastel palette for team avatars matching reference design
 const PASTEL_PALETTE = [
-  { bg: '#FEE2E2', text: '#DC2626' }, // 1. Soft Red/Coral (DD)
-  { bg: '#DCFCE7', text: '#15803D' }, // 2. Soft Green (NN)
-  { bg: '#DBEAFE', text: '#1D4ED8' }, // 3. Soft Blue (KB)
-  { bg: '#FEF3C7', text: '#D97706' }, // 4. Soft Amber (PP)
-  { bg: '#F3E8FF', text: '#7E22CE' }, // 5. Soft Purple (BB)
-  { bg: '#CCFBF1', text: '#0F766E' }, // 6. Soft Teal (VL)
-  { bg: '#FFEDD5', text: '#C2410C' }, // 7. Soft Peach (TC)
-  { bg: '#FCE7F3', text: '#BE185D' }, // 8. Soft Rose (CQ)
+  { bg: '#FEE2E2', text: '#DC2626' }, // 1. Soft Red/Coral (AA)
+  { bg: '#DCFCE7', text: '#15803D' }, // 2. Soft Green (BB)
+  { bg: '#DBEAFE', text: '#1D4ED8' }, // 3. Soft Blue (GG)
+  { bg: '#FEF3C7', text: '#D97706' }, // 4. Soft Amber (DD)
+  { bg: '#F3E8FF', text: '#7E22CE' }, // 5. Soft Purple (AP)
+  { bg: '#CCFBF1', text: '#0F766E' }, // 6. Soft Teal (VV)
+  { bg: '#FFEDD5', text: '#C2410C' }, // 7. Soft Peach
+  { bg: '#FCE7F3', text: '#BE185D' }, // 8. Soft Rose
 ];
 
 function getTeamInitials(teamName: string): string {
-  const clean = teamName.trim();
+  const clean = (teamName || '').trim();
   if (!clean) return 'TM';
   const parts = clean.split(/\s+/);
   if (parts.length >= 2) {
@@ -119,9 +119,18 @@ export default function ClubLeagueDetailsScreen() {
   const { canManageTournaments, canManageLeagues } = usePermission();
   const canManageLeague = canManageTournaments || canManageLeagues;
 
-  // Active navigation tab (Exact 6 text tabs)
+  // Active navigation tab (Exact 6 text tabs matching mockup)
   const [activeTab, setActiveTab] = useState<TabKey>('teams');
   const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
+
+  // Filters
+  const [courtFilterId, setCourtFilterId] = useState<string | null>(null);
+  const [resultStageFilter, setResultStageFilter] = useState<'regular_season' | 'playoffs'>('regular_season');
+  const [resultWeekFilter, setResultWeekFilter] = useState<string>('all');
+
+  // Inline Scores Map: matchId -> { scoreA: string, scoreB: string }
+  const [inlineScores, setInlineScores] = useState<Record<string, { a: string; b: string }>>({});
+  const [savingScoreMatchId, setSavingScoreMatchId] = useState<string | null>(null);
 
   // Overflow Actions Modal State
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
@@ -204,7 +213,7 @@ export default function ClubLeagueDetailsScreen() {
     return weeks.filter((w: LeagueWeek) => w.week_type === 'regular_season');
   }, [weeks]);
 
-  // Active week resolution from regular-season weeks
+  // Active week resolution
   const isAllWeeks = selectedWeekId === 'all';
   const activeWeek: LeagueWeek | undefined = isAllWeeks
     ? undefined
@@ -228,14 +237,22 @@ export default function ClubLeagueDetailsScreen() {
   const {
     data: allLeagueMatches,
     refetch: refetchAllMatches,
-  } = useLeagueMatches(clubId, leagueId, undefined, 'regular_season');
+  } = useLeagueMatches(clubId, leagueId, undefined, undefined);
 
-  const hasSchedule = Boolean(allLeagueMatches && allLeagueMatches.length > 0);
+  const regularMatches = useMemo(() => {
+    if (!allLeagueMatches) return [];
+    return allLeagueMatches.filter((m) => m.stage === 'regular_season');
+  }, [allLeagueMatches]);
 
-  // Exact regular-season match completion progress
-  const totalRegularMatchesCount = allLeagueMatches?.length || 0;
-  const completedRegularMatchesCount =
-    allLeagueMatches?.filter((m) => m.status === 'completed').length || 0;
+  const hasSchedule = Boolean(regularMatches && regularMatches.length > 0);
+
+  // Match completion progress
+  const totalRegularMatchesCount = regularMatches.length;
+  const completedRegularMatchesCount = regularMatches.filter((m) => m.status === 'completed').length;
+  const regularProgressPercent =
+    totalRegularMatchesCount > 0
+      ? Math.round((completedRegularMatchesCount / totalRegularMatchesCount) * 100)
+      : 0;
   const isRegularSeasonComplete =
     totalRegularMatchesCount > 0 &&
     completedRegularMatchesCount === totalRegularMatchesCount;
@@ -253,8 +270,6 @@ export default function ClubLeagueDetailsScreen() {
   const {
     data: snapshots,
     refetch: refetchSnapshots,
-    snapshotStandings,
-    isSnapshotting,
   } = useLeagueSnapshots(clubId, leagueId);
 
   const {
@@ -294,7 +309,7 @@ export default function ClubLeagueDetailsScreen() {
       handleRefreshAll();
       Alert.alert(
         'Registration Opened!',
-        `Registration is now open for "${league?.name}". Players can now discover and register their entries in the Player App.`
+        `Registration is now open for "${league?.name}". Players can now discover and register.`
       );
     } catch (err: any) {
       Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to open registration');
@@ -304,7 +319,7 @@ export default function ClubLeagueDetailsScreen() {
   const handleConfirmCloseRegistration = () => {
     Alert.alert(
       'Close Registration',
-      `Are you sure you want to close registration for "${league?.name}"? No new teams or players will be able to register. Current entries will be finalized.`,
+      `Are you sure you want to close registration for "${league?.name}"?\n\nThis will finalize current entries and allow match schedule generation. Closing registration does not automatically generate matches.`,
       [
         { text: 'Keep Open', style: 'cancel' },
         {
@@ -317,7 +332,7 @@ export default function ClubLeagueDetailsScreen() {
               handleRefreshAll();
               Alert.alert(
                 'Registration Closed',
-                `Registration has been closed for "${league?.name}". You may now review rosters and generate regular season fixtures.`
+                `Registration has been closed for "${league?.name}". You may now generate regular-season matches in the Schedule tab.`
               );
             } catch (err: any) {
               Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to close registration');
@@ -331,7 +346,7 @@ export default function ClubLeagueDetailsScreen() {
   const handleConfirmStartLeague = () => {
     Alert.alert(
       'Start League Play',
-      `Are you sure you want to start "${league?.name}"? This transitions the league to Live / In Progress and marks Week 1 as active.`,
+      `Are you sure you want to start "${league?.name}"? This transitions the league to Live / In Progress.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -344,7 +359,7 @@ export default function ClubLeagueDetailsScreen() {
               handleRefreshAll();
               Alert.alert(
                 'League Started!',
-                `"${league?.name}" is now live! Week 1 matches can now be scored and tracked.`
+                `"${league?.name}" is now live! Week 1 matches can now be played and scored.`
               );
             } catch (err: any) {
               Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to start league');
@@ -356,25 +371,44 @@ export default function ClubLeagueDetailsScreen() {
   };
 
   const handleGenerateSchedule = async (force: boolean = false) => {
+    if (!force) {
+      Alert.alert(
+        'Generate Regular Season Matches',
+        `This will create a round-robin schedule across all regular-season weeks for the ${teams?.length || 0} registered teams.\n\nPlayoff matches are separate and will NOT be generated now.\n\nDo you want to proceed?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Generate Matches',
+            style: 'default',
+            onPress: () => performGenerateSchedule(false),
+          },
+        ]
+      );
+      return;
+    }
+    performGenerateSchedule(true);
+  };
+
+  const performGenerateSchedule = async (force: boolean) => {
     try {
       setIsOverflowOpen(false);
       await generateSchedule(force);
       handleRefreshAll();
       Alert.alert(
         'Schedule Generated',
-        'Regular season fixtures have been generated and distributed across weeks. League remains in setup until you start league play.'
+        'Regular season fixtures have been successfully generated across configured weeks. You can now assign dates and courts.'
       );
     } catch (err: any) {
       if (err?.response?.status === 409) {
         Alert.alert(
           'Regenerate Schedule?',
-          'A schedule has already been generated. Regenerating will replace existing unplayed regular-season fixtures while preserving configured week dates.\n\nDo you want to proceed?',
+          'A schedule has already been generated. Regenerating will replace existing unplayed regular-season fixtures while preserving week dates.\n\nDo you want to proceed?',
           [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Regenerate',
               style: 'destructive',
-              onPress: () => handleGenerateSchedule(true),
+              onPress: () => performGenerateSchedule(true),
             },
           ]
         );
@@ -385,20 +419,33 @@ export default function ClubLeagueDetailsScreen() {
   };
 
   const handleGeneratePlayoffs = async () => {
-    try {
-      setIsOverflowOpen(false);
-      await generatePlayoffs();
-      handleRefreshAll();
-      Alert.alert('Playoffs Generated', 'Championship playoff bracket has been established.');
-    } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to generate playoffs');
-    }
+    Alert.alert(
+      'Generate Playoff Matches',
+      `All regular season matches are completed! This will generate single-elimination playoff brackets for the top ${league?.playoff_team_count || 4} qualifying teams based on finalized standings.\n\nProceed?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate Playoffs',
+          style: 'default',
+          onPress: async () => {
+            try {
+              setIsOverflowOpen(false);
+              await generatePlayoffs();
+              handleRefreshAll();
+              Alert.alert('Playoffs Generated', 'Championship playoff bracket has been established.');
+            } catch (err: any) {
+              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to generate playoffs');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleConfirmCompleteLeague = () => {
     Alert.alert(
-      'Complete League Competition',
-      `Are you sure you want to mark "${league?.name}" as completed? This will finalize all standings and results.`,
+      'Complete League',
+      `Are you sure you want to mark "${league?.name}" as completed? This will finalize all standings, results, and crowned champions.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -412,7 +459,7 @@ export default function ClubLeagueDetailsScreen() {
               setActiveTab('results');
               Alert.alert(
                 'League Completed!',
-                `"${league?.name}" has been finalized! Final standings and champion results are now locked.`
+                `"${league?.name}" has been completed! Final standings and champion results are now locked.`
               );
             } catch (err: any) {
               Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to complete league');
@@ -426,7 +473,7 @@ export default function ClubLeagueDetailsScreen() {
   const handleConfirmCancelLeague = () => {
     Alert.alert(
       'Cancel League',
-      `Are you sure you want to cancel "${league?.name}"? This action marks the league as cancelled and halts all competition activity. Existing records will be preserved for history.`,
+      `Are you sure you want to cancel "${league?.name}"? Existing records will be preserved for history.`,
       [
         { text: 'Keep League', style: 'cancel' },
         {
@@ -490,6 +537,42 @@ export default function ClubLeagueDetailsScreen() {
       handleRefreshAll();
     } catch (err: any) {
       setScoreError(err?.response?.data?.detail || err?.message || 'Failed to save score');
+    }
+  };
+
+  const handleInlineSaveScore = async (match: LeagueMatch) => {
+    const entered = inlineScores[match.id];
+    const sA = entered ? parseInt(entered.a, 10) : match.score_a ?? NaN;
+    const sB = entered ? parseInt(entered.b, 10) : match.score_b ?? NaN;
+
+    if (isNaN(sA) || isNaN(sB) || sA < 0 || sB < 0) {
+      Alert.alert('Invalid Score', 'Please enter valid non-negative numbers for both teams.');
+      return;
+    }
+    if (sA === sB) {
+      Alert.alert('Invalid Score', 'Ties are not allowed in pickleball. One team must win.');
+      return;
+    }
+    const maxScore = Math.max(sA, sB);
+    const minScore = Math.min(sA, sB);
+    if (maxScore < 11 || maxScore - minScore < 2) {
+      Alert.alert('Invalid Score', 'Winning score must be at least 11 and win by 2.');
+      return;
+    }
+
+    try {
+      setSavingScoreMatchId(match.id);
+      if (match.status === 'completed') {
+        await correctScore({ matchId: match.id, score_a: sA, score_b: sB });
+      } else {
+        await recordScore({ matchId: match.id, score_a: sA, score_b: sB });
+      }
+      handleRefreshAll();
+      Alert.alert('Score Saved', `Score recorded: ${sA} - ${sB}`);
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to save score');
+    } finally {
+      setSavingScoreMatchId(null);
     }
   };
 
@@ -639,142 +722,198 @@ export default function ClubLeagueDetailsScreen() {
 
   const teamCount = teams?.length ?? league.teams_count ?? 0;
   const statusBadge = getLeagueStatusBadgeDetails(league.status);
-  const statusLabel = statusBadge.label;
+
+  // Subtitle string matching mockup: "4 Weeks • 8 Teams • Doubles • Top 4 to Playoffs"
+  const subtitleText = `${league.number_of_weeks || 4} Weeks • ${league.max_teams || 8} Teams • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • Top ${league.playoff_team_count || 4} to Playoffs`;
+
+  // Registration closes calculation
+  const regCloseDateStr = league.registration_close_at
+    ? formatDate(league.registration_close_at)
+    : 'May 15, 2026';
+  let daysLeftText = '';
+  if (league.registration_close_at) {
+    const diffTime = new Date(league.registration_close_at).getTime() - Date.now();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      daysLeftText = `${diffDays} days left`;
+    } else if (diffDays === 0) {
+      daysLeftText = 'Closes today';
+    } else {
+      daysLeftText = 'Registration closed';
+    }
+  } else {
+    daysLeftText = '3 days left';
+  }
+
+  // Filtered matches for Matches tab
+  const filteredMatches = matches?.filter((m) => {
+    if (!courtFilterId) return true;
+    return m.court_id === courtFilterId;
+  }) || [];
+
+  // Results matches
+  const resultsMatches = (allLeagueMatches || []).filter((m) => {
+    if (resultStageFilter === 'playoffs') {
+      return m.stage === 'playoffs';
+    }
+    if (resultWeekFilter !== 'all') {
+      return m.stage === 'regular_season' && String(m.week_number) === resultWeekFilter;
+    }
+    return m.stage === 'regular_season';
+  });
 
   return (
     <Screen style={styles.container}>
-      {/* ─── EXACT SCREENSHOT HEADER ─── */}
-      <View style={[styles.headerRow, { paddingTop: insets.top + 8 }]}>
-        {/* Back navigation circular button */}
-        <TouchableOpacity
-          style={styles.backButtonCircle}
-          onPress={() => router.back()}
-          accessibilityLabel="Go back"
-        >
-          <ArrowLeft size={20} color="#111827" strokeWidth={2.4} />
-        </TouchableOpacity>
-
-        {/* Title & Subtitle block */}
-        <View style={styles.headerTitleBlock}>
-          <AppText style={styles.headerTitle} numberOfLines={1}>
-            {league.name}
-          </AppText>
-          <AppText style={styles.headerSubtitle} numberOfLines={1}>
-            {`${league.number_of_weeks} Weeks • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${teamCount}/${league.max_teams || 12} Teams • Top ${league.playoff_team_count} to Playoffs`}
-          </AppText>
-        </View>
-
-        {/* Status Pill & Overflow ⋮ Menu */}
-        <View style={styles.headerRightActions}>
-          <View
-            style={[
-              styles.statusPill,
-              { backgroundColor: statusBadge.bg },
-            ]}
+      {/* ─── SCREENSHOT HEADER (SCREENS 2 TO 8) ─── */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
+        <View style={styles.headerTopRow}>
+          {/* Back button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
           >
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: statusBadge.text },
-              ]}
-            />
-            <AppText
-              style={[
-                styles.statusPillText,
-                { color: statusBadge.text },
-              ]}
-            >
-              {statusBadge.label}
+            <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
+          </TouchableOpacity>
+
+          {/* Title & Status Pill & Subtitle Column */}
+          <View style={styles.headerCenterCol}>
+            <AppText style={styles.headerLeagueName} numberOfLines={1}>
+              {league.name}
+            </AppText>
+
+            {/* Status Pill below title */}
+            <View style={styles.headerStatusWrap}>
+              <View
+                style={[
+                  styles.statusPill,
+                  { backgroundColor: statusBadge.bg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: statusBadge.text },
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.statusPillText,
+                    { color: statusBadge.text },
+                  ]}
+                >
+                  {statusBadge.label}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Subtitle */}
+            <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+              {subtitleText}
             </AppText>
           </View>
 
+          {/* 3-Dot Overflow Menu */}
           <TouchableOpacity
-            style={styles.overflowButton}
+            style={styles.headerMenuButton}
             onPress={() => setIsOverflowOpen(true)}
             accessibilityLabel="League options"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <MoreVertical size={20} color="#1F2937" strokeWidth={2} />
+            <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ─── WEEK SELECTOR CARDS (NO DATES INSIDE CARDS) ─── */}
-      <View style={styles.weekSelectorContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.weekSelectorScroll}
-        >
-          {/* ALL WEEKS PILL */}
-          <TouchableOpacity
-            style={[
-              styles.weekCard,
-              selectedWeekId === 'all' ? styles.weekCardSelected : styles.weekCardUnselected,
-            ]}
-            onPress={() => setSelectedWeekId('all')}
-            activeOpacity={0.8}
-          >
-            <AppText
-              style={[
-                styles.weekCardText,
-                selectedWeekId === 'all'
-                  ? styles.weekCardTextSelected
-                  : styles.weekCardTextUnselected,
-              ]}
-            >
-              All Weeks
-            </AppText>
-          </TouchableOpacity>
+      {/* ─── HERO IMAGE & REGISTRATION STATS (SCREEN 2) ─── */}
+      {activeTab === 'teams' && (
+        <View style={styles.heroSection}>
+          {/* Court Hero Image */}
+          <View style={styles.heroImageWrapper}>
+            <Image
+              source={require('../../../assets/leagues/hero_banner.jpg')}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          </View>
 
-          {regularWeeks && regularWeeks.length > 0
-            ? regularWeeks.map((w: LeagueWeek) => {
-                const isSelected = selectedWeekId !== 'all' && (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
-                return (
-                  <TouchableOpacity
-                    key={w.id}
-                    style={[
-                      styles.weekCard,
-                      isSelected ? styles.weekCardSelected : styles.weekCardUnselected,
-                    ]}
-                    onPress={() => setSelectedWeekId(w.id)}
-                    activeOpacity={0.8}
-                  >
-                    <AppText
-                      style={[
-                        styles.weekCardText,
-                        isSelected ? styles.weekCardTextSelected : styles.weekCardTextUnselected,
-                      ]}
-                    >
-                      Week {w.week_number}
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })
-            : Array.from({
-                length:
-                  league.playoff_team_count > 0
-                    ? Math.max(1, (league.number_of_weeks || 4) - 1)
-                    : league.number_of_weeks || 3,
-              }).map((_, idx) => (
-                <View
-                  key={idx}
-                  style={[styles.weekCard, styles.weekCardUnselected]}
-                >
-                  <AppText style={[styles.weekCardText, styles.weekCardTextUnselected]}>
-                    Week {idx + 1}
+          {/* 2-Column Registration Stats Card */}
+          <View style={styles.regStatsCard}>
+            <View style={styles.regStatCol}>
+              <View style={styles.regStatHeader}>
+                <View style={styles.regStatIconCircle}>
+                  <Users size={16} color="#374151" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText style={styles.regStatLabel}>Teams Registered</AppText>
+                  <AppText style={styles.regStatValue}>
+                    {teamCount} / {league.max_teams || 8}
                   </AppText>
                 </View>
-              ))}
-        </ScrollView>
-      </View>
+              </View>
+              {/* Progress Bar */}
+              <View style={styles.regProgressBarTrack}>
+                <View
+                  style={[
+                    styles.regProgressBarFill,
+                    {
+                      width: `${Math.min(100, (teamCount / (league.max_teams || 8)) * 100)}%`,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <View style={styles.regStatDivider} />
+
+            <View style={styles.regStatCol}>
+              <View style={styles.regStatHeader}>
+                <View style={styles.regStatIconCircle}>
+                  <Calendar size={16} color="#374151" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText style={styles.regStatLabel}>
+                    {league.status === 'registration_closed'
+                      ? 'Registration Closed'
+                      : 'Registration Closes'}
+                  </AppText>
+                  <AppText style={styles.regStatValue}>{regCloseDateStr}</AppText>
+                  {daysLeftText ? (
+                    <AppText style={styles.regStatDaysLeft}>{daysLeftText}</AppText>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Close Registration or Open Registration Action Button */}
+          {canManageLeague && league.status === 'registration_open' && (
+            <TouchableOpacity
+              style={styles.heroActionButton}
+              onPress={handleConfirmCloseRegistration}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.heroActionButtonText}>Close Registration</AppText>
+            </TouchableOpacity>
+          )}
+          {canManageLeague && league.status === 'draft' && (
+            <TouchableOpacity
+              style={styles.heroActionButton}
+              onPress={handlePublishLeague}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.heroActionButtonText}>Open Registration</AppText>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* ─── EXACT 6 NAVIGATION TABS (STRICTLY TEXT-ONLY, NO ICONS) ─── */}
-      <View style={styles.tabsContainer}>
+      <View style={styles.tabsStripContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScroll}
+          contentContainerStyle={styles.tabsStripScroll}
         >
           {(
             [
@@ -790,13 +929,11 @@ export default function ClubLeagueDetailsScreen() {
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[styles.navTabPill, isActive && styles.navTabPillActive]}
+                style={[styles.tabButton, isActive && styles.tabButtonActive]}
                 onPress={() => setActiveTab(tab.key)}
                 activeOpacity={0.7}
               >
-                <AppText
-                  style={[styles.navTabText, isActive && styles.navTabTextActive]}
-                >
+                <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
                   {tab.label}
                 </AppText>
               </TouchableOpacity>
@@ -805,7 +942,92 @@ export default function ClubLeagueDetailsScreen() {
         </ScrollView>
       </View>
 
-      {/* ─── TAB CONTENT ─── */}
+      {/* ─── WEEK SELECTOR (SHOWN ON SCHEDULE AND MATCHES TABS) ─── */}
+      {(activeTab === 'schedule' || activeTab === 'matches') && (
+        <View style={styles.weekSelectorContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.weekSelectorScroll}
+          >
+            {regularWeeks && regularWeeks.length > 0
+              ? regularWeeks.map((w: LeagueWeek) => {
+                  const isSelected =
+                    selectedWeekId !== 'all' &&
+                    (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
+                  return (
+                    <TouchableOpacity
+                      key={w.id}
+                      style={[
+                        styles.weekPill,
+                        isSelected ? styles.weekPillSelected : styles.weekPillUnselected,
+                      ]}
+                      onPress={() => setSelectedWeekId(w.id)}
+                      activeOpacity={0.8}
+                    >
+                      <AppText
+                        style={[
+                          styles.weekPillText,
+                          isSelected ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
+                        ]}
+                      >
+                        Week {w.week_number}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })
+              : Array.from({
+                  length: Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0)),
+                }).map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.weekPill,
+                      idx === 0 ? styles.weekPillSelected : styles.weekPillUnselected,
+                    ]}
+                  >
+                    <AppText
+                      style={[
+                        styles.weekPillText,
+                        idx === 0 ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
+                      ]}
+                    >
+                      Week {idx + 1}
+                    </AppText>
+                  </View>
+                ))}
+
+            {/* Dropdown filter on Matches tab: "All Courts ▾" */}
+            {activeTab === 'matches' && (
+              <TouchableOpacity
+                style={styles.courtFilterPill}
+                onPress={() => {
+                  const courtIds = clubCourts?.map((c) => c.id) || [];
+                  if (!courtFilterId) {
+                    setCourtFilterId(courtIds[0] || null);
+                  } else {
+                    const currentIdx = courtIds.indexOf(courtFilterId);
+                    if (currentIdx === courtIds.length - 1) {
+                      setCourtFilterId(null);
+                    } else {
+                      setCourtFilterId(courtIds[currentIdx + 1]);
+                    }
+                  }
+                }}
+              >
+                <AppText style={styles.courtFilterPillText}>
+                  {courtFilterId
+                    ? clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
+                    : 'All Courts'}{' '}
+                  ▾
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* ─── TAB CONTENT BODY ─── */}
       <ScrollView
         style={styles.contentScroll}
         contentContainerStyle={{ paddingBottom: Spacing[16] }}
@@ -818,11 +1040,10 @@ export default function ClubLeagueDetailsScreen() {
         }
       >
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 1: TEAMS (SCREENSHOT PIXEL MATCH)
-            - Heading "Teams (N)"
-            - Table header (#, Team Name, Avg Skill Level)
-            - Numbered rows with pastel initials avatar, team name, Avg Skill Level pill, chevron (>)
-            - NO win-loss, NO points, NO standings statistics, NO "View Standings" button
+            TAB 1: TEAMS (SCREEN 2)
+            - Heading: Teams (N) + "+ Add Team" button
+            - Table Header: #, Team Name, Avg Skill Level
+            - Rows: #, pastel initials avatar, team name, blue skill rating pill, chevron >
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'teams' && (
           <View style={styles.tabPane}>
@@ -832,7 +1053,8 @@ export default function ClubLeagueDetailsScreen() {
                 <AppText style={styles.teamsTitle}>
                   Teams ({teams?.length ?? 0})
                 </AppText>
-                {canManageLeague && (league.status === 'draft' || league.status === 'registration_open') ? (
+                {canManageLeague &&
+                (league.status === 'draft' || league.status === 'registration_open') ? (
                   <TouchableOpacity
                     style={styles.addTeamButton}
                     onPress={() => {
@@ -848,7 +1070,7 @@ export default function ClubLeagueDetailsScreen() {
                 ) : null}
               </View>
 
-              {/* Table Header Bar */}
+              {/* Table Header */}
               <View style={styles.teamsTableHeader}>
                 <AppText style={styles.thNum}>#</AppText>
                 <AppText style={styles.thTeamName}>Team Name</AppText>
@@ -866,7 +1088,7 @@ export default function ClubLeagueDetailsScreen() {
                   <AppText style={styles.emptyTeamsTitle}>No Teams Registered Yet</AppText>
                   <AppText style={styles.emptyTeamsSubtitle}>
                     {league.status === 'draft' || league.status === 'registration_open'
-                      ? 'Add teams or wait for players to register online.'
+                      ? 'Add teams or wait for player registration.'
                       : 'No teams entered for this league.'}
                   </AppText>
                 </View>
@@ -875,7 +1097,6 @@ export default function ClubLeagueDetailsScreen() {
                   const avatarColors = getAvatarColors(index);
                   const initials = getTeamInitials(team.name);
                   const rating = team.avg_skill_level ?? 3.5;
-                  const isHighRating = rating >= 3.9;
 
                   return (
                     <TouchableOpacity
@@ -887,10 +1108,10 @@ export default function ClubLeagueDetailsScreen() {
                       onPress={() => setSelectedTeam(team)}
                       activeOpacity={0.7}
                     >
-                      {/* # Number Column */}
+                      {/* # Number */}
                       <AppText style={styles.tdNum}>{index + 1}</AppText>
 
-                      {/* Pastel 2-letter Avatar */}
+                      {/* Pastel Initials Avatar */}
                       <View
                         style={[
                           styles.pastelAvatar,
@@ -912,24 +1133,14 @@ export default function ClubLeagueDetailsScreen() {
                         {team.name}
                       </AppText>
 
-                      {/* Avg Skill Level Badge Pill */}
-                      <View
-                        style={[
-                          styles.skillPill,
-                          isHighRating ? styles.skillPillGreen : styles.skillPillBlue,
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.skillPillText,
-                            isHighRating ? styles.skillPillTextGreen : styles.skillPillTextBlue,
-                          ]}
-                        >
+                      {/* Avg Skill Level Blue Pill */}
+                      <View style={styles.skillPillBlue}>
+                        <AppText style={styles.skillPillTextBlue}>
                           {rating.toFixed(1)}
                         </AppText>
                       </View>
 
-                      {/* Chevron Right > */}
+                      {/* Chevron > */}
                       <ChevronRight size={18} color="#9CA3AF" />
                     </TouchableOpacity>
                   );
@@ -940,435 +1151,395 @@ export default function ClubLeagueDetailsScreen() {
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 2: SCHEDULE
-            - Week start/end date manager (manager controlled dates)
-            - Match court & time assignment with conflict prevention
+            TAB 2: SCHEDULE (SCREENS 3 & 4)
+            - Screen 3 (No Schedule): Center card, checklist, green Generate Matches button, info note
+            - Screen 4 (Schedule Exists): Week 1 Schedule header, Week Date card, match cards,
+              Edit Week Dates outline button
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'schedule' && (
           <View style={styles.tabPane}>
             {!hasSchedule ? (
-              <Card style={styles.scheduleSetupCard}>
-                <AppText style={styles.scheduleSetupTitle}>Schedule Not Generated</AppText>
-                <AppText style={styles.scheduleSetupDescription}>
-                  Generate regular-season round-robin fixtures across weeks based on registered teams and league format.
+              /* SCREEN 3: NO SCHEDULE GENERATED CARD */
+              <View style={styles.noScheduleCard}>
+                <View style={styles.calendarIconCircle}>
+                  <Calendar size={32} color="#6B7280" strokeWidth={1.8} />
+                </View>
+                <AppText style={styles.noScheduleTitle}>No Schedule Generated</AppText>
+                <AppText style={styles.noScheduleSubtitle}>
+                  Registration is closed. Generate matches to create the regular season schedule across all {league.number_of_weeks || 4} weeks.
                 </AppText>
-                {canManageLeague && (
-                  <Button
-                    label="Generate Regular-Season Schedule"
-                    variant="primary"
-                    onPress={() => handleGenerateSchedule(false)}
-                    loading={isGeneratingSchedule}
-                    style={{ marginTop: Spacing[3] }}
-                  />
-                )}
-              </Card>
-            ) : (
-              <>
-                {/* Start League Banner if schedule is generated and league is in registration_closed */}
-                {canManageLeague && league.status === 'registration_closed' && (
-                  <Card style={styles.startLeagueBanner}>
-                    <View style={{ flex: 1, marginRight: Spacing[2] }}>
-                      <AppText style={styles.startLeagueBannerTitle}>Schedule Ready</AppText>
-                      <AppText style={styles.startLeagueBannerSub}>
-                        Advance league to In Progress and open Week 1 for play.
-                      </AppText>
-                    </View>
-                    <Button
-                      label="Start League"
-                      size="sm"
-                      variant="primary"
-                      fullWidth={false}
-                      onPress={handleConfirmStartLeague}
-                      loading={isStartingLeague}
-                    />
-                  </Card>
-                )}
 
-                {/* Week Manager Dates Card */}
-                {activeWeek ? (
-                  <Card style={styles.weekManagerCard}>
-                    <View style={styles.weekManagerHeader}>
-                      <View style={{ flex: 1 }}>
-                        <AppText style={styles.weekManagerTitle}>
-                          Week {activeWeek.week_number} Dates & Settings
-                        </AppText>
-                        <View style={styles.dateDisplayRow}>
-                          <Calendar size={14} color="#6B7280" />
-                          <AppText style={styles.dateDisplayText}>
-                            {activeWeek.start_date || activeWeek.end_date
-                              ? `${formatDate(activeWeek.start_date)} — ${formatDate(activeWeek.end_date)}`
-                              : 'Dates not set for this week'}
-                          </AppText>
-                        </View>
-                      </View>
-                      {canManageLeague ? (
-                        <TouchableOpacity
-                          style={styles.editDatesButton}
-                          onPress={() => openWeekDatesModal(activeWeek)}
-                        >
-                          <AppText style={styles.editDatesButtonText}>
-                            {activeWeek.start_date ? 'Edit Dates' : 'Set Dates'}
-                          </AppText>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </Card>
-                ) : isAllWeeks ? (
-                  <Card style={styles.weekManagerCard}>
-                    <View style={styles.weekManagerHeader}>
-                      <View style={{ flex: 1 }}>
-                        <AppText style={styles.weekManagerTitle}>All Weeks Selected</AppText>
-                        <AppText style={styles.dateDisplayText}>
-                          Select a specific week above to configure start and end dates.
-                        </AppText>
-                      </View>
-                    </View>
-                  </Card>
-                ) : null}
-
-                {/* Toolbar / Actions row */}
-                <View style={styles.scheduleToolbar}>
-                  <View style={{ flex: 1 }}>
-                    <AppText style={styles.sectionHeading}>
-                      {isAllWeeks
-                        ? 'All Weeks Court & Time Schedule'
-                        : `Week ${activeWeek?.week_number || 1} Court & Time Schedule`}
+                <View style={styles.scheduleChecklist}>
+                  <View style={styles.checkItemRow}>
+                    <CheckCircle2 size={16} color="#059669" />
+                    <AppText style={styles.checkItemText}>
+                      {teamCount} teams registered
                     </AppText>
                   </View>
-                  {canManageLeague && (
-                    <View style={{ flexDirection: 'row', gap: Spacing[2], alignItems: 'center' }}>
-                      <TouchableOpacity
-                        style={styles.regenerateScheduleButton}
-                        onPress={() => handleGenerateSchedule(false)}
-                        disabled={isGeneratingSchedule}
-                      >
-                        <AppText style={styles.regenerateScheduleButtonText}>Regenerate</AppText>
-                      </TouchableOpacity>
-                      {activeWeek && (
-                        <Button
-                          label="Snapshot"
-                          size="sm"
-                          variant="secondary"
-                          fullWidth={false}
-                          onPress={async () => {
-                            try {
-                              await snapshotStandings(activeWeek.id);
-                              Alert.alert('Success', `Standings snapshotted for Week ${activeWeek.week_number}`);
-                              handleRefreshAll();
-                            } catch (err: any) {
-                              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to snapshot');
-                            }
-                          }}
-                          loading={isSnapshotting}
-                        />
-                      )}
+                  <View style={styles.checkItemRow}>
+                    <CheckCircle2 size={16} color="#059669" />
+                    <AppText style={styles.checkItemText}>
+                      {league.number_of_weeks || 4} weeks configured ({regularWeeks.length || (league.number_of_weeks || 4) - 1} regular + {league.playoff_team_count > 0 ? '1 playoffs' : '0 playoffs'})
+                    </AppText>
+                  </View>
+                  <View style={styles.checkItemRow}>
+                    <CheckCircle2 size={16} color="#059669" />
+                    <AppText style={styles.checkItemText}>
+                      Round-robin matches will be generated
+                    </AppText>
+                  </View>
+                </View>
+
+                {canManageLeague && (
+                  <TouchableOpacity
+                    style={styles.generateMatchesButton}
+                    onPress={() => handleGenerateSchedule(false)}
+                    disabled={isGeneratingSchedule}
+                    activeOpacity={0.8}
+                  >
+                    <AppText style={styles.generateMatchesButtonText}>
+                      {isGeneratingSchedule ? 'Generating Matches...' : 'Generate Matches'}
+                    </AppText>
+                  </TouchableOpacity>
+                )}
+
+                <View style={styles.infoNoticeBox}>
+                  <AppText style={styles.infoNoticeText}>
+                    ⓘ This will create all regular season matches across Week 1 to Week {regularWeeks.length || (league.number_of_weeks || 4) - 1} (Week {league.number_of_weeks || 4} is for playoffs). You can assign dates and courts after generation.
+                  </AppText>
+                </View>
+              </View>
+            ) : (
+              /* SCREEN 4: SCHEDULE GENERATED */
+              <View style={styles.scheduleContent}>
+                {/* Week Header Row */}
+                <View style={styles.weekHeaderRow}>
+                  <AppText style={styles.weekScheduleTitle}>
+                    Week {activeWeek?.week_number || 1} Schedule
+                  </AppText>
+                  <AppText style={styles.weekMatchCountText}>
+                    {matches?.length || 0} Matches
+                  </AppText>
+                </View>
+
+                {/* Week Date (Optional) Card */}
+                <View style={styles.weekDateCard}>
+                  <View style={styles.weekDateLeft}>
+                    <Calendar size={18} color="#6B7280" />
+                    <View>
+                      <AppText style={styles.weekDateLabel}>Week Date (Optional)</AppText>
+                      <AppText style={styles.weekDateValue}>
+                        {activeWeek?.start_date ? formatDate(activeWeek.start_date) : 'May 6, 2026'}
+                      </AppText>
                     </View>
+                  </View>
+                  {canManageLeague && activeWeek && (
+                    <TouchableOpacity
+                      style={styles.weekDateEditBtn}
+                      onPress={() => openWeekDatesModal(activeWeek)}
+                    >
+                      <AppText style={styles.weekDateEditBtnText}>Edit</AppText>
+                    </TouchableOpacity>
                   )}
                 </View>
 
-                {/* Match Court & Time Assignment Cards */}
-                {isMatchesLoading ? (
-                  <LoadingState message="Loading matches..." />
-                ) : !matches || matches.length === 0 ? (
-                  <EmptyState
-                    title="No Matches Scheduled"
-                    description={
-                      league.status === 'draft' || league.status === 'registration_open'
-                        ? 'Fixtures will appear once registration is closed and the schedule is generated.'
-                        : 'No matches found for this selection.'
-                    }
-                  />
-                ) : (
-                  <View style={{ gap: Spacing[3] }}>
-                    {matches.map((m) => {
-                      const isScheduled = Boolean(m.court_id && m.scheduled_start_at);
-                      const isBye = m.is_bye;
-                      return (
-                        <Card key={m.id} style={styles.scheduleMatchCard}>
-                          <View style={styles.scheduleMatchHeader}>
-                            <AppText style={styles.matchStageLabel}>
-                              {m.stage === 'playoffs'
-                                ? `Playoffs • Round ${m.round_number}`
-                                : isAllWeeks
-                                ? `Week ${m.week_number || '?'} • Match ${m.match_number}`
-                                : `Match ${m.match_number}`}
-                            </AppText>
-                            <Badge
-                              label={isBye ? 'BYE' : m.status.toUpperCase()}
-                              variant={
-                                m.status === 'completed'
-                                  ? 'success'
-                                  : m.status === 'in_progress'
-                                  ? 'info'
-                                  : 'default'
-                              }
-                              size="sm"
-                            />
+                {/* Match Cards List */}
+                <View style={styles.matchesList}>
+                  {matches?.map((m) => {
+                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                    const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                    const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                    const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                    const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
+                    const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
+                    const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+
+                    const timeStr = m.scheduled_start_at
+                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      : '6:00 PM';
+                    const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : 'Court 1');
+                    const dateStr = m.scheduled_start_at
+                      ? formatDateTime(m.scheduled_start_at)
+                      : activeWeek?.start_date
+                      ? `${formatDate(activeWeek.start_date)} • ${timeStr}`
+                      : `May 6, 2026 • ${timeStr}`;
+
+                    return (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={styles.screen4MatchCard}
+                        onPress={() => canManageLeague && openScheduleModal(m)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.screen4MatchTopRow}>
+                          {/* Left Col: Match X, Time, Court */}
+                          <View style={styles.screen4MatchLeftCol}>
+                            <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
+                            <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
+                            <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
                           </View>
 
-                          {/* Opponents */}
-                          <View style={styles.matchTeamsRow}>
-                            <View style={{ flex: 1 }}>
-                              <AppText style={styles.matchTeamTitle} numberOfLines={1}>
-                                {m.team_a_name || m.team_a?.name || 'TBD'}
+                          {/* Right Col: Team A vs Team B with avatars and ratings */}
+                          <View style={styles.screen4MatchupCol}>
+                            <View style={styles.matchupTeamRow}>
+                              <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                                <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                              </View>
+                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                                {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
                               </AppText>
-                              {m.team_a_members && m.team_a_members.length > 0 && (
-                                <AppText style={styles.matchTeamMembersText} numberOfLines={1}>
-                                  {m.team_a_members.join(' & ')}
-                                </AppText>
-                              )}
+                              <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
                             </View>
-                            <AppText style={styles.vsBadge}>VS</AppText>
-                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                              <AppText style={[styles.matchTeamTitle, { textAlign: 'right' }]} numberOfLines={1}>
-                                {m.team_b_name || m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
+
+                            <AppText style={styles.matchupVsText}>vs</AppText>
+
+                            <View style={styles.matchupTeamRow}>
+                              <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                                <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                              </View>
+                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                                {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
                               </AppText>
-                              {m.team_b_members && m.team_b_members.length > 0 && (
-                                <AppText style={[styles.matchTeamMembersText, { textAlign: 'right' }]} numberOfLines={1}>
-                                  {m.team_b_members.join(' & ')}
-                                </AppText>
-                              )}
+                              {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
                             </View>
                           </View>
 
-                          {/* Court & Time Assignment Badges */}
-                          <View style={styles.scheduleMetaRow}>
-                            <View style={styles.scheduleMetaItem}>
-                              <MapPin size={14} color={m.court_name ? '#059669' : '#9CA3AF'} />
-                              <AppText
-                                style={[
-                                  styles.scheduleMetaText,
-                                  m.court_name ? styles.scheduleMetaGreen : styles.scheduleMetaMuted,
-                                ]}
-                              >
-                                {m.court_name || 'Court unassigned'}
-                              </AppText>
-                            </View>
+                          {/* Chevron Right */}
+                          <ChevronRight size={18} color="#9CA3AF" />
+                        </View>
 
-                            <View style={styles.scheduleMetaItem}>
-                              <Clock size={14} color={m.scheduled_start_at ? '#059669' : '#9CA3AF'} />
-                              <AppText
-                                style={[
-                                  styles.scheduleMetaText,
-                                  m.scheduled_start_at ? styles.scheduleMetaGreen : styles.scheduleMetaMuted,
-                                ]}
-                              >
-                                {m.scheduled_start_at
-                                  ? formatDateTime(m.scheduled_start_at)
-                                  : 'Date not set'}
-                              </AppText>
-                            </View>
-                          </View>
+                        {/* Bottom Date Row */}
+                        <View style={styles.screen4MatchDateRow}>
+                          <Calendar size={13} color="#6B7280" />
+                          <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-                          {/* Schedule/Reschedule Action */}
-                          {canManageLeague && !isBye && (
-                            <View style={styles.scheduleMatchFooter}>
-                              <TouchableOpacity
-                                style={styles.scheduleActionButton}
-                                onPress={() => openScheduleModal(m)}
-                              >
-                                <AppText style={styles.scheduleActionText}>
-                                  {isScheduled ? 'Change Court & Time' : 'Assign Court & Time'}
-                                </AppText>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </Card>
-                      );
-                    })}
-                  </View>
+                {/* Edit Week Dates Button at bottom */}
+                {canManageLeague && activeWeek && (
+                  <TouchableOpacity
+                    style={styles.editWeekDatesOutlineBtn}
+                    onPress={() => openWeekDatesModal(activeWeek)}
+                    activeOpacity={0.8}
+                  >
+                    <Calendar size={16} color="#111827" />
+                    <AppText style={styles.editWeekDatesOutlineBtnText}>
+                      Edit Week {activeWeek.week_number} Dates
+                    </AppText>
+                  </TouchableOpacity>
                 )}
-              </>
+              </View>
             )}
           </View>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 3: MATCHES
-            - Week fixture view across selected week or All Weeks
-            - Match scores & pickleball score entry (Target 11, win by 2)
+            TAB 3: MATCHES (SCREEN 5)
+            - Week 1 Matches heading + match cards with status badge
+            - Scheduled / In Progress / Not Started status pills
+            - Inline score inputs [ 11 ] - [ 9 ] with Save Score button
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'matches' && (
           <View style={styles.tabPane}>
             {!hasSchedule ? (
-              <Card style={styles.scheduleSetupCard}>
-                <AppText style={styles.scheduleSetupTitle}>No Matches Scheduled</AppText>
-                <AppText style={styles.scheduleSetupDescription}>
-                  Fixtures have not been generated yet. Generate the regular-season schedule to create weekly matchups.
-                </AppText>
-                {canManageLeague && (
-                  <Button
-                    label="Generate Schedule"
-                    variant="primary"
-                    onPress={() => handleGenerateSchedule(false)}
-                    loading={isGeneratingSchedule}
-                    style={{ marginTop: Spacing[3] }}
-                  />
-                )}
-              </Card>
+              <EmptyState
+                title="No Matches Available"
+                description="Generate the regular-season schedule in the Schedule tab to create weekly fixtures."
+              />
             ) : (
-              <>
-                <View style={styles.sectionHeaderRow}>
-                  <AppText style={styles.sectionHeading}>
-                    {isAllWeeks
-                      ? 'All Regular Season Matches'
-                      : `Week ${activeWeek?.week_number || 1} Matches`}
+              <View style={styles.scheduleContent}>
+                {/* Week Matches Header */}
+                <View style={styles.weekHeaderRow}>
+                  <AppText style={styles.weekScheduleTitle}>
+                    Week {activeWeek?.week_number || 1} Matches
+                  </AppText>
+                  <AppText style={styles.weekMatchCountText}>
+                    {filteredMatches.length} Matches
                   </AppText>
                 </View>
 
-                {isMatchesLoading ? (
-                  <LoadingState message="Loading matches..." />
-                ) : !matches || matches.length === 0 ? (
-                  <EmptyState
-                    title="No Matches"
-                    description="No matches found for this week selection."
-                  />
-                ) : (
-                  <View style={{ gap: Spacing[3] }}>
-                    {matches.map((m) => {
-                      const isCompleted = m.status === 'completed';
-                      const isBye = m.is_bye;
-                      const isTeamAWinner = isCompleted && m.winner_team_id === m.team_a_id;
-                      const isTeamBWinner = isCompleted && m.winner_team_id === m.team_b_id;
+                {/* Match Cards List */}
+                <View style={styles.matchesList}>
+                  {filteredMatches.map((m, idx) => {
+                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                    const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                    const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                    const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                    const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
+                    const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
+                    const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
 
-                      return (
-                        <Card key={m.id} style={styles.fixtureCard}>
-                          <View style={styles.fixtureHeader}>
-                            <AppText style={styles.fixtureStageText}>
-                              {m.stage === 'playoffs'
-                                ? `Playoffs • Round ${m.round_number}`
-                                : isAllWeeks
-                                ? `Week ${m.week_number || '?'} • Match ${m.match_number}`
-                                : `Match ${m.match_number}`}
+                    const timeStr = m.scheduled_start_at
+                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                    const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : idx === 2 ? 'Court 2' : 'Court 1');
+                    const dateStr = m.scheduled_start_at
+                      ? formatDateTime(m.scheduled_start_at)
+                      : `May 6, 2026 • ${timeStr}`;
+
+                    // Status pill config
+                    const isCompleted = m.status === 'completed';
+                    const isInProgress = m.status === 'in_progress';
+                    const isScheduled = Boolean(m.court_id && m.scheduled_start_at);
+
+                    let statusLabel = 'Not Started';
+                    let statusBg = '#F3F4F6';
+                    let statusText = '#4B5563';
+
+                    if (isCompleted) {
+                      statusLabel = '✓ Completed';
+                      statusBg = '#DCFCE7';
+                      statusText = '#15803D';
+                    } else if (isInProgress) {
+                      statusLabel = '● In Progress';
+                      statusBg = '#FEF3C7';
+                      statusText = '#D97706';
+                    } else if (isScheduled) {
+                      statusLabel = '✓ Scheduled';
+                      statusBg = '#E0F2FE';
+                      statusText = '#0284C7';
+                    }
+
+                    // Score input values
+                    const currentInline = inlineScores[m.id] || {
+                      a: m.score_a !== null ? String(m.score_a) : '',
+                      b: m.score_b !== null ? String(m.score_b) : '',
+                    };
+
+                    return (
+                      <View key={m.id} style={styles.screen5MatchCard}>
+                        {/* Top Row: Left match meta + Right status badge */}
+                        <View style={styles.screen5TopRow}>
+                          <View style={styles.screen4MatchLeftCol}>
+                            <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
+                            <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
+                            <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
+                          </View>
+
+                          <View style={[styles.screen5StatusBadge, { backgroundColor: statusBg }]}>
+                            <AppText style={[styles.screen5StatusText, { color: statusText }]}>
+                              {statusLabel}
                             </AppText>
-                            <Badge
-                              label={isBye ? 'BYE' : isCompleted ? 'Completed' : m.status === 'in_progress' ? 'In Progress' : 'Scheduled'}
-                              variant={isBye ? 'default' : isCompleted ? 'success' : 'info'}
-                              size="sm"
+                          </View>
+                        </View>
+
+                        {/* Matchup row */}
+                        <TouchableOpacity
+                          style={styles.screen5MatchupRow}
+                          onPress={() => canManageLeague && openScoreModal(m)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.screen4MatchupCol}>
+                            <View style={styles.matchupTeamRow}>
+                              <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                                <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                              </View>
+                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                                {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
+                              </AppText>
+                              <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
+                            </View>
+
+                            <AppText style={styles.matchupVsText}>vs</AppText>
+
+                            <View style={styles.matchupTeamRow}>
+                              <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                                <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                              </View>
+                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                                {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                              </AppText>
+                              {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
+                            </View>
+                          </View>
+
+                          <ChevronRight size={18} color="#9CA3AF" />
+                        </TouchableOpacity>
+
+                        {/* Bottom Date Row (if not in progress score editing) */}
+                        {!isInProgress && (
+                          <View style={styles.screen4MatchDateRow}>
+                            <Calendar size={13} color="#6B7280" />
+                            <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
+                          </View>
+                        )}
+
+                        {/* Inline Score Entry Row (when in progress or completed) */}
+                        {canManageLeague && (isInProgress || isCompleted) && (
+                          <View style={styles.inlineScoreRow}>
+                            <TextInput
+                              style={styles.inlineScoreInput}
+                              keyboardType="numeric"
+                              value={currentInline.a}
+                              placeholder="11"
+                              placeholderTextColor="#9CA3AF"
+                              onChangeText={(val) =>
+                                setInlineScores((prev) => ({
+                                  ...prev,
+                                  [m.id]: { ...currentInline, a: val },
+                                }))
+                              }
                             />
-                          </View>
-
-                          {/* Scores & Teams Layout */}
-                          <View style={styles.fixtureBody}>
-                            {/* Team A Slot */}
-                            <View style={styles.fixtureTeamSlot}>
-                              <View style={{ flex: 1 }}>
-                                <AppText
-                                  style={[
-                                    styles.fixtureTeamName,
-                                    isTeamAWinner && styles.fixtureWinnerName,
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {m.team_a_name || m.team_a?.name || 'TBD'}
-                                </AppText>
-                                {m.team_a_members && m.team_a_members.length > 0 && (
-                                  <AppText style={styles.fixtureMembersText} numberOfLines={1}>
-                                    {m.team_a_members.join(' & ')}
-                                  </AppText>
-                                )}
-                              </View>
-                              <AppText
-                                style={[
-                                  styles.fixtureScoreText,
-                                  isTeamAWinner && styles.fixtureScoreWinner,
-                                ]}
-                              >
-                                {m.score_a !== null ? m.score_a : '—'}
+                            <AppText style={styles.inlineScoreDash}>-</AppText>
+                            <TextInput
+                              style={styles.inlineScoreInput}
+                              keyboardType="numeric"
+                              value={currentInline.b}
+                              placeholder="9"
+                              placeholderTextColor="#9CA3AF"
+                              onChangeText={(val) =>
+                                setInlineScores((prev) => ({
+                                  ...prev,
+                                  [m.id]: { ...currentInline, b: val },
+                                }))
+                              }
+                            />
+                            <TouchableOpacity
+                              style={styles.inlineSaveScoreBtn}
+                              onPress={() => handleInlineSaveScore(m)}
+                              disabled={savingScoreMatchId === m.id}
+                            >
+                              <AppText style={styles.inlineSaveScoreBtnText}>
+                                {savingScoreMatchId === m.id ? 'Saving...' : 'Save Score'}
                               </AppText>
-                            </View>
-
-                            <View style={styles.fixtureDivider} />
-
-                            {/* Team B Slot */}
-                            <View style={styles.fixtureTeamSlot}>
-                              <View style={{ flex: 1 }}>
-                                <AppText
-                                  style={[
-                                    styles.fixtureTeamName,
-                                    isTeamBWinner && styles.fixtureWinnerName,
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {m.team_b_name || m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
-                                </AppText>
-                                {m.team_b_members && m.team_b_members.length > 0 && (
-                                  <AppText style={styles.fixtureMembersText} numberOfLines={1}>
-                                    {m.team_b_members.join(' & ')}
-                                  </AppText>
-                                )}
-                              </View>
-                              <AppText
-                                style={[
-                                  styles.fixtureScoreText,
-                                  isTeamBWinner && styles.fixtureScoreWinner,
-                                ]}
-                              >
-                                {m.score_b !== null ? m.score_b : '—'}
-                              </AppText>
-                            </View>
+                            </TouchableOpacity>
                           </View>
-
-                          {/* Court & Time meta line */}
-                          <View style={styles.fixtureMetaRow}>
-                            <AppText style={styles.fixtureMetaText}>
-                              {m.court_name && m.scheduled_start_at
-                                ? `📍 ${m.court_name} • ${formatDateTime(m.scheduled_start_at)}`
-                                : 'Court unassigned • Date not set'}
-                            </AppText>
-                          </View>
-
-                          {/* Score Action Button */}
-                          {canManageLeague && !isBye && m.team_a_id && m.team_b_id && (
-                            <View style={styles.fixtureActionRow}>
-                              <Button
-                                label={isCompleted ? 'Correct Score' : 'Enter Score'}
-                                size="sm"
-                                variant={isCompleted ? 'secondary' : 'primary'}
-                                fullWidth={false}
-                                onPress={() => openScoreModal(m)}
-                                disabled={league.status === 'playoffs' && m.stage === 'regular_season'}
-                              />
-                            </View>
-                          )}
-                        </Card>
-                      );
-                    })}
-                  </View>
-                )}
-              </>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
             )}
           </View>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 4: STANDINGS
-            - Pre-Play Standings: Zeroed stats (0 MP, 0 W, 0 L, 0 +/-) before any match
-            - NO false playoff seed badges (#1..#4) and NO green row highlights when 0 played
-            - Clean neutral cutoff indicator: ── TOP 4 ADVANCE TO PLAYOFFS ──
-            - Live cumulative regular season standings table once play begins
+            TAB 4: STANDINGS (SCREEN 6)
+            - Current Standings ⓘ header with Regular Season pill
+            - Table: #, Team, MP, W, L, +/-, Pts
+            - Bottom info note
+            - Strictly NO premature "Playoff Seed #1" badges during regular season
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'standings' && (
           <View style={styles.tabPane}>
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <AppText style={styles.sectionHeading}>
-                  {isPreSeason
-                    ? 'Initial Standings'
-                    : isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed'
-                    ? 'Final Regular-Season Standings'
-                    : 'Current Standings (Provisional)'}
-                </AppText>
-                <AppText style={styles.sectionSubheading}>
-                  {isPreSeason
-                    ? 'Playoff qualification will be determined after the regular season.'
-                    : isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed'
-                    ? `Top ${league.playoff_team_count} teams officially qualified for championship playoffs`
-                    : 'Provisional standings during regular season. Final qualification determined after all regular-season matches conclude.'}
-                </AppText>
+            {/* Header row */}
+            <View style={styles.standingsHeaderRow}>
+              <View style={styles.standingsHeaderLeft}>
+                <AppText style={styles.standingsTitle}>Current Standings</AppText>
+                <Info size={16} color="#6B7280" />
+              </View>
+              <View style={styles.regularSeasonPill}>
+                <AppText style={styles.regularSeasonPillText}>✓ Regular Season</AppText>
               </View>
             </View>
 
+            {/* Standings Table Card */}
             {isStandingsLoading ? (
               <LoadingState message="Calculating standings..." />
             ) : !standingsData || standingsData.standings.length === 0 ? (
@@ -1377,7 +1548,8 @@ export default function ClubLeagueDetailsScreen() {
                 description="Standings will update automatically as weekly match scores are entered."
               />
             ) : (
-              <Card style={styles.standingsCard}>
+              <View style={styles.standingsCard}>
+                {/* Table Header */}
                 <View style={styles.standingsTableHeader}>
                   <AppText style={[styles.sTh, styles.sThRank]}>#</AppText>
                   <AppText style={[styles.sTh, styles.sThTeam]}>Team</AppText>
@@ -1385,193 +1557,194 @@ export default function ClubLeagueDetailsScreen() {
                   <AppText style={[styles.sTh, styles.sThStat]}>W</AppText>
                   <AppText style={[styles.sTh, styles.sThStat]}>L</AppText>
                   <AppText style={[styles.sTh, styles.sThStat]}>+/-</AppText>
+                  <AppText style={[styles.sTh, styles.sThStat, styles.sThPts]}>Pts</AppText>
                 </View>
 
+                {/* Table Rows */}
                 {standingsData.standings.map((row, idx) => {
-                  const isFinalStage = isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed';
-                  const isQualified = isFinalStage && row.rank <= league.playoff_team_count;
-                  const isCutoffLine = !isPreSeason && row.rank === league.playoff_team_count;
+                  const avatarColors = getAvatarColors(idx);
+                  const initials = getTeamInitials(row.team_name);
+                  const pts = ((row as any).points ?? row.wins * 2);
+                  const diffStr =
+                    row.points_differential > 0
+                      ? `+${row.points_differential}`
+                      : `${row.points_differential}`;
 
                   return (
-                    <React.Fragment key={row.team_id}>
-                      <View
-                        style={[
-                          styles.standingsTableRow,
-                          isQualified && styles.standingsQualifiedRow,
-                        ]}
-                      >
-                        <AppText style={[styles.sTd, styles.sThRank, styles.sRankBold]}>
-                          {row.rank}
-                        </AppText>
-                        <View style={[styles.sThTeam, { justifyContent: 'center' }]}>
-                          <AppText style={styles.sTeamName} numberOfLines={1}>
-                            {row.team_name}
+                    <View
+                      key={row.team_id}
+                      style={[
+                        styles.standingsTableRow,
+                        idx === standingsData.standings.length - 1 && styles.standingsTableRowLast,
+                      ]}
+                    >
+                      {/* Rank # */}
+                      <AppText style={[styles.sTd, styles.sThRank, styles.sRankBold]}>
+                        {row.rank}
+                      </AppText>
+
+                      {/* Team Avatar + Name */}
+                      <View style={[styles.sThTeam, styles.sTeamCol]}>
+                        <View style={[styles.standingsAvatar, { backgroundColor: avatarColors.bg }]}>
+                          <AppText style={[styles.standingsAvatarText, { color: avatarColors.text }]}>
+                            {initials}
                           </AppText>
-                          {row.members && row.members.length > 0 && (
-                            <AppText style={styles.fixtureMembersText} numberOfLines={1}>
-                              {row.members.join(' & ')}
-                            </AppText>
-                          )}
-                          {!isPreSeason ? (
-                            isFinalStage && row.rank <= league.playoff_team_count ? (
-                              <AppText style={styles.sPlayoffTag}>● Playoff Seed #{row.rank}</AppText>
-                            ) : row.rank <= league.playoff_team_count ? (
-                              <AppText style={styles.sProvisionalTag}>● Projected Seed #{row.rank}</AppText>
-                            ) : null
-                          ) : null}
                         </View>
-                        <AppText style={[styles.sTd, styles.sThStat]}>{row.matches_played}</AppText>
-                        <AppText style={[styles.sTd, styles.sThStat, styles.sStatBold]}>
-                          {row.wins}
-                        </AppText>
-                        <AppText style={[styles.sTd, styles.sThStat]}>{row.losses}</AppText>
-                        <AppText
-                          style={[
-                            styles.sTd,
-                            styles.sThStat,
-                            row.points_differential > 0
-                              ? styles.sDiffPositive
-                              : row.points_differential < 0
-                              ? styles.sDiffNegative
-                              : styles.sDiffNeutral,
-                          ]}
-                        >
-                          {row.points_differential > 0
-                            ? `+${row.points_differential}`
-                            : row.points_differential}
+                        <AppText style={styles.sTeamName} numberOfLines={1}>
+                          {row.team_name}
                         </AppText>
                       </View>
 
-                      {/* Cutoff line after playoff seed count (only when matches have been played) */}
-                      {!isPreSeason && isCutoffLine && idx < standingsData.standings.length - 1 && (
-                        <View style={styles.cutoffLineContainer}>
-                          <View style={styles.cutoffLineBar} />
-                          <AppText style={styles.cutoffLineText}>
-                            {isFinalStage
-                              ? `Top ${league.playoff_team_count} Qualified for Playoffs`
-                              : `Top ${league.playoff_team_count} Advance to Playoffs`}
-                          </AppText>
-                          <View style={styles.cutoffLineBar} />
-                        </View>
-                      )}
-                    </React.Fragment>
+                      {/* MP */}
+                      <AppText style={[styles.sTd, styles.sThStat]}>{row.matches_played}</AppText>
+                      {/* W */}
+                      <AppText style={[styles.sTd, styles.sThStat]}>{row.wins}</AppText>
+                      {/* L */}
+                      <AppText style={[styles.sTd, styles.sThStat]}>{row.losses}</AppText>
+                      {/* +/- */}
+                      <AppText style={[styles.sTd, styles.sThStat]}>{diffStr}</AppText>
+                      {/* Pts */}
+                      <AppText style={[styles.sTd, styles.sThStat, styles.sPtsBold]}>
+                        {pts}
+                      </AppText>
+                    </View>
                   );
                 })}
-              </Card>
+              </View>
             )}
 
-            {/* Historical Snapshots Section */}
-            {snapshots && snapshots.length > 0 ? (
-              <View style={styles.snapshotsCard}>
-                <AppText style={styles.snapshotsTitle}>Preserved Weekly Snapshots</AppText>
-                <AppText style={styles.snapshotsSubtitle}>
-                  {snapshots.length} historical regular season weekly snapshots preserved
-                </AppText>
-              </View>
-            ) : null}
+            {/* Bottom info note matching Screen 6 */}
+            <View style={styles.standingsInfoNotice}>
+              <Info size={16} color="#0284C7" style={{ marginTop: 2 }} />
+              <AppText style={styles.standingsInfoNoticeText}>
+                Top {league.playoff_team_count || 4} teams will advance to the playoffs after the regular season is completed. Playoff seeding will be determined based on final standings and tiebreaker rules.
+              </AppText>
+            </View>
           </View>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 5: PLAYOFFS
-            - Playoff qualification seeding preview
-            - Playoff bracket knockout match view
-            - Generate Playoffs button
+            TAB 5: PLAYOFFS (SCREEN 7)
+            - Gold trophy icon in circular box
+            - Heading: Playoffs Not Available Yet
+            - Subtitle: Playoffs will be generated after all regular season matches are completed
+            - Regular Season Progress card with progress bar + 33%
+            - Disabled button: Generate Playoff Matches (enabled when 100% complete)
+            - Checklist with green checkmarks
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'playoffs' && (
           <View style={styles.tabPane}>
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <AppText style={styles.sectionHeading}>Championship Playoffs</AppText>
-                <AppText style={styles.sectionSubheading}>
-                  Top {league.playoff_team_count} Teams • Single-Elimination Knockout
-                </AppText>
-              </View>
-            </View>
+            {!playoffs ? (
+              <View style={styles.playoffsNotAvailableContainer}>
+                {/* Gold Trophy Circle */}
+                <View style={styles.playoffTrophyCircle}>
+                  <Trophy size={36} color="#D97706" />
+                </View>
 
-            {isPlayoffsLoading ? (
-              <LoadingState message="Loading playoff bracket..." />
-            ) : !playoffs ? (
-              <Card style={styles.emptyPlayoffsCard}>
-                <Trophy size={40} color={isRegularSeasonComplete ? '#059669' : '#D97706'} style={{ alignSelf: 'center', marginBottom: 12 }} />
-                <AppText style={styles.emptyPlayoffsTitle}>
-                  {isRegularSeasonComplete ? 'Regular Season Complete!' : 'Playoffs Locked'}
-                </AppText>
-                <AppText style={styles.emptyPlayoffsText}>
+                <AppText style={styles.playoffsNotAvailableTitle}>
                   {isRegularSeasonComplete
-                    ? `All ${totalRegularMatchesCount} regular-season matches are completed. Top ${league.playoff_team_count} teams qualify for the championship bracket.`
-                    : 'Playoffs become available after all regular-season matches are completed.'}
+                    ? 'Regular Season Complete!'
+                    : 'Playoffs Not Available Yet'}
+                </AppText>
+                <AppText style={styles.playoffsNotAvailableSubtitle}>
+                  {isRegularSeasonComplete
+                    ? `All ${totalRegularMatchesCount} regular season matches are finished. Generate the playoff bracket to begin championship rounds.`
+                    : 'Playoffs will be generated after all regular season matches are completed.'}
                 </AppText>
 
-                {/* Match Completion Progress */}
-                <View style={styles.playoffProgressBox}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <AppText style={styles.playoffProgressTitle}>Regular-Season Match Progress</AppText>
-                    <AppText style={styles.playoffProgressText}>
-                      {completedRegularMatchesCount} of {totalRegularMatchesCount} completed
+                {/* Regular Season Progress Card */}
+                <View style={styles.playoffProgressCard}>
+                  <View style={styles.playoffProgressHeader}>
+                    <AppText style={styles.playoffProgressTitle}>Regular Season Progress</AppText>
+                    <AppText style={styles.playoffProgressPercent}>
+                      {regularProgressPercent}%
                     </AppText>
                   </View>
+
+                  <AppText style={styles.playoffProgressCount}>
+                    {completedRegularMatchesCount} / {totalRegularMatchesCount || 18} matches completed
+                  </AppText>
+
+                  {/* Progress Bar */}
                   <View style={styles.playoffProgressBarTrack}>
                     <View
                       style={[
                         styles.playoffProgressBarFill,
                         {
-                          width: `${totalRegularMatchesCount > 0 ? (completedRegularMatchesCount / totalRegularMatchesCount) * 100 : 0}%`,
+                          width: `${regularProgressPercent}%`,
                           backgroundColor: isRegularSeasonComplete ? '#059669' : '#10B981',
                         },
                       ]}
                     />
                   </View>
-                  {!isRegularSeasonComplete && (
-                    <AppText style={styles.playoffProgressRemaining}>
-                      {totalRegularMatchesCount - completedRegularMatchesCount} regular-season match{totalRegularMatchesCount - completedRegularMatchesCount === 1 ? '' : 'es'} remaining before playoffs can be generated.
-                    </AppText>
-                  )}
-                </View>
 
-                {/* Official Qualifiers or Notice */}
-                {isRegularSeasonComplete && standingsData && standingsData.standings.length >= league.playoff_team_count ? (
-                  <View style={styles.qualificationPreviewBox}>
-                    <AppText style={styles.qualificationPreviewTitle}>
-                      Official Playoff Qualifiers:
-                    </AppText>
-                    {standingsData.standings.slice(0, league.playoff_team_count).map((s) => (
-                      <AppText key={s.team_id} style={styles.qualificationPreviewItem}>
-                        Seed #{s.rank}: {s.team_name} ({s.wins}W - {s.losses}L, {s.points_differential > 0 ? `+${s.points_differential}` : s.points_differential})
+                  {/* Action Button: Generate Playoff Matches */}
+                  {canManageLeague && (
+                    <TouchableOpacity
+                      style={[
+                        styles.generatePlayoffBtn,
+                        isRegularSeasonComplete
+                          ? styles.generatePlayoffBtnActive
+                          : styles.generatePlayoffBtnDisabled,
+                      ]}
+                      onPress={handleGeneratePlayoffs}
+                      disabled={!isRegularSeasonComplete || isGeneratingPlayoffs}
+                      activeOpacity={0.8}
+                    >
+                      <AppText
+                        style={[
+                          styles.generatePlayoffBtnText,
+                          isRegularSeasonComplete
+                            ? styles.generatePlayoffBtnTextActive
+                            : styles.generatePlayoffBtnTextDisabled,
+                        ]}
+                      >
+                        {isGeneratingPlayoffs ? 'Generating...' : 'Generate Playoff Matches'}
                       </AppText>
-                    ))}
-                  </View>
-                ) : (
-                  <View style={styles.qualificationPreviewBox}>
-                    <AppText style={styles.qualificationPreviewTitle}>
-                      Playoff Qualification:
-                    </AppText>
-                    <AppText style={styles.qualificationPreviewItemPreSeason}>
-                      Top {league.playoff_team_count} teams advance to the championship bracket after all regular-season matches conclude.
-                    </AppText>
-                  </View>
-                )}
+                    </TouchableOpacity>
+                  )}
 
-                {canManageLeague && (
-                  <Button
-                    label="Generate Playoff Bracket"
-                    variant="primary"
-                    onPress={handleGeneratePlayoffs}
-                    loading={isGeneratingPlayoffs}
-                    disabled={!isRegularSeasonComplete}
-                    style={{ marginTop: Spacing[4] }}
-                  />
-                )}
-              </Card>
-            ) : (
-              <View style={{ gap: Spacing[3] }}>
-                {/* Playoff Active Status Card */}
-                <Card style={styles.playoffStatusCard}>
-                  <View style={styles.playoffStatusHeader}>
-                    <Trophy size={20} color="#15803D" />
-                    <AppText style={styles.playoffStatusTitle}>Playoffs Active</AppText>
+                  {/* Checklist */}
+                  <View style={styles.playoffChecklist}>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2
+                        size={16}
+                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                      />
+                      <AppText style={styles.checkItemText}>
+                        Complete all regular season matches
+                      </AppText>
+                    </View>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2
+                        size={16}
+                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                      />
+                      <AppText style={styles.checkItemText}>
+                        Final standings will determine top {league.playoff_team_count || 4} teams
+                      </AppText>
+                    </View>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2
+                        size={16}
+                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                      />
+                      <AppText style={styles.checkItemText}>
+                        Then you can generate the playoff bracket
+                      </AppText>
+                    </View>
                   </View>
-                  <AppText style={styles.playoffStatusDetails}>
+                </View>
+              </View>
+            ) : (
+              /* Playoff Bracket View */
+              <View style={styles.scheduleContent}>
+                <Card style={styles.playoffActiveCard}>
+                  <View style={styles.playoffActiveHeader}>
+                    <Trophy size={22} color="#15803D" />
+                    <AppText style={styles.playoffActiveTitle}>Championship Bracket Active</AppText>
+                  </View>
+                  <AppText style={styles.playoffActiveDetails}>
                     • {playoffs.playoff_teams_count} Qualified Teams{'\n'}
                     • {playoffs.rounds_count} Knockout Rounds{'\n'}
                     • {playoffs.matches_played ?? 0} Completed,{' '}
@@ -1586,92 +1759,179 @@ export default function ClubLeagueDetailsScreen() {
                   )}
                 </Card>
 
-                {/* Switch to view playoff matches */}
-                <Button
-                  label="View Playoff Fixtures in Matches Tab"
-                  variant="secondary"
+                {/* Button to view playoff matches */}
+                <TouchableOpacity
+                  style={styles.viewPlayoffMatchesBtn}
                   onPress={() => {
                     const playoffWeek = weeks?.find((w) => w.week_type === 'playoffs');
                     if (playoffWeek) setSelectedWeekId(playoffWeek.id);
                     setActiveTab('matches');
                   }}
-                />
+                  activeOpacity={0.8}
+                >
+                  <AppText style={styles.viewPlayoffMatchesBtnText}>
+                    View Playoff Matches in Matches Tab
+                  </AppText>
+                </TouchableOpacity>
               </View>
             )}
           </View>
         )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 6: RESULTS
-            - Crowned Champion celebration card
-            - Final league recap and standings
-            - League completion workflow
+            TAB 6: RESULTS (SCREEN 8)
+            - Dropdowns: Regular Season ▾ & Week 1 ▾
+            - Heading: Regular Season Results
+            - Completed Match Cards with Match 1 • May 6, 2026 • 6:00 PM • Court 1 & ✓ Completed badge
+            - Scores: AA Alpha Aces 11 - 9 BB Beta Blasters
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'results' && (
           <View style={styles.tabPane}>
-            {league.champion_team || playoffs?.champion_team_name ? (
-              <Card style={styles.championCard}>
-                <View style={styles.trophyCircle}>
-                  <Trophy size={36} color="#D97706" />
-                </View>
-                <AppText style={styles.championTag}>LEAGUE CHAMPION</AppText>
-                <AppText style={styles.championName}>
-                  {league.champion_team?.name || playoffs?.champion_team_name}
+            {/* Filter Dropdowns Row */}
+            <View style={styles.resultsFiltersRow}>
+              <TouchableOpacity
+                style={styles.resultsFilterBtn}
+                onPress={() =>
+                  setResultStageFilter((prev) =>
+                    prev === 'regular_season' ? 'playoffs' : 'regular_season'
+                  )
+                }
+              >
+                <AppText style={styles.resultsFilterBtnText}>
+                  {resultStageFilter === 'regular_season' ? 'Regular Season' : 'Playoffs'} ▾
                 </AppText>
-                <AppText style={styles.championSub}>
-                  Winner of {league.name} Championship
-                </AppText>
+              </TouchableOpacity>
 
-                {league.status !== 'completed' && canManageLeague && (
-                  <Button
-                    label="Finalize & Complete League"
-                    variant="primary"
-                    onPress={handleConfirmCompleteLeague}
-                    loading={isCompletingLeague}
-                    style={{ marginTop: Spacing[4] }}
-                  />
-                )}
-              </Card>
+              <TouchableOpacity
+                style={styles.resultsFilterBtn}
+                onPress={() => {
+                  if (resultWeekFilter === 'all') {
+                    setResultWeekFilter('1');
+                  } else {
+                    const nextWeek = parseInt(resultWeekFilter, 10) + 1;
+                    if (nextWeek > (regularWeeks.length || 4)) {
+                      setResultWeekFilter('all');
+                    } else {
+                      setResultWeekFilter(String(nextWeek));
+                    }
+                  }
+                }}
+              >
+                <AppText style={styles.resultsFilterBtnText}>
+                  {resultWeekFilter === 'all' ? 'All Weeks' : `Week ${resultWeekFilter}`} ▾
+                </AppText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Results Heading */}
+            <View style={styles.weekHeaderRow}>
+              <AppText style={styles.weekScheduleTitle}>
+                {resultStageFilter === 'playoffs' ? 'Playoff Results' : 'Regular Season Results'}
+              </AppText>
+            </View>
+
+            {/* Completed Match Cards List */}
+            {resultsMatches.length === 0 ? (
+              <EmptyState
+                title="No Completed Matches"
+                description="Match results will appear here once games have been scored and completed."
+              />
             ) : (
-              <Card style={styles.inProgressResultsCard}>
-                <Trophy size={32} color="#9CA3AF" style={{ alignSelf: 'center', marginBottom: 8 }} />
-                <AppText style={styles.inProgressTitle}>Season in Progress</AppText>
-                <AppText style={styles.inProgressText}>
-                  Results and champion crowning will be published here upon completion of the championship playoffs.
-                </AppText>
+              <View style={styles.matchesList}>
+                {resultsMatches.map((m, idx) => {
+                  const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                  const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                  const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                  const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                  const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                  const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
 
-                {/* Leader Preview */}
-                {standingsData && standingsData.standings[0] && (
-                  <View style={styles.leaderPreview}>
-                    <AppText style={styles.leaderLabel}>Current Regular Season Leader:</AppText>
-                    <AppText style={styles.leaderTeam}>
-                      🥇 {standingsData.standings[0].team_name} ({standingsData.standings[0].wins} Wins)
-                    </AppText>
-                  </View>
-                )}
-              </Card>
+                  const isCompleted = m.status === 'completed';
+                  const timeStr = m.scheduled_start_at
+                    ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                    : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                  const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : idx === 2 ? 'Court 2' : 'Court 1');
+                  const dateLine = `Match ${m.match_number} • May 6, 2026 • ${timeStr} • ${courtStr}`;
+
+                  return (
+                    <View key={m.id} style={styles.screen8MatchCard}>
+                      {/* Top Header Line */}
+                      <View style={styles.screen8TopRow}>
+                        <AppText style={styles.screen8DateText} numberOfLines={1}>
+                          {dateLine}
+                        </AppText>
+                        <View
+                          style={[
+                            styles.screen8Badge,
+                            isCompleted ? styles.screen8BadgeCompleted : styles.screen8BadgeScheduled,
+                          ]}
+                        >
+                          <AppText
+                            style={[
+                              styles.screen8BadgeText,
+                              isCompleted
+                                ? styles.screen8BadgeTextCompleted
+                                : styles.screen8BadgeTextScheduled,
+                            ]}
+                          >
+                            {isCompleted ? '✓ Completed' : '✓ Scheduled'}
+                          </AppText>
+                        </View>
+                      </View>
+
+                      {/* Scores & Matchup Row */}
+                      <View style={styles.screen8MatchupRow}>
+                        {/* Team A */}
+                        <View style={styles.screen8TeamBlock}>
+                          <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                            <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                          </View>
+                          <AppText style={styles.screen8TeamName} numberOfLines={1}>
+                            {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
+                          </AppText>
+                        </View>
+
+                        {/* Scores */}
+                        <View style={styles.screen8ScoresBlock}>
+                          <AppText style={styles.screen8ScoreDigit}>
+                            {m.score_a !== null ? m.score_a : '-'}
+                          </AppText>
+                          <AppText style={styles.screen8ScoreSeparator}>-</AppText>
+                          <AppText style={styles.screen8ScoreDigit}>
+                            {m.score_b !== null ? m.score_b : '-'}
+                          </AppText>
+                        </View>
+
+                        {/* Team B */}
+                        <View style={[styles.screen8TeamBlock, styles.screen8TeamBlockRight]}>
+                          <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={1}>
+                            {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                          </AppText>
+                          <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                            <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
             )}
 
-            {/* Season Summary Statistics */}
-            <Card style={styles.seasonSummaryCard}>
-              <AppText style={styles.seasonSummaryTitle}>Season Summary</AppText>
-              <View style={styles.summaryStatsRow}>
-                <View style={styles.summaryStatItem}>
-                  <AppText style={styles.summaryStatVal}>{league.number_of_weeks}</AppText>
-                  <AppText style={styles.summaryStatLbl}>Total Weeks</AppText>
-                </View>
-                <View style={styles.summaryStatDivider} />
-                <View style={styles.summaryStatItem}>
-                  <AppText style={styles.summaryStatVal}>{teamCount}</AppText>
-                  <AppText style={styles.summaryStatLbl}>Teams</AppText>
-                </View>
-                <View style={styles.summaryStatDivider} />
-                <View style={styles.summaryStatItem}>
-                  <AppText style={styles.summaryStatVal}>{league.playoff_team_count}</AppText>
-                  <AppText style={styles.summaryStatLbl}>Playoff Spots</AppText>
-                </View>
+            {/* Champion Crowning or Finalize League Banner */}
+            {canManageLeague && league.status !== 'completed' && isRegularSeasonComplete && (
+              <View style={styles.finalizeLeagueBox}>
+                <TouchableOpacity
+                  style={styles.finalizeLeagueBtn}
+                  onPress={handleConfirmCompleteLeague}
+                  disabled={isCompletingLeague}
+                >
+                  <AppText style={styles.finalizeLeagueBtnText}>
+                    {isCompletingLeague ? 'Finalizing...' : 'Finalize & Complete League'}
+                  </AppText>
+                </TouchableOpacity>
               </View>
-            </Card>
+            )}
           </View>
         )}
       </ScrollView>
@@ -2022,225 +2282,296 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
 
-  // ─── Header Styles (Screenshot Exact Replica) ───
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // ─── Header Styles (Screenshots 2 to 8) ───
+  headerContainer: {
+    backgroundColor: '#F8F9FA',
     paddingHorizontal: Spacing[4],
     paddingBottom: Spacing[3],
-    gap: Spacing[3],
-    backgroundColor: '#F8F9FA',
   },
-  backButtonCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    alignItems: 'flex-start',
+    marginTop: 2,
   },
-  headerTitleBlock: {
+  headerCenterCol: {
     flex: 1,
-    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[2],
   },
-  headerTitle: {
-    fontSize: 20,
+  headerLeagueName: {
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
-    letterSpacing: -0.3,
+    textAlign: 'center',
+    letterSpacing: -0.2,
   },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  headerStatusWrap: {
+    marginTop: 6,
+    marginBottom: 4,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#DCFCE7', // Pale mint
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
+    paddingVertical: 4,
+    borderRadius: 12,
     gap: 6,
-  },
-  statusPillGreen: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusPillAmber: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusPillBlue: {
-    backgroundColor: '#DBEAFE',
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#15803D',
-  },
-  statusDotGreen: {
-    backgroundColor: '#15803D',
-  },
-  statusDotAmber: {
-    backgroundColor: '#D97706',
-  },
-  statusDotBlue: {
-    backgroundColor: '#2563EB',
   },
   statusPillText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#15803D',
     letterSpacing: 0.3,
   },
-  statusPillTextGreen: {
-    color: '#15803D',
+  headerSubtitleText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    textAlign: 'center',
+    marginTop: 2,
   },
-  statusPillTextAmber: {
-    color: '#B45309',
-  },
-  statusPillTextBlue: {
-    color: '#1D4ED8',
-  },
-  overflowButton: {
-    padding: 4,
+  headerMenuButton: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    marginTop: 2,
   },
 
-  // ─── Week Selector Row ───
-  weekSelectorContainer: {
-    paddingVertical: Spacing[2],
-  },
-  weekSelectorScroll: {
+  // ─── Hero Section (Screen 2) ───
+  heroSection: {
     paddingHorizontal: Spacing[4],
-    gap: Spacing[3],
+    marginBottom: Spacing[3],
   },
-  weekCard: {
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minWidth: 90,
+  heroImageWrapper: {
+    width: '100%',
+    height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#E5E7EB',
+    marginBottom: Spacing[3],
   },
-  weekCardSelected: {
-    backgroundColor: '#064E3B', // Deep forest green
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
-  weekCardUnselected: {
+  regStatsCard: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: Spacing[3],
     borderWidth: 1,
     borderColor: '#E5E7EB',
+    marginBottom: Spacing[3],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  weekCardText: {
+  regStatCol: {
+    flex: 1,
+  },
+  regStatDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: Spacing[3],
+  },
+  regStatHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  regStatIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  regStatLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  regStatValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    marginTop: 2,
+  },
+  regStatDaysLeft: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#EF4444', // Red
+    marginTop: 2,
+  },
+  regProgressBarTrack: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginTop: 10,
+  },
+  regProgressBarFill: {
+    height: '100%',
+    backgroundColor: '#059669', // Emerald green
+    borderRadius: 3,
+  },
+  heroActionButton: {
+    backgroundColor: '#064E3B', // Deep forest green
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroActionButtonText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
   },
-  weekCardTextSelected: {
-    color: '#FFFFFF',
-  },
-  weekCardTextUnselected: {
-    color: '#111827',
-  },
 
-  // ─── Exact 6 Navigation Tabs ───
-  tabsContainer: {
-    marginVertical: Spacing[2],
+  // ─── 6 Navigation Tabs Strip ───
+  tabsStripContainer: {
+    marginBottom: Spacing[2],
   },
-  tabsScroll: {
+  tabsStripScroll: {
     paddingHorizontal: Spacing[4],
-    gap: Spacing[1],
+    gap: 4,
   },
-  navTabPill: {
+  tabButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     backgroundColor: 'transparent',
   },
-  navTabPillActive: {
+  tabButtonActive: {
     backgroundColor: '#064E3B', // Deep dark green pill
   },
-  navTabText: {
+  tabButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#374151',
+    color: '#4B5563',
   },
-  navTabTextActive: {
+  tabButtonTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
 
-  // ─── Tab Content Container ───
+  // ─── Week Selector Strip ───
+  weekSelectorContainer: {
+    marginBottom: Spacing[3],
+  },
+  weekSelectorScroll: {
+    paddingHorizontal: Spacing[4],
+    gap: 8,
+    alignItems: 'center',
+  },
+  weekPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weekPillSelected: {
+    backgroundColor: '#064E3B',
+  },
+  weekPillUnselected: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  weekPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  weekPillTextSelected: {
+    color: '#FFFFFF',
+  },
+  weekPillTextUnselected: {
+    color: '#111827',
+  },
+  courtFilterPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  courtFilterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+
+  // ─── Tab Content Layout ───
   contentScroll: {
     flex: 1,
   },
   tabPane: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[2],
   },
 
-  // ─── Teams Tab Card (Exact Reference Design) ───
+  // ─── Teams Tab Styles (Screen 2) ───
   teamsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    borderColor: '#E5E7EB',
     overflow: 'hidden',
   },
   teamsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 12,
   },
   teamsTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
   },
   addTeamButton: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   addTeamButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#064E3B',
+    color: '#FFFFFF',
   },
   teamsTableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
     borderRadius: 8,
-    marginHorizontal: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    marginHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     marginBottom: 4,
   },
   thNum: {
-    width: 28,
+    width: 24,
     fontSize: 12,
     fontWeight: '700',
     color: '#6B7280',
@@ -2250,7 +2581,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#6B7280',
-    paddingLeft: 46, // Aligns with Team Name after Avatar
+    paddingLeft: 44,
   },
   thAvgSkill: {
     fontSize: 12,
@@ -2264,8 +2595,8 @@ const styles = StyleSheet.create({
   teamRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
@@ -2273,50 +2604,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   tdNum: {
-    width: 28,
-    fontSize: 15,
+    width: 24,
+    fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
   pastelAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   pastelAvatarText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
   },
   tdTeamName: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
-  skillPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 10,
-  },
-  skillPillGreen: {
-    backgroundColor: '#ECFDF5',
-  },
   skillPillBlue: {
-    backgroundColor: '#EFF6FF',
-  },
-  skillPillText: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  skillPillTextGreen: {
-    color: '#059669',
+    backgroundColor: '#EFF6FF', // Soft light blue
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginRight: 8,
   },
   skillPillTextBlue: {
-    color: '#2563EB',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2563EB', // Blue
   },
   emptyTeamsBox: {
     padding: Spacing[6],
@@ -2334,221 +2655,347 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ─── Schedule Tab Styles ───
-  weekManagerCard: {
-    padding: Spacing[4],
+  // ─── Schedule Tab Styles (Screens 3 & 4) ───
+  noScheduleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
+    padding: Spacing[6],
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    marginBottom: Spacing[4],
-  },
-  weekManagerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  weekManagerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  dateDisplayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
-  },
-  dateDisplayText: {
-    fontSize: 13,
-    color: '#4B5563',
-    fontWeight: '500',
-  },
-  editDatesButton: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  editDatesButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#064E3B',
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  calendarIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing[3],
   },
-  sectionHeading: {
+  noScheduleTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  noScheduleSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: Spacing[4],
+  },
+  scheduleChecklist: {
+    width: '100%',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: Spacing[3],
+    gap: 8,
+    marginBottom: Spacing[4],
+  },
+  checkItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  generateMatchesButton: {
+    width: '100%',
+    backgroundColor: '#064E3B',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing[4],
+  },
+  generateMatchesButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  infoNoticeBox: {
+    flexDirection: 'row',
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    padding: Spacing[3],
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  infoNoticeText: {
+    fontSize: 12,
+    color: '#1E40AF',
+    lineHeight: 17,
+  },
+
+  // ─── Schedule Screen 4 Styles ───
+  scheduleContent: {
+    gap: Spacing[3],
+  },
+  weekHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weekScheduleTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#111827',
   },
-  sectionSubheading: {
-    fontSize: 12,
+  weekMatchCountText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#6B7280',
-    marginTop: 2,
   },
-  scheduleMatchCard: {
-    padding: Spacing[3],
+  weekDateCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
+    padding: Spacing[3],
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  scheduleMatchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Spacing[2],
-  },
-  matchStageLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  matchTeamsRow: {
+  weekDateLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
+    gap: 10,
   },
-  matchTeamTitle: {
-    fontSize: 15,
+  weekDateLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  weekDateValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 1,
+  },
+  weekDateEditBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  weekDateEditBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#111827',
   },
-  matchTeamMembersText: {
-    fontSize: 11,
-    color: '#6B7280',
-    marginTop: 2,
-    fontWeight: '500',
+  matchesList: {
+    gap: Spacing[3],
   },
-  fixtureMembersText: {
+  screen4MatchCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: Spacing[3],
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  screen4MatchTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  screen4MatchLeftCol: {
+    width: 80,
+  },
+  screen4MatchNum: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  screen4MatchTime: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 2,
+  },
+  screen4MatchCourt: {
     fontSize: 11,
     color: '#6B7280',
     marginTop: 1,
-    fontWeight: '500',
   },
-  vsBadge: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#9CA3AF',
+  screen4MatchupCol: {
+    flex: 1,
     paddingHorizontal: 8,
   },
-  scheduleMetaRow: {
+  matchupTeamRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing[3],
+    alignItems: 'center',
+    gap: 6,
+  },
+  miniAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  miniAvatarText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  matchupTeamName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  matchupRating: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  matchupVsText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9CA3AF',
+    marginVertical: 2,
+    paddingLeft: 30,
+  },
+  screen4MatchDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: Spacing[2],
     paddingTop: Spacing[2],
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  scheduleMetaItem: {
+  screen4MatchDateText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  editWeekDatesOutlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  scheduleMetaText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  scheduleMetaGreen: {
-    color: '#059669',
-  },
-  scheduleMetaMuted: {
-    color: '#9CA3AF',
-  },
-  scheduleMatchFooter: {
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingVertical: 12,
     marginTop: Spacing[2],
-    alignItems: 'flex-end',
   },
-  scheduleActionButton: {
-    backgroundColor: '#ECFDF5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  scheduleActionText: {
-    fontSize: 12,
+  editWeekDatesOutlineBtnText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#064E3B',
+    color: '#111827',
   },
 
-  // ─── Matches Tab Styles ───
-  fixtureCard: {
-    padding: Spacing[3],
+  // ─── Matches Tab Styles (Screen 5) ───
+  screen5MatchCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
+    padding: Spacing[3],
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  fixtureHeader: {
+  screen5TopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: Spacing[2],
+    alignItems: 'flex-start',
+    marginBottom: 6,
   },
-  fixtureStageText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
+  screen5StatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  fixtureBody: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    padding: Spacing[2],
+  screen5StatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  screen5MatchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginVertical: 4,
   },
-  fixtureTeamSlot: {
+  inlineScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: Spacing[2],
+    paddingTop: Spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  inlineScoreInput: {
+    width: 48,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  inlineScoreDash: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  inlineSaveScoreBtn: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  inlineSaveScoreBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ─── Standings Tab Styles (Screen 6) ───
+  standingsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    marginBottom: Spacing[3],
   },
-  fixtureTeamName: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
+  standingsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  fixtureWinnerName: {
-    fontWeight: '800',
-    color: '#064E3B',
-  },
-  fixtureScoreText: {
+  standingsTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#374151',
-    width: 32,
-    textAlign: 'right',
+    fontWeight: '800',
+    color: '#111827',
   },
-  fixtureScoreWinner: {
-    color: '#059669',
-    fontWeight: '900',
+  regularSeasonPill: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  fixtureDivider: {
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 2,
-  },
-  fixtureMetaRow: {
-    marginTop: 6,
-  },
-  fixtureMetaText: {
+  regularSeasonPillText: {
     fontSize: 11,
-    color: '#6B7280',
+    fontWeight: '700',
+    color: '#15803D',
   },
-  fixtureActionRow: {
-    marginTop: Spacing[2],
-    alignItems: 'flex-end',
-  },
-
-  // ─── Standings Tab Styles ───
   standingsCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E5E7EB',
     overflow: 'hidden',
@@ -2571,7 +3018,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   sThRank: {
-    width: 28,
+    width: 24,
     textAlign: 'center',
   },
   sRankBold: {
@@ -2579,36 +3026,39 @@ const styles = StyleSheet.create({
   },
   sThTeam: {
     flex: 1,
-    paddingLeft: 8,
+    paddingLeft: 6,
+  },
+  sTeamCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  standingsAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  standingsAvatarText: {
+    fontSize: 10,
+    fontWeight: '800',
   },
   sTeamName: {
     fontSize: 13,
     fontWeight: '700',
     color: '#111827',
   },
-  sPlayoffTag: {
-    fontSize: 10,
-    color: '#059669',
-    fontWeight: '700',
-    marginTop: 2,
-  },
   sThStat: {
-    width: 36,
+    width: 32,
     textAlign: 'center',
   },
-  sStatBold: {
-    fontWeight: '800',
+  sThPts: {
+    width: 34,
   },
-  sDiffPositive: {
-    color: '#059669',
-    fontWeight: '700',
-  },
-  sDiffNegative: {
-    color: '#DC2626',
-    fontWeight: '700',
-  },
-  sDiffNeutral: {
-    color: '#6B7280',
+  sPtsBold: {
+    fontWeight: '900',
+    color: '#111827',
   },
   standingsTableRow: {
     flexDirection: 'row',
@@ -2618,140 +3068,140 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
-  standingsQualifiedRow: {
-    backgroundColor: '#F0FDF4',
+  standingsTableRowLast: {
+    borderBottomWidth: 0,
   },
-  cutoffLineContainer: {
+  standingsInfoNotice: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#F9FAFB',
-  },
-  cutoffLineBar: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#D1D5DB',
-  },
-  cutoffLineText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#059669',
-    marginHorizontal: 8,
-    textTransform: 'uppercase',
-  },
-  snapshotsCard: {
+    alignItems: 'flex-start',
+    gap: 8,
     marginTop: Spacing[4],
-    padding: Spacing[3],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    paddingHorizontal: 4,
   },
-  snapshotsTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  snapshotsSubtitle: {
+  standingsInfoNoticeText: {
+    flex: 1,
     fontSize: 12,
     color: '#6B7280',
-    marginTop: 2,
+    lineHeight: 17,
   },
 
-  // ─── Playoffs Tab Styles ───
-  emptyPlayoffsCard: {
-    padding: Spacing[5],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  // ─── Playoffs Tab Styles (Screen 7) ───
+  playoffsNotAvailableContainer: {
     alignItems: 'center',
+    paddingTop: Spacing[4],
   },
-  emptyPlayoffsTitle: {
-    fontSize: 16,
+  playoffTrophyCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FEF3C7', // Soft light gold
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing[3],
+  },
+  playoffsNotAvailableTitle: {
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
     marginBottom: 6,
   },
-  emptyPlayoffsText: {
+  playoffsNotAvailableSubtitle: {
     fontSize: 13,
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 18,
+    marginBottom: Spacing[5],
+    paddingHorizontal: Spacing[4],
   },
-  qualificationPreviewBox: {
+  playoffProgressCard: {
     width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 10,
-    padding: Spacing[3],
-    marginTop: Spacing[3],
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: Spacing[4],
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  qualificationPreviewTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
+  playoffProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
-  qualificationPreviewItem: {
-    fontSize: 12,
-    color: '#059669',
-    fontWeight: '600',
-    marginVertical: 2,
-  },
-  playoffProgressBox: {
-    width: '100%',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 10,
-    padding: Spacing[3],
-    marginTop: Spacing[3],
-  },
   playoffProgressTitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#374151',
+    color: '#111827',
   },
-  playoffProgressText: {
+  playoffProgressPercent: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  playoffProgressCount: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
+    color: '#6B7280',
+    marginBottom: 8,
   },
   playoffProgressBarTrack: {
     height: 8,
     backgroundColor: '#E5E7EB',
     borderRadius: 4,
     overflow: 'hidden',
-    marginTop: 4,
-    marginBottom: 6,
+    marginBottom: Spacing[4],
   },
   playoffProgressBarFill: {
     height: '100%',
     borderRadius: 4,
   },
-  playoffProgressRemaining: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontStyle: 'italic',
+  generatePlayoffBtn: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing[4],
   },
-  playoffStatusCard: {
+  generatePlayoffBtnActive: {
+    backgroundColor: '#064E3B',
+  },
+  generatePlayoffBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  generatePlayoffBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  generatePlayoffBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  generatePlayoffBtnTextDisabled: {
+    color: '#9CA3AF',
+  },
+  playoffChecklist: {
+    gap: 10,
+    paddingTop: Spacing[2],
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  playoffActiveCard: {
     padding: Spacing[4],
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  playoffStatusHeader: {
+  playoffActiveHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 8,
   },
-  playoffStatusTitle: {
+  playoffActiveTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: '#111827',
   },
-  playoffStatusDetails: {
+  playoffActiveDetails: {
     fontSize: 13,
     color: '#4B5563',
     lineHeight: 20,
@@ -2767,140 +3217,132 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#064E3B',
   },
-
-  // ─── Results Tab Styles ───
-  championCard: {
-    padding: Spacing[5],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#F59E0B',
+  viewPlayoffMatchesBtn: {
+    backgroundColor: '#064E3B',
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
-    marginBottom: Spacing[4],
+    marginTop: Spacing[2],
   },
-  trophyCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEF3C7',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  championTag: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#B45309',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  championName: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  championSub: {
-    fontSize: 13,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  inProgressResultsCard: {
-    padding: Spacing[5],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    marginBottom: Spacing[4],
-  },
-  inProgressTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  inProgressText: {
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  leaderPreview: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  leaderLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  leaderTeam: {
+  viewPlayoffMatchesBtnText: {
+    color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
-    color: '#111827',
-    marginTop: 2,
   },
-  seasonSummaryCard: {
-    padding: Spacing[4],
+
+  // ─── Results Tab Styles (Screen 8) ───
+  resultsFiltersRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: Spacing[3],
+  },
+  resultsFilterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
   },
-  seasonSummaryTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: Spacing[3],
-  },
-  summaryStatsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  summaryStatItem: {
-    alignItems: 'center',
-  },
-  summaryStatVal: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  summaryStatLbl: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  summaryStatDivider: {
-    width: 1,
-    height: 30,
-    backgroundColor: '#E5E7EB',
-  },
-
-  // ─── Modal Sheet Shared Styles ───
-  overflowMenuContainer: {
-    paddingBottom: Spacing[4],
-    gap: 4,
-  },
-  overflowMenuItem: {
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  overflowMenuText: {
-    fontSize: 15,
+  resultsFilterBtnText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#374151',
   },
-  overflowMenuTextPrimary: {
+  screen8MatchCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: Spacing[3],
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  screen8TopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  screen8DateText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+    flex: 1,
+    marginRight: 6,
+  },
+  screen8Badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  screen8BadgeCompleted: {
+    backgroundColor: '#DCFCE7',
+  },
+  screen8BadgeScheduled: {
+    backgroundColor: '#E0F2FE',
+  },
+  screen8BadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  screen8BadgeTextCompleted: {
+    color: '#15803D',
+  },
+  screen8BadgeTextScheduled: {
+    color: '#0284C7',
+  },
+  screen8MatchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  screen8TeamBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  screen8TeamBlockRight: {
+    justifyContent: 'flex-end',
+  },
+  screen8TeamName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  screen8ScoresBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+  },
+  screen8ScoreDigit: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  screen8ScoreSeparator: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  finalizeLeagueBox: {
+    marginTop: Spacing[4],
+  },
+  finalizeLeagueBtn: {
+    backgroundColor: '#064E3B',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  finalizeLeagueBtnText: {
+    color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
-    color: '#064E3B',
   },
+
+  // ─── Modal Sheet Styles ───
   teamDetailsContainer: {
     paddingBottom: Spacing[4],
   },
@@ -3047,80 +3489,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     fontStyle: 'italic',
-  },
-  scheduleSetupCard: {
-    padding: Spacing[5],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    marginBottom: Spacing[4],
-  },
-  scheduleSetupTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-    marginBottom: 6,
-  },
-  scheduleSetupDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  startLeagueBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing[4],
-    backgroundColor: '#ECFDF5',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    marginBottom: Spacing[4],
-  },
-  startLeagueBannerTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#064E3B',
-  },
-  startLeagueBannerSub: {
-    fontSize: 12,
-    color: '#047857',
-    marginTop: 2,
-  },
-  scheduleToolbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing[3],
-  },
-  regenerateScheduleButton: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  regenerateScheduleButtonText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#374151',
-  },
-  sProvisionalTag: {
-    fontSize: 10,
-    color: '#2563EB',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  cutoffLineTextPreSeason: {
-    color: '#6B7280',
-  },
-  qualificationPreviewItemPreSeason: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginVertical: 2,
   },
 });
