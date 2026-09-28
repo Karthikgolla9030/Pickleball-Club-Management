@@ -45,8 +45,8 @@ def _team_eager_options():
 
 def _match_eager_options():
     return [
-        selectinload(Match.team_a).selectinload(Team.members),
-        selectinload(Match.team_b).selectinload(Team.members),
+        selectinload(Match.team_a).selectinload(Team.members).selectinload(TeamMember.player_membership).selectinload(ClubPlayerMembership.user),
+        selectinload(Match.team_b).selectinload(Team.members).selectinload(TeamMember.player_membership).selectinload(ClubPlayerMembership.user),
         selectinload(Match.winner_team),
         selectinload(Match.league_week),
         selectinload(Match.next_match),

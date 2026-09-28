@@ -88,9 +88,9 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
   });
 
   const generateScheduleMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (force?: boolean) => {
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
-      return leagueApi.generateSchedule(clubId, leagueId);
+      return leagueApi.generateSchedule(clubId, leagueId, Boolean(force));
     },
     onSuccess: () => {
       if (clubId && leagueId) {
@@ -106,6 +106,27 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_LEAGUE_STANDINGS(clubId, leagueId),
         });
+      }
+    },
+  });
+
+  const startLeagueMutation = useMutation({
+    mutationFn: () => {
+      if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
+      return leagueApi.startLeague(clubId, leagueId);
+    },
+    onSuccess: () => {
+      if (clubId && leagueId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_WEEKS(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId),
+        });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
       }
     },
   });
@@ -139,6 +160,8 @@ export function useLeagueDetails(clubId: string | null, leagueId: string | null)
     isUpdatingStatus: updateStatusMutation.isPending,
     generateSchedule: generateScheduleMutation.mutateAsync,
     isGeneratingSchedule: generateScheduleMutation.isPending,
+    startLeague: startLeagueMutation.mutateAsync,
+    isStartingLeague: startLeagueMutation.isPending,
     generatePlayoffs: generatePlayoffsMutation.mutateAsync,
     isGeneratingPlayoffs: generatePlayoffsMutation.isPending,
   };
@@ -231,17 +254,18 @@ export function useLeagueWeeks(clubId: string | null, leagueId: string | null) {
 export function useLeagueMatches(
   clubId: string | null,
   leagueId: string | null,
-  weekId?: string
+  weekId?: string,
+  stage?: string
 ) {
   const queryClient = useQueryClient();
 
   const matchesQuery = useQuery<LeagueMatch[], Error>({
     queryKey: clubId && leagueId
-      ? QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId, weekId)
+      ? [...QUERY_KEYS.CLUB_LEAGUE_MATCHES(clubId, leagueId, weekId), stage ?? 'all']
       : ['clubs', 'none', 'leagues', 'none', 'matches'],
     queryFn: () => {
       if (!clubId || !leagueId) throw new Error('Club ID and League ID required');
-      return leagueApi.listMatches(clubId, leagueId, weekId);
+      return leagueApi.listMatches(clubId, leagueId, weekId, stage);
     },
     enabled: Boolean(clubId && leagueId),
     staleTime: 10 * 1000,

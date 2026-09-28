@@ -498,7 +498,7 @@ class TestLeagueScheduleAndMatchesAPI:
         await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=headers)
         await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/close-registration", headers=headers)
 
-        # Generate schedule succeeds
+        # Generate schedule succeeds (league stays registration_closed, weeks pending)
         r_sched = await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule", headers=headers)
         assert r_sched.status_code == 201
         weeks = r_sched.json()
@@ -506,7 +506,7 @@ class TestLeagueScheduleAndMatchesAPI:
 
         # Weeks 1 and 2 contain all 6 unique pairings distributed across the 2 regular season weeks
         assert weeks[0]["week_type"] == "regular_season"
-        assert weeks[0]["status"] == "in_progress"
+        assert weeks[0]["status"] == "pending"
         assert len(weeks[0]["matches"]) == 4  # 2 rounds
 
         assert weeks[1]["week_type"] == "regular_season"
@@ -518,9 +518,22 @@ class TestLeagueScheduleAndMatchesAPI:
         assert weeks[2]["status"] == "pending"
         assert len(weeks[2]["matches"]) == 0  # Playoffs generated after regular season
 
-        # Idempotency: duplicate generate schedule rejected
+        # Idempotency / Safe regeneration: duplicate generate schedule without force returns 409
         r_dup = await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule", headers=headers)
-        assert r_dup.status_code == 400
+        assert r_dup.status_code == 409
+
+        # Safe regeneration with force=true succeeds
+        r_force = await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule?force=true", headers=headers)
+        assert r_force.status_code == 201
+
+        # Manager starts the league explicitly
+        r_start = await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/start", headers=headers)
+        assert r_start.status_code == 200
+        assert r_start.json()["status"] == "in_progress"
+
+        # Week 1 is now in_progress
+        r_w1 = await async_client.get(f"/api/v1/clubs/{club.id}/leagues/{lid}/weeks/1", headers=headers)
+        assert r_w1.json()["status"] == "in_progress"
 
 
 class TestLeagueCompetitionFlowAPI:
@@ -1178,3 +1191,154 @@ class TestLeaguePlayerRegistrationAPI:
         )
         assert r3.status_code == 400
         assert "capacity" in r3.json()["detail"].lower()
+
+
+class TestLeagueScheduleManagementAndPrePlayStandingsAPI:
+    """Tests for schedule generation, all-weeks matches, pre-play standings, and safe regeneration."""
+
+    @pytest.mark.asyncio
+    async def test_schedule_all_weeks_and_week_id_filtering(self, async_client: AsyncClient, league_setup: dict):
+        data = league_setup
+        club = data["club_a"]
+        staff_headers = make_auth_header(data["director"])
+        player_headers = make_auth_header(data["player_users_a"][0])
+        pms = data["pms_a"]
+
+        # Create 4-week league (3 regular season weeks, 1 playoff week) with 4 teams
+        r_league = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues",
+            headers=staff_headers,
+            json={
+                "name": "Multi-Week League",
+                "team_size": 2,
+                "number_of_weeks": 4,
+                "playoff_team_count": 2,
+            },
+        )
+        assert r_league.status_code == 201
+        lid = r_league.json()["id"]
+
+        # Add 4 teams
+        for i in range(4):
+            await async_client.post(
+                f"/api/v1/clubs/{club.id}/leagues/{lid}/teams",
+                headers=staff_headers,
+                json={"name": f"Team Alpha {i+1}", "member_player_membership_ids": [str(pms[2*i].id), str(pms[2*i+1].id)]},
+            )
+
+        # Pre-play standings check: Before any matches, all 4 teams have 0 MP, 0 W, 0 L
+        r_standings_pre = await async_client.get(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/standings",
+            headers=staff_headers,
+        )
+        assert r_standings_pre.status_code == 200
+        standings_pre = r_standings_pre.json()["standings"]
+        assert len(standings_pre) == 4
+        for row in standings_pre:
+            assert row["matches_played"] == 0
+            assert row["wins"] == 0
+            assert row["losses"] == 0
+            assert row["points_differential"] == 0
+
+        # Player view of pre-play standings
+        r_player_standings = await async_client.get(
+            f"/api/v1/leagues/{lid}/standings",
+            headers=player_headers,
+        )
+        assert r_player_standings.status_code == 200
+        assert len(r_player_standings.json()["standings"]) == 4
+
+        # Close registration and generate schedule
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/open-registration", headers=staff_headers)
+        await async_client.post(f"/api/v1/clubs/{club.id}/leagues/{lid}/close-registration", headers=staff_headers)
+
+        r_sched = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule",
+            headers=staff_headers,
+        )
+        assert r_sched.status_code == 201
+        weeks = r_sched.json()
+        assert len(weeks) == 4
+        week1_id = weeks[0]["id"]
+        week2_id = weeks[1]["id"]
+
+        # All-weeks query (no week param) returns all 6 regular-season matches
+        r_all_matches = await async_client.get(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/matches",
+            headers=staff_headers,
+        )
+        assert r_all_matches.status_code == 200
+        all_matches = r_all_matches.json()
+        assert len(all_matches) == 6
+
+        # Filter by week_id (Week 1)
+        r_w1_matches = await async_client.get(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/matches?week_id={week1_id}",
+            headers=staff_headers,
+        )
+        assert r_w1_matches.status_code == 200
+        w1_matches = r_w1_matches.json()
+        assert len(w1_matches) == 2
+        for m in w1_matches:
+            assert m["week_number"] == 1
+
+        # Player view filter by week_id
+        r_player_w1 = await async_client.get(
+            f"/api/v1/leagues/{lid}/matches?week_id={week1_id}",
+            headers=player_headers,
+        )
+        assert r_player_w1.status_code == 200
+        assert len(r_player_w1.json()) == 2
+
+        # Start the league
+        r_start = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/start",
+            headers=staff_headers,
+        )
+        assert r_start.status_code == 200
+        assert r_start.json()["status"] == "in_progress"
+
+        # Record a match score
+        m0 = w1_matches[0]
+        r_score = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/matches/{m0['id']}/score",
+            headers=staff_headers,
+            json={"score_a": 11, "score_b": 5},
+        )
+        assert r_score.status_code == 200
+
+        # Standings now updated: winner has 1 win, loser has 1 loss
+        r_standings_post = await async_client.get(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/standings",
+            headers=staff_headers,
+        )
+        assert r_standings_post.status_code == 200
+        standings_post = r_standings_post.json()["standings"]
+        winner_row = next(r for r in standings_post if r["team_id"] == m0["team_a_id"])
+        loser_row = next(r for r in standings_post if r["team_id"] == m0["team_b_id"])
+        assert winner_row["wins"] == 1
+        assert winner_row["matches_played"] == 1
+        assert winner_row["points_differential"] == 6
+        assert loser_row["losses"] == 1
+        assert loser_row["points_differential"] == -6
+
+        # Destructive regeneration blocked once results exist
+        r_regen_blocked = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule?force=true",
+            headers=staff_headers,
+        )
+        assert r_regen_blocked.status_code == 400
+        assert "recorded" in r_regen_blocked.json()["detail"].lower()
+
+        # Unauthorized player cannot generate schedule or start league
+        r_unauth_sched = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/generate-schedule",
+            headers=player_headers,
+        )
+        assert r_unauth_sched.status_code in (401, 403)
+
+        r_unauth_start = await async_client.post(
+            f"/api/v1/clubs/{club.id}/leagues/{lid}/start",
+            headers=player_headers,
+        )
+        assert r_unauth_start.status_code in (401, 403)

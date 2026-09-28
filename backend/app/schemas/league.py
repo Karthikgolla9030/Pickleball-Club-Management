@@ -51,6 +51,10 @@ class LeagueStatusUpdateRequest(BaseModel):
     status: LeagueStatus
 
 
+class LeagueScheduleGenerateRequest(BaseModel):
+    force: bool = False
+
+
 class LeagueResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

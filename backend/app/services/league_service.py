@@ -290,6 +290,44 @@ class LeagueService:
         await self.db.commit()
         return await self.get_league(club_id, league_id)
 
+    async def start_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
+        league = await self._get_league_or_404(league_id, club_id=club_id)
+        self._assert_status(league, [LeagueStatus.REGISTRATION_CLOSED], "start league")
+
+        teams = await self.league_repo.list_teams_by_league(league_id)
+        if len(teams) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"At least 2 teams required to start league (got {len(teams)}).",
+            )
+
+        reg_matches = await self.league_repo.list_league_matches(
+            league_id, stage=MatchStage.REGULAR_SEASON
+        )
+        if not reg_matches:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot start league: regular season schedule has not been generated yet. Please generate schedule first.",
+            )
+
+        # Advance league status to IN_PROGRESS, current_week to 1
+        await self.league_repo.update_league(
+            league,
+            status=LeagueStatus.IN_PROGRESS,
+            current_week=1,
+        )
+
+        # Transition Week 1 to IN_PROGRESS if pending
+        week1 = await self.league_repo.get_league_week_by_number(league_id, 1)
+        if week1 and week1.status == LeagueWeekStatus.PENDING:
+            await self.league_repo.update_league_week(
+                week1,
+                status=LeagueWeekStatus.IN_PROGRESS,
+            )
+
+        await self.db.commit()
+        return await self.get_league(club_id, league_id)
+
     async def cancel_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
         league = await self._get_league_or_404(league_id, club_id=club_id)
         if league.status in (LeagueStatus.COMPLETED, LeagueStatus.CANCELLED):
@@ -495,19 +533,41 @@ class LeagueService:
         self,
         club_id: uuid.UUID,
         league_id: uuid.UUID,
+        force: bool = False,
     ) -> list[LeagueWeekResponse]:
         """
-        Generate regular-season round-robin schedule and transition league to IN_PROGRESS.
+        Generate regular-season round-robin schedule for all configured regular-season weeks.
+        Does NOT generate playoff matches (playoffs are managed separately).
+        Does NOT transition league status to IN_PROGRESS (the manager uses Start League).
         """
         league = await self._get_league_or_404(league_id, club_id=club_id)
-        self._assert_status(league, [LeagueStatus.REGISTRATION_CLOSED], "generate schedule")
+        self._assert_status(
+            league,
+            [LeagueStatus.REGISTRATION_CLOSED, LeagueStatus.IN_PROGRESS],
+            "generate schedule",
+        )
 
-        existing_matches = await self.league_repo.count_all_league_matches(league_id)
-        if existing_matches > 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Schedule already generated for this league.",
+        existing_matches = await self.league_repo.list_league_matches(
+            league_id, stage=MatchStage.REGULAR_SEASON
+        )
+        if existing_matches:
+            # Check if any matches have recorded scores / completed
+            has_completed = any(
+                m.status == MatchStatus.COMPLETED or m.score_a is not None or m.score_b is not None
+                for m in existing_matches
             )
+            if has_completed:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot regenerate schedule: regular season match scores have already been recorded. Completed results must be preserved.",
+                )
+            if not force:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Schedule already generated for this league. Confirm regeneration to overwrite existing unplayed fixtures.",
+                )
+            # Safe regeneration requested: remove unplayed regular-season matches
+            await self.league_repo.delete_league_matches_by_stage(league_id, MatchStage.REGULAR_SEASON)
 
         teams = await self.league_repo.list_teams_by_league(league_id)
         if len(teams) < 2:
@@ -523,7 +583,13 @@ class LeagueService:
             )
 
         team_dicts = [{"id": t.id, "name": t.name, "seed": t.seed} for t in teams]
-        reg_weeks = league.number_of_weeks - 1
+        reg_weeks = (
+            league.number_of_weeks - 1
+            if (league.playoff_team_count and league.playoff_team_count > 0)
+            else league.number_of_weeks
+        )
+        if reg_weeks < 1:
+            reg_weeks = 1
 
         try:
             match_slots = self.engine.generate_regular_season_schedule(team_dicts, reg_weeks)
@@ -552,17 +618,9 @@ class LeagueService:
 
         await self.league_repo.create_matches_bulk(matches_data)
 
-        # Advance league status to IN_PROGRESS, Week 1 to IN_PROGRESS
-        await self.league_repo.update_league(
-            league,
-            status=LeagueStatus.IN_PROGRESS,
-            current_week=1,
-        )
-        if 1 in week_by_number:
-            await self.league_repo.update_league_week(
-                week_by_number[1],
-                status=LeagueWeekStatus.IN_PROGRESS,
-            )
+        # Note: We do NOT auto-transition league to IN_PROGRESS here.
+        # Schedule preparation can happen before the first match, and the manager
+        # uses the Start League action to begin play.
 
         await self.db.commit()
         return await self.list_weeks(club_id, league_id)
@@ -651,16 +709,17 @@ class LeagueService:
         club_id: uuid.UUID | None,
         league_id: uuid.UUID,
         week_number: int | None = None,
+        week_id: uuid.UUID | None = None,
         stage: MatchStage | None = None,
     ) -> list[LeagueMatchResponse]:
         await self._get_league_or_404(league_id, club_id=club_id)
-        week_id = None
-        if week_number is not None:
+        target_week_id = week_id
+        if target_week_id is None and week_number is not None:
             lw = await self.league_repo.get_league_week_by_number(league_id, week_number)
             if not lw:
                 return []
-            week_id = lw.id
-        matches = await self.league_repo.list_league_matches(league_id, week_id=week_id, stage=stage)
+            target_week_id = lw.id
+        matches = await self.league_repo.list_league_matches(league_id, week_id=target_week_id, stage=stage)
         return [self._format_match_response(m) for m in matches]
 
     def _format_match_response(self, m: Match) -> LeagueMatchResponse:

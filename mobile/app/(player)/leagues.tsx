@@ -381,46 +381,53 @@ export default function PlayerLeaguesScreen() {
                       <AppText style={[styles.th, styles.thStat]}>L</AppText>
                       <AppText style={[styles.th, styles.thStat]}>Diff</AppText>
                     </View>
-                    {standingsData.standings.map((r) => (
-                      <View
-                        key={r.team_id}
-                        style={[
-                          styles.tableRow,
-                          selectedLeague &&
-                            r.rank <= selectedLeague.playoff_team_count &&
-                            styles.qualifyingRow,
-                        ]}
-                      >
-                        <AppText style={[styles.td, styles.thRank, styles.rankBold]}>
-                          {r.rank}
-                        </AppText>
-                        <View style={styles.thTeam}>
-                          <AppText style={styles.teamNameText} numberOfLines={1}>
-                            {r.team_name}
-                          </AppText>
-                          {r.members && r.members.length > 0 ? (
-                            <AppText style={styles.teamMembersSubtext} numberOfLines={1}>
-                              {r.members.join(' & ')}
+                    {(() => {
+                      const totalMatchesPlayed =
+                        standingsData.standings.reduce((acc, row) => acc + (row.matches_played || 0), 0);
+                      const isPreSeason = totalMatchesPlayed === 0;
+
+                      return standingsData.standings.map((r) => {
+                        const isQualified = !isPreSeason && selectedLeague && r.rank <= selectedLeague.playoff_team_count;
+                        return (
+                          <View
+                            key={r.team_id}
+                            style={[
+                              styles.tableRow,
+                              isQualified && styles.qualifyingRow,
+                            ]}
+                          >
+                            <AppText style={[styles.td, styles.thRank, styles.rankBold]}>
+                              {r.rank}
                             </AppText>
-                          ) : null}
-                          {selectedLeague && r.rank <= selectedLeague.playoff_team_count ? (
-                            <AppText style={styles.playoffTag}>Playoffs</AppText>
-                          ) : null}
-                        </View>
-                        <AppText style={[styles.td, styles.thStat]}>{r.matches_played}</AppText>
-                        <AppText style={[styles.td, styles.thStat, styles.bold]}>{r.wins}</AppText>
-                        <AppText style={[styles.td, styles.thStat]}>{r.losses}</AppText>
-                        <AppText
-                          style={[
-                            styles.td,
-                            styles.thStat,
-                            r.points_differential > 0 ? styles.posDiff : styles.negDiff,
-                          ]}
-                        >
-                          {r.points_differential > 0 ? `+${r.points_differential}` : r.points_differential}
-                        </AppText>
-                      </View>
-                    ))}
+                            <View style={styles.thTeam}>
+                              <AppText style={styles.teamNameText} numberOfLines={1}>
+                                {r.team_name}
+                              </AppText>
+                              {r.members && r.members.length > 0 ? (
+                                <AppText style={styles.teamMembersSubtext} numberOfLines={1}>
+                                  {r.members.join(' & ')}
+                                </AppText>
+                              ) : null}
+                              {isQualified ? (
+                                <AppText style={styles.playoffTag}>Playoffs</AppText>
+                              ) : null}
+                            </View>
+                            <AppText style={[styles.td, styles.thStat]}>{r.matches_played}</AppText>
+                            <AppText style={[styles.td, styles.thStat, styles.bold]}>{r.wins}</AppText>
+                            <AppText style={[styles.td, styles.thStat]}>{r.losses}</AppText>
+                            <AppText
+                              style={[
+                                styles.td,
+                                styles.thStat,
+                                r.points_differential > 0 ? styles.posDiff : styles.negDiff,
+                              ]}
+                            >
+                              {r.points_differential > 0 ? `+${r.points_differential}` : r.points_differential}
+                            </AppText>
+                          </View>
+                        );
+                      });
+                    })()}
                   </Card>
                 )}
               </View>
@@ -432,9 +439,12 @@ export default function PlayerLeaguesScreen() {
                 {weeks && weeks.length > 0 ? (
                   <View style={{ marginBottom: Spacing[3] }}>
                     <FilterChips
-                      chips={weeks.map((w) => ({ key: w.id, label: `Week ${w.week_number}` }))}
-                      activeChip={selectedWeekId || weeks[0]?.id || ''}
-                      onChipPress={(id) => setSelectedWeekId(id)}
+                      chips={[
+                        { key: 'all', label: 'All Weeks' },
+                        ...weeks.map((w) => ({ key: w.id, label: `Week ${w.week_number}` })),
+                      ]}
+                      activeChip={selectedWeekId || 'all'}
+                      onChipPress={(id) => setSelectedWeekId(id === 'all' ? undefined : id)}
                     />
                   </View>
                 ) : null}
@@ -504,13 +514,13 @@ export default function PlayerLeaguesScreen() {
                             </AppText>
                           </View>
                         </View>
-                        {m.court_name && m.scheduled_start_at ? (
-                          <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.surface.border }}>
-                            <AppText style={{ fontSize: 11, color: Colors.brand.primary, fontWeight: '600' }}>
-                              📍 {m.court_name} • {formatDateTime(m.scheduled_start_at)}
-                            </AppText>
-                          </View>
-                        ) : null}
+                        <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.surface.border }}>
+                          <AppText style={{ fontSize: 11, color: m.court_name && m.scheduled_start_at ? Colors.brand.primary : Colors.text.tertiary, fontWeight: '600' }}>
+                            {m.court_name && m.scheduled_start_at
+                              ? `📍 ${m.court_name} • ${formatDateTime(m.scheduled_start_at)}`
+                              : 'Court unassigned • Date not set'}
+                          </AppText>
+                        </View>
                       </Card>
                     ))}
                   </View>

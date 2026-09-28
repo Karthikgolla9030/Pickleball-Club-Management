@@ -58,6 +58,7 @@ from app.schemas.league import (
     LeagueMatchResponse,
     LeagueRegistrationStatusResponse,
     LeagueResponse,
+    LeagueScheduleGenerateRequest,
     LeagueSnapshotResponse,
     LeagueStandingsResponse,
     LeagueStatusUpdateRequest,
@@ -202,6 +203,8 @@ async def update_league_status(
         return await service.open_registration(club_id, league_id)
     elif payload.status == LeagueStatus.REGISTRATION_CLOSED:
         return await service.close_registration(club_id, league_id)
+    elif payload.status == LeagueStatus.IN_PROGRESS:
+        return await service.start_league(club_id, league_id)
     elif payload.status == LeagueStatus.CANCELLED:
         return await service.cancel_league(club_id, league_id)
     else:
@@ -209,6 +212,20 @@ async def update_league_status(
         league = await service.league_repo.update_league(league, status=payload.status)
         await db.commit()
         return await service.get_league(club_id, league_id)
+
+
+@club_league_router.post(
+    "/{league_id}/start",
+    response_model=LeagueResponse,
+    summary="Start league play",
+)
+async def start_league(
+    club_id: uuid.UUID,
+    league_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_LEAGUES)),
+) -> LeagueResponse:
+    return await LeagueService(db).start_league(club_id, league_id)
 
 
 # ─── Club Staff Team Operations ───────────────────────────────────────────────
@@ -306,10 +323,13 @@ async def delete_league_team(
 async def generate_schedule(
     club_id: uuid.UUID,
     league_id: uuid.UUID,
+    force: bool = Query(False, description="Force regeneration and overwrite existing unplayed fixtures"),
+    payload: LeagueScheduleGenerateRequest | None = None,
     db: AsyncSession = Depends(get_db),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
 ) -> list[LeagueWeekResponse]:
-    return await LeagueService(db).generate_schedule(club_id, league_id)
+    effective_force = (payload.force if payload else False) or force
+    return await LeagueService(db).generate_schedule(club_id, league_id, force=effective_force)
 
 
 @club_league_router.get(
@@ -365,12 +385,15 @@ async def update_week(
 async def list_matches(
     club_id: uuid.UUID,
     league_id: uuid.UUID,
+    week_id: uuid.UUID | None = Query(None),
     week: int | None = Query(None, alias="week_number"),
     stage: MatchStage | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
 ) -> list[LeagueMatchResponse]:
-    return await LeagueService(db).list_matches(club_id, league_id, week_number=week, stage=stage)
+    return await LeagueService(db).list_matches(
+        club_id, league_id, week_number=week, week_id=week_id, stage=stage
+    )
 
 
 @club_league_router.post(
@@ -582,11 +605,14 @@ async def player_get_week(
 )
 async def player_list_matches(
     league_id: uuid.UUID,
+    week_id: uuid.UUID | None = Query(None),
     week: int | None = Query(None, alias="week_number"),
     stage: MatchStage | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> list[LeagueMatchResponse]:
-    return await LeagueService(db).list_matches(None, league_id, week_number=week, stage=stage)
+    return await LeagueService(db).list_matches(
+        None, league_id, week_number=week, week_id=week_id, stage=stage
+    )
 
 
 @player_league_router.get(

@@ -61,6 +61,9 @@ export const leagueApi = {
     if (status === 'registration_closed') {
       return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/close-registration`, {});
     }
+    if (status === 'in_progress') {
+      return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/start`, {});
+    }
     if (status === 'cancelled') {
       return apiClient.post<LeagueSummary>(`${clubLeagueBase(clubId)}/${leagueId}/cancel`, {});
     }
@@ -90,9 +93,16 @@ export const leagueApi = {
 
   generateSchedule(
     clubId: string,
-    leagueId: string
-  ): Promise<{ league_id: string; total_weeks: number; matches_generated: number; message: string }> {
-    return apiClient.post(`${clubLeagueBase(clubId)}/${leagueId}/schedule`, {});
+    leagueId: string,
+    force: boolean = false
+  ): Promise<LeagueWeek[]> {
+    return apiClient.post(`${clubLeagueBase(clubId)}/${leagueId}/schedule?force=${force}`, {
+      force,
+    });
+  },
+
+  startLeague(clubId: string, leagueId: string): Promise<LeagueSummary> {
+    return apiClient.post(`${clubLeagueBase(clubId)}/${leagueId}/start`, {});
   },
 
   listWeeks(clubId: string, leagueId: string): Promise<LeagueWeek[]> {
