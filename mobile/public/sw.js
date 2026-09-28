@@ -8,7 +8,7 @@
  *   Ensures zero caching of private user data, tokens, auth state, or live match scores.
  */
 
-const CACHE_NAME = 'aught2-shell-v1';
+const CACHE_NAME = 'aught2-shell-v2';
 
 // Essential app shell and static resources precached during install
 const PRECACHE_ASSETS = [
@@ -23,12 +23,18 @@ const PRECACHE_ASSETS = [
   '/icons/apple-touch-icon.png',
 ];
 
+// ─── Message Event ─────────────────────────────────────────────────────────
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
 // ─── 1. Install Event ────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        // Tolerant precache: if any single optional asset fails, continue
         console.warn('[SW] Precache asset fetch notice:', err);
       });
     }).then(() => self.skipWaiting())
@@ -43,7 +49,10 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames
           .filter((cacheName) => cacheName !== CACHE_NAME)
-          .map((cacheName) => caches.delete(cacheName))
+          .map((cacheName) => {
+            console.log('[SW] Purging outdated cache:', cacheName);
+            return caches.delete(cacheName);
+          })
       );
     }).then(() => self.clients.claim())
   );
@@ -74,19 +83,17 @@ self.addEventListener('fetch', (event) => {
   }
 
   // ─── B. Navigation Requests (HTML document navigation) ────────────────────
+  // STRICT NETWORK-FIRST: Always fetch latest index.html from server to get new bundle hashes
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((networkResponse) => {
-          // If valid response received from network, return it
           if (networkResponse && networkResponse.status === 200) {
             return networkResponse;
           }
-          // Otherwise try cache or fallback
           return caches.match(request).then((cached) => cached || caches.match('/offline.html'));
         })
         .catch(async () => {
-          // Network failed (offline) — return cached page if available, else offline.html
           const cached = await caches.match(request);
           if (cached) return cached;
           const offlinePage = await caches.match('/offline.html');
@@ -96,16 +103,35 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ─── C. Static Assets (JS bundles, CSS, fonts, static images, icons) ─────
-  const isStaticAsset =
+  // ─── C. Scripts & JS Bundles ──────────────────────────────────────────────
+  // STRICT NETWORK-FIRST: Always load fresh JavaScript chunks so code updates take effect immediately
+  const isScript =
     request.destination === 'script' ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.startsWith('/_expo/');
+
+  if (isScript) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // ─── D. Static Media Assets (CSS, fonts, images, icons) ───────────────────
+  const isStaticMedia =
     request.destination === 'style' ||
     request.destination === 'image' ||
     request.destination === 'font' ||
-    url.pathname.startsWith('/_expo/') ||
     url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
-    url.pathname.endsWith('.js') ||
     url.pathname.endsWith('.css') ||
     url.pathname.endsWith('.png') ||
     url.pathname.endsWith('.jpg') ||
@@ -113,8 +139,7 @@ self.addEventListener('fetch', (event) => {
     url.pathname.endsWith('.ico') ||
     url.pathname.endsWith('.woff2');
 
-  if (isStaticAsset) {
-    // Stale-While-Revalidate: Return cached response immediately while fetching update in background
+  if (isStaticMedia) {
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request)
@@ -127,7 +152,7 @@ self.addEventListener('fetch', (event) => {
             }
             return networkResponse;
           })
-          .catch(() => cachedResponse); // If network fails, fallback to cachedResponse
+          .catch(() => cachedResponse);
 
         return cachedResponse || fetchPromise;
       })

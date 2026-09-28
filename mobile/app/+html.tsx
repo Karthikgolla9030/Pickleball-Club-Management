@@ -68,19 +68,22 @@ export default function Root({ children }: PropsWithChildren) {
         <noscript>You need to enable JavaScript to run Aught2 Pickleball.</noscript>
         {children}
 
-        {/* Service Worker Registration */}
+        {/* Service Worker Registration with Automatic Cache-Busting & Auto-Reload */}
         <script
           dangerouslySetInnerHTML={{
             __html: `
               if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
                 window.addEventListener('load', function() {
                   navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                    reg.update();
                     reg.onupdatefound = function() {
                       var installingWorker = reg.installing;
                       if (installingWorker) {
                         installingWorker.onstatechange = function() {
                           if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            console.log('[PWA] New version available.');
+                            console.log('[PWA] New version available, reloading to apply latest code...');
+                            installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                            window.location.reload();
                           }
                         };
                       }
@@ -88,6 +91,9 @@ export default function Root({ children }: PropsWithChildren) {
                   }).catch(function(err) {
                     console.warn('[PWA] ServiceWorker registration failed: ', err);
                   });
+                });
+                navigator.serviceWorker.addEventListener('controllerchange', function() {
+                  window.location.reload();
                 });
               }
             `,
