@@ -504,7 +504,7 @@ class BookingService:
 
         # Validate operating hours & times
         club_tz = self._get_club_tz(club.timezone)
-        self._validate_time_boundaries(
+        duration = self._validate_time_boundaries(
             start_at=payload.start_at,
             end_at=payload.end_at,
             club_opening=club.opening_time or DEFAULT_CLUB_OPENING_TIME,

@@ -101,6 +101,8 @@ export default function TournamentDetailsScreen() {
     openRegistration,
     closeRegistration,
     cancelTournament,
+    startTournament,
+    isStartingTournament,
   } = useTournamentDetails(clubId, tournamentId ?? null);
 
   const {
@@ -393,6 +395,28 @@ export default function TournamentDetailsScreen() {
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Action failed');
     }
+  };
+
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Are you sure you want to start the tournament? This will mark it as live (In Progress) and players will see live match updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              Alert.alert('Tournament Started!', 'The tournament is now live. Matches can be started and scored.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleCancelTournament = () => {
@@ -892,6 +916,15 @@ export default function TournamentDetailsScreen() {
                       pathname: '/(club)/competition-setup' as never,
                       params: { tournamentId: tournament.id },
                     })}
+                  />
+                )}
+                {tournament.status === 'registration_closed' && (
+                  <Button
+                    label="Start Tournament"
+                    variant="primary"
+                    size="sm"
+                    loading={isStartingTournament}
+                    onPress={handleStartTournament}
                   />
                 )}
                 {tournament.status !== 'completed' && tournament.status !== 'cancelled' && (

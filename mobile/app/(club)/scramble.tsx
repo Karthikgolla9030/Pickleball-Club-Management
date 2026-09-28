@@ -80,6 +80,8 @@ export default function ScrambleWorkspaceScreen() {
     isOpenRegistrationPending,
     closeRegistration,
     isCloseRegistrationPending,
+    startTournament,
+    isStartingTournament,
   } = useTournamentDetails(clubId, tournamentId);
 
   const {
@@ -163,6 +165,29 @@ export default function ScrambleWorkspaceScreen() {
     });
   };
 
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Mark this Scramble tournament as live (In Progress)? Players will see live round updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              void handleRefresh();
+              Alert.alert('Tournament Started!', 'The tournament is now live. You can now manage rounds.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleOpenOptionsMenu = () => {
     const isDraft = tournament?.status === 'draft';
     const isRegOpen = tournament?.status === 'registration_open';
@@ -188,6 +213,13 @@ export default function ScrambleWorkspaceScreen() {
       buttons.push({
         text: 'Reopen Registration',
         onPress: handlePublishTournament,
+      });
+    }
+
+    if (isRegClosed && canManage) {
+      buttons.push({
+        text: 'Start Tournament (Go Live)',
+        onPress: handleStartTournament,
       });
     }
 
@@ -354,6 +386,13 @@ export default function ScrambleWorkspaceScreen() {
         onPress: () => setActiveTab('results'),
       };
     }
+    if (tournament?.status === 'registration_closed') {
+      return {
+        label: 'Start Tournament',
+        onPress: handleStartTournament,
+        isLoading: isStartingTournament,
+      };
+    }
     if (state?.round_status === 'setup' && (state?.available_players_count ?? 0) >= 4) {
       return {
         label: 'Create Round Matchups',
@@ -402,6 +441,8 @@ export default function ScrambleWorkspaceScreen() {
     isStartingNextRound,
     handlePublishTournament,
     handleCloseRegistration,
+    handleStartTournament,
+    isStartingTournament,
   ]);
 
   // ─── Loading & Error States ──────────────────────────────────────────────

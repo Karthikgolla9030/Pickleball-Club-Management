@@ -84,6 +84,8 @@ export default function BracketWorkspaceScreen() {
     isOpenRegistrationPending,
     closeRegistration,
     isCloseRegistrationPending,
+    startTournament,
+    isStartingTournament,
   } = useTournamentDetails(clubId, tournamentId);
 
   const {
@@ -287,6 +289,29 @@ export default function BracketWorkspaceScreen() {
     );
   };
 
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Mark this tournament as live (In Progress)? Players will see live match updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              await handleRefreshAll();
+              Alert.alert('Tournament Started!', 'The tournament is now live.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleStartMatch = async (matchId: string) => {
     try {
       await startMatch(matchId);
@@ -379,6 +404,13 @@ export default function BracketWorkspaceScreen() {
       });
     }
 
+    if (isRegClosed && matches.length > 0 && canManage) {
+      buttons.push({
+        text: 'Start Tournament (Go Live)',
+        onPress: handleStartTournament,
+      });
+    }
+
     if (canRegenerate && canManage) {
       buttons.push({
         text: 'Regenerate Bracket',
@@ -452,6 +484,13 @@ export default function BracketWorkspaceScreen() {
         isLoading: isGenerating,
       };
     }
+    if (tournament?.status === 'registration_closed' && matches.length > 0 && progress.remainingMatches > 0) {
+      return {
+        label: 'Start Tournament',
+        onPress: handleStartTournament,
+        isLoading: isStartingTournament,
+      };
+    }
     if (matches.length > 0 && progress.remainingMatches > 0) {
       return {
         label: 'Enter Scores',
@@ -466,11 +505,13 @@ export default function BracketWorkspaceScreen() {
     isCloseRegistrationPending,
     canGenerate,
     isGenerating,
+    isStartingTournament,
     matches.length,
     progress.remainingMatches,
     handlePublishTournament,
     handleCloseRegistration,
     handleGenerateBracket,
+    handleStartTournament,
   ]);
 
   // ─── Loading & Error Views ───────────────────────────────────────────────

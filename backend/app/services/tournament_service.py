@@ -611,6 +611,62 @@ class TournamentService:
             pass
         return resp
 
+    async def start_tournament(
+        self, club_id: UUID, tournament_id: UUID
+    ) -> TournamentResponse:
+        """Transition tournament from registration_closed to in_progress.
+
+        Must be explicitly called by a club admin after registration is closed
+        and the draw / schedule is ready. Validates minimum confirmed participants.
+        """
+        tournament = await self.tournament_repo.get_by_id(
+            tournament_id=tournament_id, club_id=club_id
+        )
+        if not tournament:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tournament not found in this club",
+            )
+
+        if tournament.status != TournamentStatus.REGISTRATION_CLOSED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Cannot start tournament: status is '{tournament.status.value}', "
+                    "must be 'registration_closed'."
+                ),
+            )
+
+        # Validate minimum confirmed participants
+        registrations = await self.registration_repo.list_by_tournament(tournament_id)
+        confirmed_count = sum(
+            1 for r in registrations if r.status == RegistrationStatus.CONFIRMED
+        )
+        min_req = tournament.min_participants or 0
+        if min_req > 0 and confirmed_count < min_req:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Cannot start tournament: only {confirmed_count} confirmed participant(s), "
+                    f"minimum required is {min_req}."
+                ),
+            )
+
+        updated = await self.tournament_repo.update(
+            tournament, status=TournamentStatus.IN_PROGRESS
+        )
+        await self.db.commit()
+        resp = _build_tournament_response(updated)
+        try:
+            await dispatch_event(
+                event_type=EventType.TOURNAMENT_UPDATED,
+                data={"tournament_id": str(updated.id), "name": updated.name, "status": updated.status.value},
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+        return resp
+
     # ─── Participant Administration (Staff) ────────────────────────────────────
 
     async def list_tournament_registrations(

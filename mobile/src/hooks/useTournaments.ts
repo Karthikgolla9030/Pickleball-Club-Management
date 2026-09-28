@@ -209,6 +209,19 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
     onSuccess: invalidateTournament,
   });
 
+  const startTournamentMutation = useMutation({
+    mutationFn: () => {
+      if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
+      return tournamentApi.startTournament(clubId, tournamentId);
+    },
+    onSuccess: (updated: Tournament) => {
+      if (tournamentId) {
+        queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
+      }
+      invalidateTournament();
+    },
+  });
+
   return {
     ...tournamentQuery,
     tournament: tournamentQuery.data,
@@ -220,6 +233,8 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
     isCloseRegistrationPending: closeRegistrationMutation.isPending,
     cancelTournament: cancelTournamentMutation.mutateAsync,
     isCancelTournamentPending: cancelTournamentMutation.isPending,
+    startTournament: startTournamentMutation.mutateAsync,
+    isStartingTournament: startTournamentMutation.isPending,
   };
 }
 
@@ -279,9 +294,8 @@ export function usePlayerTournaments() {
   const playerTournamentsQuery = useQuery<TournamentDiscoveryItem[], Error>({
     queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS,
     queryFn: () => tournamentApi.discoverTournaments(),
-    staleTime: 30 * 1000,
-    // No automatic polling — data is invalidated by mutations (register, close-reg, etc.)
-    // The short staleTime ensures data is refetched when the screen is re-focused.
+    staleTime: 5 * 1000,
+    // The 5s staleTime ensures instant synchronization when switching between club and player views.
     refetchInterval: false,
   });
 

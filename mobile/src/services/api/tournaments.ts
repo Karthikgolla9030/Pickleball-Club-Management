@@ -101,6 +101,16 @@ export const tournamentApi = {
   },
 
   /**
+   * Transition tournament from REGISTRATION_CLOSED to IN_PROGRESS (go live).
+   */
+  startTournament(clubId: string, tournamentId: string): Promise<Tournament> {
+    return apiClient.post<Tournament>(
+      `${API_ENDPOINTS.CLUB_TOURNAMENTS(clubId)}/${tournamentId}/start`,
+      {}
+    );
+  },
+
+  /**
    * List all registrations/participants for a tournament.
    */
   listRegistrations(

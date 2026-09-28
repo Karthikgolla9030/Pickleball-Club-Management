@@ -82,6 +82,8 @@ export default function PoolPlayManagementScreen() {
     isOpenRegistrationPending,
     closeRegistration,
     isCloseRegistrationPending,
+    startTournament,
+    isStartingTournament,
   } = useTournamentDetails(clubId, tournamentId ?? null);
 
   const {
@@ -556,6 +558,29 @@ export default function PoolPlayManagementScreen() {
     );
   };
 
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Mark this tournament as live (In Progress)? Players will see live match updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              void refetchTournament();
+              Alert.alert('Tournament Started!', 'The tournament is now live.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleOpenOptionsMenu = () => {
     const isDraft = tournament?.status === 'draft';
     const isRegOpen = tournament?.status === 'registration_open';
@@ -580,6 +605,13 @@ export default function PoolPlayManagementScreen() {
       buttons.push({
         text: 'Reopen Registration',
         onPress: handlePublishTournament,
+      });
+    }
+
+    if (isRegClosed && matches.length > 0) {
+      buttons.push({
+        text: 'Start Tournament (Go Live)',
+        onPress: handleStartTournament,
       });
     }
 
@@ -644,6 +676,13 @@ export default function PoolPlayManagementScreen() {
         onPress: () => setActiveTab('results'),
       };
     }
+    if (tournament?.status === 'registration_closed' && matches.length > 0 && !isPoolPlayComplete) {
+      return {
+        label: 'Start Tournament',
+        onPress: handleStartTournament,
+        isLoading: isStartingTournament,
+      };
+    }
     if (matches.length > 0 && !isPoolPlayComplete) {
       return {
         label: 'Enter Scores',
@@ -664,6 +703,7 @@ export default function PoolPlayManagementScreen() {
     tournament?.status,
     isOpenRegistrationPending,
     isCloseRegistrationPending,
+    isStartingTournament,
     teams.length,
     matches.length,
     isPoolPlayComplete,
@@ -673,6 +713,7 @@ export default function PoolPlayManagementScreen() {
     handleCreateMatchups,
     handleGenerateChampionshipBracket,
     handlePublishTournament,
+    handleStartTournament,
   ]);
 
   // ─── Loading & Error Guards (matches Bracket, Round Robin, Scramble pattern) ─

@@ -235,6 +235,30 @@ async def cancel_tournament(
     )
 
 
+@club_tournaments_router.post(
+    "/{tournament_id}/start",
+    response_model=TournamentResponse,
+    summary="Start tournament (go live)",
+    description="Transitions tournament from registration_closed to in_progress. Requires MANAGE_TOURNAMENTS permission.",
+    responses={
+        400: {"description": "Tournament not in registration_closed status or insufficient confirmed participants"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Tournament not found in this club"},
+    },
+)
+async def start_tournament(
+    club_id: UUID,
+    tournament_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_TOURNAMENTS)),
+    db: AsyncSession = Depends(get_db),
+) -> TournamentResponse:
+    """Start tournament — mark it as in_progress (live)."""
+    return await TournamentService(db).start_tournament(
+        club_id=club_id, tournament_id=tournament_id
+    )
+
+
 # ─── Participant Administration (Staff) ────────────────────────────────────────
 
 

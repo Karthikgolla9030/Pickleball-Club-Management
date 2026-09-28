@@ -83,6 +83,8 @@ export default function RoundRobinWorkspaceScreen() {
     isOpenRegistrationPending,
     closeRegistration,
     isCloseRegistrationPending,
+    startTournament,
+    isStartingTournament,
   } = useTournamentDetails(clubId, tournamentId);
 
   const {
@@ -319,6 +321,29 @@ export default function RoundRobinWorkspaceScreen() {
     });
   };
 
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Mark this tournament as live (In Progress)? Players will see live match updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              handleRefreshAll();
+              Alert.alert('Tournament Started!', 'The tournament is now live.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleStartMatch = async (matchId: string) => {
     try {
       await startMatch(matchId);
@@ -352,6 +377,13 @@ export default function RoundRobinWorkspaceScreen() {
       buttons.push({
         text: 'Reopen Registration',
         onPress: handlePublishTournament,
+      });
+    }
+
+    if (isRegClosed && matches.length > 0 && canManage) {
+      buttons.push({
+        text: 'Start Tournament (Go Live)',
+        onPress: handleStartTournament,
       });
     }
 
@@ -431,6 +463,13 @@ export default function RoundRobinWorkspaceScreen() {
         isLoading: isGenerating,
       };
     }
+    if (tournament?.status === 'registration_closed' && matches.length > 0 && remaining > 0) {
+      return {
+        label: 'Start Tournament',
+        onPress: handleStartTournament,
+        isLoading: isStartingTournament,
+      };
+    }
     if (matches.length > 0 && remaining > 0) {
       return {
         label: 'Enter Scores',
@@ -445,12 +484,14 @@ export default function RoundRobinWorkspaceScreen() {
     isCloseRegistrationPending,
     canGenerate,
     isGenerating,
+    isStartingTournament,
     matches.length,
     progress.totalMatches,
     progress.completedMatches,
     handleCloseRegistration,
     handleGenerateMatchups,
     handlePublishTournament,
+    handleStartTournament,
   ]);
 
   // ─── Loading / Error States ──────────────────────────────────────────────

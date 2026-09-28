@@ -327,7 +327,7 @@ export function PlayerTournamentCard({
       return (
         <TouchableOpacity
           style={styles.btnPrimary}
-          onPress={onActionPress}
+          onPress={onActionPress || onPress}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={`Register now for ${tournament.name}`}
@@ -341,8 +341,15 @@ export function PlayerTournamentCard({
     return null;
   };
 
+  const handleCardPress = onActionPress || onPress;
+
   return (
-    <View style={styles.cardContainer}>
+    <TouchableOpacity
+      style={styles.cardContainer}
+      activeOpacity={handleCardPress ? 0.94 : 1}
+      onPress={handleCardPress}
+      disabled={!handleCardPress}
+    >
       {/* ─── Top Banner Area (Image + Status Badge + Format Badge + Favorite) ─── */}
       <View style={styles.bannerContainer}>
         <Image
@@ -427,7 +434,7 @@ export function PlayerTournamentCard({
           {renderActionButton()}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

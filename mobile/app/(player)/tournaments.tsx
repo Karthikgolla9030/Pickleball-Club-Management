@@ -13,8 +13,9 @@
  *   - Fully connected to backend APIs, real data, and favorites persistence
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   ImageBackground,
   Modal,
@@ -26,7 +27,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
@@ -94,6 +95,13 @@ export default function PlayerTournamentsScreen() {
     error,
     refetch,
   } = usePlayerTournaments();
+
+  // Automatically refresh tournaments when player visits or switches back to this screen
+  useFocusEffect(
+    useCallback(() => {
+      void refetch();
+    }, [refetch])
+  );
 
   const { isFavorite, toggleFavorite } = useTournamentFavorites();
 
@@ -585,41 +593,79 @@ export default function PlayerTournamentsScreen() {
             )}
           </>
         }
-        renderItem={({ item, index }) => (
-          <PlayerTournamentCard
-            tournament={item}
-            index={index}
-            isFavorite={isFavorite(item.id)}
-            isRegistered={item.is_registered}
-            registrationStatus={item.my_registration_status}
-            onToggleFavorite={() => toggleFavorite(item.id)}
-            onActionPress={() => {
-              // 1. If already registered, directly open Registration Details modal
-              if (item.is_registered) {
-                setViewingRegistrationTournament(item);
-                return;
-              }
+        renderItem={({ item, index }) => {
+          const handleTournamentAction = () => {
+            const isLive = item.status === 'in_progress';
+            const isCompleted = item.status === 'completed';
+            const isCancelled = item.status === 'cancelled';
+            const isRegClosed = item.status === 'registration_closed';
 
-              const isLive = item.status === 'in_progress';
-              const isCompleted = item.status === 'completed';
+            // 1. Live or completed tournaments always navigate to the tournament details screen
+            if (isLive || isCompleted) {
+              router.push({
+                pathname: '/(player)/tournament-details' as any,
+                params: { id: item.id },
+              });
+              return;
+            }
 
-              // 2. If live or completed, navigate to tournament details (live matches or results)
-              if (isCompleted || isLive) {
-                router.push({
-                  pathname: '/(player)/tournament-details' as any,
-                  params: { id: item.id },
-                });
-                return;
-              }
+            // 2. If tournament is cancelled, inform the player
+            if (isCancelled) {
+              Alert.alert(
+                'Tournament Cancelled',
+                `"${item.name}" was cancelled by the tournament organizers.`
+              );
+              return;
+            }
 
-              // 3. If registration is open, open the 3-step registration flow directly
-              if (item.status === 'registration_open' || item.is_registration_open) {
-                setRegisteringTournament(item);
-                return;
-              }
-            }}
-          />
-        )}
+            // 3. If already registered (and tournament is NOT live/completed),
+            //    show the registration details / status modal.
+            if (item.is_registered) {
+              setViewingRegistrationTournament(item);
+              return;
+            }
+
+            // 4. If registration is closed and player did not register
+            if (isRegClosed) {
+              Alert.alert(
+                'Registration Closed',
+                'Registration for this tournament has closed. Draw and match schedules are being prepared. Check back when the tournament goes live!'
+              );
+              return;
+            }
+
+            // 5. If registration is open, open the 3-step registration flow.
+            if (item.status === 'registration_open' || item.is_registration_open) {
+              setRegisteringTournament(item);
+              return;
+            }
+
+            // 6. Upcoming tournament
+            Alert.alert(
+              'Registration Opens Soon',
+              item.registration_open_at
+                ? `Registration opens on ${new Date(item.registration_open_at).toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  })}.`
+                : 'Registration will open soon. Check back shortly!'
+            );
+          };
+
+          return (
+            <PlayerTournamentCard
+              tournament={item}
+              index={index}
+              isFavorite={isFavorite(item.id)}
+              isRegistered={item.is_registered}
+              registrationStatus={item.my_registration_status}
+              onToggleFavorite={() => toggleFavorite(item.id)}
+              onPress={handleTournamentAction}
+              onActionPress={handleTournamentAction}
+            />
+          );
+        }}
         ListEmptyComponent={
           isLoading ? (
             <LoadingState message="Discovering tournaments..." />

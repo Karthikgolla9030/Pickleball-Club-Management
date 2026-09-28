@@ -21,6 +21,7 @@ export class ApiClientError extends Error {
   public readonly type: ApiErrorType;
   public readonly status: number | undefined;
   public readonly detail: string;
+  public readonly isApiClientError = true;
 
   constructor(message: string, type: ApiErrorType, status?: number) {
     super(message);
@@ -28,6 +29,7 @@ export class ApiClientError extends Error {
     this.type = type;
     this.status = status;
     this.detail = message;
+    Object.setPrototypeOf(this, ApiClientError.prototype);
   }
 }
 
@@ -205,12 +207,17 @@ async function request<T>(
 
     return response.json() as Promise<T>;
   } catch (error) {
-    if (error instanceof ApiClientError) {
+    if (
+      error instanceof ApiClientError ||
+      (error as any)?.name === 'ApiClientError' ||
+      (error as any)?.isApiClientError
+    ) {
+      const apiErr = error as ApiClientError;
       // 401 is expected when restoring session with an expired/invalid token or checking auth
-      if (error.status === 401 || error.type === 'UNAUTHORIZED') {
-        console.log(`[AUTH] Session unauthenticated (${url}): ${error.message}`);
+      if (apiErr.status === 401 || apiErr.type === 'UNAUTHORIZED') {
+        console.log(`[AUTH] Session unauthenticated (${url}): ${apiErr.message}`);
       } else {
-        console.log(`[API ${error.status || 'ERR'}] ${options.method || 'GET'} ${url}: ${error.message}`);
+        console.log(`[API ${apiErr.status || 'ERR'}] ${options.method || 'GET'} ${url}: ${apiErr.message}`);
       }
       throw error;
     }
