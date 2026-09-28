@@ -8,12 +8,13 @@
  * - Tab 4: Championship Bracket (Seeding, automatic BYEs, live winner progression)
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -69,7 +70,7 @@ export default function PoolPlayManagementScreen() {
   const { tournamentId } = useLocalSearchParams<{ tournamentId: string }>();
   const { clubId, clubName } = useActiveClub();
   const { courts: clubCourts } = useClubCourts(clubId);
-  const activeClubCourts = useMemo(() => (clubCourts || []).filter(c => c.is_active), [clubCourts]);
+  const activeClubCourts = useMemo(() => (clubCourts || []).filter((c) => c.is_active), [clubCourts]);
   const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
   const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
 
@@ -118,7 +119,7 @@ export default function PoolPlayManagementScreen() {
   const tournamentConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
   // Synchronize persisted format configuration from backend
-  React.useEffect(() => {
+  useEffect(() => {
     if (tournament?.format_configuration) {
       const fc = tournament.format_configuration as Record<string, any>;
       setConfig((prev) => ({
@@ -129,11 +130,86 @@ export default function PoolPlayManagementScreen() {
         bracketType: (fc.bracket_type as BracketType) || prev.bracketType,
         balanceTolerance: typeof fc.balance_tolerance === 'number' ? fc.balance_tolerance : prev.balanceTolerance,
       }));
+
+      const pps = fc.pool_play_state;
+      if (pps) {
+        if (Array.isArray(pps.teams) && pps.teams.length > 0) {
+          setTeams((prev) => (prev.length === 0 ? pps.teams : prev));
+        }
+        if (Array.isArray(pps.matches) && pps.matches.length > 0) {
+          setMatches((prev) => (prev.length === 0 ? pps.matches : prev));
+        }
+        if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+          setChampionshipMatches((prev) => (prev.length === 0 ? pps.championshipMatches : prev));
+        }
+      }
     }
   }, [tournament?.format_configuration]);
 
+  // Fetch full runtime pool-play state from server API endpoint to survive browser refreshes
+  useEffect(() => {
+    if (!clubId || !tournamentId) return;
+
+    let isMounted = true;
+    const fetchState = async () => {
+      try {
+        const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
+        if (!isMounted) return;
+        const pps = res?.pool_play_state;
+        if (pps) {
+          if (Array.isArray(pps.teams) && pps.teams.length > 0) {
+            setTeams(pps.teams);
+          }
+          if (Array.isArray(pps.matches) && pps.matches.length > 0) {
+            setMatches(pps.matches);
+          }
+          if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+            setChampionshipMatches(pps.championshipMatches);
+          }
+          if (pps.config) {
+            setConfig((prev) => ({ ...prev, ...pps.config }));
+          }
+        }
+      } catch {
+        // Fallback already populated from format_configuration
+      }
+    };
+
+    void fetchState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [clubId, tournamentId]);
+
+  // Helper to persist pool-play state back to backend database
+  const persistPoolPlayState = async (updates: {
+    teams?: Team[];
+    matches?: Match[];
+    championshipMatches?: ChampionshipMatch[];
+    config?: PoolPlayConfig;
+    winner?: any;
+    completed?: boolean;
+  }) => {
+    if (!clubId || !tournamentId) return;
+    try {
+      const payload = {
+        teams: updates.teams ?? teams,
+        matches: updates.matches ?? matches,
+        championshipMatches: updates.championshipMatches ?? championshipMatches,
+        config: updates.config ?? config,
+        winner: updates.winner,
+        completed: updates.completed,
+      };
+      await competitionApi.savePoolPlayState(clubId, tournamentId, payload);
+    } catch (err) {
+      console.warn('Failed to save pool play state:', err);
+    }
+  };
+
   const handleSavePoolConfig = async (updated: Partial<PoolPlayConfig>) => {
-    setConfig((prev) => ({ ...prev, ...updated }));
+    const nextConfig = { ...config, ...updated };
+    setConfig(nextConfig);
     if (clubId && tournamentId) {
       try {
         const nextPoolCount = updated.numPools ?? config.numPools;
@@ -153,6 +229,8 @@ export default function PoolPlayManagementScreen() {
           },
         });
 
+        void persistPoolPlayState({ config: nextConfig });
+
         try {
           await competitionApi.configurePools(clubId, tournamentId, {
             number_of_pools: nextPoolCount,
@@ -168,8 +246,11 @@ export default function PoolPlayManagementScreen() {
     }
   };
 
-  // Synchronize actual teams and registrations into Pool Play state
-  React.useEffect(() => {
+  // Synchronize actual teams and registrations into Pool Play state (only if teams not yet loaded/persisted)
+  useEffect(() => {
+    if (teams.length > 0) return;
+    if ((tournament?.format_configuration as Record<string, any>)?.pool_play_state?.teams?.length) return;
+
     if (apiTeams && apiTeams.length > 0) {
       const mapped: Team[] = apiTeams.map((t, idx) => {
         const p1Mem = t.members?.[0];
@@ -271,7 +352,7 @@ export default function PoolPlayManagementScreen() {
     } else {
       setTeams([]);
     }
-  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize]);
+  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, teams.length, tournament?.format_configuration]);
 
   // Calculated Stats
   const { updatedTeams, pools, poolDiff, isWithinTolerance } = useMemo(() => {
@@ -318,6 +399,35 @@ export default function PoolPlayManagementScreen() {
     return false;
   }, [tournament?.status, championshipMatches.length, isChampionshipComplete, config.qualifierCount, matches]);
 
+  const isCompleted = isTournamentCompleted || tournament?.status === 'completed';
+
+  // Effective Tournament guarantees COMPLETED badge and status consistency across UI
+  const effectiveTournament = useMemo(() => {
+    if (!tournament) return null;
+    if (isCompleted) {
+      return {
+        ...tournament,
+        status: 'completed' as const,
+        status_label: 'COMPLETED',
+      };
+    }
+    return tournament;
+  }, [tournament, isCompleted]);
+
+  // Auto-complete tournament on backend whenever championship final match concludes
+  useEffect(() => {
+    if (isTournamentCompleted && tournament?.status !== 'completed' && clubId && tournamentId) {
+      void competitionApi
+        .endPoolPlayTournament(clubId, tournamentId)
+        .then(() => {
+          void refetchTournament();
+        })
+        .catch((err) => {
+          console.warn('Auto end pool play tournament error:', err);
+        });
+    }
+  }, [isTournamentCompleted, tournament?.status, clubId, tournamentId, refetchTournament]);
+
   // ─── Actions ──────────────────────────────────────────────────────────────
 
   const handleBalancePools = () => {
@@ -327,6 +437,7 @@ export default function PoolPlayManagementScreen() {
     }
     const balanced = balancePools(teams, config.numPools);
     setTeams(balanced);
+    void persistPoolPlayState({ teams: balanced });
 
     // Compute preview
     const { pools: newPools, poolDiff: newDiff } = recalculateStats(balanced, config);
@@ -343,18 +454,22 @@ export default function PoolPlayManagementScreen() {
   };
 
   const handleAddTeam = (newTeam: Team) => {
-    setTeams((prev) => [...prev, newTeam]);
+    const updated = [...teams, newTeam];
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
     Alert.alert('Team Added', `${newTeam.name} has been added to Pool ${newTeam.pool}.`);
   };
 
   const handleDeleteTeam = (teamId: string) => {
-    setTeams((prev) => prev.filter((t) => t.id !== teamId));
+    const updated = teams.filter((t) => t.id !== teamId);
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
   };
 
   const handleMoveTeamPool = (teamId: string, targetPool: string) => {
-    setTeams((prev) =>
-      prev.map((t) => (t.id === teamId ? { ...t, pool: targetPool } : t))
-    );
+    const updated = teams.map((t) => (t.id === teamId ? { ...t, pool: targetPool } : t));
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
   };
 
   const handleUpdatePlayerRating = (
@@ -362,19 +477,19 @@ export default function PoolPlayManagementScreen() {
     slot: 'p1' | 'p2',
     newRating: number
   ) => {
-    setTeams((prev) =>
-      prev.map((t) => {
-        if (t.id !== teamId) return t;
-        const updatedPlayer = {
-          ...(slot === 'p1' ? t.p1 : t.p2),
-          rating: newRating,
-        };
-        return {
-          ...t,
-          [slot]: updatedPlayer,
-        };
-      })
-    );
+    const updated = teams.map((t) => {
+      if (t.id !== teamId) return t;
+      const updatedPlayer = {
+        ...(slot === 'p1' ? t.p1 : t.p2),
+        rating: newRating,
+      };
+      return {
+        ...t,
+        [slot]: updatedPlayer,
+      };
+    });
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
   };
 
   const handleSwapPlayers = (
@@ -383,31 +498,31 @@ export default function PoolPlayManagementScreen() {
     targetTeamId: string,
     targetSlot: 'p1' | 'p2'
   ) => {
-    setTeams((prev) => {
-      const sourceTeam = prev.find((t) => t.id === sourceTeamId);
-      const targetTeam = prev.find((t) => t.id === targetTeamId);
-      if (!sourceTeam || !targetTeam) return prev;
+    const updated = teams.map((t) => {
+      const sourceTeam = teams.find((item) => item.id === sourceTeamId);
+      const targetTeam = teams.find((item) => item.id === targetTeamId);
+      if (!sourceTeam || !targetTeam) return t;
 
       const sourcePlayer = sourceSlot === 'p1' ? sourceTeam.p1 : sourceTeam.p2;
       const targetPlayer = targetSlot === 'p1' ? targetTeam.p1 : targetTeam.p2;
 
-      return prev.map((t) => {
-        if (t.id === sourceTeamId) {
-          return {
-            ...t,
-            [sourceSlot]: targetPlayer,
-          };
-        }
-        if (t.id === targetTeamId) {
-          return {
-            ...t,
-            [targetSlot]: sourcePlayer,
-          };
-        }
-        return t;
-      });
+      if (t.id === sourceTeamId) {
+        return {
+          ...t,
+          [sourceSlot]: targetPlayer,
+        };
+      }
+      if (t.id === targetTeamId) {
+        return {
+          ...t,
+          [targetSlot]: sourcePlayer,
+        };
+      }
+      return t;
     });
 
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
     Alert.alert('Partner Swapped', 'Players have been swapped and stats recalculated.');
   };
 
@@ -419,6 +534,12 @@ export default function PoolPlayManagementScreen() {
     const generated = createMatchups(pools, config.courts);
     setMatches(generated);
     setActiveTab('matchups');
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches: generated,
+      championshipMatches,
+      config,
+    });
     Alert.alert(
       'Matchups Created',
       `Generated ${generated.length} intra-pool round robin matches across ${config.courts.length} courts.`
@@ -426,37 +547,43 @@ export default function PoolPlayManagementScreen() {
   };
 
   const handleStartRound = () => {
-    // Move first available upcoming matches into 'playing' on open courts
     const maxPlaying = config.courts.length;
     let count = 0;
 
-    setMatches((prev) =>
-      prev.map((m) => {
-        if (m.status === 'upcoming' && count < maxPlaying) {
-          count++;
-          return { ...m, status: 'playing' };
-        }
-        return m;
-      })
-    );
+    const nextMatches = matches.map((m) => {
+      if (m.status === 'upcoming' && count < maxPlaying) {
+        count++;
+        return { ...m, status: 'playing' as const };
+      }
+      return m;
+    });
 
+    setMatches(nextMatches);
+    void persistPoolPlayState({ matches: nextMatches });
     Alert.alert('Round Started', `Courts are active! Showing live matches.`);
   };
 
   const handleRecordPoolScore = async (matchId: string, score1: number, score2: number) => {
-    setMatches((prev) =>
-      prev.map((m) => {
-        if (m.id !== matchId) return m;
-        const winner = score1 > score2 ? m.t1 : m.t2;
-        return {
-          ...m,
-          score1,
-          score2,
-          status: 'completed',
-          winner,
-        };
-      })
-    );
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+      const winner = score1 > score2 ? m.t1 : m.t2;
+      return {
+        ...m,
+        score1,
+        score2,
+        status: 'completed' as const,
+        winner,
+      };
+    });
+    setMatches(nextMatches);
+
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches: nextMatches,
+      championshipMatches,
+      config,
+    });
+
     if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
       try {
         await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
@@ -491,6 +618,12 @@ export default function PoolPlayManagementScreen() {
       config.courts
     );
     setChampionshipMatches(generated);
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches,
+      championshipMatches: generated,
+      config,
+    });
     Alert.alert(
       'Bracket Generated',
       `Championship bracket generated with ${generated.length} matches and deterministic cross-pool seeding.`
@@ -502,7 +635,42 @@ export default function PoolPlayManagementScreen() {
     score1: number,
     score2: number
   ) => {
-    setChampionshipMatches((prev) => advanceBracketWinner(prev, matchId, score1, score2));
+    const nextChampMatches = advanceBracketWinner(championshipMatches, matchId, score1, score2);
+    setChampionshipMatches(nextChampMatches);
+
+    // Identify final match and champion
+    const titleMatches = nextChampMatches.filter(
+      (m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd')
+    );
+    const finals =
+      titleMatches.find((m) => m.roundName === 'Finals' || m.roundName === 'Final') ||
+      (titleMatches.length > 0
+        ? titleMatches.find(
+            (m) => (m.roundIndex ?? 0) === Math.max(...titleMatches.map((x) => x.roundIndex ?? 0))
+          )
+        : null);
+
+    const isFinalCompleted = finals?.status === 'completed' && Boolean(finals?.winner);
+    const winner = finals?.winner;
+
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches,
+      championshipMatches: nextChampMatches,
+      config,
+      winner,
+      completed: isFinalCompleted,
+    });
+
+    if (isFinalCompleted && clubId && tournamentId) {
+      try {
+        await competitionApi.endPoolPlayTournament(clubId, tournamentId);
+        void refetchTournament();
+      } catch (e) {
+        console.warn('Failed to end tournament on backend:', e);
+      }
+    }
+
     if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
       try {
         await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
@@ -630,9 +798,7 @@ export default function PoolPlayManagementScreen() {
       {
         text: 'Refresh Data',
         onPress: () => {
-          void refetchTournament();
-          void refetchRegs();
-          void refetchTeams();
+          void handleRefresh();
         },
       },
       {
@@ -644,7 +810,7 @@ export default function PoolPlayManagementScreen() {
 
     Alert.alert(
       tournament?.name ?? 'Pool Play Tournament',
-      `Status: ${tournament?.status_label ?? tournament?.status ?? ''}`,
+      `Status: ${effectiveTournament?.status_label ?? tournament?.status_label ?? tournament?.status ?? ''}`,
       buttons
     );
   };
@@ -652,24 +818,30 @@ export default function PoolPlayManagementScreen() {
   const isSingles = tournamentConfig.teamSize === 1;
 
   const navTabs = useMemo(() => {
-    return getTournamentNavigationTabs(tournament, {
+    return getTournamentNavigationTabs(effectiveTournament, {
       participantsCount: updatedTeams.length,
       teamsCount: updatedTeams.length,
       matchesCount: matches.length,
       poolsCount: pools.length || config.numPools,
     });
-  }, [tournament, updatedTeams.length, matches.length, pools.length, config.numPools]);
+  }, [effectiveTournament, updatedTeams.length, matches.length, pools.length, config.numPools]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
-    if (tournament?.status === 'draft') {
+    if (isCompleted) {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
+    if (effectiveTournament?.status === 'draft') {
       return {
         label: 'Publish Tournament',
         onPress: handlePublishTournament,
         isLoading: isOpenRegistrationPending,
       };
     }
-    if (tournament?.status === 'registration_open') {
+    if (effectiveTournament?.status === 'registration_open') {
       return {
         label: 'Close Registration',
         onPress: handleCloseRegistration,
@@ -677,13 +849,7 @@ export default function PoolPlayManagementScreen() {
         variant: 'secondary' as const,
       };
     }
-    if (tournament?.status === 'completed') {
-      return {
-        label: 'View Results',
-        onPress: () => setActiveTab('results'),
-      };
-    }
-    if (tournament?.status === 'registration_closed' && matches.length > 0 && !isPoolPlayComplete) {
+    if (effectiveTournament?.status === 'registration_closed' && matches.length > 0 && !isPoolPlayComplete) {
       return {
         label: 'Start Tournament',
         onPress: handleStartTournament,
@@ -720,21 +886,45 @@ export default function PoolPlayManagementScreen() {
     }
     return null;
   }, [
-    tournament?.status,
+    canManage,
+    isCompleted,
+    effectiveTournament?.status,
     isOpenRegistrationPending,
     isCloseRegistrationPending,
     isStartingTournament,
-    teams.length,
     matches.length,
     isPoolPlayComplete,
-    championshipMatches.length,
-    canManage,
-    handleCloseRegistration,
-    handleCreateMatchups,
-    handleGenerateChampionshipBracket,
+    championshipMatches,
     handlePublishTournament,
+    handleCloseRegistration,
     handleStartTournament,
   ]);
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchTournament(),
+      refetchRegs(),
+      refetchTeams(),
+      (async () => {
+        if (clubId && tournamentId) {
+          try {
+            const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
+            const pps = res?.pool_play_state;
+            if (pps) {
+              if (Array.isArray(pps.teams) && pps.teams.length > 0) setTeams(pps.teams);
+              if (Array.isArray(pps.matches) && pps.matches.length > 0) setMatches(pps.matches);
+              if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+                setChampionshipMatches(pps.championshipMatches);
+              }
+              if (pps.config) setConfig((prev) => ({ ...prev, ...pps.config }));
+            }
+          } catch {
+            // ignore
+          }
+        }
+      })(),
+    ]);
+  };
 
   // ─── Loading & Error Guards (matches Bracket, Round Robin, Scramble pattern) ─
   if (isLoadingTournament && !tournament) {
@@ -758,195 +948,207 @@ export default function PoolPlayManagementScreen() {
   }
 
   return (
-    <Screen safeArea={false}>
-      {/* ─── Top Standardized Management Header ─────────────────────────────── */}
-      <TournamentManagementHeader
-        tournament={tournament ?? null}
-        tabs={navTabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onBack={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/(club)/tournaments');
-          }
-        }}
-        onOptionsPress={handleOpenOptionsMenu}
-        canManage={canManage}
-        primaryAction={primaryAction}
-      />
-
-      {/* Draft Mode Notice Banner */}
-      {tournament?.status === 'draft' && (
-        <DraftTournamentBanner
-          tournamentName={tournament?.name}
-          onPublish={handlePublishTournament}
-          isPublishing={isOpenRegistrationPending}
-        />
-      )}
-
-      {/* Registration Open Action Banner */}
-      {tournament?.status === 'registration_open' && (
-        <RegistrationOpenBanner
-          tournamentName={tournament?.name}
-          participantCount={registrations.length}
-          maxParticipants={tournament?.max_participants}
-          onCloseRegistration={handleCloseRegistration}
-          isClosing={isCloseRegistrationPending}
-        />
-      )}
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={isLoadingTournament}
-            onRefresh={() => void refetchTournament()}
-          />
-        }
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ─── Tab 1: Overview ───────────────────────────────────────── */}
-        {activeTab === 'overview' && (
-          <PoolPlayOverviewTab
-            tournament={tournament!}
-            teams={updatedTeams}
-            matches={matches}
-            championshipMatches={championshipMatches}
-            pools={pools}
-            config={config}
-            isPoolPlayComplete={isPoolPlayComplete}
-            isChampionshipComplete={isChampionshipComplete}
-            isSingles={isSingles}
-            onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
-          />
-        )}
-
-        {/* ─── Tab 2: Players & Pools / Teams & Pools ─────────────────── */}
-        {(activeTab === 'participants' || (activeTab as string) === 'teams_pools') && (
-          <TeamsPoolsTab
-            teams={updatedTeams}
-            pools={pools}
-            poolDiff={poolDiff}
-            isWithinTolerance={isWithinTolerance}
-            config={config}
-            isSingles={isSingles}
-            onBalancePools={handleBalancePools}
-            onAddTeam={handleAddTeam}
-            onDeleteTeam={handleDeleteTeam}
-            onMoveTeamPool={handleMoveTeamPool}
-            onUpdatePlayerRating={handleUpdatePlayerRating}
-            onSwapPlayers={handleSwapPlayers}
-            onToleranceChange={(tol) =>
-              setConfig((prev) => ({ ...prev, balanceTolerance: tol }))
+    <Screen safeArea={false} style={styles.screen}>
+      <View style={styles.responsiveContainer}>
+        {/* ─── Top Standardized Management Header ─────────────────────────────── */}
+        <TournamentManagementHeader
+          tournament={effectiveTournament}
+          tabs={navTabs}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(club)/tournaments');
             }
-            onCreateMatchups={handleCreateMatchups}
+          }}
+          onOptionsPress={handleOpenOptionsMenu}
+          canManage={canManage}
+          primaryAction={primaryAction}
+        />
+
+        {/* Draft Mode Notice Banner */}
+        {effectiveTournament?.status === 'draft' && (
+          <DraftTournamentBanner
+            tournamentName={effectiveTournament?.name}
+            onPublish={handlePublishTournament}
+            isPublishing={isOpenRegistrationPending}
           />
         )}
 
-        {/* ─── Tab 3: Matchups ───────────────────────────────────────── */}
-        {activeTab === 'matchups' && (
-          <MatchupsTab
-            matches={matches}
-            pools={pools}
-            onStartRound={handleStartRound}
-            onRecordScore={handleRecordPoolScore}
-            onCreateMatchups={handleCreateMatchups}
-            isTournamentCompleted={isTournamentCompleted}
+        {/* Registration Open Action Banner */}
+        {effectiveTournament?.status === 'registration_open' && (
+          <RegistrationOpenBanner
+            tournamentName={effectiveTournament?.name}
+            participantCount={registrations.length}
+            maxParticipants={effectiveTournament?.max_participants}
+            onCloseRegistration={handleCloseRegistration}
+            isClosing={isCloseRegistrationPending}
           />
         )}
 
-        {/* ─── Tab 4: Standings ──────────────────────────────────────── */}
-        {activeTab === 'standings' && (
-          <StandingsTab
-            pools={pools}
-            standingsByPool={standingsByPool}
-            isPoolPlayComplete={isPoolPlayComplete}
-            hasMatchups={matches.length > 0}
-            matches={matches}
-            qualifierCountPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
-            onGoToMatchups={() => setActiveTab('matchups')}
-            hasChampionshipBracket={championshipMatches.length > 0}
-            isTournamentCompleted={isTournamentCompleted}
-            onNavigateToBracket={() => setActiveTab('championship')}
-            onAdvanceToBracket={() => {
-              handleGenerateChampionshipBracket();
-              setActiveTab('championship');
-            }}
-          />
-        )}
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoadingTournament}
+              onRefresh={handleRefresh}
+            />
+          }
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* ─── Tab 1: Overview ───────────────────────────────────────── */}
+          {activeTab === 'overview' && (
+            <PoolPlayOverviewTab
+              tournament={effectiveTournament ?? tournament!}
+              teams={updatedTeams}
+              matches={matches}
+              championshipMatches={championshipMatches}
+              pools={pools}
+              config={config}
+              isPoolPlayComplete={isPoolPlayComplete}
+              isChampionshipComplete={isChampionshipComplete}
+              isSingles={isSingles}
+              onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
+            />
+          )}
 
-        {/* ─── Tab 5: Championship Bracket ───────────────────────────── */}
-        {activeTab === 'championship' && (
-          <ChampionshipBracketTab
-            standingsByPool={standingsByPool}
-            championshipMatches={championshipMatches}
-            courts={config.courts}
-            bracketType={config.bracketType}
-            qualifierCount={config.qualifierCount}
-            isPoolPlayComplete={isPoolPlayComplete}
-            isTournamentCompleted={isTournamentCompleted}
-            onGenerateBracket={handleGenerateChampionshipBracket}
-            onRecordBracketScore={handleRecordBracketScore}
-          />
-        )}
+          {/* ─── Tab 2: Players & Pools / Teams & Pools ─────────────────── */}
+          {(activeTab === 'participants' || (activeTab as string) === 'teams_pools') && (
+            <TeamsPoolsTab
+              teams={updatedTeams}
+              pools={pools}
+              poolDiff={poolDiff}
+              isWithinTolerance={isWithinTolerance}
+              config={config}
+              isSingles={isSingles}
+              onBalancePools={handleBalancePools}
+              onAddTeam={handleAddTeam}
+              onDeleteTeam={handleDeleteTeam}
+              onMoveTeamPool={handleMoveTeamPool}
+              onUpdatePlayerRating={handleUpdatePlayerRating}
+              onSwapPlayers={handleSwapPlayers}
+              onToleranceChange={(tol) =>
+                setConfig((prev) => ({ ...prev, balanceTolerance: tol }))
+              }
+              onCreateMatchups={handleCreateMatchups}
+            />
+          )}
 
-        {/* ─── Tab 6: Setup & Courts (Dedicated Tab) ─────────────────── */}
-        {activeTab === 'setup_courts' && (
-          <PoolPlaySetupCourtsTab
-            config={config}
-            onSaveConfig={handleSavePoolConfig}
-            canManage={canManage}
-            registeredCount={updatedTeams.length}
-            maxParticipants={tournament?.max_participants}
-            clubCourts={activeClubCourts}
-            clubName={clubName ?? undefined}
-          />
-        )}
+          {/* ─── Tab 3: Matchups ───────────────────────────────────────── */}
+          {activeTab === 'matchups' && (
+            <MatchupsTab
+              matches={matches}
+              pools={pools}
+              onStartRound={handleStartRound}
+              onRecordScore={handleRecordPoolScore}
+              onCreateMatchups={handleCreateMatchups}
+              isTournamentCompleted={isTournamentCompleted}
+            />
+          )}
 
-        {/* ─── Tab 7: Results ────────────────────────────────────────── */}
-        {activeTab === 'results' && (
-          <PoolPlayResultsTab
-            tournament={tournament}
-            teams={updatedTeams}
-            matches={matches}
-            championshipMatches={championshipMatches}
-            standingsByPool={standingsByPool}
-            isSingles={isSingles}
-          />
-        )}
+          {/* ─── Tab 4: Standings ──────────────────────────────────────── */}
+          {activeTab === 'standings' && (
+            <StandingsTab
+              pools={pools}
+              standingsByPool={standingsByPool}
+              isPoolPlayComplete={isPoolPlayComplete}
+              hasMatchups={matches.length > 0}
+              matches={matches}
+              qualifierCountPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
+              onGoToMatchups={() => setActiveTab('matchups')}
+              hasChampionshipBracket={championshipMatches.length > 0}
+              isTournamentCompleted={isTournamentCompleted}
+              onNavigateToBracket={() => setActiveTab('championship')}
+              onAdvanceToBracket={() => {
+                handleGenerateChampionshipBracket();
+                setActiveTab('championship');
+              }}
+            />
+          )}
 
-        {/* ─── Tab 8: Settings ───────────────────────────────────────── */}
-        {activeTab === 'settings' && (
-          <TournamentSettingsTab
-            tournament={tournament ?? null}
-          />
-        )}
-      </ScrollView>
+          {/* ─── Tab 5: Championship Bracket ───────────────────────────── */}
+          {activeTab === 'championship' && (
+            <ChampionshipBracketTab
+              standingsByPool={standingsByPool}
+              championshipMatches={championshipMatches}
+              courts={config.courts}
+              bracketType={config.bracketType}
+              qualifierCount={config.qualifierCount}
+              isPoolPlayComplete={isPoolPlayComplete}
+              isTournamentCompleted={isTournamentCompleted}
+              onGenerateBracket={handleGenerateChampionshipBracket}
+              onRecordBracketScore={handleRecordBracketScore}
+            />
+          )}
 
-      {/* ─── Setup & Courts Modal ──────────────────────────────────── */}
-      <SetupCourtsModal
-        visible={showSetupModal}
-        onClose={() => setShowSetupModal(false)}
-        config={config}
-        onSaveConfig={handleSavePoolConfig}
-        registeredCount={updatedTeams.length}
-        maxParticipants={tournament?.max_participants}
-      />
+          {/* ─── Tab 6: Setup & Courts (Dedicated Tab) ─────────────────── */}
+          {activeTab === 'setup_courts' && (
+            <PoolPlaySetupCourtsTab
+              config={config}
+              onSaveConfig={handleSavePoolConfig}
+              canManage={canManage}
+              registeredCount={updatedTeams.length}
+              maxParticipants={tournament?.max_participants}
+              clubCourts={activeClubCourts}
+              clubName={clubName ?? undefined}
+            />
+          )}
+
+          {/* ─── Tab 7: Results ────────────────────────────────────────── */}
+          {activeTab === 'results' && (
+            <PoolPlayResultsTab
+              tournament={effectiveTournament ?? tournament}
+              teams={updatedTeams}
+              matches={matches}
+              championshipMatches={championshipMatches}
+              standingsByPool={standingsByPool}
+              isSingles={isSingles}
+            />
+          )}
+
+          {/* ─── Tab 8: Settings ───────────────────────────────────────── */}
+          {activeTab === 'settings' && (
+            <TournamentSettingsTab
+              tournament={effectiveTournament ?? tournament ?? null}
+            />
+          )}
+        </ScrollView>
+
+        {/* ─── Setup & Courts Modal ──────────────────────────────────── */}
+        <SetupCourtsModal
+          visible={showSetupModal}
+          onClose={() => setShowSetupModal(false)}
+          config={config}
+          onSaveConfig={handleSavePoolConfig}
+          registeredCount={updatedTeams.length}
+          maxParticipants={tournament?.max_participants}
+        />
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
+  screen: {
+    backgroundColor: '#F1F8F3',
+  },
+  responsiveContainer: {
     flex: 1,
-    backgroundColor: Colors.background.primary,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    backgroundColor: '#F1F8F3',
+  },
+  contentScroll: {
+    flex: 1,
+    backgroundColor: '#F1F8F3',
   },
   contentContainer: {
-    padding: Spacing[4],
+    paddingBottom: Spacing[10],
   },
   optionsBtn: {
     padding: 6,

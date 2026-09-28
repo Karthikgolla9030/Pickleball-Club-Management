@@ -50,14 +50,44 @@ export function RoundRobinTeamsTab({
 }: RoundRobinTeamsTabProps) {
   const config = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
-  const maxPlayersCount =
-    tournament?.max_participants ?? (teamSize > 1 ? teams.length * teamSize : teams.length);
-  const maxTeamsCount =
-    teamSize > 1 ? Math.floor(maxPlayersCount / teamSize) : maxPlayersCount;
-  const registeredPlayersCount =
-    tournament?.participant_count ?? (teamSize > 1 ? teams.length * teamSize : teams.length);
+  const effectiveTeamSize = teamSize > 1 ? teamSize : (config.teamSize > 1 ? config.teamSize : 1);
+  const isDoubles = effectiveTeamSize > 1;
+
+  // Derive counts based on singles vs doubles category logic:
+  // For doubles, if max_participants is entered as team count (e.g. 8 for 8 doubles teams),
+  // max teams is 8 and max players is 8 * 2 = 16.
+  // If max_participants was entered as total players (e.g. 16), max teams is 16 / 2 = 8.
+  const rawMax = tournament?.max_participants ?? (isDoubles ? teams.length : teams.length);
+  let maxTeamsCount: number;
+  let maxPlayersCount: number;
+
+  if (isDoubles) {
+    if (rawMax > 0 && rawMax <= Math.max(teams.length, 12)) {
+      maxTeamsCount = rawMax;
+      maxPlayersCount = rawMax * effectiveTeamSize;
+    } else if (rawMax > 12) {
+      maxPlayersCount = rawMax;
+      maxTeamsCount = Math.floor(rawMax / effectiveTeamSize);
+    } else {
+      maxTeamsCount = Math.max(teams.length, 4);
+      maxPlayersCount = maxTeamsCount * effectiveTeamSize;
+    }
+  } else {
+    maxTeamsCount = rawMax;
+    maxPlayersCount = rawMax;
+  }
+
+  // Count registered players across registered teams
+  const registeredPlayersCount = isDoubles
+    ? teams.reduce(
+        (sum, t) => sum + (t.members && t.members.length > 0 ? t.members.length : effectiveTeamSize),
+        0
+      )
+    : teams.length;
+  const registeredTeamsCount = teams.length;
+
   const categoryLabel =
-    config.category || (teamSize > 1 ? "Men's Doubles" : 'Singles');
+    config.category || (isDoubles ? "Men's Doubles" : 'Singles');
 
   const getPlayerRating = (member?: TeamMember | null): number => {
     if (member?.skill_rating !== undefined && member?.skill_rating !== null) {
@@ -114,11 +144,11 @@ export function RoundRobinTeamsTab({
           </AppText>
         </View>
 
-        {teamSize > 1 && (
+        {isDoubles && (
           <View style={styles.summaryOverviewRow}>
             <AppText style={styles.summaryOverviewLabel}>Registered teams:</AppText>
             <AppText style={styles.summaryOverviewValue}>
-              {teams.length} / {maxTeamsCount}
+              {registeredTeamsCount} / {maxTeamsCount}
             </AppText>
           </View>
         )}
@@ -131,26 +161,26 @@ export function RoundRobinTeamsTab({
         <View style={styles.summaryOverviewRow}>
           <AppText style={styles.summaryOverviewLabel}>Registration type:</AppText>
           <AppText style={styles.summaryOverviewValue}>
-            {teamSize > 1 ? 'Fixed teams' : 'Singles individual'}
+            {isDoubles ? 'Fixed teams' : 'Singles individual'}
           </AppText>
         </View>
       </Card>
 
-      {/* Section Heading: Teams (4) · 8 Players [DOUBLES] */}
+      {/* Section Heading: Teams (N) · X Players [DOUBLES] */}
       <View style={styles.headerRow}>
         <AppText style={styles.headingTitle}>
-          {teamSize > 1
-            ? `Teams (${teams.length})`
-            : `Players (${teams.length})`}
+          {isDoubles
+            ? `Teams (${registeredTeamsCount})`
+            : `Players (${registeredTeamsCount})`}
         </AppText>
-        {teamSize > 1 && (
+        {isDoubles && (
           <AppText style={styles.headingSub}>
             · {registeredPlayersCount} Players
           </AppText>
         )}
         <View style={styles.categoryBadge}>
           <AppText style={styles.categoryBadgeText}>
-            {teamSize === 1 ? 'SINGLES' : 'DOUBLES'}
+            {isDoubles ? 'DOUBLES' : 'SINGLES'}
           </AppText>
         </View>
       </View>

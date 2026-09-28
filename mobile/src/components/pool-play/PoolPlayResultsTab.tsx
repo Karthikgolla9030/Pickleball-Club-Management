@@ -27,7 +27,7 @@ interface PoolPlayResultsTabProps {
 }
 
 export function PoolPlayResultsTab({
-  tournament: _tournament,
+  tournament,
   teams: _teams,
   matches,
   championshipMatches,
@@ -61,6 +61,26 @@ export function PoolPlayResultsTab({
     return null;
   }, [finalMatch]);
 
+  // Fallback to persisted metadata if available
+  const persistedWinner = useMemo(() => {
+    const fc = (tournament?.format_configuration as Record<string, any>) || {};
+    return fc.winner || fc.final_results?.winner || fc.pool_play_state?.winner || null;
+  }, [tournament?.format_configuration]);
+
+  const persistedPodium = useMemo(() => {
+    const fc = (tournament?.format_configuration as Record<string, any>) || {};
+    return fc.podium || fc.final_results?.podium || [];
+  }, [tournament?.format_configuration]);
+
+  const championName = championTeam?.name || persistedWinner?.name || persistedWinner?.display_name || null;
+  const championMembers = championTeam
+    ? `${championTeam.p1.name} & ${championTeam.p2.name}`
+    : (persistedWinner?.members && persistedWinner.members.length > 0
+        ? persistedWinner.members.join(' & ')
+        : (persistedWinner?.p1 && persistedWinner?.p2 ? `${persistedWinner.p1} & ${persistedWinner.p2}` : ''));
+
+  const runnerUpName = runnerUpTeam?.name || (persistedPodium.length > 1 ? persistedPodium[1]?.team_name : null);
+
   const completedChampMatches = useMemo(() => {
     return championshipMatches.filter((m) => m.status === 'completed');
   }, [championshipMatches]);
@@ -69,39 +89,39 @@ export function PoolPlayResultsTab({
     return matches.filter((m) => m.status === 'completed');
   }, [matches]);
 
-  const hasAnyResults = completedPoolMatches.length > 0 || completedChampMatches.length > 0;
+  const hasAnyResults = completedPoolMatches.length > 0 || completedChampMatches.length > 0 || Boolean(championName);
 
   return (
     <View style={styles.container}>
       <AppText style={styles.headingTitle}>Results</AppText>
 
       {/* ─── 1. Champion Podium Card or Neutral Pending Card ──────────────── */}
-      {championTeam ? (
+      {championName ? (
         <Card style={styles.championCard}>
           <View style={styles.championBadge}>
             <Trophy size={20} color="#D97706" />
             <AppText style={styles.championBadgeText}>TOURNAMENT CHAMPION</AppText>
           </View>
 
-          <AppText style={styles.championTeamName}>{championTeam.name}</AppText>
-          {!isSingles && (
+          <AppText style={styles.championTeamName}>{championName}</AppText>
+          {!isSingles && championMembers ? (
             <AppText style={styles.championMembersText}>
-              {championTeam.p1.name} & {championTeam.p2.name}
+              {championMembers}
             </AppText>
-          )}
+          ) : null}
 
           <View style={styles.championStatsRow}>
             <View style={styles.championStatPill}>
               <Award size={13} color="#0F766E" />
               <AppText style={styles.championStatText}>Gold Medalist</AppText>
             </View>
-            {runnerUpTeam && (
+            {runnerUpName ? (
               <View style={styles.runnerUpStatPill}>
                 <AppText style={styles.runnerUpText}>
-                  Runner-Up: {runnerUpTeam.name}
+                  Runner-Up: {runnerUpName}
                 </AppText>
               </View>
-            )}
+            ) : null}
           </View>
         </Card>
       ) : championshipMatches.length > 0 ? (

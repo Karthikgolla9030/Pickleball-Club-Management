@@ -1556,6 +1556,81 @@ class CompetitionService:
         )
         return [_build_match_response(m) for m in matches]
 
+    async def save_pool_play_state(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Persist client Pool Play workspace state to tournament format_configuration."""
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_pool_play(tournament)
+
+        config = dict(tournament.format_configuration or {})
+        config["pool_play_state"] = payload
+        tournament.format_configuration = config
+        flag_modified(tournament, "format_configuration")
+
+        # If payload marks completion or winner is crowned, evaluate completion
+        if payload.get("is_completed") or payload.get("winner"):
+            await self._evaluate_and_persist_tournament_completion(tournament, force_pool_play_end=True)
+
+        await self.tournament_repo.update(
+            tournament,
+            format_configuration=config,
+            status=tournament.status,
+        )
+        await self.db.commit()
+        await self.db.refresh(tournament)
+
+        return {
+            "tournament_id": str(tournament.id),
+            "status": tournament.status.value,
+            "pool_play_state": tournament.format_configuration.get("pool_play_state", {}),
+            "winner": (tournament.format_configuration or {}).get("winner"),
+            "podium": (tournament.format_configuration or {}).get("podium", []),
+        }
+
+    async def get_pool_play_state(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        """Fetch persisted Pool Play state and auto-reconcile completion."""
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_pool_play(tournament)
+
+        if tournament.status != TournamentStatus.COMPLETED:
+            await self._evaluate_and_persist_tournament_completion(tournament)
+            await self.db.commit()
+            await self.db.refresh(tournament)
+
+        return {
+            "tournament_id": str(tournament.id),
+            "status": tournament.status.value,
+            "pool_play_state": tournament.format_configuration.get("pool_play_state", {}),
+            "winner": (tournament.format_configuration or {}).get("winner"),
+            "podium": (tournament.format_configuration or {}).get("podium", []),
+        }
+
+    async def end_pool_play_tournament(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        """Explicitly end a Pool Play tournament and persist champion/podium."""
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_pool_play(tournament)
+
+        if tournament.status == TournamentStatus.COMPLETED:
+            return await self.get_pool_play_state(club_id, tournament_id)
+
+        await self._evaluate_and_persist_tournament_completion(tournament, force_pool_play_end=True)
+        await self.db.commit()
+        await self.db.refresh(tournament)
+
+        return await self.get_pool_play_state(club_id, tournament_id)
+
     async def get_match(
         self, club_id: uuid.UUID, tournament_id: uuid.UUID, match_id: uuid.UUID
     ) -> MatchResponse:
@@ -2097,7 +2172,10 @@ class CompetitionService:
         return resp
 
     async def _evaluate_and_persist_tournament_completion(
-        self, tournament: Tournament, force_scramble_end: bool = False
+        self,
+        tournament: Tournament,
+        force_scramble_end: bool = False,
+        force_pool_play_end: bool = False,
     ) -> bool:
         """
         Evaluate if all matches and stages for the tournament format are complete.
@@ -2114,7 +2192,7 @@ class CompetitionService:
         # This avoids loading all match relationships (teams, members, participants)
         # just to determine whether the tournament might be finished.
         status_only_matches = await self.competition_repo.list_match_statuses_by_tournament(tournament_id)
-        if not status_only_matches and not force_scramble_end:
+        if not status_only_matches and not force_scramble_end and not force_pool_play_end:
             return False
 
         playable_status = [m for m in status_only_matches if m.status != MatchStatus.CANCELLED]
@@ -2123,7 +2201,7 @@ class CompetitionService:
         )
 
         # Short-circuit: if not all completed, skip the expensive full load
-        if not all_completed_quick and not force_scramble_end:
+        if not all_completed_quick and not force_scramble_end and not force_pool_play_end:
             if tournament.status == TournamentStatus.COMPLETED:
                 cfg = dict(tournament.format_configuration or {})
                 cfg.pop("winner", None)
@@ -2278,13 +2356,16 @@ class CompetitionService:
                         }
 
         elif tournament.format == TournamentFormat.POOL_PLAY:
-            pool_matches = [m for m in playable_matches if m.stage == MatchStage.POOL]
-            champ_matches = [m for m in playable_matches if m.stage == MatchStage.CHAMPIONSHIP]
+            pool_matches = [m for m in playable_matches if m.stage == MatchStage.POOL or m.pool_id is not None]
+            champ_matches = [
+                m for m in playable_matches
+                if m.stage == MatchStage.CHAMPIONSHIP or (m.pool_id is None and (m.bracket_round is not None or m.next_match_id is not None))
+            ]
             pool_done = bool(pool_matches) and all(m.status == MatchStatus.COMPLETED for m in pool_matches)
 
             if champ_matches:
                 # Championship final is the match in championship stage with the highest bracket_round and next_match_id is None
-                title_matches = [m for m in champ_matches if m.stage == MatchStage.CHAMPIONSHIP]
+                title_matches = [m for m in champ_matches if m.stage == MatchStage.CHAMPIONSHIP or m.pool_id is None]
                 max_bracket_round = max((m.bracket_round or 1) for m in title_matches) if title_matches else 1
                 final_candidates = [
                     m for m in title_matches
@@ -2299,17 +2380,19 @@ class CompetitionService:
                     and final_match.winner_team_id is not None
                 )
 
-                if pool_done and champ_done and final_done:
+                if (pool_done and champ_done and final_done) or force_pool_play_end:
                     is_finished = True
-                    winner_team_id = final_match.winner_team_id
-                    runner_up_id = final_match.team_b_id if winner_team_id == final_match.team_a_id else final_match.team_a_id
+                    winner_team_id = final_match.winner_team_id if final_match else None
+                    runner_up_id = (
+                        final_match.team_b_id if winner_team_id == final_match.team_a_id else final_match.team_a_id
+                    ) if final_match and winner_team_id else None
 
                     teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
                     team_map = {t.id: t for t in teams}
                     team_size = self._get_tournament_team_size(tournament)
 
-                    winner_team = team_map.get(winner_team_id)
-                    runner_team = team_map.get(runner_up_id)
+                    winner_team = team_map.get(winner_team_id) if winner_team_id else None
+                    runner_team = team_map.get(runner_up_id) if runner_up_id else None
 
                     def get_mems(t_obj):
                         if not t_obj or not t_obj.members:
@@ -2346,10 +2429,30 @@ class CompetitionService:
                             "finish": "Runner-Up",
                         })
             else:
-                # Championship stage matches have not been generated yet.
-                # A Pool Play tournament requires advancing qualifying teams to the championship bracket.
-                # Do NOT mark the entire tournament completed merely because pool matches have ended.
-                is_finished = False
+                # If force_pool_play_end or pool is complete with 0 qualifiers:
+                if pool_done and (force_pool_play_end or (tournament.format_configuration or {}).get("qualifier_count") == 0):
+                    is_finished = True
+                else:
+                    is_finished = False
+
+            if (is_finished or force_pool_play_end) and not winner_info:
+                cfg_state = (tournament.format_configuration or {}).get("pool_play_state", {})
+                if cfg_state.get("winner"):
+                    w = cfg_state["winner"]
+                    w_name = str(w.get("name") or "Champion")
+                    w_id = str(w.get("id") or w.get("team_id") or "")
+                    winner_info = {
+                        "team_id": w_id,
+                        "name": w_name,
+                        "type": "team",
+                        "display_name": w_name,
+                    }
+                    podium_info.append({
+                        "rank": 1,
+                        "team_id": w_id,
+                        "team_name": w_name,
+                        "finish": "Champion",
+                    })
 
         elif tournament.format == TournamentFormat.SCRAMBLE:
             config = dict(tournament.format_configuration or {})

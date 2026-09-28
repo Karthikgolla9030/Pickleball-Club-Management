@@ -307,8 +307,10 @@ export function MatchupsTab({
 
 const styles = StyleSheet.create({
   container: {
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
+    paddingBottom: Spacing[8],
     gap: Spacing[3],
-    paddingBottom: Spacing[6],
   },
   topControlRow: {
     flexDirection: 'row',

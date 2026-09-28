@@ -278,8 +278,10 @@ export function ChampionshipBracketTab({
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing[4],
-    paddingBottom: Spacing[6],
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
+    paddingBottom: Spacing[8],
+    gap: Spacing[3],
   },
   setupCard: {
     backgroundColor: Colors.surface.elevated,

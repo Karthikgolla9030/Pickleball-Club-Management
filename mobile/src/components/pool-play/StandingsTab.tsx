@@ -271,8 +271,10 @@ export function StandingsTab({
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing[4],
-    paddingBottom: Spacing[6],
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
+    paddingBottom: Spacing[8],
+    gap: Spacing[3],
   },
   completeBanner: {
     backgroundColor: 'rgba(34, 197, 94, 0.12)',

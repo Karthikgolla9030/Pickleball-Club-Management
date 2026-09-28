@@ -19,6 +19,7 @@ import {
   BarChart2,
   CheckCircle2,
   ChevronRight,
+  Info,
   Layers,
   ShieldCheck,
   Trophy,
@@ -150,6 +151,14 @@ export function PoolPlayOverviewTab({
           </View>
         </View>
 
+        {/* Information Strip */}
+        <View style={styles.infoStrip}>
+          <Info size={14} color="#0284C7" />
+          <AppText style={styles.infoStripText}>
+            Intra-pool round robin stage. Top {Math.max(1, Math.floor(config.qualifierCount / config.numPools))} per pool advance to championship bracket.
+          </AppText>
+        </View>
+
         {/* Quick Action Button */}
         <TouchableOpacity
           style={styles.ctaBtn}
@@ -243,7 +252,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[4],
     paddingBottom: Spacing[8],
-    gap: Spacing[4],
+    gap: Spacing[3],
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -251,7 +260,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: Radius.lg,
     padding: Spacing[4],
-    gap: 14,
+    gap: 12,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -324,7 +333,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     borderRadius: Radius.md,
     paddingVertical: 10,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
@@ -339,9 +348,27 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   statTileNum: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
+  },
+  infoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  infoStripText: {
+    fontSize: 12,
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 16,
+    fontWeight: '500',
   },
   ctaBtn: {
     backgroundColor: '#0F766E',

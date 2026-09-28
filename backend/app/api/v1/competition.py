@@ -63,7 +63,7 @@ from __future__ import annotations
 from typing import Union
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_permission
@@ -401,6 +401,49 @@ async def list_championship_matches(
     return await CompetitionService(db).list_championship_matches(
         club_id, tournament_id
     )
+
+
+@club_competition_router.post(
+    "/pool-play/state",
+    summary="Save pool play runtime state",
+    description="Persists client Pool Play workspace state to format_configuration and auto-completes if finished.",
+)
+async def save_pool_play_state(
+    club_id: UUID,
+    tournament_id: UUID,
+    payload: dict = Body(...),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await CompetitionService(db).save_pool_play_state(club_id, tournament_id, payload)
+
+
+@club_competition_router.get(
+    "/pool-play/state",
+    summary="Get pool play runtime state",
+    description="Retrieves persisted Pool Play workspace state and auto-reconciles completion.",
+)
+async def get_pool_play_state(
+    club_id: UUID,
+    tournament_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await CompetitionService(db).get_pool_play_state(club_id, tournament_id)
+
+
+@club_competition_router.post(
+    "/pool-play/end-tournament",
+    summary="End pool play tournament",
+    description="Explicitly ends the Pool Play tournament, sets status to completed, and persists podium.",
+)
+async def end_pool_play_tournament(
+    club_id: UUID,
+    tournament_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+):
+    return await CompetitionService(db).end_pool_play_tournament(club_id, tournament_id)
 
 
 # ─── Match Operations (Staff) ─────────────────────────────────────────────────

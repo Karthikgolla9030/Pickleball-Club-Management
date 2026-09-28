@@ -349,10 +349,23 @@ class TournamentService:
             )
 
         if current_status == TournamentStatus.IN_PROGRESS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot modify tournament configuration while competition is in progress",
-            )
+            if (
+                payload.format is not None
+                or payload.scoring_rules is not None
+                or payload.tiebreaker_rules is not None
+                or (
+                    payload.max_participants is not None
+                    and payload.max_participants != tournament.max_participants
+                )
+                or (
+                    payload.min_participants is not None
+                    and payload.min_participants != tournament.min_participants
+                )
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot modify tournament format, scoring, tiebreakers, or capacity while competition is in progress",
+                )
 
         if current_status == TournamentStatus.REGISTRATION_CLOSED:
             if (

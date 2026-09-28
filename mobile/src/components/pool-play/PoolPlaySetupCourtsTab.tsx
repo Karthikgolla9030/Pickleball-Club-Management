@@ -433,8 +433,10 @@ export function PoolPlaySetupCourtsTab({
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing[4],
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
     paddingBottom: Spacing[8],
+    gap: Spacing[4],
   },
   card: {
     backgroundColor: '#FFFFFF',

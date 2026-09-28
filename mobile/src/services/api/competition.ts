@@ -221,6 +221,30 @@ export const competitionApi = {
     );
   },
 
+  savePoolPlayState(
+    clubId: string,
+    tournamentId: string,
+    payload: Record<string, unknown>
+  ): Promise<any> {
+    return apiClient.post<any>(
+      `${competitionBase(clubId, tournamentId)}/pool-play/state`,
+      payload
+    );
+  },
+
+  getPoolPlayState(clubId: string, tournamentId: string): Promise<any> {
+    return apiClient.get<any>(
+      `${competitionBase(clubId, tournamentId)}/pool-play/state`
+    );
+  },
+
+  endPoolPlayTournament(clubId: string, tournamentId: string): Promise<any> {
+    return apiClient.post<any>(
+      `${competitionBase(clubId, tournamentId)}/pool-play/end-tournament`,
+      {}
+    );
+  },
+
   // ─── Scramble Competition (Staff - Phase 7) ──────────────────────────────────
 
   generateScramble(

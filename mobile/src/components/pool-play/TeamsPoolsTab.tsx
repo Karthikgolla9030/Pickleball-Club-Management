@@ -410,8 +410,10 @@ export function TeamsPoolsTab({
 
 const styles = StyleSheet.create({
   container: {
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
+    paddingBottom: Spacing[8],
     gap: Spacing[3],
-    paddingBottom: Spacing[6],
   },
   actionBar: {
     gap: Spacing[2],
@@ -423,15 +425,16 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flex: 1,
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: '#0F766E',
+    borderColor: '#0F766E',
   },
   outlineBtn: {
     flex: 1,
+    borderColor: '#0F766E',
   },
   matchupBtn: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: '#087A60',
+    borderColor: '#087A60',
     paddingHorizontal: Spacing[3],
   },
   tolScroll: {
@@ -441,21 +444,21 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing[1],
     paddingHorizontal: Spacing[2],
     borderRadius: Radius.full,
-    backgroundColor: Colors.surface.elevated,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: '#E2E8F0',
     marginRight: Spacing[1],
   },
   tolChipActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderColor: '#0F766E',
+    backgroundColor: '#F0FDFA',
   },
   tolChipText: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: '#64748B',
   },
   tolChipTextActive: {
-    color: '#60A5FA',
+    color: '#0F766E',
     fontWeight: '700',
   },
   toleranceBanner: {

@@ -420,8 +420,9 @@ export default function RoundRobinWorkspaceScreen() {
   const tournamentConfig = parseTournamentConfig(tournament);
   const teamSize = tournamentConfig.teamSize;
   const isSingles = teamSize === 1;
-  const totalRegisteredPlayers =
-    tournament?.participant_count ?? (teamSize > 1 ? teams.length * teamSize : teams.length);
+  const totalRegisteredPlayers = teamSize > 1
+    ? (teams.reduce((sum, t) => sum + (t.members?.length || teamSize), 0) || (teams.length * teamSize))
+    : (tournament?.participant_count ?? teams.length);
 
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {
