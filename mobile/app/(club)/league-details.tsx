@@ -19,7 +19,7 @@
  *   - Results Tab: Crowned champion showcase + league completion workflow.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -178,11 +178,17 @@ export default function ClubLeagueDetailsScreen() {
     isUpdatingWeek,
   } = useLeagueWeeks(clubId, leagueId);
 
-  // Active week resolution
+  // Regular-season weeks only (excludes playoff championship week)
+  const regularWeeks: LeagueWeek[] = useMemo(() => {
+    if (!weeks) return [];
+    return weeks.filter((w: LeagueWeek) => w.week_type === 'regular_season');
+  }, [weeks]);
+
+  // Active week resolution from regular-season weeks
   const isAllWeeks = selectedWeekId === 'all';
   const activeWeek: LeagueWeek | undefined = isAllWeeks
     ? undefined
-    : (weeks?.find((w) => w.id === selectedWeekId) || weeks?.[0]);
+    : (regularWeeks?.find((w: LeagueWeek) => w.id === selectedWeekId) || regularWeeks?.[0]);
   const effectiveWeekId = isAllWeeks ? undefined : activeWeek?.id;
 
   const {
@@ -205,6 +211,14 @@ export default function ClubLeagueDetailsScreen() {
   } = useLeagueMatches(clubId, leagueId, undefined, 'regular_season');
 
   const hasSchedule = Boolean(allLeagueMatches && allLeagueMatches.length > 0);
+
+  // Exact regular-season match completion progress
+  const totalRegularMatchesCount = allLeagueMatches?.length || 0;
+  const completedRegularMatchesCount =
+    allLeagueMatches?.filter((m) => m.status === 'completed').length || 0;
+  const isRegularSeasonComplete =
+    totalRegularMatchesCount > 0 &&
+    completedRegularMatchesCount === totalRegularMatchesCount;
 
   const {
     data: standingsData,
@@ -614,8 +628,8 @@ export default function ClubLeagueDetailsScreen() {
             </AppText>
           </TouchableOpacity>
 
-          {weeks && weeks.length > 0
-            ? weeks.map((w) => {
+          {regularWeeks && regularWeeks.length > 0
+            ? regularWeeks.map((w: LeagueWeek) => {
                 const isSelected = selectedWeekId !== 'all' && (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
                 return (
                   <TouchableOpacity
@@ -638,7 +652,12 @@ export default function ClubLeagueDetailsScreen() {
                   </TouchableOpacity>
                 );
               })
-            : Array.from({ length: league.number_of_weeks || 4 }).map((_, idx) => (
+            : Array.from({
+                length:
+                  league.playoff_team_count > 0
+                    ? Math.max(1, (league.number_of_weeks || 4) - 1)
+                    : league.number_of_weeks || 3,
+              }).map((_, idx) => (
                 <View
                   key={idx}
                   style={[styles.weekCard, styles.weekCardUnselected]}
@@ -990,13 +1009,27 @@ export default function ClubLeagueDetailsScreen() {
 
                           {/* Opponents */}
                           <View style={styles.matchTeamsRow}>
-                            <AppText style={styles.matchTeamTitle} numberOfLines={1}>
-                              {m.team_a?.name || 'TBD'}
-                            </AppText>
+                            <View style={{ flex: 1 }}>
+                              <AppText style={styles.matchTeamTitle} numberOfLines={1}>
+                                {m.team_a_name || m.team_a?.name || 'TBD'}
+                              </AppText>
+                              {m.team_a_members && m.team_a_members.length > 0 && (
+                                <AppText style={styles.matchTeamMembersText} numberOfLines={1}>
+                                  {m.team_a_members.join(' & ')}
+                                </AppText>
+                              )}
+                            </View>
                             <AppText style={styles.vsBadge}>VS</AppText>
-                            <AppText style={styles.matchTeamTitle} numberOfLines={1}>
-                              {m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
-                            </AppText>
+                            <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                              <AppText style={[styles.matchTeamTitle, { textAlign: 'right' }]} numberOfLines={1}>
+                                {m.team_b_name || m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
+                              </AppText>
+                              {m.team_b_members && m.team_b_members.length > 0 && (
+                                <AppText style={[styles.matchTeamMembersText, { textAlign: 'right' }]} numberOfLines={1}>
+                                  {m.team_b_members.join(' & ')}
+                                </AppText>
+                              )}
+                            </View>
                           </View>
 
                           {/* Court & Time Assignment Badges */}
@@ -1120,15 +1153,22 @@ export default function ClubLeagueDetailsScreen() {
                           <View style={styles.fixtureBody}>
                             {/* Team A Slot */}
                             <View style={styles.fixtureTeamSlot}>
-                              <AppText
-                                style={[
-                                  styles.fixtureTeamName,
-                                  isTeamAWinner && styles.fixtureWinnerName,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {m.team_a?.name || 'TBD'}
-                              </AppText>
+                              <View style={{ flex: 1 }}>
+                                <AppText
+                                  style={[
+                                    styles.fixtureTeamName,
+                                    isTeamAWinner && styles.fixtureWinnerName,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {m.team_a_name || m.team_a?.name || 'TBD'}
+                                </AppText>
+                                {m.team_a_members && m.team_a_members.length > 0 && (
+                                  <AppText style={styles.fixtureMembersText} numberOfLines={1}>
+                                    {m.team_a_members.join(' & ')}
+                                  </AppText>
+                                )}
+                              </View>
                               <AppText
                                 style={[
                                   styles.fixtureScoreText,
@@ -1143,15 +1183,22 @@ export default function ClubLeagueDetailsScreen() {
 
                             {/* Team B Slot */}
                             <View style={styles.fixtureTeamSlot}>
-                              <AppText
-                                style={[
-                                  styles.fixtureTeamName,
-                                  isTeamBWinner && styles.fixtureWinnerName,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
-                              </AppText>
+                              <View style={{ flex: 1 }}>
+                                <AppText
+                                  style={[
+                                    styles.fixtureTeamName,
+                                    isTeamBWinner && styles.fixtureWinnerName,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {m.team_b_name || m.team_b?.name || (isBye ? 'BYE' : 'TBD')}
+                                </AppText>
+                                {m.team_b_members && m.team_b_members.length > 0 && (
+                                  <AppText style={styles.fixtureMembersText} numberOfLines={1}>
+                                    {m.team_b_members.join(' & ')}
+                                  </AppText>
+                                )}
+                              </View>
                               <AppText
                                 style={[
                                   styles.fixtureScoreText,
@@ -1208,15 +1255,17 @@ export default function ClubLeagueDetailsScreen() {
               <View>
                 <AppText style={styles.sectionHeading}>
                   {isPreSeason
-                    ? 'Pre-Season Standings'
-                    : league.status === 'completed'
-                    ? 'Final Standings'
-                    : 'Live Standings'}
+                    ? 'Initial Standings'
+                    : isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed'
+                    ? 'Final Regular-Season Standings'
+                    : 'Current Standings (Provisional)'}
                 </AppText>
                 <AppText style={styles.sectionSubheading}>
                   {isPreSeason
-                    ? 'No matches played yet • Initial seed order'
-                    : 'Ranked by Wins → Point Differential → Points Scored'}
+                    ? 'Playoff qualification will be determined after the regular season.'
+                    : isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed'
+                    ? `Top ${league.playoff_team_count} teams officially qualified for championship playoffs`
+                    : 'Provisional standings during regular season. Final qualification determined after all regular-season matches conclude.'}
                 </AppText>
               </View>
             </View>
@@ -1240,9 +1289,9 @@ export default function ClubLeagueDetailsScreen() {
                 </View>
 
                 {standingsData.standings.map((row, idx) => {
-                  const isQualified = !isPreSeason && row.rank <= league.playoff_team_count;
-                  const isCutoffLine = row.rank === league.playoff_team_count;
-                  const isOfficialSeed = league.status === 'playoffs' || league.status === 'completed';
+                  const isFinalStage = isRegularSeasonComplete || league.status === 'playoffs' || league.status === 'completed';
+                  const isQualified = isFinalStage && row.rank <= league.playoff_team_count;
+                  const isCutoffLine = !isPreSeason && row.rank === league.playoff_team_count;
 
                   return (
                     <React.Fragment key={row.team_id}>
@@ -1259,12 +1308,17 @@ export default function ClubLeagueDetailsScreen() {
                           <AppText style={styles.sTeamName} numberOfLines={1}>
                             {row.team_name}
                           </AppText>
-                          {!isPreSeason && isQualified ? (
-                            isOfficialSeed ? (
+                          {row.members && row.members.length > 0 && (
+                            <AppText style={styles.fixtureMembersText} numberOfLines={1}>
+                              {row.members.join(' & ')}
+                            </AppText>
+                          )}
+                          {!isPreSeason ? (
+                            isFinalStage && row.rank <= league.playoff_team_count ? (
                               <AppText style={styles.sPlayoffTag}>● Playoff Seed #{row.rank}</AppText>
-                            ) : (
+                            ) : row.rank <= league.playoff_team_count ? (
                               <AppText style={styles.sProvisionalTag}>● Projected Seed #{row.rank}</AppText>
-                            )
+                            ) : null
                           ) : null}
                         </View>
                         <AppText style={[styles.sTd, styles.sThStat]}>{row.matches_played}</AppText>
@@ -1289,12 +1343,14 @@ export default function ClubLeagueDetailsScreen() {
                         </AppText>
                       </View>
 
-                      {/* Cutoff line after playoff seed count */}
-                      {isCutoffLine && idx < standingsData.standings.length - 1 && (
+                      {/* Cutoff line after playoff seed count (only when matches have been played) */}
+                      {!isPreSeason && isCutoffLine && idx < standingsData.standings.length - 1 && (
                         <View style={styles.cutoffLineContainer}>
                           <View style={styles.cutoffLineBar} />
-                          <AppText style={[styles.cutoffLineText, isPreSeason && styles.cutoffLineTextPreSeason]}>
-                            Top {league.playoff_team_count} Advance to Playoffs
+                          <AppText style={styles.cutoffLineText}>
+                            {isFinalStage
+                              ? `Top ${league.playoff_team_count} Qualified for Playoffs`
+                              : `Top ${league.playoff_team_count} Advance to Playoffs`}
                           </AppText>
                           <View style={styles.cutoffLineBar} />
                         </View>
@@ -1338,30 +1394,62 @@ export default function ClubLeagueDetailsScreen() {
               <LoadingState message="Loading playoff bracket..." />
             ) : !playoffs ? (
               <Card style={styles.emptyPlayoffsCard}>
-                <Trophy size={40} color="#D97706" style={{ alignSelf: 'center', marginBottom: 12 }} />
-                <AppText style={styles.emptyPlayoffsTitle}>Playoffs Not Established Yet</AppText>
+                <Trophy size={40} color={isRegularSeasonComplete ? '#059669' : '#D97706'} style={{ alignSelf: 'center', marginBottom: 12 }} />
+                <AppText style={styles.emptyPlayoffsTitle}>
+                  {isRegularSeasonComplete ? 'Regular Season Complete!' : 'Playoffs Locked'}
+                </AppText>
                 <AppText style={styles.emptyPlayoffsText}>
-                  Playoffs begin in the final week once regular season round-robin matches are completed.
-                  The top {league.playoff_team_count} seeded teams will qualify.
+                  {isRegularSeasonComplete
+                    ? `All ${totalRegularMatchesCount} regular-season matches are completed. Top ${league.playoff_team_count} teams qualify for the championship bracket.`
+                    : 'Playoffs become available after all regular-season matches are completed.'}
                 </AppText>
 
-                {/* Qualification Preview */}
-                {standingsData && standingsData.standings.length >= league.playoff_team_count && (
+                {/* Match Completion Progress */}
+                <View style={styles.playoffProgressBox}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <AppText style={styles.playoffProgressTitle}>Regular-Season Match Progress</AppText>
+                    <AppText style={styles.playoffProgressText}>
+                      {completedRegularMatchesCount} of {totalRegularMatchesCount} completed
+                    </AppText>
+                  </View>
+                  <View style={styles.playoffProgressBarTrack}>
+                    <View
+                      style={[
+                        styles.playoffProgressBarFill,
+                        {
+                          width: `${totalRegularMatchesCount > 0 ? (completedRegularMatchesCount / totalRegularMatchesCount) * 100 : 0}%`,
+                          backgroundColor: isRegularSeasonComplete ? '#059669' : '#10B981',
+                        },
+                      ]}
+                    />
+                  </View>
+                  {!isRegularSeasonComplete && (
+                    <AppText style={styles.playoffProgressRemaining}>
+                      {totalRegularMatchesCount - completedRegularMatchesCount} regular-season match{totalRegularMatchesCount - completedRegularMatchesCount === 1 ? '' : 'es'} remaining before playoffs can be generated.
+                    </AppText>
+                  )}
+                </View>
+
+                {/* Official Qualifiers or Notice */}
+                {isRegularSeasonComplete && standingsData && standingsData.standings.length >= league.playoff_team_count ? (
                   <View style={styles.qualificationPreviewBox}>
                     <AppText style={styles.qualificationPreviewTitle}>
-                      {isPreSeason ? 'Playoff Qualification:' : 'Current Projected Qualifiers:'}
+                      Official Playoff Qualifiers:
                     </AppText>
-                    {isPreSeason ? (
-                      <AppText style={styles.qualificationPreviewItemPreSeason}>
-                        Top {league.playoff_team_count} teams advance to the championship bracket after regular season matches conclude.
+                    {standingsData.standings.slice(0, league.playoff_team_count).map((s) => (
+                      <AppText key={s.team_id} style={styles.qualificationPreviewItem}>
+                        Seed #{s.rank}: {s.team_name} ({s.wins}W - {s.losses}L, {s.points_differential > 0 ? `+${s.points_differential}` : s.points_differential})
                       </AppText>
-                    ) : (
-                      standingsData.standings.slice(0, league.playoff_team_count).map((s) => (
-                        <AppText key={s.team_id} style={styles.qualificationPreviewItem}>
-                          Seed #{s.rank}: {s.team_name} ({s.wins}W - {s.losses}L, {s.points_differential > 0 ? `+${s.points_differential}` : s.points_differential})
-                        </AppText>
-                      ))
-                    )}
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.qualificationPreviewBox}>
+                    <AppText style={styles.qualificationPreviewTitle}>
+                      Playoff Qualification:
+                    </AppText>
+                    <AppText style={styles.qualificationPreviewItemPreSeason}>
+                      Top {league.playoff_team_count} teams advance to the championship bracket after all regular-season matches conclude.
+                    </AppText>
                   </View>
                 )}
 
@@ -1371,6 +1459,7 @@ export default function ClubLeagueDetailsScreen() {
                     variant="primary"
                     onPress={handleGeneratePlayoffs}
                     loading={isGeneratingPlayoffs}
+                    disabled={!isRegularSeasonComplete}
                     style={{ marginTop: Spacing[4] }}
                   />
                 )}
@@ -1661,7 +1750,7 @@ export default function ClubLeagueDetailsScreen() {
         visible={Boolean(schedulingMatch)}
         onClose={() => setSchedulingMatch(null)}
         title="Schedule Match"
-        subtitle={`${schedulingMatch?.team_a?.name || 'Team A'} vs ${schedulingMatch?.team_b?.name || 'Team B'}`}
+        subtitle={`${schedulingMatch?.team_a_name || schedulingMatch?.team_a?.name || 'Team A'} vs ${schedulingMatch?.team_b_name || schedulingMatch?.team_b?.name || 'Team B'}`}
         actions={[
           {
             label: schedulingMatch?.court_id ? 'Unschedule' : 'Cancel',
@@ -1769,7 +1858,7 @@ export default function ClubLeagueDetailsScreen() {
           <View style={styles.scoreInputsRow}>
             <View style={styles.scoreInputCol}>
               <AppText style={styles.scoreTeamLabel} numberOfLines={1}>
-                {scoreModalMatch?.team_a?.name || 'Team A'}
+                {scoreModalMatch?.team_a_name || scoreModalMatch?.team_a?.name || 'Team A'}
               </AppText>
               <Input
                 placeholder="0"
@@ -1784,7 +1873,7 @@ export default function ClubLeagueDetailsScreen() {
 
             <View style={styles.scoreInputCol}>
               <AppText style={styles.scoreTeamLabel} numberOfLines={1}>
-                {scoreModalMatch?.team_b?.name || 'Team B'}
+                {scoreModalMatch?.team_b_name || scoreModalMatch?.team_b?.name || 'Team B'}
               </AppText>
               <Input
                 placeholder="0"
@@ -2292,10 +2381,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   matchTeamTitle: {
-    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: '#111827',
+  },
+  matchTeamMembersText: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  fixtureMembersText: {
+    fontSize: 11,
+    color: '#6B7280',
+    marginTop: 1,
+    fontWeight: '500',
   },
   vsBadge: {
     fontSize: 12,
@@ -2564,6 +2664,40 @@ const styles = StyleSheet.create({
     color: '#059669',
     fontWeight: '600',
     marginVertical: 2,
+  },
+  playoffProgressBox: {
+    width: '100%',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    padding: Spacing[3],
+    marginTop: Spacing[3],
+  },
+  playoffProgressTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  playoffProgressText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  playoffProgressBarTrack: {
+    height: 8,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  playoffProgressBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  playoffProgressRemaining: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontStyle: 'italic',
   },
   playoffStatusCard: {
     padding: Spacing[4],

@@ -239,7 +239,7 @@ export function CreateLeagueModal({
                   </AppText>
                 </View>
                 <AppText style={styles.suggestionDesc}>
-                  Based on {teamCountNum} {format === 'doubles' ? 'teams' : 'players'}, a full single round-robin requires {fullRounds} weekly rounds {hasPlayoffs ? '+ 1 playoff championship week' : ''}.
+                  Based on {teamCountNum} {format === 'doubles' ? 'teams' : 'players'}, a complete round-robin requires {fullRounds} weekly rounds {hasPlayoffs ? '+ 1 playoff championship week' : ''}. This is a recommendation, not a fixed value. You can manually customize the number of weeks below.
                 </AppText>
                 {numberOfWeeks !== String(suggestedWeeks) && (
                   <TouchableOpacity

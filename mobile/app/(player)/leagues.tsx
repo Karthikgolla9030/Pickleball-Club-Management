@@ -385,9 +385,10 @@ export default function PlayerLeaguesScreen() {
                       const totalMatchesPlayed =
                         standingsData.standings.reduce((acc, row) => acc + (row.matches_played || 0), 0);
                       const isPreSeason = totalMatchesPlayed === 0;
+                      const isFinalStage = selectedLeague?.status === 'playoffs' || selectedLeague?.status === 'completed';
 
                       return standingsData.standings.map((r) => {
-                        const isQualified = !isPreSeason && selectedLeague && r.rank <= selectedLeague.playoff_team_count;
+                        const isQualified = !isPreSeason && isFinalStage && Boolean(selectedLeague && r.rank <= selectedLeague.playoff_team_count);
                         return (
                           <View
                             key={r.team_id}
@@ -441,7 +442,9 @@ export default function PlayerLeaguesScreen() {
                     <FilterChips
                       chips={[
                         { key: 'all', label: 'All Weeks' },
-                        ...weeks.map((w) => ({ key: w.id, label: `Week ${w.week_number}` })),
+                        ...weeks
+                          .filter((w) => w.week_type === 'regular_season')
+                          .map((w) => ({ key: w.id, label: `Week ${w.week_number}` })),
                       ]}
                       activeChip={selectedWeekId || 'all'}
                       onChipPress={(id) => setSelectedWeekId(id === 'all' ? undefined : id)}
