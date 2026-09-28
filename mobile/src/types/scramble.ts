@@ -53,6 +53,7 @@ export interface ScrambleState {
   champion_player_id: string | null;
   champion_player_name: string | null;
   courts: ScrambleCourtInfo[];
+  rounds_data?: Record<string, any>;
   valid_actions: string[];
   quality_summary?: any;
   coverage_summary?: any;

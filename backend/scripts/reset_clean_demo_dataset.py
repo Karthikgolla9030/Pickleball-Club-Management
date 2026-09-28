@@ -470,20 +470,26 @@ async def reset_database(target_url: str):
 
         scramble_engine = ScrambleEngine()
         scramble_pdicts = [
-            {"id": p.id, "player_membership_id": p.id, "display_name": f"Player {idx}"}
+            {"id": p.id, "player_membership_id": p.id, "display_name": f"Player {idx}", "name": f"Player {idx}", "rating": 3.5}
             for idx, p in enumerate(scramble_players, start=1)
         ]
-        scramble_matchups = scramble_engine.generate_matchups(scramble_pdicts, num_rounds=3)
+        scramble_courts = courts[:2] if len(courts) >= 2 else courts
+        courts_info = [{"id": str(c.id), "court_id": str(c.id), "name": c.name} for c in scramble_courts]
+        plan = scramble_engine.generate_round_matchups(
+            players=scramble_pdicts,
+            round_number=1,
+            start_match_number=1,
+            courts_info=courts_info,
+        )
 
         match_count = 0
-        for sm in scramble_matchups:
-            # Create match
+        for sm in plan["matches"]:
             m = Match(
                 id=uuid4(),
                 tournament_id=t_scramble.id,
                 round_number=sm["round_number"],
                 match_number=sm["match_number"],
-                court_id=court_ids[(sm["match_number"] - 1) % len(court_ids)] if court_ids else None,
+                court_id=UUID(str(sm["court_id"])) if sm.get("court_id") else None,
                 status=MatchStatus.PENDING,
                 score_a=None,
                 score_b=None,
@@ -496,7 +502,7 @@ async def reset_database(target_url: str):
                 mp = MatchParticipant(
                     id=uuid4(),
                     match_id=m.id,
-                    player_membership_id=p["id"],
+                    player_membership_id=p["id"] if isinstance(p["id"], UUID) else UUID(str(p["id"])),
                     side="side_a",
                     partner_slot=slot_idx,
                 )
@@ -505,15 +511,36 @@ async def reset_database(target_url: str):
                 mp = MatchParticipant(
                     id=uuid4(),
                     match_id=m.id,
-                    player_membership_id=p["id"],
+                    player_membership_id=p["id"] if isinstance(p["id"], UUID) else UUID(str(p["id"])),
                     side="side_b",
                     partner_slot=slot_idx,
                 )
                 session.add(mp)
             match_count += 1
 
+        rounds_store = {
+            "1": {
+                "status": "matchups_created",
+                "c4_courts": plan["c4_courts"],
+                "c5_courts": plan["c5_courts"],
+                "courts": plan["courts"],
+                "quality_summary": plan.get("quality_summary"),
+            }
+        }
+        t_scramble.format_configuration = {
+            "category": "Open Scramble",
+            "scramble_type": "Individual Rotating Doubles",
+            "planned_rounds": 3,
+            "rounds": 3,
+            "rounds_count": 3,
+            "current_round": 1,
+            "round_status": "matchups_created",
+            "available_player_ids": [str(p.id) for p in scramble_players],
+            "rounds_data": rounds_store,
+        }
+        session.add(t_scramble)
         await session.flush()
-        print(f"  Created Scramble tournament with 8 players, 7 rounds, {match_count} matches (ready to play).")
+        print(f"  Created Scramble tournament with 8 players, 3 planned rounds, {match_count} matches for Round 1 across 2 courts.")
 
 
         # ─── LEAGUE: EXACTLY 1 LEAGUE (8 doubles teams, IN_PROGRESS) ───

@@ -153,37 +153,161 @@ export function validateScrambleScore(
 
 /**
  * Group round matches by their court.
+ *
+ * Reliably assigns matches to Court 1, Court 2, etc. using explicit court_number,
+ * court_id, or fair capacity distribution so Court 2 is never starved of matches.
  */
 export function groupMatchesByCourt(
   matches: Match[],
   courts: ScrambleCourtInfo[],
 ): { court: ScrambleCourtInfo; matches: Match[] }[] {
-  if (!courts || courts.length === 0) {
-    if (matches.length === 6) {
-      return [
-        {
-          court: { court_number: 1, court_id: null, court_name: 'Court 1', player_count: 4, players: [] },
-          matches: matches.slice(0, 3),
-        },
-        {
-          court: { court_number: 2, court_id: null, court_name: 'Court 2', player_count: 4, players: [] },
-          matches: matches.slice(3, 6),
-        },
-      ];
+  if (!matches || matches.length === 0) {
+    if (courts && courts.length > 0) {
+      return courts.map((court) => ({ court, matches: [] }));
     }
-    if (matches.length === 10) {
-      return [
-        {
-          court: { court_number: 1, court_id: null, court_name: 'Court 1', player_count: 5, players: [] },
-          matches: matches.slice(0, 5),
-        },
-        {
-          court: { court_number: 2, court_id: null, court_name: 'Court 2', player_count: 5, players: [] },
-          matches: matches.slice(5, 10),
-        },
-      ];
+    return [];
+  }
+
+  // 1. If courts are provided, attempt explicit court_number / court_id matching
+  if (courts && courts.length > 0) {
+    const assignedMatchIds = new Set<string>();
+    const courtGroups = courts.map((court) => {
+      const courtMatches = matches.filter((m) => {
+        // Direct court number match
+        if (m.court_number !== undefined && m.court_number !== null) {
+          const mCourtNum = Number(m.court_number);
+          if (mCourtNum === court.court_number) {
+            assignedMatchIds.add(m.id);
+            return true;
+          }
+        }
+        // Direct court ID match
+        if (court.court_id && m.court_id && m.court_id === court.court_id) {
+          assignedMatchIds.add(m.id);
+          return true;
+        }
+        return false;
+      });
+
+      return {
+        court,
+        matches: courtMatches,
+      };
+    });
+
+    // If at least one match was explicitly assigned, assign any leftover unassigned matches
+    if (assignedMatchIds.size > 0) {
+      const unassignedMatches = matches.filter((m) => !assignedMatchIds.has(m.id));
+      if (unassignedMatches.length > 0) {
+        // Distribute remaining unassigned matches to courts that have fewer matches than expected
+        for (const unassigned of unassignedMatches) {
+          const targetGroup = courtGroups.reduce((prev, curr) =>
+            curr.matches.length < prev.matches.length ? curr : prev
+          );
+          targetGroup.matches.push(unassigned);
+        }
+      }
+      return courtGroups;
     }
-    return [{
+
+    // 2. If NO matches had explicit court markers (fallback distribution):
+    // Check if total matches matches the standard block size (e.g. 3 per 4-player, 5 per 5-player)
+    const expectedTotal = courts.reduce((sum, c) => sum + (c.player_count === 5 ? 5 : 3), 0);
+    if (matches.length === expectedTotal) {
+      let startIdx = 0;
+      return courts.map((court) => {
+        const matchesPerCourt = court.player_count === 5 ? 5 : 3;
+        const courtMatches = matches.slice(startIdx, startIdx + matchesPerCourt);
+        startIdx += matchesPerCourt;
+        return { court, matches: courtMatches };
+      });
+    }
+
+    // Otherwise, distribute matches evenly across courts so Court 2 is never empty
+    const numCourts = courts.length;
+    const perCourt = Math.max(1, Math.floor(matches.length / numCourts));
+    return courts.map((court, idx) => {
+      const startIdx = idx * perCourt;
+      const endIdx = idx === numCourts - 1 ? matches.length : startIdx + perCourt;
+      const courtMatches = startIdx < matches.length ? matches.slice(startIdx, endIdx) : [];
+      return {
+        court,
+        matches: courtMatches,
+      };
+    });
+  }
+
+  // 3. When courts array is empty or not yet loaded from state:
+  // Dynamically build courts from matches that have court_number or court_name
+  const courtNumbersPresent = Array.from(
+    new Set(
+      matches
+        .map((m) => (m.court_number !== undefined && m.court_number !== null ? Number(m.court_number) : null))
+        .filter((n): n is number => n !== null && !isNaN(n))
+    )
+  ).sort((a, b) => a - b);
+
+  if (courtNumbersPresent.length > 0) {
+    return courtNumbersPresent.map((cNum) => {
+      const courtMatches = matches.filter((m) => Number(m.court_number) === cNum);
+      const courtName = courtMatches[0]?.court_name || `Court ${cNum}`;
+      const courtId = courtMatches[0]?.court_id || null;
+      return {
+        court: {
+          court_number: cNum,
+          court_id: courtId,
+          court_name: courtName,
+          player_count: courtMatches.length >= 5 ? 5 : 4,
+          players: [],
+        },
+        matches: courtMatches,
+      };
+    });
+  }
+
+  // 4. Fallback when neither courts array nor match court numbers exist:
+  if (matches.length === 6) {
+    return [
+      {
+        court: { court_number: 1, court_id: null, court_name: 'Court 1', player_count: 4, players: [] },
+        matches: matches.slice(0, 3),
+      },
+      {
+        court: { court_number: 2, court_id: null, court_name: 'Court 2', player_count: 4, players: [] },
+        matches: matches.slice(3, 6),
+      },
+    ];
+  }
+
+  if (matches.length === 10) {
+    return [
+      {
+        court: { court_number: 1, court_id: null, court_name: 'Court 1', player_count: 5, players: [] },
+        matches: matches.slice(0, 5),
+      },
+      {
+        court: { court_number: 2, court_id: null, court_name: 'Court 2', player_count: 5, players: [] },
+        matches: matches.slice(5, 10),
+      },
+    ];
+  }
+
+  if (matches.length >= 2 && matches.length % 2 === 0) {
+    const half = matches.length / 2;
+    return [
+      {
+        court: { court_number: 1, court_id: null, court_name: 'Court 1', player_count: 4, players: [] },
+        matches: matches.slice(0, half),
+      },
+      {
+        court: { court_number: 2, court_id: null, court_name: 'Court 2', player_count: 4, players: [] },
+        matches: matches.slice(half),
+      },
+    ];
+  }
+
+  return [
+    {
       court: {
         court_number: 1,
         court_id: null,
@@ -192,29 +316,8 @@ export function groupMatchesByCourt(
         players: [],
       },
       matches,
-    }];
-  }
-
-  return courts.map((court, idx) => {
-    // Each 4-player court has 3 matches, 5-player has 5 matches
-    const matchesPerCourt = court.player_count === 5 ? 5 : 3;
-    let courtMatches = matches.filter(
-      (m) => court.court_id && m.court_id === court.court_id,
-    );
-
-    if (courtMatches.length === 0) {
-      let startIdx = 0;
-      for (let i = 0; i < idx; i++) {
-        startIdx += courts[i].player_count === 5 ? 5 : 3;
-      }
-      courtMatches = matches.slice(startIdx, startIdx + matchesPerCourt);
-    }
-
-    return {
-      court,
-      matches: courtMatches,
-    };
-  });
+    },
+  ];
 }
 
 /**

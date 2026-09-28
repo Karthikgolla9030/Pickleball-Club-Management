@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
 from app.models.club import Club
+from app.models.court import Court
 from app.models.club_membership import ClubMembership, ClubRole
 from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
 from app.models.competition import Match, MatchStage, MatchStatus, MatchParticipant, Team, TeamMember
@@ -69,6 +70,11 @@ async def scramble_3_round_setup(db_session: AsyncSession, unique_id: str):
         is_active=True,
     )
     db_session.add(club)
+    await db_session.flush()
+
+    c1 = Court(club_id=club.id, name="Court 1", court_number=1, is_active=True)
+    c2 = Court(club_id=club.id, name="Court 2", court_number=2, is_active=True)
+    db_session.add_all([c1, c2])
     await db_session.flush()
 
     membership = ClubMembership(
@@ -654,3 +660,135 @@ class TestPoolPlayAuditFixes:
         )
         assert t_corr.json()["status"] == "completed"
         assert t_corr.json()["format_configuration"]["winner"]["team_id"] == str(teams[3].id)
+
+
+@pytest.mark.asyncio
+async def test_scramble_court_allocation_and_court_numbers_in_matches(
+    async_client: AsyncClient, scramble_3_round_setup
+):
+    """
+    Verifies Court 1 and Court 2 match allocation & visibility:
+    1. 8 players on 2 courts generate exactly 6 matches for Round 1 (3 on Court 1, 3 on Court 2).
+    2. list_scramble_matches returns court_number and court_name populated on each match.
+    3. Exactly 3 matches belong to Court 1 and 3 matches belong to Court 2 (no court is empty).
+    4. get_scramble_state returns rounds_data with both courts defined and populated with matches.
+    """
+    club = scramble_3_round_setup["club"]
+    t = scramble_3_round_setup["tournament"]
+    mgr = scramble_3_round_setup["manager"]
+    headers = make_auth_header(mgr)
+
+    # Generate Round 1 matchups
+    gen_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matchups",
+        headers=headers,
+    )
+    assert gen_res.status_code == 200, gen_res.text
+    state_data = gen_res.json()
+
+    # Verify rounds_data is present in state response
+    assert "rounds_data" in state_data
+    assert "1" in state_data["rounds_data"]
+    r1_courts = state_data["rounds_data"]["1"]["courts"]
+    assert len(r1_courts) == 2
+    assert r1_courts[0]["court_number"] == 1
+    assert len(r1_courts[0]["matches"]) == 3
+    assert r1_courts[1]["court_number"] == 2
+    assert len(r1_courts[1]["matches"]) == 3
+
+    # Query matches endpoint
+    m_res = await async_client.get(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
+        headers=headers,
+    )
+    assert m_res.status_code == 200, m_res.text
+    matches = m_res.json()
+    assert len(matches) == 6
+
+    # Verify each match has court_number and court_name populated
+    c1_matches = [m for m in matches if m.get("court_number") == 1]
+    c2_matches = [m for m in matches if m.get("court_number") == 2]
+
+    assert len(c1_matches) == 3, f"Expected 3 matches on Court 1, got {len(c1_matches)}"
+    assert len(c2_matches) == 3, f"Expected 3 matches on Court 2, got {len(c2_matches)}"
+
+    for m in c1_matches:
+        assert m["court_name"] == "Court 1"
+        assert m["round_number"] == 1
+    for m in c2_matches:
+        assert m["court_name"] == "Court 2"
+        assert m["round_number"] == 1
+
+
+@pytest.mark.asyncio
+async def test_scramble_rounds_advance_to_planned_limit_and_blocks_further(
+    async_client: AsyncClient, scramble_3_round_setup
+):
+    """
+    Verifies that a tournament configured for 3 planned rounds can complete
+    Rounds 1, 2, and 3, but is strictly blocked from advancing to Round 4.
+    """
+    club = scramble_3_round_setup["club"]
+    t = scramble_3_round_setup["tournament"]
+    mgr = scramble_3_round_setup["manager"]
+    headers = make_auth_header(mgr)
+
+    for round_num in (1, 2, 3):
+        # 1. Generate matchups if in setup
+        st = await async_client.get(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/state",
+            headers=headers,
+        )
+        if st.json()["round_status"] == "setup":
+            await async_client.post(
+                f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matchups",
+                headers=headers,
+            )
+
+        # 2. Start round
+        start_res = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/start-round",
+            headers=headers,
+        )
+        assert start_res.status_code == 200
+
+        # 3. Get round matches and score them
+        m_res = await async_client.get(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
+            headers=headers,
+        )
+        r_matches = [m for m in m_res.json() if m["round_number"] == round_num]
+        assert len(r_matches) == 6
+
+        for m in r_matches:
+            await async_client.post(
+                f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                headers=headers,
+                json={"score_a": 11, "score_b": 7},
+            )
+
+        # 4. Finish round
+        fin_res = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/finish-round",
+            headers=headers,
+        )
+        assert fin_res.status_code == 200
+        assert fin_res.json()["round_status"] == "completed"
+
+        if round_num < 3:
+            # Advance to next round
+            next_res = await async_client.post(
+                f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/next-round",
+                headers=headers,
+            )
+            assert next_res.status_code == 200
+            assert next_res.json()["current_round"] == round_num + 1
+
+    # Now at end of Round 3, attempt to start Round 4: MUST BE REJECTED!
+    blocked_next = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/next-round",
+        headers=headers,
+    )
+    assert blocked_next.status_code == 400
+    assert "configured limit of 3 rounds" in blocked_next.json()["detail"]
+

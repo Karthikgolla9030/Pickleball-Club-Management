@@ -141,7 +141,10 @@ def _build_team_response(team: Team) -> TeamResponse:
 
 
 def _build_match_response(
-    match: Match, sit_out_p: MatchParticipantResponse | None = None
+    match: Match,
+    sit_out_p: MatchParticipantResponse | None = None,
+    court_number: int | None = None,
+    court_name: str | None = None,
 ) -> MatchResponse:
     stage_val = match.stage.value if match.stage else None
     stage_label = match.stage.display_label if match.stage else None
@@ -227,6 +230,27 @@ def _build_match_response(
         winner_side=winner_side,
         completed_at=match.completed_at,
         court_id=match.court_id,
+        court_number=(
+            court_number
+            if court_number is not None
+            else (
+                getattr(match.__dict__.get("court"), "court_number", None)
+                if hasattr(match, "__dict__") and match.__dict__.get("court")
+                else None
+            )
+        ),
+        court_name=(
+            court_name
+            if court_name is not None
+            else (
+                (
+                    getattr(match.__dict__.get("court"), "name", None)
+                    or getattr(match.__dict__.get("court"), "display_name", None)
+                )
+                if hasattr(match, "__dict__") and match.__dict__.get("court")
+                else None
+            )
+        ),
         scheduled_start_at=match.scheduled_start_at,
         scheduled_end_at=match.scheduled_end_at,
         created_at=match.created_at,
@@ -2942,7 +2966,43 @@ class CompetitionService:
 
         valid_matches = [m for m in matches if m.round_number is None or m.round_number <= planned_rounds]
         sit_outs = self._get_sit_out_map(tournament)
-        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in valid_matches]
+
+        # Extract court metadata by match_number from rounds_data
+        rounds_data_cfg = config.get("rounds_data")
+        if not isinstance(rounds_data_cfg, dict):
+            raw_r = config.get("rounds")
+            rounds_data_cfg = raw_r if isinstance(raw_r, dict) else {}
+
+        court_meta_by_match_num: dict[int, tuple[int | None, str | None]] = {}
+        for r_key, r_info in rounds_data_cfg.items():
+            if isinstance(r_info, dict):
+                for c in r_info.get("courts", []):
+                    c_num = c.get("court_number")
+                    c_name = c.get("court_name")
+                    for cm in c.get("matches", []):
+                        m_num = cm.get("match_number")
+                        if m_num is not None:
+                            court_meta_by_match_num[int(m_num)] = (c_num, c_name)
+
+        court_lookup: dict[uuid.UUID, Any] = {}
+        try:
+            club_courts = await self.court_repo.list_by_club(club_id, is_active=True)
+            for c in club_courts:
+                court_lookup[c.id] = c
+        except Exception:
+            pass
+
+        responses = []
+        for m in valid_matches:
+            c_num, c_name = court_meta_by_match_num.get(m.match_number or 0, (None, None))
+            if (c_num is None or c_name is None) and m.court_id and m.court_id in court_lookup:
+                cc = court_lookup[m.court_id]
+                if c_num is None:
+                    c_num = cc.court_number
+                if c_name is None:
+                    c_name = cc.name or cc.display_name
+            responses.append(_build_match_response(m, sit_outs.get(m.match_number), court_number=c_num, court_name=c_name))
+        return responses
 
     async def get_scramble_standings(
         self, club_id: uuid.UUID | None, tournament_id: uuid.UUID
@@ -3066,7 +3126,42 @@ class CompetitionService:
 
         valid_matches = [m for m in matches if m.round_number is None or m.round_number <= planned_rounds]
         sit_outs = self._get_sit_out_map(tournament)
-        return [_build_match_response(m, sit_outs.get(m.match_number)) for m in valid_matches]
+
+        rounds_data_cfg = config.get("rounds_data")
+        if not isinstance(rounds_data_cfg, dict):
+            raw_r = config.get("rounds")
+            rounds_data_cfg = raw_r if isinstance(raw_r, dict) else {}
+
+        court_meta_by_match_num: dict[int, tuple[int | None, str | None]] = {}
+        for r_key, r_info in rounds_data_cfg.items():
+            if isinstance(r_info, dict):
+                for c in r_info.get("courts", []):
+                    c_num = c.get("court_number")
+                    c_name = c.get("court_name")
+                    for cm in c.get("matches", []):
+                        m_num = cm.get("match_number")
+                        if m_num is not None:
+                            court_meta_by_match_num[int(m_num)] = (c_num, c_name)
+
+        court_lookup: dict[uuid.UUID, Any] = {}
+        try:
+            club_courts = await self.court_repo.list_by_club(tournament.club_id, is_active=True)
+            for c in club_courts:
+                court_lookup[c.id] = c
+        except Exception:
+            pass
+
+        responses = []
+        for m in valid_matches:
+            c_num, c_name = court_meta_by_match_num.get(m.match_number or 0, (None, None))
+            if (c_num is None or c_name is None) and m.court_id and m.court_id in court_lookup:
+                cc = court_lookup[m.court_id]
+                if c_num is None:
+                    c_num = cc.court_number
+                if c_name is None:
+                    c_name = cc.name or cc.display_name
+            responses.append(_build_match_response(m, sit_outs.get(m.match_number), court_number=c_num, court_name=c_name))
+        return responses
 
     async def get_scramble_standings_public(
         self, tournament_id: uuid.UUID
@@ -3385,6 +3480,7 @@ class CompetitionService:
             champion_player_id=champion_id,
             champion_player_name=champion_name,
             courts=courts_list,
+            rounds_data=rounds_data_cfg,
             valid_actions=valid_actions,
             quality_summary=quality_summary,
             coverage_summary=coverage_summary,

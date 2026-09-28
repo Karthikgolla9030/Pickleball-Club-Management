@@ -160,6 +160,8 @@ class MatchResponse(BaseModel):
     sit_out_participant: MatchParticipantResponse | None = None
     completed_at: datetime | None = None
     court_id: uuid.UUID | None = None
+    court_number: int | None = None
+    court_name: str | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
     created_at: datetime
@@ -393,6 +395,7 @@ class ScrambleStateResponse(BaseModel):
     champion_player_id: uuid.UUID | None = None
     champion_player_name: str | None = None
     courts: list[ScrambleCourtInfo] = []
+    rounds_data: dict | None = None
     valid_actions: list[str] = []
     quality_summary: dict | None = None
     coverage_summary: dict | None = None

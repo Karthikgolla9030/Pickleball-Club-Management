@@ -99,9 +99,12 @@ export function ScrambleRoundsTab({
   }, [matches, selectedRound]);
 
   const courtGroups = useMemo(() => {
-    const courtsList = state?.courts || [];
+    const roundDataCourts = state?.rounds_data?.[String(selectedRound)]?.courts;
+    const courtsList = roundDataCourts && roundDataCourts.length > 0
+      ? roundDataCourts
+      : (selectedRound === currentRound ? (state?.courts || []) : []);
     return groupMatchesByCourt(roundMatches, courtsList);
-  }, [roundMatches, state?.courts]);
+  }, [roundMatches, state?.rounds_data, state?.courts, selectedRound, currentRound]);
 
   const isCurrentRound = selectedRound === currentRound;
 
@@ -314,7 +317,15 @@ export function ScrambleRoundsTab({
 
                 {/* Court Matches */}
                 <View style={styles.matchesList}>
-                  {courtGroup.matches.map((match, idx) => {
+                  {courtGroup.matches.length === 0 ? (
+                    <View style={styles.noMatchesCourtCard}>
+                      <Clock size={16} color="#71817E" />
+                      <AppText style={styles.noMatchesCourtText}>
+                        No matches assigned to this court in Round {selectedRound}
+                      </AppText>
+                    </View>
+                  ) : (
+                    courtGroup.matches.map((match, idx) => {
                     const isCompleted = match.status === 'completed';
                     const scoreA = match.score_a ?? 0;
                     const scoreB = match.score_b ?? 0;
@@ -398,7 +409,8 @@ export function ScrambleRoundsTab({
                         )}
                       </View>
                     );
-                  })}
+                  })
+                )}
                 </View>
               </View>
             );
@@ -915,5 +927,23 @@ const styles = StyleSheet.create({
   modalRoundBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  noMatchesCourtCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: Spacing[4],
+    paddingHorizontal: Spacing[3],
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderStyle: 'dashed',
+  },
+  noMatchesCourtText: {
+    fontSize: 13,
+    color: '#71817E',
+    fontWeight: '500',
   },
 });
