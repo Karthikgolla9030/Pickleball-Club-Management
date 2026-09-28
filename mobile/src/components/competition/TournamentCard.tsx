@@ -154,12 +154,17 @@ export function TournamentCard({
   const statusLower = String(tournament.status).toLowerCase();
   const isDraft = statusLower === 'draft';
   const isRegistrationOpen = statusLower === 'registration_open' || statusLower === 'open';
-  const isCompleted = statusLower === 'completed';
+  const fc = (tournament.format_configuration as Record<string, any>) || {};
+  const isCompleted =
+    statusLower === 'completed' ||
+    Boolean(fc.winner) ||
+    Boolean(fc.pool_play_state?.completed) ||
+    Boolean(fc.pool_play_state?.winner);
 
   const defaultActionLabel = isCompleted ? 'View Results' : 'Manage';
-  const resolvedActionLabel = actionLabel || defaultActionLabel;
+  const resolvedActionLabel = actionLabel && actionLabel !== 'Manage' ? actionLabel : defaultActionLabel;
 
-  const statusBadge = getStatusBadgeStyle(tournament.status);
+  const statusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const formatBadge = getFormatBadgeStyle(tournament.format || '', tournament.format_label);
   const banner = getBannerImage(tournament, index);
   const parsed = parseTournamentConfig(tournament as any);

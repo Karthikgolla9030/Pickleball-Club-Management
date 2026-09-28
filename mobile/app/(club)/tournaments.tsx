@@ -27,7 +27,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import {
   AlertTriangle,
   Check,
@@ -180,6 +180,15 @@ export default function ClubTournamentsScreen() {
     cancelTournament: cancelClubTournament,
     isCancelTournamentPending: isClubCancelPending,
   } = useClubTournaments(clubId, statusFilter);
+
+  // Auto-refresh tournaments whenever this screen gains focus (e.g. returning from tournament workspace)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (clubId) {
+        void refetch();
+      }
+    }, [clubId, refetch])
+  );
 
   const {
     tournament: detailedTournament,
@@ -682,19 +691,28 @@ export default function ClubTournamentsScreen() {
               onAction={handleOpenCreateModal}
             />
           }
-          renderItem={({ item, index }) => (
-            <TournamentCard
-              tournament={item}
-              index={index}
-              actionLabel={item.status === 'completed' ? 'View Results' : 'Manage'}
-              onPress={() => handleManage(item)}
-              onOptionsPress={() => handleOpenOptionsMenu(item)}
-              onPublishPress={item.status === 'draft' ? () => handlePublishTournament(item) : undefined}
-              onCloseRegistrationPress={
-                item.status === 'registration_open' ? () => handleConfirmCloseRegistration(item) : undefined
-              }
-            />
-          )}
+          renderItem={({ item, index }) => {
+            const fc = (item.format_configuration as Record<string, any>) || {};
+            const isItemCompleted =
+              item.status === 'completed' ||
+              Boolean(fc.winner) ||
+              Boolean(fc.pool_play_state?.completed) ||
+              Boolean(fc.pool_play_state?.winner);
+
+            return (
+              <TournamentCard
+                tournament={isItemCompleted && item.status !== 'completed' ? { ...item, status: 'completed', status_label: 'COMPLETED' } : item}
+                index={index}
+                actionLabel={isItemCompleted ? 'View Results' : 'Manage'}
+                onPress={() => handleManage(item)}
+                onOptionsPress={() => handleOpenOptionsMenu(item)}
+                onPublishPress={item.status === 'draft' ? () => handlePublishTournament(item) : undefined}
+                onCloseRegistrationPress={
+                  item.status === 'registration_open' ? () => handleConfirmCloseRegistration(item) : undefined
+                }
+              />
+            );
+          }}
         />
       )}
 

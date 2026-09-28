@@ -1572,8 +1572,8 @@ class CompetitionService:
         flag_modified(tournament, "format_configuration")
 
         # If payload marks completion or winner is crowned, evaluate completion
-        if payload.get("is_completed") or payload.get("winner"):
-            await self._evaluate_and_persist_tournament_completion(tournament, force_pool_play_end=True)
+        if payload.get("is_completed") or payload.get("completed") or payload.get("winner"):
+            return await self.end_pool_play_tournament(club_id, tournament_id)
 
         await self.tournament_repo.update(
             tournament,
@@ -1600,10 +1600,14 @@ class CompetitionService:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
 
+        pps = (tournament.format_configuration or {}).get("pool_play_state", {})
         if tournament.status != TournamentStatus.COMPLETED:
-            await self._evaluate_and_persist_tournament_completion(tournament)
-            await self.db.commit()
-            await self.db.refresh(tournament)
+            if pps.get("completed") or pps.get("is_completed") or pps.get("winner") or (tournament.format_configuration or {}).get("winner"):
+                return await self.end_pool_play_tournament(club_id, tournament_id)
+            else:
+                await self._evaluate_and_persist_tournament_completion(tournament)
+                await self.db.commit()
+                await self.db.refresh(tournament)
 
         return {
             "tournament_id": str(tournament.id),
@@ -1622,14 +1626,86 @@ class CompetitionService:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
 
-        if tournament.status == TournamentStatus.COMPLETED:
-            return await self.get_pool_play_state(club_id, tournament_id)
+        cfg = dict(tournament.format_configuration or {})
+        pps = cfg.get("pool_play_state", {})
 
-        await self._evaluate_and_persist_tournament_completion(tournament, force_pool_play_end=True)
+        # Extract winner & podium from payload, pool_play_state, or database
+        winner_info = cfg.get("winner") or pps.get("winner")
+        podium_info = list(cfg.get("podium", []))
+
+        if not winner_info and pps.get("championshipMatches"):
+            c_matches = pps.get("championshipMatches", [])
+            finals = [m for m in c_matches if m.get("roundName") in ("Finals", "Final")]
+            final_match = finals[0] if finals else (c_matches[-1] if c_matches else None)
+            if final_match and final_match.get("winner"):
+                w = final_match["winner"]
+                w_name = str(w.get("name") or "Champion")
+                w_id = str(w.get("id") or "")
+                winner_info = {
+                    "team_id": w_id,
+                    "name": w_name,
+                    "type": "team",
+                    "display_name": w_name,
+                }
+                runner_up = final_match.get("t2") if final_match.get("winner") == final_match.get("t1") else final_match.get("t1")
+                podium_info = [
+                    {"rank": 1, "team_id": w_id, "team_name": w_name, "finish": "Champion"}
+                ]
+                if runner_up:
+                    r_name = str(runner_up.get("name") or "Runner-Up")
+                    podium_info.append({
+                        "rank": 2, "team_id": str(runner_up.get("id") or ""), "team_name": r_name, "finish": "Runner-Up"
+                    })
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if winner_info:
+            cfg["winner"] = winner_info
+        if podium_info:
+            cfg["podium"] = podium_info[:3]
+        cfg["final_results"] = {
+            "winner": winner_info,
+            "podium": podium_info[:3],
+            "completed_at": now_iso,
+        }
+        cfg["completed_at"] = now_iso
+        if "pool_play_state" in cfg:
+            cfg["pool_play_state"]["completed"] = True
+            if winner_info:
+                cfg["pool_play_state"]["winner"] = winner_info
+
+        tournament.format_configuration = cfg
+        tournament.status = TournamentStatus.COMPLETED
+        flag_modified(tournament, "format_configuration")
+        await self.tournament_repo.update(
+            tournament,
+            status=TournamentStatus.COMPLETED,
+            format_configuration=cfg,
+        )
+
+        try:
+            await dispatch_event(
+                event_type=EventType.TOURNAMENT_UPDATED,
+                data={
+                    "tournament_id": str(tournament.id),
+                    "status": TournamentStatus.COMPLETED.value,
+                    "winner": winner_info,
+                    "podium": podium_info[:3],
+                },
+                club_id=tournament.club_id,
+            )
+        except Exception:
+            pass
+
         await self.db.commit()
         await self.db.refresh(tournament)
 
-        return await self.get_pool_play_state(club_id, tournament_id)
+        return {
+            "tournament_id": str(tournament.id),
+            "status": tournament.status.value,
+            "pool_play_state": tournament.format_configuration.get("pool_play_state", {}),
+            "winner": (tournament.format_configuration or {}).get("winner"),
+            "podium": (tournament.format_configuration or {}).get("podium", []),
+        }
 
     async def get_match(
         self, club_id: uuid.UUID, tournament_id: uuid.UUID, match_id: uuid.UUID

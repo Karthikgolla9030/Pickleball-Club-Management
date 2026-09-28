@@ -181,9 +181,28 @@ class TournamentService:
             club_id=club_id, status=status_filter
         )
         updated_tournaments = []
+        needs_commit = False
         for t in tournaments:
             updated_t = await self._auto_close_registration_if_deadline_passed(t)
+            # Reconcile completion status from format_configuration (e.g. Pool Play / Scramble)
+            if updated_t.status != TournamentStatus.COMPLETED:
+                cfg = updated_t.format_configuration or {}
+                pps = cfg.get("pool_play_state", {})
+                if pps.get("completed") or pps.get("is_completed") or pps.get("winner") or cfg.get("winner"):
+                    updated_t.status = TournamentStatus.COMPLETED
+                    await self.tournament_repo.update(
+                        updated_t,
+                        status=TournamentStatus.COMPLETED,
+                    )
+                    needs_commit = True
             updated_tournaments.append(updated_t)
+
+        if needs_commit and self.db.is_active:
+            try:
+                await self.db.commit()
+            except Exception:
+                pass
+
         return [_build_tournament_response(t) for t in updated_tournaments]
 
     async def get_club_tournament(
@@ -199,6 +218,21 @@ class TournamentService:
                 detail="Tournament not found in this club",
             )
         tournament = await self._auto_close_registration_if_deadline_passed(tournament)
+        if tournament.status != TournamentStatus.COMPLETED:
+            cfg = tournament.format_configuration or {}
+            pps = cfg.get("pool_play_state", {})
+            if pps.get("completed") or pps.get("is_completed") or pps.get("winner") or cfg.get("winner"):
+                tournament.status = TournamentStatus.COMPLETED
+                await self.tournament_repo.update(
+                    tournament,
+                    status=TournamentStatus.COMPLETED,
+                )
+                if self.db.is_active:
+                    try:
+                        await self.db.commit()
+                    except Exception:
+                        pass
+
         return _build_tournament_response(tournament)
 
     async def get_tournament_by_id(

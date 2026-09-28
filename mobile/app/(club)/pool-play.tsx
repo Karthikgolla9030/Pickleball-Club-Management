@@ -63,6 +63,8 @@ import {
   generateChampionshipBracket,
   recalculateStats,
 } from '@/utils/poolPlayLogic';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '@/constants';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function PoolPlayManagementScreen() {
@@ -73,6 +75,7 @@ export default function PoolPlayManagementScreen() {
   const activeClubCourts = useMemo(() => (clubCourts || []).filter((c) => c.is_active), [clubCourts]);
   const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
   const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
+  const queryClient = useQueryClient();
 
   const {
     tournament,
@@ -421,12 +424,16 @@ export default function PoolPlayManagementScreen() {
         .endPoolPlayTournament(clubId, tournamentId)
         .then(() => {
           void refetchTournament();
+          if (clubId) {
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+          }
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
         })
         .catch((err) => {
           console.warn('Auto end pool play tournament error:', err);
         });
     }
-  }, [isTournamentCompleted, tournament?.status, clubId, tournamentId, refetchTournament]);
+  }, [isTournamentCompleted, tournament?.status, clubId, tournamentId, refetchTournament, queryClient]);
 
   // ─── Actions ──────────────────────────────────────────────────────────────
 
@@ -666,6 +673,10 @@ export default function PoolPlayManagementScreen() {
       try {
         await competitionApi.endPoolPlayTournament(clubId, tournamentId);
         void refetchTournament();
+        if (clubId) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        }
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       } catch (e) {
         console.warn('Failed to end tournament on backend:', e);
       }
