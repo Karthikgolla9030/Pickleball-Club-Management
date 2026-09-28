@@ -476,6 +476,12 @@ export default function RoundRobinWorkspaceScreen() {
         onPress: () => setActiveTab('matchups'),
       };
     }
+    if (matches.length > 0 && remaining === 0) {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     return null;
   }, [
     canManage,

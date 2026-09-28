@@ -792,3 +792,15 @@ async def test_scramble_rounds_advance_to_planned_limit_and_blocks_further(
     assert blocked_next.status_code == 400
     assert "configured limit of 3 rounds" in blocked_next.json()["detail"]
 
+    # Verify tournament is completed, champion crowned, and view_results in valid_actions
+    final_st = await async_client.get(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/state",
+        headers=headers,
+    )
+    assert final_st.status_code == 200
+    f_data = final_st.json()
+    assert f_data["tournament_status"] == "completed"
+    assert f_data["champion_player_id"] is not None
+    assert f_data["champion_player_name"] is not None
+    assert "view_results" in f_data["valid_actions"]
+

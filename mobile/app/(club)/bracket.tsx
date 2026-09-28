@@ -497,6 +497,12 @@ export default function BracketWorkspaceScreen() {
         onPress: () => setActiveTab('matches'),
       };
     }
+    if (matches.length > 0 && progress.remainingMatches === 0) {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     return null;
   }, [
     canManage,

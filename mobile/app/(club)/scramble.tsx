@@ -373,6 +373,12 @@ export default function ScrambleWorkspaceScreen() {
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
+    if (tournament?.status === 'completed' || state?.tournament_status === 'completed') {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     if (tournament?.status === 'draft') {
       return {
         label: 'Publish Tournament',
@@ -388,69 +394,112 @@ export default function ScrambleWorkspaceScreen() {
         variant: 'secondary' as const,
       };
     }
-    if (tournament?.status === 'completed') {
-      return {
-        label: 'View Results',
-        onPress: () => setActiveTab('results'),
-      };
-    }
-    if (tournament?.status === 'registration_closed') {
+    if (tournament?.status === 'registration_closed' && (!validMatches.length || state?.round_status === 'setup')) {
       return {
         label: 'Start Tournament',
         onPress: handleStartTournament,
         isLoading: isStartingTournament,
       };
     }
-    if (state?.round_status === 'setup' && (state?.available_players_count ?? 0) >= 4) {
+
+    const currentRound = state?.current_round ?? 1;
+    const plannedRounds = state?.planned_rounds ?? 3;
+    const isFinalRound = currentRound >= plannedRounds;
+
+    const currentRoundMatches = validMatches.filter(
+      (m) => ((m.round_number ?? m.round) ?? 1) === currentRound
+    );
+    const roundHasMatches = currentRoundMatches.length > 0;
+    const roundAllCompleted = roundHasMatches && currentRoundMatches.every((m) => m.status === 'completed');
+
+    const totalGames = state?.expected_total_games ?? (validMatches.length || 1);
+    const playedGames = validMatches.filter((m) => m.status === 'completed').length;
+    const allMatchesCompleted = validMatches.length > 0 && validMatches.every((m) => m.status === 'completed');
+
+    const isTournamentFullyPlayed =
+      (isFinalRound && roundAllCompleted) ||
+      (allMatchesCompleted && playedGames >= totalGames);
+
+    if (isTournamentFullyPlayed) {
       return {
-        label: 'Create Round Matchups',
-        onPress: handleCreateMatchups,
-        isLoading: isCreatingMatchups,
+        label: 'End Tournament & View Results',
+        onPress: () => {
+          setActiveTab('results');
+          setEndTournamentModalVisible(true);
+        },
+        isLoading: isEndingTournament,
       };
     }
-    if (state?.round_status === 'matchups_created') {
+
+    if (!roundHasMatches) {
+      if ((state?.available_players_count ?? 0) >= 4) {
+        return {
+          label: currentRound > 1 ? `Create Round ${currentRound} Matchups` : 'Create Round Matchups',
+          onPress: handleCreateMatchups,
+          isLoading: isCreatingMatchups,
+        };
+      }
+    } else {
+      if (roundAllCompleted) {
+        if (!isFinalRound) {
+          return {
+            label: `Start Round ${currentRound + 1}`,
+            onPress: handleStartNextRound,
+            isLoading: isStartingNextRound,
+          };
+        } else {
+          return {
+            label: 'End Tournament & View Results',
+            onPress: () => {
+              setActiveTab('results');
+              setEndTournamentModalVisible(true);
+            },
+            isLoading: isEndingTournament,
+          };
+        }
+      }
+
+      const anyMatchStarted = currentRoundMatches.some(
+        (m) => m.status === 'in_progress' || m.status === 'completed'
+      );
+      if (state?.round_status === 'matchups_created' && !anyMatchStarted) {
+        return {
+          label: `Start Round ${currentRound}`,
+          onPress: handleStartRound,
+          isLoading: isStartingRound,
+        };
+      }
+
       return {
-        label: `Start Round ${state?.current_round ?? 1}`,
-        onPress: handleStartRound,
-        isLoading: isStartingRound,
+        label: 'Enter Scores',
+        onPress: () => setActiveTab('rounds'),
       };
     }
-    if (state?.round_status === 'in_progress') {
-      return {
-        label: `Finish Round ${state?.current_round ?? 1}`,
-        onPress: handleFinishRound,
-        isLoading: isFinishingRound,
-      };
-    }
-    if (state?.round_status === 'completed' && state?.valid_actions?.includes('advance_round')) {
-      return {
-        label: 'Start Next Round',
-        onPress: handleStartNextRound,
-        isLoading: isStartingNextRound,
-      };
-    }
+
     return null;
   }, [
     canManage,
     tournament?.status,
-    isOpenRegistrationPending,
-    isCloseRegistrationPending,
+    state?.tournament_status,
     state?.round_status,
     state?.available_players_count,
     state?.current_round,
-    state?.valid_actions,
-    handleCreateMatchups,
+    state?.planned_rounds,
+    state?.expected_total_games,
+    validMatches,
+    isOpenRegistrationPending,
+    isCloseRegistrationPending,
+    isStartingTournament,
     isCreatingMatchups,
-    handleStartRound,
     isStartingRound,
-    handleFinishRound,
-    isFinishingRound,
-    handleStartNextRound,
     isStartingNextRound,
+    isEndingTournament,
     handlePublishTournament,
     handleCloseRegistration,
     handleStartTournament,
-    isStartingTournament,
+    handleCreateMatchups,
+    handleStartRound,
+    handleStartNextRound,
   ]);
 
   // ─── Loading & Error States ──────────────────────────────────────────────
@@ -596,10 +645,13 @@ export default function ScrambleWorkspaceScreen() {
         {activeTab === 'results' && (
           <ScrambleResultsTab
             state={state}
-            matches={matches}
+            matches={validMatches}
+            standings={standings || []}
             canManage={canManage}
             onOpenScoreModal={handleOpenScoreModal}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
+            onEndTournament={() => setEndTournamentModalVisible(true)}
+            isEndingTournament={isEndingTournament}
           />
         )}
 

@@ -20,32 +20,40 @@ import {
   View,
 } from 'react-native';
 import {
+  Award,
   CheckCircle2,
   ChevronDown,
   Info,
+  Medal,
   ShieldCheck,
   Trophy,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Radius, Spacing } from '@/theme';
 import type { Match } from '@/types';
-import type { ScrambleState, ScrambleSubTab } from '@/types/scramble';
+import type { ScrambleStandingRow, ScrambleState, ScrambleSubTab } from '@/types/scramble';
 import { formatPartnerNames } from '@/utils/scrambleLogic';
 
 interface ScrambleResultsTabProps {
   state: ScrambleState | null;
   matches: Match[];
+  standings?: ScrambleStandingRow[];
   canManage: boolean;
   onOpenScoreModal?: (match: Match) => void;
   onNavigateTab?: (tab: ScrambleSubTab) => void;
+  onEndTournament?: () => void;
+  isEndingTournament?: boolean;
 }
 
 export function ScrambleResultsTab({
   state,
   matches,
+  standings = [],
   canManage,
   onOpenScoreModal,
   onNavigateTab,
+  onEndTournament,
+  isEndingTournament = false,
 }: ScrambleResultsTabProps) {
   const [selectedRoundFilter, setSelectedRoundFilter] = useState<number | 'all'>('all');
   const [isFilterPickerOpen, setIsFilterPickerOpen] = useState(false);
@@ -86,36 +94,85 @@ export function ScrambleResultsTab({
   const remainingCount = Math.max(0, totalCount - playedCount);
   const percentDone = totalCount > 0 ? Math.min(100, Math.round((playedCount / totalCount) * 100)) : 0;
 
+  // Has all tournament games completed or tournament completed in DB?
+  const isAllGamesCompleted =
+    matches.length > 0 && completedMatches.length === matches.length && remainingCount === 0;
+  const isTournamentCompleted = isCompleted || isAllGamesCompleted;
+
+  // Champion resolution (prioritizing state crowned champion, then #1 standing)
+  const championName =
+    state?.champion_player_name ||
+    (isTournamentCompleted && standings.length > 0 ? standings[0].display_name : null);
+  const championStanding =
+    isTournamentCompleted && standings.length > 0 ? standings[0] : null;
+
+  // Top 3 Podium
+  const podium = useMemo(() => {
+    if (!isTournamentCompleted || standings.length === 0) return [];
+    return standings.slice(0, 3);
+  }, [isTournamentCompleted, standings]);
+
   return (
     <ScrollView
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      {/* Champion Banner if Tournament is Truly Completed */}
-      {isCompleted && state?.champion_player_name && (
+      {/* ── Champion Banner when tournament is completed or all games are played ── */}
+      {isTournamentCompleted && championName && (
         <View style={styles.championBanner}>
           <View style={styles.trophyIconWrap}>
             <Trophy size={28} color="#D97706" />
           </View>
           <View style={{ flex: 1 }}>
             <AppText style={styles.championPreTitle}>TOURNAMENT CHAMPION</AppText>
-            <AppText style={styles.championName}>{state.champion_player_name}</AppText>
-            <AppText style={styles.championSub}>
-              Official tournament winner. Congratulations!
-            </AppText>
+            <AppText style={styles.championName}>{championName}</AppText>
+            {championStanding ? (
+              <AppText style={styles.championSub}>
+                {championStanding.wins}W - {championStanding.losses}L • Diff: {championStanding.points_differential > 0 ? `+${championStanding.points_differential}` : championStanding.points_differential} • {championStanding.points_scored} Pts
+              </AppText>
+            ) : (
+              <AppText style={styles.championSub}>
+                Official tournament winner. Congratulations!
+              </AppText>
+            )}
           </View>
         </View>
       )}
 
-      {/* Notice Card if Tournament is NOT Completed */}
-      {!isCompleted && (
+      {/* ── Organizer Finalize Prompt if all games are played but tournament not yet completed ── */}
+      {!isCompleted && isAllGamesCompleted && canManage && onEndTournament && (
+        <View style={styles.finalizePromptCard}>
+          <View style={styles.finalizePromptHeader}>
+            <CheckCircle2 size={20} color="#08785E" />
+            <AppText style={styles.finalizePromptTitle}>All Matches Completed</AppText>
+          </View>
+          <AppText style={styles.finalizePromptText}>
+            All {playedCount} tournament games have been completed! Official standings are ready. Finalize and conclude the tournament to record official ratings and publish results.
+          </AppText>
+          <TouchableOpacity
+            style={styles.finalizePromptBtn}
+            onPress={onEndTournament}
+            disabled={isEndingTournament}
+            activeOpacity={0.8}
+          >
+            <AppText style={styles.finalizePromptBtnText}>
+              {isEndingTournament ? 'Finalizing Tournament...' : 'End Tournament & Finalize Results'}
+            </AppText>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Notice Card only if Tournament is NOT Completed and games remain ── */}
+      {!isTournamentCompleted && (
         <View style={styles.notCompletedCard}>
           <View style={styles.notCompletedIconCircle}>
             <Trophy size={32} color="#71817E" />
           </View>
-          <AppText style={styles.notCompletedTitle}>Final Results Not Yet Available</AppText>
+          <AppText style={styles.notCompletedTitle}>Tournament In Progress</AppText>
           <AppText style={styles.notCompletedText}>
-            The tournament is currently in progress. Final individual rankings, champion crowning, and official podium positions will be available after all games are completed and the tournament is ended.
+            {remainingCount > 0
+              ? `${remainingCount} games remaining across planned rounds. Final rankings, champion crowning, and official podium positions will be available after all games are completed.`
+              : 'Final individual rankings, champion crowning, and official podium positions will be available after all games are completed and the tournament is ended.'}
           </AppText>
           {onNavigateTab && (
             <TouchableOpacity
@@ -126,6 +183,82 @@ export function ScrambleResultsTab({
               <AppText style={styles.viewStandingsBtnText}>View Current Live Standings</AppText>
             </TouchableOpacity>
           )}
+        </View>
+      )}
+
+      {/* ── Official Podium Showcase if Tournament Completed ── */}
+      {isTournamentCompleted && podium.length > 0 && (
+        <View style={styles.podiumCard}>
+          <AppText style={styles.podiumTitle}>Official Podium</AppText>
+          <View style={styles.podiumList}>
+            {podium.map((p, idx) => {
+              const rankColor = idx === 0 ? '#D97706' : idx === 1 ? '#64748B' : '#B45309';
+              const rankBg = idx === 0 ? '#FEF3C7' : idx === 1 ? '#F1F5F9' : '#FFEDD5';
+              const label = idx === 0 ? '1st Place • Champion' : idx === 1 ? '2nd Place • Runner-Up' : '3rd Place';
+
+              return (
+                <View key={String(p.player_membership_id)} style={styles.podiumItem}>
+                  <View style={[styles.podiumMedalWrap, { backgroundColor: rankBg }]}>
+                    {idx === 0 ? (
+                      <Trophy size={16} color={rankColor} />
+                    ) : (
+                      <Medal size={16} color={rankColor} />
+                    )}
+                  </View>
+                  <View style={styles.podiumPlayerInfo}>
+                    <AppText style={[styles.podiumPlayerRankLabel, { color: rankColor }]}>
+                      {label}
+                    </AppText>
+                    <AppText style={styles.podiumPlayerName}>{p.display_name}</AppText>
+                  </View>
+                  <View style={styles.podiumPlayerStatsWrap}>
+                    <AppText style={styles.podiumPlayerScore}>
+                      {p.wins}W - {p.losses}L
+                    </AppText>
+                    <AppText style={styles.podiumPlayerDiff}>
+                      {p.points_differential > 0 ? `+${p.points_differential}` : p.points_differential} diff
+                    </AppText>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* ── Final Standings Table Summary if Tournament Completed ── */}
+      {isTournamentCompleted && standings.length > 0 && (
+        <View style={styles.standingsCard}>
+          <AppText style={styles.standingsCardTitle}>Final Standings</AppText>
+          <View style={styles.standingsTableHeader}>
+            <AppText style={styles.thRank}>#</AppText>
+            <AppText style={styles.thPlayer}>PLAYER</AppText>
+            <AppText style={styles.thStat}>W-L</AppText>
+            <AppText style={styles.thStat}>PD</AppText>
+            <AppText style={styles.thStat}>PTS</AppText>
+          </View>
+          {standings.map((row) => (
+            <View key={String(row.player_membership_id)} style={styles.standingsRow}>
+              <AppText style={styles.tdRank}>{row.rank}</AppText>
+              <AppText style={styles.tdPlayer} numberOfLines={1}>
+                {row.display_name}
+              </AppText>
+              <AppText style={styles.tdStat}>
+                {row.wins}-{row.losses}
+              </AppText>
+              <AppText
+                style={[
+                  styles.tdStat,
+                  row.points_differential > 0 && { color: '#08785E', fontWeight: '700' },
+                ]}
+              >
+                {row.points_differential > 0 ? `+${row.points_differential}` : row.points_differential}
+              </AppText>
+              <AppText style={[styles.tdStat, { fontWeight: '700', color: '#102E2A' }]}>
+                {row.points_scored}
+              </AppText>
+            </View>
+          ))}
         </View>
       )}
 
@@ -695,6 +828,172 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#71817E',
     marginTop: 2,
+  },
+  finalizePromptCard: {
+    backgroundColor: '#F0FDF4',
+    borderRadius: Radius.lg ?? 16,
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    padding: Spacing[4],
+    marginBottom: Spacing[3],
+    gap: Spacing[2],
+  },
+  finalizePromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  finalizePromptTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  finalizePromptText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#15803D',
+  },
+  finalizePromptBtn: {
+    backgroundColor: '#08785E',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  finalizePromptBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  podiumCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg ?? 16,
+    borderWidth: 1,
+    borderColor: '#DCE8E3',
+    padding: Spacing[4],
+    marginBottom: Spacing[3],
+  },
+  podiumTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#102E2A',
+    marginBottom: Spacing[3],
+  },
+  podiumList: {
+    gap: Spacing[2],
+  },
+  podiumItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAF9',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#E5EDE9',
+  },
+  podiumMedalWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  podiumPlayerInfo: {
+    flex: 1,
+  },
+  podiumPlayerRankLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginBottom: 1,
+  },
+  podiumPlayerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102E2A',
+  },
+  podiumPlayerStatsWrap: {
+    alignItems: 'flex-end',
+  },
+  podiumPlayerScore: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102E2A',
+  },
+  podiumPlayerDiff: {
+    fontSize: 11,
+    color: '#08785E',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  standingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg ?? 16,
+    borderWidth: 1,
+    borderColor: '#DCE8E3',
+    padding: Spacing[4],
+    marginBottom: Spacing[3],
+  },
+  standingsCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#102E2A',
+    marginBottom: Spacing[3],
+  },
+  standingsTableHeader: {
+    flexDirection: 'row',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5EDE9',
+    marginBottom: 4,
+  },
+  thRank: {
+    width: 28,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#71817E',
+  },
+  thPlayer: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#71817E',
+  },
+  thStat: {
+    width: 44,
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#71817E',
+  },
+  standingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F3',
+  },
+  tdRank: {
+    width: 28,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102E2A',
+  },
+  tdPlayer: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#102E2A',
+  },
+  tdStat: {
+    width: 44,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#71817E',
   },
   notCompletedCard: {
     backgroundColor: '#FFFFFF',

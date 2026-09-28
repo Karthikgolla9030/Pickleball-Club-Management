@@ -2354,10 +2354,26 @@ class CompetitionService:
         elif tournament.format == TournamentFormat.SCRAMBLE:
             config = dict(tournament.format_configuration or {})
             has_workspace = "rounds_data" in config or "round_status" in config
+            raw_planned = config.get("planned_rounds") or config.get("rounds")
+            try:
+                planned_rounds = int(raw_planned) if raw_planned is not None else 3
+            except (ValueError, TypeError):
+                planned_rounds = 3
+            current_round = config.get("current_round", 1)
+
             if force_scramble_end:
                 is_finished = True
-            elif not has_workspace and all_completed and playable_matches:
-                is_finished = True
+            elif all_completed and playable_matches:
+                if has_workspace:
+                    current_round_matches = [m for m in playable_matches if m.round_number == current_round]
+                    if (
+                        current_round >= planned_rounds
+                        and current_round_matches
+                        and all(m.status == MatchStatus.COMPLETED for m in current_round_matches)
+                    ):
+                        is_finished = True
+                else:
+                    is_finished = True
 
             if is_finished:
                 standings_resp = await self.get_scramble_standings(tournament.club_id, tournament_id)
@@ -3307,16 +3323,37 @@ class CompetitionService:
         else:
             expected_total_games = rec_details.get("expected_total_games", planned_rounds * 3)
 
-        if round_status == "in_progress" and all_round_completed:
-            round_status = "completed"
-            config["round_status"] = "completed"
+        # Dynamic round_status reconciliation so that if scores were recorded, status reflects accurately
+        reconciled_status = round_status
+        if round_games_total > 0 and all_round_completed:
+            reconciled_status = "completed"
+        elif round_games_completed > 0 or any(m.status == MatchStatus.IN_PROGRESS for m in round_matches):
+            if round_status in ("setup", "matchups_created"):
+                reconciled_status = "in_progress"
+        elif round_games_total > 0 and round_status == "setup":
+            reconciled_status = "matchups_created"
+
+        if reconciled_status != round_status:
+            round_status = reconciled_status
+            config["round_status"] = round_status
             rounds_store = dict(config.get("rounds_data") or {})
             if str(current_round) in rounds_store:
-                rounds_store[str(current_round)]["status"] = "completed"
+                rounds_store[str(current_round)]["status"] = round_status
                 config["rounds_data"] = rounds_store
             flag_modified(tournament, "format_configuration")
             await self.tournament_repo.update(tournament, format_configuration=config)
             await self.db.commit()
+
+        # If all playable games are completed and current_round >= planned_rounds:
+        if (
+            is_final_round
+            and round_games_total > 0
+            and all_round_completed
+            and tournament.status not in (TournamentStatus.COMPLETED, TournamentStatus.CANCELLED)
+        ):
+            await self._evaluate_and_persist_tournament_completion(tournament, force_scramble_end=True)
+            await self.db.commit()
+            tournament.status = TournamentStatus.COMPLETED
 
         standings_resp = await self.get_scramble_standings(club_id, tournament_id)
         standings = standings_resp.standings
@@ -3325,10 +3362,11 @@ class CompetitionService:
         champion_id = None
         champion_name = None
         if (
-            tournament.status == TournamentStatus.COMPLETED
+            (
+                tournament.status == TournamentStatus.COMPLETED
+                or (is_final_round and round_games_total > 0 and all_round_completed)
+            )
             and standings
-            and total_games > 0
-            and games_completed == total_games
         ):
             champion_id = standings[0].player_membership_id
             champion_name = standings[0].display_name
@@ -3419,7 +3457,11 @@ class CompetitionService:
             elif round_status == "completed":
                 if not is_final_round:
                     valid_actions.append("start_next_round")
+                    valid_actions.append("advance_round")
                 valid_actions.append("end_tournament")
+        elif tournament.status == TournamentStatus.COMPLETED:
+            valid_actions.append("view_results")
+            valid_actions.append("end_tournament")
 
         rounds_data_cfg = config.get("rounds_data")
         if not isinstance(rounds_data_cfg, dict):
@@ -3580,17 +3622,10 @@ class CompetitionService:
         """Create deterministic rotating doubles matchups for the current round."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
-        self._assert_not_completed_or_cancelled(tournament)
 
         config = dict(tournament.format_configuration or {})
         current_round = config.get("current_round", 1)
         round_status = config.get("round_status", "setup")
-
-        if round_status not in ("setup", "matchups_created"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot generate matchups when round is in '{round_status}' state.",
-            )
 
         raw_planned = config.get("planned_rounds") or config.get("rounds")
         try:
@@ -3604,6 +3639,14 @@ class CompetitionService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot create matchups: current round ({current_round}) exceeds planned limit of {planned_rounds} rounds.",
+            )
+
+        self._assert_not_completed_or_cancelled(tournament)
+
+        if round_status not in ("setup", "matchups_created"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot generate matchups when round is in '{round_status}' state.",
             )
 
         all_matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
@@ -3811,10 +3854,15 @@ class CompetitionService:
         """Finish the current Scramble round after all games are completed."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
-        self._assert_not_completed_or_cancelled(tournament)
 
         config = dict(tournament.format_configuration or {})
         current_round = config.get("current_round", 1)
+
+        # Idempotent return if round or tournament is already completed
+        if tournament.status == TournamentStatus.COMPLETED or config.get("round_status") == "completed":
+            return await self.get_scramble_state(club_id, tournament_id)
+
+        self._assert_not_completed_or_cancelled(tournament)
 
         all_matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
         round_matches = [m for m in all_matches if m.round_number == current_round]
@@ -3838,6 +3886,15 @@ class CompetitionService:
         await self.tournament_repo.update(tournament, format_configuration=config)
         await self.db.commit()
 
+        raw_planned = config.get("planned_rounds") or config.get("rounds")
+        try:
+            planned_rounds = int(raw_planned) if raw_planned is not None else 3
+        except (ValueError, TypeError):
+            planned_rounds = 3
+        if current_round >= planned_rounds:
+            await self._evaluate_and_persist_tournament_completion(tournament, force_scramble_end=True)
+            await self.db.commit()
+
         return await self.get_scramble_state(club_id, tournament_id)
 
     async def start_scramble_next_round(
@@ -3846,15 +3903,8 @@ class CompetitionService:
         """Advance to the next Scramble round, respecting configured planned rounds limit."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
-        self._assert_not_completed_or_cancelled(tournament)
 
         config = dict(tournament.format_configuration or {})
-        if config.get("round_status") != "completed":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot start next round: current round status is '{config.get('round_status')}' (expected 'completed').",
-            )
-
         current_round = config.get("current_round", 1)
         raw_planned = config.get("planned_rounds") or config.get("rounds")
         try:
@@ -3868,6 +3918,14 @@ class CompetitionService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot start next round: tournament has reached its configured limit of {planned_rounds} rounds. Please end the tournament and publish results.",
+            )
+
+        self._assert_not_completed_or_cancelled(tournament)
+
+        if config.get("round_status") != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot start next round: current round status is '{config.get('round_status')}' (expected 'completed').",
             )
 
         config["current_round"] = current_round + 1
@@ -3921,6 +3979,8 @@ class CompetitionService:
         """Explicitly end the Scramble tournament and crown the champion."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
+        if tournament.status == TournamentStatus.COMPLETED:
+            return await self.get_scramble_state(club_id, tournament_id)
         self._assert_not_completed_or_cancelled(tournament)
 
         config = dict(tournament.format_configuration or {})

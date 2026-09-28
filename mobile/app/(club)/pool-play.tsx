@@ -705,6 +705,19 @@ export default function PoolPlayManagementScreen() {
         },
       };
     }
+    if (championshipMatches.length > 0) {
+      const champRemaining = championshipMatches.filter((m) => m.status !== 'completed').length;
+      if (champRemaining > 0) {
+        return {
+          label: 'Championship Scores',
+          onPress: () => setActiveTab('championship'),
+        };
+      }
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
     return null;
   }, [
     tournament?.status,
