@@ -345,7 +345,7 @@ export default function PlayerLeaguesScreen() {
             </View>
 
             <AppText style={styles.modalSubtitle}>
-              {`${selectedLeague?.number_of_weeks} Weeks • ${(selectedLeague?.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${(selectedLeague?.teams_count ?? 0) > 0 ? `${selectedLeague?.teams_count}/${selectedLeague?.max_teams || 12} Teams` : 'Teams not finalized'} • Top ${selectedLeague?.playoff_team_count || 4} to Playoffs`}
+              {`${selectedLeague?.number_of_weeks} Wks • ${(selectedLeague?.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${(selectedLeague?.teams_count ?? 0) > 0 ? `${selectedLeague?.teams_count}/${selectedLeague?.max_teams || 12} Teams` : 'Teams not finalized'} • Top ${selectedLeague?.playoff_team_count || 4} Playoffs`}
             </AppText>
 
             {/* Registration Banner / Action for Player */}

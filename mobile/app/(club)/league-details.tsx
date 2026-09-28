@@ -21,7 +21,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -723,8 +722,8 @@ export default function ClubLeagueDetailsScreen() {
   const teamCount = teams?.length ?? league.teams_count ?? 0;
   const statusBadge = getLeagueStatusBadgeDetails(league.status);
 
-  // Subtitle string matching mockup: "4 Weeks • 8 Teams • Doubles • Top 4 to Playoffs"
-  const subtitleText = `${league.number_of_weeks || 4} Weeks • ${league.max_teams || 8} Teams • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • Top ${league.playoff_team_count || 4} to Playoffs`;
+  // Subtitle string: "12 Wks • 12 Teams • Doubles • Top 4 Playoffs"
+  const subtitleText = `${league.number_of_weeks || 4} Wks • ${league.max_teams || 8} Teams • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • Top ${league.playoff_team_count || 4} Playoffs`;
 
   // Registration closes calculation
   const regCloseDateStr = league.registration_close_at
@@ -808,7 +807,7 @@ export default function ClubLeagueDetailsScreen() {
             </View>
 
             {/* Subtitle */}
-            <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+            <AppText style={styles.headerSubtitleText}>
               {subtitleText}
             </AppText>
           </View>
@@ -825,18 +824,9 @@ export default function ClubLeagueDetailsScreen() {
         </View>
       </View>
 
-      {/* ─── HERO IMAGE & REGISTRATION STATS (SCREEN 2) ─── */}
+      {/* ─── REGISTRATION STATS (SCREEN 2) ─── */}
       {activeTab === 'teams' && (
         <View style={styles.heroSection}>
-          {/* Court Hero Image */}
-          <View style={styles.heroImageWrapper}>
-            <Image
-              source={require('../../assets/leagues/hero_banner.jpg')}
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
-          </View>
-
           {/* 2-Column Registration Stats Card */}
           <View style={styles.regStatsCard}>
             <View style={styles.regStatCol}>
@@ -2335,11 +2325,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   headerSubtitleText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#6B7280',
     fontWeight: '500',
     textAlign: 'center',
     marginTop: 2,
+    lineHeight: 15,
   },
   headerMenuButton: {
     width: 36,
@@ -2352,19 +2343,8 @@ const styles = StyleSheet.create({
   // ─── Hero Section (Screen 2) ───
   heroSection: {
     paddingHorizontal: Spacing[4],
-    marginBottom: Spacing[3],
-  },
-  heroImageWrapper: {
-    width: '100%',
-    height: 120,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#E5E7EB',
-    marginBottom: Spacing[3],
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+    marginTop: Spacing[2],
+    marginBottom: Spacing[2],
   },
   regStatsCard: {
     flexDirection: 'row',
@@ -2373,7 +2353,7 @@ const styles = StyleSheet.create({
     padding: Spacing[3],
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    marginBottom: Spacing[3],
+    marginBottom: Spacing[2],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
