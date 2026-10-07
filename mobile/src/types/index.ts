@@ -123,6 +123,7 @@ export interface PlayerProfile {
   gender?: string | null;
   profile_image_url: string | null;
   bio: string | null;
+  skill_rating?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -906,8 +907,17 @@ export interface LeagueSummary {
   end_date?: string | null;
   champion_team_id: string | null;
   champion_team?: { id: string; name: string } | null;
+  category?: string | null;
+  registration_status?: string | null;
   teams_count: number;
+  current_teams_count?: number;
   weeks_count: number;
+  total_weeks?: number;
+  total_matches_count?: number;
+  completed_matches_count?: number;
+  is_registered?: boolean;
+  my_team_id?: string | null;
+  my_team_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -992,6 +1002,7 @@ export interface PlayerLeagueRegisterPayload {
   teamName: string;
   partnerMembershipId?: string | null;
   partnerName?: string | null;
+  skillRating?: number | null;
 }
 
 export interface LeagueTeam {
@@ -1001,6 +1012,7 @@ export interface LeagueTeam {
   seed: number | null;
   avg_skill_level?: number | null;
   members: LeagueTeamMember[];
+  created_at?: string;
 }
 
 export interface LeagueMatch {

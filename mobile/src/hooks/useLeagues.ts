@@ -668,6 +668,7 @@ export function usePlayerRegisterLeague(leagueId: string | null) {
       teamName: string;
       partnerMembershipId?: string | null;
       partnerName?: string | null;
+      skillRating?: number | null;
     }) => {
       if (!leagueId) throw new Error('League ID required');
       return leagueApi.registerPlayerLeague(leagueId, payload);

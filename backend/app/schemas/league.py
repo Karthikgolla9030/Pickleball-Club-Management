@@ -79,6 +79,11 @@ class LeagueResponse(BaseModel):
     champion_team: dict[str, Any] | None = None
     teams_count: int = 0
     weeks_count: int = 0
+    total_matches_count: int = 0
+    completed_matches_count: int = 0
+    is_registered: bool = False
+    my_team_id: uuid.UUID | None = None
+    my_team_name: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -87,6 +92,7 @@ class PlayerLeagueRegisterRequest(BaseModel):
     team_name: str = Field(..., min_length=1, max_length=255, description="Name for the registered team")
     partner_membership_id: uuid.UUID | None = Field(None, description="Active club player membership ID if selected from club")
     partner_name: str | None = Field(None, max_length=255, description="Manual doubles partner name if not selecting an existing member")
+    skill_rating: float | None = Field(None, ge=1.0, le=7.0, description="Submitted or confirmed skill rating")
 
 
 class LeagueEligiblePartnerResponse(BaseModel):

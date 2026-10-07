@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import case, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -232,6 +232,60 @@ class LeagueRepository:
         )
         result = await self.db.execute(stmt)
         return {row[0]: row[1] for row in result.all()}
+
+    async def get_match_counts_for_leagues(
+        self, league_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, int]]:
+        if not league_ids:
+            return {}
+        stmt = (
+            select(
+                Match.league_id,
+                func.count(Match.id).label("total"),
+                func.count(case((Match.status == MatchStatus.COMPLETED, 1))).label("completed"),
+            )
+            .where(Match.league_id.in_(league_ids))
+            .group_by(Match.league_id)
+        )
+        result = await self.db.execute(stmt)
+        return {
+            row[0]: {"total": row[1] or 0, "completed": row[2] or 0}
+            for row in result.all()
+            if row[0] is not None
+        }
+
+    async def get_match_counts(self, league_id: uuid.UUID) -> dict[str, int]:
+        stmt = (
+            select(
+                func.count(Match.id).label("total"),
+                func.count(case((Match.status == MatchStatus.COMPLETED, 1))).label("completed"),
+            )
+            .where(Match.league_id == league_id)
+        )
+        result = await self.db.execute(stmt)
+        row = result.first()
+        if row:
+            return {"total": row[0] or 0, "completed": row[1] or 0}
+        return {"total": 0, "completed": 0}
+
+    async def get_user_teams_for_leagues(
+        self, user_id: uuid.UUID, league_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, Team]:
+        if not league_ids:
+            return {}
+        stmt = (
+            select(Team)
+            .join(Team.members)
+            .join(TeamMember.player_membership)
+            .where(
+                Team.league_id.in_(league_ids),
+                ClubPlayerMembership.user_id == user_id,
+            )
+            .options(*_team_eager_options())
+        )
+        result = await self.db.execute(stmt)
+        teams = result.scalars().all()
+        return {t.league_id: t for t in teams if t.league_id is not None}
 
     async def get_team_by_id(
         self,

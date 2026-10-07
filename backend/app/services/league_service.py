@@ -149,6 +149,11 @@ class LeagueService:
         self,
         league: League,
         teams_count: int | None = None,
+        total_matches: int = 0,
+        completed_matches: int = 0,
+        is_registered: bool = False,
+        my_team_id: uuid.UUID | None = None,
+        my_team_name: str | None = None,
     ) -> LeagueResponse:
         if teams_count is None:
             teams_count = await self.league_repo.count_teams_by_league(league.id)
@@ -183,6 +188,11 @@ class LeagueService:
             champion_team=champion_team_dict,
             teams_count=teams_count,
             weeks_count=league.number_of_weeks,
+            total_matches_count=total_matches,
+            completed_matches_count=completed_matches,
+            is_registered=is_registered,
+            my_team_id=my_team_id,
+            my_team_name=my_team_name,
             created_at=league.created_at,
             updated_at=league.updated_at,
         )
@@ -191,23 +201,63 @@ class LeagueService:
         self,
         club_id: uuid.UUID | None,
         league_id: uuid.UUID,
+        current_user: User | None = None,
     ) -> LeagueResponse:
         league = await self._get_league_or_404(league_id, club_id=club_id)
-        return await self._format_league_response(league)
+        m_counts = await self.league_repo.get_match_counts(league_id)
+        is_reg = False
+        my_tid = None
+        my_tname = None
+        if current_user:
+            user_teams = await self.league_repo.get_user_teams_for_leagues(current_user.id, [league_id])
+            if league_id in user_teams:
+                is_reg = True
+                my_tid = user_teams[league_id].id
+                my_tname = user_teams[league_id].name
+
+        return await self._format_league_response(
+            league,
+            total_matches=m_counts.get("total", 0),
+            completed_matches=m_counts.get("completed", 0),
+            is_registered=is_reg,
+            my_team_id=my_tid,
+            my_team_name=my_tname,
+        )
 
     async def list_club_leagues(self, club_id: uuid.UUID) -> list[LeagueResponse]:
         leagues = await self.league_repo.list_leagues_by_club(club_id)
-        counts = await self.league_repo.get_team_counts_for_leagues([l.id for l in leagues])
+        l_ids = [l.id for l in leagues]
+        counts = await self.league_repo.get_team_counts_for_leagues(l_ids)
+        m_counts = await self.league_repo.get_match_counts_for_leagues(l_ids)
         return [
-            await self._format_league_response(l, teams_count=counts.get(l.id, 0))
+            await self._format_league_response(
+                l,
+                teams_count=counts.get(l.id, 0),
+                total_matches=m_counts.get(l.id, {}).get("total", 0),
+                completed_matches=m_counts.get(l.id, {}).get("completed", 0),
+            )
             for l in leagues
         ]
 
-    async def list_public_leagues(self) -> list[LeagueResponse]:
+    async def list_public_leagues(self, current_user: User | None = None) -> list[LeagueResponse]:
         leagues = await self.league_repo.list_public_leagues()
-        counts = await self.league_repo.get_team_counts_for_leagues([l.id for l in leagues])
+        l_ids = [l.id for l in leagues]
+        counts = await self.league_repo.get_team_counts_for_leagues(l_ids)
+        m_counts = await self.league_repo.get_match_counts_for_leagues(l_ids)
+        user_teams: dict[uuid.UUID, Any] = {}
+        if current_user and l_ids:
+            user_teams = await self.league_repo.get_user_teams_for_leagues(current_user.id, l_ids)
+
         return [
-            await self._format_league_response(l, teams_count=counts.get(l.id, 0))
+            await self._format_league_response(
+                l,
+                teams_count=counts.get(l.id, 0),
+                total_matches=m_counts.get(l.id, {}).get("total", 0),
+                completed_matches=m_counts.get(l.id, {}).get("completed", 0),
+                is_registered=l.id in user_teams,
+                my_team_id=user_teams[l.id].id if l.id in user_teams else None,
+                my_team_name=user_teams[l.id].name if l.id in user_teams else None,
+            )
             for l in leagues
         ]
 
@@ -1552,6 +1602,8 @@ class LeagueService:
             name=clean_name,
             members_data=members_data,
         )
+        if payload.skill_rating is not None and getattr(user, "player_profile", None):
+            user.player_profile.skill_rating = payload.skill_rating
         await self.db.commit()
         return self._format_team_response(team)
 

@@ -67,6 +67,29 @@ async def get_current_user(
     return user
 
 
+async def get_optional_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    """
+    Dependency: optionally extract and validate user if Authorization header is present.
+    Returns None if missing or invalid, never raises 401.
+    """
+    if not credentials:
+        return None
+    try:
+        user_id = decode_access_token(credentials.credentials)
+    except Exception:
+        return None
+    try:
+        user = await UserRepository(db).get_by_id(UUID(user_id))
+        if not user or not user.is_active:
+            return None
+        return user
+    except Exception:
+        return None
+
+
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:

@@ -48,6 +48,7 @@ export default function PlayerLayout() {
         <Stack.Screen name="tournaments" />
         <Stack.Screen name="tournament-details" />
         <Stack.Screen name="leagues" />
+        <Stack.Screen name="league-details" />
         <Stack.Screen name="competition-schedule" />
         <Stack.Screen name="events" />
         <Stack.Screen name="lessons" />

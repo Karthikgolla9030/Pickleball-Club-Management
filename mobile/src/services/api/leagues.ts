@@ -287,12 +287,13 @@ export const leagueApi = {
 
   registerPlayerLeague(
     leagueId: string,
-    payload: PlayerLeagueRegisterPayload | { teamName: string; partnerMembershipId?: string | null; partnerName?: string | null }
+    payload: PlayerLeagueRegisterPayload | { teamName: string; partnerMembershipId?: string | null; partnerName?: string | null; skillRating?: number | null }
   ): Promise<LeagueTeam> {
     return apiClient.post<LeagueTeam>(`${playerLeagueBase()}/${leagueId}/register`, {
       team_name: payload.teamName,
       partner_membership_id: payload.partnerMembershipId || null,
       partner_name: payload.partnerName || null,
+      skill_rating: (payload as any).skillRating ?? null,
     });
   },
 

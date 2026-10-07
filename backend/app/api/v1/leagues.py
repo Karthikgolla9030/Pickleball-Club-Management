@@ -46,7 +46,7 @@ from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_permission
+from app.api.deps import get_current_user, get_optional_current_user, require_permission
 from app.core.database import get_db
 from app.models.club_membership import ClubMembership
 from app.models.competition import MatchStage
@@ -539,9 +539,10 @@ async def get_playoffs(
     summary="List active leagues (player view)",
 )
 async def player_list_leagues(
+    current_user: User | None = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[LeagueResponse]:
-    return await LeagueService(db).list_public_leagues()
+    return await LeagueService(db).list_public_leagues(current_user=current_user)
 
 
 @player_league_router.get(
@@ -551,9 +552,10 @@ async def player_list_leagues(
 )
 async def player_get_league(
     league_id: uuid.UUID,
+    current_user: User | None = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> LeagueResponse:
-    return await LeagueService(db).get_league(None, league_id)
+    return await LeagueService(db).get_league(None, league_id, current_user=current_user)
 
 
 @player_league_router.get(

@@ -1,96 +1,53 @@
 /**
- * Aught2 Pickleball — Player Leagues Screen (Phase 9)
+ * Aught2 Pickleball — Player Leagues Screen (Screen 1)
  *
- * Provides authenticated players with read-only league viewing:
- *   - Browse active & completed leagues across clubs
- *   - View real-time cumulative standings and tiebreaker ranks
- *   - Inspect weekly match schedules and verified scores
- *   - Track championship playoff bracket progression and crowned champion
+ * Dedicated player discovery list matching Screen 1 of reference mockup:
+ *   - Top header with hamburger menu control and title "Leagues"
+ *   - Introductory subtitle: "Track weekly standings, upcoming matches, and playoff brackets."
+ *   - Strictly NO category filter chips (Doubles, Singles, Mixed, My Leagues)
+ *   - Roomy cards with 104x104 court thumbnails, authoritative lifecycle status badges,
+ *     natural wrapping titles, summary details, and contextual primary actions:
+ *     - Open registration + unregistered -> Register
+ *     - Player registered -> View Registration Details
+ *     - Closed registration + unregistered -> Registration Closed
+ *     - Live / in progress -> View Live League
+ *     - Completed -> View Results
+ *   - Full integration with dedicated registration modal and saved registration details modal
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
-  Alert,
   FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   RefreshControl,
-  ScrollView,
   StyleSheet,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import {
+  AppHeader,
   AppText,
-  Badge,
-  Button,
-  Card,
   EmptyState,
   ErrorState,
-  FilterChips,
-  Input,
-  LoadingState,
-  Screen,
-  ScreenHeader,
-  SegmentedTabs,
-  AppHeader,
   LeagueCard,
+  LoadingState,
 } from '@/components';
-import { getLeagueStatusBadgeDetails } from '@/components/competition/LeagueOptionsMenuModal';
 import {
-  useAuth,
-  useLeagueEligiblePartners,
-  usePlayerCancelLeagueRegistration,
-  usePlayerLeagueMatches,
-  usePlayerLeaguePlayoffs,
-  usePlayerLeagueRegistrationStatus,
-  usePlayerLeagues,
-  usePlayerLeagueStandings,
-  usePlayerLeagueWeeks,
-  usePlayerRegisterLeague,
-} from '@/hooks';
-import { Colors, Layout, Radius, Shadows, Spacing, Typography } from '@/theme';
-import {
-  LEAGUE_STATUS_LABELS,
-  type LeagueEligiblePartner,
-  type LeagueSummary,
-} from '@/types';
-import { formatDate, formatDateTime } from '@/utils/formatters';
-
-type PlayerDetailTabKey = 'standings' | 'schedule' | 'playoffs' | 'results';
-
-const LEAGUE_DETAIL_TABS: { key: PlayerDetailTabKey; label: string }[] = [
-  { key: 'standings', label: 'Standings' },
-  { key: 'schedule', label: 'Schedule' },
-  { key: 'playoffs', label: 'Playoffs' },
-  { key: 'results', label: 'Results' },
-];
+  LeagueRegistrationDetailsModal,
+  LeagueRegistrationModal,
+} from '@/components/league-registration';
+import { usePlayerLeagues } from '@/hooks';
+import { Colors, Radius, Spacing } from '@/theme';
+import type { LeagueSummary } from '@/types';
 
 export default function PlayerLeaguesScreen() {
-  const { user } = useAuth();
-  const [selectedLeague, setSelectedLeague] = useState<LeagueSummary | null>(null);
-  const [detailTab, setDetailTab] = useState<PlayerDetailTabKey>('standings');
-  const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
+  const router = useRouter();
 
-  // Player registration modal state
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [regTeamName, setRegTeamName] = useState('');
-  const [regPartnerName, setRegPartnerName] = useState('');
-  const [selectedPartner, setSelectedPartner] = useState<LeagueEligiblePartner | null>(null);
-  const [memberSearchQuery, setMemberSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [showMemberPicker, setShowMemberPicker] = useState(false);
-  const [regError, setRegError] = useState<string | null>(null);
+  // Selected league for modals
+  const [registerLeague, setRegisterLeague] = useState<LeagueSummary | null>(null);
+  const [detailsLeague, setDetailsLeague] = useState<LeagueSummary | null>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(memberSearchQuery);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [memberSearchQuery]);
-
+  // Authoritative leagues query from backend
   const {
     data: leagues,
     isLoading,
@@ -100,1443 +57,131 @@ export default function PlayerLeaguesScreen() {
     isRefetching,
   } = usePlayerLeagues();
 
-  const leagueId = selectedLeague?.id || null;
-
-  const { data: standingsData, isLoading: isStandingsLoading } = usePlayerLeagueStandings(leagueId);
-  const { data: weeks } = usePlayerLeagueWeeks(leagueId);
-  const { data: matches, isLoading: isMatchesLoading } = usePlayerLeagueMatches(
-    leagueId,
-    selectedWeekId
-  );
-  const { data: playoffs, isLoading: isPlayoffsLoading } = usePlayerLeaguePlayoffs(leagueId);
-
-  // Registration hooks
-  const { data: regStatus, refetch: refetchRegStatus } = usePlayerLeagueRegistrationStatus(leagueId);
-  const { mutateAsync: registerTeam, isPending: isRegistering } = usePlayerRegisterLeague(leagueId);
-  const { mutateAsync: cancelReg, isPending: isCancelling } = usePlayerCancelLeagueRegistration(leagueId);
-  const { data: eligiblePartners, isLoading: isLoadingPartners } = useLeagueEligiblePartners(
-    leagueId,
-    debouncedSearch
-  );
-
-  const handleSelectPartner = (partner: LeagueEligiblePartner) => {
-    setSelectedPartner(partner);
-    setRegPartnerName(partner.full_name);
-    setShowMemberPicker(false);
-    setRegError(null);
+  const handleOpenLeague = (league: LeagueSummary) => {
+    router.push({
+      pathname: '/(player)/league-details',
+      params: { id: league.id },
+    } as any);
   };
 
-  const handleClearPartner = () => {
-    setSelectedPartner(null);
-    setRegPartnerName('');
+  const handleRegisterPress = (league: LeagueSummary) => {
+    setRegisterLeague(league);
   };
 
-  const handlePartnerNameChange = (text: string) => {
-    setRegPartnerName(text);
-    if (selectedPartner && text.trim().toLowerCase() !== selectedPartner.full_name.trim().toLowerCase()) {
-      setSelectedPartner(null);
-    }
+  const handleViewRegistrationPress = (league: LeagueSummary) => {
+    setDetailsLeague(league);
   };
 
-  const handleRegisterSubmit = async () => {
-    const isSingles = selectedLeague?.team_size === 1;
-    const trimmedTeam = regTeamName.trim() || (isSingles ? (user?.full_name || 'My Entry') : '');
-    const trimmedPartner = isSingles ? '' : regPartnerName.trim();
-
-    if (selectedLeague?.status !== 'registration_open') {
-      setRegError('Registration is not currently open for this league.');
-      return;
-    }
-
-    if (!trimmedTeam) {
-      setRegError('Please enter an entry name');
-      return;
-    }
-    if (!isSingles && !trimmedPartner) {
-      setRegError('Please enter a partner name or select a club member');
-      return;
-    }
-
-    if (!isSingles) {
-      // Prevent selecting or typing oneself as partner
-      const myName = (user?.full_name || '').toLowerCase().trim();
-      const myEmail = (user?.email || '').toLowerCase().trim();
-      const partnerNameLower = trimmedPartner.toLowerCase();
-
-      if (
-        (myName && partnerNameLower === myName) ||
-        (myEmail && partnerNameLower === myEmail) ||
-        (selectedPartner && selectedPartner.user_id === user?.id)
-      ) {
-        setRegError('You cannot select yourself as your doubles partner');
-        return;
-      }
-    }
-
-    try {
-      setRegError(null);
-      await registerTeam({
-        teamName: trimmedTeam,
-        partnerMembershipId: isSingles ? null : (selectedPartner ? selectedPartner.membership_id : null),
-        partnerName: isSingles ? null : trimmedPartner,
-      });
-      setIsRegisterModalOpen(false);
-      setRegTeamName('');
-      setRegPartnerName('');
-      setSelectedPartner(null);
-      setShowMemberPicker(false);
-      setMemberSearchQuery('');
-      refetchRegStatus();
-      refetch();
-      Alert.alert('Registration Confirmed', `Registration for "${trimmedTeam}" has been confirmed!`);
-    } catch (err: any) {
-      setRegError(err?.response?.data?.detail || err?.message || 'Failed to register team');
-    }
+  const handleRegistrationSuccess = () => {
+    setRegisterLeague(null);
+    void refetch();
   };
 
-  const handleCancelRegistration = () => {
-    Alert.alert(
-      'Cancel Registration',
-      'Are you sure you want to cancel your team registration for this league?',
-      [
-        { text: 'Keep Registration', style: 'cancel' },
-        {
-          text: 'Cancel Registration',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await cancelReg();
-              refetchRegStatus();
-              refetch();
-              Alert.alert('Registration Cancelled', 'Your team registration has been removed.');
-            } catch (err: any) {
-              Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to cancel registration');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const renderLeagueCard = ({ item }: { item: LeagueSummary }) => {
-    let actionLabel = 'View Details ›';
-    if (item.status === 'registration_open') {
-      actionLabel = 'Register Entry →';
-    } else if (item.status === 'registration_closed') {
-      actionLabel = 'Registration Closed';
-    } else if (item.status === 'in_progress') {
-      actionLabel = 'View Live League ›';
-    } else if (item.status === 'playoffs') {
-      actionLabel = 'View Playoffs ›';
-    } else if (item.status === 'completed') {
-      actionLabel = 'View Results ›';
-    } else if (item.status === 'cancelled') {
-      actionLabel = 'Cancelled';
-    }
-
-    return (
-      <LeagueCard
-        league={item}
-        actionLabel={actionLabel}
-        onPress={() => {
-          setSelectedLeague(item);
-          setDetailTab(item.status === 'completed' ? 'results' : 'standings');
-          setSelectedWeekId(undefined);
-        }}
-        onManagePress={() => {
-          setSelectedLeague(item);
-          if (item.status === 'registration_open') {
-            setRegTeamName(item.team_size === 1 ? (user?.full_name || 'My Entry') : '');
-            setRegPartnerName('');
-            setSelectedPartner(null);
-            setShowMemberPicker(false);
-            setMemberSearchQuery('');
-            setRegError(null);
-            setIsRegisterModalOpen(true);
-          } else if (item.status === 'completed') {
-            setDetailTab('results');
-          } else {
-            setDetailTab('standings');
-          }
-          setSelectedWeekId(undefined);
-        }}
-      />
-    );
+  const handleRegistrationCancelled = () => {
+    setDetailsLeague(null);
+    void refetch();
   };
 
   return (
-    <Screen style={styles.container}>
-      <AppHeader title="Leagues" />
-      <ScreenHeader
+    <View style={styles.container}>
+      {/* Top Header with Hamburger Menu */}
+      <AppHeader
         title="Leagues"
-        subtitle="Track weekly standings, upcoming matches, and playoff brackets"
+        showMenu={true}
+        borderless={true}
+        style={styles.header}
       />
 
-      {isLoading ? (
-        <LoadingState message="Loading leagues..." />
+      {/* Subtitle / Intro Description directly below header */}
+      <View style={styles.introContainer}>
+        <AppText style={styles.introText}>
+          Track weekly standings, upcoming matches, and playoff brackets.
+        </AppText>
+      </View>
+
+      {/* Main Content */}
+      {isLoading && !isRefetching ? (
+        <LoadingState message="Loading available leagues..." />
       ) : isError ? (
         <ErrorState
-          message={error?.message || 'Failed to load leagues'}
-          onRetry={refetch}
-        />
-      ) : !leagues || leagues.length === 0 ? (
-        <EmptyState
-          title="No leagues available right now."
-          description="Check back later for upcoming leagues."
+          message={error?.message || 'Failed to load leagues. Please try again.'}
+          onRetry={() => void refetch()}
         />
       ) : (
         <FlatList
-          data={leagues}
+          data={leagues || []}
           keyExtractor={(item) => item.id}
-          renderItem={renderLeagueCard}
           contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
-              onRefresh={refetch}
+              onRefresh={() => void refetch()}
               tintColor={Colors.brand.primary}
+              colors={[Colors.brand.primary]}
+            />
+          }
+          renderItem={({ item, index }) => (
+            <LeagueCard
+              league={item}
+              imageIndex={index}
+              onPress={() => handleOpenLeague(item)}
+              onRegisterPress={() => handleRegisterPress(item)}
+              onViewRegistrationPress={() => handleViewRegistrationPress(item)}
+            />
+          )}
+          ListEmptyComponent={
+            <EmptyState
+              title="No Leagues Available"
+              description="There are currently no active or upcoming leagues scheduled at your clubs. Check back soon for new seasons!"
             />
           }
         />
       )}
 
-      {/* League Details Modal */}
-      <Modal
-        visible={Boolean(selectedLeague)}
-        animationType="slide"
-        onRequestClose={() => setSelectedLeague(null)}
-      >
-        <Screen style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity
-              onPress={() => setSelectedLeague(null)}
-              style={styles.modalCloseBtn}
-            >
-              <AppText style={styles.closeBtnText}>✕ Close</AppText>
-            </TouchableOpacity>
+      {/* Dedicated Multi-Step Registration Modal */}
+      <LeagueRegistrationModal
+        visible={Boolean(registerLeague)}
+        league={registerLeague}
+        onClose={() => setRegisterLeague(null)}
+        onSuccess={handleRegistrationSuccess}
+      />
 
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <AppText style={[styles.modalTitle, { flex: 1, marginRight: 8 }]} numberOfLines={1}>
-                {selectedLeague?.name}
-              </AppText>
-              {selectedLeague && (
-                <View
-                  style={[
-                    styles.statusPill,
-                    { backgroundColor: getLeagueStatusBadgeDetails(selectedLeague.status).bg },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.statusDot,
-                      { backgroundColor: getLeagueStatusBadgeDetails(selectedLeague.status).text },
-                    ]}
-                  />
-                  <AppText
-                    style={[
-                      styles.statusPillText,
-                      { color: getLeagueStatusBadgeDetails(selectedLeague.status).text },
-                    ]}
-                  >
-                    {getLeagueStatusBadgeDetails(selectedLeague.status).label}
-                  </AppText>
-                </View>
-              )}
-            </View>
-
-            <AppText style={styles.modalSubtitle}>
-              {`${selectedLeague?.number_of_weeks} Wks • ${(selectedLeague?.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • ${(selectedLeague?.teams_count ?? 0) > 0 ? `${selectedLeague?.teams_count}/${selectedLeague?.max_teams || 12} Teams` : 'Teams not finalized'} • Top ${selectedLeague?.playoff_team_count || 4} Playoffs`}
-            </AppText>
-
-            {/* Registration Banner / Action for Player */}
-            {regStatus?.is_registered ? (
-              <View style={styles.regBanner}>
-                <View style={styles.regBannerTextContainer}>
-                  <AppText style={styles.regBannerTitle}>✓ You are registered</AppText>
-                  <AppText style={styles.regBannerSubtitle}>
-                    Team: {regStatus.team?.name || 'Registered'}
-                  </AppText>
-                </View>
-                {selectedLeague?.status === 'registration_open' && (
-                  <Button
-                    label="Cancel"
-                    variant="secondary"
-                    size="sm"
-                    fullWidth={false}
-                    onPress={handleCancelRegistration}
-                    loading={isCancelling}
-                  />
-                )}
-              </View>
-            ) : selectedLeague?.status === 'registration_open' ? (
-              <View style={styles.openRegRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.openRegPrompt}>Registration is currently open</AppText>
-                  <AppText style={styles.openRegSubtitle}>
-                    {selectedLeague?.team_size === 1 ? 'Singles (1 Player)' : 'Doubles (2 Players)'} •{' '}
-                    {selectedLeague?.registration_fee && selectedLeague.registration_fee > 0
-                      ? `$${selectedLeague.registration_fee.toFixed(2)} Fee`
-                      : 'Free Entry'}
-                  </AppText>
-                  {selectedLeague?.max_teams ? (
-                    <AppText style={{ fontSize: 11, color: Colors.text.tertiary, marginTop: 2 }}>
-                      Capacity: {selectedLeague.teams_count || 0} / {selectedLeague.max_teams} Teams
-                      {(selectedLeague.teams_count || 0) >= selectedLeague.max_teams ? ' (Full)' : ''}
-                    </AppText>
-                  ) : null}
-                </View>
-                <Button
-                  label={
-                    selectedLeague?.max_teams && (selectedLeague.teams_count || 0) >= selectedLeague.max_teams
-                      ? 'Full'
-                      : 'Register'
-                  }
-                  variant="primary"
-                  size="sm"
-                  fullWidth={false}
-                  disabled={Boolean(
-                    selectedLeague?.max_teams && (selectedLeague.teams_count || 0) >= selectedLeague.max_teams
-                  )}
-                  onPress={() => {
-                    setRegTeamName(selectedLeague?.team_size === 1 ? (user?.full_name || 'My Entry') : '');
-                    setRegPartnerName('');
-                    setSelectedPartner(null);
-                    setShowMemberPicker(false);
-                    setMemberSearchQuery('');
-                    setRegError(null);
-                    setIsRegisterModalOpen(true);
-                  }}
-                />
-              </View>
-            ) : selectedLeague?.status === 'registration_closed' && !regStatus?.is_registered ? (
-              <View style={styles.closedRegBanner}>
-                <View>
-                  <AppText style={styles.closedRegText}>🔒 Registration is Closed</AppText>
-                  <AppText style={styles.closedRegSub}>
-                    Team entries have been closed and finalized for this league.
-                  </AppText>
-                </View>
-              </View>
-            ) : selectedLeague?.status === 'cancelled' ? (
-              <View style={styles.cancelledRegBanner}>
-                <View>
-                  <AppText style={styles.cancelledRegText}>⚠️ League Cancelled</AppText>
-                  <AppText style={styles.cancelledRegSub}>
-                    This league was cancelled by the club organizer.
-                  </AppText>
-                </View>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Sub-tabs */}
-          <View style={{ marginHorizontal: Spacing[4], marginBottom: Spacing[3] }}>
-            <SegmentedTabs
-              tabs={LEAGUE_DETAIL_TABS}
-              activeTab={detailTab}
-              onTabChange={setDetailTab}
-            />
-          </View>
-
-          <ScrollView style={styles.modalBody}>
-            {/* ─── STANDINGS ─── */}
-            {detailTab === 'standings' && (
-              <View style={styles.tabPane}>
-                {isStandingsLoading ? (
-                  <LoadingState message="Loading standings..." />
-                ) : !standingsData || standingsData.standings.length === 0 ? (
-                  <EmptyState
-                    title="No Standings Yet"
-                    description="Standings will update automatically as regular season matches are scored by club staff."
-                  />
-                ) : (
-                  <Card style={styles.tableCard}>
-                    <View style={styles.tableHeader}>
-                      <AppText style={[styles.th, styles.thRank]}>#</AppText>
-                      <AppText style={[styles.th, styles.thTeam]}>Team</AppText>
-                      <AppText style={[styles.th, styles.thStat]}>MP</AppText>
-                      <AppText style={[styles.th, styles.thStat]}>W</AppText>
-                      <AppText style={[styles.th, styles.thStat]}>L</AppText>
-                      <AppText style={[styles.th, styles.thStat]}>Diff</AppText>
-                    </View>
-                    {(() => {
-                      const totalMatchesPlayed =
-                        standingsData.standings.reduce((acc, row) => acc + (row.matches_played || 0), 0);
-                      const isPreSeason = totalMatchesPlayed === 0;
-                      const isFinalStage = selectedLeague?.status === 'playoffs' || selectedLeague?.status === 'completed';
-
-                      return standingsData.standings.map((r) => {
-                        const isQualified = !isPreSeason && isFinalStage && Boolean(selectedLeague && r.rank <= selectedLeague.playoff_team_count);
-                        return (
-                          <View
-                            key={r.team_id}
-                            style={[
-                              styles.tableRow,
-                              isQualified && styles.qualifyingRow,
-                            ]}
-                          >
-                            <AppText style={[styles.td, styles.thRank, styles.rankBold]}>
-                              {r.rank}
-                            </AppText>
-                            <View style={styles.thTeam}>
-                              <AppText style={styles.teamNameText} numberOfLines={1}>
-                                {r.team_name}
-                              </AppText>
-                              {r.members && r.members.length > 0 ? (
-                                <AppText style={styles.teamMembersSubtext} numberOfLines={1}>
-                                  {r.members.join(' & ')}
-                                </AppText>
-                              ) : null}
-                              {isQualified ? (
-                                <AppText style={styles.playoffTag}>Playoffs</AppText>
-                              ) : null}
-                            </View>
-                            <AppText style={[styles.td, styles.thStat]}>{r.matches_played}</AppText>
-                            <AppText style={[styles.td, styles.thStat, styles.bold]}>{r.wins}</AppText>
-                            <AppText style={[styles.td, styles.thStat]}>{r.losses}</AppText>
-                            <AppText
-                              style={[
-                                styles.td,
-                                styles.thStat,
-                                r.points_differential > 0 ? styles.posDiff : styles.negDiff,
-                              ]}
-                            >
-                              {r.points_differential > 0 ? `+${r.points_differential}` : r.points_differential}
-                            </AppText>
-                          </View>
-                        );
-                      });
-                    })()}
-                  </Card>
-                )}
-              </View>
-            )}
-
-            {/* ─── SCHEDULE ─── */}
-            {detailTab === 'schedule' && (
-              <View style={styles.tabPane}>
-                {weeks && weeks.length > 0 ? (
-                  <View style={{ marginBottom: Spacing[3] }}>
-                    <FilterChips
-                      chips={[
-                        { key: 'all', label: 'All Weeks' },
-                        ...weeks
-                          .filter((w) => w.week_type === 'regular_season')
-                          .map((w) => ({ key: w.id, label: `Week ${w.week_number}` })),
-                      ]}
-                      activeChip={selectedWeekId || 'all'}
-                      onChipPress={(id) => setSelectedWeekId(id === 'all' ? undefined : id)}
-                    />
-                  </View>
-                ) : null}
-
-                {isMatchesLoading ? (
-                  <LoadingState message="Loading matches..." />
-                ) : !matches || matches.length === 0 ? (
-                  <EmptyState
-                    title="Schedule Not Ready"
-                    description={
-                      selectedLeague?.status === 'registration_open'
-                        ? 'Registration is currently open. The round-robin schedule will be generated once registration closes.'
-                        : 'Matches will appear here once the schedule is finalized by the club.'
-                    }
-                  />
-                ) : (
-                  <View style={styles.matchesList}>
-                    {matches.map((m) => (
-                      <Card key={m.id} style={styles.matchCard}>
-                        <View style={styles.matchHeader}>
-                          <AppText style={styles.matchStage}>
-                            {m.stage === 'playoffs'
-                              ? `Playoff Round ${m.round_number}`
-                              : `Match ${m.match_number}`}
-                          </AppText>
-                          <Badge
-                            label={m.is_bye ? 'BYE' : m.status === 'completed' ? 'Final' : 'Scheduled'}
-                            variant={m.is_bye ? 'default' : m.status === 'completed' ? 'success' : 'info'}
-                          />
-                        </View>
-                        <View style={styles.matchRow}>
-                          <View style={styles.matchTeamSide}>
-                            <AppText
-                              style={[
-                                styles.matchTeamName,
-                                m.winner_team_id === m.team_a_id && styles.winnerName,
-                              ]}
-                            >
-                              {m.team_a?.name || m.team_a_name || 'TBD'}
-                            </AppText>
-                            {m.team_a_members && m.team_a_members.length > 0 ? (
-                              <AppText style={styles.matchMembersText} numberOfLines={1}>
-                                {m.team_a_members.join(' & ')}
-                              </AppText>
-                            ) : null}
-                            <AppText style={styles.matchScore}>
-                              {m.score_a !== null ? m.score_a : '-'}
-                            </AppText>
-                          </View>
-                          <AppText style={styles.matchVs}>vs</AppText>
-                          <View style={styles.matchTeamSide}>
-                            <AppText
-                              style={[
-                                styles.matchTeamName,
-                                m.winner_team_id === m.team_b_id && styles.winnerName,
-                              ]}
-                            >
-                              {m.team_b?.name || m.team_b_name || (m.is_bye ? 'BYE' : 'TBD')}
-                            </AppText>
-                            {m.team_b_members && m.team_b_members.length > 0 ? (
-                              <AppText style={styles.matchMembersText} numberOfLines={1}>
-                                {m.team_b_members.join(' & ')}
-                              </AppText>
-                            ) : null}
-                            <AppText style={styles.matchScore}>
-                              {m.score_b !== null ? m.score_b : '-'}
-                            </AppText>
-                          </View>
-                        </View>
-                        <View style={{ marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: Colors.surface.border }}>
-                          <AppText style={{ fontSize: 11, color: m.court_name && m.scheduled_start_at ? Colors.brand.primary : Colors.text.tertiary, fontWeight: '600' }}>
-                            {m.court_name && m.scheduled_start_at
-                              ? `📍 ${m.court_name} • ${formatDateTime(m.scheduled_start_at)}`
-                              : 'Court unassigned • Date not set'}
-                          </AppText>
-                        </View>
-                      </Card>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
-
-            {/* ─── PLAYOFFS ─── */}
-            {detailTab === 'playoffs' && (
-              <View style={styles.tabPane}>
-                {isPlayoffsLoading ? (
-                  <LoadingState message="Loading playoffs..." />
-                ) : !playoffs ? (
-                  <EmptyState
-                    title="Playoffs Not Started"
-                    description={`The top ${selectedLeague?.playoff_team_count || 4} qualifying teams will advance to single-elimination playoffs after the regular season concludes.`}
-                  />
-                ) : (
-                  <Card style={styles.playoffCard}>
-                    <AppText style={styles.playoffTitle}>Championship Bracket</AppText>
-                    <AppText style={styles.playoffMeta}>
-                      {playoffs.playoff_teams_count} Teams • {playoffs.rounds_count} Rounds •{' '}
-                      {playoffs.matches_played} Matches Completed
-                    </AppText>
-                    {playoffs.champion_team_name ? (
-                      <View style={styles.championBox}>
-                        <AppText style={styles.championBoxText}>
-                          👑 League Champion: {playoffs.champion_team_name}
-                        </AppText>
-                      </View>
-                    ) : null}
-                  </Card>
-                )}
-              </View>
-            )}
-
-            {/* ─── RESULTS ─── */}
-            {detailTab === 'results' && (
-              <View style={styles.tabPane}>
-                {selectedLeague?.champion_team || playoffs?.champion_team_name ? (
-                  <Card style={styles.playoffCard}>
-                    <AppText style={styles.playoffTitle}>🏆 League Champion</AppText>
-                    <View style={styles.championBox}>
-                      <AppText style={styles.championBoxText}>
-                        👑 {selectedLeague?.champion_team?.name || playoffs?.champion_team_name}
-                      </AppText>
-                    </View>
-                    <AppText style={styles.playoffMeta}>
-                      Congratulations to the champion of {selectedLeague?.name}!
-                    </AppText>
-                  </Card>
-                ) : (
-                  <EmptyState
-                    title="Season in Progress"
-                    description="Final league results and crowned champion will appear here once playoffs conclude."
-                  />
-                )}
-              </View>
-            )}
-          </ScrollView>
-        </Screen>
-      </Modal>
-
-      {/* Player Team Registration Modal */}
-      <Modal
-        visible={isRegisterModalOpen}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setIsRegisterModalOpen(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <Screen style={styles.regModalContainer}>
-            <View style={styles.regModalHeader}>
-              <View style={{ flex: 1 }}>
-                <AppText variant="heading2" style={styles.regModalTitle}>
-                  Register Team
-                </AppText>
-                <AppText style={styles.regModalSubtitle}>
-                  {selectedLeague?.name}
-                </AppText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsRegisterModalOpen(false)}
-                style={styles.modalCloseBtn}
-              >
-                <AppText style={styles.closeBtnText}>✕ Close</AppText>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.regModalBody}
-              contentContainerStyle={styles.regModalScrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {regError ? (
-                <View style={styles.errorBox}>
-                  <AppText style={styles.errorText}>{regError}</AppText>
-                </View>
-              ) : null}
-
-              {/* Format, Fee & Capacity Information Card */}
-              <View style={{ backgroundColor: Colors.surface.elevated, padding: Spacing[3], borderRadius: Radius.md, marginBottom: Spacing[3], gap: 6, borderWidth: 1, borderColor: Colors.surface.border }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>Competition Format</AppText>
-                  <Badge
-                    label={selectedLeague?.team_size === 1 ? 'Singles (1 Player)' : 'Doubles (2 Players)'}
-                    variant="info"
-                    size="sm"
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>Registration Fee</AppText>
-                  <AppText style={{ fontSize: 13, fontWeight: '700', color: Colors.brand.primary }}>
-                    {selectedLeague?.registration_fee && selectedLeague.registration_fee > 0
-                      ? `$${selectedLeague.registration_fee.toFixed(2)}`
-                      : 'Free Entry'}
-                  </AppText>
-                </View>
-                {selectedLeague?.max_teams ? (
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <AppText style={{ fontSize: 13, color: Colors.text.secondary }}>League Capacity</AppText>
-                    <AppText style={{ fontSize: 13, fontWeight: '600', color: Colors.text.primary }}>
-                      {selectedLeague.teams_count || 0} / {selectedLeague.max_teams} Teams
-                    </AppText>
-                  </View>
-                ) : null}
-              </View>
-
-              <Input
-                label={selectedLeague?.team_size === 1 ? 'Entry / Player Name *' : 'Team Name *'}
-                placeholder={selectedLeague?.team_size === 1 ? (user?.full_name || 'My Entry') : 'e.g., The Dinkers'}
-                value={regTeamName}
-                onChangeText={setRegTeamName}
-                autoFocus
-              />
-
-              {/* Only show partner fields if doubles format */}
-              {selectedLeague?.team_size !== 1 && (
-                <>
-                  <Input
-                    label="Doubles Partner Name *"
-                    placeholder="Enter partner's full name"
-                    value={regPartnerName}
-                    onChangeText={handlePartnerNameChange}
-                  />
-
-                  {/* Linked Member Card or Optional Club Search */}
-                  {selectedPartner ? (
-                    <View style={styles.selectedPartnerCard}>
-                      <View style={{ flex: 1 }}>
-                        <AppText style={styles.selectedPartnerLabel}>Linked Club Member</AppText>
-                        <AppText style={styles.selectedPartnerName}>
-                          {selectedPartner.full_name}
-                          {selectedPartner.membership_number ? ` (#${selectedPartner.membership_number})` : ''}
-                        </AppText>
-                      </View>
-                      <TouchableOpacity
-                        onPress={handleClearPartner}
-                        style={styles.clearPartnerBtn}
-                        accessibilityLabel="Remove selected member"
-                      >
-                        <AppText style={styles.clearPartnerBtnText}>✕ Remove</AppText>
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.optionalSearchContainer}>
-                      <AppText style={styles.helperText}>
-                        Selecting a club member is optional. You can enter any guest partner name above, or link an active club member below.
-                      </AppText>
-                      <TouchableOpacity
-                        style={styles.togglePickerButton}
-                        onPress={() => setShowMemberPicker(!showMemberPicker)}
-                      >
-                        <AppText style={styles.togglePickerButtonText}>
-                          {showMemberPicker ? 'Hide Club Member Search ▲' : 'Search Club Members (Optional) ▼'}
-                        </AppText>
-                      </TouchableOpacity>
-
-                      {showMemberPicker && (
-                        <View style={styles.memberPickerCard}>
-                          <Input
-                            placeholder="Search member by name..."
-                            value={memberSearchQuery}
-                            onChangeText={setMemberSearchQuery}
-                          />
-                          <View style={styles.playerSelectList}>
-                            <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
-                              {isLoadingPartners ? (
-                                <LoadingState message="Loading club members..." />
-                              ) : eligiblePartners && eligiblePartners.length > 0 ? (
-                                eligiblePartners.map((partner) => (
-                                  <TouchableOpacity
-                                    key={partner.membership_id}
-                                    style={styles.playerOption}
-                                    onPress={() => handleSelectPartner(partner)}
-                                  >
-                                    <View style={{ flex: 1 }}>
-                                      <AppText style={styles.playerOptionText}>
-                                        {partner.full_name}
-                                      </AppText>
-                                      {partner.membership_number ? (
-                                        <AppText style={styles.playerOptionSubtext}>
-                                          Member #{partner.membership_number}
-                                        </AppText>
-                                      ) : null}
-                                    </View>
-                                    <AppText style={styles.selectActionText}>Select ›</AppText>
-                                  </TouchableOpacity>
-                                ))
-                              ) : (
-                                <View style={{ padding: Spacing[3] }}>
-                                  <AppText style={styles.emptyMembersText}>
-                                    {memberSearchQuery ? 'No matching members found.' : 'No other eligible active members found.'}
-                                  </AppText>
-                                </View>
-                              )}
-                            </ScrollView>
-                          </View>
-                        </View>
-                      )}
-                    </View>
-                  )}
-                </>
-              )}
-
-              {/* Team Roster Preview Summary */}
-              <View style={styles.rosterCard}>
-                <AppText style={styles.rosterCardTitle}>
-                  {selectedLeague?.team_size === 1
-                    ? 'Entry Roster (Singles — 1 Player)'
-                    : 'Team Roster Preview (Doubles — 2 Players)'}
-                </AppText>
-
-                <View style={styles.rosterRow}>
-                  <View style={styles.rosterBadgeYou}>
-                    <AppText style={styles.rosterBadgeText}>
-                      {selectedLeague?.team_size === 1 ? 'Player' : 'Player 1 (You)'}
-                    </AppText>
-                  </View>
-                  <AppText style={styles.rosterNameText} numberOfLines={1}>
-                    {user?.full_name || user?.email || 'Authenticated Player'}
-                  </AppText>
-                </View>
-
-                {selectedLeague?.team_size !== 1 && (
-                  <>
-                    <View style={styles.rosterDivider} />
-                    <View style={styles.rosterRow}>
-                      <View style={selectedPartner ? styles.rosterBadgeMember : styles.rosterBadgeGuest}>
-                        <AppText style={styles.rosterBadgeText}>
-                          {selectedPartner ? 'Player 2 (Member)' : 'Player 2 (Partner)'}
-                        </AppText>
-                      </View>
-                      <AppText
-                        style={[
-                          styles.rosterNameText,
-                          !regPartnerName.trim() && styles.rosterPlaceholderText,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {regPartnerName.trim() || 'Enter partner name above'}
-                      </AppText>
-                    </View>
-                  </>
-                )}
-              </View>
-
-              <View style={styles.regFooterActions}>
-                <Button
-                  label="Cancel"
-                  variant="secondary"
-                  onPress={() => setIsRegisterModalOpen(false)}
-                  style={{ flex: 1 }}
-                />
-                <Button
-                  label="Confirm Registration"
-                  variant="primary"
-                  onPress={handleRegisterSubmit}
-                  loading={isRegistering}
-                  style={{ flex: 1 }}
-                />
-              </View>
-            </ScrollView>
-          </Screen>
-        </KeyboardAvoidingView>
-      </Modal>
-    </Screen>
+      {/* Saved Registration Details Modal */}
+      <LeagueRegistrationDetailsModal
+        visible={Boolean(detailsLeague)}
+        league={detailsLeague}
+        onClose={() => setDetailsLeague(null)}
+        onCancelled={handleRegistrationCancelled}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background.primary,
+    backgroundColor: '#F3F8F5',
   },
   header: {
-    padding: Spacing[4],
-    backgroundColor: Colors.background.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
+    backgroundColor: '#F3F8F5',
+    paddingBottom: 2,
   },
-  title: {
-    fontSize: Typography.size.xl,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+  introContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 2,
+    paddingBottom: Spacing.md,
+    backgroundColor: '#F3F8F5',
   },
-  subtitle: {
-    fontSize: Typography.size.sm,
-    color: Colors.text.secondary,
-    marginTop: 2,
+  introText: {
+    fontSize: 13.5,
+    color: '#4B6358',
+    lineHeight: 19,
+    fontWeight: '400',
   },
   listContent: {
-    paddingHorizontal: Layout.screenHorizontal,
-    paddingBottom: Layout.bottomScrollPadding,
-  },
-  card: {
-    padding: Spacing[4],
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.surface.default,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    ...Shadows.sm,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardTitleContainer: {
-    flex: 1,
-    marginRight: Spacing[2],
-  },
-  leagueName: {
-    fontSize: Typography.size.md,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  description: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: Spacing[3],
-    paddingTop: Spacing[2],
-    borderTopWidth: 1,
-    borderTopColor: Colors.surface.border,
-  },
-  metaCol: {
-    alignItems: 'flex-start',
-  },
-  metaLabel: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
-  },
-  metaValue: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.medium,
-    color: Colors.text.primary,
-    marginTop: 2,
-  },
-  championBadge: {
-    marginTop: Spacing[2],
-    padding: Spacing[1],
-    backgroundColor: '#E7F5EC',
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-  },
-  championText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.brand.primary,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background.primary,
-  },
-  modalHeader: {
-    padding: Spacing[4],
-    backgroundColor: Colors.background.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-  },
-  modalCloseBtn: {
-    marginBottom: Spacing[1],
-  },
-  closeBtnText: {
-    fontSize: Typography.size.sm,
-    color: Colors.brand.primary,
-    fontWeight: Typography.weight.semibold,
-  },
-  modalTitle: {
-    fontSize: Typography.size.lg,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  modalSubtitle: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    gap: 5,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  closedRegBanner: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: Spacing[3],
-    marginTop: Spacing[2],
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-  },
-  closedRegText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: '#475569',
-  },
-  closedRegSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  cancelledRegBanner: {
-    backgroundColor: '#FEF2F2',
-    borderRadius: 8,
-    padding: Spacing[3],
-    marginTop: Spacing[2],
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  cancelledRegText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: '#DC2626',
-  },
-  cancelledRegSub: {
-    fontSize: 11,
-    color: '#B91C1C',
-    marginTop: 2,
-  },
-  modalTabs: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface.default,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-  },
-  modalTab: {
-    flex: 1,
-    paddingVertical: Spacing[2],
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  modalTabActive: {
-    borderBottomColor: Colors.brand.primary,
-  },
-  modalTabText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.medium,
-    color: Colors.text.tertiary,
-  },
-  modalTabTextActive: {
-    color: Colors.brand.primary,
-    fontWeight: Typography.weight.bold,
-  },
-  modalBody: {
-    flex: 1,
-  },
-  tabPane: {
-    padding: Spacing[4],
-  },
-  tableCard: {
-    backgroundColor: Colors.surface.default,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    overflow: 'hidden',
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface.elevated,
-    paddingVertical: Spacing[1],
-    paddingHorizontal: Spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-    alignItems: 'center',
-  },
-  qualifyingRow: {
-    backgroundColor: '#E7F5EC',
-  },
-  th: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.secondary,
-  },
-  td: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.primary,
-  },
-  thRank: {
-    width: 24,
-    textAlign: 'center',
-  },
-  rankBold: {
-    fontWeight: Typography.weight.bold,
-  },
-  thTeam: {
-    flex: 1,
-    paddingLeft: Spacing[1],
-  },
-  teamNameText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.text.primary,
-  },
-  playoffTag: {
-    fontSize: 9,
-    color: Colors.brand.primary,
-    fontWeight: Typography.weight.bold,
-  },
-  thStat: {
-    width: 32,
-    textAlign: 'center',
-  },
-  bold: {
-    fontWeight: Typography.weight.bold,
-  },
-  posDiff: {
-    color: Colors.status.success,
-    fontWeight: Typography.weight.semibold,
-  },
-  negDiff: {
-    color: Colors.status.error,
-  },
-  weeksBar: {
-    gap: Spacing[1],
-    marginBottom: Spacing[2],
-  },
-  weekPill: {
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[1],
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface.elevated,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    marginRight: Spacing[1],
-  },
-  weekPillActive: {
-    backgroundColor: Colors.brand.primary,
-    borderColor: Colors.brand.primary,
-  },
-  weekPillText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-  },
-  weekPillTextActive: {
-    color: Colors.text.inverse,
-    fontWeight: Typography.weight.bold,
-  },
-  matchesList: {
-    gap: Spacing[1],
-  },
-  matchCard: {
-    padding: Spacing[2],
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface.default,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    marginBottom: Spacing[1],
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  matchStage: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  matchTeamSide: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  matchTeamName: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.text.primary,
-    flex: 1,
-  },
-  winnerName: {
-    color: Colors.brand.primary,
-    fontWeight: Typography.weight.bold,
-  },
-  matchScore: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-    paddingHorizontal: Spacing[1],
-  },
-  matchVs: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
-    marginHorizontal: Spacing[1],
-  },
-  playoffCard: {
-    padding: Spacing[4],
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface.default,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-  },
-  playoffTitle: {
-    fontSize: Typography.size.md,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  playoffMeta: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  championBox: {
-    marginTop: Spacing[4],
-    padding: Spacing[2],
-    backgroundColor: '#E7F5EC',
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  championBoxText: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
-    color: Colors.brand.primary,
-  },
-  regBanner: {
-    marginTop: Spacing[2],
-    padding: Spacing[3],
-    backgroundColor: '#E7F5EC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing[2],
-  },
-  regBannerTextContainer: {
-    flex: 1,
-  },
-  regBannerTitle: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.brand.primary,
-  },
-  regBannerSubtitle: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  openRegRow: {
-    marginTop: Spacing[2],
-    padding: Spacing[3],
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing[2],
-  },
-  openRegPrompt: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  openRegSubtitle: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  regModalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background.primary,
-  },
-  regModalHeader: {
-    padding: Spacing[4],
-    backgroundColor: Colors.background.secondary,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  regModalTitle: {
-    fontSize: Typography.size.lg,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  regModalSubtitle: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    marginTop: 2,
-  },
-  regModalBody: {
-    flex: 1,
-    padding: Spacing[4],
-  },
-  errorBox: {
-    padding: Spacing[2],
-    backgroundColor: Colors.status.errorBg,
-    borderRadius: Radius.md,
-    marginBottom: Spacing[3],
-  },
-  errorText: {
-    fontSize: Typography.size.xs,
-    color: Colors.status.error,
-  },
-  selectLabel: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.text.primary,
-    marginBottom: Spacing[1],
-    marginTop: Spacing[2],
-  },
-  playerSelectList: {
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    marginBottom: Spacing[4],
-    overflow: 'hidden',
-  },
-  playerOption: {
-    padding: Spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.border,
-  },
-  playerOptionSelected: {
-    backgroundColor: '#E7F5EC',
-  },
-  playerOptionText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.primary,
-  },
-  playerOptionTextSelected: {
-    color: Colors.brand.primary,
-    fontWeight: Typography.weight.bold,
-  },
-  emptyMembersText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-  },
-  regFooterActions: {
-    flexDirection: 'row',
-    gap: Spacing[3],
-    marginTop: Spacing[4],
-  },
-  teamMembersSubtext: {
-    fontSize: 10,
-    color: Colors.text.tertiary,
-    marginTop: 1,
-  },
-  matchMembersText: {
-    fontSize: 10,
-    color: Colors.text.tertiary,
-    marginTop: 2,
-  },
-  selectedPartnerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing[3],
-    backgroundColor: '#E7F5EC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    marginTop: Spacing[2],
-    marginBottom: Spacing[3],
-  },
-  selectedPartnerLabel: {
-    fontSize: 11,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.brand.primary,
-  },
-  selectedPartnerName: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-    marginTop: 2,
-  },
-  clearPartnerBtn: {
-    paddingVertical: Spacing[1],
-    paddingHorizontal: Spacing[2],
-    backgroundColor: '#FEE2E2',
-    borderRadius: Radius.sm,
-  },
-  clearPartnerBtnText: {
-    fontSize: 11,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.status.error,
-  },
-  optionalSearchContainer: {
-    marginTop: Spacing[1],
-    marginBottom: Spacing[3],
-  },
-  helperText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    lineHeight: 16,
-    marginBottom: Spacing[2],
-  },
-  togglePickerButton: {
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[3],
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    alignItems: 'center',
-  },
-  togglePickerButtonText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.brand.primary,
-  },
-  memberPickerCard: {
-    marginTop: Spacing[2],
-  },
-  playerOptionSubtext: {
-    fontSize: 10,
-    color: Colors.text.tertiary,
-    marginTop: 1,
-  },
-  selectActionText: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.brand.primary,
-  },
-  rosterCard: {
-    padding: Spacing[3],
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    marginTop: Spacing[2],
-    marginBottom: Spacing[3],
-  },
-  rosterCardTitle: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: Spacing[2],
-  },
-  rosterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  rosterBadgeYou: {
-    backgroundColor: '#E0E7FF',
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  rosterBadgeMember: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  rosterBadgeGuest: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  rosterBadgeText: {
-    fontSize: 10,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-  },
-  rosterNameText: {
-    flex: 1,
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
-    color: Colors.text.primary,
-  },
-  rosterPlaceholderText: {
-    color: Colors.text.tertiary,
-    fontStyle: 'italic',
-  },
-  rosterDivider: {
-    height: 1,
-    backgroundColor: Colors.surface.border,
-    marginVertical: Spacing[2],
-  },
-  regModalScrollContent: {
-    paddingBottom: Spacing[16],
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.xs,
+    paddingBottom: 110, // Prevent overlap with fixed player bottom nav
   },
 });
