@@ -67,7 +67,8 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
     'bracket',
     'scramble',
     'competition-schedule',
-  ].some(r => pathname.includes(r));
+    'competition-setup',
+  ].some(r => normalizedPath.includes(r) || pathname.includes(r));
 
   if (isDetailRoute) {
     return null;
@@ -575,10 +576,6 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#E6EFEA',

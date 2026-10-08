@@ -572,6 +572,6 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingBottom: 24,
   },
 });

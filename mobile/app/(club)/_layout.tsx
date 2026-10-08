@@ -61,36 +61,38 @@ export default function ClubLayout() {
 
   return (
     <View style={styles.container}>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: Colors.background.primary },
-          animation: 'fade',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="members" />
-        <Stack.Screen name="tournaments" />
-        <Stack.Screen name="tournament-details" />
-        <Stack.Screen name="pool-play" />
-        <Stack.Screen name="round-robin" />
-        <Stack.Screen name="bracket" />
-        <Stack.Screen name="scramble" />
-        <Stack.Screen name="leagues" />
-        <Stack.Screen name="league-details" />
-        <Stack.Screen name="courts" />
-        <Stack.Screen name="bookings" />
-        <Stack.Screen name="memberships" />
-        <Stack.Screen name="payments" />
-        <Stack.Screen name="events" />
-        <Stack.Screen name="lessons" />
-        <Stack.Screen name="competition-schedule" />
-        <Stack.Screen name="notifications" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="profile" />
-      </Stack>
+      <View style={styles.stackWrapper}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: Colors.background.primary },
+            animation: 'fade',
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="members" />
+          <Stack.Screen name="tournaments" />
+          <Stack.Screen name="tournament-details" />
+          <Stack.Screen name="pool-play" />
+          <Stack.Screen name="round-robin" />
+          <Stack.Screen name="bracket" />
+          <Stack.Screen name="scramble" />
+          <Stack.Screen name="leagues" />
+          <Stack.Screen name="league-details" />
+          <Stack.Screen name="courts" />
+          <Stack.Screen name="bookings" />
+          <Stack.Screen name="memberships" />
+          <Stack.Screen name="payments" />
+          <Stack.Screen name="events" />
+          <Stack.Screen name="lessons" />
+          <Stack.Screen name="competition-schedule" />
+          <Stack.Screen name="notifications" />
+          <Stack.Screen name="settings" />
+          <Stack.Screen name="profile" />
+        </Stack>
+      </View>
 
-      {/* Global Fixed Bottom Navigation */}
+      {/* Global Bottom Navigation */}
       <AppBottomNav mode="club" />
 
       {/* Drawer system — renders above the Stack & Bottom Nav */}
@@ -104,5 +106,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background.primary,
+  },
+  stackWrapper: {
+    flex: 1,
   },
 });

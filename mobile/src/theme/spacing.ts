@@ -117,5 +117,13 @@ export const Layout = {
   inputGap: Spacing[3],     // 12px
   buttonGap: 10,            // 10px
   badgeGap: Spacing[1.5],   // 6px
-  bottomScrollPadding: 110, // 110px to clear fixed AppBottomNav, floating FAB & safe area
+  bottomScrollPadding: 32, // Clean 32px breathing room (AppBottomNav is in-flow below Stack)
 } as const;
+
+/**
+ * Bottom scroll padding helper that calculates clean clearance
+ * considering device safe area insets.
+ */
+export function getBottomNavPadding(bottomInset: number = 0): number {
+  return Math.max(bottomInset + 24, 32);
+}

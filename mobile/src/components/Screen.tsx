@@ -19,7 +19,7 @@ import {
   ViewProps,
 } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
-import { Colors, Spacing } from '@/theme';
+import { Colors, Spacing, Layout } from '@/theme';
 
 interface ScreenProps extends ViewProps {
   /** Apply standard 16px horizontal padding to root content (default false) */
@@ -30,7 +30,7 @@ interface ScreenProps extends ViewProps {
   edges?: Edge[];
   /** If true, wraps children in a ScrollView */
   scrollable?: boolean;
-  /** Bottom padding when scrollable=true (default Spacing[8] = 32px) */
+  /** Bottom padding when scrollable=true (default Layout.bottomScrollPadding = 120px) */
   scrollPaddingBottom?: number;
   scrollProps?: ScrollViewProps;
 }
@@ -42,7 +42,7 @@ export function Screen({
   safeArea = true,
   edges = DEFAULT_EDGES,
   scrollable = false,
-  scrollPaddingBottom = 110,
+  scrollPaddingBottom = Layout.bottomScrollPadding,
   scrollProps,
   children,
   style,

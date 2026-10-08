@@ -29,6 +29,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Mail,
   MoreVertical,
@@ -114,6 +115,7 @@ function formatPlayerName(member: ClubPlayerMember): string {
 }
 
 export default function ClubMembersScreen() {
+  const insets = useSafeAreaInsets();
   const { clubId } = useActiveClub();
   const { canManageMembers, canManageRoles } = usePermission();
 
@@ -1280,7 +1282,7 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingBottom: 24,
   },
   listHeaderWrapper: {
     marginBottom: 8,

@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Clock,
   Lock,
+  MoreVertical,
   Trophy,
   Users,
 } from 'lucide-react-native';
@@ -142,6 +143,9 @@ export function LeagueCard({
   onRegisterPress,
   onViewRegistrationPress,
   imageIndex = 0,
+  onOptionsPress,
+  onManagePress,
+  actionLabel,
 }: LeagueCardProps) {
   const totalWeeks = league.total_weeks || league.number_of_weeks || 12;
   const currentWeek = league.current_week || 1;
@@ -203,7 +207,7 @@ export function LeagueCard({
 
         {/* Right Column: Information & Actions */}
         <View style={styles.detailsColumn}>
-          {/* Top Row: Status Badge & Chevron */}
+          {/* Top Row: Status Badge & Chevron / 3-Dot Options Button */}
           <View style={styles.topRow}>
             <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
               {statusConfig.icon === 'dot' && (
@@ -231,7 +235,22 @@ export function LeagueCard({
               </AppText>
             </View>
 
-            <ChevronRight size={18} color="#94A3B8" />
+            {onOptionsPress ? (
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  onOptionsPress();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.optionsButton}
+                accessibilityLabel="League options"
+                accessibilityRole="button"
+              >
+                <MoreVertical size={18} color="#64748B" strokeWidth={2.2} />
+              </TouchableOpacity>
+            ) : (
+              <ChevronRight size={18} color="#94A3B8" />
+            )}
           </View>
 
           {/* League Title */}
@@ -292,7 +311,18 @@ export function LeagueCard({
 
           {/* Bottom Contextual Action */}
           <View style={styles.actionRow}>
-            {isRegistered ? (
+            {onOptionsPress ? (
+              <TouchableOpacity
+                style={styles.manageButton}
+                onPress={onManagePress || onPress}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <AppText style={styles.manageButtonText}>
+                  {actionLabel || (isLive ? 'Manage Live League' : isCompleted ? 'View Results' : 'Manage League')}
+                </AppText>
+              </TouchableOpacity>
+            ) : isRegistered ? (
               <TouchableOpacity
                 style={styles.registeredButton}
                 onPress={onViewRegistrationPress || onPress}
@@ -506,5 +536,25 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#334155',
+  },
+  optionsButton: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageButton: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 13,
+    paddingVertical: 5.5,
+    borderRadius: Radius.md,
+  },
+  manageButtonText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

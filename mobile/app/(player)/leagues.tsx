@@ -182,6 +182,6 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.xs,
-    paddingBottom: 110, // Prevent overlap with fixed player bottom nav
+    paddingBottom: 24,
   },
 });

@@ -29,6 +29,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Calendar,
   Check,
@@ -91,6 +92,7 @@ function formatDate(dateStr: string | null | undefined): string {
 }
 
 export default function MembershipsScreen() {
+  const insets = useSafeAreaInsets();
   const { clubId: activeClubId } = useActiveClub();
   const { canManageMemberships } = usePermission();
   const clubId = activeClubId ?? '';
@@ -1019,7 +1021,7 @@ const styles = StyleSheet.create({
   },
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 28,
+    paddingBottom: 24,
   },
   listHeaderWrapper: {
     marginBottom: 8,
