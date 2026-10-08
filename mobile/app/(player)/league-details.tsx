@@ -71,11 +71,11 @@ const DETAIL_TABS: { key: TabKey; label: string }[] = [
 
 export default function PlayerLeagueDetailsScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: TabKey }>();
   const leagueId = id ?? null;
 
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabKey>('standings');
+  const [activeTab, setActiveTab] = useState<TabKey>(tab || 'standings');
   const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
 
   // Modals state

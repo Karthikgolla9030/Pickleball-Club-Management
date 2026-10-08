@@ -209,30 +209,39 @@ export function LeagueCard({
         <View style={styles.detailsColumn}>
           {/* Top Row: Status Badge & Chevron / 3-Dot Options Button */}
           <View style={styles.topRow}>
-            <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-              {statusConfig.icon === 'dot' && (
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: statusConfig.dotColor || statusConfig.text },
-                  ]}
-                />
+            <View style={styles.badgeRow}>
+              <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+                {statusConfig.icon === 'dot' && (
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: statusConfig.dotColor || statusConfig.text },
+                    ]}
+                  />
+                )}
+                {statusConfig.icon === 'clock' && (
+                  <Clock size={11} color={statusConfig.text} style={styles.badgeIcon} />
+                )}
+                {statusConfig.icon === 'users' && (
+                  <Users size={11} color={statusConfig.text} style={styles.badgeIcon} />
+                )}
+                {statusConfig.icon === 'lock' && (
+                  <Lock size={11} color={statusConfig.text} style={styles.badgeIcon} />
+                )}
+                {statusConfig.icon === 'check' && (
+                  <CheckCircle2 size={11} color={statusConfig.text} style={styles.badgeIcon} />
+                )}
+                <AppText style={[styles.statusText, { color: statusConfig.text }]}>
+                  {statusConfig.label}
+                </AppText>
+              </View>
+
+              {isRegistered && (
+                <View style={styles.registeredPill}>
+                  <CheckCircle2 size={10} color="#065F46" />
+                  <AppText style={styles.registeredPillText}>Joined</AppText>
+                </View>
               )}
-              {statusConfig.icon === 'clock' && (
-                <Clock size={11} color={statusConfig.text} style={styles.badgeIcon} />
-              )}
-              {statusConfig.icon === 'users' && (
-                <Users size={11} color={statusConfig.text} style={styles.badgeIcon} />
-              )}
-              {statusConfig.icon === 'lock' && (
-                <Lock size={11} color={statusConfig.text} style={styles.badgeIcon} />
-              )}
-              {statusConfig.icon === 'check' && (
-                <CheckCircle2 size={11} color={statusConfig.text} style={styles.badgeIcon} />
-              )}
-              <AppText style={[styles.statusText, { color: statusConfig.text }]}>
-                {statusConfig.label}
-              </AppText>
             </View>
 
             {onOptionsPress ? (
@@ -322,6 +331,15 @@ export function LeagueCard({
                   {actionLabel || (isLive ? 'Manage Live League' : isCompleted ? 'View Results' : 'Manage League')}
                 </AppText>
               </TouchableOpacity>
+            ) : isLive ? (
+              <TouchableOpacity
+                style={styles.liveButton}
+                onPress={onPress}
+                activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <AppText style={styles.liveButtonText}>View Live League</AppText>
+              </TouchableOpacity>
             ) : isRegistered ? (
               <TouchableOpacity
                 style={styles.registeredButton}
@@ -331,7 +349,7 @@ export function LeagueCard({
               >
                 <CheckCircle2 size={13} color="#065F46" />
                 <AppText style={styles.registeredButtonText}>
-                  {isLive ? 'View Live League' : 'View Registration Details'}
+                  View Registration Details
                 </AppText>
               </TouchableOpacity>
             ) : isOpenReg ? (
@@ -343,19 +361,12 @@ export function LeagueCard({
               >
                 <AppText style={styles.registerButtonText}>Register</AppText>
               </TouchableOpacity>
-            ) : isLive ? (
-              <TouchableOpacity
-                style={styles.liveButton}
-                onPress={onPress}
-                activeOpacity={0.8}
-              >
-                <AppText style={styles.liveButtonText}>View Live League</AppText>
-              </TouchableOpacity>
             ) : isCompleted ? (
               <TouchableOpacity
                 style={styles.resultsButton}
                 onPress={onPress}
                 activeOpacity={0.8}
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <AppText style={styles.resultsButtonText}>View Results</AppText>
               </TouchableOpacity>
@@ -556,5 +567,28 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+    flex: 1,
+  },
+  registeredPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3.5,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: Radius.full,
+  },
+  registeredPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#065F46',
   },
 });
