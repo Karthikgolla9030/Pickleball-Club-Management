@@ -52,7 +52,7 @@ function resolveApiBase(): string {
   }
 
   // 4. Local Development Fallback
-  return 'https://tender-corners-fail.loca.lt';
+  return 'https://implementation-practitioners-prep-proc.trycloudflare.com';
 }
 
 const API_BASE = resolveApiBase();
