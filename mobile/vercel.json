@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://lucky-paws-sink.loca.lt/api/:path*"
+      "destination": "https://tender-corners-fail.loca.lt/api/:path*"
     },
     {
       "source": "/uploads/:path*",
-      "destination": "https://lucky-paws-sink.loca.lt/uploads/:path*"
+      "destination": "https://tender-corners-fail.loca.lt/uploads/:path*"
     },
     {
       "source": "/((?!assets/|_expo/|icons/|favicon.png|manifest.json|sw.js|offline.html|api/|uploads/|.*\\..*).*)",

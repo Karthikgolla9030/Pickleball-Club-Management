@@ -52,7 +52,7 @@ function resolveApiBase(): string {
   }
 
   // 4. Local Development Fallback
-  return 'https://lucky-paws-sink.loca.lt';
+  return 'https://tender-corners-fail.loca.lt';
 }
 
 const API_BASE = resolveApiBase();
