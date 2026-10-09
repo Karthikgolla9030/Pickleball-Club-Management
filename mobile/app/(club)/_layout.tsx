@@ -52,6 +52,7 @@ export default function ClubLayout() {
         '/(club)/payments',
         '/(club)/lessons',
         '/(club)/competition-schedule',
+        '/(club)/club-details',
       ];
       if (tdRestricted.some((r) => pathname.startsWith(r))) {
         router.replace('/(club)/tournaments');
@@ -89,6 +90,7 @@ export default function ClubLayout() {
           <Stack.Screen name="notifications" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="profile" />
+          <Stack.Screen name="club-details" />
         </Stack>
       </View>
 

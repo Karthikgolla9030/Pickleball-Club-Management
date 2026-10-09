@@ -238,7 +238,7 @@ export default function ClubProfileScreen() {
             {/* Club Details */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Club Details', '/(club)/courts')}
+              onPress={() => handleRowPress('Club Details', '/(club)/club-details')}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>

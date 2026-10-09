@@ -32,7 +32,13 @@ from app.core.database import get_db
 from app.models.club_membership import ClubMembership
 from app.models.user import User
 from app.permissions import Permission
-from app.schemas.club import ClubResponse, UserClubResponse
+from app.schemas.club import (
+    ClubLogoUploadRequest,
+    ClubResponse,
+    ClubUpdateRequest,
+    PublicClubResponse,
+    UserClubResponse,
+)
 from app.schemas.club_membership import (
     AddMemberRequest,
     ClubMembershipDetailResponse,
@@ -89,6 +95,67 @@ async def get_club(
         user_id=current_user.id,
         club_id=club_id,
     )
+
+
+@router.get(
+    "/{club_id}/public",
+    response_model=PublicClubResponse,
+    summary="Get public club details",
+    description="Returns public details of an active club for players and discovery.",
+    responses={
+        404: {"description": "Club not found or inactive"},
+    },
+)
+async def get_public_club(
+    club_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> PublicClubResponse:
+    """Retrieve public profile for an active club without requiring staff role."""
+    return await ClubService(db).get_public_club(club_id=club_id)
+
+
+@router.patch(
+    "/{club_id}",
+    response_model=ClubResponse,
+    summary="Update club profile and settings",
+    description="Update club details, location, and operating hours. Club Owner only (manage_club permission required).",
+    responses={
+        400: {"description": "Validation error or invalid time range"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_club required)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def update_club(
+    club_id: UUID,
+    payload: ClubUpdateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> ClubResponse:
+    """Update club details (Club Owner only)."""
+    return await ClubService(db).update_club(club_id=club_id, payload=payload)
+
+
+@router.post(
+    "/{club_id}/logo",
+    response_model=ClubResponse,
+    summary="Upload club logo",
+    description="Upload or update club logo (base64 or URL). Club Owner only (manage_club permission required).",
+    responses={
+        400: {"description": "Invalid image payload"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_club required)"},
+        413: {"description": "Image exceeds size limit"},
+    },
+)
+async def upload_club_logo(
+    club_id: UUID,
+    payload: ClubLogoUploadRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> ClubResponse:
+    """Upload club logo (Club Owner only)."""
+    return await ClubService(db).upload_club_logo(club_id=club_id, image_data=payload.image_data)
 
 
 @router.get(

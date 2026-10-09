@@ -14,7 +14,12 @@ from app.models.club_membership import ClubMembership, ClubRole
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_repository import ClubRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.club import ClubResponse, UserClubResponse
+from app.schemas.club import (
+    ClubResponse,
+    ClubUpdateRequest,
+    PublicClubResponse,
+    UserClubResponse,
+)
 from app.schemas.club_membership import (
     ClubMembershipDetailResponse,
     MemberResponse,
@@ -102,6 +107,132 @@ class ClubService:
             )
 
         return ClubResponse.model_validate(club)
+
+    async def update_club(
+        self,
+        club_id: UUID,
+        payload: ClubUpdateRequest,
+    ) -> ClubResponse:
+        """
+        Update club settings/profile information.
+        Enforces tenant isolation and validated payload constraints.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+
+        update_data = payload.model_dump(exclude_unset=True)
+        if not update_data:
+            return ClubResponse.model_validate(club)
+
+        # Time range safety check
+        opening = update_data.get("opening_time", club.opening_time)
+        closing = update_data.get("closing_time", club.closing_time)
+        if opening and closing and opening >= closing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Opening time must be earlier than closing time",
+            )
+
+        updated = await self.club_repo.update(club, **update_data)
+        await self.db.commit()
+        return ClubResponse.model_validate(updated)
+
+    async def upload_club_logo(
+        self,
+        club_id: UUID,
+        image_data: str,
+    ) -> ClubResponse:
+        """
+        Upload or replace club logo with base64 data or persistent URL.
+        """
+        import base64
+        import os
+        import time
+
+        club = await self.club_repo.get_by_id(club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+
+        data_str = image_data.strip()
+        if not data_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Image data is required",
+            )
+
+        if (
+            data_str.startswith("http://")
+            or data_str.startswith("https://")
+            or data_str.startswith("/uploads/")
+        ):
+            updated = await self.club_repo.update(club, logo_url=data_str)
+            await self.db.commit()
+            return ClubResponse.model_validate(updated)
+
+        ext = "png"
+        raw_b64 = data_str
+        if data_str.startswith("data:image/"):
+            header, _, b64_part = data_str.partition(";base64,")
+            if b64_part:
+                raw_b64 = b64_part
+                mime = header.split(":")[-1]
+                if "png" in mime:
+                    ext = "png"
+                elif "webp" in mime:
+                    ext = "webp"
+                elif "jpeg" in mime or "jpg" in mime:
+                    ext = "jpg"
+                elif "svg" in mime:
+                    ext = "svg"
+
+        try:
+            image_bytes = base64.b64decode(raw_b64)
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid base64 image data",
+            )
+
+        if len(image_bytes) > 5 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Image exceeds 5MB limit",
+            )
+
+        backend_dir = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )
+        uploads_dir = os.path.join(backend_dir, "uploads", "logos")
+        os.makedirs(uploads_dir, exist_ok=True)
+
+        filename = f"club_{club_id}_{int(time.time())}.{ext}"
+        filepath = os.path.join(uploads_dir, filename)
+        with open(filepath, "wb") as f:
+            f.write(image_bytes)
+
+        relative_url = f"/uploads/logos/{filename}"
+        updated = await self.club_repo.update(club, logo_url=relative_url)
+        await self.db.commit()
+        return ClubResponse.model_validate(updated)
+
+    async def get_public_club(self, club_id: UUID) -> PublicClubResponse:
+        """
+        Return public club information for players and discovery.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club or not club.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+        return PublicClubResponse.model_validate(club)
 
     async def get_membership(
         self, user_id: UUID, club_id: UUID

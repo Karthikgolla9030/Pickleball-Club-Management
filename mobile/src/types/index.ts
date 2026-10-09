@@ -31,10 +31,58 @@ export interface Club {
   id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
+  short_description?: string | null;
   description: string | null;
   is_active: boolean;
+
+  // Contact Info
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  established_year?: number | null;
+
+  // Location Info
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+
+  // Operating & Facilities
+  operating_days?: string | null;
+  opening_time?: string;
+  closing_time?: string;
+  timezone?: string;
+  holiday_closure_notes?: string | null;
+  facilities_summary?: string | null;
+
   created_at: string;
   updated_at: string;
+}
+
+export interface UpdateClubPayload {
+  name?: string;
+  logo_url?: string | null;
+  short_description?: string | null;
+  description?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  established_year?: number | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  operating_days?: string | null;
+  opening_time?: string;
+  closing_time?: string;
+  timezone?: string;
+  holiday_closure_notes?: string | null;
+  facilities_summary?: string | null;
 }
 
 // ─── Club Membership ─────────────────────────────────────────────────────────
@@ -159,6 +207,24 @@ export interface PlayerClub {
   status: PlayerMembershipStatus;
   joined_at: string;
   expires_at: string | null;
+  logo_url?: string | null;
+  short_description?: string | null;
+  description?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  operating_days?: string[] | string | null;
+  opening_time?: string | null;
+  closing_time?: string | null;
+  timezone?: string;
+  facilities_summary?: string | null;
+  established_year?: number | null;
 }
 
 export interface PlayerClubDetail {
@@ -170,6 +236,24 @@ export interface PlayerClubDetail {
   status: PlayerMembershipStatus;
   joined_at: string;
   expires_at: string | null;
+  logo_url?: string | null;
+  short_description?: string | null;
+  description?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  operating_days?: string[] | string | null;
+  opening_time?: string | null;
+  closing_time?: string | null;
+  timezone?: string;
+  facilities_summary?: string | null;
+  established_year?: number | null;
   created_at: string;
   updated_at: string;
 }

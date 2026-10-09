@@ -38,3 +38,11 @@ class ClubRepository:
             select(Club).where(Club.is_active == True).order_by(Club.name)  # noqa: E712
         )
         return list(result.scalars().all())
+
+    async def update(self, club: Club, **kwargs) -> Club:
+        for key, value in kwargs.items():
+            if hasattr(club, key):
+                setattr(club, key, value)
+        await self.db.flush()
+        await self.db.refresh(club)
+        return club

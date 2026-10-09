@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, time, timezone
 
-from sqlalchemy import Boolean, DateTime, String, Time
+from sqlalchemy import Boolean, DateTime, Integer, String, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -30,9 +30,31 @@ class Club(Base):
         nullable=False,
         index=True,
     )
-    description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    short_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    # ─── Contact Information ─────────────────────────────────────
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    established_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # ─── Location Information ────────────────────────────────────
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True, default="United States")
+
+    # ─── Operating & Facility Information ─────────────────────────
+    operating_days: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        default="Monday - Sunday",
+    )
     opening_time: Mapped[time] = mapped_column(
         Time,
         default=time(6, 0),
@@ -48,6 +70,8 @@ class Club(Base):
         default="UTC",
         nullable=False,
     )
+    holiday_closure_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    facilities_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

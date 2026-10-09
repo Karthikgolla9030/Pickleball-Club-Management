@@ -9,6 +9,7 @@ export { useClubMembers } from './useClubMembers';
 export { usePlayerProfile } from './usePlayerProfile';
 export { usePlayerActivity } from './usePlayerActivity';
 export { usePlayerClubs, usePlayerClubDetail } from './usePlayerClubs';
+export { useClubDetails } from './useClubDetails';
 export { useClubPlayerMembers } from './useClubPlayerMembers';
 export {
   useClubTournaments,

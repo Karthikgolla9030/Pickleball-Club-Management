@@ -635,3 +635,216 @@ async def test_25_unauthorized_requests_return_403(
     )
     # Either 403 or 404
     assert resp.status_code in (403, 404)
+
+
+@pytest.mark.asyncio
+async def test_26_club_owner_can_update_club_details(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """26. Club Owner can update club details (name, location, hours, contacts)."""
+    owner = await create_user(db_session, email="owner_update@test.local")
+    club = await create_club(db_session, name="Original Name")
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    update_payload = {
+        "name": "Aught2 Premier Pickleball",
+        "short_description": "Premier Pickleball Facility",
+        "description": "Full featured indoor and outdoor pickleball club.",
+        "contact_email": "contact@aught2.com",
+        "contact_phone": "+1 (555) 234-5678",
+        "website": "https://aught2.com",
+        "established_year": 2022,
+        "address_line1": "123 Pickleball Way",
+        "address_line2": "Suite 100",
+        "city": "Austin",
+        "state": "TX",
+        "postal_code": "78701",
+        "country": "United States",
+        "operating_days": "Monday - Sunday",
+        "opening_time": "06:30:00",
+        "closing_time": "22:30:00",
+        "timezone": "America/Chicago",
+        "facilities_summary": "8 Indoor Courts, Pro Shop, Lounge",
+        "holiday_closure_notes": "Closed on Thanksgiving and Christmas Day",
+    }
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json=update_payload,
+        headers=make_auth_header(owner.id),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "Aught2 Premier Pickleball"
+    assert data["short_description"] == "Premier Pickleball Facility"
+    assert data["contact_email"] == "contact@aught2.com"
+    assert data["city"] == "Austin"
+    assert data["state"] == "TX"
+    assert data["postal_code"] == "78701"
+    assert data["facilities_summary"] == "8 Indoor Courts, Pro Shop, Lounge"
+    assert data["opening_time"] == "06:30:00"
+    assert data["closing_time"] == "22:30:00"
+
+    # Verify persistence via GET /api/v1/clubs/{club_id}
+    get_resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}",
+        headers=make_auth_header(owner.id),
+    )
+    assert get_resp.status_code == 200
+    get_data = get_resp.json()
+    assert get_data["name"] == "Aught2 Premier Pickleball"
+    assert get_data["city"] == "Austin"
+
+
+@pytest.mark.asyncio
+async def test_27_club_manager_cannot_update_club_details(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """27. Club Manager cannot update club details (403 Forbidden)."""
+    manager = await create_user(db_session, email="manager_update@test.local")
+    club = await create_club(db_session, name="Protected Name")
+    await create_membership(db_session, manager.id, club.id, ClubRole.CLUB_MANAGER)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json={"name": "Hacked Name"},
+        headers=make_auth_header(manager.id),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_28_tournament_director_cannot_update_club_details(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """28. Tournament Director cannot update club details (403 Forbidden)."""
+    director = await create_user(db_session, email="td_update@test.local")
+    club = await create_club(db_session)
+    await create_membership(db_session, director.id, club.id, ClubRole.TOURNAMENT_DIRECTOR)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json={"name": "Director Renamed"},
+        headers=make_auth_header(director.id),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_29_player_without_staff_role_cannot_update_club_details(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """29. Player without staff role cannot update club details (403 Forbidden)."""
+    player = await create_user(db_session, email="regular_player@test.local")
+    club = await create_club(db_session)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json={"name": "Player Renamed"},
+        headers=make_auth_header(player.id),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_30_cross_club_owner_cannot_update_other_club(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """30. Owner of Club A cannot update Club B (tenant isolation)."""
+    owner_a = await create_user(db_session, email="owner_a@test.local")
+    club_a = await create_club(db_session, name="Club A")
+    club_b = await create_club(db_session, name="Club B")
+    await create_membership(db_session, owner_a.id, club_a.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club_b.id}",
+        json={"name": "Club B Hijacked"},
+        headers=make_auth_header(owner_a.id),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_31_invalid_time_range_is_rejected(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """31. Opening time equal to or later than closing time returns 400 Bad Request."""
+    owner = await create_user(db_session, email="owner_time@test.local")
+    club = await create_club(db_session)
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json={"opening_time": "22:00:00", "closing_time": "08:00:00"},
+        headers=make_auth_header(owner.id),
+    )
+    assert resp.status_code == 400
+    assert "earlier than closing time" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_32_invalid_email_format_is_rejected(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """32. Malformed contact email format is rejected with 422."""
+    owner = await create_user(db_session, email="owner_email@test.local")
+    club = await create_club(db_session)
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    resp = await async_client.patch(
+        f"/api/v1/clubs/{club.id}",
+        json={"contact_email": "not-a-valid-email"},
+        headers=make_auth_header(owner.id),
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_33_public_club_endpoint_returns_safe_public_data(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """33. Public club endpoint returns public fields without requiring staff auth."""
+    club = await create_club(db_session, name="Public Aught2 Club")
+    club.address_line1 = "456 Court Lane"
+    club.city = "Dallas"
+    club.state = "TX"
+    club.postal_code = "75001"
+    club.facilities_summary = "12 Courts"
+    await db_session.commit()
+
+    resp = await async_client.get(f"/api/v1/clubs/{club.id}/public")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["name"] == "Public Aught2 Club"
+    assert data["city"] == "Dallas"
+    assert data["facilities_summary"] == "12 Courts"
+
+
+@pytest.mark.asyncio
+async def test_34_club_owner_can_upload_logo(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """34. Club owner can upload base64 or URL logo and it persists."""
+    owner = await create_user(db_session, email="owner_logo@test.local")
+    club = await create_club(db_session)
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    # Small 1x1 base64 transparent PNG
+    dummy_b64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/logo",
+        json={"image_data": dummy_b64},
+        headers=make_auth_header(owner.id),
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["logo_url"] is not None
+    assert "/uploads/logos/" in data["logo_url"]

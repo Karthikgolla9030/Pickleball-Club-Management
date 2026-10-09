@@ -193,7 +193,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' },
       ];
       clubSection2 = [
-        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/settings' },
+        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
         { key: 'staff', label: 'Staff & Permissions', icon: UserCheck, route: '/(club)/members' },
         { key: 'billing', label: 'Subscription & Billing', icon: CreditCard, route: '/(club)/payments' },
       ];

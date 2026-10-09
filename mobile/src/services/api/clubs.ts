@@ -11,6 +11,7 @@ import type {
   ClubMember,
   ClubMembershipDetail,
   ClubPlayerMember,
+  UpdateClubPayload,
   UpdateClubPlayerMemberPayload,
   UpdateMemberPayload,
   UserClubItem,
@@ -29,6 +30,31 @@ export const clubsApi = {
    */
   getClub(clubId: string): Promise<Club> {
     return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/${clubId}`);
+  },
+
+  /**
+   * Get public profile info for a club (accessible without club membership).
+   */
+  getPublicClub(clubId: string): Promise<Club> {
+    return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/${clubId}/public`);
+  },
+
+  /**
+   * Update club profile and location settings.
+   * Allowed for Club Owner only (MANAGE_CLUB).
+   */
+  updateClub(clubId: string, payload: UpdateClubPayload): Promise<Club> {
+    return apiClient.patch<Club>(`${API_ENDPOINTS.CLUBS}/${clubId}`, payload);
+  },
+
+  /**
+   * Upload club logo (base64 image data).
+   * Allowed for Club Owner only (MANAGE_CLUB).
+   */
+  uploadClubLogo(clubId: string, imageData: string): Promise<Club> {
+    return apiClient.post<Club>(`${API_ENDPOINTS.CLUBS}/${clubId}/logo`, {
+      image_data: imageData,
+    });
   },
 
   /**
