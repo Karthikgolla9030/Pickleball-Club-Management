@@ -48,7 +48,11 @@ function classifyError(status: number): ApiErrorType {
 
 async function extractErrorDetail(response: Response): Promise<string> {
   try {
-    const json = await response.json() as ApiError;
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      return `Backend server returned an HTML page (HTTP ${response.status}) instead of API data. Please ensure the backend is running and tunnel is active.`;
+    }
+    const json = (await response.json()) as ApiError;
     if (typeof json.detail === 'string') return json.detail;
     if (Array.isArray(json.detail)) {
       return json.detail.map((e) => e.msg).join('; ');
@@ -203,6 +207,15 @@ async function request<T>(
     // 204 No Content
     if (response.status === 204) {
       return undefined as T;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      throw new ApiClientError(
+        'Server returned HTML instead of API data. Please verify the backend server and tunnel are running.',
+        'SERVER_ERROR',
+        502
+      );
     }
 
     return response.json() as Promise<T>;

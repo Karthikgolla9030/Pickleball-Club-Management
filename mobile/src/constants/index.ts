@@ -52,7 +52,7 @@ function resolveApiBase(): string {
   }
 
   // 4. Local Development Fallback
-  return 'http://172.22.148.205:8000';
+  return 'https://lucky-paws-sink.loca.lt';
 }
 
 const API_BASE = resolveApiBase();
