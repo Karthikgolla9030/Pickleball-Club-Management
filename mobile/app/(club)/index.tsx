@@ -32,7 +32,6 @@
 import React, { useMemo, useState } from 'react';
 import {
   Image,
-  ImageBackground,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -59,7 +58,7 @@ import {
   Users,
 } from 'lucide-react-native';
 
-import { AppText } from '@/components';
+import { AppText, ClubHeroCarousel } from '@/components';
 import {
   useActiveClub,
   useClubEvents,
@@ -219,59 +218,8 @@ export default function ClubHomeScreen() {
           </View>
         </View>
 
-        {/* 3. HERO BANNER */}
-        <View style={styles.heroWrapper}>
-          <ImageBackground
-            source={require('../../assets/events/pickleball_hero.jpg')}
-            style={styles.heroCard}
-            imageStyle={styles.heroCardImage}
-          >
-            {/* Dark green overlay for high-contrast typography */}
-            <View style={styles.heroOverlay} />
-
-            <View style={styles.heroInner}>
-              {/* Top content */}
-              <View style={styles.heroContentBlock}>
-                <AppText style={styles.heroTagText}>AUGHT2 PICKLEBALL</AppText>
-                <AppText style={styles.heroHeading}>
-                  Play Together{'\n'}Grow Stronger
-                </AppText>
-                <AppText style={styles.heroSupportingText}>
-                  Great courts. Active members.{'\n'}A healthier, happier community.
-                </AppText>
-
-                <TouchableOpacity
-                  style={styles.heroCtaButton}
-                  onPress={() => router.push('/(club)/bookings' as any)}
-                  activeOpacity={0.88}
-                  accessibilityLabel="Book a Court"
-                  accessibilityRole="button"
-                >
-                  <AppText style={styles.heroCtaText}>Book a Court</AppText>
-                  <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
-                </TouchableOpacity>
-              </View>
-
-              {/* Bottom footer row */}
-              <View style={styles.heroFooterRow}>
-                {/* Carousel Dots */}
-                <View style={styles.carouselDotsRow}>
-                  <View style={[styles.dotPill, styles.dotActive]} />
-                  <View style={styles.dotCircle} />
-                  <View style={styles.dotCircle} />
-                </View>
-
-                {/* Script Motto */}
-                <View style={styles.heroScriptMotto}>
-                  <AppText style={styles.scriptLine}>Same</AppText>
-                  <AppText style={styles.scriptLine}>Game</AppText>
-                  <AppText style={styles.scriptLine}>Bigger</AppText>
-                  <AppText style={styles.scriptLine}>Community</AppText>
-                </View>
-              </View>
-            </View>
-          </ImageBackground>
-        </View>
+        {/* 3. HERO BANNER CAROUSEL (3 Banners, Touch Swiping, Interactive Dots) */}
+        <ClubHeroCarousel />
 
         {/* 4. QUICK ACTIONS SECTION (2 Rows × 3 Columns) */}
         <View style={styles.sectionHeaderRow}>
@@ -629,118 +577,6 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
 
-  // 3. Hero Section
-  heroWrapper: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    shadowColor: '#102F2B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  heroCard: {
-    width: '100%',
-    minHeight: 195,
-  },
-  heroCardImage: {
-    borderRadius: 20,
-  },
-  heroOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(16, 47, 43, 0.44)',
-    borderRadius: 20,
-  },
-  heroInner: {
-    padding: 16,
-    justifyContent: 'space-between',
-    flex: 1,
-  },
-  heroContentBlock: {
-    gap: 6,
-    alignItems: 'flex-start',
-  },
-  heroTagText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  heroHeading: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 26,
-    letterSpacing: -0.3,
-  },
-  heroSupportingText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.92)',
-    lineHeight: 16,
-    fontWeight: '400',
-    marginTop: 2,
-  },
-  heroCtaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginTop: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroCtaText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#102F2B',
-  },
-  heroFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginTop: 12,
-  },
-  carouselDotsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  dotPill: {
-    width: 14,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FFFFFF',
-  },
-  dotCircle: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-  },
-  dotActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  heroScriptMotto: {
-    alignItems: 'flex-end',
-  },
-  scriptLine: {
-    fontSize: 10.5,
-    fontStyle: 'italic',
-    color: 'rgba(255, 255, 255, 0.88)',
-    lineHeight: 13,
-    fontWeight: '500',
-  },
 
   // 4. Section Header Row
   sectionHeaderRow: {

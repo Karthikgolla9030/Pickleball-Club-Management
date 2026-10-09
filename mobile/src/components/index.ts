@@ -37,3 +37,4 @@ export * from './BookingDetailsModal';
 export * from './scramble';
 export * from './tournament-registration';
 export * from './tournament-management';
+export { ClubHeroCarousel } from './ClubHeroCarousel';
