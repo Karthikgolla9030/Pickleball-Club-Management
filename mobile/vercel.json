@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://implementation-practitioners-prep-proc.trycloudflare.com/api/:path*"
+      "destination": "https://pickleball-club-management.onrender.com/api/:path*"
     },
     {
       "source": "/uploads/:path*",
-      "destination": "https://implementation-practitioners-prep-proc.trycloudflare.com/uploads/:path*"
+      "destination": "https://pickleball-club-management.onrender.com/uploads/:path*"
     },
     {
       "source": "/((?!assets/|_expo/|icons/|favicon.png|manifest.json|sw.js|offline.html|api/|uploads/|.*\\..*).*)",

@@ -52,7 +52,7 @@ function resolveApiBase(): string {
   }
 
   // 4. Local Development Fallback
-  return 'https://implementation-practitioners-prep-proc.trycloudflare.com';
+  return 'https://pickleball-club-management.onrender.com';
 }
 
 const API_BASE = resolveApiBase();

@@ -21,9 +21,13 @@ import app.models  # noqa: F401 — registers all models with Base.metadata
 
 config = context.config
 
-# ─── Load DATABASE_URL from environment / settings (override alembic.ini value) ─
 database_url = os.environ.get("DATABASE_URL") or get_settings().DATABASE_URL
 if database_url:
+    database_url = database_url.strip()
+    if database_url.startswith("postgres://"):
+        database_url = "postgresql+asyncpg://" + database_url[len("postgres://"):]
+    elif database_url.startswith("postgresql://") and not database_url.startswith("postgresql+"):
+        database_url = "postgresql+asyncpg://" + database_url[len("postgresql://"):]
     config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:

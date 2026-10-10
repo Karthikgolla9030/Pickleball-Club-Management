@@ -39,10 +39,22 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: Any) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                v = "postgresql+asyncpg://" + v[len("postgres://"):]
+            elif v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
+
     # ─── CORS ───────────────────────────────────────────────────
     CORS_ORIGINS: Union[list[str], str] = [
         "http://localhost:8081",
         "http://localhost:19006",
+        "https://pickleball-club-management.vercel.app",
     ]
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -51,7 +63,11 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             v = v.strip()
             if not v:
-                return ["http://localhost:8081", "http://localhost:19006"]
+                return [
+                    "http://localhost:8081",
+                    "http://localhost:19006",
+                    "https://pickleball-club-management.vercel.app",
+                ]
             if v.startswith("[") and v.endswith("]"):
                 try:
                     return json.loads(v)
@@ -60,7 +76,11 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.replace(";", ",").split(",") if origin.strip()]
         elif isinstance(v, (list, tuple, set)):
             return [str(origin).strip() for origin in v if str(origin).strip()]
-        return ["http://localhost:8081", "http://localhost:19006"]
+        return [
+            "http://localhost:8081",
+            "http://localhost:19006",
+            "https://pickleball-club-management.vercel.app",
+        ]
 
     @property
     def is_production(self) -> bool:

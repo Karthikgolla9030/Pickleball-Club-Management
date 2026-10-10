@@ -9,13 +9,13 @@ IMPORTANT:
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 from contextlib import asynccontextmanager
 
 # On Windows, psycopg async mode requires the Selector event loop policy
 if sys.platform == "win32":
-    import asyncio
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Allow .local domain for development / demo seed accounts
@@ -48,12 +48,42 @@ def _configure_logging(log_level: str) -> None:
 logger = logging.getLogger(__name__)
 
 
+# ─── Database Migrations ──────────────────────────────────────────────────────
+def _run_db_migrations() -> None:
+    """
+    Apply any pending Alembic migrations on startup.
+    Ensures cloud databases (e.g. Render PostgreSQL) stay synchronized with schema changes.
+    """
+    try:
+        from pathlib import Path
+        from alembic import command
+        from alembic.config import Config
+
+        backend_dir = Path(__file__).resolve().parent.parent
+        alembic_ini_path = backend_dir / "alembic.ini"
+        if not alembic_ini_path.exists():
+            logger.warning("alembic.ini not found at %s; skipping auto-migration", alembic_ini_path)
+            return
+
+        alembic_cfg = Config(str(alembic_ini_path))
+        alembic_cfg.set_main_option("script_location", str(backend_dir / "alembic"))
+        settings = get_settings()
+        if settings.DATABASE_URL:
+            alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+        logger.info("Applying pending database migrations (alembic upgrade head)...")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied successfully to head.")
+    except Exception as exc:
+        logger.error("Database migration check failed on startup: %s", exc, exc_info=True)
+
+
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application startup/shutdown lifecycle.
-    Does NOT create database tables — that is Alembic's responsibility.
+    Automatically applies pending Alembic migrations to ensure the database schema matches models.
     """
     settings = get_settings()
     _configure_logging(settings.LOG_LEVEL)
@@ -63,6 +93,9 @@ async def lifespan(app: FastAPI):
         settings.APP_VERSION,
         settings.APP_ENV,
     )
+    # Apply database migrations in a worker thread so the async event loop is not blocked
+    await asyncio.to_thread(_run_db_migrations)
+
     yield
     logger.info("Shutting down %s", settings.APP_NAME)
 
@@ -115,18 +148,35 @@ def create_app() -> FastAPI:
     app.include_router(api_router)
 
     # ─── Global Error Handlers ────────────────────────────────────────────────
+    def _build_cors_headers(request: Request) -> dict[str, str]:
+        origin = request.headers.get("origin")
+        if not origin:
+            return {}
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Vary": "Origin",
+        }
+
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(
         request: Request, exc: Exception
     ) -> JSONResponse:
         """
-        Catch-all handler. Logs the error but NEVER exposes stack traces
-        or internal details to clients.
+        Catch-all handler. Logs the error and returns JSONResponse with explicit CORS headers
+        so browsers never misinterpret an unhandled server error as a CORS policy violation.
         """
-        logger.exception("Unhandled exception on %s %s", request.method, request.url)
+        logger.exception("Unhandled exception on %s %s: %s", request.method, request.url, exc)
+        headers = _build_cors_headers(request)
+        detail = "An internal server error occurred"
+        if not settings.is_production:
+            detail = f"Internal server error: {type(exc).__name__}: {str(exc)}"
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"detail": "An internal server error occurred"},
+            content={"detail": detail},
+            headers=headers,
         )
 
     # ─── Health & Root ────────────────────────────────────────────────────────
@@ -140,7 +190,40 @@ def create_app() -> FastAPI:
 
     @app.get("/health", tags=["Health"], include_in_schema=False)
     async def health_check():
-        return {"status": "ok", "version": settings.APP_VERSION}
+        db_status = "ok"
+        try:
+            from sqlalchemy import text
+            from app.core.database import AsyncSessionLocal
+            async with AsyncSessionLocal() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception as e:
+            db_status = f"error: {str(e)}"
+        return {
+            "status": "ok" if db_status == "ok" else "degraded",
+            "version": settings.APP_VERSION,
+            "database": db_status,
+        }
+
+    @app.api_route(
+        "/api/v1/system/run-migrations",
+        methods=["GET", "POST"],
+        tags=["System"],
+        include_in_schema=False,
+    )
+    async def run_migrations_endpoint(request: Request):
+        """Run pending alembic database migrations on demand."""
+        try:
+            await asyncio.to_thread(_run_db_migrations)
+            return JSONResponse(
+                content={"status": "success", "message": "Migrations applied successfully"},
+                headers=_build_cors_headers(request),
+            )
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": str(e)},
+                headers=_build_cors_headers(request),
+            )
 
     return app
 
