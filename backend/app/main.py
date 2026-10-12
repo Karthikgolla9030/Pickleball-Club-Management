@@ -78,6 +78,44 @@ def _run_db_migrations() -> None:
         logger.error("Database migration check failed on startup: %s", exc, exc_info=True)
 
 
+async def _ensure_platform_admin_exists() -> None:
+    """
+    Ensure the primary platform administrator account exists in the database.
+    Matches the emails configured in PLATFORM_OWNER_EMAILS.
+    """
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.core.security import hash_password
+        from app.models.user import User
+        from sqlalchemy import select
+
+        settings = get_settings()
+        admin_emails = [e.lower() for e in settings.PLATFORM_OWNER_EMAILS]
+        if not admin_emails:
+            return
+
+        primary_email = admin_emails[0]
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                select(User).where(User.email == primary_email)
+            )
+            existing = result.scalar_one_or_none()
+            if not existing:
+                default_password = "PlatformAdmin2024!"
+                admin = User(
+                    email=primary_email,
+                    hashed_password=hash_password(default_password),
+                    full_name="Aught2 Platform Administrator",
+                    is_active=True,
+                    is_verified=True,
+                )
+                session.add(admin)
+                await session.commit()
+                logger.info("Auto-provisioned platform administrator: %s", primary_email)
+    except Exception as exc:
+        logger.warning("Platform administrator auto-provisioning skipped: %s", exc)
+
+
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,6 +133,7 @@ async def lifespan(app: FastAPI):
     )
     # Apply database migrations in a worker thread so the async event loop is not blocked
     await asyncio.to_thread(_run_db_migrations)
+    await _ensure_platform_admin_exists()
 
     yield
     logger.info("Shutting down %s", settings.APP_NAME)

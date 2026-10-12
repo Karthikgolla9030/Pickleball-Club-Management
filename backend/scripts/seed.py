@@ -137,6 +137,13 @@ CLUBS_DATA = [
 
 USERS_DATA = [
     {
+        "email": "platform.owner@aught2.com",
+        "password": "PlatformAdmin2024!",
+        "full_name": "Aught2 Platform Administrator",
+        "display_name": "Platform Admin",
+        "bio": "Central platform administrator for Aught2 Pickleball.",
+    },
+    {
         "email": "owner@demo.local",
         "password": "DemoOwner2024!",
         "full_name": "Demo Owner",
