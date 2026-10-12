@@ -15,6 +15,7 @@ export function useAuth() {
   const login = useAuthStore((s) => s.login);
   const loginClub = useAuthStore((s) => s.loginClub);
   const loginPlayer = useAuthStore((s) => s.loginPlayer);
+  const loginPlatform = useAuthStore((s) => s.loginPlatform);
   const registerPlayer = useAuthStore((s) => s.registerPlayer);
   const logout = useAuthStore((s) => s.logout);
   const setActiveMembership = useAuthStore((s) => s.setActiveMembership);
@@ -30,6 +31,7 @@ export function useAuth() {
     login,
     loginClub,
     loginPlayer,
+    loginPlatform,
     registerPlayer,
     logout,
     setActiveMembership,

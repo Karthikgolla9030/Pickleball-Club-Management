@@ -49,7 +49,8 @@ function RootLayoutContent() {
   // Auth route guard: prevent access to authenticated screens when session is terminated
   useEffect(() => {
     if (isLoading) return;
-    const inAuthGroup = segments[0] === '(auth)';
+    const seg = segments[0] as string | undefined;
+    const inAuthGroup = seg === '(auth)' || seg === '(platform)';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -64,6 +65,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(player)" />
         <Stack.Screen name="(club)" />
+        <Stack.Screen name="(platform)" />
       </Stack>
     </>
   );

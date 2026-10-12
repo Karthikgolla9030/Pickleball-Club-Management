@@ -80,6 +80,27 @@ export interface ClubApplicationStatusLookupResponse {
   reviewed_at?: string;
 }
 
+export interface PlatformOwnerProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  is_platform_owner: boolean;
+}
+
+export interface PlatformClubItem {
+  id: string;
+  name: string;
+  slug: string;
+  is_active: boolean;
+  city?: string;
+  state?: string;
+  country: string;
+  contact_email?: string;
+  contact_phone?: string;
+  created_at?: string;
+  active_members_count: number;
+}
+
 export const clubApplicationsApi = {
   /** Submit a new club application without requiring an active club-owner session */
   submit: (payload: SubmitClubApplicationPayload): Promise<ClubApplicationResponse> => {
@@ -151,5 +172,15 @@ export const platformApplicationsApi = {
         rejection_reason: rejectionReason || undefined,
       }
     );
+  },
+
+  /** Verify platform owner session */
+  getPlatformMe: (): Promise<PlatformOwnerProfile> => {
+    return apiClient.get<PlatformOwnerProfile>('/api/v1/platform/me');
+  },
+
+  /** List all registered clubs on the platform */
+  listClubs: (): Promise<{ items: PlatformClubItem[]; total: number }> => {
+    return apiClient.get<{ items: PlatformClubItem[]; total: number }>('/api/v1/platform/clubs');
   },
 };

@@ -168,18 +168,6 @@ export function ClubSwitcher({
                   );
                 }}
               />
-
-              <TouchableOpacity
-                style={styles.registerNewClubBtn}
-                onPress={() => {
-                  setModalVisible(false);
-                  router.push('/(club)/register-club' as any);
-                }}
-                activeOpacity={0.8}
-              >
-                <Plus size={16} color="#176F5B" strokeWidth={2.5} />
-                <AppText style={styles.registerNewClubText}>Apply for New Club</AppText>
-              </TouchableOpacity>
             </Pressable>
           </Pressable>
         </Modal>
@@ -306,18 +294,6 @@ export function ClubSwitcher({
                 );
               }}
             />
-
-            <TouchableOpacity
-              style={styles.registerNewClubBtn}
-              onPress={() => {
-                setModalVisible(false);
-                router.push('/(club)/register-club' as any);
-              }}
-              activeOpacity={0.8}
-            >
-              <Plus size={16} color="#176F5B" strokeWidth={2.5} />
-              <AppText style={styles.registerNewClubText}>Apply for New Club</AppText>
-            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>

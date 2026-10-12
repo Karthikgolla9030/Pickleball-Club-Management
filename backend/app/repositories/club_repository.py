@@ -39,6 +39,12 @@ class ClubRepository:
         )
         return list(result.scalars().all())
 
+    async def get_all_clubs(self) -> list[Club]:
+        result = await self.db.execute(
+            select(Club).order_by(Club.created_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def update(self, club: Club, **kwargs) -> Club:
         for key, value in kwargs.items():
             if hasattr(club, key):

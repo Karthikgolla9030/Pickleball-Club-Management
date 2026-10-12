@@ -11,6 +11,7 @@ from app.schemas.auth import (
     AuthResponse,
     ClubLoginRequest,
     LoginRequest,
+    PlatformLoginRequest,
     PlayerLoginRequest,
     PlayerRegisterRequest,
     TokenRefreshRequest,
@@ -46,6 +47,20 @@ async def player_login(
     """
     service = AuthService(db)
     return await service.login_player(email=request.email, password=request.password)
+
+
+@router.post("/platform/login", response_model=AuthResponse)
+async def platform_login(
+    request: PlatformLoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> AuthResponse:
+    """
+    Authenticate a platform owner by email and password.
+    Dedicated administrative authentication entry point.
+    Rejects non-platform owners with 403.
+    """
+    service = AuthService(db)
+    return await service.login_platform(email=request.email, password=request.password)
 
 
 @router.post(

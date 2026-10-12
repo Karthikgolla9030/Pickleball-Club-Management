@@ -54,6 +54,17 @@ export const authApi = {
   },
 
   /**
+   * Platform Owner Login: enters Platform Administration only.
+   */
+  loginPlatform(email: string, password: string): Promise<AuthResponse> {
+    return apiClient.post<AuthResponse>(
+      '/api/v1/auth/platform/login',
+      { email, password },
+      false,
+    );
+  },
+
+  /**
    * Exchange refresh token for new access token.
    */
   refreshToken(refreshToken: string): Promise<TokenRefreshResponse> {

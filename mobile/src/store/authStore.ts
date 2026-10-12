@@ -27,6 +27,7 @@ interface AuthStoreState extends AuthSession {
   login: (email: string, password: string) => Promise<void>;
   loginClub: (email: string, password: string) => Promise<void>;
   loginPlayer: (email: string, password: string) => Promise<void>;
+  loginPlatform: (email: string, password: string) => Promise<void>;
   registerPlayer: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setActiveMembership: (membership: MembershipInfo) => void;
@@ -342,6 +343,32 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Player login failed';
+      set({ isLoading: false, error: message, isAuthenticated: false });
+      throw error;
+    }
+  },
+
+  /**
+   * Platform Owner Login: authenticates platform owner account for administration only.
+   * Dedicated administrative entry point.
+   */
+  loginPlatform: async (email: string, password: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await authApi.loginPlatform(email, password);
+      await saveTokens(response.access_token, response.refresh_token);
+
+      set({
+        user: response.user,
+        memberships: [],
+        activeMembership: null,
+        isAuthenticated: true,
+        isLoading: false,
+        error: null,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Platform login failed';
       set({ isLoading: false, error: message, isAuthenticated: false });
       throw error;
     }

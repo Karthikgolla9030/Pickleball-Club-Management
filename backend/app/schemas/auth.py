@@ -48,6 +48,11 @@ class PlayerLoginRequest(LoginRequest):
     pass
 
 
+class PlatformLoginRequest(LoginRequest):
+    """Platform administration login — email and password only."""
+    pass
+
+
 class PlayerRegisterRequest(BaseModel):
     """Player self-registration request."""
     email: str

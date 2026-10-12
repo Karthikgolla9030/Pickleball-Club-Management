@@ -7,6 +7,7 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -145,6 +146,43 @@ class AuthService:
             token_type="bearer",
             user=UserResponse.model_validate(user),
             memberships=[],  # Players have no club staff access
+        )
+
+    async def login_platform(self, email: str, password: str) -> AuthResponse:
+        """
+        Authenticate a platform owner by email and password.
+        Rejects any account whose email is not in PLATFORM_OWNER_EMAILS with 403.
+        Platform owners operate platform-wide, not scoped to individual clubs.
+        """
+        user = await self.user_repo.get_by_email(email)
+        if not user or not verify_password(password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been disabled.",
+            )
+
+        settings = get_settings()
+        platform_owners = [e.lower() for e in settings.PLATFORM_OWNER_EMAILS]
+        if user.email.lower() not in platform_owners:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied. Your account is not authorized for platform administration.",
+            )
+
+        user_id_str = str(user.id)
+        return AuthResponse(
+            access_token=create_access_token(user_id_str),
+            refresh_token=create_refresh_token(user_id_str),
+            token_type="bearer",
+            user=UserResponse.model_validate(user),
+            memberships=[],  # Platform owner operates platform-wide, not tenant-scoped
         )
 
     async def register_player(

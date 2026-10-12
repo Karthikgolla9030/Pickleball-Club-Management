@@ -25,6 +25,8 @@ import { Screen, AppText, Input, Button, Card } from '@/components';
 import { useAuth } from '@/hooks';
 import { Colors, Spacing } from '@/theme';
 
+const SHOW_DEMO_CREDENTIALS = Boolean(__DEV__ || process.env.EXPO_PUBLIC_SHOW_DEMO_CREDENTIALS === 'true');
+
 type AuthPortal = 'club' | 'player';
 
 export default function LoginScreen() {
@@ -202,73 +204,80 @@ export default function LoginScreen() {
                 </View>
               )}
 
-              {/* Demo Account Quick-Fill Chips */}
-              <View style={styles.demoSection}>
-                <AppText variant="caption" color="secondary" style={styles.demoSectionTitle}>
-                  Quick Fill Demo Account:
-                </AppText>
-                <View style={styles.demoChipsRow}>
-                  {portal === 'player' ? (
-                    <TouchableOpacity
-                      style={styles.demoChip}
-                      onPress={() => {
-                        setEmail('player@demo.local');
-                        setPassword('DemoPlayer2024!');
-                        clearError();
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <AppText variant="caption" style={styles.demoChipText}>
-                        🎾 Player (Pete)
-                      </AppText>
-                    </TouchableOpacity>
-                  ) : (
-                    <>
+              {/* Demo Account Quick-Fill Chips (Dev Environment Only) */}
+              {SHOW_DEMO_CREDENTIALS && (
+                <View style={styles.demoSection}>
+                  <View style={styles.demoSectionHeader}>
+                    <AppText variant="caption" color="secondary" style={styles.demoSectionTitle}>
+                      Quick Fill Demo Account:
+                    </AppText>
+                    <View style={styles.devTag}>
+                      <AppText style={styles.devTagText}>DEV ONLY</AppText>
+                    </View>
+                  </View>
+                  <View style={styles.demoChipsRow}>
+                    {portal === 'player' ? (
                       <TouchableOpacity
                         style={styles.demoChip}
                         onPress={() => {
-                          setEmail('owner@demo.local');
-                          setPassword('DemoOwner2024!');
+                          setEmail('player@demo.local');
+                          setPassword('DemoPlayer2024!');
                           clearError();
                         }}
                         activeOpacity={0.7}
                       >
                         <AppText variant="caption" style={styles.demoChipText}>
-                          👑 Owner
+                          🎾 Player (Pete)
                         </AppText>
                       </TouchableOpacity>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={styles.demoChip}
+                          onPress={() => {
+                            setEmail('owner@demo.local');
+                            setPassword('DemoOwner2024!');
+                            clearError();
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText variant="caption" style={styles.demoChipText}>
+                            👑 Owner
+                          </AppText>
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.demoChip}
-                        onPress={() => {
-                          setEmail('manager@demo.local');
-                          setPassword('DemoManager2024!');
-                          clearError();
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <AppText variant="caption" style={styles.demoChipText}>
-                          🛡️ Manager
-                        </AppText>
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.demoChip}
+                          onPress={() => {
+                            setEmail('manager@demo.local');
+                            setPassword('DemoManager2024!');
+                            clearError();
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText variant="caption" style={styles.demoChipText}>
+                            🛡️ Manager
+                          </AppText>
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.demoChip}
-                        onPress={() => {
-                          setEmail('director@demo.local');
-                          setPassword('DemoDirector2024!');
-                          clearError();
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <AppText variant="caption" style={styles.demoChipText}>
-                          🏆 Director
-                        </AppText>
-                      </TouchableOpacity>
-                    </>
-                  )}
+                        <TouchableOpacity
+                          style={styles.demoChip}
+                          onPress={() => {
+                            setEmail('director@demo.local');
+                            setPassword('DemoDirector2024!');
+                            clearError();
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText variant="caption" style={styles.demoChipText}>
+                            🏆 Director
+                          </AppText>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
                 </View>
-              </View>
+              )}
 
               <Button
                 testID="login-submit"
@@ -323,9 +332,20 @@ export default function LoginScreen() {
             </View>
           </Card>
 
-          <AppText variant="caption" color="tertiary" center style={styles.footer}>
-            Aught2 Pickleball © 2026
-          </AppText>
+          <View style={styles.footerContainer}>
+            <AppText variant="caption" color="tertiary" center style={styles.footer}>
+              Aught2 Pickleball © 2026
+            </AppText>
+            <TouchableOpacity
+              onPress={() => router.push('/(platform)/login' as any)}
+              style={styles.platformLinkBtn}
+              activeOpacity={0.7}
+            >
+              <AppText variant="caption" style={styles.platformLinkText} center>
+                Platform Owner Administration →
+              </AppText>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -467,4 +487,38 @@ const styles = StyleSheet.create({
   footer: {
     marginTop: Spacing[4],
   },
+  demoSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  devTag: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  devTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  footerContainer: {
+    alignItems: 'center',
+    gap: 8,
+    marginTop: Spacing[4],
+  },
+  platformLinkBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  platformLinkText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#18794E',
+  },
 });
+

@@ -128,3 +128,72 @@ async def reject_club_application(
         platform_owner_id=current_platform_owner.id,
         rejection_reason=payload.rejection_reason,
     )
+
+
+@router.get(
+    "/me",
+    summary="Get current platform owner profile",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def get_platform_me(
+    current_platform_owner: User = Depends(get_current_platform_owner),
+) -> dict:
+    """Verify that current session is an authorized platform owner."""
+    return {
+        "id": str(current_platform_owner.id),
+        "email": current_platform_owner.email,
+        "full_name": current_platform_owner.full_name,
+        "is_platform_owner": True,
+    }
+
+
+@router.get(
+    "/clubs",
+    summary="List all registered clubs on the platform",
+    description="Returns platform-wide club directory with approval and status information for platform administration.",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def list_platform_clubs(
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """List all registered clubs on the platform."""
+    from sqlalchemy import func, select
+    from app.models.club import Club
+    from app.models.club_membership import ClubMembership
+
+    result = await db.execute(select(Club).order_by(Club.created_at.desc()))
+    clubs = result.scalars().all()
+
+    counts_result = await db.execute(
+        select(ClubMembership.club_id, func.count(ClubMembership.id))
+        .where(ClubMembership.is_active == True)  # noqa: E712
+        .group_by(ClubMembership.club_id)
+    )
+    counts_map = dict(counts_result.all())
+
+    items = []
+    for c in clubs:
+        items.append({
+            "id": str(c.id),
+            "name": c.name,
+            "slug": c.slug,
+            "is_active": c.is_active,
+            "city": c.city,
+            "state": c.state,
+            "country": c.country,
+            "contact_email": c.contact_email,
+            "contact_phone": c.contact_phone,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+            "active_members_count": counts_map.get(c.id, 0),
+        })
+
+    return {
+        "items": items,
+        "total": len(items),
+    }
+
