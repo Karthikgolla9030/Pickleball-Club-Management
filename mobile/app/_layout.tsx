@@ -46,16 +46,17 @@ function RootLayoutContent() {
     initialize();
   }, [initialize]);
 
+  const rootSegment = segments[0] as string | undefined;
+
   // Auth route guard: prevent access to authenticated screens when session is terminated
   useEffect(() => {
     if (isLoading) return;
-    const seg = segments[0] as string | undefined;
-    const inAuthGroup = seg === '(auth)' || seg === 'platform';
+    const inAuthGroup = rootSegment === '(auth)' || rootSegment === 'platform';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
     }
-  }, [isLoading, isAuthenticated, segments, router]);
+  }, [isLoading, isAuthenticated, rootSegment, router]);
 
   return (
     <>
