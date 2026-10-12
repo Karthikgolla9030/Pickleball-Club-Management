@@ -1,8 +1,4 @@
-/**
- * usePlayerClubs — TanStack Query hook for clubs user belongs to as a player.
- */
-
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { playerApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type { PlayerClub, PlayerClubDetail } from '@/types';
@@ -35,4 +31,15 @@ export function usePlayerClubDetail(clubId: string | null) {
     ...detailQuery,
     clubDetail: detailQuery.data ?? null,
   };
+}
+
+export function useJoinClub() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (clubId: string) => playerApi.joinClub(clubId),
+    onSuccess: (_, clubId) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
+    },
+  });
 }

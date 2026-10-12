@@ -517,12 +517,20 @@ class MemberSubscriptionService:
                 detail="Cannot subscribe to an inactive membership plan",
             )
 
-        # 3. Verify player membership in this club
+        # 3. Ensure player membership in this club (auto-activate without manual approval)
+        now = datetime.now(timezone.utc)
         pm = await self.player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
-        if not pm or pm.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You must have an active player membership in this club to subscribe to a plan. Please submit a membership request first.",
+        if not pm:
+            pm = await self.player_repo.create(
+                user_id=user_id,
+                club_id=club_id,
+                status=PlayerMembershipStatus.ACTIVE,
+                joined_at=now,
+            )
+        elif pm.status != PlayerMembershipStatus.ACTIVE:
+            pm = await self.player_repo.update(
+                pm,
+                status=PlayerMembershipStatus.ACTIVE,
             )
 
         # 4. Verify no conflicting active/scheduled subscription
@@ -660,9 +668,9 @@ class MemberSubscriptionService:
             )
 
         if sub.player_membership.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Active club player membership required to renew subscription",
+            await self.player_repo.update(
+                sub.player_membership,
+                status=PlayerMembershipStatus.ACTIVE,
             )
 
         if sub.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.EXPIRED):

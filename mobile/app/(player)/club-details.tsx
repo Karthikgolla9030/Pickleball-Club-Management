@@ -60,6 +60,7 @@ import { API_ENDPOINTS } from '@/constants';
 import {
   usePlayerClubMembershipRequest,
   usePlayerClubs,
+  useJoinClub,
   usePlayerMembershipRequests,
   usePlayerSubscribe,
 } from '@/hooks';
@@ -141,7 +142,7 @@ export default function PublicClubDetailScreen() {
   });
 
   // 6. Check caller's enrolled club memberships
-  const { clubs: myClubs } = usePlayerClubs();
+  const { clubs: myClubs, refetch: refetchMyClubs } = usePlayerClubs();
   const isEnrolled = useMemo(() => {
     return myClubs.some((c) => c.club_id === clubId && c.status === 'active');
   }, [myClubs, clubId]);
@@ -159,6 +160,7 @@ export default function PublicClubDetailScreen() {
     isWithdrawing,
   } = usePlayerMembershipRequests();
 
+  const { mutateAsync: joinClub, isPending: isJoiningClub } = useJoinClub();
   const { mutateAsync: subscribeToPlan, isPending: isSubscribing } = usePlayerSubscribe();
   const [selectedPlanForSubscribe, setSelectedPlanForSubscribe] = useState<MembershipPlan | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
@@ -166,6 +168,21 @@ export default function PublicClubDetailScreen() {
   // Modal for application message
   const [modalVisible, setModalVisible] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
+
+  const handleJoinClub = async () => {
+    if (!clubId || isJoiningClub) return;
+    try {
+      await joinClub(clubId);
+      await refetchMyClubs();
+      Alert.alert(
+        'Welcome!',
+        `You have successfully joined ${club?.name || 'the club'}. Your player membership is now active!`,
+      );
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to join club';
+      Alert.alert('Error', msg);
+    }
+  };
 
   const handleConfirmSubscribe = async () => {
     if (!clubId || !selectedPlanForSubscribe || isSubscribing) return;
@@ -180,6 +197,7 @@ export default function PublicClubDetailScreen() {
       const planName = selectedPlanForSubscribe.name;
       const isFree = Number(selectedPlanForSubscribe.price) === 0;
       setSelectedPlanForSubscribe(null);
+      await refetchMyClubs();
       Alert.alert(
         isFree ? 'Subscription Activated!' : 'Subscription Created',
         isFree
@@ -441,12 +459,13 @@ export default function PublicClubDetailScreen() {
                   Join This Club
                 </AppText>
                 <AppText variant="caption" color="secondary">
-                  Submit an application to become an active player member and unlock court booking.
+                  Join immediately to become an active player member and unlock court booking.
                 </AppText>
               </View>
               <Button
-                label="Request Membership"
-                onPress={() => setModalVisible(true)}
+                label={isJoiningClub ? 'Joining...' : 'Join Club'}
+                onPress={handleJoinClub}
+                disabled={isJoiningClub}
               />
             </View>
           )}

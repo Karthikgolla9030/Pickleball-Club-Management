@@ -87,7 +87,6 @@ export const CLUB_NAV_SECTIONS: NavSection[] = [
     label: 'MANAGEMENT',
     items: [
       { key: 'members', label: 'Members', icon: 'Users', route: '/(club)/members', permission: 'canManageMembers' },
-      { key: 'membership_requests', label: 'Membership Requests', icon: 'UserCheck', route: '/(club)/membership-requests', permission: 'canManageMembers' },
       { key: 'courts', label: 'Courts', icon: 'LayoutGrid', route: '/(club)/courts', permission: 'canManageCourts' },
       { key: 'bookings', label: 'Bookings', icon: 'CalendarDays', route: '/(club)/bookings', permission: 'canManageBookings' },
       { key: 'memberships', label: 'Memberships', icon: 'Crown', route: '/(club)/memberships', permission: 'canManageMemberships' },

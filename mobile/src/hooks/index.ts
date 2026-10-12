@@ -8,7 +8,7 @@ export { useClubMembership } from './useClubMembership';
 export { useClubMembers } from './useClubMembers';
 export { usePlayerProfile } from './usePlayerProfile';
 export { usePlayerActivity } from './usePlayerActivity';
-export { usePlayerClubs, usePlayerClubDetail } from './usePlayerClubs';
+export { usePlayerClubs, usePlayerClubDetail, useJoinClub } from './usePlayerClubs';
 export { useClubDetails } from './useClubDetails';
 export { useClubDashboard } from './useClubDashboard';
 export { useClubPlayerMembers } from './useClubPlayerMembers';

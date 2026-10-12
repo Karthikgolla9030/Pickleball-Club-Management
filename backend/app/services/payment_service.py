@@ -239,6 +239,11 @@ class PaymentService:
                 detail="Payment not found in this club",
             )
 
+        # Idempotent: If payment already succeeded, return cleanly without duplicate processing
+        if payment.status == PaymentStatus.SUCCEEDED:
+            full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
+            return PaymentResponse.from_orm_model(full)
+
         self.validate_status_transition(payment.status, PaymentStatus.SUCCEEDED)
 
         now = datetime.now(timezone.utc)
@@ -247,42 +252,48 @@ class PaymentService:
         payment.status_changed_by_user_id = actor_id
         payment.updated_at = now
 
-        # Phase 5: If this payment is for a scheduled subscription, activate it
+        # If this payment is for a subscription, activate it and ensure player membership is active
         if payment.subscription_id:
             sub = await self.subscription_repo.get_by_id(payment.subscription_id, club_id=club_id)
-            if sub and sub.status == SubscriptionStatus.SCHEDULED:
+            if sub:
                 today = date.today()
-                if sub.start_date <= today <= sub.end_date:
+                if sub.status == SubscriptionStatus.SCHEDULED and sub.start_date <= today <= sub.end_date:
                     sub.status = SubscriptionStatus.ACTIVE
                     sub.updated_at = now
-                    await self.db.flush()
-                    try:
-                        from app.core.events import EventType, dispatch_event
-                        from app.services.notification_service import NotificationService
-                        plan_name = sub.plan.name if sub.plan else "Membership Plan"
-                        await dispatch_event(
-                            event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
-                            data={
-                                "subscription_id": str(sub.id),
-                                "club_id": str(club_id),
-                                "user_id": str(payment.player_id),
-                                "status": sub.status.value,
-                                "plan_name": plan_name,
-                            },
-                            club_id=club_id,
-                            user_id=payment.player_id,
-                        )
-                        notif_svc = NotificationService(self.db)
-                        await notif_svc.create_notification(
-                            user_id=payment.player_id,
-                            club_id=club_id,
-                            category="membership",
-                            title="Payment Succeeded — Membership Active",
-                            message=f"Payment for '{plan_name}' was received. Your subscription is now active!",
-                            data={"subscription_id": str(sub.id), "payment_id": str(payment.id)},
-                        )
-                    except Exception:
-                        pass
+                # Automatically ensure player's club membership is active
+                if sub.player_membership_id:
+                    pm = await self.player_membership_repo.get_by_id(sub.player_membership_id)
+                    if pm and pm.status != PlayerMembershipStatus.ACTIVE:
+                        pm.status = PlayerMembershipStatus.ACTIVE
+                        pm.updated_at = now
+                await self.db.flush()
+                try:
+                    from app.core.events import EventType, dispatch_event
+                    from app.services.notification_service import NotificationService
+                    plan_name = sub.plan.name if sub.plan else "Membership Plan"
+                    await dispatch_event(
+                        event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                        data={
+                            "subscription_id": str(sub.id),
+                            "club_id": str(club_id),
+                            "user_id": str(payment.player_id),
+                            "status": sub.status.value,
+                            "plan_name": plan_name,
+                        },
+                        club_id=club_id,
+                        user_id=payment.player_id,
+                    )
+                    notif_svc = NotificationService(self.db)
+                    await notif_svc.create_notification(
+                        user_id=payment.player_id,
+                        club_id=club_id,
+                        category="membership",
+                        title="Payment Succeeded — Membership Active",
+                        message=f"Payment for '{plan_name}' was received. Your subscription is now active!",
+                        data={"subscription_id": str(sub.id), "payment_id": str(payment.id)},
+                    )
+                except Exception:
+                    pass
         else:
             try:
                 from app.services.notification_service import NotificationService
@@ -327,6 +338,10 @@ class PaymentService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Payment not found in this club",
             )
+
+        if payment.status == PaymentStatus.FAILED:
+            full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
+            return PaymentResponse.from_orm_model(full)
 
         self.validate_status_transition(payment.status, PaymentStatus.FAILED)
 
@@ -379,6 +394,10 @@ class PaymentService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Payment not found in this club",
             )
+
+        if payment.status == PaymentStatus.CANCELLED:
+            full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
+            return PaymentResponse.from_orm_model(full)
 
         self.validate_status_transition(payment.status, PaymentStatus.CANCELLED)
 

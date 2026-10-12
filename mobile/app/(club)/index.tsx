@@ -216,28 +216,6 @@ export default function ClubHomeScreen() {
           </View>
         </View>
 
-        {/* 2b. PENDING MEMBERSHIP REQUESTS ATTENTION BANNER (IF ANY) */}
-        {pendingRequests > 0 && (
-          <TouchableOpacity
-            style={styles.pendingAlertCard}
-            onPress={() => router.push('/(club)/membership-requests' as any)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.pendingAlertIconBox}>
-              <AlertCircle size={18} color="#D97706" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <AppText style={styles.pendingAlertTitle}>
-                {pendingRequests} Pending Membership Request{pendingRequests > 1 ? 's' : ''}
-              </AppText>
-              <AppText style={styles.pendingAlertSubtitle}>
-                Tap to review and approve player requests
-              </AppText>
-            </View>
-            <ArrowRight size={16} color="#D97706" />
-          </TouchableOpacity>
-        )}
-
         {/* 3. HERO BANNER CAROUSEL (3 Banners, Touch Swiping, Interactive Dots) */}
         <ClubHeroCarousel />
 

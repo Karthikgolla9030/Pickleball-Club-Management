@@ -256,10 +256,24 @@ export default function ClubMembershipRequestsScreen() {
 
   return (
     <Screen style={styles.screen}>
-      <AppHeader
-        title="Membership Requests"
-        showBack
-      />
+      {/* Automatic Activation Notice */}
+      <View style={styles.autoActivationBanner}>
+        <CheckCircle2 size={18} color="#18794E" />
+        <View style={{ flex: 1, gap: 2 }}>
+          <AppText variant="bodySmall" style={{ color: '#18794E', fontWeight: '600' }}>
+            Automatic Activation Active
+          </AppText>
+          <AppText variant="caption" color="secondary">
+            Ordinary player memberships activate automatically upon joining or plan purchase.
+          </AppText>
+        </View>
+        <Button
+          label="Members"
+          size="sm"
+          variant="outline"
+          onPress={() => router.replace('/(club)/members' as any)}
+        />
+      </View>
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
@@ -372,6 +386,19 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#F5F8F7',
+  },
+  autoActivationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    backgroundColor: '#E4F4EC',
+    borderColor: '#A8D5C2',
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
   },
   tabsContainer: {
     paddingHorizontal: Spacing.md,

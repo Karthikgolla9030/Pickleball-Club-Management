@@ -69,6 +69,14 @@ export const playerApi = {
   },
 
   /**
+   * Directly join a club as an active player member.
+   * Auto-activates player membership without manual staff approval.
+   */
+  joinClub(clubId: string): Promise<PlayerClub> {
+    return apiClient.post<PlayerClub>(`${API_ENDPOINTS.PLAYER_CLUBS}/${clubId}/join`, {});
+  },
+
+  /**
    * Get recent chronological activity for the authenticated player.
    */
   getActivity(): Promise<PlayerActivityItem[]> {

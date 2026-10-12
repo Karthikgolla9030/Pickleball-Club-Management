@@ -4,6 +4,7 @@ Ensures tenant isolation, validation, and complete separation from staff roles.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
+from app.models.club import Club
 
 from app.models.booking import Booking, BookingStatus
 from app.models.club_player_membership import (
@@ -62,6 +65,37 @@ def _build_club_player_response(m: ClubPlayerMembership) -> ClubPlayerMembership
         expires_at=m.expires_at,
         created_at=m.created_at,
         updated_at=m.updated_at,
+    )
+
+
+def _build_player_club_response(m: ClubPlayerMembership, club: Club) -> PlayerClubResponse:
+    return PlayerClubResponse(
+        club_id=club.id,
+        club_name=club.name,
+        club_slug=club.slug,
+        logo_url=club.logo_url,
+        short_description=club.short_description,
+        description=club.description,
+        address_line1=club.address_line1,
+        address_line2=club.address_line2,
+        city=club.city,
+        state=club.state,
+        postal_code=club.postal_code,
+        country=club.country,
+        contact_email=club.contact_email,
+        contact_phone=club.contact_phone,
+        website=club.website,
+        operating_days=club.operating_days,
+        opening_time=club.opening_time,
+        closing_time=club.closing_time,
+        timezone=club.timezone,
+        facilities_summary=club.facilities_summary,
+        established_year=club.established_year,
+        membership_id=m.id,
+        membership_number=m.membership_number,
+        status=m.status,
+        joined_at=m.joined_at,
+        expires_at=m.expires_at,
     )
 
 
@@ -242,6 +276,89 @@ class PlayerService:
             created_at=membership.created_at,
             updated_at=membership.updated_at,
         )
+
+    async def join_club(self, user_id: UUID, club_id: UUID) -> PlayerClubResponse:
+        """
+        Player joins a club directly.
+        Automatically activates ordinary player club membership without manual staff approval.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club or not club.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found or inactive",
+            )
+
+        now = datetime.now(timezone.utc)
+        existing = await self.player_membership_repo.get_by_user_and_club(user_id, club_id)
+        if existing:
+            if existing.status == PlayerMembershipStatus.ACTIVE:
+                return _build_player_club_response(existing, club)
+            # Reactivate membership if it was inactive or suspended
+            updated = await self.player_membership_repo.update(
+                existing,
+                status=PlayerMembershipStatus.ACTIVE,
+                joined_at=now,
+            )
+            membership = updated
+        else:
+            membership = await self.player_membership_repo.create(
+                user_id=user_id,
+                club_id=club_id,
+                status=PlayerMembershipStatus.ACTIVE,
+                joined_at=now,
+            )
+
+        # If any pending membership request exists for this user and club, mark it approved
+        from app.models.club_membership_request import ClubMembershipRequest, MembershipRequestStatus
+        stmt = select(ClubMembershipRequest).where(
+            ClubMembershipRequest.club_id == club_id,
+            ClubMembershipRequest.user_id == user_id,
+            ClubMembershipRequest.status == MembershipRequestStatus.PENDING,
+        )
+        pending_reqs = (await self.db.execute(stmt)).scalars().all()
+        for pr in pending_reqs:
+            pr.status = MembershipRequestStatus.APPROVED
+            pr.reviewed_at = now
+            pr.updated_at = now
+
+        await self.db.commit()
+
+        try:
+            await dispatch_event(
+                event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                data={
+                    "membership_id": str(membership.id),
+                    "club_id": str(club_id),
+                    "user_id": str(user_id),
+                    "status": membership.status.value,
+                },
+                club_id=club_id,
+                user_id=user_id,
+            )
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=user_id,
+                club_id=club_id,
+                category="membership",
+                title=f"Welcome to {club.name}!",
+                message=f"You have joined {club.name}. Your player membership is now active.",
+                data={"club_id": str(club_id), "membership_id": str(membership.id)},
+            )
+            user_obj = await self.user_repo.get_by_id(user_id)
+            user_name = user_obj.full_name or user_obj.email if user_obj else "A new player"
+            await notif_svc.notify_club_staff(
+                club_id=club_id,
+                category="membership",
+                title="New Club Member",
+                message=f"{user_name} joined {club.name}.",
+                data={"club_id": str(club_id), "user_id": str(user_id)},
+            )
+            await self.db.commit()
+        except Exception:
+            pass
+
+        return _build_player_club_response(membership, club)
 
     # ─── Club-Side Player Administration ────────────────────────────────────────
 

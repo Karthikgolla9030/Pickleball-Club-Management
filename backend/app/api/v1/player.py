@@ -276,6 +276,29 @@ async def get_player_club_detail(
     )
 
 
+@router.post(
+    "/clubs/{club_id}/join",
+    response_model=PlayerClubResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Join a club",
+    description="Player joins a club. Automatically activates player club membership without manual approval.",
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "Club not found or inactive"},
+    },
+)
+async def join_club(
+    club_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlayerClubResponse:
+    """Player directly joins a club."""
+    return await PlayerService(db).join_club(
+        user_id=current_user.id,
+        club_id=club_id,
+    )
+
+
 @router.get(
     "/tournaments",
     response_model=list[TournamentDiscoveryResponse],

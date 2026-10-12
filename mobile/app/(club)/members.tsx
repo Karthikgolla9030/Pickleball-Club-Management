@@ -156,14 +156,11 @@ export default function ClubMembersScreen() {
   // Subscriptions query (for subscriber identification)
   const { data: subscriptions = [] } = useClubSubscriptions(clubId || '');
 
-  // Set of user IDs with active/scheduled subscriptions
+  // Set of user IDs with active subscriptions (excludes scheduled, expired, cancelled, and pending payments)
   const subscriberMap = useMemo(() => {
     const map = new Map<string, string>();
     subscriptions.forEach((s) => {
-      if (
-        (s.effective_status === 'active' || s.effective_status === 'scheduled') &&
-        s.player?.user_id
-      ) {
+      if (s.effective_status === 'active' && s.player?.user_id) {
         map.set(s.player.user_id, s.plan_name || 'Active Subscriber');
       }
     });

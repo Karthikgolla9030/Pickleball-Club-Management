@@ -188,7 +188,6 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Owner: Full management
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'membership_requests', label: 'Membership Requests', icon: UserCheck, route: '/(club)/membership-requests' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
@@ -213,7 +212,6 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Manager: Operations only
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'membership_requests', label: 'Membership Requests', icon: UserCheck, route: '/(club)/membership-requests' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
