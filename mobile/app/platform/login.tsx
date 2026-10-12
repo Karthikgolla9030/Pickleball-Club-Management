@@ -165,7 +165,12 @@ export default function PlatformLoginScreen() {
 
           {/* Return Navigation */}
           <TouchableOpacity
-            onPress={() => router.replace('/(auth)/login')}
+            onPress={() => {
+              if (Platform.OS === 'web' && typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
+                document.activeElement.blur();
+              }
+              router.replace('/(auth)/login');
+            }}
             style={styles.returnLink}
             activeOpacity={0.7}
           >
