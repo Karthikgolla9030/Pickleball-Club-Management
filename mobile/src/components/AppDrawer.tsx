@@ -99,7 +99,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       toValue: isOpen ? 0 : -DRAWER_WIDTH,
       duration: 250,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   }, [isOpen, translateX]);
 

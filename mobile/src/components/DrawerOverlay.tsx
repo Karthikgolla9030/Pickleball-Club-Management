@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
 import { useDrawerStore } from '@/navigation';
 
 export function DrawerOverlay() {
@@ -18,7 +18,7 @@ export function DrawerOverlay() {
     Animated.timing(opacity, {
       toValue: isOpen ? 1 : 0,
       duration: 260,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start();
   }, [isOpen, opacity]);
 
