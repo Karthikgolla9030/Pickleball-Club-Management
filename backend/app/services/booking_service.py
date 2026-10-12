@@ -25,6 +25,7 @@ from app.core.booking_config import (
     MAX_BOOKING_HORIZON_DAYS,
     MIN_SLOT_INTERVAL_MINUTES,
 )
+from app.core.operating_hours import resolve_effective_operating_hours
 from app.models.booking import Booking, BookingStatus, BookingType
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.court import Court, CourtStatus
@@ -40,6 +41,7 @@ from app.schemas.booking import (
     BookingCourtInfo,
     BookingCreateRequest,
     BookingPlayerInfo,
+    BookingPriceCalculationResponse,
     BookingResponse,
     ClubAvailabilityResponse,
     CourtAvailability,
@@ -180,6 +182,7 @@ class BookingService:
         club_opening: time,
         club_closing: time,
         club_tz: timezone | zoneinfo.ZoneInfo,
+        is_closed: bool = False,
     ) -> int:
         """
         Validate slot alignment, horizon, and operating hours.
@@ -244,6 +247,12 @@ class BookingService:
         local_start = start_at.astimezone(club_tz)
         local_end = end_at.astimezone(club_tz)
 
+        if is_closed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Facility is closed on {local_start.strftime('%A')} ({local_start.date()})",
+            )
+
         # Ensure booking does not cross day boundaries
         if local_start.date() != local_end.date():
             # Allow ending exactly at 00:00 of next day if club closes at midnight (00:00)
@@ -268,6 +277,79 @@ class BookingService:
                 )
 
         return duration
+
+    # ─── Price Calculation ────────────────────────────────────────────────────
+
+    async def calculate_booking_price(
+        self,
+        club_id: UUID,
+        court_id: UUID,
+        user_id: UUID,
+        start_at: datetime,
+        end_at: datetime,
+    ) -> BookingPriceCalculationResponse:
+        """
+        Calculate booking duration and price snapshot for a player court reservation.
+        Validates club existence, court existence within club, active status,
+        future slot alignment, operating hours, and booking horizon.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club or not club.is_active:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
+
+        # Verify active club membership
+        membership = await self.club_player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
+        if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Active club player membership required to book courts at this club",
+            )
+
+        court = await self.court_repo.get_by_id(court_id)
+        if not court or court.club_id != club_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Court not found in this club")
+
+        if not court.is_active or court.status != CourtStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Court is inactive and cannot receive new bookings",
+            )
+
+        # Booking horizon check (plan-aware)
+        _, max_horizon = await self._get_player_booking_limits(user_id=user_id, club_id=club_id)
+        now = datetime.now(timezone.utc)
+        max_horizon_dt = now + timedelta(days=max_horizon)
+        s_at = start_at.replace(tzinfo=timezone.utc) if start_at.tzinfo is None else start_at.astimezone(timezone.utc)
+        if s_at > max_horizon_dt:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Bookings cannot be made more than {max_horizon} days in advance",
+            )
+
+        club_tz = self._get_club_tz(club.timezone)
+        local_date = s_at.astimezone(club_tz).date()
+        is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, court)
+        duration = self._validate_time_boundaries(
+            start_at=start_at,
+            end_at=end_at,
+            club_opening=eff_opening,
+            club_closing=eff_closing,
+            club_tz=club_tz,
+            is_closed=is_closed,
+        )
+
+        rate = Decimal(str(court.price_per_hour)) if court.price_per_hour is not None else Decimal("0.00")
+        hours = Decimal(duration) / Decimal(60)
+        total_price = (hours * rate).quantize(Decimal("0.01"))
+
+        return BookingPriceCalculationResponse(
+            court_id=court.id,
+            court_name=court.name,
+            duration_minutes=duration,
+            price_per_hour=rate,
+            total_price=total_price,
+            currency="INR",
+        )
 
     # ─── Player Booking Creation ──────────────────────────────────────────────
 
@@ -328,14 +410,6 @@ class BookingService:
                 detail=f"Bookings cannot be made more than {max_horizon} days in advance",
             )
 
-        duration = self._validate_time_boundaries(
-            start_at=payload.start_at,
-            end_at=payload.end_at,
-            club_opening=club.opening_time or DEFAULT_CLUB_OPENING_TIME,
-            club_closing=club.closing_time or DEFAULT_CLUB_CLOSING_TIME,
-            club_tz=club_tz,
-        )
-
         # 6. Concurrency lock on Court row and verify court active
         locked_court = await self.booking_repo.lock_court_for_update(payload.court_id)
         if not locked_court or locked_court.club_id != club_id:
@@ -346,6 +420,18 @@ class BookingService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Court is inactive and cannot receive new bookings",
             )
+
+        # 5. Operating hours validation with day-of-week & court override support
+        local_date = payload_start.astimezone(club_tz).date()
+        is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        duration = self._validate_time_boundaries(
+            start_at=payload.start_at,
+            end_at=payload.end_at,
+            club_opening=eff_opening,
+            club_closing=eff_closing,
+            club_tz=club_tz,
+            is_closed=is_closed,
+        )
 
         # 7. Check double-booking conflicts
         conflicts = await self.booking_repo.find_conflicts(
@@ -371,7 +457,7 @@ class BookingService:
             )
 
         # 8. Calculate price snapshot from locked_court
-        rate_snapshot = locked_court.price_per_hour
+        rate_snapshot = Decimal(str(locked_court.price_per_hour)) if locked_court.price_per_hour is not None else None
         total_price_snapshot = None
         if rate_snapshot is not None:
             hours = Decimal(duration) / Decimal(60)
@@ -502,16 +588,6 @@ class BookingService:
             guest_prefix = f"Walk-in Guest: {payload.guest_name}"
             notes = f"{guest_prefix}\n{notes}" if notes else guest_prefix
 
-        # Validate operating hours & times
-        club_tz = self._get_club_tz(club.timezone)
-        duration = self._validate_time_boundaries(
-            start_at=payload.start_at,
-            end_at=payload.end_at,
-            club_opening=club.opening_time or DEFAULT_CLUB_OPENING_TIME,
-            club_closing=club.closing_time or DEFAULT_CLUB_CLOSING_TIME,
-            club_tz=club_tz,
-        )
-
         # Concurrency lock on Court row
         locked_court = await self.booking_repo.lock_court_for_update(payload.court_id)
         if not locked_court or locked_court.club_id != club_id:
@@ -522,6 +598,20 @@ class BookingService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Court is inactive and cannot receive new bookings",
             )
+
+        # Validate operating hours & times with day-of-week & court override support
+        club_tz = self._get_club_tz(club.timezone)
+        payload_start = payload.start_at if payload.start_at.tzinfo else payload.start_at.replace(tzinfo=timezone.utc)
+        local_date = payload_start.astimezone(club_tz).date()
+        is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        duration = self._validate_time_boundaries(
+            start_at=payload.start_at,
+            end_at=payload.end_at,
+            club_opening=eff_opening,
+            club_closing=eff_closing,
+            club_tz=club_tz,
+            is_closed=is_closed,
+        )
 
         # Check conflicts
         conflicts = await self.booking_repo.find_conflicts(
@@ -547,7 +637,7 @@ class BookingService:
             )
 
         # Calculate pricing snapshot from locked_court
-        rate_snapshot = locked_court.price_per_hour
+        rate_snapshot = Decimal(str(locked_court.price_per_hour)) if locked_court.price_per_hour is not None else None
         total_price_snapshot = None
         if rate_snapshot is not None:
             hours = Decimal(duration) / Decimal(60)
@@ -639,18 +729,22 @@ class BookingService:
         if not club or not club.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
 
-        club_tz = self._get_club_tz(club.timezone)
-        self._validate_time_boundaries(
-            start_at=payload.start_at,
-            end_at=payload.end_at,
-            club_opening=club.opening_time or DEFAULT_CLUB_OPENING_TIME,
-            club_closing=club.closing_time or DEFAULT_CLUB_CLOSING_TIME,
-            club_tz=club_tz,
-        )
-
         locked_court = await self.booking_repo.lock_court_for_update(payload.court_id)
         if not locked_court or locked_court.club_id != club_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Court not found in this club")
+
+        club_tz = self._get_club_tz(club.timezone)
+        payload_start = payload.start_at if payload.start_at.tzinfo else payload.start_at.replace(tzinfo=timezone.utc)
+        local_date = payload_start.astimezone(club_tz).date()
+        is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        self._validate_time_boundaries(
+            start_at=payload.start_at,
+            end_at=payload.end_at,
+            club_opening=eff_opening,
+            club_closing=eff_closing,
+            club_tz=club_tz,
+            is_closed=is_closed,
+        )
 
         conflicts = await self.booking_repo.find_conflicts(
             court_id=payload.court_id,
@@ -966,26 +1060,22 @@ class BookingService:
         if not club or not club.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
 
-        opening = club.opening_time or DEFAULT_CLUB_OPENING_TIME
-        closing = club.closing_time or DEFAULT_CLUB_CLOSING_TIME
         club_tz = self._get_club_tz(club.timezone)
+        club_is_closed, club_open, club_close = resolve_effective_operating_hours(target_date, club, None)
 
         # Active club courts only (ordered by display order)
         courts = await self.court_repo.list_by_club(club_id, is_active=True)
 
-        # Construct start and end datetimes for the target date in club timezone
-        day_start = datetime.combine(target_date, opening, tzinfo=club_tz).astimezone(timezone.utc)
-        if closing == time(0, 0):
-            day_end = datetime.combine(target_date + timedelta(days=1), time(0, 0), tzinfo=club_tz).astimezone(timezone.utc)
-        else:
-            day_end = datetime.combine(target_date, closing, tzinfo=club_tz).astimezone(timezone.utc)
+        # Broad date range for loading confirmed bookings across all courts
+        day_range_start = datetime.combine(target_date, time(0, 0), tzinfo=club_tz).astimezone(timezone.utc)
+        day_range_end = datetime.combine(target_date + timedelta(days=1), time(0, 0), tzinfo=club_tz).astimezone(timezone.utc)
 
         # Load confirmed bookings on this day across active courts
         all_court_ids = [c.id for c in courts]
         confirmed_bookings = await self.booking_repo.list_confirmed_for_date_range(
             club_id=club_id,
-            start_time=day_start,
-            end_time=day_end,
+            start_time=day_range_start,
+            end_time=day_range_end,
             court_ids=all_court_ids,
         )
 
@@ -998,56 +1088,66 @@ class BookingService:
         court_availabilities: list[CourtAvailability] = []
 
         for court in courts:
+            court_is_closed, court_open, court_close = resolve_effective_operating_hours(target_date, club, court)
             slots: list[TimeSlotAvailability] = []
-            slot_start = day_start
-            slot_delta = timedelta(minutes=slot_duration_minutes)
 
-            while slot_start + slot_delta <= day_end:
-                slot_end = slot_start + slot_delta
+            # If court is marked closed for this weekday, expose 0 bookable slots
+            if not court_is_closed:
+                court_day_start = datetime.combine(target_date, court_open, tzinfo=club_tz).astimezone(timezone.utc)
+                if court_close == time(0, 0):
+                    court_day_end = datetime.combine(target_date + timedelta(days=1), time(0, 0), tzinfo=club_tz).astimezone(timezone.utc)
+                else:
+                    court_day_end = datetime.combine(target_date, court_close, tzinfo=club_tz).astimezone(timezone.utc)
 
-                # Find any overlapping confirmed booking for this court
-                def _as_utc(dt: datetime) -> datetime:
-                    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+                slot_start = court_day_start
+                slot_delta = timedelta(minutes=slot_duration_minutes)
 
-                conflict = next(
-                    (
-                        b for b in confirmed_bookings
-                        if b.court_id == court.id and _as_utc(b.start_at) < slot_end and _as_utc(b.end_at) > slot_start
-                    ),
-                    None,
-                )
-                match_conflict = next(
-                    (
-                        m for m in scheduled_matches
-                        if m.court_id == court.id and m.scheduled_start_at and m.scheduled_end_at and _as_utc(m.scheduled_start_at) < slot_end and _as_utc(m.scheduled_end_at) > slot_start
-                    ),
-                    None,
-                )
+                while slot_start + slot_delta <= court_day_end:
+                    slot_end = slot_start + slot_delta
 
-                is_available = conflict is None and match_conflict is None and court.is_active
-                slot_status = "AVAILABLE"
-                if not court.is_active:
-                    slot_status = "BLOCKED"
-                elif match_conflict:
-                    slot_status = "BOOKED"
-                elif conflict:
-                    if conflict.booking_type == BookingType.MAINTENANCE:
-                        slot_status = "MAINTENANCE"
-                    elif conflict.booking_type == BookingType.BLOCKED:
-                        slot_status = "BLOCKED"
-                    else:
-                        slot_status = "BOOKED"
+                    # Find any overlapping confirmed booking for this court
+                    def _as_utc(dt: datetime) -> datetime:
+                        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
-                slots.append(
-                    TimeSlotAvailability(
-                        start_at=slot_start,
-                        end_at=slot_end,
-                        is_available=is_available,
-                        status=slot_status,
-                        booking_id=conflict.id if conflict else None,
+                    conflict = next(
+                        (
+                            b for b in confirmed_bookings
+                            if b.court_id == court.id and _as_utc(b.start_at) < slot_end and _as_utc(b.end_at) > slot_start
+                        ),
+                        None,
                     )
-                )
-                slot_start += slot_delta
+                    match_conflict = next(
+                        (
+                            m for m in scheduled_matches
+                            if m.court_id == court.id and m.scheduled_start_at and m.scheduled_end_at and _as_utc(m.scheduled_start_at) < slot_end and _as_utc(m.scheduled_end_at) > slot_start
+                        ),
+                        None,
+                    )
+
+                    is_available = conflict is None and match_conflict is None and court.is_active
+                    slot_status = "AVAILABLE"
+                    if not court.is_active:
+                        slot_status = "BLOCKED"
+                    elif match_conflict:
+                        slot_status = "BOOKED"
+                    elif conflict:
+                        if conflict.booking_type == BookingType.MAINTENANCE:
+                            slot_status = "MAINTENANCE"
+                        elif conflict.booking_type == BookingType.BLOCKED:
+                            slot_status = "BLOCKED"
+                        else:
+                            slot_status = "BOOKED"
+
+                    slots.append(
+                        TimeSlotAvailability(
+                            start_at=slot_start,
+                            end_at=slot_end,
+                            is_available=is_available,
+                            status=slot_status,
+                            booking_id=conflict.id if conflict else None,
+                        )
+                    )
+                    slot_start += slot_delta
 
             court_availabilities.append(
                 CourtAvailability(
@@ -1064,8 +1164,8 @@ class BookingService:
         return ClubAvailabilityResponse(
             club_id=club.id,
             date=target_date,
-            opening_time=opening,
-            closing_time=closing,
+            opening_time=club_open,
+            closing_time=club_close,
             timezone=club.timezone or "UTC",
             courts=court_availabilities,
         )

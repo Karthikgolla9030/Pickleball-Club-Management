@@ -28,11 +28,13 @@ import {
 import {
   AlertTriangle,
   ArrowRight,
+  Building2,
   Calendar,
   CheckCircle2,
   Clock,
   Heart,
   Lock,
+  MapPin,
   Radio,
   Trophy,
   UserPlus,
@@ -53,6 +55,7 @@ export interface PlayerTournamentCardProps {
   onToggleFavorite?: () => void;
   onPress?: () => void;
   onActionPress?: () => void;
+  onClubPress?: (clubId: string) => void;
 }
 
 // Format-specific authentic court imagery
@@ -99,6 +102,7 @@ export function PlayerTournamentCard({
   onToggleFavorite,
   onPress,
   onActionPress,
+  onClubPress,
 }: PlayerTournamentCardProps) {
   const isRegistered = isRegisteredProp ?? Boolean(tournament.is_registered);
   const regStatus = registrationStatusProp ?? tournament.my_registration_status;
@@ -413,6 +417,29 @@ export function PlayerTournamentCard({
           ) : null}
         </View>
 
+        {/* Row 1.5: Host Club Row */}
+        {tournament.club_name ? (
+          <TouchableOpacity
+            style={styles.clubRow}
+            onPress={(e) => {
+              if (onClubPress) {
+                e.stopPropagation?.();
+                onClubPress(tournament.club_id);
+              }
+            }}
+            disabled={!onClubPress}
+            activeOpacity={0.75}
+            accessibilityLabel={`Hosted by ${tournament.club_name}`}
+            accessibilityRole={onClubPress ? 'button' : undefined}
+          >
+            <Building2 size={13} color="#065F46" strokeWidth={2.2} style={{ marginRight: 5 }} />
+            <AppText style={styles.clubText} numberOfLines={1}>
+              {tournament.club_name}
+              {tournament.location_name ? ` • ${tournament.location_name}` : ''}
+            </AppText>
+          </TouchableOpacity>
+        ) : null}
+
         {/* Row 2: Calendar Icon & Date Range */}
         <View style={styles.dateRow}>
           <Calendar size={13} color="#64748B" strokeWidth={2} style={{ marginRight: 6 }} />
@@ -637,6 +664,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#475569',
+  },
+  clubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 2,
+    alignSelf: 'flex-start',
+  },
+  clubText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#065F46',
+    flexShrink: 1,
   },
   dateRow: {
     flexDirection: 'row',

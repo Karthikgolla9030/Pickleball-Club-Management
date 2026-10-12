@@ -60,6 +60,8 @@ class LeagueResponse(BaseModel):
 
     id: uuid.UUID
     club_id: uuid.UUID
+    club_name: str | None = None
+    club_slug: str | None = None
     name: str
     description: str | None
     status: LeagueStatus

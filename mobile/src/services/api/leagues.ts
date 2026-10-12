@@ -245,10 +245,17 @@ export const leagueApi = {
 
   // ─── Player Read Endpoints ──────────────────────────────────────────────────
 
-  listPlayerLeagues(status?: LeagueStatus): Promise<LeagueSummary[]> {
-    const url = status
-      ? `${playerLeagueBase()}?status=${status}`
-      : playerLeagueBase();
+  listPlayerLeagues(
+    status?: LeagueStatus,
+    clubId?: string,
+    search?: string
+  ): Promise<LeagueSummary[]> {
+    const params = new URLSearchParams();
+    if (status) params.append('status', status);
+    if (clubId) params.append('club_id', clubId);
+    if (search) params.append('search', search);
+    const qs = params.toString();
+    const url = qs ? `${playerLeagueBase()}?${qs}` : playerLeagueBase();
     return apiClient.get<LeagueSummary[]>(url);
   },
 

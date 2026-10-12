@@ -11,6 +11,10 @@ from app.models.membership import (
     SubscriptionStatus,
 )
 from app.models.club_membership import ClubMembership, ClubRole
+from app.models.club_membership_request import (
+    ClubMembershipRequest,
+    MembershipRequestStatus,
+)
 from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
 from app.models.competition import (
     Match,
@@ -65,7 +69,7 @@ from app.models.tournament_registration import (
     RegistrationStatus,
     TournamentRegistration,
 )
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationPreference
 from app.models.user import User
 
 __all__ = [
@@ -74,6 +78,7 @@ __all__ = [
     "BookingType",
     "Club",
     "ClubMembership",
+    "ClubMembershipRequest",
     "ClubPlayerMembership",
     "ClubRole",
     "Coach",
@@ -103,7 +108,9 @@ __all__ = [
     "MatchStatus",
     "MembershipPlan",
     "MemberSubscription",
+    "MembershipRequestStatus",
     "Notification",
+    "NotificationPreference",
     "Payment",
     "PaymentMethod",
     "PaymentPurpose",

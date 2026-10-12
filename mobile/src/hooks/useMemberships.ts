@@ -19,6 +19,7 @@ import type {
   CancelSubscriptionPayload,
   CreateMembershipPlanPayload,
   CreateSubscriptionPayload,
+  PlayerSubscribePayload,
   UpdateMembershipPlanPayload,
   UpdateSubscriptionPayload,
 } from '@/types';
@@ -218,5 +219,55 @@ export function usePlayerMembership(clubId: string) {
       return failureCount < 3;
     },
     staleTime: 2 * 60 * 1000, // 2 min
+  });
+}
+
+/**
+ * Player-facing: fetch all subscriptions across clubs for authenticated player.
+ */
+export function usePlayerMemberships(status?: string) {
+  return useQuery({
+    queryKey: QUERY_KEYS.PLAYER_MEMBERSHIPS(status),
+    queryFn: () => membershipApi.listPlayerMemberships(status),
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Player-facing: subscribe to a club membership plan.
+ */
+export function usePlayerSubscribe() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      clubId,
+      planId,
+      payload,
+    }: {
+      clubId: string;
+      planId: string;
+      payload?: PlayerSubscribePayload;
+    }) => membershipApi.playerSubscribe(clubId, planId, payload),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MEMBERSHIP(variables.clubId) });
+      queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'clubs'] });
+    },
+  });
+}
+
+/**
+ * Player-facing: renew an existing subscription.
+ */
+export function useRenewPlayerSubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (subscriptionId: string) =>
+      membershipApi.renewPlayerSubscription(subscriptionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+    },
   });
 }

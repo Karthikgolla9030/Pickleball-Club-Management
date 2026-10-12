@@ -10,7 +10,9 @@ import { FilterChips } from './FilterChips';
 import { DateCalendar } from './DateCalendar';
 import { Input } from './Input';
 import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } from '@/hooks';
+import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
+import type { Booking, BookingPriceCalculation } from '@/types';
 
 export interface BookingFlowModalProps {
   visible: boolean;
@@ -48,6 +50,9 @@ export function BookingFlowModal({
   const [notes, setNotes] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [serverPrice, setServerPrice] = useState<BookingPriceCalculation | null>(null);
+  const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
+  const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
 
   // Queries & Mutations
   const {
@@ -69,6 +74,8 @@ export function BookingFlowModal({
     if (visible && !prevVisibleRef.current) {
       setStage(1);
       setFormError(null);
+      setServerPrice(null);
+      setConfirmedBooking(null);
       setShowDatePicker(false);
       if (initialDate) setDateStr(initialDate);
       if (initialCourtId) setCourtId(initialCourtId);
@@ -104,7 +111,7 @@ export function BookingFlowModal({
   // Only show slots for selected court that are actually available
   const selectedCourtSlots = availableCourts.find(c => c.court_id === courtId)?.slots || [];
 
-  const handleNextToSummary = () => {
+  const handleNextToSummary = async () => {
     if (mode === 'staff' && !playerId && !customerText.trim()) {
       setFormError('Please select or enter a customer name.');
       return;
@@ -118,10 +125,40 @@ export function BookingFlowModal({
       return;
     }
     setFormError(null);
-    setStage(2);
+
+    const slot = selectedCourtSlots.find(
+      (s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime()
+    );
+    const startAt = slot?.start_at || slotIso;
+    const endAt = slot?.end_at || new Date(new Date(slotIso).getTime() + 60 * 60 * 1000).toISOString();
+
+    if (mode === 'player') {
+      try {
+        setIsCalculatingPrice(true);
+        const calculation = await bookingApi.calculatePrice(clubId, {
+          court_id: courtId,
+          start_at: startAt,
+          end_at: endAt,
+        });
+        setServerPrice(calculation);
+        setStage(2);
+      } catch (err: any) {
+        const msg =
+          err?.response?.data?.detail ||
+          err?.detail ||
+          err?.message ||
+          'Failed to calculate booking price for this court and time slot.';
+        setFormError(msg);
+      } finally {
+        setIsCalculatingPrice(false);
+      }
+    } else {
+      setStage(2);
+    }
   };
 
   const handleConfirmSummary = () => {
+    setFormError(null);
     setStage(3); // Go to Payment
   };
 
@@ -135,8 +172,9 @@ export function BookingFlowModal({
       const startAt = slot?.start_at || slotIso;
       const endAt = slot?.end_at || new Date(new Date(slotIso).getTime() + 60 * 60 * 1000).toISOString();
       
+      let created: Booking | null = null;
       if (mode === 'staff') {
-        await createStaffBooking({
+        created = await createStaffBooking({
           court_id: courtId,
           player_id: playerId || undefined,
           guest_name: !playerId ? customerText.trim() : undefined,
@@ -145,13 +183,14 @@ export function BookingFlowModal({
           notes: notes.trim() || null,
         });
       } else {
-        await createBooking({
+        created = await createBooking({
           court_id: courtId,
           start_at: startAt,
           end_at: endAt,
           notes: notes.trim() || null,
         });
       }
+      setConfirmedBooking(created);
       setStage(4);
     } catch (err: any) {
       const isConflict =
@@ -178,15 +217,15 @@ export function BookingFlowModal({
 
       if (isConflict) {
         msg = 'This court is no longer available for that time. Another player has just booked it. Please choose another slot.';
+        setSlotIso(''); // Clear slot selection while preserving court, date, notes
+        setStage(1); // Return to stage 1 only on slot conflict so player can select another slot
       } else if (isAuth) {
         msg = 'Your session has expired. Please sign in again to complete your booking.';
       } else if (isForbidden) {
-        msg = err?.detail || 'You do not have permission to book this court.';
+        msg = err?.response?.data?.detail || err?.detail || 'Active club player membership required to book courts at this club.';
       }
       setFormError(msg);
-      if (isConflict) {
-        setStage(1); // Return to stage 1 only on slot conflict so player can select another slot
-      }
+      // On non-conflict errors, player remains on Stage 3 with form state preserved
     }
   };
 
@@ -396,14 +435,19 @@ export function BookingFlowModal({
       ? (playerId ? playerMembers.find(m => m.user_id === playerId)?.user_full_name : customerText.trim())
       : 'You';
 
-    const rateText = court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN')}/hour` : 'Free / Included';
-    const totalText = court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)';
+    const rateText = serverPrice != null
+      ? `₹${Number(serverPrice.price_per_hour).toLocaleString('en-IN')}/hour`
+      : (court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN')}/hour` : 'Free / Included');
+    const totalText = serverPrice != null
+      ? `₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      : (court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)');
+    const durationText = serverPrice?.duration_minutes ? `${serverPrice.duration_minutes} minutes` : '1 hour';
 
     return (
       <View style={styles.formContainer}>
         <Card style={styles.summaryCard}>
           <SummaryRow label="Customer" value={pName || 'Member'} />
-          <SummaryRow label="Court" value={court?.display_name || court?.court_name || 'Court'} />
+          <SummaryRow label="Court" value={serverPrice?.court_name || court?.display_name || court?.court_name || 'Court'} />
           <SummaryRow 
             label="Date" 
             value={new Date(slot?.start_at || '').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} 
@@ -412,7 +456,7 @@ export function BookingFlowModal({
             label="Time" 
             value={`${new Date(slot?.start_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – ${new Date(slot?.end_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`} 
           />
-          <SummaryRow label="Duration" value="1 hour" />
+          <SummaryRow label="Duration" value={durationText} />
           <SummaryRow label="Rate" value={rateText} />
           <SummaryRow label="Players" value={playersCount} />
           
@@ -431,23 +475,27 @@ export function BookingFlowModal({
 
   const renderStage3 = () => {
     const court = availableCourts.find(c => c.court_id === courtId);
-    const totalAmount = court?.price_per_hour != null 
-      ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
-      : '₹0.00';
+    const totalAmount = serverPrice != null
+      ? `₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      : (court?.price_per_hour != null 
+        ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
+        : '₹0.00');
 
     return (
       <View style={styles.formContainer}>
         <AppText variant="heading3" style={{ marginBottom: Spacing[2] }}>Payment</AppText>
         <Card style={styles.summaryCard}>
           <AppText variant="body" color="secondary" style={{ marginBottom: Spacing[2] }}>
-            Amount Due
+            Amount Due (Server-Verified)
           </AppText>
           <AppText variant="heading2" style={{ marginBottom: Spacing[4] }}>{totalAmount}</AppText>
           
           <AppText variant="caption" color="tertiary">
-            {court?.price_per_hour != null 
-              ? `Court rate is ₹${Number(court.price_per_hour)}/hour. Price is calculated and confirmed by the server.` 
-              : 'This booking is fully covered by membership or internal staff credit. No external payment required at this time.'}
+            {serverPrice != null && Number(serverPrice.total_price) > 0
+              ? `Calculated server court rate is ₹${Number(serverPrice.price_per_hour)}/hour for ${serverPrice.duration_minutes}m duration.`
+              : (court?.price_per_hour != null && Number(court.price_per_hour) > 0
+                ? `Court rate is ₹${Number(court.price_per_hour)}/hour. Price is calculated and confirmed by the server.` 
+                : 'This booking is fully covered by membership or internal staff credit. No external payment required at this time.')}
           </AppText>
         </Card>
         {formError && (
@@ -468,9 +516,16 @@ export function BookingFlowModal({
       ? (playerId ? playerMembers.find(m => m.user_id === playerId)?.user_full_name : customerText.trim())
       : 'You';
 
-    const priceText = court?.price_per_hour != null 
-      ? `Total: ₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-      : 'Free Booking';
+    const confirmedCourtName = confirmedBooking?.court?.name || serverPrice?.court_name || court?.display_name || court?.court_name || 'Court';
+    const confirmedStart = confirmedBooking?.start_at ? new Date(confirmedBooking.start_at) : (slot?.start_at ? new Date(slot.start_at) : null);
+    const confirmedEnd = confirmedBooking?.end_at ? new Date(confirmedBooking.end_at) : (slot?.end_at ? new Date(slot.end_at) : null);
+    const confirmedTotal = confirmedBooking?.total_price != null
+      ? `Total: ₹${Number(confirmedBooking.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      : (serverPrice != null
+        ? `Total: ₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+        : (court?.price_per_hour != null
+          ? `Total: ₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+          : 'Free / Included'));
 
     return (
       <View style={styles.successContainer}>
@@ -479,18 +534,18 @@ export function BookingFlowModal({
         </View>
         <AppText variant="heading2" style={{ marginBottom: Spacing[2] }}>Booking Confirmed!</AppText>
         <AppText variant="body" color="secondary" style={{ textAlign: 'center', marginBottom: Spacing[4] }}>
-          {pName} has been booked for:
+          {pName} has been confirmed for:
         </AppText>
         <Card style={styles.summaryCard}>
-          <AppText variant="heading3">{court?.display_name || court?.court_name}</AppText>
+          <AppText variant="heading3">{confirmedCourtName}</AppText>
           <AppText variant="body" color="secondary">
-            {new Date(slot?.start_at || '').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+            {confirmedStart ? confirmedStart.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : ''}
           </AppText>
           <AppText variant="body" color="secondary">
-            {new Date(slot?.start_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – {new Date(slot?.end_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+            {confirmedStart && confirmedEnd ? `${confirmedStart.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – ${confirmedEnd.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` : ''}
           </AppText>
           <AppText variant="body" color="primary" bold style={{ marginTop: Spacing[1] }}>
-            {priceText}
+            {confirmedTotal}
           </AppText>
         </Card>
       </View>
@@ -502,7 +557,13 @@ export function BookingFlowModal({
       case 1:
         return [
           { label: 'Cancel', variant: 'secondary' as const, onPress: handleClose },
-          { label: 'Next \u2192 Summary', variant: 'primary' as const, onPress: handleNextToSummary }
+          { 
+            label: isCalculatingPrice ? 'Calculating...' : 'Next \u2192 Summary', 
+            variant: 'primary' as const, 
+            onPress: handleNextToSummary,
+            loading: isCalculatingPrice,
+            disabled: isCalculatingPrice,
+          }
         ];
       case 2:
         return [

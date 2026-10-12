@@ -50,6 +50,7 @@ from app.api.deps import get_current_user, get_optional_current_user, require_pe
 from app.core.database import get_db
 from app.models.club_membership import ClubMembership
 from app.models.competition import MatchStage
+from app.models.league import LeagueStatus
 from app.models.user import User
 from app.permissions import Permission
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
@@ -537,12 +538,25 @@ async def get_playoffs(
     "",
     response_model=list[LeagueResponse],
     summary="List active leagues (player view)",
+    description="Returns public active leagues across clubs. Supports search, status filtering, and pagination.",
 )
 async def player_list_leagues(
+    club_id: uuid.UUID | None = Query(None, description="Optional club filter"),
+    search: str | None = Query(None, description="Search term for league name, host club, or description"),
+    status: LeagueStatus | None = Query(None, description="Filter by league status"),
+    limit: int | None = Query(None, ge=1, le=100, description="Maximum leagues to return"),
+    offset: int | None = Query(None, ge=0, description="Offset for pagination"),
     current_user: User | None = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[LeagueResponse]:
-    return await LeagueService(db).list_public_leagues(current_user=current_user)
+    return await LeagueService(db).list_public_leagues(
+        current_user=current_user,
+        club_id=club_id,
+        search=search,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @player_league_router.get(

@@ -11,13 +11,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, require_permission
+from app.api.deps import get_current_user, get_optional_current_user, require_permission
 from app.core.database import get_db
 from app.models.club_membership import ClubMembership
 from app.models.user import User
 from app.permissions import Permission
 from app.schemas.court import (
+    CourtAffectedBookingsResponse,
     CourtCreateRequest,
+    CourtOperatingHoursResponse,
+    CourtOperatingHoursUpdateRequest,
     CourtReorderRequest,
     CourtResponse,
     CourtUpdateRequest,
@@ -40,7 +43,7 @@ player_courts_router = APIRouter(prefix="/clubs/{club_id}/courts", tags=["player
 )
 async def list_player_active_courts(
     club_id: UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[PlayerCourtResponse]:
     return await CourtService(db).list_active_courts(club_id)
@@ -178,3 +181,54 @@ async def delete_court(
     db: AsyncSession = Depends(get_db),
 ) -> CourtResponse:
     return await CourtService(db).deactivate_court(club_id=club_id, court_id=court_id)
+
+
+@club_courts_router.get(
+    "/{court_id}/operating-hours",
+    response_model=CourtOperatingHoursResponse,
+    summary="Get court operating hours",
+    description="Returns court-specific operating hours and effective schedule with inheritance from club general hours. Requires MANAGE_COURTS.",
+)
+async def get_court_operating_hours(
+    club_id: UUID,
+    court_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    db: AsyncSession = Depends(get_db),
+) -> CourtOperatingHoursResponse:
+    return await CourtService(db).get_court_operating_hours(club_id=club_id, court_id=court_id)
+
+
+@club_courts_router.put(
+    "/{court_id}/operating-hours",
+    response_model=CourtOperatingHoursResponse,
+    summary="Update court operating hours override",
+    description="Sets or clears court-specific weekly operating hours override. Pass null operating_hours to inherit from club. Requires MANAGE_COURTS.",
+)
+async def update_court_operating_hours(
+    club_id: UUID,
+    court_id: UUID,
+    payload: CourtOperatingHoursUpdateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    db: AsyncSession = Depends(get_db),
+) -> CourtOperatingHoursResponse:
+    return await CourtService(db).update_court_operating_hours(
+        club_id=club_id,
+        court_id=court_id,
+        payload=payload,
+    )
+
+
+@club_courts_router.get(
+    "/{court_id}/affected-bookings",
+    response_model=CourtAffectedBookingsResponse,
+    summary="Preview affected bookings for court",
+    description="Lists upcoming confirmed bookings that may be affected before deactivation. Never modifies bookings. Requires MANAGE_COURTS.",
+)
+async def get_court_affected_bookings(
+    club_id: UUID,
+    court_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    db: AsyncSession = Depends(get_db),
+) -> CourtAffectedBookingsResponse:
+    return await CourtService(db).get_court_affected_bookings(club_id=club_id, court_id=court_id)
+

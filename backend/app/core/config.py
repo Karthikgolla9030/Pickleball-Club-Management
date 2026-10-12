@@ -82,6 +82,64 @@ class Settings(BaseSettings):
             "https://pickleball-club-management.vercel.app",
         ]
 
+    MIGRATION_SECRET: str | None = None
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> Settings:
+        """
+        Fail closed at startup if production environment lacks mandatory secure configuration.
+        Ensures production never runs with default placeholder credentials or debug configurations.
+        """
+        if self.is_production:
+            insecure_placeholders = {
+                "change-this-in-production",
+                "your-super-secret-jwt-key-change-this-in-production",
+                "your-super-secret-key-at-least-32-characters",
+                "secret",
+                "password",
+            }
+            # 1. JWT Signing Secret
+            jwt_key = (self.JWT_SECRET_KEY or "").strip()
+            if not jwt_key or jwt_key.lower() in insecure_placeholders:
+                raise ValueError(
+                    "Production configuration error: JWT_SECRET_KEY must be a cryptographically secure string and cannot be a default placeholder."
+                )
+            if len(jwt_key) < 32:
+                raise ValueError(
+                    "Production configuration error: JWT_SECRET_KEY must be at least 32 characters long."
+                )
+
+            # 2. Database Connection URL
+            db_url = (self.DATABASE_URL or "").lower()
+            if "localhost" in db_url or "127.0.0.1" in db_url:
+                raise ValueError(
+                    "Production configuration error: DATABASE_URL must not point to localhost in production."
+                )
+            if "sqlite" in db_url:
+                raise ValueError(
+                    "Production configuration error: DATABASE_URL must be a PostgreSQL connection in production."
+                )
+
+            # 3. Dedicated Migration Secret Separation
+            if self.MIGRATION_SECRET and self.MIGRATION_SECRET.strip() == jwt_key:
+                raise ValueError(
+                    "Production configuration error: MIGRATION_SECRET must not be identical to JWT_SECRET_KEY."
+                )
+
+            # 4. Debug Mode Guard
+            if self.DEBUG:
+                raise ValueError(
+                    "Production configuration error: DEBUG mode must not be enabled in production."
+                )
+
+            # 5. CORS Origins
+            if isinstance(self.CORS_ORIGINS, list):
+                if "*" in self.CORS_ORIGINS:
+                    raise ValueError(
+                        "Production configuration error: CORS_ORIGINS must not contain wildcard '*' in production."
+                    )
+        return self
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"

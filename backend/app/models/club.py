@@ -7,7 +7,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, time, timezone
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Time
+from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Time
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +72,7 @@ class Club(Base):
     )
     holiday_closure_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     facilities_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    operating_hours: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -93,6 +94,11 @@ class Club(Base):
     )
     player_memberships: Mapped[list["ClubPlayerMembership"]] = relationship(  # noqa: F821
         "ClubPlayerMembership",
+        back_populates="club",
+        cascade="all, delete-orphan",
+    )
+    membership_requests: Mapped[list["ClubMembershipRequest"]] = relationship(  # noqa: F821
+        "ClubMembershipRequest",
         back_populates="club",
         cascade="all, delete-orphan",
     )

@@ -176,6 +176,9 @@ class MemberSubscriptionResponse(BaseModel):
     plan_booking_limit: int | None = None
     plan_advance_booking_days: int | None = None
     player: SubscriptionPlayerInfo | None = None
+    club_name: str | None = None
+    payment_id: UUID | None = None
+    payment_status: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -191,6 +194,21 @@ class MemberSubscriptionResponse(BaseModel):
                 user_full_name=u.full_name,
             )
         plan = sub.plan
+        club_name = sub.club.name if getattr(sub, "club", None) else None
+        payment_status = None
+        payment_id = None
+        price = None
+        if hasattr(sub, "payments") and sub.payments:
+            sorted_p = sorted(sub.payments, key=lambda p: p.created_at, reverse=True)
+            payment_status = sorted_p[0].status.value
+            payment_id = sorted_p[0].id
+            price = Decimal(str(sorted_p[0].amount))
+        elif plan and (plan.price == Decimal("0.00") or plan.price == 0):
+            payment_status = "succeeded"
+            price = Decimal("0.00")
+        else:
+            price = Decimal(str(plan.price)) if plan else None
+
         return cls(
             id=sub.id,
             club_id=sub.club_id,
@@ -210,12 +228,15 @@ class MemberSubscriptionResponse(BaseModel):
             updated_at=sub.updated_at,
             plan_name=plan.name if plan else None,
             plan_duration=plan.duration_unit.display_label if plan else None,
-            plan_price=plan.price if plan else None,
+            plan_price=price if price is not None else (Decimal(str(plan.price)) if plan else None),
             plan_currency=plan.currency if plan else None,
             plan_benefits=plan.benefits or [] if plan else [],
             plan_booking_limit=plan.booking_limit if plan else None,
             plan_advance_booking_days=plan.advance_booking_days if plan else None,
             player=player_info,
+            club_name=club_name,
+            payment_id=payment_id,
+            payment_status=payment_status,
         )
 
 
@@ -227,7 +248,9 @@ class PlayerMembershipView(BaseModel):
     Players can VIEW their subscription but NEVER modify it.
     """
     subscription_id: UUID
+    id: UUID | None = None
     club_id: UUID
+    club_name: str | None = None
     plan_name: str
     plan_description: str | None
     status: SubscriptionStatus
@@ -242,30 +265,73 @@ class PlayerMembershipView(BaseModel):
     duration_label: str
     price: Decimal
     currency: str
+    payment_status: str | None = None
+    renewal_eligible: bool = True
 
     model_config = {"from_attributes": True}
 
     @classmethod
     def from_subscription(cls, sub) -> "PlayerMembershipView":
         plan = sub.plan
+        club_name = sub.club.name if getattr(sub, "club", None) else None
+        payment_status = None
+        price = None
+        if hasattr(sub, "payments") and sub.payments:
+            sorted_p = sorted(sub.payments, key=lambda p: p.created_at, reverse=True)
+            payment_status = sorted_p[0].status.value
+            price = Decimal(str(sorted_p[0].amount))
+        elif plan and (plan.price == Decimal("0.00") or plan.price == 0):
+            payment_status = "succeeded"
+            price = Decimal("0.00")
+        else:
+            price = Decimal(str(plan.price)) if plan else Decimal("0.00")
+
+        renewal_eligible = (
+            plan is not None
+            and getattr(plan, "status", None) == PlanStatus.ACTIVE
+            and sub.status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.EXPIRED)
+        )
+
         return cls(
             subscription_id=sub.id,
+            id=sub.id,
             club_id=sub.club_id,
-            plan_name=plan.name,
-            plan_description=plan.description,
+            club_name=club_name,
+            plan_name=plan.name if plan else "Membership Plan",
+            plan_description=plan.description if plan else None,
             status=sub.status,
             status_label=sub.status.display_label,
             effective_status=sub.effective_status,
             start_date=sub.start_date,
             end_date=sub.end_date,
             auto_renew=sub.auto_renew,
-            benefits=plan.benefits or [],
-            booking_limit=plan.booking_limit,
-            advance_booking_days=plan.advance_booking_days,
-            duration_label=plan.duration_unit.display_label,
-            price=plan.price,
-            currency=plan.currency,
+            benefits=plan.benefits or [] if plan else [],
+            booking_limit=plan.booking_limit if plan else None,
+            advance_booking_days=plan.advance_booking_days if plan else None,
+            duration_label=plan.duration_unit.display_label if plan else "Monthly",
+            price=price if price is not None else (Decimal(str(plan.price)) if plan else Decimal("0.00")),
+            currency=plan.currency if plan else "INR",
+            payment_status=payment_status,
+            renewal_eligible=renewal_eligible,
         )
+
+
+class PlayerSubscribeRequest(BaseModel):
+    """Payload for player subscribing to a club membership plan."""
+    membership_plan_id: UUID | None = None
+    plan_id: UUID | None = None
+    payment_method: str = "cash"
+    auto_renew: bool = False
+    start_date: date | None = None
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_subscribe_payload(self) -> "PlayerSubscribeRequest":
+        if self.membership_plan_id is None and self.plan_id is not None:
+            self.membership_plan_id = self.plan_id
+        if self.start_date is not None and self.start_date < date.today():
+            raise ValueError("start_date cannot be in the past.")
+        return self
 
 
 # Backward-compatibility aliases

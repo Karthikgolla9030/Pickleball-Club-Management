@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import {
+  Building2,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -52,6 +53,7 @@ export interface LeagueCardProps {
   onPress: () => void;
   onRegisterPress?: () => void;
   onViewRegistrationPress?: () => void;
+  onClubPress?: (clubId: string) => void;
   imageIndex?: number;
   onOptionsPress?: () => void;
   onManagePress?: () => void;
@@ -142,6 +144,7 @@ export function LeagueCard({
   onPress,
   onRegisterPress,
   onViewRegistrationPress,
+  onClubPress,
   imageIndex = 0,
   onOptionsPress,
   onManagePress,
@@ -266,6 +269,28 @@ export function LeagueCard({
           <AppText style={styles.leagueName} numberOfLines={2}>
             {league.name}
           </AppText>
+
+          {league.club_name ? (
+            <TouchableOpacity
+              onPress={(e) => {
+                if (onClubPress) {
+                  e.stopPropagation?.();
+                  onClubPress(league.club_id);
+                }
+              }}
+              disabled={!onClubPress}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+              activeOpacity={0.75}
+              style={styles.clubNameWrapper}
+              accessibilityLabel={`Hosted by ${league.club_name}`}
+              accessibilityRole={onClubPress ? 'button' : undefined}
+            >
+              <Building2 size={11} color="#065F46" strokeWidth={2.2} style={{ marginRight: 4 }} />
+              <AppText style={styles.clubNameText} numberOfLines={1}>
+                {league.club_name}
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
 
           {/* Subtitle: Weeks • Teams • Format */}
           <AppText style={styles.subtitleText} numberOfLines={1}>
@@ -441,6 +466,17 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 3,
     letterSpacing: -0.2,
+  },
+  clubNameWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+    alignSelf: 'flex-start',
+  },
+  clubNameText: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '600',
   },
   subtitleText: {
     fontSize: 12.5,

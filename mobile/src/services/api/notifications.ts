@@ -8,10 +8,15 @@ export interface NotificationItem {
   id: string;
   user_id: string;
   club_id: string | null;
+  club_name?: string | null;
   category: string;
   title: string;
   message: string;
   is_read: boolean;
+  read_at?: string | null;
+  resource_type?: string | null;
+  resource_id?: string | null;
+  action_url?: string | null;
   data: Record<string, unknown>;
   created_at: string;
 }
@@ -24,6 +29,16 @@ export interface NotificationListResponse {
 
 export interface NotificationUnreadCountResponse {
   unread_count: number;
+}
+
+export interface NotificationPreference {
+  user_id: string;
+  booking_notifications: boolean;
+  membership_notifications: boolean;
+  tournament_notifications: boolean;
+  event_notifications: boolean;
+  payment_notifications: boolean;
+  administrative_notifications: boolean;
 }
 
 export const notificationsApi = {
@@ -65,5 +80,18 @@ export const notificationsApi = {
       {}
     );
   },
-};
 
+  async deleteNotification(notificationId: string): Promise<{ status: string; id: string }> {
+    return apiClient.delete<{ status: string; id: string }>(
+      `${API_ENDPOINTS.NOTIFICATIONS}/${notificationId}`
+    );
+  },
+
+  async getPreferences(): Promise<NotificationPreference> {
+    return apiClient.get<NotificationPreference>(`${API_ENDPOINTS.NOTIFICATIONS}/preferences`);
+  },
+
+  async updatePreferences(updates: Partial<NotificationPreference>): Promise<NotificationPreference> {
+    return apiClient.put<NotificationPreference>(`${API_ENDPOINTS.NOTIFICATIONS}/preferences`, updates);
+  },
+};

@@ -50,7 +50,7 @@ export interface TournamentCardData {
     target_score?: number;
     win_by?: number;
   };
-  club_name?: string;
+  club_name?: string | null;
   is_registration_open?: boolean;
   format_configuration?: Record<string, any> | null;
 }

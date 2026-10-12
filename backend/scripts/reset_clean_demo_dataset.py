@@ -47,11 +47,7 @@ from app.services.competition.round_robin_engine import RoundRobinEngine
 from app.services.competition.pool_play_engine import PoolPlayEngine
 from app.services.competition.scramble_engine import ScrambleEngine
 
-DEFAULT_NEON_URL = (
-    "postgresql+psycopg://neondb_owner:npg_0Dih5TSXyrKu@"
-    "ep-muddy-sun-b3dznvdm-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?"
-    "sslmode=require&channel_binding=require"
-)
+DEFAULT_NEON_URL = os.getenv("DATABASE_URL", "")
 
 async def reset_database(target_url: str):
     print(f"\n=======================================================")

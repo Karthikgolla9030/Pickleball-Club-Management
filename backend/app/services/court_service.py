@@ -6,17 +6,25 @@ uniqueness constraints, deterministic ordering, and lifecycle transitions.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.operating_hours import WeeklyOperatingHours, build_weekly_schedule_dict
+from app.models.booking import Booking, BookingStatus
 from app.models.court import Court, CourtStatus
 from app.repositories.club_repository import ClubRepository
 from app.repositories.court_repository import CourtRepository
 from app.schemas.court import (
+    CourtAffectedBookingsItem,
+    CourtAffectedBookingsResponse,
     CourtCreateRequest,
+    CourtOperatingHoursResponse,
+    CourtOperatingHoursUpdateRequest,
     CourtReorderRequest,
     CourtUpdateRequest,
 )
@@ -91,6 +99,13 @@ class CourtService:
             final_status = CourtStatus.ACTIVE
             final_is_active = True
 
+        operating_hours_dict = None
+        if payload.operating_hours is not None:
+            if hasattr(payload.operating_hours, "to_dict"):
+                operating_hours_dict = payload.operating_hours.to_dict()
+            elif isinstance(payload.operating_hours, dict):
+                operating_hours_dict = payload.operating_hours
+
         return await self.court_repo.create(
             club_id=club_id,
             name=payload.name,
@@ -103,6 +118,7 @@ class CourtService:
             is_active=final_is_active,
             display_order=display_order,
             price_per_hour=validated_price,
+            operating_hours=operating_hours_dict,
         )
 
     async def get_court(self, club_id: UUID, court_id: UUID) -> Court:
@@ -197,6 +213,11 @@ class CourtService:
                 active_val = update_data["is_active"]
                 update_data["status"] = CourtStatus.ACTIVE if active_val else CourtStatus.INACTIVE
 
+        if "operating_hours" in update_data and update_data["operating_hours"] is not None:
+            val = update_data["operating_hours"]
+            if hasattr(val, "to_dict"):
+                update_data["operating_hours"] = val.to_dict()
+
         return await self.court_repo.update(court, **update_data)
 
     async def deactivate_court(self, club_id: UUID, court_id: UUID) -> Court:
@@ -248,3 +269,106 @@ class CourtService:
             )
 
         return await self.court_repo.reorder(club_id, court_ids)
+
+    async def get_court_operating_hours(self, club_id: UUID, court_id: UUID) -> CourtOperatingHoursResponse:
+        """
+        Retrieve operating hours for a specific court with inheritance from club hours.
+        """
+        await self._require_club(club_id)
+        court = await self.get_court(club_id, court_id)
+        club = await self.club_repo.get_by_id(club_id)
+        effective_schedule = build_weekly_schedule_dict(club, court)
+        return CourtOperatingHoursResponse(
+            court_id=court.id,
+            club_id=club_id,
+            court_name=court.name,
+            has_override=bool(court.operating_hours),
+            court_operating_hours=court.operating_hours,
+            effective_operating_hours=effective_schedule,
+        )
+
+    async def update_court_operating_hours(
+        self,
+        club_id: UUID,
+        court_id: UUID,
+        payload: CourtOperatingHoursUpdateRequest,
+    ) -> CourtOperatingHoursResponse:
+        """
+        Set or clear court-specific weekly operating hours override.
+        Passing null for operating_hours clears the override and inherits club hours.
+        """
+        await self._require_club(club_id)
+        court = await self.get_court(club_id, court_id)
+        club = await self.club_repo.get_by_id(club_id)
+
+        if payload.operating_hours is None:
+            updated_hours = None
+        else:
+            updated_hours = payload.operating_hours.to_dict()
+
+        await self.court_repo.update(court, operating_hours=updated_hours)
+        await self.db.commit()
+
+        effective_schedule = build_weekly_schedule_dict(club, court)
+        return CourtOperatingHoursResponse(
+            court_id=court.id,
+            club_id=club_id,
+            court_name=court.name,
+            has_override=bool(court.operating_hours),
+            court_operating_hours=court.operating_hours,
+            effective_operating_hours=effective_schedule,
+        )
+
+    async def get_court_affected_bookings(
+        self,
+        club_id: UUID,
+        court_id: UUID,
+    ) -> CourtAffectedBookingsResponse:
+        """
+        Check for upcoming confirmed bookings on a court prior to deactivation.
+        Never alters or cancels any bookings.
+        """
+        await self._require_club(club_id)
+        court = await self.get_court(club_id, court_id)
+
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(Booking)
+            .where(
+                Booking.club_id == club_id,
+                Booking.court_id == court_id,
+                Booking.status == BookingStatus.CONFIRMED,
+                Booking.start_at >= now,
+            )
+            .order_by(Booking.start_at.asc())
+        )
+        res = await self.db.execute(stmt)
+        upcoming_bookings = list(res.scalars().all())
+
+        items = [
+            CourtAffectedBookingsItem(
+                id=b.id,
+                player_id=b.player_id,
+                start_at=b.start_at,
+                end_at=b.end_at,
+                status=b.status.value,
+                booking_type=b.booking_type.value,
+            )
+            for b in upcoming_bookings
+        ]
+        count = len(items)
+        msg = (
+            f"Court '{court.name}' has {count} upcoming confirmed booking(s). "
+            "Deactivating or modifying this court will prevent new bookings but will not cancel or alter existing reservations."
+            if count > 0
+            else f"Court '{court.name}' has no upcoming confirmed bookings."
+        )
+
+        return CourtAffectedBookingsResponse(
+            court_id=court.id,
+            court_name=court.name,
+            upcoming_confirmed_bookings_count=count,
+            bookings=items,
+            message=msg,
+        )
+

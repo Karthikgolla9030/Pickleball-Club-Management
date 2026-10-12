@@ -145,3 +145,13 @@ class ClubAvailabilityResponse(BaseModel):
     closing_time: time
     timezone: str
     courts: list[CourtAvailability]
+
+
+class BookingPriceCalculationResponse(BaseModel):
+    court_id: uuid.UUID
+    court_name: str
+    duration_minutes: int
+    price_per_hour: Decimal
+    total_price: Decimal
+    currency: str = "INR"
+

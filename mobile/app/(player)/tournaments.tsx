@@ -27,7 +27,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
@@ -57,7 +57,7 @@ import {
   RegistrationDetailsModal,
   TournamentRegistrationModal,
 } from '@/components/tournament-registration';
-import { usePlayerTournaments, useTournamentFavorites } from '@/hooks';
+import { useClubDiscovery, usePlayerTournaments, useTournamentFavorites } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { TournamentDiscoveryItem, TournamentFormat } from '@/types';
@@ -77,15 +77,22 @@ export default function PlayerTournamentsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const searchInputRef = useRef<TextInput>(null);
+  const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
 
   // Filter States
   const [activeTab, setActiveTab] = useState<StatusTabKey>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [formatFilter, setFormatFilter] = useState<string>('all');
-  const [clubFilter, setClubFilter] = useState<string>('all');
+  const [clubFilter, setClubFilter] = useState<string>(paramClubId || 'all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [registeringTournament, setRegisteringTournament] = useState<TournamentDiscoveryItem | null>(null);
   const [viewingRegistrationTournament, setViewingRegistrationTournament] = useState<TournamentDiscoveryItem | null>(null);
+
+  React.useEffect(() => {
+    if (paramClubId) {
+      setClubFilter(paramClubId);
+    }
+  }, [paramClubId]);
 
   // Queries & Favorites
   const {
@@ -94,7 +101,7 @@ export default function PlayerTournamentsScreen() {
     isRefetching,
     error,
     refetch,
-  } = usePlayerTournaments();
+  } = usePlayerTournaments(clubFilter !== 'all' ? clubFilter : undefined);
 
   // Automatically refresh tournaments when player visits or switches back to this screen
   useFocusEffect(
@@ -160,9 +167,16 @@ export default function PlayerTournamentsScreen() {
     };
   }, [tournaments]);
 
+  const { clubs: publicClubs } = useClubDiscovery();
+
   // Extract unique clubs for filter sheet
   const clubOptions = useMemo(() => {
     const clubsMap = new Map<string, string>();
+    if (publicClubs && publicClubs.length > 0) {
+      publicClubs.forEach((c) => {
+        clubsMap.set(c.id, c.name);
+      });
+    }
     tournaments.forEach((t) => {
       if (t.status === 'draft') return;
       if (t.club_id && t.club_name) {
@@ -170,7 +184,7 @@ export default function PlayerTournamentsScreen() {
       }
     });
     return Array.from(clubsMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [tournaments]);
+  }, [publicClubs, tournaments]);
 
   // Filter tournaments list
   const filteredTournaments = useMemo(() => {
@@ -579,7 +593,9 @@ export default function PlayerTournamentsScreen() {
                   {[
                     searchQuery ? `"${searchQuery}"` : null,
                     formatFilter !== 'all' ? `Format: ${formatFilter.replace('_', ' ').toUpperCase()}` : null,
-                    clubFilter !== 'all' ? `Club filtered` : null,
+                    clubFilter !== 'all'
+                      ? `Club: ${clubOptions.find((c) => c.id === clubFilter)?.name || 'Filtered'}`
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(' • ')}
@@ -653,6 +669,13 @@ export default function PlayerTournamentsScreen() {
             );
           };
 
+          const handleOpenTournamentDetails = () => {
+            router.push({
+              pathname: '/(player)/tournament-details' as any,
+              params: { id: item.id },
+            });
+          };
+
           return (
             <PlayerTournamentCard
               tournament={item}
@@ -661,8 +684,14 @@ export default function PlayerTournamentsScreen() {
               isRegistered={item.is_registered}
               registrationStatus={item.my_registration_status}
               onToggleFavorite={() => toggleFavorite(item.id)}
-              onPress={handleTournamentAction}
+              onPress={handleOpenTournamentDetails}
               onActionPress={handleTournamentAction}
+              onClubPress={(clubId) =>
+                router.push({
+                  pathname: '/(player)/club-details' as any,
+                  params: { id: clubId },
+                })
+              }
             />
           );
         }}

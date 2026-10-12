@@ -342,16 +342,35 @@ export default function ClubMembersScreen() {
 
   const handleSaveRole = async () => {
     if (!selectedStaffMember) return;
-    try {
-      await updateMember({
-        membershipId: selectedStaffMember.id,
-        payload: { role: selectedRole },
-      });
+    if (selectedRole === selectedStaffMember.role) {
       setRoleModalVisible(false);
       setSelectedStaffMember(null);
-    } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update role');
+      return;
     }
+
+    const targetRoleLabel = VALID_ROLES.find((r) => r.role === selectedRole)?.label || selectedRole;
+    Alert.alert(
+      'Confirm Role Change',
+      `Are you sure you want to change the role of ${selectedStaffMember.user_email} to ${targetRoleLabel}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm Change',
+          onPress: async () => {
+            try {
+              await updateMember({
+                membershipId: selectedStaffMember.id,
+                payload: { role: selectedRole },
+              });
+              setRoleModalVisible(false);
+              setSelectedStaffMember(null);
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update role');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleToggleStaffActive = (member: ClubMember) => {

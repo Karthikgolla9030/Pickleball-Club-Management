@@ -166,9 +166,14 @@ class LeagueService:
             if champ:
                 champion_team_dict = {"id": str(champ.id), "name": champ.name}
 
+        club_name = league.club.name if getattr(league, "club", None) else None
+        club_slug = league.club.slug if getattr(league, "club", None) else None
+
         return LeagueResponse(
             id=league.id,
             club_id=league.club_id,
+            club_name=club_name,
+            club_slug=club_slug,
             name=league.name,
             description=league.description,
             status=league.status,
@@ -239,8 +244,22 @@ class LeagueService:
             for l in leagues
         ]
 
-    async def list_public_leagues(self, current_user: User | None = None) -> list[LeagueResponse]:
-        leagues = await self.league_repo.list_public_leagues()
+    async def list_public_leagues(
+        self,
+        current_user: User | None = None,
+        club_id: uuid.UUID | None = None,
+        search: str | None = None,
+        status: LeagueStatus | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[LeagueResponse]:
+        leagues = await self.league_repo.list_public_leagues(
+            club_id=club_id,
+            search=search,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
         l_ids = [l.id for l in leagues]
         counts = await self.league_repo.get_team_counts_for_leagues(l_ids)
         m_counts = await self.league_repo.get_match_counts_for_leagues(l_ids)
@@ -1605,6 +1624,41 @@ class LeagueService:
         if payload.skill_rating is not None and getattr(user, "player_profile", None):
             user.player_profile.skill_rating = payload.skill_rating
         await self.db.commit()
+        try:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=user.id,
+                club_id=league.club_id,
+                category="tournament",
+                title="League Registration Confirmed",
+                message=f"You are registered for '{league.name}' as team '{clean_name}'.",
+                data={
+                    "resource_type": "league",
+                    "resource_id": str(league.id),
+                    "team_id": str(team.id),
+                    "idempotency_key": f"league_reg_{league.id}_{user.id}",
+                    "action_url": "/(player)/tournaments",
+                },
+            )
+            if payload.partner_membership_id is not None and "partner_pm" in locals() and partner_pm:
+                await notif_svc.create_notification(
+                    user_id=partner_pm.user_id,
+                    club_id=league.club_id,
+                    category="tournament",
+                    title="League Registration Confirmed",
+                    message=f"You were registered for '{league.name}' in team '{clean_name}' by {user.full_name or 'your partner'}.",
+                    data={
+                        "resource_type": "league",
+                        "resource_id": str(league.id),
+                        "team_id": str(team.id),
+                        "idempotency_key": f"league_reg_{league.id}_{partner_pm.user_id}",
+                        "action_url": "/(player)/tournaments",
+                    },
+                )
+            await self.db.commit()
+        except Exception:
+            pass
         return self._format_team_response(team)
 
     async def cancel_player_registration(
@@ -1629,6 +1683,25 @@ class LeagueService:
 
         await self.league_repo.delete_team(team)
         await self.db.commit()
+
+        try:
+            from app.services.notification_service import NotificationService
+            await NotificationService(self.db).create_notification(
+                user_id=user.id,
+                club_id=league.club_id,
+                category="tournament",
+                title="League Registration Cancelled",
+                message=f"Your registration for '{league.name}' has been cancelled.",
+                data={
+                    "resource_type": "league",
+                    "resource_id": str(league.id),
+                    "idempotency_key": f"league_cancel_{league.id}_{user.id}",
+                },
+            )
+            await self.db.commit()
+        except Exception:
+            pass
+
         return {"message": "Registration cancelled successfully."}
 
     async def get_player_registration_status(

@@ -24,7 +24,8 @@ Expiration architecture:
 """
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -32,15 +33,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.membership import PlanStatus, SubscriptionStatus
+from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
+from app.repositories.club_repository import ClubRepository
 from app.repositories.member_subscription_repository import MemberSubscriptionRepository
 from app.repositories.membership_plan_repository import MembershipPlanRepository
+from app.repositories.payment_repository import PaymentRepository
 from app.schemas.membership import (
     MemberSubscriptionCancelRequest,
     MemberSubscriptionCreate,
     MemberSubscriptionResponse,
     MemberSubscriptionUpdate,
     PlayerMembershipView,
+    PlayerSubscribeRequest,
 )
 from app.core.events import EventType, dispatch_event
 from app.services.membership_plan_service import MembershipPlanService
@@ -448,6 +454,317 @@ class MemberSubscriptionService:
                     data={"subscription_id": str(new_sub.id)},
                 )
                 await self.db.commit()
+        except Exception:
+            pass
+
+        return resp
+
+    async def list_player_memberships(
+        self,
+        user_id: UUID,
+        status_filter: SubscriptionStatus | None = None,
+    ) -> list[PlayerMembershipView]:
+        """
+        List all subscriptions for the authenticated player across all clubs.
+        Lazily syncs expiry for each active subscription.
+        """
+        subs = await self.sub_repo.list_by_user(user_id=user_id, status=status_filter)
+        for s in subs:
+            await self._sync_expiry(s)
+        return [PlayerMembershipView.from_subscription(s) for s in subs]
+
+    async def player_subscribe(
+        self,
+        club_id: UUID,
+        plan_id: UUID,
+        user_id: UUID,
+        payload: PlayerSubscribeRequest,
+    ) -> MemberSubscriptionResponse:
+        """
+        Self-enrollment workflow for an active club player.
+
+        Validates:
+          - Club exists and is active
+          - Plan belongs to club and is active
+          - Player has active ClubPlayerMembership in this club
+          - Player has no conflicting active or scheduled subscription in this club
+          - start_date is not in the past
+
+        Status & Payment Policy:
+          - If plan.price == 0: subscription is immediately ACTIVE (or SCHEDULED if start_date in future).
+          - If plan.price > 0: subscription is created as SCHEDULED (pending payment),
+            and a Payment record in PENDING status is created for historical audit.
+            Activation to ACTIVE occurs when payment is confirmed succeeded by club staff.
+        """
+        # 1. Verify club
+        club = await ClubRepository(self.db).get_by_id(club_id)
+        if not club or not club.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found or inactive",
+            )
+
+        # 2. Verify plan
+        plan = await self.plan_repo.get_by_id(plan_id=plan_id, club_id=club_id)
+        if not plan:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Membership plan not found in this club",
+            )
+        if plan.status != PlanStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot subscribe to an inactive membership plan",
+            )
+
+        # 3. Verify player membership in this club
+        pm = await self.player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
+        if not pm or pm.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You must have an active player membership in this club to subscribe to a plan. Please submit a membership request first.",
+            )
+
+        # 4. Verify no conflicting active/scheduled subscription
+        existing = await self.sub_repo.get_active_or_scheduled_for_player_in_club(
+            player_membership_id=pm.id,
+            club_id=club_id,
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"You already have an {existing.status.value} subscription in this club.",
+            )
+
+        # 5. Dates
+        today = date.today()
+        start_date = payload.start_date or today
+        if start_date < today:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="start_date cannot be in the past",
+            )
+        end_date = MembershipPlanService.calculate_end_date(
+            start=start_date,
+            unit=plan.duration_unit,
+        )
+
+        # 6. Status determination
+        is_free = (plan.price == Decimal("0.00") or plan.price == 0)
+        initial_status = (
+            SubscriptionStatus.ACTIVE
+            if (is_free and start_date == today)
+            else SubscriptionStatus.SCHEDULED
+        )
+
+        # 7. Create subscription
+        sub = await self.sub_repo.create(
+            club_id=club_id,
+            player_membership_id=pm.id,
+            membership_plan_id=plan.id,
+            start_date=start_date,
+            end_date=end_date,
+            status=initial_status,
+            auto_renew=payload.auto_renew,
+            notes=payload.notes,
+        )
+
+        # 8. Create pending payment for paid plan
+        if not is_free:
+            pay_repo = PaymentRepository(self.db)
+            reference = await pay_repo.generate_reference()
+            try:
+                p_method = PaymentMethod(payload.payment_method.lower())
+            except ValueError:
+                p_method = PaymentMethod.CASH
+
+            payment = Payment(
+                reference=reference,
+                club_id=club_id,
+                player_id=user_id,
+                subscription_id=sub.id,
+                amount=plan.price,
+                currency=plan.currency,
+                status=PaymentStatus.PENDING,
+                purpose=PaymentPurpose.MEMBERSHIP,
+                payment_method=p_method,
+                notes=payload.notes or f"Enrollment in {plan.name}",
+                created_by_user_id=user_id,
+            )
+            await pay_repo.create(payment)
+            sub.payments = [payment]
+
+        await self.db.commit()
+
+        # Build response with eager relationships
+        resp = MemberSubscriptionResponse.from_orm(sub)
+        if not is_free:
+            resp.payment_id = payment.id
+            resp.payment_status = "pending"
+
+        try:
+            await dispatch_event(
+                event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                data={
+                    "subscription_id": str(sub.id),
+                    "club_id": str(club_id),
+                    "user_id": str(user_id),
+                    "status": sub.status.value,
+                    "plan_name": plan.name,
+                },
+                club_id=club_id,
+                user_id=user_id,
+            )
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=user_id,
+                club_id=club_id,
+                category="membership",
+                title="Membership Plan Enrolled",
+                message=f"You have enrolled in '{plan.name}'.",
+                data={"subscription_id": str(sub.id)},
+            )
+            await notif_svc.notify_club_staff(
+                club_id=club_id,
+                category="membership",
+                title="New Plan Enrollment",
+                message=f"Player enrolled in '{plan.name}'.",
+                data={"subscription_id": str(sub.id), "player_id": str(user_id)},
+            )
+            await self.db.commit()
+        except Exception:
+            pass
+
+        return resp
+
+    async def player_renew_subscription(
+        self,
+        subscription_id: UUID,
+        user_id: UUID,
+    ) -> MemberSubscriptionResponse:
+        """
+        Player self-renewal workflow.
+        Creates a new subscription starting the day after previous end_date.
+        Preserves previous subscription record for audit trail.
+        """
+        sub = await self.sub_repo.get_by_id(subscription_id)
+        if not sub:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Subscription not found",
+            )
+        if not sub.player_membership or sub.player_membership.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only renew your own subscription",
+            )
+
+        if sub.player_membership.status != PlayerMembershipStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Active club player membership required to renew subscription",
+            )
+
+        if sub.status not in (SubscriptionStatus.ACTIVE, SubscriptionStatus.EXPIRED):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot renew subscription with status '{sub.status.value}'",
+            )
+
+        plan = await self.plan_repo.get_by_id(sub.membership_plan_id, club_id=sub.club_id)
+        if not plan or plan.status != PlanStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="The plan associated with this subscription is no longer active",
+            )
+
+        existing_new = await self.sub_repo.get_active_or_scheduled_for_player_in_club(
+            player_membership_id=sub.player_membership_id,
+            club_id=sub.club_id,
+        )
+        if existing_new and existing_new.id != sub.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Player already has an active or scheduled subscription in this club",
+            )
+
+        if sub.status == SubscriptionStatus.ACTIVE:
+            await self.sub_repo.update(sub, status=SubscriptionStatus.EXPIRED)
+
+        today = date.today()
+        new_start = max(sub.end_date + timedelta(days=1), today)
+        new_end = MembershipPlanService.calculate_end_date(
+            start=new_start,
+            unit=plan.duration_unit,
+        )
+
+        is_free = (plan.price == Decimal("0.00") or plan.price == 0)
+        new_status = (
+            SubscriptionStatus.ACTIVE
+            if (is_free and new_start <= today)
+            else SubscriptionStatus.SCHEDULED
+        )
+
+        new_sub = await self.sub_repo.create(
+            club_id=sub.club_id,
+            player_membership_id=sub.player_membership_id,
+            membership_plan_id=sub.membership_plan_id,
+            start_date=new_start,
+            end_date=new_end,
+            status=new_status,
+            auto_renew=sub.auto_renew,
+            notes=None,
+        )
+
+        if not is_free:
+            pay_repo = PaymentRepository(self.db)
+            reference = await pay_repo.generate_reference()
+            payment = Payment(
+                reference=reference,
+                club_id=sub.club_id,
+                player_id=user_id,
+                subscription_id=new_sub.id,
+                amount=plan.price,
+                currency=plan.currency,
+                status=PaymentStatus.PENDING,
+                purpose=PaymentPurpose.MEMBERSHIP,
+                payment_method=PaymentMethod.CASH,
+                notes=f"Renewal of {plan.name}",
+                created_by_user_id=user_id,
+            )
+            await pay_repo.create(payment)
+            new_sub.payments = [payment]
+
+        await self.db.commit()
+
+        resp = MemberSubscriptionResponse.from_orm(new_sub)
+        if not is_free:
+            resp.payment_id = payment.id
+            resp.payment_status = "pending"
+
+        try:
+            await dispatch_event(
+                event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                data={
+                    "subscription_id": str(new_sub.id),
+                    "club_id": str(sub.club_id),
+                    "user_id": str(user_id),
+                    "status": new_sub.status.value,
+                    "plan_name": plan.name,
+                },
+                club_id=sub.club_id,
+                user_id=user_id,
+            )
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=user_id,
+                club_id=sub.club_id,
+                category="membership",
+                title="Membership Plan Renewed",
+                message=f"Your subscription for '{plan.name}' has been renewed.",
+                data={"subscription_id": str(new_sub.id)},
+            )
+            await self.db.commit()
         except Exception:
             pass
 

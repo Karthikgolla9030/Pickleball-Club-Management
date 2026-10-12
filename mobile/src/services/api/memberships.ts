@@ -17,6 +17,7 @@ import type {
   MembershipPlan,
   MembershipPlanDetail,
   PlayerMembershipView,
+  PlayerSubscribePayload,
   UpdateMembershipPlanPayload,
   UpdateSubscriptionPayload,
 } from '@/types';
@@ -180,9 +181,42 @@ export const membershipApi = {
 
   /**
    * Player-facing: get active membership for a specific club.
-   * Players can VIEW only — all mutations require staff permissions.
    */
   getPlayerMembership(clubId: string): Promise<PlayerMembershipView> {
     return apiClient.get<PlayerMembershipView>(API_ENDPOINTS.PLAYER_MEMBERSHIP(clubId));
+  },
+
+  /**
+   * Player-facing: list all subscriptions for the authenticated player across clubs.
+   */
+  listPlayerMemberships(status?: string): Promise<PlayerMembershipView[]> {
+    const url = status
+      ? `${API_ENDPOINTS.PLAYER_MEMBERSHIPS}?status=${status}`
+      : API_ENDPOINTS.PLAYER_MEMBERSHIPS;
+    return apiClient.get<PlayerMembershipView[]>(url);
+  },
+
+  /**
+   * Player-facing: enroll in a club's membership plan.
+   */
+  playerSubscribe(
+    clubId: string,
+    planId: string,
+    payload?: PlayerSubscribePayload
+  ): Promise<MemberSubscription> {
+    return apiClient.post<MemberSubscription>(
+      API_ENDPOINTS.CLUB_PLAN_SUBSCRIBE(clubId, planId),
+      payload ?? { membership_plan_id: planId }
+    );
+  },
+
+  /**
+   * Player-facing: renew an existing subscription.
+   */
+  renewPlayerSubscription(subscriptionId: string): Promise<MemberSubscription> {
+    return apiClient.post<MemberSubscription>(
+      API_ENDPOINTS.PLAYER_SUBSCRIPTION_RENEW(subscriptionId),
+      {}
+    );
   },
 };

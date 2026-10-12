@@ -12,11 +12,15 @@ from datetime import datetime, timedelta, timezone
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
+import os
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.services.league_service import LeagueService
 
-NEON_DB_URL = "postgresql+psycopg://neondb_owner:npg_0Dih5TSXyrKu@ep-muddy-sun-b3dznvdm-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+NEON_DB_URL = os.getenv("DATABASE_URL")
+if not NEON_DB_URL:
+    print("ERROR: DATABASE_URL environment variable must be set.")
+    sys.exit(1)
 
 DEMO_PASSWORD_HASH = "$2b$12$mMFx2XaS7q1ZLymSwtntxe9WrdopKp3t.n3sjX179Hhi5dqjwKd8C"
 

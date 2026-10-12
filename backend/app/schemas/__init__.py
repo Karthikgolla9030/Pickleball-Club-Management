@@ -1,6 +1,6 @@
 """Schemas package."""
 from app.schemas.auth import AuthResponse, LoginRequest, TokenRefreshRequest, TokenRefreshResponse
-from app.schemas.club import ClubResponse, UserClubResponse
+from app.schemas.club import ClubDashboardResponse, ClubResponse, UserClubResponse
 from app.schemas.club_membership import (
     AddMemberRequest,
     ClubMembershipDetailResponse,
@@ -53,8 +53,26 @@ from app.schemas.membership import (
     MembershipPlanResponse,
     MemberSubscriptionResponse,
     PlayerMembershipView,
+    PlayerSubscribeRequest,
     UpdateMembershipPlanRequest,
     UpdateSubscriptionRequest,
+)
+from app.schemas.analytics import (
+    AnalyticsPeriodInfo,
+    BookingAnalyticsSummary,
+    BookingsReportResponse,
+    ClubAnalyticsSummaryResponse,
+    CommunityAnalyticsSummary,
+    CompetitionAnalyticsSummary,
+    CourtUtilizationItem,
+    DailyBookingTrend,
+    DailyRevenueTrend,
+    MembershipAnalyticsSummary,
+    MembershipsReportResponse,
+    PaymentAnalyticsSummary,
+    PaymentMethodBreakdown,
+    PaymentsReportResponse,
+    PlanEnrollmentItem,
 )
 from app.schemas.payment import (
     CreatePaymentRequest,
@@ -157,6 +175,7 @@ __all__ = [
     "PlayerProfileUpdate",
     "PlayerRegisterRequest",
     "PlayerSelfRegistrationResponse",
+    "PlayerSubscribeRequest",
     "RescheduleMatchRequest",
     "ScheduleMatchRequest",
     "ScheduledMatchResponse",

@@ -70,6 +70,9 @@ export const API_ENDPOINTS = {
 
   // Clubs (Phase 2+)
   CLUBS: `${API_BASE}/api/v1/clubs`,
+  CLUB_DASHBOARD: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/dashboard`,
+  CLUB_MEMBER_DETAIL: (clubId: string, membershipId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/members/${membershipId}`,
 
   // Player (Phase 3+)
   PLAYER_PROFILE: `${API_BASE}/api/v1/player/profile`,
@@ -87,6 +90,12 @@ export const API_ENDPOINTS = {
   // Courts (Phase 10)
   CLUB_COURTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/courts`,
   PLAYER_COURTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/courts/active`,
+  COURT_OPERATING_HOURS: (clubId: string, courtId: string) => `${API_BASE}/api/v1/clubs/${clubId}/courts/${courtId}/operating-hours`,
+  COURT_AFFECTED_BOOKINGS: (clubId: string, courtId: string) => `${API_BASE}/api/v1/clubs/${clubId}/courts/${courtId}/affected-bookings`,
+
+  // Operating Hours (Phase 7)
+  CLUB_OPERATING_HOURS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/operating-hours`,
+  CLUB_OPERATING_HOURS_PREVIEW: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/operating-hours/preview-disruptions`,
 
   // Bookings (Phase 11)
   BOOKINGS: `${API_BASE}/api/v1/bookings`,
@@ -107,7 +116,11 @@ export const API_ENDPOINTS = {
   CLUB_SUBSCRIPTION: (clubId: string, subscriptionId: string) => `${API_BASE}/api/v1/clubs/${clubId}/subscriptions/${subscriptionId}`,
   CLUB_SUBSCRIPTION_CANCEL: (clubId: string, subscriptionId: string) => `${API_BASE}/api/v1/clubs/${clubId}/subscriptions/${subscriptionId}/cancel`,
   CLUB_SUBSCRIPTION_RENEW: (clubId: string, subscriptionId: string) => `${API_BASE}/api/v1/clubs/${clubId}/subscriptions/${subscriptionId}/renew`,
+  CLUB_PLAN_SUBSCRIBE: (clubId: string, planId: string) => `${API_BASE}/api/v1/clubs/${clubId}/membership-plans/${planId}/subscribe`,
   PLAYER_MEMBERSHIP: (clubId: string) => `${API_BASE}/api/v1/player/membership?club_id=${clubId}`,
+  PLAYER_MEMBERSHIPS: `${API_BASE}/api/v1/player/memberships`,
+  PLAYER_SUBSCRIBE: (clubId: string) => `${API_BASE}/api/v1/player/clubs/${clubId}/subscribe`,
+  PLAYER_SUBSCRIPTION_RENEW: (subscriptionId: string) => `${API_BASE}/api/v1/player/memberships/${subscriptionId}/renew`,
 
   // Payments (Phase 13)
   CLUB_PAYMENTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments`,
@@ -198,6 +211,14 @@ export const API_ENDPOINTS = {
     return `${API_BASE}/api/v1/players/me/competition-schedule${qs ? `?${qs}` : ''}`;
   },
 
+  // Analytics & Reports (Phase 9)
+  CLUB_ANALYTICS_SUMMARY: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/summary`,
+  CLUB_ANALYTICS_BOOKINGS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/bookings`,
+  CLUB_ANALYTICS_MEMBERSHIPS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/memberships`,
+  CLUB_ANALYTICS_COMPETITIONS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/competitions`,
+  CLUB_ANALYTICS_PAYMENTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/payments`,
+  CLUB_ANALYTICS_EXPORT: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/analytics/export`,
+
   // WebSockets & Notifications
   WS: `${API_BASE.replace(/^http/, 'ws')}/api/v1/ws`,
   NOTIFICATIONS: `${API_BASE}/api/v1/notifications`,
@@ -215,7 +236,10 @@ export const QUERY_KEYS = {
   ME: ['auth', 'me'] as const,
   CLUBS: ['clubs'] as const,
   CLUB_DETAIL: (clubId: string) => ['clubs', clubId] as const,
+  CLUB_DASHBOARD: (clubId: string) => ['clubs', clubId, 'dashboard'] as const,
   CLUB_MEMBERS: (clubId: string) => ['clubs', clubId, 'members'] as const,
+  CLUB_MEMBER_DETAIL: (clubId: string, memberId: string) =>
+    ['clubs', clubId, 'members', memberId] as const,
   CLUB_MEMBERSHIP: (clubId: string) => ['clubs', clubId, 'membership'] as const,
   CLUB_PLAYER_MEMBERS: (clubId: string) => ['clubs', clubId, 'player-memberships'] as const,
   PLAYER_PROFILE: ['player', 'profile'] as const,
@@ -332,6 +356,8 @@ export const QUERY_KEYS = {
     ['clubs', clubId, 'subscriptions', subscriptionId] as const,
   PLAYER_MEMBERSHIP: (clubId: string) =>
     ['player', 'membership', clubId] as const,
+  PLAYER_MEMBERSHIPS: (status?: string) =>
+    ['player', 'memberships', status ?? 'all'] as const,
 
   // Phase 13: Payments
   CLUB_PAYMENTS: (clubId: string, filters?: string) =>
@@ -400,6 +426,18 @@ export const QUERY_KEYS = {
   // Real-Time Notifications
   NOTIFICATIONS: (category?: string) => ['notifications', category ?? 'all'] as const,
   NOTIFICATIONS_UNREAD_COUNT: ['notifications', 'unread-count'] as const,
+
+  // Analytics & Reports (Phase 9)
+  CLUB_ANALYTICS_SUMMARY: (clubId: string, filters?: string) =>
+    ['clubs', clubId, 'analytics', 'summary', filters ?? 'all'] as const,
+  CLUB_ANALYTICS_BOOKINGS: (clubId: string, filters?: string) =>
+    ['clubs', clubId, 'analytics', 'bookings', filters ?? 'all'] as const,
+  CLUB_ANALYTICS_MEMBERSHIPS: (clubId: string, filters?: string) =>
+    ['clubs', clubId, 'analytics', 'memberships', filters ?? 'all'] as const,
+  CLUB_ANALYTICS_COMPETITIONS: (clubId: string, filters?: string) =>
+    ['clubs', clubId, 'analytics', 'competitions', filters ?? 'all'] as const,
+  CLUB_ANALYTICS_PAYMENTS: (clubId: string, filters?: string) =>
+    ['clubs', clubId, 'analytics', 'payments', filters ?? 'all'] as const,
 } as const;
 
 

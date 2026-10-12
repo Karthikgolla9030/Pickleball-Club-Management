@@ -1,6 +1,7 @@
 """
 Aught2 Pickleball — Notification Service
-Business logic for creating, delivering, and tracking persistent notifications.
+Business logic for creating, delivering, tracking, and managing persistent notifications.
+Enforces multi-club recipient isolation, idempotency, and user preferences.
 """
 from __future__ import annotations
 
@@ -11,9 +12,10 @@ from uuid import UUID
 
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.events import EventType, dispatch_event
-from app.models.notification import Notification
+from app.models.notification import Notification, NotificationPreference
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +23,47 @@ logger = logging.getLogger(__name__)
 class NotificationService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+
+    async def get_preferences(self, user_id: UUID) -> NotificationPreference:
+        """Fetch or initialize default notification preferences for a user."""
+        res = await self.db.execute(
+            select(NotificationPreference).where(NotificationPreference.user_id == user_id)
+        )
+        pref = res.scalar_one_or_none()
+        if not pref:
+            pref = NotificationPreference(
+                user_id=user_id,
+                booking_notifications=True,
+                membership_notifications=True,
+                tournament_notifications=True,
+                event_notifications=True,
+                payment_notifications=True,
+                administrative_notifications=True,
+            )
+            self.db.add(pref)
+            await self.db.flush()
+        return pref
+
+    async def update_preferences(
+        self,
+        user_id: UUID,
+        updates: dict[str, Any],
+    ) -> NotificationPreference:
+        """Update persistent notification preferences for a user."""
+        pref = await self.get_preferences(user_id)
+        for field in [
+            "booking_notifications",
+            "membership_notifications",
+            "tournament_notifications",
+            "event_notifications",
+            "payment_notifications",
+            "administrative_notifications",
+        ]:
+            if field in updates and updates[field] is not None:
+                setattr(pref, field, bool(updates[field]))
+        pref.updated_at = datetime.now(timezone.utc)
+        await self.db.flush()
+        return pref
 
     async def create_notification(
         self,
@@ -30,8 +73,53 @@ class NotificationService:
         category: str = "general",
         club_id: UUID | None = None,
         data: dict[str, Any] | None = None,
-    ) -> Notification:
-        """Create a notification in the database and push via WebSocket."""
+        idempotency_key: str | None = None,
+        mandatory: bool = False,
+    ) -> Notification | None:
+        """
+        Create a persistent notification and broadcast via WebSocket.
+        Applies idempotency de-duplication and respects user preferences.
+        """
+        data_dict = dict(data or {})
+        effective_key = idempotency_key or data_dict.get("idempotency_key")
+        if effective_key:
+            data_dict["idempotency_key"] = effective_key
+            # Check recent notifications for idempotency to avoid duplicates
+            recent_stmt = (
+                select(Notification)
+                .where(Notification.user_id == user_id)
+                .order_by(Notification.created_at.desc(), Notification.id.desc())
+                .limit(50)
+            )
+            recent_res = await self.db.execute(recent_stmt)
+            for existing in recent_res.scalars().all():
+                if existing.data and existing.data.get("idempotency_key") == effective_key:
+                    logger.info("Notification de-duplicated via idempotency_key '%s'", effective_key)
+                    return existing
+
+        # Check user preferences for optional notifications
+        if not mandatory:
+            cat_lower = category.lower()
+            pref = await self.get_preferences(user_id)
+            if "booking" in cat_lower and not pref.booking_notifications:
+                logger.info("Notification skipped for user %s: booking notifications disabled", user_id)
+                return None
+            if "membership" in cat_lower and not pref.membership_notifications:
+                logger.info("Notification skipped for user %s: membership notifications disabled", user_id)
+                return None
+            if ("tournament" in cat_lower or "league" in cat_lower) and not pref.tournament_notifications:
+                logger.info("Notification skipped for user %s: tournament notifications disabled", user_id)
+                return None
+            if ("event" in cat_lower or "lesson" in cat_lower) and not pref.event_notifications:
+                logger.info("Notification skipped for user %s: event notifications disabled", user_id)
+                return None
+            if "payment" in cat_lower and not pref.payment_notifications:
+                logger.info("Notification skipped for user %s: payment notifications disabled", user_id)
+                return None
+            if "admin" in cat_lower and not pref.administrative_notifications:
+                logger.info("Notification skipped for user %s: administrative notifications disabled", user_id)
+                return None
+
         notification = Notification(
             user_id=user_id,
             club_id=club_id,
@@ -39,7 +127,8 @@ class NotificationService:
             title=title,
             message=message,
             is_read=False,
-            data=data or {},
+            read_at=None,
+            data=data_dict,
             created_at=datetime.now(timezone.utc),
         )
         self.db.add(notification)
@@ -54,7 +143,11 @@ class NotificationService:
             "title": title,
             "message": message,
             "is_read": False,
-            "data": data or {},
+            "read_at": None,
+            "data": data_dict,
+            "resource_type": data_dict.get("resource_type"),
+            "resource_id": data_dict.get("resource_id"),
+            "action_url": data_dict.get("action_url"),
             "created_at": notification.created_at.isoformat(),
         }
         await dispatch_event(
@@ -79,6 +172,7 @@ class NotificationService:
         message: str,
         category: str = "general",
         data: dict[str, Any] | None = None,
+        mandatory: bool = False,
     ) -> list[Notification]:
         """Notify all active staff members of a club and broadcast over WebSocket."""
         from app.models.club_membership import ClubMembership
@@ -89,7 +183,7 @@ class NotificationService:
             )
         )
         staff_uids = set(staff_res.scalars().all())
-        created = []
+        created: list[Notification] = []
         for uid in staff_uids:
             n = await self.create_notification(
                 user_id=uid,
@@ -98,8 +192,10 @@ class NotificationService:
                 category=category,
                 club_id=club_id,
                 data=data,
+                mandatory=mandatory,
             )
-            created.append(n)
+            if n:
+                created.append(n)
         return created
 
     async def list_user_notifications(
@@ -112,8 +208,16 @@ class NotificationService:
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Notification], int, int]:
-        """Return (items, total_count, unread_count) for the user."""
-        query = select(Notification).where(Notification.user_id == user_id)
+        """
+        Return (items, total_count, unread_count) for the user.
+        Eager-loads club to ensure club_name is available without N+1 queries.
+        Uses deterministic secondary ordering (created_at desc, id desc).
+        """
+        query = (
+            select(Notification)
+            .options(selectinload(Notification.club))
+            .where(Notification.user_id == user_id)
+        )
         count_query = select(func.count(Notification.id)).where(Notification.user_id == user_id)
         unread_count_query = select(func.count(Notification.id)).where(
             Notification.user_id == user_id,
@@ -140,12 +244,16 @@ class NotificationService:
             cat_lower = category.lower()
             if "booking" in cat_lower:
                 cats = ["booking", "bookings"]
-            elif "tournament" in cat_lower:
-                cats = ["tournament", "tournaments"]
+            elif "tournament" in cat_lower or "league" in cat_lower:
+                cats = ["tournament", "tournaments", "league", "leagues"]
             elif "event" in cat_lower or "lesson" in cat_lower:
                 cats = ["event", "events", "lesson", "lessons"]
             elif "membership" in cat_lower or "member" in cat_lower:
                 cats = ["membership", "memberships"]
+            elif "payment" in cat_lower:
+                cats = ["payment", "payments"]
+            elif "admin" in cat_lower:
+                cats = ["administrative", "admin", "general"]
             else:
                 cats = [category]
             query = query.where(Notification.category.in_(cats))
@@ -162,7 +270,7 @@ class NotificationService:
         unread_res = await self.db.execute(unread_count_query)
         unread_count = unread_res.scalar_one() or 0
 
-        query = query.order_by(Notification.created_at.desc()).offset(offset).limit(limit)
+        query = query.order_by(Notification.created_at.desc(), Notification.id.desc()).offset(offset).limit(limit)
         items_res = await self.db.execute(query)
         items = list(items_res.scalars().all())
 
@@ -179,7 +287,7 @@ class NotificationService:
         return unread_res.scalar_one() or 0
 
     async def mark_as_read(self, notification_id: UUID, user_id: UUID) -> bool:
-        """Mark a single notification as read."""
+        """Mark a single notification as read and record read_at."""
         res = await self.db.execute(
             select(Notification).where(
                 Notification.id == notification_id,
@@ -190,19 +298,38 @@ class NotificationService:
         if not notification:
             return False
 
+        now = datetime.now(timezone.utc)
         notification.is_read = True
+        notification.read_at = now
         await self.db.flush()
         return True
 
     async def mark_all_as_read(self, user_id: UUID) -> int:
-        """Mark all unread notifications as read for a user."""
+        """Mark all unread notifications as read for a user and record read_at."""
+        now = datetime.now(timezone.utc)
         result = await self.db.execute(
             update(Notification)
             .where(
                 Notification.user_id == user_id,
                 Notification.is_read == False,
             )
-            .values(is_read=True)
+            .values(is_read=True, read_at=now)
         )
         await self.db.flush()
         return result.rowcount
+
+    async def delete_notification(self, notification_id: UUID, user_id: UUID) -> bool:
+        """Delete / dismiss a single notification belonging to the authenticated user."""
+        res = await self.db.execute(
+            select(Notification).where(
+                Notification.id == notification_id,
+                Notification.user_id == user_id,
+            )
+        )
+        notification = res.scalar_one_or_none()
+        if not notification:
+            return False
+
+        await self.db.delete(notification)
+        await self.db.flush()
+        return True

@@ -14,7 +14,8 @@ import {
   View,
   Image,
 } from 'react-native';
-import { ChevronDown, ChevronRight, Crown, Building2, Trophy } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ChevronDown, ChevronRight, Crown, Building2, Trophy, Plus } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { Badge } from './Badge';
@@ -39,6 +40,7 @@ export function ClubSwitcher({
     switchClub,
   } = useActiveClub();
 
+  const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
 
   // Zero-club users
@@ -166,6 +168,18 @@ export function ClubSwitcher({
                   );
                 }}
               />
+
+              <TouchableOpacity
+                style={styles.registerNewClubBtn}
+                onPress={() => {
+                  setModalVisible(false);
+                  router.push('/(club)/register-club' as any);
+                }}
+                activeOpacity={0.8}
+              >
+                <Plus size={16} color="#176F5B" strokeWidth={2.5} />
+                <AppText style={styles.registerNewClubText}>Register New Club</AppText>
+              </TouchableOpacity>
             </Pressable>
           </Pressable>
         </Modal>
@@ -292,6 +306,18 @@ export function ClubSwitcher({
                 );
               }}
             />
+
+            <TouchableOpacity
+              style={styles.registerNewClubBtn}
+              onPress={() => {
+                setModalVisible(false);
+                router.push('/(club)/register-club' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <Plus size={16} color="#176F5B" strokeWidth={2.5} />
+              <AppText style={styles.registerNewClubText}>Register New Club</AppText>
+            </TouchableOpacity>
           </Pressable>
         </Pressable>
       </Modal>
@@ -300,6 +326,23 @@ export function ClubSwitcher({
 }
 
 const styles = StyleSheet.create({
+  registerNewClubBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingVertical: 12,
+    borderRadius: Radius.lg,
+    backgroundColor: '#EAF6F0',
+    borderWidth: 1,
+    borderColor: '#C3E5D4',
+  },
+  registerNewClubText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#176F5B',
+  },
   container: {
     flexDirection: 'row',
     alignItems: 'center',

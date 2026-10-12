@@ -40,6 +40,7 @@ from app.schemas.membership import (
     MembershipPlanDetailResponse,
     MembershipPlanResponse,
     MembershipPlanUpdate,
+    PlayerSubscribeRequest,
 )
 from app.services.member_subscription_service import MemberSubscriptionService
 from app.services.membership_plan_service import MembershipPlanService
@@ -115,6 +116,23 @@ async def create_membership_plan(
 ) -> MembershipPlanResponse:
     """Create a new membership plan."""
     return await MembershipPlanService(db).create_plan(club_id=club_id, payload=payload)
+
+
+@plans_router.get(
+    "/public",
+    response_model=list[MembershipPlanResponse],
+    summary="List active membership plans for public discovery",
+    description="Returns active membership plans for a club for player viewing without requiring staff permissions.",
+)
+async def list_public_membership_plans(
+    club_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[MembershipPlanResponse]:
+    """List active plans for a club for public player display."""
+    return await MembershipPlanService(db).list_plans(
+        club_id=club_id,
+        status=PlanStatus.ACTIVE,
+    )
 
 
 @plans_router.get(
@@ -212,6 +230,36 @@ async def reactivate_membership_plan(
 ) -> MembershipPlanResponse:
     """Reactivate an inactive membership plan."""
     return await MembershipPlanService(db).reactivate_plan(club_id=club_id, plan_id=plan_id)
+
+
+@plans_router.post(
+    "/{plan_id}/subscribe",
+    response_model=MemberSubscriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Subscribe to a membership plan",
+    description="Player self-enrollment into a published club membership plan.",
+    responses={
+        400: {"description": "Validation error or inactive player membership"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Club or plan not found"},
+        409: {"description": "Player already has active/scheduled subscription"},
+    },
+)
+async def subscribe_to_membership_plan(
+    club_id: UUID,
+    plan_id: UUID,
+    payload: PlayerSubscribeRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MemberSubscriptionResponse:
+    """Player self-subscribes to a club membership plan."""
+    req_payload = payload or PlayerSubscribeRequest(membership_plan_id=plan_id)
+    return await MemberSubscriptionService(db).player_subscribe(
+        club_id=club_id,
+        plan_id=plan_id,
+        user_id=current_user.id,
+        payload=req_payload,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

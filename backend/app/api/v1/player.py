@@ -15,28 +15,43 @@ Security & Architecture:
 """
 from __future__ import annotations
 
+from datetime import date, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.models.membership import SubscriptionStatus
+from app.models.payment import PaymentMethod, PaymentPurpose, PaymentStatus
+from app.models.tournament import TournamentFormat, TournamentStatus
 from app.models.user import User
 from app.schemas.club_player_membership import (
     PlayerClubMembershipDetailResponse,
     PlayerClubResponse,
 )
-from app.schemas.membership import PlayerMembershipView
+from app.schemas.membership import (
+    MemberSubscriptionResponse,
+    PlayerMembershipView,
+    PlayerSubscribeRequest,
+)
+from app.schemas.payment import PlayerPaymentResponse
 from app.schemas.player_profile import (
     PlayerProfileCreate,
     PlayerProfileResponse,
     PlayerProfileUpdate,
 )
+from app.schemas.club_membership_request import (
+    MembershipRequestCreate,
+    MembershipRequestResponse,
+)
 from app.schemas.player_activity import PlayerActivityItem
 from app.schemas.tournament import TournamentDiscoveryResponse
+from app.services.club_membership_request_service import ClubMembershipRequestService
 from app.services.member_subscription_service import MemberSubscriptionService
+from app.services.payment_service import PaymentService
 from app.services.player_service import PlayerService
 from app.services.tournament_service import TournamentService
 
@@ -265,17 +280,35 @@ async def get_player_club_detail(
     "/tournaments",
     response_model=list[TournamentDiscoveryResponse],
     summary="Discover public tournaments",
-    description="Returns all discoverable public tournaments across active clubs. Private tournaments are excluded.",
+    description="Returns all discoverable public tournaments across active clubs. Private tournaments are excluded. Supports search, format, status, date range, and pagination.",
     responses={
         401: {"description": "Not authenticated"},
     },
 )
 async def discover_tournaments(
+    club_id: UUID | None = Query(None, description="Optional club filter"),
+    search: str | None = Query(None, description="Search term for tournament name, host club, location, or description"),
+    format: TournamentFormat | None = Query(None, description="Filter by tournament format"),
+    status: TournamentStatus | None = Query(None, description="Filter by status"),
+    start_date_from: datetime | None = Query(None, description="Filter tournaments starting on or after"),
+    start_date_to: datetime | None = Query(None, description="Filter tournaments starting on or before"),
+    limit: int | None = Query(None, ge=1, le=100, description="Maximum tournaments to return"),
+    offset: int | None = Query(None, ge=0, description="Offset for pagination"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[TournamentDiscoveryResponse]:
     """Retrieve discoverable public tournaments with caller's registration status."""
-    return await TournamentService(db).list_public_tournaments(user_id=current_user.id)
+    return await TournamentService(db).list_public_tournaments(
+        user_id=current_user.id,
+        club_id=club_id,
+        search=search,
+        format=format,
+        status=status,
+        start_date_from=start_date_from,
+        start_date_to=start_date_to,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -301,6 +334,86 @@ async def get_player_membership(
     return await MemberSubscriptionService(db).get_player_membership_view(
         user_id=current_user.id,
         club_id=club_id,
+    )
+
+
+@router.get(
+    "/memberships",
+    response_model=list[PlayerMembershipView],
+    summary="List caller's subscriptions across all clubs",
+    description="Returns all subscriptions for the authenticated player across clubs, with club name and payment status.",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def list_player_memberships(
+    status: SubscriptionStatus | None = Query(default=None, description="Optional status filter"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[PlayerMembershipView]:
+    """Retrieve player's subscriptions across all clubs."""
+    return await MemberSubscriptionService(db).list_player_memberships(
+        user_id=current_user.id,
+        status_filter=status,
+    )
+
+
+@router.post(
+    "/clubs/{club_id}/subscribe",
+    response_model=MemberSubscriptionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Subscribe to a club membership plan",
+    description="Player subscribes to an active membership plan in a club where they have an active player membership.",
+    responses={
+        400: {"description": "Validation error or inactive player membership"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Club or plan not found"},
+        409: {"description": "Conflicting active or scheduled subscription exists"},
+    },
+)
+async def player_subscribe(
+    club_id: UUID,
+    payload: PlayerSubscribeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MemberSubscriptionResponse:
+    """Enroll caller in a club membership plan."""
+    from fastapi import HTTPException
+    if not payload.membership_plan_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="membership_plan_id is required",
+        )
+    return await MemberSubscriptionService(db).player_subscribe(
+        club_id=club_id,
+        plan_id=payload.membership_plan_id,
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/memberships/{subscription_id}/renew",
+    response_model=MemberSubscriptionResponse,
+    summary="Renew an existing subscription",
+    description="Player renews an active or expired subscription, creating a new subscription record while preserving audit history.",
+    responses={
+        400: {"description": "Cannot renew or inactive plan"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Cannot renew another player's subscription"},
+        404: {"description": "Subscription not found"},
+        409: {"description": "Active subscription already exists"},
+    },
+)
+async def player_renew_subscription(
+    subscription_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MemberSubscriptionResponse:
+    """Renew player's subscription."""
+    return await MemberSubscriptionService(db).player_renew_subscription(
+        subscription_id=subscription_id,
+        user_id=current_user.id,
     )
 
 
@@ -395,4 +508,125 @@ async def remove_favorite_tournament(
     await db.commit()
 
     return {"favorited": False, "tournament_id": tournament_id}
+
+
+# ─── Player Membership Requests Workflow ──────────────────────────────────────
+
+
+@router.post(
+    "/clubs/{club_id}/membership-requests",
+    response_model=MembershipRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit a club membership request",
+    description="Player submits an application/request to join a club. Validates that player is not already an active member and has no pending request.",
+    responses={
+        400: {"description": "Already an active member or pending request exists"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Club not found or inactive"},
+    },
+)
+async def submit_club_membership_request(
+    club_id: UUID,
+    payload: MembershipRequestCreate | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MembershipRequestResponse:
+    """Submit a membership application for a club."""
+    return await ClubMembershipRequestService(db).create_request(
+        club_id=club_id,
+        user_id=current_user.id,
+        message=payload.message if payload else None,
+    )
+
+
+@router.get(
+    "/membership-requests",
+    response_model=list[MembershipRequestResponse],
+    summary="List caller's membership requests",
+    description="Returns all club membership requests submitted by the authenticated player.",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def list_my_membership_requests(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[MembershipRequestResponse]:
+    """List caller's membership requests."""
+    return await ClubMembershipRequestService(db).list_user_requests(
+        user_id=current_user.id,
+    )
+
+
+@router.get(
+    "/clubs/{club_id}/membership-request",
+    response_model=MembershipRequestResponse | None,
+    summary="Get caller's request status for a club",
+    description="Returns caller's latest membership request status for the specified club, or null if no request exists.",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def get_my_club_membership_request(
+    club_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MembershipRequestResponse | None:
+    """Get caller's membership request status for a specific club."""
+    return await ClubMembershipRequestService(db).get_user_request_for_club(
+        club_id=club_id,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/membership-requests/{request_id}/withdraw",
+    response_model=MembershipRequestResponse,
+    summary="Withdraw a pending membership request",
+    description="Player withdraws their own pending membership request. Only pending requests can be withdrawn.",
+    responses={
+        400: {"description": "Request is not pending"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Cannot withdraw another user's request"},
+        404: {"description": "Request not found"},
+    },
+)
+async def withdraw_my_membership_request(
+    request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MembershipRequestResponse:
+    """Withdraw player's pending membership request."""
+    return await ClubMembershipRequestService(db).withdraw_request(
+        request_id=request_id,
+        user_id=current_user.id,
+    )
+
+
+@router.get(
+    "/payments",
+    response_model=list[PlayerPaymentResponse],
+    summary="List caller's payment history across clubs",
+    description="Returns caller's payment records across all clubs with optional filtering.",
+)
+async def list_my_payments(
+    status: PaymentStatus | None = Query(None),
+    purpose: PaymentPurpose | None = Query(None),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> list[PlayerPaymentResponse]:
+    """List caller's own payment records across all clubs."""
+    return await PaymentService(db).list_player_payments(
+        user_id=current_user.id,
+        status=status,
+        purpose=purpose,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
+        offset=offset,
+    )
 

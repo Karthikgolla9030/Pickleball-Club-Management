@@ -22,6 +22,7 @@ from app.permissions import Permission
 from app.schemas.booking import (
     BookingCancelRequest,
     BookingCreateRequest,
+    BookingPriceCalculationResponse,
     BookingResponse,
     ClubAvailabilityResponse,
     StaffBookingCreateRequest,
@@ -59,6 +60,29 @@ async def get_club_court_availability(
         club_id=club_id,
         target_date=target_date,
         slot_duration_minutes=slot_duration,
+    )
+
+
+@player_club_bookings_router.get(
+    "/clubs/{club_id}/bookings/calculate-price",
+    response_model=BookingPriceCalculationResponse,
+    summary="Calculate booking price",
+    description="Calculates duration and total booking price for the specified court and time slot.",
+)
+async def calculate_booking_price(
+    club_id: UUID,
+    court_id: UUID = Query(..., description="ID of the court to reserve"),
+    start_at: datetime = Query(..., description="Start timestamp (timezone-aware UTC)"),
+    end_at: datetime = Query(..., description="End timestamp (timezone-aware UTC)"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> BookingPriceCalculationResponse:
+    return await BookingService(db).calculate_booking_price(
+        club_id=club_id,
+        court_id=court_id,
+        user_id=current_user.id,
+        start_at=start_at,
+        end_at=end_at,
     )
 
 

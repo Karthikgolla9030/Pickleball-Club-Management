@@ -57,6 +57,7 @@ export interface Club {
   timezone?: string;
   holiday_closure_notes?: string | null;
   facilities_summary?: string | null;
+  operating_hours?: WeeklyOperatingHoursMap | null;
 
   created_at: string;
   updated_at: string;
@@ -83,6 +84,30 @@ export interface UpdateClubPayload {
   timezone?: string;
   holiday_closure_notes?: string | null;
   facilities_summary?: string | null;
+  operating_hours?: WeeklyOperatingHoursMap | null;
+}
+
+export interface CreateClubPayload {
+  name: string;
+  slug?: string;
+  short_description?: string | null;
+  description?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  website?: string | null;
+  established_year?: number | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  operating_days?: string | null;
+  opening_time?: string;
+  closing_time?: string;
+  timezone?: string;
+  facilities_summary?: string | null;
+  holiday_closure_notes?: string | null;
 }
 
 // ─── Club Membership ─────────────────────────────────────────────────────────
@@ -147,6 +172,123 @@ export interface AddMemberPayload {
 export interface UpdateMemberPayload {
   role?: ClubRole;
   is_active?: boolean;
+}
+
+// ─── Phase 6: Club Dashboard ─────────────────────────────────────────────────
+
+export interface DashboardMembershipsSummary {
+  total_players: number;
+  active_players: number;
+  pending_requests: number;
+}
+
+export interface DashboardBookingsSummary {
+  today_count: number;
+  upcoming_count: number;
+}
+
+export interface DashboardCompetitionsSummary {
+  upcoming_tournaments: number;
+  upcoming_leagues: number;
+}
+
+export interface DashboardTodayScheduleItem {
+  id: string;
+  title: string;
+  item_type: 'event' | 'lesson';
+  status: string;
+  status_label: string;
+  start_at: string;
+  end_at: string;
+  location: string | null;
+  capacity: number | null;
+  registered_count: number;
+}
+
+export interface DashboardEventsLessonsSummary {
+  upcoming_events: number;
+  upcoming_lessons: number;
+  today_item: DashboardTodayScheduleItem | null;
+}
+
+export interface DashboardPaymentsSummary {
+  pending_count: number;
+  pending_amount: string;
+  succeeded_count: number;
+  total_revenue: string;
+}
+
+export interface DashboardStaffSummary {
+  total_staff: number;
+  active_staff: number;
+}
+
+export interface ClubDashboardResponse {
+  club_id: string;
+  club_name: string;
+  memberships: DashboardMembershipsSummary;
+  bookings: DashboardBookingsSummary;
+  competitions: DashboardCompetitionsSummary;
+  events_and_lessons: DashboardEventsLessonsSummary;
+  payments: DashboardPaymentsSummary | null;
+  staff: DashboardStaffSummary;
+}
+
+// ─── Phase 2: Club Discovery & Membership Requests ──────────────────────────
+
+export type MembershipRequestStatus = 'pending' | 'approved' | 'rejected' | 'withdrawn';
+
+export const MEMBERSHIP_REQUEST_STATUS_LABELS: Record<MembershipRequestStatus, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  withdrawn: 'Withdrawn',
+} as const;
+
+export interface MembershipRequest {
+  id: string;
+  club_id: string;
+  club_name: string;
+  club_slug: string;
+  club_logo_url?: string | null;
+  user_id: string;
+  user_email: string;
+  user_full_name: string | null;
+  player_display_name: string | null;
+  player_skill_rating: number | null;
+  player_photo_url: string | null;
+  status: MembershipRequestStatus;
+  status_label: string;
+  message: string | null;
+  rejection_reason: string | null;
+  reviewed_by_id: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PublicClubDiscoveryResponse {
+  items: Club[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+}
+
+export interface DiscoverClubsParams {
+  search?: string;
+  city?: string;
+  state?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface CreateMembershipRequestPayload {
+  message?: string;
+}
+
+export interface RejectMembershipRequestPayload {
+  rejection_reason?: string;
 }
 
 // ─── Phase 3: Player Profile & Club Player Memberships ───────────────────────
@@ -485,6 +627,8 @@ export interface ScoringRules {
 export interface Tournament {
   id: string;
   club_id: string;
+  club_name?: string | null;
+  club_slug?: string | null;
   created_by_user_id: string | null;
   name: string;
   description: string | null;
@@ -511,6 +655,9 @@ export interface Tournament {
   } | null;
   tiebreaker_rules: string[];
   participant_count: number;
+  is_registered?: boolean;
+  my_registration_status?: string | null;
+  is_registration_open?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -974,6 +1121,8 @@ export interface ScoringRules {
 export interface LeagueSummary {
   id: string;
   club_id: string;
+  club_name?: string | null;
+  club_slug?: string | null;
   name: string;
   description: string | null;
   status: LeagueStatus;
@@ -1185,6 +1334,7 @@ export interface Court {
   status: CourtStatus;
   is_active: boolean;
   display_order: number;
+  operating_hours?: WeeklyOperatingHoursMap | null;
   created_at: string;
   updated_at: string;
 }
@@ -1200,6 +1350,7 @@ export interface PlayerCourt {
   price_per_hour?: number | string | null;
   display_order: number;
   description: string | null;
+  operating_hours?: WeeklyOperatingHoursMap | null;
 }
 
 export interface CourtCreateRequest {
@@ -1212,6 +1363,7 @@ export interface CourtCreateRequest {
   price_per_hour?: number | string | null;
   is_active?: boolean;
   display_order?: number | null;
+  operating_hours?: WeeklyOperatingHoursMap | null;
 }
 
 export interface CourtUpdateRequest {
@@ -1224,10 +1376,79 @@ export interface CourtUpdateRequest {
   price_per_hour?: number | string | null;
   is_active?: boolean;
   display_order?: number | null;
+  operating_hours?: WeeklyOperatingHoursMap | null;
 }
 
 export interface CourtReorderRequest {
   court_ids: string[];
+}
+
+// ─── Phase 7: Operating Hours & Facility Configuration ───────────────────────
+
+export interface DayOperatingHours {
+  is_closed: boolean;
+  open_time: string | null;
+  close_time: string | null;
+}
+
+export interface WeeklyOperatingHoursMap {
+  monday: DayOperatingHours;
+  tuesday: DayOperatingHours;
+  wednesday: DayOperatingHours;
+  thursday: DayOperatingHours;
+  friday: DayOperatingHours;
+  saturday: DayOperatingHours;
+  sunday: DayOperatingHours;
+}
+
+export interface ClubOperatingHoursResponse {
+  club_id: string;
+  timezone: string;
+  operating_hours: WeeklyOperatingHoursMap;
+  fallback_opening_time: string;
+  fallback_closing_time: string;
+}
+
+export interface OperatingHoursDisruptionItem {
+  booking_id: string;
+  court_id: string;
+  court_name: string;
+  player_id?: string | null;
+  start_at: string;
+  end_at: string;
+  status: string;
+}
+
+export interface OperatingHoursDisruptionPreviewResponse {
+  affected_bookings_count: number;
+  affected_bookings: OperatingHoursDisruptionItem[];
+  message: string;
+}
+
+export interface CourtOperatingHoursResponse {
+  court_id: string;
+  club_id: string;
+  court_name: string;
+  has_override: boolean;
+  court_operating_hours?: WeeklyOperatingHoursMap | null;
+  effective_operating_hours: WeeklyOperatingHoursMap;
+}
+
+export interface CourtAffectedBookingItem {
+  id: string;
+  player_id?: string | null;
+  start_at: string;
+  end_at: string;
+  status: string;
+  booking_type: string;
+}
+
+export interface CourtAffectedBookingsResponse {
+  court_id: string;
+  court_name: string;
+  upcoming_confirmed_bookings_count: number;
+  bookings: CourtAffectedBookingItem[];
+  message: string;
 }
 
 // ─── Phase 11: Court Bookings & Reservations ──────────────────────────────────
@@ -1324,6 +1545,15 @@ export interface StaffBookingCreatePayload {
 
 export interface BookingCancelPayload {
   cancellation_reason?: string | null;
+}
+
+export interface BookingPriceCalculation {
+  court_id: string;
+  court_name: string;
+  duration_minutes: number;
+  price_per_hour: number;
+  total_price: number;
+  currency: string;
 }
 
 // ─── Phase 12: Membership Plans & Subscriptions ───────────────────────────────
@@ -1429,6 +1659,9 @@ export interface MemberSubscription {
   plan_advance_booking_days: number | null;
   // Embedded player info
   player: SubscriptionPlayerInfo | null;
+  club_name?: string | null;
+  payment_id?: string | null;
+  payment_status?: string | null;
 }
 
 export interface CreateSubscriptionPayload {
@@ -1448,10 +1681,20 @@ export interface CancelSubscriptionPayload {
   cancellation_reason?: string | null;
 }
 
+export interface PlayerSubscribePayload {
+  membership_plan_id?: string;
+  payment_method?: string;
+  auto_renew?: boolean;
+  start_date?: string;
+  notes?: string | null;
+}
+
 /** Player-facing read-only membership view */
 export interface PlayerMembershipView {
+  id?: string;
   subscription_id: string;
   club_id: string;
+  club_name?: string | null;
   plan_name: string;
   plan_description: string | null;
   status: SubscriptionStatus;
@@ -1466,6 +1709,8 @@ export interface PlayerMembershipView {
   duration_label: string;
   price: string;
   currency: string;
+  payment_status?: string | null;
+  renewal_eligible?: boolean;
 }
 
 // ─── Phase 13 Payments Types ──────────────────────────────────────────────────
@@ -2006,6 +2251,168 @@ export interface PlayerMatchScheduleResponse {
 }
 
 export * from './scramble';
+
+// ─── Analytics & Reports (Phase 9) ──────────────────────────────────────────
+
+export interface AnalyticsPeriodInfo {
+  start_date: string;
+  end_date: string;
+  preset: string;
+  timezone: string;
+  days_count: number;
+}
+
+export interface CourtUtilizationItem {
+  court_id: string;
+  court_name: string;
+  court_number: number | null;
+  booking_count: number;
+  booked_minutes: number;
+  utilization_rate: number;
+}
+
+export interface DailyBookingTrend {
+  date: string;
+  day_name: string;
+  count: number;
+  booked_minutes: number;
+}
+
+export interface BookingAnalyticsSummary {
+  total_bookings: number;
+  confirmed_count: number;
+  completed_count: number;
+  cancelled_count: number;
+  upcoming_count: number;
+  court_utilization_rate: number;
+  cancellation_rate: number;
+  total_booked_minutes: number;
+  total_operating_minutes: number;
+  active_courts_count: number;
+}
+
+export interface PlanEnrollmentItem {
+  plan_id: string;
+  plan_name: string;
+  active_subscribers: number;
+  price: string;
+  currency: string;
+}
+
+export interface MembershipAnalyticsSummary {
+  total_player_memberships: number;
+  active_count: number;
+  inactive_count: number;
+  suspended_count: number;
+  expired_count: number;
+  new_members_in_period: number;
+  pending_requests_count: number;
+  active_subscriptions_count: number;
+  expired_subscriptions_count: number;
+}
+
+export interface PaymentMethodBreakdown {
+  method: string;
+  method_label: string;
+  count: number;
+  amount: string;
+}
+
+export interface DailyRevenueTrend {
+  date: string;
+  amount: string;
+  succeeded_count: number;
+}
+
+export interface PaymentAnalyticsSummary {
+  total_recorded_count: number;
+  total_recorded_amount: string;
+  succeeded_count: number;
+  total_collected_amount: string;
+  pending_count: number;
+  pending_amount: string;
+  failed_count: number;
+  failed_amount: string;
+  cancelled_count: number;
+  cancelled_amount: string;
+  currency: string;
+  by_method: PaymentMethodBreakdown[];
+}
+
+export interface CompetitionAnalyticsSummary {
+  total_tournaments: number;
+  upcoming_tournaments: number;
+  completed_tournaments: number;
+  cancelled_tournaments: number;
+  total_tournament_registrations: number;
+  total_leagues: number;
+  active_leagues: number;
+  completed_leagues: number;
+  total_league_teams: number;
+}
+
+export interface CommunityAnalyticsSummary {
+  total_events: number;
+  upcoming_events: number;
+  completed_events: number;
+  total_event_registrations: number;
+  total_lessons: number;
+  upcoming_lessons: number;
+  completed_lessons: number;
+  total_lesson_registrations: number;
+}
+
+export interface ClubAnalyticsSummaryResponse {
+  club_id: string;
+  club_name: string;
+  period: AnalyticsPeriodInfo;
+  bookings: BookingAnalyticsSummary;
+  memberships: MembershipAnalyticsSummary;
+  competitions: CompetitionAnalyticsSummary;
+  community: CommunityAnalyticsSummary;
+  payments: PaymentAnalyticsSummary | null;
+  daily_bookings: DailyBookingTrend[];
+  daily_revenue: DailyRevenueTrend[] | null;
+}
+
+export interface BookingsReportResponse {
+  club_id: string;
+  club_name: string;
+  period: AnalyticsPeriodInfo;
+  summary: BookingAnalyticsSummary;
+  by_court: CourtUtilizationItem[];
+  daily_trend: DailyBookingTrend[];
+}
+
+export interface MembershipsReportResponse {
+  club_id: string;
+  club_name: string;
+  period: AnalyticsPeriodInfo;
+  summary: MembershipAnalyticsSummary;
+  plan_enrollments: PlanEnrollmentItem[];
+}
+
+export interface CompetitionsReportResponse {
+  club_id: string;
+  club_name: string;
+  period: AnalyticsPeriodInfo;
+  competitions: CompetitionAnalyticsSummary;
+  community: CommunityAnalyticsSummary;
+}
+
+export interface PaymentsReportResponse {
+  club_id: string;
+  club_name: string;
+  period: AnalyticsPeriodInfo;
+  summary: PaymentAnalyticsSummary;
+  daily_trend: DailyRevenueTrend[];
+}
+
+export interface AnalyticsQueryFilters {
+  preset?: string;
+  start_date?: string;
+  end_date?: string;
+}
 
 
 

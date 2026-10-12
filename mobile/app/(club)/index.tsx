@@ -41,6 +41,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  AlertCircle,
   ArrowRight,
   Bell,
   Calendar,
@@ -49,10 +50,12 @@ import {
   ChevronDown,
   ChevronRight,
   Clock,
+  CreditCard,
   Crown,
   LayoutGrid,
   MapPin,
   Menu,
+  ShieldCheck,
   Star,
   Trophy,
   Users,
@@ -61,10 +64,8 @@ import {
 import { AppText, ClubHeroCarousel } from '@/components';
 import {
   useActiveClub,
-  useClubEvents,
-  useClubPlayerMembers,
-  useClubStaffBookings,
-  useClubTournaments,
+  useClubDashboard,
+  usePermission,
   useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -74,59 +75,56 @@ export default function ClubHomeScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
-  const { clubId } = useActiveClub();
+  const { clubId, clubName } = useActiveClub();
+  const { canManagePayments } = usePermission();
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
 
-  // Real data queries
-  const { playerMembers, refetch: refetchMembers } = useClubPlayerMembers(clubId);
-  const { bookings, refetch: refetchBookings } = useClubStaffBookings(clubId);
-  const { data: eventsData, refetch: refetchEvents } = useClubEvents(clubId || '');
-  const { tournaments, refetch: refetchTournaments } = useClubTournaments(clubId);
+  // Real server-aggregated dashboard query
+  const { dashboard, refetch: refetchDashboard } = useClubDashboard(clubId);
 
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      refetchMembers(),
-      refetchBookings(),
-      refetchEvents(),
-      refetchTournaments(),
-    ]);
+    await refetchDashboard();
     setRefreshing(false);
   };
 
-  // Compute counts directly from real API queries (no hardcoded fallback values)
-  const memberCount = playerMembers?.length ?? 0;
-  const bookingCount = bookings?.length ?? 0;
-  const eventCount = eventsData?.length ?? 0;
-  const tournamentCount = tournaments?.length ?? 0;
+  // Compute counts directly from server-aggregated dashboard data
+  const totalPlayers = dashboard?.memberships?.total_players ?? 0;
+  const activePlayers = dashboard?.memberships?.active_players ?? 0;
+  const pendingRequests = dashboard?.memberships?.pending_requests ?? 0;
+  const todayBookings = dashboard?.bookings?.today_count ?? 0;
+  const upcomingBookings = dashboard?.bookings?.upcoming_count ?? 0;
+  const upcomingTournaments = dashboard?.competitions?.upcoming_tournaments ?? 0;
+  const upcomingLeagues = dashboard?.competitions?.upcoming_leagues ?? 0;
+  const upcomingEvents = dashboard?.events_and_lessons?.upcoming_events ?? 0;
+  const upcomingLessons = dashboard?.events_and_lessons?.upcoming_lessons ?? 0;
+  const activeStaff = dashboard?.staff?.active_staff ?? 0;
 
-  // Today's schedule item from real event data (null if none exist)
+  // Today's schedule item from real event/lesson data
   const todayItem = useMemo(() => {
-    if (!eventsData || eventsData.length === 0) {
-      return null;
-    }
-    const activeEvent = eventsData.find((e) => e.status === 'published') || eventsData[0];
+    const raw = dashboard?.events_and_lessons?.today_item;
+    if (!raw) return null;
     let timeStr = 'All Day';
     try {
-      const s = new Date(activeEvent.start_at);
-      const e = new Date(activeEvent.end_at);
+      const s = new Date(raw.start_at);
+      const e = new Date(raw.end_at);
       timeStr = `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     } catch {
-      timeStr = activeEvent.start_at;
+      timeStr = raw.start_at;
     }
 
     return {
-      title: activeEvent.title,
-      status: activeEvent.status_label || (activeEvent.status === 'published' ? 'Happening Now' : 'Upcoming'),
+      title: raw.title,
+      status: raw.status_label || (raw.status === 'published' ? 'Happening Now' : 'Upcoming'),
       time: timeStr,
-      courts: activeEvent.location || 'Club Courts',
-      capacity: activeEvent.capacity
-        ? `${activeEvent.registered_count ?? 0} / ${activeEvent.capacity}`
-        : `${activeEvent.registered_count ?? 0} registered`,
+      courts: raw.location || 'Club Courts',
+      capacity: raw.capacity
+        ? `${raw.registered_count ?? 0} / ${raw.capacity}`
+        : `${raw.registered_count ?? 0} registered`,
     };
-  }, [eventsData]);
+  }, [dashboard]);
 
   return (
     <View style={styles.screenWrapper}>
@@ -204,7 +202,7 @@ export default function ClubHomeScreen() {
               numberOfLines={1}
               adjustsFontSizeToFit
             >
-              Let's make today amazing at Aught2.
+              Let's make today amazing at {clubName || 'your club'}.
             </AppText>
           </View>
 
@@ -217,6 +215,28 @@ export default function ClubHomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* 2b. PENDING MEMBERSHIP REQUESTS ATTENTION BANNER (IF ANY) */}
+        {pendingRequests > 0 && (
+          <TouchableOpacity
+            style={styles.pendingAlertCard}
+            onPress={() => router.push('/(club)/membership-requests' as any)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.pendingAlertIconBox}>
+              <AlertCircle size={18} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.pendingAlertTitle}>
+                {pendingRequests} Pending Membership Request{pendingRequests > 1 ? 's' : ''}
+              </AppText>
+              <AppText style={styles.pendingAlertSubtitle}>
+                Tap to review and approve player requests
+              </AppText>
+            </View>
+            <ArrowRight size={16} color="#D97706" />
+          </TouchableOpacity>
+        )}
 
         {/* 3. HERO BANNER CAROUSEL (3 Banners, Touch Swiping, Interactive Dots) */}
         <ClubHeroCarousel />
@@ -411,57 +431,119 @@ export default function ClubHomeScreen() {
         <View style={styles.sectionHeaderRow}>
           <AppText style={styles.sectionTitle}>Club Overview</AppText>
           <View style={styles.monthSelectorPill}>
-            <AppText style={styles.monthSelectorText}>This Month</AppText>
-            <ChevronDown size={13} color="#667773" />
+            <AppText style={styles.monthSelectorText}>Real-Time Metrics</AppText>
           </View>
         </View>
 
-        {/* 4 Compact Stat Cards in a Single Row */}
+        {/* Primary Operational Stat Cards */}
         <View style={styles.statsRow}>
           {/* Members */}
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push('/(club)/members' as any)}
+            activeOpacity={0.8}
+            accessibilityLabel="Club Members"
+          >
             <View style={[styles.statIconSlot, { backgroundColor: '#E8F5EE' }]}>
               <Users size={15} color="#18794E" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.statNumber}>{memberCount}</AppText>
+            <AppText style={styles.statNumber}>{totalPlayers}</AppText>
             <AppText style={styles.statLabel} numberOfLines={1}>
-              Total Members
+              {activePlayers} Active Players
             </AppText>
-          </View>
+          </TouchableOpacity>
 
           {/* Bookings */}
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push('/(club)/bookings' as any)}
+            activeOpacity={0.8}
+            accessibilityLabel="Court Bookings"
+          >
             <View style={[styles.statIconSlot, { backgroundColor: '#E7F0FB' }]}>
               <Calendar size={15} color="#1E40AF" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.statNumber}>{bookingCount}</AppText>
+            <AppText style={styles.statNumber}>{todayBookings}</AppText>
             <AppText style={styles.statLabel} numberOfLines={1}>
-              Bookings
+              {upcomingBookings} Upcoming
             </AppText>
-          </View>
+          </TouchableOpacity>
 
-          {/* Events */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconSlot, { backgroundColor: '#F3EFFB' }]}>
-              <Star size={15} color="#7C3AED" strokeWidth={2.2} />
-            </View>
-            <AppText style={styles.statNumber}>{eventCount}</AppText>
-            <AppText style={styles.statLabel} numberOfLines={1}>
-              Events
-            </AppText>
-          </View>
-
-          {/* Tournaments */}
-          <View style={styles.statCard}>
+          {/* Competitions */}
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push('/(club)/tournaments' as any)}
+            activeOpacity={0.8}
+            accessibilityLabel="Competitions"
+          >
             <View style={[styles.statIconSlot, { backgroundColor: '#FEF3EB' }]}>
               <Trophy size={15} color="#D97706" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.statNumber}>{tournamentCount}</AppText>
+            <AppText style={styles.statNumber}>{upcomingTournaments}</AppText>
             <AppText style={styles.statLabel} numberOfLines={1}>
-              Tournaments
+              {upcomingLeagues} Leagues
             </AppText>
-          </View>
+          </TouchableOpacity>
+
+          {/* Staff Members */}
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push('/(club)/members' as any)}
+            activeOpacity={0.8}
+            accessibilityLabel="Staff Members"
+          >
+            <View style={[styles.statIconSlot, { backgroundColor: '#F3EFFB' }]}>
+              <ShieldCheck size={15} color="#7C3AED" strokeWidth={2.2} />
+            </View>
+            <AppText style={styles.statNumber}>{activeStaff}</AppText>
+            <AppText style={styles.statLabel} numberOfLines={1}>
+              Staff Active
+            </AppText>
+          </TouchableOpacity>
         </View>
+
+        {/* Secondary Row for Payments & Community (if caller has payment permissions) */}
+        {canManagePayments && dashboard?.payments && (
+          <View style={[styles.statsRow, { marginTop: 10 }]}>
+            {/* Payments */}
+            <TouchableOpacity
+              style={[styles.statCard, { flex: 2 }]}
+              onPress={() => router.push('/(club)/payments' as any)}
+              activeOpacity={0.8}
+              accessibilityLabel="Payments"
+            >
+              <View style={[styles.statIconSlot, { backgroundColor: '#FEF2F2' }]}>
+                <CreditCard size={15} color="#DC2626" strokeWidth={2.2} />
+              </View>
+              <AppText style={styles.statNumber}>
+                {dashboard.payments.pending_count > 0
+                  ? `₹${dashboard.payments.pending_amount}`
+                  : `₹${dashboard.payments.total_revenue}`}
+              </AppText>
+              <AppText style={styles.statLabel} numberOfLines={1}>
+                {dashboard.payments.pending_count > 0
+                  ? `${dashboard.payments.pending_count} Pending Payments`
+                  : `${dashboard.payments.succeeded_count} Succeeded Payments`}
+              </AppText>
+            </TouchableOpacity>
+
+            {/* Events & Lessons */}
+            <TouchableOpacity
+              style={[styles.statCard, { flex: 2 }]}
+              onPress={() => router.push('/(club)/events' as any)}
+              activeOpacity={0.8}
+              accessibilityLabel="Events & Lessons"
+            >
+              <View style={[styles.statIconSlot, { backgroundColor: '#FCE7F3' }]}>
+                <Star size={15} color="#DB2777" strokeWidth={2.2} />
+              </View>
+              <AppText style={styles.statNumber}>{upcomingEvents}</AppText>
+              <AppText style={styles.statLabel} numberOfLines={1}>
+                Events ({upcomingLessons} Lessons)
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -799,5 +881,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#18794E',
+  },
+  pendingAlertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  pendingAlertIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingAlertTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  pendingAlertSubtitle: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 1,
   },
 });

@@ -11,6 +11,7 @@ import type {
   Booking,
   BookingCancelPayload,
   BookingCreatePayload,
+  BookingPriceCalculation,
   ClubAvailabilityResponse,
   StaffBookingCreatePayload,
 } from '@/types';
@@ -28,6 +29,27 @@ export const bookingApi = {
   ): Promise<ClubAvailabilityResponse> {
     const url = `${API_ENDPOINTS.CLUB_COURT_AVAILABILITY(clubId)}?date=${encodeURIComponent(dateStr)}&duration=${durationMinutes}`;
     return apiClient.get<ClubAvailabilityResponse>(url);
+  },
+
+  /**
+   * Request server-calculated booking price for a court and time slot.
+   */
+  calculatePrice(
+    clubId: string,
+    params: {
+      court_id: string;
+      start_at: string;
+      end_at: string;
+    }
+  ): Promise<BookingPriceCalculation> {
+    const qs = new URLSearchParams({
+      court_id: params.court_id,
+      start_at: params.start_at,
+      end_at: params.end_at,
+    }).toString();
+    return apiClient.get<BookingPriceCalculation>(
+      `${API_ENDPOINTS.CLUBS}/${clubId}/bookings/calculate-price?${qs}`
+    );
   },
 
   /**

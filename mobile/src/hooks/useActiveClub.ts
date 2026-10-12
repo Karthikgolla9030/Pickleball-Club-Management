@@ -19,30 +19,27 @@ export function useActiveClub() {
   const memberships = useAuthStore((s) => s.memberships);
   const setActiveMembership = useAuthStore((s) => s.setActiveMembership);
 
-  // ENFORCE AUGHT2 PICKLEBALL SINGLE-CLUB CONTEXT
-  // If the user has an Aught2 Pickleball staff membership, lock onto it.
-  const pickleballMembership = memberships.find((m) =>
-    m.club_name.toLowerCase().includes('pickleball')
-  );
-  
-  // Use the enforced membership if available, otherwise fallback to the active one in store
-  const effectiveMembership = pickleballMembership || activeMembership;
+  // Multi-club context:
+  // If activeMembership is valid and belongs to the user's memberships, use it.
+  // Otherwise, default cleanly to the first available membership without hardcoding club names.
+  const effectiveMembership =
+    activeMembership && memberships.some((m) => m.membership_id === activeMembership.membership_id)
+      ? activeMembership
+      : memberships[0] ?? null;
 
-  // Fallback to player's enrolled clubs if user is not staff
+  // Fallback to player's enrolled clubs if user has no staff memberships
   const { clubs: playerClubs } = usePlayerClubs();
-  const playerPickleball =
-    playerClubs.find((c) => c.club_name.toLowerCase().includes('pickleball')) ||
-    playerClubs[0];
+  const playerPrimaryClub = playerClubs[0] ?? null;
 
-  const resolvedClubId = effectiveMembership?.club_id ?? playerPickleball?.club_id ?? null;
-  const resolvedClubName = effectiveMembership?.club_name ?? playerPickleball?.club_name ?? null;
-  const resolvedClubSlug = effectiveMembership?.club_slug ?? playerPickleball?.club_slug ?? null;
+  const resolvedClubId = effectiveMembership?.club_id ?? playerPrimaryClub?.club_id ?? null;
+  const resolvedClubName = effectiveMembership?.club_name ?? playerPrimaryClub?.club_name ?? null;
+  const resolvedClubSlug = effectiveMembership?.club_slug ?? playerPrimaryClub?.club_slug ?? null;
 
   const switchClub = useCallback(
     (membership: MembershipInfo) => {
       setActiveMembership(membership);
-      // Invalidate club-scoped queries so fresh data is loaded for the new active club
-      queryClient.invalidateQueries({ queryKey: ['clubs', membership.club_id] });
+      // Invalidate all queries so fresh data is loaded for the new active club without leaking previous club data
+      queryClient.invalidateQueries();
     },
     [setActiveMembership, queryClient],
   );
@@ -54,11 +51,11 @@ export function useActiveClub() {
     clubSlug: resolvedClubSlug,
     role: effectiveMembership?.role ?? null,
     roleLabel: effectiveMembership?.role_label ?? null,
-    isActive: effectiveMembership?.is_active ?? (playerPickleball?.status === 'active'),
+    isActive: effectiveMembership?.is_active ?? (playerPrimaryClub?.status === 'active'),
     allMemberships: memberships,
-    // Hide the ability to switch clubs since this is a single-club application product
-    canSwitchClub: false,
-    hasClubContext: Boolean(effectiveMembership || playerPickleball),
+    // Enable switching whenever the user belongs to multiple clubs
+    canSwitchClub: memberships.length > 1,
+    hasClubContext: Boolean(effectiveMembership || playerPrimaryClub),
     switchClub,
     setActiveMembership,
   };

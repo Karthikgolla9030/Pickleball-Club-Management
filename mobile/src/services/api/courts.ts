@@ -8,11 +8,14 @@ import { API_ENDPOINTS } from '@/constants';
 import { apiClient } from './client';
 import type {
   Court,
+  CourtAffectedBookingsResponse,
   CourtCreateRequest,
+  CourtOperatingHoursResponse,
   CourtReorderRequest,
   CourtStatus,
   CourtUpdateRequest,
   PlayerCourt,
+  WeeklyOperatingHoursMap,
 } from '@/types';
 
 const clubCourtBase = (clubId: string) => `${API_ENDPOINTS.CLUBS}/${clubId}/courts`;
@@ -59,5 +62,25 @@ export const courtApi = {
 
   getPlayerCourts(clubId: string): Promise<PlayerCourt[]> {
     return apiClient.get<PlayerCourt[]>(`${clubCourtBase(clubId)}/active`);
+  },
+
+  // ─── Phase 7: Court Operating Hours & Affected Bookings ───────────────────
+
+  getCourtOperatingHours(clubId: string, courtId: string): Promise<CourtOperatingHoursResponse> {
+    return apiClient.get<CourtOperatingHoursResponse>(API_ENDPOINTS.COURT_OPERATING_HOURS(clubId, courtId));
+  },
+
+  updateCourtOperatingHours(
+    clubId: string,
+    courtId: string,
+    operatingHours: WeeklyOperatingHoursMap | null
+  ): Promise<CourtOperatingHoursResponse> {
+    return apiClient.put<CourtOperatingHoursResponse>(API_ENDPOINTS.COURT_OPERATING_HOURS(clubId, courtId), {
+      operating_hours: operatingHours,
+    });
+  },
+
+  getCourtAffectedBookings(clubId: string, courtId: string): Promise<CourtAffectedBookingsResponse> {
+    return apiClient.get<CourtAffectedBookingsResponse>(API_ENDPOINTS.COURT_AFFECTED_BOOKINGS(clubId, courtId));
   },
 };

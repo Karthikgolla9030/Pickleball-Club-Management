@@ -12,6 +12,7 @@ import type {
   PlayerTournamentRegistrationStatus,
   Tournament,
   TournamentDiscoveryItem,
+  TournamentFormat,
   TournamentRegistrationItem,
   TournamentStatus,
   UpdateRegistrationPayload,
@@ -140,12 +141,41 @@ export const tournamentApi = {
   // ─── Player Discovery & Self-Registration ─────────────────────────────────
 
   /**
-   * Discover public tournaments across active clubs.
+   * Discover public tournaments across active clubs, optionally filtered by club, search, format, status, and date.
    */
-  discoverTournaments(): Promise<TournamentDiscoveryItem[]> {
-    return apiClient.get<TournamentDiscoveryItem[]>(
-      API_ENDPOINTS.PLAYER_TOURNAMENTS
-    );
+  discoverTournaments(
+    params?:
+      | {
+          clubId?: string;
+          search?: string;
+          format?: TournamentFormat;
+          status?: TournamentStatus;
+          startDateFrom?: string;
+          startDateTo?: string;
+          limit?: number;
+          offset?: number;
+        }
+      | string
+  ): Promise<TournamentDiscoveryItem[]> {
+    if (typeof params === 'string') {
+      const url = params
+        ? `${API_ENDPOINTS.PLAYER_TOURNAMENTS}?club_id=${encodeURIComponent(params)}`
+        : API_ENDPOINTS.PLAYER_TOURNAMENTS;
+      return apiClient.get<TournamentDiscoveryItem[]>(url);
+    }
+    const query = new URLSearchParams();
+    if (params?.clubId) query.append('club_id', params.clubId);
+    if (params?.search) query.append('search', params.search);
+    if (params?.format) query.append('format', params.format);
+    if (params?.status) query.append('status', params.status);
+    if (params?.startDateFrom) query.append('start_date_from', params.startDateFrom);
+    if (params?.startDateTo) query.append('start_date_to', params.startDateTo);
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.offset) query.append('offset', String(params.offset));
+
+    const qs = query.toString();
+    const url = qs ? `${API_ENDPOINTS.PLAYER_TOURNAMENTS}?${qs}` : API_ENDPOINTS.PLAYER_TOURNAMENTS;
+    return apiClient.get<TournamentDiscoveryItem[]>(url);
   },
 
   /**

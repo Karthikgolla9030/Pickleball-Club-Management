@@ -10,6 +10,7 @@ export { usePlayerProfile } from './usePlayerProfile';
 export { usePlayerActivity } from './usePlayerActivity';
 export { usePlayerClubs, usePlayerClubDetail } from './usePlayerClubs';
 export { useClubDetails } from './useClubDetails';
+export { useClubDashboard } from './useClubDashboard';
 export { useClubPlayerMembers } from './useClubPlayerMembers';
 export {
   useClubTournaments,
@@ -51,4 +52,8 @@ export * from './useEvents';
 export * from './useLessons';
 export * from './useScheduling';
 export * from './useNotifications';
+export * from './useClubDiscovery';
+export * from './useMembershipRequests';
+export * from './usePlayerMembershipRequests';
+export * from './useAnalytics';
 

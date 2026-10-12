@@ -31,6 +31,7 @@ import {
   ArrowLeft,
   Award,
   BarChart2,
+  Building2,
   Calendar,
   CheckCircle2,
   ChevronRight,
@@ -324,6 +325,38 @@ export default function PlayerLeagueDetailsScreen() {
           </AppText>
         </View>
 
+        {/* ─── Host Club Banner ────────────────────────────────────── */}
+        {league.club_name ? (
+          <TouchableOpacity
+            style={styles.hostClubBanner}
+            onPress={() =>
+              router.push({
+                pathname: '/(player)/club-details',
+                params: { id: league.club_id },
+              } as any)
+            }
+            activeOpacity={0.8}
+            accessibilityLabel={`Hosted by ${league.club_name}. View club profile.`}
+            accessibilityRole="button"
+          >
+            <View style={styles.hostClubLeft}>
+              <View style={styles.hostClubIconWrap}>
+                <Building2 size={18} color="#065F46" />
+              </View>
+              <View style={styles.hostClubTextCol}>
+                <AppText style={styles.hostClubLabel}>HOST CLUB</AppText>
+                <AppText style={styles.hostClubName} numberOfLines={1}>
+                  {league.club_name}
+                </AppText>
+              </View>
+            </View>
+            <View style={styles.hostClubActionRow}>
+              <AppText style={styles.hostClubActionText}>View Club</AppText>
+              <ChevronRight size={14} color="#065F46" />
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
         {/* ─── Compact Info Row (3 Cards) ───────────────────────────── */}
         <View style={styles.infoRow}>
           {/* Card 1: Schedule / Week */}
@@ -340,15 +373,26 @@ export default function PlayerLeagueDetailsScreen() {
           </View>
 
           {/* Card 2: Courts / Club */}
-          <View style={styles.infoCard}>
+          <TouchableOpacity
+            style={styles.infoCard}
+            onPress={() =>
+              router.push({
+                pathname: '/(player)/club-details',
+                params: { id: league.club_id },
+              } as any)
+            }
+            activeOpacity={0.75}
+            accessibilityLabel={`Hosted by ${league.club_name || 'Club'}. Tap to view club details.`}
+            accessibilityRole="button"
+          >
             <View style={styles.infoCardHeader}>
               <MapPin size={15} color="#0D9488" />
-              <AppText style={styles.infoCardTitle}>Courts 1-4</AppText>
+              <AppText style={styles.infoCardTitle}>Venue</AppText>
             </View>
             <AppText style={styles.infoCardSub} numberOfLines={2}>
-              Aught2 Pickleball Club
+              {league.club_name || 'Club Courts'}
             </AppText>
-          </View>
+          </TouchableOpacity>
 
           {/* Card 3: Playoffs */}
           <View style={styles.infoCard}>
@@ -1690,5 +1734,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
+  },
+  hostClubBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    marginBottom: Spacing.md,
+  },
+  hostClubLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  hostClubIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostClubTextCol: {
+    flex: 1,
+  },
+  hostClubLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  hostClubName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#064E3B',
+  },
+  hostClubActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingLeft: Spacing.sm,
+  },
+  hostClubActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
   },
 });

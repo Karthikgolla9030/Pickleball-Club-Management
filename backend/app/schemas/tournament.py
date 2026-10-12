@@ -317,6 +317,8 @@ class TournamentUpdate(BaseModel):
 class TournamentResponse(BaseModel):
     id: UUID
     club_id: UUID
+    club_name: str | None = None
+    club_slug: str | None = None
     created_by_user_id: UUID | None = None
     name: str
     description: str | None = None

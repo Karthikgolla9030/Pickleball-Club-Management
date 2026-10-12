@@ -568,10 +568,19 @@ export function useLeaguePlayoffs(clubId: string | null, leagueId: string | null
 
 // ─── Player Read Hooks ────────────────────────────────────────────────────────
 
-export function usePlayerLeagues(status?: LeagueStatus) {
+export function usePlayerLeagues(
+  status?: LeagueStatus,
+  clubId?: string,
+  search?: string
+) {
   return useQuery<LeagueSummary[], Error>({
-    queryKey: [...QUERY_KEYS.PLAYER_LEAGUES, status ?? 'all'],
-    queryFn: () => leagueApi.listPlayerLeagues(status),
+    queryKey: [
+      ...QUERY_KEYS.PLAYER_LEAGUES,
+      status ?? 'all',
+      clubId ?? 'all',
+      search ?? '',
+    ],
+    queryFn: () => leagueApi.listPlayerLeagues(status, clubId, search),
     staleTime: 30 * 1000,
   });
 }

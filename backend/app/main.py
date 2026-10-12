@@ -211,7 +211,32 @@ def create_app() -> FastAPI:
         include_in_schema=False,
     )
     async def run_migrations_endpoint(request: Request):
-        """Run pending alembic database migrations on demand."""
+        """
+        Run pending alembic database migrations on demand.
+        In production, the endpoint is disabled by default (returns 404).
+        If MIGRATION_SECRET is explicitly configured, it requires a matching X-Migration-Secret header.
+        Never accepts JWT_SECRET_KEY as a substitute.
+        """
+        import secrets
+
+        if settings.is_production:
+            if not settings.MIGRATION_SECRET:
+                return JSONResponse(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    content={"detail": "Migration endpoint is disabled in production"},
+                    headers=_build_cors_headers(request),
+                )
+            migration_secret = request.headers.get("X-Migration-Secret")
+            if (
+                not migration_secret
+                or (settings.JWT_SECRET_KEY and secrets.compare_digest(migration_secret, settings.JWT_SECRET_KEY))
+                or not secrets.compare_digest(migration_secret, settings.MIGRATION_SECRET)
+            ):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Forbidden: valid migration secret required in production"},
+                    headers=_build_cors_headers(request),
+                )
         try:
             await asyncio.to_thread(_run_db_migrations)
             return JSONResponse(
@@ -219,9 +244,11 @@ def create_app() -> FastAPI:
                 headers=_build_cors_headers(request),
             )
         except Exception as e:
+            logger.error("Error executing migrations on-demand: %s", type(e).__name__)
+            error_msg = "Migration execution failed" if settings.is_production else str(e)
             return JSONResponse(
-                status_code=500,
-                content={"status": "error", "message": str(e)},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                content={"status": "error", "message": error_msg},
                 headers=_build_cors_headers(request),
             )
 

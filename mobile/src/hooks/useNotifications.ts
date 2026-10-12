@@ -2,7 +2,11 @@
  * Aught2 Pickleball — Notifications Hook (TanStack Query)
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { notificationsApi, type NotificationItem, type NotificationListResponse } from '@/services/api';
+import {
+  notificationsApi,
+  type NotificationListResponse,
+  type NotificationPreference,
+} from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import { useAuthStore } from '@/store';
 
@@ -67,6 +71,41 @@ export function useMarkAllNotificationsRead() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.NOTIFICATIONS_UNREAD_COUNT });
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (notificationId: string) => notificationsApi.deleteNotification(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.NOTIFICATIONS_UNREAD_COUNT });
+    },
+  });
+}
+
+export function useNotificationPreferences() {
+  const { isAuthenticated } = useAuthStore();
+
+  return useQuery<NotificationPreference, Error>({
+    queryKey: ['notifications', 'preferences'],
+    queryFn: () => notificationsApi.getPreferences(),
+    enabled: isAuthenticated,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useUpdateNotificationPreferences() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (updates: Partial<NotificationPreference>) =>
+      notificationsApi.updatePreferences(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'preferences'] });
     },
   });
 }

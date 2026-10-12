@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    JSON,
     Numeric,
     SmallInteger,
     String,
@@ -152,6 +153,11 @@ class Court(Base):
         Numeric(10, 2),
         nullable=True,
         default=None,
+    )
+
+    operating_hours: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
     )
 
     # ─── Relationships ────────────────────────────────────────────────────────

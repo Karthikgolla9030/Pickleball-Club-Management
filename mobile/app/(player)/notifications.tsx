@@ -54,6 +54,7 @@ interface NotificationItem {
   message: string;
   timestamp: string;
   read: boolean;
+  clubName?: string | null;
   route?: string;
 }
 
@@ -81,7 +82,9 @@ export default function PlayerNotificationsScreen() {
         let navRoute = '/(player)/';
 
         const c = item.category?.toLowerCase() || '';
-        if (c.includes('booking')) {
+        if (item.action_url) {
+          navRoute = item.action_url;
+        } else if (c.includes('booking')) {
           cat = 'bookings';
           navRoute = '/(player)/bookings';
         } else if (c.includes('tournament')) {
@@ -105,6 +108,7 @@ export default function PlayerNotificationsScreen() {
           message: item.message,
           timestamp: item.created_at,
           read: item.is_read || readIds.has(item.id),
+          clubName: item.club_name,
           route: navRoute,
         });
       });
@@ -358,6 +362,12 @@ export default function PlayerNotificationsScreen() {
               <AppText style={styles.cardMessage} numberOfLines={2}>
                 {item.message}
               </AppText>
+
+              {item.clubName ? (
+                <View style={styles.clubBadge}>
+                  <AppText style={styles.clubBadgeText}>{item.clubName}</AppText>
+                </View>
+              ) : null}
             </View>
 
             {!item.read && <View style={styles.unreadDot} />}
@@ -540,5 +550,20 @@ const styles = StyleSheet.create({
     color: '#647570',
     textAlign: 'center',
     lineHeight: 19,
+  },
+  clubBadge: {
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: '#C6F6D5',
+  },
+  clubBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#166534',
   },
 });

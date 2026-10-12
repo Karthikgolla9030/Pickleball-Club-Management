@@ -208,6 +208,10 @@ export default function ClubNotificationsScreen() {
         navRoute = '/(club)/memberships';
       }
 
+      if (item.action_url) {
+        navRoute = item.action_url;
+      }
+
       // Extract ISO date YYYY-MM-DD
       let createdDateStr = DEFAULT_DATE;
       if (item.created_at) {

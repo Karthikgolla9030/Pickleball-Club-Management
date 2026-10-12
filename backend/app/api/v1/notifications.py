@@ -1,6 +1,6 @@
 """
 Aught2 Pickleball — Notifications API Endpoints
-Endpoints for listing, filtering, and marking notifications as read.
+Endpoints for listing, filtering, marking as read, dismissing, and managing preferences.
 """
 from __future__ import annotations
 
@@ -14,6 +14,8 @@ from app.api.deps import get_current_active_user, get_db
 from app.models.user import User
 from app.schemas.notification import (
     NotificationListResponse,
+    NotificationPreferenceResponse,
+    NotificationPreferenceUpdateRequest,
     NotificationResponse,
     NotificationUnreadCountResponse,
 )
@@ -64,7 +66,36 @@ async def get_unread_notification_count(
     return NotificationUnreadCountResponse(unread_count=unread)
 
 
+@router.get("/preferences", response_model=NotificationPreferenceResponse)
+async def get_notification_preferences(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get notification preferences for the authenticated user."""
+    service = NotificationService(db)
+    pref = await service.get_preferences(user_id=current_user.id)
+    await db.commit()
+    return NotificationPreferenceResponse.model_validate(pref)
+
+
+@router.put("/preferences", response_model=NotificationPreferenceResponse)
+async def update_notification_preferences(
+    payload: NotificationPreferenceUpdateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Update notification preferences for the authenticated user."""
+    service = NotificationService(db)
+    pref = await service.update_preferences(
+        user_id=current_user.id,
+        updates=payload.model_dump(exclude_unset=True),
+    )
+    await db.commit()
+    return NotificationPreferenceResponse.model_validate(pref)
+
+
 @router.post("/{notification_id}/read", response_model=dict)
+@router.patch("/{notification_id}/read", response_model=dict)
 async def mark_notification_as_read(
     notification_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -94,3 +125,23 @@ async def mark_all_notifications_as_read(
     count = await service.mark_all_as_read(user_id=current_user.id)
     await db.commit()
     return {"status": "ok", "marked_read_count": count}
+
+
+@router.delete("/{notification_id}", response_model=dict)
+async def delete_notification(
+    notification_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Dismiss / delete a specific notification belonging to the authenticated user."""
+    service = NotificationService(db)
+    success = await service.delete_notification(
+        notification_id=notification_id, user_id=current_user.id
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found",
+        )
+    await db.commit()
+    return {"status": "ok", "id": str(notification_id)}

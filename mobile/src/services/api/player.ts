@@ -5,7 +5,9 @@
 import { API_ENDPOINTS } from '@/constants';
 import { apiClient } from './client';
 import type {
+  CreateMembershipRequestPayload,
   CreatePlayerProfilePayload,
+  MembershipRequest,
   PlayerActivityItem,
   PlayerClub,
   PlayerClubDetail,
@@ -72,4 +74,48 @@ export const playerApi = {
   getActivity(): Promise<PlayerActivityItem[]> {
     return apiClient.get<PlayerActivityItem[]>(API_ENDPOINTS.PLAYER_ACTIVITY);
   },
+
+  // ─── Membership Requests ───────────────────────────────────────────────────
+
+  /**
+   * Submit a membership request for a club.
+   */
+  submitMembershipRequest(
+    clubId: string,
+    payload?: CreateMembershipRequestPayload,
+  ): Promise<MembershipRequest> {
+    return apiClient.post<MembershipRequest>(
+      `${API_ENDPOINTS.PLAYER_CLUBS}/${clubId}/membership-requests`,
+      payload || {},
+    );
+  },
+
+  /**
+   * Get all membership requests submitted by current player.
+   */
+  getMembershipRequests(): Promise<MembershipRequest[]> {
+    return apiClient.get<MembershipRequest[]>(
+      `${API_ENDPOINTS.BASE}/api/v1/player/membership-requests`,
+    );
+  },
+
+  /**
+   * Get latest request status for a specific club.
+   */
+  getClubMembershipRequest(clubId: string): Promise<MembershipRequest | null> {
+    return apiClient.get<MembershipRequest | null>(
+      `${API_ENDPOINTS.PLAYER_CLUBS}/${clubId}/membership-request`,
+    );
+  },
+
+  /**
+   * Withdraw a pending membership request.
+   */
+  withdrawMembershipRequest(requestId: string): Promise<MembershipRequest> {
+    return apiClient.post<MembershipRequest>(
+      `${API_ENDPOINTS.BASE}/api/v1/player/membership-requests/${requestId}/withdraw`,
+      {},
+    );
+  },
 };
+

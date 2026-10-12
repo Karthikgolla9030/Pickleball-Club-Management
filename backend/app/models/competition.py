@@ -20,6 +20,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     SmallInteger,
     String,
@@ -372,6 +373,10 @@ class Match(Base):
       pending → cancelled (admin action)
     """
     __tablename__ = "matches"
+    __table_args__ = (
+        Index("ix_matches_tournament_stage", "tournament_id", "stage"),
+        Index("ix_matches_tournament_status", "tournament_id", "status"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

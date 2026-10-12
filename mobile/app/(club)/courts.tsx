@@ -48,6 +48,7 @@ import {
   ChevronDown,
   X,
   Check,
+  ShieldAlert,
 } from 'lucide-react-native';
 
 import {
@@ -209,6 +210,27 @@ export default function ClubCourtsScreen() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingCourt, setEditingCourt] = useState<Court | null>(null);
   const [deactivatingCourt, setDeactivatingCourt] = useState<Court | null>(null);
+  const [affectedBookingsCount, setAffectedBookingsCount] = useState<number | null>(null);
+  const [isCheckingDisruptions, setIsCheckingDisruptions] = useState(false);
+
+  React.useEffect(() => {
+    if (deactivatingCourt && clubId) {
+      setIsCheckingDisruptions(true);
+      courtApi
+        .getCourtAffectedBookings(clubId, deactivatingCourt.id)
+        .then((res) => {
+          setAffectedBookingsCount(res.upcoming_confirmed_bookings_count);
+        })
+        .catch(() => {
+          setAffectedBookingsCount(null);
+        })
+        .finally(() => {
+          setIsCheckingDisruptions(false);
+        });
+    } else {
+      setAffectedBookingsCount(null);
+    }
+  }, [deactivatingCourt, clubId]);
 
   // Form State
   const [formName, setFormName] = useState('');
@@ -1086,6 +1108,15 @@ export default function ClubCourtsScreen() {
               at any time.
             </AppText>
 
+            {affectedBookingsCount !== null && affectedBookingsCount > 0 && (
+              <View style={styles.disruptionWarningBox}>
+                <ShieldAlert size={18} color="#B45309" />
+                <AppText variant="caption" style={styles.disruptionWarningText}>
+                  Warning: This court has {affectedBookingsCount} upcoming confirmed booking(s). Existing bookings will NOT be cancelled or moved automatically. Players must be notified manually if needed.
+                </AppText>
+              </View>
+            )}
+
             <View style={styles.confirmButtonsRow}>
               <Button
                 label="Cancel"
@@ -1910,5 +1941,21 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     minWidth: 100,
+  },
+  disruptionWarningBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+  },
+  disruptionWarningText: {
+    flex: 1,
+    color: '#92400E',
+    lineHeight: 18,
+    fontWeight: '500',
   },
 });

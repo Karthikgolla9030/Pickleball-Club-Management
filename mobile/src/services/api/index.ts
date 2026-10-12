@@ -16,4 +16,5 @@ export { paymentApi } from './payments';
 export { eventApi } from './events';
 export { lessonApi } from './lessons';
 export { schedulingApi } from './scheduling';
-export { notificationsApi, type NotificationItem, type NotificationListResponse } from './notifications';
+export { notificationsApi, type NotificationItem, type NotificationListResponse, type NotificationPreference } from './notifications';
+export { analyticsApi } from './analytics';

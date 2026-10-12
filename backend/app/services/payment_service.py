@@ -21,6 +21,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club_player_membership import PlayerMembershipStatus
+from app.models.membership import SubscriptionStatus
 from app.models.payment import (
     Payment,
     PaymentMethod,
@@ -245,6 +246,65 @@ class PaymentService:
         payment.paid_at = now
         payment.status_changed_by_user_id = actor_id
         payment.updated_at = now
+
+        # Phase 5: If this payment is for a scheduled subscription, activate it
+        if payment.subscription_id:
+            sub = await self.subscription_repo.get_by_id(payment.subscription_id, club_id=club_id)
+            if sub and sub.status == SubscriptionStatus.SCHEDULED:
+                today = date.today()
+                if sub.start_date <= today <= sub.end_date:
+                    sub.status = SubscriptionStatus.ACTIVE
+                    sub.updated_at = now
+                    await self.db.flush()
+                    try:
+                        from app.core.events import EventType, dispatch_event
+                        from app.services.notification_service import NotificationService
+                        plan_name = sub.plan.name if sub.plan else "Membership Plan"
+                        await dispatch_event(
+                            event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                            data={
+                                "subscription_id": str(sub.id),
+                                "club_id": str(club_id),
+                                "user_id": str(payment.player_id),
+                                "status": sub.status.value,
+                                "plan_name": plan_name,
+                            },
+                            club_id=club_id,
+                            user_id=payment.player_id,
+                        )
+                        notif_svc = NotificationService(self.db)
+                        await notif_svc.create_notification(
+                            user_id=payment.player_id,
+                            club_id=club_id,
+                            category="membership",
+                            title="Payment Succeeded — Membership Active",
+                            message=f"Payment for '{plan_name}' was received. Your subscription is now active!",
+                            data={"subscription_id": str(sub.id), "payment_id": str(payment.id)},
+                        )
+                    except Exception:
+                        pass
+        else:
+            try:
+                from app.services.notification_service import NotificationService
+                notif_svc = NotificationService(self.db)
+                curr_str = payment.currency.value if hasattr(payment.currency, "value") else str(payment.currency)
+                await notif_svc.create_notification(
+                    user_id=payment.player_id,
+                    club_id=club_id,
+                    category="payment",
+                    title="Payment Succeeded",
+                    message=f"Your payment of {curr_str} {payment.amount} has been successfully processed.",
+                    data={
+                        "resource_type": "payment",
+                        "resource_id": str(payment.id),
+                        "amount": float(payment.amount),
+                        "idempotency_key": f"payment_succeeded_{payment.id}",
+                    },
+                    mandatory=True,
+                )
+            except Exception:
+                pass
+
         await self.db.flush()
 
         full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
@@ -277,6 +337,27 @@ class PaymentService:
         payment.status_changed_by_user_id = actor_id
         payment.updated_at = now
         await self.db.flush()
+
+        try:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            curr_str = payment.currency.value if hasattr(payment.currency, "value") else str(payment.currency)
+            await notif_svc.create_notification(
+                user_id=payment.player_id,
+                club_id=club_id,
+                category="payment",
+                title="Payment Failed",
+                message=f"Payment for {curr_str} {payment.amount} failed. Reason: {failure_reason}",
+                data={
+                    "resource_type": "payment",
+                    "resource_id": str(payment.id),
+                    "failure_reason": failure_reason,
+                    "idempotency_key": f"payment_failed_{payment.id}",
+                },
+                mandatory=True,
+            )
+        except Exception:
+            pass
 
         full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
         return PaymentResponse.from_orm_model(full)

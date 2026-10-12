@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   AlertCircle,
   Check,
@@ -56,6 +57,7 @@ export function Step3PaymentSubmit({
   onBack,
   onSubmit,
 }: Step3Props) {
+  const router = useRouter();
   const parsed = parseTournamentConfig(tournament);
   const isDoubles = !parsed.isSingles;
   const isScramble = tournament.format === 'scramble';
@@ -321,8 +323,26 @@ export function Step3PaymentSubmit({
       {/* ─── Submit Error Display ─── */}
       {submitError && (
         <View style={styles.submitErrorCard}>
-          <AlertCircle size={16} color="#DC2626" style={{ marginTop: 1 }} />
-          <AppText style={styles.submitErrorText}>{submitError}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+            <AlertCircle size={16} color="#DC2626" style={{ marginTop: 1 }} />
+            <AppText style={styles.submitErrorText}>{submitError}</AppText>
+          </View>
+          {(submitError.toLowerCase().includes('member') || submitError.toLowerCase().includes('membership')) && (tournament as any).club_id ? (
+            <TouchableOpacity
+              style={styles.errorClubActionBtn}
+              onPress={() => {
+                router.push({
+                  pathname: '/(player)/club-details' as any,
+                  params: { id: (tournament as any).club_id },
+                });
+              }}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.errorClubActionBtnText}>
+                View {(tournament as any).club_name || 'Host Club'} & Request Membership →
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
 
@@ -555,19 +575,31 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
   submitErrorCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FCA5A5',
     borderRadius: 10,
-    padding: 10,
+    padding: 12,
     gap: 8,
   },
   submitErrorText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#DC2626',
+    lineHeight: 18,
+  },
+  errorClubActionBtn: {
+    marginTop: 4,
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  errorClubActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   actionsContainer: {
     gap: 8,

@@ -14,6 +14,7 @@ import type {
   PlayerTournamentRegistrationStatus,
   Tournament,
   TournamentDiscoveryItem,
+  TournamentFormat,
   TournamentRegistrationItem,
   TournamentStatus,
   UpdateRegistrationPayload,
@@ -290,10 +291,34 @@ export function useTournamentRegistrations(clubId: string | null, tournamentId: 
 /**
  * Hook for player tournament discovery across active clubs.
  */
-export function usePlayerTournaments() {
+export function usePlayerTournaments(
+  params?:
+    | {
+        clubId?: string;
+        search?: string;
+        format?: TournamentFormat;
+        status?: TournamentStatus;
+        startDateFrom?: string;
+        startDateTo?: string;
+        limit?: number;
+        offset?: number;
+      }
+    | string
+) {
+  const clubId = typeof params === 'string' ? params : params?.clubId;
+  const search = typeof params === 'object' ? params?.search : undefined;
+  const format = typeof params === 'object' ? params?.format : undefined;
+  const status = typeof params === 'object' ? params?.status : undefined;
+
   const playerTournamentsQuery = useQuery<TournamentDiscoveryItem[], Error>({
-    queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS,
-    queryFn: () => tournamentApi.discoverTournaments(),
+    queryKey: [
+      ...QUERY_KEYS.PLAYER_TOURNAMENTS,
+      clubId ?? 'all',
+      search ?? '',
+      format ?? 'all',
+      status ?? 'all',
+    ],
+    queryFn: () => tournamentApi.discoverTournaments(params),
     staleTime: 5 * 1000,
     // The 5s staleTime ensures instant synchronization when switching between club and player views.
     refetchInterval: false,

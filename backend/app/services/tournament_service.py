@@ -79,9 +79,13 @@ def _build_tournament_response(
                 count = 0
         except Exception:
             count = 0
+    club_name = t.club.name if getattr(t, "club", None) else None
+    club_slug = t.club.slug if getattr(t, "club", None) else None
     return TournamentResponse(
         id=t.id,
         club_id=t.club_id,
+        club_name=club_name,
+        club_slug=club_slug,
         created_by_user_id=t.created_by_user_id,
         name=t.name,
         description=t.description,
@@ -786,10 +790,28 @@ class TournamentService:
     # ─── Player Discovery & Self-Registration ─────────────────────────────────
 
     async def list_public_tournaments(
-        self, user_id: UUID | None = None
+        self,
+        user_id: UUID | None = None,
+        club_id: UUID | None = None,
+        search: str | None = None,
+        format: TournamentFormat | None = None,
+        status: TournamentStatus | None = None,
+        start_date_from: datetime | None = None,
+        start_date_to: datetime | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[TournamentDiscoveryResponse]:
         """List all discoverable public tournaments with caller's registration status."""
-        tournaments = await self.tournament_repo.list_public_discoverable()
+        tournaments = await self.tournament_repo.list_public_discoverable(
+            club_id=club_id,
+            search=search,
+            format=format,
+            status=status,
+            start_date_from=start_date_from,
+            start_date_to=start_date_to,
+            limit=limit,
+            offset=offset,
+        )
         user_membership_ids: set[UUID] = set()
         if user_id:
             user_memberships = await self.player_membership_repo.get_user_player_memberships(user_id)

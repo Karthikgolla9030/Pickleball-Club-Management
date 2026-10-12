@@ -16,10 +16,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.club import Club
 from app.models.club_player_membership import ClubPlayerMembership
 from app.models.competition import Match, MatchStage, MatchStatus, Team, TeamMember
 from app.models.league import (
@@ -79,6 +80,7 @@ class LeagueRepository:
         stmt = stmt.options(
             selectinload(League.weeks),
             selectinload(League.champion_team),
+            selectinload(League.club),
         )
         result = await self.db.execute(stmt)
         return result.scalars().first()
@@ -91,16 +93,29 @@ class LeagueRepository:
             .options(
                 selectinload(League.weeks),
                 selectinload(League.champion_team),
+                selectinload(League.club),
             )
         )
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def list_public_leagues(self) -> list[League]:
-        """List active/published leagues for players."""
+    async def list_public_leagues(
+        self,
+        club_id: uuid.UUID | None = None,
+        search: str | None = None,
+        status: LeagueStatus | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[League]:
+        """List active/published leagues for players across active clubs."""
         stmt = (
             select(League)
-            .where(League.status != LeagueStatus.DRAFT)
+            .join(League.club)
+            .where(
+                League.status != LeagueStatus.DRAFT,
+                League.status != LeagueStatus.CANCELLED,
+                Club.is_active == True,  # noqa: E712
+            )
             .order_by(League.created_at.desc())
             .options(
                 selectinload(League.weeks),
@@ -108,6 +123,24 @@ class LeagueRepository:
                 selectinload(League.club),
             )
         )
+        if club_id is not None:
+            stmt = stmt.where(League.club_id == club_id)
+        if status is not None:
+            stmt = stmt.where(League.status == status)
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    League.name.ilike(search_pattern),
+                    Club.name.ilike(search_pattern),
+                    League.description.ilike(search_pattern),
+                )
+            )
+        if offset is not None:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
+
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 

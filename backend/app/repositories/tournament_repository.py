@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -110,10 +110,21 @@ class TournamentRepository:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def list_public_discoverable(self) -> list[Tournament]:
+    async def list_public_discoverable(
+        self,
+        club_id: UUID | None = None,
+        search: str | None = None,
+        format: TournamentFormat | None = None,
+        status: TournamentStatus | None = None,
+        start_date_from: datetime | None = None,
+        start_date_to: datetime | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> list[Tournament]:
         """
         List all public tournaments belonging to active clubs.
-        Excludes private and cancelled tournaments.
+        Excludes private, draft, and cancelled tournaments.
+        Supports search, format, status, date, and pagination filtering.
         """
         query = (
             select(Tournament)
@@ -130,6 +141,31 @@ class TournamentRepository:
             )
             .order_by(Tournament.start_date.asc())
         )
+        if club_id is not None:
+            query = query.where(Tournament.club_id == club_id)
+        if format is not None:
+            query = query.where(Tournament.format == format)
+        if status is not None:
+            query = query.where(Tournament.status == status)
+        if start_date_from is not None:
+            query = query.where(Tournament.start_date >= start_date_from)
+        if start_date_to is not None:
+            query = query.where(Tournament.start_date <= start_date_to)
+        if search:
+            search_pattern = f"%{search.strip()}%"
+            query = query.where(
+                or_(
+                    Tournament.name.ilike(search_pattern),
+                    Club.name.ilike(search_pattern),
+                    Tournament.location_name.ilike(search_pattern),
+                    Tournament.description.ilike(search_pattern),
+                )
+            )
+        if offset is not None:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

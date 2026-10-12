@@ -36,6 +36,11 @@ export default function ClubLayout() {
       router.replace('/(auth)/login');
       return;
     }
+    // Allow club registration for any authenticated user
+    if (pathname === '/(club)/register-club' || pathname.startsWith('/(club)/register-club')) {
+      return;
+    }
+
     if (memberships.length === 0 || !activeMembership) {
       // Unauthorized: player accounts cannot access club management
       router.replace('/(player)');
@@ -46,10 +51,13 @@ export default function ClubLayout() {
     if (activeMembership.role === 'tournament_director') {
       const tdRestricted = [
         '/(club)/members',
+        '/(club)/membership-requests',
+        '/(club)/register-club',
         '/(club)/courts',
         '/(club)/bookings',
         '/(club)/memberships',
         '/(club)/payments',
+        '/(club)/analytics',
         '/(club)/lessons',
         '/(club)/competition-schedule',
         '/(club)/club-details',
@@ -72,6 +80,8 @@ export default function ClubLayout() {
         >
           <Stack.Screen name="index" />
           <Stack.Screen name="members" />
+          <Stack.Screen name="membership-requests" />
+          <Stack.Screen name="register-club" />
           <Stack.Screen name="tournaments" />
           <Stack.Screen name="tournament-details" />
           <Stack.Screen name="pool-play" />
@@ -84,6 +94,7 @@ export default function ClubLayout() {
           <Stack.Screen name="bookings" />
           <Stack.Screen name="memberships" />
           <Stack.Screen name="payments" />
+          <Stack.Screen name="analytics" />
           <Stack.Screen name="events" />
           <Stack.Screen name="lessons" />
           <Stack.Screen name="competition-schedule" />

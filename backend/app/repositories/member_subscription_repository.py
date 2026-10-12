@@ -35,6 +35,7 @@ class MemberSubscriptionRepository:
                     ClubPlayerMembership.user
                 ),
                 selectinload(MemberSubscription.club),
+                selectinload(MemberSubscription.payments),
             )
         )
 
@@ -177,6 +178,26 @@ class MemberSubscriptionRepository:
         self.db.add(sub)
         await self.db.flush()
         return await self.get_by_id(sub.id) or sub
+
+    async def list_by_user(
+        self,
+        user_id: UUID,
+        status: SubscriptionStatus | None = None,
+    ) -> list[MemberSubscription]:
+        """List all subscriptions across all clubs for a specific player."""
+        stmt = (
+            self._base_query()
+            .join(
+                ClubPlayerMembership,
+                MemberSubscription.player_membership_id == ClubPlayerMembership.id,
+            )
+            .where(ClubPlayerMembership.user_id == user_id)
+            .order_by(MemberSubscription.created_at.desc())
+        )
+        if status is not None:
+            stmt = stmt.where(MemberSubscription.status == status)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def update(
         self,

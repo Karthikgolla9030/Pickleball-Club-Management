@@ -31,6 +31,7 @@ import {
   CalendarDays,
   CalendarHeart,
   ChevronRight,
+  Compass,
   CreditCard,
   Crown,
   FileText,
@@ -40,6 +41,7 @@ import {
   LayoutGrid,
   LogOut,
   Medal,
+  PlusCircle,
   Settings,
   ShieldCheck,
   Trophy,
@@ -158,18 +160,21 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   // ─── 1. PLAYER NAVIGATION ─────────────────────────────────────────────────
   const playerActivities: NavItemConfig[] = [
     { key: 'player_home', label: 'Home', icon: Home, route: '/(player)/' },
+    { key: 'player_explore', label: 'Explore Clubs', icon: Compass, route: '/(player)/explore-clubs' },
+    { key: 'player_clubs', label: 'My Clubs', icon: Building2, route: '/(player)/clubs' },
     { key: 'player_bookings', label: 'My Bookings', icon: CalendarDays, route: '/(player)/bookings' },
     { key: 'player_courts', label: 'Book a Court', icon: LayoutGrid, route: '/(player)/courts' },
+    { key: 'player_membership', label: 'My Memberships', icon: Crown, route: '/(player)/membership' },
+    { key: 'player_payments', label: 'My Payments', icon: CreditCard, route: '/(player)/payments' },
     { key: 'player_tournaments', label: 'Tournaments', icon: Trophy, route: '/(player)/tournaments' },
     { key: 'player_leagues', label: 'Leagues', icon: Medal, route: '/(player)/leagues' },
     { key: 'player_events', label: 'Events', icon: CalendarHeart, route: '/(player)/events' },
     { key: 'player_lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(player)/lessons' },
-    { key: 'player_membership', label: 'Membership', icon: Crown, route: '/(player)/membership' },
   ];
 
   const playerAccount: NavItemConfig[] = [
+    { key: 'player_profile', label: 'Profile', icon: User, route: '/(player)/profile' },
     { key: 'player_notifications', label: 'Notifications', icon: Bell, route: '/(player)/notifications' },
-    { key: 'player_settings', label: 'Settings', icon: Settings, route: '/(player)/profile' },
     { key: 'player_help', label: 'Help & Support', icon: HelpCircle, route: '/(player)/profile' },
   ];
 
@@ -183,6 +188,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Owner: Full management
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
+        { key: 'membership_requests', label: 'Membership Requests', icon: UserCheck, route: '/(club)/membership-requests' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
@@ -194,7 +200,8 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       ];
       clubSection2 = [
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
-        { key: 'staff', label: 'Staff & Permissions', icon: UserCheck, route: '/(club)/members' },
+        { key: 'register_club', label: 'Register New Club', icon: PlusCircle, route: '/(club)/register-club' },
+        { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members' },
         { key: 'billing', label: 'Subscription & Billing', icon: CreditCard, route: '/(club)/payments' },
       ];
       clubSection3 = [
@@ -207,6 +214,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Manager: Operations only
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
+        { key: 'membership_requests', label: 'Membership Requests', icon: UserCheck, route: '/(club)/membership-requests' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
@@ -217,6 +225,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' },
       ];
       clubSection2 = [
+        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/settings' },

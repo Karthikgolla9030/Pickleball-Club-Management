@@ -1,17 +1,14 @@
-"""
-Aught2 Pickleball — Court Schemas (Phase 10)
-
-Pydantic validation schemas for Court creation, update, reordering, and serialization.
-"""
 from __future__ import annotations
 
 import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.operating_hours import WeeklyOperatingHours
 from app.models.court import CourtEnvironment, CourtStatus
 
 
@@ -38,6 +35,15 @@ class CourtCreateRequest(BaseModel):
     is_active: bool = Field(default=True, description="Active flag")
     display_order: int | None = Field(None, ge=0, description="Manual display sort order")
     price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
+    operating_hours: WeeklyOperatingHours | dict[str, Any] | None = Field(None, description="Optional court-level operating hours override")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        trimmed = v.strip() if isinstance(v, str) else ""
+        if not trimmed:
+            raise ValueError("Court name cannot be blank")
+        return trimmed
 
 
 class CourtUpdateRequest(BaseModel):
@@ -51,6 +57,17 @@ class CourtUpdateRequest(BaseModel):
     is_active: bool | None = None
     display_order: int | None = Field(None, ge=0)
     price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
+    operating_hours: WeeklyOperatingHours | dict[str, Any] | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is not None:
+            trimmed = v.strip()
+            if not trimmed:
+                raise ValueError("Court name cannot be blank")
+            return trimmed
+        return v
 
 
 class CourtReorderRequest(BaseModel):
@@ -76,6 +93,7 @@ class CourtResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     price_per_hour: Decimal | None = None
+    operating_hours: dict[str, Any] | None = None
 
 
 class PlayerCourtResponse(BaseModel):
@@ -92,3 +110,38 @@ class PlayerCourtResponse(BaseModel):
     indoor_outdoor: CourtEnvironment
     display_order: int
     price_per_hour: Decimal | None = None
+    operating_hours: dict[str, Any] | None = None
+
+
+class CourtOperatingHoursUpdateRequest(BaseModel):
+    operating_hours: WeeklyOperatingHours | None = Field(
+        None,
+        description="Weekly operating hours override for this court. Set to null to inherit from club.",
+    )
+
+
+class CourtOperatingHoursResponse(BaseModel):
+    court_id: uuid.UUID
+    club_id: uuid.UUID
+    court_name: str
+    has_override: bool
+    court_operating_hours: dict[str, Any] | None = None
+    effective_operating_hours: dict[str, Any]
+
+
+class CourtAffectedBookingsItem(BaseModel):
+    id: uuid.UUID
+    player_id: uuid.UUID | None = None
+    start_at: datetime
+    end_at: datetime
+    status: str
+    booking_type: str
+
+
+class CourtAffectedBookingsResponse(BaseModel):
+    court_id: uuid.UUID
+    court_name: str
+    upcoming_confirmed_bookings_count: int
+    bookings: list[CourtAffectedBookingsItem]
+    message: str
+

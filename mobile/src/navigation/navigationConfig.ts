@@ -36,17 +36,18 @@ export const PLAYER_NAV_SECTIONS: NavSection[] = [
     label: 'GENERAL',
     items: [
       { key: 'home', label: 'Home', icon: 'Home', route: '/(player)/' },
-      { key: 'profile', label: 'Profile', icon: 'User', route: '/(player)/profile' },
+      { key: 'explore_clubs', label: 'Explore Clubs', icon: 'Compass', route: '/(player)/explore-clubs' },
       { key: 'clubs', label: 'My Clubs', icon: 'Building2', route: '/(player)/clubs' },
+      { key: 'profile', label: 'Profile', icon: 'User', route: '/(player)/profile' },
     ],
   },
   {
     label: 'PLAY',
     items: [
       { key: 'courts', label: 'Courts', icon: 'LayoutGrid', route: '/(player)/courts' },
-      { key: 'bookings', label: 'Bookings', icon: 'CalendarDays', route: '/(player)/bookings' },
-      { key: 'membership', label: 'Membership', icon: 'BadgeCheck', route: '/(player)/membership' },
-      { key: 'payments', label: 'Payments', icon: 'CreditCard', route: '/(player)/payments' },
+      { key: 'bookings', label: 'My Bookings', icon: 'CalendarDays', route: '/(player)/bookings' },
+      { key: 'membership', label: 'My Memberships', icon: 'BadgeCheck', route: '/(player)/membership' },
+      { key: 'payments', label: 'My Payments', icon: 'CreditCard', route: '/(player)/payments' },
     ],
   },
   {
@@ -86,10 +87,12 @@ export const CLUB_NAV_SECTIONS: NavSection[] = [
     label: 'MANAGEMENT',
     items: [
       { key: 'members', label: 'Members', icon: 'Users', route: '/(club)/members', permission: 'canManageMembers' },
+      { key: 'membership_requests', label: 'Membership Requests', icon: 'UserCheck', route: '/(club)/membership-requests', permission: 'canManageMembers' },
       { key: 'courts', label: 'Courts', icon: 'LayoutGrid', route: '/(club)/courts', permission: 'canManageCourts' },
       { key: 'bookings', label: 'Bookings', icon: 'CalendarDays', route: '/(club)/bookings', permission: 'canManageBookings' },
       { key: 'memberships', label: 'Memberships', icon: 'Crown', route: '/(club)/memberships', permission: 'canManageMemberships' },
       { key: 'payments', label: 'Payments', icon: 'CreditCard', route: '/(club)/payments', permission: 'canManagePayments' },
+      { key: 'analytics', label: 'Analytics & Reports', icon: 'BarChart2', route: '/(club)/analytics', permission: 'canManageReports' },
     ],
   },
   {
@@ -104,6 +107,13 @@ export const CLUB_NAV_SECTIONS: NavSection[] = [
     items: [
       { key: 'tournaments', label: 'Tournaments', icon: 'Trophy', route: '/(club)/tournaments', permission: 'canManageTournaments' },
       { key: 'leagues', label: 'Leagues', icon: 'Medal', route: '/(club)/leagues', permission: 'canManageTournaments' },
+    ],
+  },
+  {
+    label: 'CLUB PROFILE',
+    items: [
+      { key: 'club_details', label: 'Club Details', icon: 'Building2', route: '/(club)/club-details', permission: 'canManageClub' },
+      { key: 'register_club', label: 'Register New Club', icon: 'PlusCircle', route: '/(club)/register-club' },
     ],
   },
   {

@@ -20,22 +20,29 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_club_membership,
+    get_current_active_user,
     get_current_user,
     require_permission,
 )
 from app.core.database import get_db
-from app.models.club_membership import ClubMembership
+from app.models.club_membership import ClubMembership, ClubRole
 from app.models.user import User
 from app.permissions import Permission
 from app.schemas.club import (
+    ClubCreateRequest,
+    ClubDashboardResponse,
     ClubLogoUploadRequest,
+    ClubOperatingHoursResponse,
+    ClubOperatingHoursUpdateRequest,
     ClubResponse,
     ClubUpdateRequest,
+    OperatingHoursDisruptionPreviewResponse,
+    PublicClubDiscoveryResponse,
     PublicClubResponse,
     UserClubResponse,
 )
@@ -45,11 +52,16 @@ from app.schemas.club_membership import (
     MemberResponse,
     UpdateMemberRequest,
 )
+from app.schemas.club_membership_request import (
+    MembershipRequestReject,
+    MembershipRequestResponse,
+)
 from app.schemas.club_player_membership import (
     ClubPlayerMembershipResponse,
     CreateClubPlayerMembershipRequest,
     UpdateClubPlayerMembershipRequest,
 )
+from app.services.club_membership_request_service import ClubMembershipRequestService
 from app.services.club_service import ClubService
 from app.services.player_service import PlayerService
 
@@ -71,6 +83,55 @@ async def list_user_clubs(
 ) -> list[UserClubResponse]:
     """Retrieve clubs that the authenticated user belongs to."""
     return await ClubService(db).list_user_clubs(current_user.id)
+
+
+@router.post(
+    "",
+    response_model=UserClubResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new club",
+    description="Creates a new club with the authenticated user as the initial Club Owner. Fully transactional.",
+    responses={
+        400: {"description": "Validation error or slug already taken"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Account disabled"},
+        422: {"description": "Malformed request payload"},
+    },
+)
+async def create_club(
+    payload: ClubCreateRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserClubResponse:
+    """Create a new club and assign current user as initial Club Owner."""
+    return await ClubService(db).create_club(
+        owner_user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/public",
+    response_model=PublicClubDiscoveryResponse,
+    summary="Discover public clubs",
+    description="Returns paginated public details of active clubs for player discovery. Supports search by name/description and location filtering.",
+)
+async def discover_public_clubs(
+    search: str | None = Query(default=None, description="Search term for club name, description, city, or state"),
+    city: str | None = Query(default=None, description="Filter by city"),
+    state: str | None = Query(default=None, description="Filter by state"),
+    page: int = Query(default=1, ge=1, description="Page number"),
+    page_size: int = Query(default=20, ge=1, le=100, description="Items per page"),
+    db: AsyncSession = Depends(get_db),
+) -> PublicClubDiscoveryResponse:
+    """Public club discovery for players with search, filtering and pagination."""
+    return await ClubService(db).discover_public_clubs(
+        search=search,
+        city=city,
+        state=state,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.get(
@@ -159,6 +220,71 @@ async def upload_club_logo(
 
 
 @router.get(
+    "/{club_id}/operating-hours",
+    response_model=ClubOperatingHoursResponse,
+    summary="Get club operating hours",
+    description="Returns full weekly operating schedule for the club. Accessible to club members.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not a member or membership inactive"},
+        404: {"description": "Club not found"},
+    },
+)
+async def get_club_operating_hours(
+    club_id: UUID,
+    membership: ClubMembership = Depends(get_club_membership),
+    db: AsyncSession = Depends(get_db),
+) -> ClubOperatingHoursResponse:
+    """Retrieve weekly operating schedule for the club."""
+    return await ClubService(db).get_operating_hours(club_id=club_id)
+
+
+@router.put(
+    "/{club_id}/operating-hours",
+    response_model=ClubOperatingHoursResponse,
+    summary="Update club operating hours",
+    description="Updates weekly operating hours for the club. Club Owner only (manage_club permission required).",
+    responses={
+        400: {"description": "Invalid schedule or times"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_club required)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def update_club_operating_hours(
+    club_id: UUID,
+    payload: ClubOperatingHoursUpdateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> ClubOperatingHoursResponse:
+    """Update weekly operating schedule for the club (Club Owner only)."""
+    return await ClubService(db).update_operating_hours(club_id=club_id, payload=payload)
+
+
+@router.post(
+    "/{club_id}/operating-hours/preview-disruptions",
+    response_model=OperatingHoursDisruptionPreviewResponse,
+    summary="Preview booking disruptions for proposed operating hours",
+    description="Checks if any upcoming confirmed bookings would fall outside proposed operating hours. Never alters bookings. Club Owner only.",
+    responses={
+        400: {"description": "Invalid schedule"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_club required)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def preview_operating_hours_disruptions(
+    club_id: UUID,
+    payload: ClubOperatingHoursUpdateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> OperatingHoursDisruptionPreviewResponse:
+    """Preview affected confirmed bookings before updating operating hours."""
+    return await ClubService(db).preview_operating_hours_disruptions(club_id=club_id, payload=payload)
+
+
+
+@router.get(
     "/{club_id}/membership",
     response_model=ClubMembershipDetailResponse,
     summary="Get current user's membership for club",
@@ -183,6 +309,29 @@ async def get_my_club_membership(
 
 
 @router.get(
+    "/{club_id}/dashboard",
+    response_model=ClubDashboardResponse,
+    summary="Get Club Owner / Manager dashboard summary",
+    description="Retrieve aggregated operational metrics for the club. Accessible to club staff.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (not a staff member of this club)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def get_club_dashboard(
+    club_id: UUID,
+    membership: ClubMembership = Depends(get_club_membership),
+    db: AsyncSession = Depends(get_db),
+) -> ClubDashboardResponse:
+    """Retrieve aggregated dashboard metrics for the authorized club."""
+    return await ClubService(db).get_dashboard_summary(
+        club_id=club_id,
+        caller_role=membership.role,
+    )
+
+
+@router.get(
     "/{club_id}/members",
     response_model=list[MemberResponse],
     summary="List club members",
@@ -195,11 +344,43 @@ async def get_my_club_membership(
 )
 async def list_club_members(
     club_id: UUID,
+    role: ClubRole | None = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
     db: AsyncSession = Depends(get_db),
 ) -> list[MemberResponse]:
     """List members of the selected club."""
-    return await ClubService(db).list_members(club_id)
+    return await ClubService(db).list_members(
+        club_id=club_id,
+        role=role,
+        search=search,
+        is_active=is_active,
+    )
+
+
+@router.get(
+    "/{club_id}/members/{membership_id}",
+    response_model=MemberResponse,
+    summary="Get club member details",
+    description="Retrieve details of a single staff member in this club. Authorized for Club Owner and Club Manager.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_members required)"},
+        404: {"description": "Member not found in club"},
+    },
+)
+async def get_club_member_detail(
+    club_id: UUID,
+    membership_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> MemberResponse:
+    """Retrieve details of a single staff member in this club."""
+    return await ClubService(db).get_member(
+        club_id=club_id,
+        membership_id=membership_id,
+    )
 
 
 @router.post(
@@ -359,3 +540,86 @@ async def update_club_player_membership(
         membership_id=membership_id,
         payload=payload,
     )
+
+
+# ─── Club Membership Requests (Staff Management) ──────────────────────────
+
+
+@router.get(
+    "/{club_id}/membership-requests",
+    response_model=list[MembershipRequestResponse],
+    summary="List club membership requests",
+    description="List player membership requests for this club. Club staff with MANAGE_MEMBERS permission only (Club Owner, Club Manager).",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_members required)"},
+    },
+)
+async def list_club_membership_requests(
+    club_id: UUID,
+    status_filter: str | None = Query(default=None, alias="status", description="Filter by status (pending, approved, rejected, withdrawn)"),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> list[MembershipRequestResponse]:
+    """Retrieve membership requests submitted for this club."""
+    return await ClubMembershipRequestService(db).list_club_requests(
+        club_id=club_id,
+        status_filter=status_filter,
+    )
+
+
+@router.post(
+    "/{club_id}/membership-requests/{request_id}/approve",
+    response_model=MembershipRequestResponse,
+    summary="Approve club membership request",
+    description="Approves a pending membership request and activates player membership. Requires MANAGE_MEMBERS permission. Staff cannot approve their own requests.",
+    responses={
+        400: {"description": "Request not in pending status"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions or self-approval attempt"},
+        404: {"description": "Request not found in this club"},
+    },
+)
+async def approve_club_membership_request(
+    club_id: UUID,
+    request_id: UUID,
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> MembershipRequestResponse:
+    """Approve player membership request."""
+    return await ClubMembershipRequestService(db).approve_request(
+        club_id=club_id,
+        request_id=request_id,
+        reviewer_user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/{club_id}/membership-requests/{request_id}/reject",
+    response_model=MembershipRequestResponse,
+    summary="Reject club membership request",
+    description="Rejects a pending membership request with optional reason. Requires MANAGE_MEMBERS permission.",
+    responses={
+        400: {"description": "Request not in pending status"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Request not found in this club"},
+    },
+)
+async def reject_club_membership_request(
+    club_id: UUID,
+    request_id: UUID,
+    payload: MembershipRequestReject | None = None,
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> MembershipRequestResponse:
+    """Reject player membership request."""
+    return await ClubMembershipRequestService(db).reject_request(
+        club_id=club_id,
+        request_id=request_id,
+        reviewer_user_id=current_user.id,
+        reason=payload.rejection_reason if payload else None,
+    )
+

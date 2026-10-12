@@ -68,6 +68,7 @@ class CourtRepository:
         is_active: bool = True,
         display_order: int = 0,
         price_per_hour: Decimal | None = None,
+        operating_hours: dict | None = None,
     ) -> Court:
         court = Court(
             club_id=club_id,
@@ -81,6 +82,7 @@ class CourtRepository:
             is_active=is_active,
             display_order=display_order,
             price_per_hour=price_per_hour,
+            operating_hours=operating_hours,
         )
         self.db.add(court)
         await self.db.flush()

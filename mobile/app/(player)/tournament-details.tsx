@@ -13,7 +13,7 @@
  * and "You are Registered!" pages have been completely removed from this screen.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
@@ -26,6 +26,7 @@ import {
   LoadingState,
   UpcomingTournamentPreviewView,
 } from '@/components';
+import { TournamentRegistrationModal } from '@/components/tournament-registration';
 import { useTournamentDetails } from '@/hooks';
 
 export default function PlayerTournamentDetailsScreen() {
@@ -34,6 +35,7 @@ export default function PlayerTournamentDetailsScreen() {
   const tournamentId = id ?? null;
 
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   // Primary Tournament Query (public/player scoped)
   const {
@@ -53,19 +55,6 @@ export default function PlayerTournamentDetailsScreen() {
   const isLive = status === 'in_progress';
   const isCompleted = status === 'completed';
 
-  // Check registration opening window for upcoming preview
-  const now = new Date();
-  const regOpenAt = tournament?.registration_open_at ? new Date(tournament.registration_open_at) : null;
-  const isNotYetOpen = status === 'draft' || (regOpenAt ? regOpenAt > now : false);
-
-  // If tournament is in registration phase (open or closed), the redundant registration
-  // pages are removed; redirect back to tournaments discovery list.
-  useEffect(() => {
-    if (!isLoadingTournament && tournament && !isLive && !isCompleted && !isNotYetOpen) {
-      router.replace('/(player)/tournaments' as any);
-    }
-  }, [isLoadingTournament, tournament, isLive, isCompleted, isNotYetOpen, router]);
-
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -78,6 +67,13 @@ export default function PlayerTournamentDetailsScreen() {
     setIsRefreshing(true);
     await refetchTournament();
     setIsRefreshing(false);
+  };
+
+  const handleClubPress = (clubId: string) => {
+    router.push({
+      pathname: '/(player)/club-details' as any,
+      params: { id: clubId },
+    });
   };
 
   if (isLoadingTournament) {
@@ -141,19 +137,7 @@ export default function PlayerTournamentDetailsScreen() {
     );
   }
 
-  // 5. Dedicated Upcoming Tournament Preview view (before registration opens)
-  if (isNotYetOpen) {
-    return (
-      <UpcomingTournamentPreviewView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 6. Dedicated Live Tournament view
+  // 5. Dedicated Live Tournament view
   if (isLive) {
     return (
       <LiveTournamentView
@@ -165,6 +149,28 @@ export default function PlayerTournamentDetailsScreen() {
     );
   }
 
-  // Fallback while redirecting non-live/completed tournaments
-  return <LoadingState message="Redirecting to tournaments..." />;
+  // 6. Pre-Live / Registration / Upcoming Tournament view
+  return (
+    <>
+      <UpcomingTournamentPreviewView
+        tournament={tournament}
+        onBack={handleBack}
+        onRefresh={handleRefresh}
+        isRefreshing={isRefreshing}
+        onRegister={() => setShowRegisterModal(true)}
+        onClubPress={handleClubPress}
+      />
+      {showRegisterModal && (
+        <TournamentRegistrationModal
+          visible={showRegisterModal}
+          tournament={tournament}
+          onClose={() => setShowRegisterModal(false)}
+          onSuccess={() => {
+            setShowRegisterModal(false);
+            void refetchTournament();
+          }}
+        />
+      )}
+    </>
+  );
 }

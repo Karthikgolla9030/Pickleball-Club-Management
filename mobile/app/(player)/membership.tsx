@@ -34,24 +34,28 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Award,
+  Building2,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
+  CreditCard,
   Crown,
   HelpCircle,
   Info,
   Menu,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Users,
 } from 'lucide-react-native';
 
-import { AppText, ModalSheet } from '@/components';
-import { useActiveClub, usePlayerMembership } from '@/hooks';
+import { AppText, Badge, Button, ModalSheet } from '@/components';
+import { useActiveClub, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import type { PlayerMembershipView, SubscriptionStatus } from '@/types';
@@ -153,6 +157,7 @@ function formatMembershipDate(dateStr: string | null | undefined): string {
 
 export default function PlayerMembershipScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, clubName } = useActiveClub();
 
@@ -163,40 +168,79 @@ export default function PlayerMembershipScreen() {
   } | null>(null);
 
   const {
-    data: membership,
+    data: memberships = [],
     isLoading,
     isRefetching,
     isError,
-    error,
     refetch,
-  } = usePlayerMembership(clubId || '');
+  } = usePlayerMemberships();
 
-  const isNoMembership = isError && (error as any)?.status === 404;
+  const { mutateAsync: renewSubscription, isPending: isRenewing } = useRenewPlayerSubscription();
+
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+
+  const activeSubscription = useMemo(() => {
+    if (!memberships || memberships.length === 0) return null;
+    if (selectedSubId) {
+      const found = memberships.find((m) => (m.id || m.subscription_id) === selectedSubId);
+      if (found) return found;
+    }
+    // Prefer matching the active club if present
+    if (clubId) {
+      const match = memberships.find((m) => m.club_id === clubId);
+      if (match) return match;
+    }
+    return memberships[0];
+  }, [memberships, selectedSubId, clubId]);
 
   const statusConfig = useMemo(() => {
-    if (!membership) return STATUS_CONFIG.active;
-    const effective = membership.effective_status || membership.status;
+    if (!activeSubscription) return STATUS_CONFIG.active;
+    const effective = activeSubscription.effective_status || activeSubscription.status;
     return STATUS_CONFIG[effective] || STATUS_CONFIG.active;
-  }, [membership]);
+  }, [activeSubscription]);
 
   const startDateFormatted = useMemo(() => {
-    return formatMembershipDate(membership?.start_date);
-  }, [membership?.start_date]);
+    return formatMembershipDate(activeSubscription?.start_date);
+  }, [activeSubscription?.start_date]);
 
   const endDateFormatted = useMemo(() => {
-    return formatMembershipDate(membership?.end_date);
-  }, [membership?.end_date]);
+    return formatMembershipDate(activeSubscription?.end_date);
+  }, [activeSubscription?.end_date]);
 
   const benefitsList = useMemo(() => {
-    if (!membership?.benefits || membership.benefits.length === 0) {
+    if (!activeSubscription?.benefits || activeSubscription.benefits.length === 0) {
       return [
         'Court booking access',
         'Member-only events',
         'Priority access',
       ];
     }
-    return membership.benefits;
-  }, [membership?.benefits]);
+    return activeSubscription.benefits;
+  }, [activeSubscription?.benefits]);
+
+  const handleRenew = (sub: PlayerMembershipView) => {
+    const subId = sub.id || sub.subscription_id;
+    Alert.alert(
+      'Renew Subscription',
+      `Extend your subscription for "${sub.plan_name}" at ${sub.club_name || 'your club'}? Your new billing cycle will start following the current period.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm Renewal',
+          onPress: async () => {
+            try {
+              await renewSubscription(subId);
+              Alert.alert('Subscription Renewed', 'Your renewal subscription record has been created successfully.');
+              await refetch();
+            } catch (err: any) {
+              const msg = err?.response?.data?.detail || err?.message || 'Failed to renew subscription';
+              Alert.alert('Renewal Failed', msg);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -215,8 +259,44 @@ export default function PlayerMembershipScreen() {
       </View>
 
       <AppText style={styles.headerSubtitle}>
-        View your active subscription and benefits
+        View your active subscriptions and privileges across clubs
       </AppText>
+
+      {/* Multi-Club Tabs if player belongs to multiple clubs */}
+      {memberships.length > 1 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.clubSelectorRow}
+          contentContainerStyle={styles.clubSelectorContent}
+        >
+          {memberships.map((sub) => {
+            const subId = sub.id || sub.subscription_id;
+            const activeId = activeSubscription?.id || activeSubscription?.subscription_id;
+            const isSelected = subId === activeId;
+            return (
+              <TouchableOpacity
+                key={subId}
+                style={[styles.clubTabPill, isSelected && styles.clubTabPillActive]}
+                onPress={() => setSelectedSubId(subId)}
+                activeOpacity={0.8}
+              >
+                <Building2 size={13} color={isSelected ? '#114D3F' : '#667776'} />
+                <AppText
+                  style={isSelected ? styles.clubTabPillTextActive : styles.clubTabPillText}
+                >
+                  {sub.club_name || 'Club'}
+                </AppText>
+                <Badge
+                  label={sub.effective_status || sub.status}
+                  size="sm"
+                  variant={sub.effective_status === 'active' ? 'success' : 'default'}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      ) : null}
 
       {/* ─── Scroll Content ─── */}
       <ScrollView
@@ -237,25 +317,33 @@ export default function PlayerMembershipScreen() {
             <ActivityIndicator size="large" color="#114D3F" />
             <AppText style={styles.loadingText}>Loading membership details...</AppText>
           </View>
-        ) : isNoMembership || !membership ? (
+        ) : !activeSubscription ? (
           /* Empty State */
           <View style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
               <ShieldCheck size={32} color="#114D3F" strokeWidth={1.8} />
             </View>
-            <AppText style={styles.emptyTitle}>No Active Membership</AppText>
+            <AppText style={styles.emptyTitle}>No Active Memberships</AppText>
             <AppText style={styles.emptyDescription}>
-              You do not currently have an active membership subscription at{' '}
-              {clubName || 'this club'}. Contact club staff to enroll in a plan and unlock
-              exclusive court privileges.
+              You do not currently have an active membership subscription across your clubs.
+              Discover clubs or join a membership plan to unlock exclusive court privileges.
             </AppText>
-            <TouchableOpacity
-              style={styles.emptyButton}
-              onPress={() => refetch()}
-              activeOpacity={0.85}
-            >
-              <AppText style={styles.emptyButtonText}>Refresh Status</AppText>
-            </TouchableOpacity>
+            <View style={styles.emptyActionsRow}>
+              <TouchableOpacity
+                style={styles.emptyButton}
+                onPress={() => router.push('/(player)/explore' as any)}
+                activeOpacity={0.85}
+              >
+                <AppText style={styles.emptyButtonText}>Explore Clubs</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.emptyButton, styles.emptyOutlineButton]}
+                onPress={() => router.push('/(player)/clubs' as any)}
+                activeOpacity={0.85}
+              >
+                <AppText style={styles.emptyOutlineButtonText}>My Clubs</AppText>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : isError ? (
           /* Error State */
@@ -281,19 +369,38 @@ export default function PlayerMembershipScreen() {
           <>
             {/* Card 1: Active Membership Card */}
             <View style={styles.membershipCard}>
+              {/* Club Header */}
+              <View style={styles.cardClubHeader}>
+                <Building2 size={15} color="#18794E" />
+                <AppText style={styles.cardClubName}>
+                  {activeSubscription.club_name || clubName || 'Club Facility'}
+                </AppText>
+              </View>
+
               {/* Top Row: Status Badge & Manage Plan */}
               <View style={styles.cardTopRow}>
-                <View
-                  style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}
-                >
+                <View style={styles.statusPillGroup}>
                   <View
-                    style={[styles.statusDot, { backgroundColor: statusConfig.dotColor }]}
-                  />
-                  <AppText
-                    style={[styles.statusBadgeText, { color: statusConfig.textColor }]}
+                    style={[styles.statusBadge, { backgroundColor: statusConfig.bgColor }]}
                   >
-                    {statusConfig.label}
-                  </AppText>
+                    <View
+                      style={[styles.statusDot, { backgroundColor: statusConfig.dotColor }]}
+                    />
+                    <AppText
+                      style={[styles.statusBadgeText, { color: statusConfig.textColor }]}
+                    >
+                      {statusConfig.label}
+                    </AppText>
+                  </View>
+
+                  {activeSubscription.payment_status && activeSubscription.payment_status !== 'succeeded' ? (
+                    <View style={styles.paymentStatusBadge}>
+                      <CreditCard size={11} color="#B45309" />
+                      <AppText style={styles.paymentStatusBadgeText}>
+                        Payment: {activeSubscription.payment_status.toUpperCase()}
+                      </AppText>
+                    </View>
+                  ) : null}
                 </View>
 
                 <TouchableOpacity
@@ -308,22 +415,22 @@ export default function PlayerMembershipScreen() {
               </View>
 
               {/* Plan Name */}
-              <AppText style={styles.planName}>{membership.plan_name}</AppText>
+              <AppText style={styles.planName}>{activeSubscription.plan_name}</AppText>
 
               {/* Billing Description */}
               <AppText style={styles.planDescription}>
-                {membership.plan_description ||
-                  `${membership.duration_label || 'Monthly'} plan`}
+                {activeSubscription.plan_description ||
+                  `${activeSubscription.duration_label || 'Monthly'} plan`}
               </AppText>
 
               {/* Price */}
               <View style={styles.priceRow}>
                 <AppText style={styles.priceAmount}>
-                  ₹{parseFloat(membership.price).toFixed(2)}
+                  ₹{parseFloat(activeSubscription.price).toFixed(2)}
                 </AppText>
                 <AppText style={styles.priceInterval}>
                   {' '}
-                  / {(membership.duration_label || 'month').toLowerCase()}
+                  / {(activeSubscription.duration_label || 'month').toLowerCase()}
                 </AppText>
               </View>
 
@@ -349,12 +456,29 @@ export default function PlayerMembershipScreen() {
                   <View style={styles.dateLabelRow}>
                     <Calendar size={15} color="#718279" strokeWidth={1.8} />
                     <AppText style={styles.dateLabel}>
-                      {membership.effective_status === 'expired' ? 'Expired' : 'Expires'}
+                      {activeSubscription.effective_status === 'expired' ? 'Expired' : 'Expires'}
                     </AppText>
                   </View>
                   <AppText style={styles.dateValue}>{endDateFormatted}</AppText>
                 </View>
               </View>
+
+              {/* Renewal Action Button */}
+              {activeSubscription.renewal_eligible ? (
+                <View style={styles.renewalActionRow}>
+                  <TouchableOpacity
+                    style={styles.renewButton}
+                    onPress={() => handleRenew(activeSubscription)}
+                    disabled={isRenewing}
+                    activeOpacity={0.85}
+                  >
+                    <RefreshCw size={14} color="#FFFFFF" />
+                    <AppText style={styles.renewButtonText}>
+                      {isRenewing ? 'Processing Renewal...' : 'Renew Subscription'}
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
 
             {/* Card 2: Your Benefits */}
@@ -405,7 +529,7 @@ export default function PlayerMembershipScreen() {
                   </View>
                   <View style={styles.privilegeTextCol}>
                     <AppText style={styles.privilegeValue}>
-                      {membership.booking_limit ?? '∞'}
+                      {activeSubscription.booking_limit ?? '∞'}
                     </AppText>
                     <AppText style={styles.privilegeLabel}>
                       Max active bookings
@@ -423,8 +547,8 @@ export default function PlayerMembershipScreen() {
                   </View>
                   <View style={styles.privilegeTextCol}>
                     <AppText style={styles.privilegeValue}>
-                      {membership.advance_booking_days
-                        ? `${membership.advance_booking_days} days`
+                      {activeSubscription.advance_booking_days
+                        ? `${activeSubscription.advance_booking_days} days`
                         : 'Unlimited'}
                     </AppText>
                     <AppText style={styles.privilegeLabel}>Advance booking</AppText>
@@ -441,13 +565,20 @@ export default function PlayerMembershipScreen() {
         visible={manageModalVisible}
         onClose={() => setManageModalVisible(false)}
         title="Manage Subscription"
-        subtitle={membership?.plan_name || 'Membership Plan'}
+        subtitle={activeSubscription?.plan_name || 'Membership Plan'}
       >
         <View style={styles.modalBody}>
           <View style={styles.modalInfoRow}>
+            <AppText style={styles.modalInfoLabel}>Club Facility</AppText>
+            <AppText style={styles.modalInfoValue}>
+              {activeSubscription?.club_name || clubName || 'Club Facility'}
+            </AppText>
+          </View>
+
+          <View style={styles.modalInfoRow}>
             <AppText style={styles.modalInfoLabel}>Current Plan</AppText>
             <AppText style={styles.modalInfoValue}>
-              {membership?.plan_name || 'Basic Monthly'}
+              {activeSubscription?.plan_name || 'Basic Monthly'}
             </AppText>
           </View>
 
@@ -466,8 +597,8 @@ export default function PlayerMembershipScreen() {
           <View style={styles.modalInfoRow}>
             <AppText style={styles.modalInfoLabel}>Billing Rate</AppText>
             <AppText style={styles.modalInfoValue}>
-              ₹{membership ? parseFloat(membership.price).toFixed(2) : '999.00'} /{' '}
-              {(membership?.duration_label || 'Month').toLowerCase()}
+              ₹{activeSubscription ? parseFloat(activeSubscription.price).toFixed(2) : '999.00'} /{' '}
+              {(activeSubscription?.duration_label || 'Month').toLowerCase()}
             </AppText>
           </View>
 
@@ -481,7 +612,7 @@ export default function PlayerMembershipScreen() {
           <View style={styles.modalInfoRow}>
             <AppText style={styles.modalInfoLabel}>Auto-Renewal</AppText>
             <AppText style={styles.modalInfoValue}>
-              {membership?.auto_renew ? 'Enabled' : 'Manual renewal'}
+              {activeSubscription?.auto_renew ? 'Enabled' : 'Manual renewal'}
             </AppText>
           </View>
 
@@ -593,6 +724,42 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
+  // ─── Multi-Club Selector ───────────────────────────────────────────────────
+  clubSelectorRow: {
+    marginBottom: 12,
+    maxHeight: 44,
+  },
+  clubSelectorContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    alignItems: 'center',
+  },
+  clubTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+  },
+  clubTabPillActive: {
+    borderColor: '#114D3F',
+    backgroundColor: '#E8F5E9',
+  },
+  clubTabPillText: {
+    fontSize: 13,
+    color: '#647570',
+    fontWeight: '500',
+  },
+  clubTabPillTextActive: {
+    fontSize: 13,
+    color: '#114D3F',
+    fontWeight: '700',
+  },
+
   // ─── Card 1: Active Membership Card ────────────────────────────────────────
   membershipCard: {
     backgroundColor: '#FFFFFF',
@@ -605,6 +772,57 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
+  },
+  cardClubHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  cardClubName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#18794E',
+  },
+  statusPillGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  paymentStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+  },
+  paymentStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  renewalActionRow: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  renewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#114D3F',
+    borderRadius: 10,
+    paddingVertical: 10,
+  },
+  renewButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -839,6 +1057,20 @@ const styles = StyleSheet.create({
   },
   emptyButtonText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  emptyActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  emptyOutlineButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#114D3F',
+  },
+  emptyOutlineButtonText: {
+    color: '#114D3F',
     fontWeight: '700',
     fontSize: 14,
   },

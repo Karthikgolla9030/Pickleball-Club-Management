@@ -8,7 +8,10 @@ if sys.platform == 'win32':
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-db_url = 'postgresql+psycopg://neondb_owner:npg_0Dih5TSXyrKu@ep-muddy-sun-b3dznvdm-pooler.c-4.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+db_url = os.getenv('DATABASE_URL')
+if not db_url:
+    print('ERROR: DATABASE_URL environment variable must be set.')
+    sys.exit(1)
 
 async def main():
     engine = create_async_engine(db_url)

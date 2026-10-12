@@ -28,10 +28,14 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
   ArrowLeft,
   Award,
+  Building2,
   Calendar,
+  CheckCircle2,
+  ChevronRight,
   Clock,
   FileText,
   Info,
@@ -59,6 +63,8 @@ interface UpcomingTournamentPreviewViewProps {
   onBack: () => void;
   onRefresh: () => Promise<void>;
   isRefreshing?: boolean;
+  onRegister?: () => void;
+  onClubPress?: (clubId: string) => void;
 }
 
 // Format short date for hero banner: e.g. "26 Sept"
@@ -92,7 +98,10 @@ export function UpcomingTournamentPreviewView({
   onBack,
   onRefresh,
   isRefreshing = false,
+  onRegister,
+  onClubPress,
 }: UpcomingTournamentPreviewViewProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'details' | 'rules'>('details');
 
@@ -128,6 +137,12 @@ export function UpcomingTournamentPreviewView({
   const regOpenDateStr = tournament.registration_open_at
     ? formatUpcomingFullDate(tournament.registration_open_at)
     : formatUpcomingFullDate(tournament.start_date);
+
+  // Registration state
+  const isRegistrationOpen = tournament.status === 'registration_open' || Boolean(tournament.is_registration_open);
+  const isRegistrationClosed = tournament.status === 'registration_closed';
+  const isRegistered = Boolean(tournament.is_registered);
+  const regStatus = tournament.my_registration_status;
 
   // Registration type
   const registrationType = useMemo(() => {
@@ -279,29 +294,136 @@ export function UpcomingTournamentPreviewView({
           </View>
         </View>
 
+        {/* ─── Host Club Banner ─── */}
+        {tournament.club_name ? (
+          <TouchableOpacity
+            style={styles.hostClubBanner}
+            onPress={() => {
+              if (onClubPress && tournament.club_id) {
+                onClubPress(tournament.club_id);
+              } else if (tournament.club_id) {
+                router.push({
+                  pathname: '/(player)/club-details' as any,
+                  params: { id: tournament.club_id },
+                });
+              }
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel={`Hosted by ${tournament.club_name}. View club profile.`}
+            accessibilityRole="button"
+          >
+            <View style={styles.hostClubLeft}>
+              <View style={styles.hostClubIconWrap}>
+                <Building2 size={18} color="#065F46" />
+              </View>
+              <View style={styles.hostClubTextCol}>
+                <AppText style={styles.hostClubLabel}>HOST CLUB</AppText>
+                <AppText style={styles.hostClubName} numberOfLines={1}>
+                  {tournament.club_name}
+                </AppText>
+              </View>
+            </View>
+            <View style={styles.hostClubActionRow}>
+              <AppText style={styles.hostClubActionText}>View Club</AppText>
+              <ChevronRight size={14} color="#065F46" />
+            </View>
+          </TouchableOpacity>
+        ) : null}
+
         {/* ─── Registration Notice Callout Box ─── */}
-        <View style={styles.noticeCard}>
-          <View style={styles.clockCircle}>
-            <Clock size={22} color="#92400E" strokeWidth={2.4} />
-          </View>
-
-          <View style={styles.noticeRight}>
-            <AppText variant="heading3" bold style={styles.noticeHeading}>
-              Registration opens soon
-            </AppText>
-
-            <View style={styles.noticeDateRow}>
-              <Calendar size={14} color="#78350F" strokeWidth={2} style={{ marginRight: 6 }} />
-              <AppText variant="caption" style={styles.noticeDateText}>
-                Registration begins on {regOpenDateStr}.
+        {isRegistered ? (
+          <View style={[styles.noticeCard, styles.noticeCardSuccess]}>
+            <View style={[styles.clockCircle, styles.clockCircleSuccess]}>
+              <CheckCircle2 size={22} color="#15803D" strokeWidth={2.4} />
+            </View>
+            <View style={styles.noticeRight}>
+              <AppText variant="heading3" bold style={[styles.noticeHeading, { color: '#15803D' }]}>
+                You are registered!
+              </AppText>
+              <View style={styles.noticeDateRow}>
+                <AppText variant="caption" style={[styles.noticeDateText, { color: '#166534' }]}>
+                  Status: {(regStatus || 'Confirmed').toUpperCase()}
+                </AppText>
+              </View>
+              <AppText variant="caption" style={styles.noticeSubtext}>
+                You are entered in this tournament. Check back for draw, court assignments and match schedules.
               </AppText>
             </View>
-
-            <AppText variant="caption" style={styles.noticeSubtext}>
-              You can review tournament details, eligibility requirements and rules below to prepare before registration opens.
-            </AppText>
           </View>
-        </View>
+        ) : isRegistrationOpen ? (
+          <View style={[styles.noticeCard, styles.noticeCardOpen]}>
+            <View style={[styles.clockCircle, styles.clockCircleOpen]}>
+              <Users size={22} color="#065F46" strokeWidth={2.4} />
+            </View>
+            <View style={styles.noticeRight}>
+              <AppText variant="heading3" bold style={[styles.noticeHeading, { color: '#064E3B' }]}>
+                Registration is open!
+              </AppText>
+              <View style={styles.noticeDateRow}>
+                <Calendar size={14} color="#065F46" strokeWidth={2} style={{ marginRight: 6 }} />
+                <AppText variant="caption" style={[styles.noticeDateText, { color: '#065F46' }]}>
+                  {tournament.max_participants && tournament.participant_count != null
+                    ? `${Math.max(0, tournament.max_participants - tournament.participant_count)} spots remaining`
+                    : 'Spots available'}
+                </AppText>
+              </View>
+              <AppText variant="caption" style={styles.noticeSubtext}>
+                Registration is currently open for eligible club members. Secure your spot before capacity is filled.
+              </AppText>
+              {onRegister && (
+                <TouchableOpacity
+                  style={styles.registerActionBtn}
+                  onPress={onRegister}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Register for tournament"
+                >
+                  <AppText style={styles.registerActionBtnText}>Register Now</AppText>
+                  <ChevronRight size={16} color="#FFFFFF" strokeWidth={2.4} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        ) : isRegistrationClosed ? (
+          <View style={[styles.noticeCard, styles.noticeCardClosed]}>
+            <View style={[styles.clockCircle, styles.clockCircleClosed]}>
+              <Clock size={22} color="#475569" strokeWidth={2.4} />
+            </View>
+            <View style={styles.noticeRight}>
+              <AppText variant="heading3" bold style={[styles.noticeHeading, { color: '#334155' }]}>
+                Registration closed
+              </AppText>
+              <View style={styles.noticeDateRow}>
+                <AppText variant="caption" style={[styles.noticeDateText, { color: '#475569' }]}>
+                  Entries are locked. Match schedules being prepared.
+                </AppText>
+              </View>
+              <AppText variant="caption" style={styles.noticeSubtext}>
+                Registration has closed. Check back when tournament play begins.
+              </AppText>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.noticeCard}>
+            <View style={styles.clockCircle}>
+              <Clock size={22} color="#92400E" strokeWidth={2.4} />
+            </View>
+            <View style={styles.noticeRight}>
+              <AppText variant="heading3" bold style={styles.noticeHeading}>
+                Registration opens soon
+              </AppText>
+              <View style={styles.noticeDateRow}>
+                <Calendar size={14} color="#78350F" strokeWidth={2} style={{ marginRight: 6 }} />
+                <AppText variant="caption" style={styles.noticeDateText}>
+                  Registration begins on {regOpenDateStr}.
+                </AppText>
+              </View>
+              <AppText variant="caption" style={styles.noticeSubtext}>
+                You can review tournament details, eligibility requirements and rules below to prepare before registration opens.
+              </AppText>
+            </View>
+          </View>
+        )}
 
         {/* ─── Horizontal Tabs ─── */}
         <View style={styles.tabsRow}>
@@ -1007,5 +1129,100 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#475569',
     lineHeight: 19,
+  },
+  /* ─── Host Club Banner ─── */
+  hostClubBanner: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  hostClubLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  hostClubIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#D1FAE5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostClubTextCol: {
+    flex: 1,
+  },
+  hostClubLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  hostClubName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#064E3B',
+  },
+  hostClubActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingLeft: 6,
+  },
+  hostClubActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+  /* ─── Notice Card Variants ─── */
+  noticeCardSuccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  clockCircleSuccess: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  noticeCardOpen: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#A7F3D0',
+  },
+  clockCircleOpen: {
+    backgroundColor: '#D1FAE5',
+    borderColor: '#6EE7B7',
+  },
+  noticeCardClosed: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  clockCircleClosed: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  registerActionBtn: {
+    marginTop: 12,
+    backgroundColor: '#064E3B',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  registerActionBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

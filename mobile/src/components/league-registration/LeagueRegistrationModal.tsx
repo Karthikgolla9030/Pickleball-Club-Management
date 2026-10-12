@@ -21,7 +21,9 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import {
+  AlertCircle,
   Calendar,
   Check,
   CheckCircle2,
@@ -70,6 +72,7 @@ export function LeagueRegistrationModal({
   league,
   onSuccess,
 }: LeagueRegistrationModalProps) {
+  const router = useRouter();
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
 
@@ -664,6 +667,33 @@ export function LeagueRegistrationModal({
               </View>
             )}
           </ScrollView>
+
+          {/* Form Error Banner */}
+          {formError ? (
+            <View style={styles.formErrorBox}>
+              <View style={styles.formErrorRow}>
+                <AlertCircle size={16} color="#DC2626" style={{ marginTop: 2 }} />
+                <AppText style={styles.formErrorText}>{formError}</AppText>
+              </View>
+              {(formError.toLowerCase().includes('member') || formError.toLowerCase().includes('membership')) && league.club_id ? (
+                <TouchableOpacity
+                  style={styles.formErrorClubBtn}
+                  onPress={() => {
+                    onClose();
+                    router.push({
+                      pathname: '/(player)/club-details' as any,
+                      params: { id: league.club_id },
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <AppText style={styles.formErrorClubBtnText}>
+                    View {league.club_name || 'Host Club'} & Request Membership →
+                  </AppText>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* Bottom Actions Bar */}
           <View style={styles.bottomBar}>
@@ -1342,6 +1372,39 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  formErrorBox: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  formErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  formErrorText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#DC2626',
+    lineHeight: 18,
+  },
+  formErrorClubBtn: {
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+  },
+  formErrorClubBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },

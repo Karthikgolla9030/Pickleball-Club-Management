@@ -84,9 +84,79 @@ class Notification(Base):
         index=True,
     )
 
+    read_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
     # Relationships
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
     club: Mapped["Club | None"] = relationship("Club", foreign_keys=[club_id])
 
+    @property
+    def club_name(self) -> str | None:
+        return self.club.name if self.club else None
+
+    @property
+    def resource_type(self) -> str | None:
+        return (self.data or {}).get("resource_type")
+
+    @property
+    def resource_id(self) -> str | None:
+        return (self.data or {}).get("resource_id")
+
+    @property
+    def action_url(self) -> str | None:
+        return (self.data or {}).get("action_url")
+
     def __repr__(self) -> str:
         return f"<Notification user={self.user_id} title={self.title} read={self.is_read}>"
+
+
+class NotificationPreference(Base):
+    """
+    Persistent notification preferences per user.
+    Controls optional in-app delivery for domain categories.
+    Mandatory transactional/security notifications bypass user preference toggles.
+    """
+    __tablename__ = "notification_preferences"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        index=True,
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+        index=True,
+    )
+
+    booking_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    membership_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    tournament_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    event_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    payment_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    administrative_notifications: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    # Relationships
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+    def __repr__(self) -> str:
+        return f"<NotificationPreference user={self.user_id}>"
