@@ -354,13 +354,13 @@ export default function ClubProfileScreen() {
             {activeModal === 'Notifications' &&
               'Configure email and push notification preferences for court reservations, matches, and tournaments.'}
             {activeModal === 'Preferences' &&
-              `Default court preferences, metric displays, and local time settings for ${clubName || 'Aught2'}.`}
+              `Default court preferences, metric displays, and local time settings for ${clubName || 'your club'}.`}
             {activeModal === 'Help & Support' &&
-              'Reach out to Aught2 Pickleball operations support, read FAQ guides, or submit feedback.'}
+              'Reach out to Pickleball operations support, read FAQ guides, or submit feedback.'}
             {activeModal === 'Privacy Policy' &&
-              'Aught2 Pickleball maintains strict data privacy standards. Member data is protected with TLS encryption and access control.'}
+              'Pickleball maintains strict data privacy standards. Member data is protected with TLS encryption and access control.'}
             {activeModal === 'Terms of Service' &&
-              'Terms of service and club facility management rules governed by Aught2 Pickleball operations.'}
+              'Terms of service and club facility management rules governed by Pickleball operations.'}
           </AppText>
         </View>
       </ModalSheet>

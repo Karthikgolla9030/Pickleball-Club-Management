@@ -3,9 +3,9 @@ Development seed script — NOT for production use.
 
 Phase 12 Seed Data (extends Phase 11):
   Membership Plans for Aught2 Pickleball:
-    - Basic Monthly      ₹999/month
-    - Premium Monthly    ₹1,799/month
-    - Annual Premium     ₹14,999/year
+    - Basic Monthly      $39/month
+    - Premium Monthly    $79/month
+    - Annual Premium     $699/year
 
   Sample Subscriptions:
     - player@demo.local   → active   (Basic Monthly)
@@ -1581,8 +1581,8 @@ async def seed(session: AsyncSession) -> None:
         description="Standard monthly membership with core court access and booking privileges.",
         status=PlanStatus.ACTIVE,
         duration_unit=PlanDurationUnit.MONTHLY,
-        price=999.00,
-        currency="INR",
+        price=39.00,
+        currency="USD",
         benefits=[
             "Court booking access",
             "Member-only events",
@@ -1597,8 +1597,8 @@ async def seed(session: AsyncSession) -> None:
         description="Premium monthly membership with expanded booking windows and priority access.",
         status=PlanStatus.ACTIVE,
         duration_unit=PlanDurationUnit.MONTHLY,
-        price=1799.00,
-        currency="INR",
+        price=79.00,
+        currency="USD",
         benefits=[
             "Court booking access",
             "Member-only events",
@@ -1615,8 +1615,8 @@ async def seed(session: AsyncSession) -> None:
         description="Best value — full year of premium access with the highest booking limits.",
         status=PlanStatus.ACTIVE,
         duration_unit=PlanDurationUnit.YEARLY,
-        price=14999.00,
-        currency="INR",
+        price=699.00,
+        currency="USD",
         benefits=[
             "Court booking access",
             "Member-only events",
@@ -1731,14 +1731,14 @@ async def seed(session: AsyncSession) -> None:
     print("Creating Phase 13 membership payments...")
     owner_user = users_by_email["owner@demo.local"]
     sample_payments = [
-        # 1. Succeeded: player@demo.local for Basic Monthly (₹999)
+        # 1. Succeeded: player@demo.local for Basic Monthly ($39)
         Payment(
             reference="A2P-2026-000001",
             club_id=a2_club.id,
             player_id=users_by_email["player@demo.local"].id,
             subscription_id=sample_subs[0].id,
-            amount=Decimal("999.00"),
-            currency="INR",
+            amount=Decimal("39.00"),
+            currency="USD",
             status=PaymentStatus.SUCCEEDED,
             purpose=PaymentPurpose.MEMBERSHIP,
             payment_method=PaymentMethod.BANK_TRANSFER,
@@ -1747,14 +1747,14 @@ async def seed(session: AsyncSession) -> None:
             status_changed_by_user_id=owner_user.id,
             paid_at=datetime.now(timezone.utc) - timedelta(days=2),
         ),
-        # 2. Succeeded: player2@demo.local for Premium Monthly (₹1,799)
+        # 2. Succeeded: player2@demo.local for Premium Monthly ($79)
         Payment(
             reference="A2P-2026-000002",
             club_id=a2_club.id,
             player_id=users_by_email["player2@demo.local"].id,
             subscription_id=sample_subs[1].id,
-            amount=Decimal("1799.00"),
-            currency="INR",
+            amount=Decimal("79.00"),
+            currency="USD",
             status=PaymentStatus.SUCCEEDED,
             purpose=PaymentPurpose.MEMBERSHIP,
             payment_method=PaymentMethod.CASH,
@@ -1763,28 +1763,28 @@ async def seed(session: AsyncSession) -> None:
             status_changed_by_user_id=owner_user.id,
             paid_at=datetime.now(timezone.utc) - timedelta(days=1),
         ),
-        # 3. Pending: player3@demo.local for Annual Premium (₹999)
+        # 3. Pending: player3@demo.local for Basic Monthly ($39)
         Payment(
             reference="A2P-2026-000003",
             club_id=a2_club.id,
             player_id=users_by_email["player3@demo.local"].id,
             subscription_id=sample_subs[2].id,
-            amount=Decimal("999.00"),
-            currency="INR",
+            amount=Decimal("39.00"),
+            currency="USD",
             status=PaymentStatus.PENDING,
             purpose=PaymentPurpose.MEMBERSHIP,
             payment_method=PaymentMethod.BANK_TRANSFER,
             notes="Awaiting bank transfer confirmation",
             created_by_user_id=owner_user.id,
         ),
-        # 4. Failed: player4@demo.local for Basic Monthly (₹999)
+        # 4. Failed: player4@demo.local for Basic Monthly ($39)
         Payment(
             reference="A2P-2026-000004",
             club_id=a2_club.id,
             player_id=users_by_email["player4@demo.local"].id,
             subscription_id=sample_subs[3].id,
-            amount=Decimal("999.00"),
-            currency="INR",
+            amount=Decimal("39.00"),
+            currency="USD",
             status=PaymentStatus.FAILED,
             purpose=PaymentPurpose.MEMBERSHIP,
             payment_method=PaymentMethod.ONLINE,
@@ -1821,13 +1821,13 @@ async def seed(session: AsyncSession) -> None:
         registration_opens_at=now - timedelta(days=5),
         registration_closes_at=now + timedelta(days=3, hours=17),
         registration_fee=Decimal("0.00"),
-        currency="INR",
+        currency="USD",
         created_by_user_id=owner_user.id,
     )
     session.add(event_social)
     await session.flush()
 
-    # Event 2: Beginner Pickleball Clinic (clinic, published, public, capacity: 8, fee: 499)
+    # Event 2: Beginner Pickleball Clinic (clinic, published, public, capacity: 8, fee: $25)
     event_clinic = Event(
         club_id=a2_club.id,
         title="Beginner Pickleball Clinic",
@@ -1842,8 +1842,8 @@ async def seed(session: AsyncSession) -> None:
         registration_required=True,
         registration_opens_at=now - timedelta(days=3),
         registration_closes_at=now + timedelta(days=5, hours=9),
-        registration_fee=Decimal("499.00"),
-        currency="INR",
+        registration_fee=Decimal("25.00"),
+        currency="USD",
         created_by_user_id=owner_user.id,
     )
     session.add(event_clinic)
@@ -1853,7 +1853,7 @@ async def seed(session: AsyncSession) -> None:
     event_anniversary = Event(
         club_id=a2_club.id,
         title="Club Anniversary Gathering",
-        description="Celebrating 2 years of Aught2 Pickleball! Special exhibition matches and community BBQ.",
+        description="Celebrating 2 years of Pickleball! Special exhibition matches and community BBQ.",
         event_type=EventType.SPECIAL,
         status=EventStatus.DRAFT,
         visibility=EventVisibility.PUBLIC,
@@ -1865,7 +1865,7 @@ async def seed(session: AsyncSession) -> None:
         registration_opens_at=now + timedelta(days=5),
         registration_closes_at=now + timedelta(days=19),
         registration_fee=Decimal("0.00"),
-        currency="INR",
+        currency="USD",
         created_by_user_id=owner_user.id,
     )
     session.add(event_anniversary)
@@ -1887,7 +1887,7 @@ async def seed(session: AsyncSession) -> None:
         registration_opens_at=now - timedelta(days=20),
         registration_closes_at=now - timedelta(days=10, hours=9),
         registration_fee=Decimal("0.00"),
-        currency="INR",
+        currency="USD",
         created_by_user_id=owner_user.id,
     )
     session.add(event_openhouse)
@@ -1978,7 +1978,7 @@ async def seed(session: AsyncSession) -> None:
         club_id=club_main.id,
         name="Alex Morgan",
         specialization="Advanced Strategy & Singles",
-        phone="+91 98765 43210",
+        phone="+1 (800) 555-0191",
         email="alex.morgan@demo.local",
         bio="PPR Certified Coach with 8+ years coaching top tournament players.",
         is_active=True,
@@ -1987,7 +1987,7 @@ async def seed(session: AsyncSession) -> None:
         club_id=club_main.id,
         name="Priya Sharma",
         specialization="Beginner & Dinking Fundamentals",
-        phone="+91 98765 43211",
+        phone="+1 (800) 555-0192",
         email="priya.sharma@demo.local",
         bio="Focuses on mechanics, third-shot drops, and court safety.",
         is_active=True,
@@ -1996,7 +1996,7 @@ async def seed(session: AsyncSession) -> None:
         club_id=club_main.id,
         name="Daniel Lee",
         specialization="Doubles Stacking & Transition",
-        phone="+91 98765 43212",
+        phone="+1 (800) 555-0193",
         email="daniel.lee@demo.local",
         bio="Former college tennis athlete specialized in tactical doubles play.",
         is_active=True,
@@ -2012,8 +2012,8 @@ async def seed(session: AsyncSession) -> None:
         description="Introduction to grip, paddle control, basic dinking, and court rules.",
         duration_minutes=60,
         default_capacity=8,
-        default_price=Decimal("600.00"),
-        currency="INR",
+        default_price=Decimal("25.00"),
+        currency="USD",
         is_private=False,
         is_active=True,
     )
@@ -2023,8 +2023,8 @@ async def seed(session: AsyncSession) -> None:
         description="Third-shot drop drills, transition zone resets, and cross-court dinking.",
         duration_minutes=60,
         default_capacity=6,
-        default_price=Decimal("800.00"),
-        currency="INR",
+        default_price=Decimal("35.00"),
+        currency="USD",
         is_private=False,
         is_active=True,
     )
@@ -2034,8 +2034,8 @@ async def seed(session: AsyncSession) -> None:
         description="1-on-1 personalized technical feedback, video analysis, and target drills.",
         duration_minutes=60,
         default_capacity=1,
-        default_price=Decimal("1500.00"),
-        currency="INR",
+        default_price=Decimal("75.00"),
+        currency="USD",
         is_private=True,
         is_active=True,
     )
@@ -2045,8 +2045,8 @@ async def seed(session: AsyncSession) -> None:
         description="Stacking, switching, poaching, and target placement in doubles play.",
         duration_minutes=90,
         default_capacity=8,
-        default_price=Decimal("1000.00"),
-        currency="INR",
+        default_price=Decimal("40.00"),
+        currency="USD",
         is_private=False,
         is_active=True,
     )
@@ -2069,8 +2069,8 @@ async def seed(session: AsyncSession) -> None:
         start_at=now + timedelta(days=2, hours=2),
         end_at=now + timedelta(days=2, hours=3),
         capacity=8,
-        price=Decimal("600.00"),
-        currency="INR",
+        price=Decimal("25.00"),
+        currency="USD",
         status=LessonStatus.PUBLISHED,
         registration_opens_at=now - timedelta(days=5),
         registration_closes_at=now + timedelta(days=2, hours=1),
@@ -2087,8 +2087,8 @@ async def seed(session: AsyncSession) -> None:
         start_at=now + timedelta(days=3, hours=4),
         end_at=now + timedelta(days=3, hours=5),
         capacity=6,
-        price=Decimal("800.00"),
-        currency="INR",
+        price=Decimal("35.00"),
+        currency="USD",
         status=LessonStatus.PUBLISHED,
         registration_opens_at=now - timedelta(days=5),
         registration_closes_at=now + timedelta(days=3, hours=3),
@@ -2105,8 +2105,8 @@ async def seed(session: AsyncSession) -> None:
         start_at=now + timedelta(days=4, hours=1),
         end_at=now + timedelta(days=4, hours=2),
         capacity=1,
-        price=Decimal("1500.00"),
-        currency="INR",
+        price=Decimal("75.00"),
+        currency="USD",
         status=LessonStatus.PUBLISHED,
         registration_opens_at=now - timedelta(days=5),
         registration_closes_at=now + timedelta(days=4),
@@ -2123,8 +2123,8 @@ async def seed(session: AsyncSession) -> None:
         start_at=now - timedelta(days=5, hours=3),
         end_at=now - timedelta(days=5, hours=1, minutes=30),
         capacity=8,
-        price=Decimal("1000.00"),
-        currency="INR",
+        price=Decimal("40.00"),
+        currency="USD",
         status=LessonStatus.COMPLETED,
         registration_opens_at=now - timedelta(days=12),
         registration_closes_at=now - timedelta(days=5, hours=4),

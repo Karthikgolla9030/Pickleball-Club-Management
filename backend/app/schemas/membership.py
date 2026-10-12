@@ -26,7 +26,7 @@ class MembershipPlanCreate(BaseModel):
     description: str | None = None
     duration_unit: PlanDurationUnit
     price: Decimal = Field(..., ge=0, decimal_places=2)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
     benefits: list[str] = Field(default_factory=list)
     booking_limit: int | None = Field(default=None, ge=0)
     advance_booking_days: int | None = Field(default=None, gt=0)
@@ -310,7 +310,7 @@ class PlayerMembershipView(BaseModel):
             advance_booking_days=plan.advance_booking_days if plan else None,
             duration_label=plan.duration_unit.display_label if plan else "Monthly",
             price=price if price is not None else (Decimal(str(plan.price)) if plan else Decimal("0.00")),
-            currency=plan.currency if plan else "INR",
+            currency=plan.currency if plan else "USD",
             payment_status=payment_status,
             renewal_eligible=renewal_eligible,
         )

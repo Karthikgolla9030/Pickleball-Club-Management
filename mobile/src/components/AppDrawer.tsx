@@ -302,9 +302,10 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       {/* 1. Header with Logo & Close Button */}
       <View style={styles.headerRow}>
         <Image
-          source={require('../../assets/aught2_brand_logo_transparent.png')}
+          source={require('../../assets/pickleball_logo_transparent.png')}
           style={styles.logoImage}
           resizeMode="contain"
+          accessibilityLabel="Pickleball"
         />
 
         <TouchableOpacity

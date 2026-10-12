@@ -169,7 +169,7 @@ class Payment(Base):
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="INR",
+        default="USD",
     )
 
     status: Mapped[PaymentStatus] = mapped_column(

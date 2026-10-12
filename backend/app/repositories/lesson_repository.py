@@ -102,7 +102,7 @@ class LessonTypeRepository:
         default_price: Decimal,
         description: str | None = None,
         default_capacity: int | None = None,
-        currency: str = "INR",
+        currency: str = "USD",
         is_private: bool = False,
     ) -> LessonType:
         lesson_type = LessonType(
@@ -163,7 +163,7 @@ class LessonRepository:
         start_at: datetime,
         end_at: datetime,
         price: Decimal,
-        currency: str = "INR",
+        currency: str = "USD",
         capacity: int | None = None,
         court_id: UUID | None = None,
         description: str | None = None,

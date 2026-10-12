@@ -1,7 +1,7 @@
 {
-  "name": "Aught2 Pickleball",
-  "short_name": "Aught2",
-  "description": "Aught2 Pickleball Club & Tournament Management Platform",
+  "name": "Pickleball",
+  "short_name": "Pickleball",
+  "description": "Pickleball Club & Tournament Management Platform",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

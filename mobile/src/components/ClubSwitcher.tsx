@@ -78,7 +78,7 @@ export function ClubSwitcher({
               />
             </View>
             <AppText style={styles.compactClubName} numberOfLines={1}>
-              {clubName ?? 'Aught2 Pickleball'}
+              {clubName ?? 'Pickleball Club'}
             </AppText>
             <ChevronDown size={15} color="#667776" style={styles.compactChevron} />
           </View>
@@ -198,7 +198,7 @@ export function ClubSwitcher({
               numberOfLines={1}
               style={styles.clubName}
             >
-              {clubName ?? 'Aught2 Pickleball'}
+              {clubName ?? 'Pickleball Club'}
             </AppText>
             <AppText variant="caption" style={styles.clubSlogan}>
               {slogan}

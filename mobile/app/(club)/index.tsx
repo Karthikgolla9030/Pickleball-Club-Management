@@ -69,6 +69,7 @@ import {
   useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
+import { formatCurrency } from '@/utils';
 
 export default function ClubHomeScreen() {
   const router = useRouter();
@@ -141,9 +142,10 @@ export default function ClubHomeScreen() {
         {/* Left: Aught2 Pickleball Logo */}
         <View style={styles.logoSlot}>
           <Image
-            source={require('../../assets/aught2_pickleball_logo.png')}
+            source={require('../../assets/pickleball_logo.png')}
             style={styles.headerLogoImage}
             resizeMode="contain"
+            accessibilityLabel="Pickleball"
           />
         </View>
 
@@ -495,8 +497,8 @@ export default function ClubHomeScreen() {
               </View>
               <AppText style={styles.statNumber}>
                 {dashboard.payments.pending_count > 0
-                  ? `₹${dashboard.payments.pending_amount}`
-                  : `₹${dashboard.payments.total_revenue}`}
+                  ? formatCurrency(dashboard.payments.pending_amount)
+                  : formatCurrency(dashboard.payments.total_revenue)}
               </AppText>
               <AppText style={styles.statLabel} numberOfLines={1}>
                 {dashboard.payments.pending_count > 0

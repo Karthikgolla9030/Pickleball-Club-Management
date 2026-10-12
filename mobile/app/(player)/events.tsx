@@ -48,7 +48,7 @@ import {
   useRegisterForEvent,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
-import { formatDateTime } from '@/utils';
+import { formatCurrency, formatDateTime } from '@/utils';
 import type { ClubEvent, EventRegistration } from '@/types';
 
 type MainTab = 'discover' | 'my_registrations';
@@ -282,8 +282,7 @@ export default function PlayerEventsScreen() {
         {/* Paid Fee if applicable */}
         {!isFree && (
           <AppText style={styles.priceText}>
-            {event.currency === 'USD' ? '$' : '₹'}
-            {feeNum.toFixed(2)}
+            {formatCurrency(feeNum)}
           </AppText>
         )}
       </View>
@@ -648,7 +647,7 @@ export default function PlayerEventsScreen() {
           onPress={() => {
             Alert.alert(
               'Host an Event',
-              'Interested in organizing a tournament, clinic, or social gathering at Aught2 Pickleball? Reach out to club staff or management to propose your event!',
+              'Interested in organizing a tournament, clinic, or social gathering? Reach out to club staff or management to propose your event!',
               [{ text: 'Got it', style: 'default' }]
             );
           }}
@@ -674,8 +673,8 @@ export default function PlayerEventsScreen() {
         title={selectedDetailEvent?.title || 'Event Details'}
         subtitle={
           selectedDetailEvent?.location
-            ? `${selectedDetailEvent.location} • Aught2 Pickleball`
-            : 'Aught2 Pickleball Event'
+            ? `${selectedDetailEvent.location} • Pickleball`
+            : 'Pickleball Event'
         }
         actions={
           selectedDetailEvent
@@ -751,9 +750,7 @@ export default function PlayerEventsScreen() {
                 <AppText style={styles.modalLabel}>Entry Fee:</AppText>
                 <AppText style={styles.modalFeeValue}>
                   {Number(selectedDetailEvent.registration_fee) > 0
-                    ? `${selectedDetailEvent.currency === 'USD' ? '$' : '₹'}${Number(
-                        selectedDetailEvent.registration_fee
-                      ).toFixed(2)}`
+                    ? formatCurrency(selectedDetailEvent.registration_fee)
                     : 'Free'}
                 </AppText>
               </View>

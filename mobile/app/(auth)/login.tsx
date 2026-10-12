@@ -103,10 +103,10 @@ export default function LoginScreen() {
           {/* Logo / Brand */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/aught2_pickleball_logo.png')}
+              source={require('../../assets/pickleball_logo.png')}
               style={styles.logoImage}
               resizeMode="contain"
-              accessibilityLabel="Aught2 Pickleball"
+              accessibilityLabel="Pickleball"
             />
             <AppText variant="title" color="secondary" center style={styles.portalSubtitle}>
               {portal === 'club' ? 'Club Management' : 'Player Portal'}
@@ -298,7 +298,7 @@ export default function LoginScreen() {
                 <View style={styles.clubRegisterSection}>
                   <View style={styles.divider} />
                   <AppText variant="bodySmall" color="secondary" center style={styles.newClubPrompt}>
-                    New to Aught2? Register your club facility
+                    New to Pickleball? Register your club facility
                   </AppText>
                   <Button
                     testID="register-club-button"
@@ -334,7 +334,7 @@ export default function LoginScreen() {
 
           <View style={styles.footerContainer}>
             <AppText variant="caption" color="tertiary" center style={styles.footer}>
-              Aught2 Pickleball © 2026
+              Pickleball © 2026
             </AppText>
             <TouchableOpacity
               onPress={() => {

@@ -175,7 +175,7 @@ class LessonType(Base):
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="INR",
+        default="USD",
     )
     is_private: Mapped[bool] = mapped_column(
         Boolean,
@@ -278,7 +278,7 @@ class Lesson(Base):
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="INR",
+        default="USD",
     )
     status: Mapped[LessonStatus] = mapped_column(
         Enum(LessonStatus, name="lesson_status", create_type=True),

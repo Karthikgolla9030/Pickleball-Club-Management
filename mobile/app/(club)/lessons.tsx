@@ -89,6 +89,7 @@ import {
   type LessonStatus,
   type LessonType,
 } from '@/types';
+import { formatCurrency } from '@/utils';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
 
@@ -686,7 +687,7 @@ export default function ClubLessonsScreen() {
 
               <View style={styles.priceContainer}>
                 <AppText style={styles.priceText}>
-                  {Number(item.price) === 0 ? 'Free' : `₹${Number(item.price)}`}
+                  {Number(item.price) === 0 ? 'Free' : formatCurrency(Number(item.price))}
                 </AppText>
                 <TouchableOpacity
                   onPress={() => handleLessonMenu(item)}
@@ -988,7 +989,7 @@ export default function ClubLessonsScreen() {
                       </View>
                     </View>
                     <AppText variant="heading3" style={styles.priceText}>
-                      {Number(item.default_price) === 0 ? 'Free' : `₹${item.default_price}`}
+                      {Number(item.default_price) === 0 ? 'Free' : formatCurrency(Number(item.default_price))}
                     </AppText>
                   </View>
 
@@ -1242,8 +1243,8 @@ export default function ClubLessonsScreen() {
           />
 
           <Input
-            label="Price (₹)"
-            placeholder="e.g. 500.00"
+            label="Price (USD)"
+            placeholder="e.g. 50.00"
             value={lessonPrice}
             onChangeText={setLessonPrice}
             keyboardType="decimal-pad"
@@ -1303,7 +1304,7 @@ export default function ClubLessonsScreen() {
 
           <Input
             label="Email"
-            placeholder="e.g. coach@aught2.com"
+            placeholder="e.g. coach@pickleball.com"
             value={coachEmail}
             onChangeText={setCoachEmail}
             keyboardType="email-address"
@@ -1381,7 +1382,7 @@ export default function ClubLessonsScreen() {
           />
 
           <Input
-            label="Default Price (₹)"
+            label="Default Price (USD)"
             placeholder="0.00"
             value={typePrice}
             onChangeText={setTypePrice}

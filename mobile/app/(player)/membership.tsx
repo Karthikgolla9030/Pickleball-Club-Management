@@ -11,7 +11,7 @@
  *     - "Manage Plan >" top-right action
  *     - Plan Name (e.g. "Basic Monthly")
  *     - Billing description ("Monthly plan")
- *     - Large price (e.g. "₹999.00 / month")
+ *     - Large price (e.g. "$49.00 / month")
  *     - Start Date and Expires Date columns with calendar icons & vertical divider
  *   - Your Benefits Card:
  *     - Pale mint circular icon backgrounds with green line icons
@@ -58,6 +58,7 @@ import { AppText, Badge, Button, ModalSheet } from '@/components';
 import { useActiveClub, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { PlayerMembershipView, SubscriptionStatus } from '@/types';
 
 // ─── Status Palette ──────────────────────────────────────────────────────────
@@ -426,7 +427,7 @@ export default function PlayerMembershipScreen() {
               {/* Price */}
               <View style={styles.priceRow}>
                 <AppText style={styles.priceAmount}>
-                  ₹{parseFloat(activeSubscription.price).toFixed(2)}
+                  {formatCurrency(activeSubscription.price)}
                 </AppText>
                 <AppText style={styles.priceInterval}>
                   {' '}
@@ -597,7 +598,7 @@ export default function PlayerMembershipScreen() {
           <View style={styles.modalInfoRow}>
             <AppText style={styles.modalInfoLabel}>Billing Rate</AppText>
             <AppText style={styles.modalInfoValue}>
-              ₹{activeSubscription ? parseFloat(activeSubscription.price).toFixed(2) : '999.00'} /{' '}
+              {formatCurrency(activeSubscription?.price ?? 99.00)} /{' '}
               {(activeSubscription?.duration_label || 'Month').toLowerCase()}
             </AppText>
           </View>

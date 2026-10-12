@@ -143,7 +143,7 @@ export default function RegisterClubScreen() {
       const user = useAuthStore.getState().user;
       const result = await clubApplicationsApi.submit({
         applicant_name: user?.full_name || 'Club Owner',
-        applicant_email: user?.email || contactEmail.trim().toLowerCase() || 'owner@aught2.com',
+        applicant_email: user?.email || contactEmail.trim().toLowerCase() || 'owner@pickleball.com',
         applicant_phone: contactPhone.trim() || undefined,
         applicant_password: 'AuthenticatedOwnerSession2026!',
         club_name: name.trim(),

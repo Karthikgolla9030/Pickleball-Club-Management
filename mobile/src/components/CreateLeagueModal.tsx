@@ -314,8 +314,8 @@ export function CreateLeagueModal({
 
               {/* Registration Fee */}
               <Input
-                label="Registration Fee per Entry (₹)"
-                placeholder="0"
+                label="Registration Fee per Entry ($)"
+                placeholder="0.00"
                 keyboardType="numeric"
                 value={entryFee}
                 onChangeText={setEntryFee}

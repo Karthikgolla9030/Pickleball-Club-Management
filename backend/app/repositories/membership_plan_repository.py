@@ -68,7 +68,7 @@ class MembershipPlanRepository:
         name: str,
         duration_unit: str,
         price: float,
-        currency: str = "INR",
+        currency: str = "USD",
         description: str | None = None,
         benefits: list | None = None,
         booking_limit: int | None = None,

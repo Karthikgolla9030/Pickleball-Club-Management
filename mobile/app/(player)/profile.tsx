@@ -310,7 +310,7 @@ export default function PlayerProfileScreen() {
   const handleSignOut = () => {
     Alert.alert(
       'Sign Out',
-      'Are you sure you want to sign out of Aught2 Pickleball?',
+      'Are you sure you want to sign out of Pickleball?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -982,7 +982,7 @@ export default function PlayerProfileScreen() {
         title="Help & Support"
       >
         <ScrollView style={styles.infoModalContent} showsVerticalScrollIndicator={false}>
-          <AppText style={styles.helpHeader}>Aught2 Pickleball Support</AppText>
+          <AppText style={styles.helpHeader}>Pickleball Support</AppText>
           <AppText style={styles.helpText}>
             Need assistance with court bookings, tournament registrations, or membership plans?
           </AppText>
@@ -1004,7 +1004,7 @@ export default function PlayerProfileScreen() {
           <View style={styles.faqCard}>
             <AppText style={styles.faqQuestion}>Contact Club Desk</AppText>
             <AppText style={styles.faqAnswer}>
-              Email: support@aught2pickleball.com{'\n'}Phone: +91 98765 43210
+              Email: support@pickleball.com{'\n'}Phone: +1 (800) 555-0199
             </AppText>
           </View>
 

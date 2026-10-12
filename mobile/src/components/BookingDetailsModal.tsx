@@ -6,6 +6,7 @@ import { Button } from './Button';
 import { ModalSheet } from './ModalSheet';
 import { useClubStaffBookings, usePlayerBookings } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { Booking } from '@/types';
 
 export interface BookingDetailsModalProps {
@@ -88,11 +89,11 @@ export function BookingDetailsModal({
           <DetailRow label="Time" value={timeStr} />
           <DetailRow 
             label="Rate" 
-            value={booking.price_per_hour != null ? `₹${Number(booking.price_per_hour).toLocaleString('en-IN')}/hr` : 'Unpriced / Free'} 
+            value={booking.price_per_hour != null ? `${formatCurrency(booking.price_per_hour)}/hr` : 'Unpriced / Free'} 
           />
           <DetailRow 
             label="Total Price" 
-            value={booking.total_price != null ? `₹${Number(booking.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)'} 
+            value={booking.total_price != null ? formatCurrency(booking.total_price) : '$0.00 (Included)'} 
           />
           <DetailRow label="Payment" value="Settled" />
         </View>

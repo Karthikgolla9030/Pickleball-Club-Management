@@ -241,7 +241,7 @@ export default function PublicRegisterClubScreen() {
                 Club Facility Application
               </AppText>
               <AppText variant="caption" color="secondary" style={styles.headerSub}>
-                Submit your club details for review by the Aught2 Pickleball team. Once approved, you will be able to manage courts, bookings, tournaments, and members.
+                Submit your club details for review by the Pickleball platform team. Once approved, you will be able to manage courts, bookings, tournaments, and members.
               </AppText>
             </View>
           </Card>
@@ -524,7 +524,7 @@ export default function PublicRegisterClubScreen() {
               disabled={isSubmitting}
             />
             <AppText variant="caption" color="secondary" center style={styles.legalNotice}>
-              By submitting, you agree that your facility information will be reviewed by the Aught2 Pickleball platform team before activation.
+              By submitting, you agree that your facility information will be reviewed by the Pickleball platform team before activation.
             </AppText>
           </View>
         </ScrollView>

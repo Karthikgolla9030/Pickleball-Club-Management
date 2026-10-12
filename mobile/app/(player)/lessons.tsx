@@ -65,6 +65,7 @@ import {
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type {
   LessonRegistration,
   LessonRegistrationStatus,
@@ -352,7 +353,7 @@ export default function PlayerLessonsScreen() {
             );
             const courtName = item.court_name || `Court ${index + 1}`;
             const priceNum = Number(item.price);
-            const priceText = isNaN(priceNum) || priceNum === 0 ? 'Free' : `₹${Math.round(priceNum)}`;
+            const priceText = isNaN(priceNum) || priceNum === 0 ? 'Free' : formatCurrency(priceNum);
 
             return (
               <View style={styles.lessonCard}>
@@ -641,7 +642,7 @@ export default function PlayerLessonsScreen() {
               <AppText style={[styles.modalInfoValue, { color: '#114D3F', fontWeight: '800' }]}>
                 {Number(registeringLesson.price) === 0
                   ? 'Free'
-                  : `₹${parseFloat(String(registeringLesson.price)).toFixed(2)}`}
+                  : formatCurrency(registeringLesson.price)}
               </AppText>
             </View>
 
@@ -760,7 +761,7 @@ export default function PlayerLessonsScreen() {
               <AppText style={[styles.modalInfoValue, { color: '#114D3F', fontWeight: '800' }]}>
                 {Number(selectedLesson.price) === 0
                   ? 'Free'
-                  : `₹${parseFloat(String(selectedLesson.price)).toFixed(2)}`}
+                  : formatCurrency(selectedLesson.price)}
               </AppText>
             </View>
 

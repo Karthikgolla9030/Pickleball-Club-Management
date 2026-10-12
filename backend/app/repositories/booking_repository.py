@@ -207,7 +207,7 @@ class BookingRepository:
         notes: str | None = None,
         price_per_hour: Decimal | None = None,
         total_price: Decimal | None = None,
-        currency: str = "INR",
+        currency: str = "USD",
     ) -> Booking:
         booking = Booking(
             club_id=club_id,

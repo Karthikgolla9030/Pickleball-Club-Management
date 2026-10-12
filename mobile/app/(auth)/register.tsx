@@ -7,6 +7,7 @@
 
 import React, { useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -94,14 +95,12 @@ export default function RegisterScreen() {
         >
           {/* Logo / Brand */}
           <View style={styles.header}>
-            <View style={styles.logoMark}>
-              <AppText variant="heading2" style={styles.logoText}>
-                A2
-              </AppText>
-            </View>
-            <AppText variant="heading1" style={styles.brandName}>
-              Aught2
-            </AppText>
+            <Image
+              source={require('../../assets/pickleball_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+              accessibilityLabel="Pickleball"
+            />
             <AppText variant="title" color="secondary" center>
               Player Portal
             </AppText>
@@ -194,7 +193,7 @@ export default function RegisterScreen() {
           </Card>
 
           <AppText variant="caption" color="tertiary" center style={styles.footer}>
-            Aught2 Pickleball © 2026
+            Pickleball © 2026
           </AppText>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -215,22 +214,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing[2],
   },
-  logoMark: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: Colors.brand.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing[2],
-  },
-  logoText: {
-    color: Colors.text.inverse,
-    fontWeight: '800',
-  },
-  brandName: {
-    color: Colors.text.primary,
-    letterSpacing: -1,
+  logoImage: {
+    width: 220,
+    height: 70,
+    marginBottom: Spacing[1],
   },
   card: {
     gap: Spacing[4],

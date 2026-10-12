@@ -16,7 +16,7 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
-        <title>Aught2 Pickleball</title>
+        <title>Pickleball</title>
 
         {/* PWA Web App Manifest */}
         <link rel="manifest" href="/manifest.json" />
@@ -28,7 +28,7 @@ export default function Root({ children }: PropsWithChildren) {
         {/* Apple iOS PWA Capabilities & Icons */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Aught2" />
+        <meta name="apple-mobile-web-app-title" content="Pickleball" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
 
@@ -37,7 +37,7 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
 
         {/* General Meta */}
-        <meta name="description" content="Aught2 Pickleball Club & Tournament Management Platform" />
+        <meta name="description" content="Pickleball Club & Tournament Management Platform" />
         <meta name="mobile-web-app-capable" content="yes" />
 
         {/* Expo web resets */}
@@ -65,7 +65,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
       </head>
       <body>
-        <noscript>You need to enable JavaScript to run Aught2 Pickleball.</noscript>
+        <noscript>You need to enable JavaScript to run Pickleball.</noscript>
         {children}
 
         {/* Service Worker Registration with Automatic Cache-Busting & Auto-Reload */}

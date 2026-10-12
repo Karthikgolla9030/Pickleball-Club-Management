@@ -50,6 +50,7 @@ import {
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { Booking, PlayerActivityItem, TournamentDiscoveryItem } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -253,9 +254,10 @@ export default function PlayerHomeScreen() {
       >
         {/* Logo on Left */}
         <Image
-          source={require('../../assets/aught2_brand_logo_transparent.png')}
+          source={require('../../assets/pickleball_logo_transparent.png')}
           style={styles.logoImage}
           resizeMode="contain"
+          accessibilityLabel="Pickleball"
         />
 
         {/* Action Icons on Right */}
@@ -424,9 +426,9 @@ export default function PlayerHomeScreen() {
                       <View style={styles.pricePill}>
                         <AppText style={styles.pricePillText}>
                           {nextBooking.total_price != null
-                            ? `₹${Number(nextBooking.total_price).toLocaleString('en-IN')}`
+                            ? formatCurrency(nextBooking.total_price)
                             : nextBooking.court?.price_per_hour != null
-                              ? `₹${Number(nextBooking.court.price_per_hour).toLocaleString('en-IN')}`
+                              ? `${formatCurrency(nextBooking.court.price_per_hour)}/hr`
                               : 'Free'}
                         </AppText>
                       </View>

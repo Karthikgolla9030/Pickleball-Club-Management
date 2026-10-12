@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Aught2 Pickleball",
+    "name": "Pickleball",
     "slug": "aught2-pickleball",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -22,8 +22,8 @@
       "bundler": "metro",
       "output": "single",
       "favicon": "./public/favicon.png",
-      "name": "Aught2 Pickleball",
-      "shortName": "Aught2",
+      "name": "Pickleball",
+      "shortName": "Pickleball",
       "backgroundColor": "#F4F8F5",
       "themeColor": "#176B57",
       "display": "standalone",

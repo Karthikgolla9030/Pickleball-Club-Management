@@ -37,6 +37,7 @@ import { AppText, BookingDetailsModal } from '@/components';
 import { useActiveClub, usePlayerBookings } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { Booking } from '@/types';
 
 type FilterTab = 'upcoming' | 'past' | 'cancelled';
@@ -187,7 +188,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Aught2 Pickleball';
+    const clubName = booking.club_name || 'Pickleball Club';
     const venueText = `${courtName} • ${clubName}`;
 
     return (
@@ -227,9 +228,9 @@ export default function PlayerBookingsScreen() {
             <View style={styles.playerPriceBadge}>
               <AppText style={styles.playerPriceBadgeText}>
                 {booking.total_price != null
-                  ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                  ? formatCurrency(booking.total_price)
                   : booking.court?.price_per_hour != null
-                    ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                    ? `${formatCurrency(booking.court.price_per_hour)}/hr`
                     : 'Free'}
               </AppText>
             </View>
@@ -249,7 +250,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Aught2 Pickleball';
+    const clubName = booking.club_name || 'Pickleball Club';
     const venueText = `${courtName} • ${clubName}`;
     const courtImage = getCourtImage(booking, index);
 
@@ -271,9 +272,9 @@ export default function PlayerBookingsScreen() {
               <View style={styles.playerPriceBadge}>
                 <AppText style={styles.playerPriceBadgeText}>
                   {booking.total_price != null
-                    ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                    ? formatCurrency(booking.total_price)
                     : booking.court?.price_per_hour != null
-                      ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                      ? `${formatCurrency(booking.court.price_per_hour)}/hr`
                       : 'Free'}
                 </AppText>
               </View>
@@ -314,7 +315,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Aught2 Pickleball';
+    const clubName = booking.club_name || 'Pickleball Club';
     const venueText = `${courtName} • ${clubName}`;
     const courtImage = getCourtImage(booking, index);
 
@@ -334,9 +335,9 @@ export default function PlayerBookingsScreen() {
               <View style={styles.playerPriceBadge}>
                 <AppText style={styles.playerPriceBadgeText}>
                   {booking.total_price != null
-                    ? `₹${Number(booking.total_price).toLocaleString('en-IN')}`
+                    ? formatCurrency(booking.total_price)
                     : booking.court?.price_per_hour != null
-                      ? `₹${Number(booking.court.price_per_hour).toLocaleString('en-IN')}`
+                      ? `${formatCurrency(booking.court.price_per_hour)}/hr`
                       : 'Free'}
                 </AppText>
               </View>

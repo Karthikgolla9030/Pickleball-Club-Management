@@ -72,7 +72,7 @@ class PlanEnrollmentItem(BaseModel):
     plan_name: str
     active_subscribers: int = 0
     price: Decimal = Decimal("0.00")
-    currency: str = "INR"
+    currency: str = "USD"
 
     model_config = {"from_attributes": True}
 
@@ -128,7 +128,7 @@ class PaymentAnalyticsSummary(BaseModel):
     failed_amount: Decimal = Decimal("0.00")
     cancelled_count: int = 0
     cancelled_amount: Decimal = Decimal("0.00")
-    currency: str = "INR"
+    currency: str = "USD"
     by_method: list[PaymentMethodBreakdown] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

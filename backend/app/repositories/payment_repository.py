@@ -219,7 +219,7 @@ class PaymentRepository:
             "pending_count": pending_count,
             "failed_count": failed_count,
             "total_amount_collected": total_amount,
-            "currency": "INR",
+            "currency": "USD",
         }
 
     async def generate_reference(self, year: int | None = None) -> str:

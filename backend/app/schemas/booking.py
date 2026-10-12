@@ -112,7 +112,7 @@ class BookingResponse(BaseModel):
     updated_at: datetime
     price_per_hour: Decimal | None = None
     total_price: Decimal | None = None
-    currency: str = "INR"
+    currency: str = "USD"
     court: BookingCourtInfo | None = None
     player: BookingPlayerInfo | None = None
     club_name: str | None = None
@@ -153,5 +153,5 @@ class BookingPriceCalculationResponse(BaseModel):
     duration_minutes: int
     price_per_hour: Decimal
     total_price: Decimal
-    currency: str = "INR"
+    currency: str = "USD"
 

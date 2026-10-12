@@ -306,7 +306,7 @@ async def test_booking_snapshots_price_and_calculates_total(
     booking_data = res.json()
     assert float(booking_data["price_per_hour"]) == 600.0
     assert float(booking_data["total_price"]) == 600.0
-    assert booking_data["currency"] == "INR"
+    assert booking_data["currency"] == "USD"
 
     # Now change court's price to 800.00
     court.price_per_hour = Decimal("800.00")

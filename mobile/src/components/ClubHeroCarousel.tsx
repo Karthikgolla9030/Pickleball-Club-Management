@@ -29,7 +29,7 @@ export interface HeroBannerSlide {
 export const HERO_SLIDES: HeroBannerSlide[] = [
   {
     id: 'court-booking',
-    tag: 'AUGHT2 PICKLEBALL',
+    tag: 'PICKLEBALL',
     title: 'Play Together\nGrow Stronger',
     supportingText: 'Great courts. Active members.\nA healthier, happier community.',
     ctaText: 'Book a Court',

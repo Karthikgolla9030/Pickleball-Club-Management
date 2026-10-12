@@ -12,6 +12,7 @@ import { Input } from './Input';
 import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } from '@/hooks';
 import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { Booking, BookingPriceCalculation } from '@/types';
 
 export interface BookingFlowModalProps {
@@ -346,7 +347,7 @@ export function BookingFlowModal({
         ) : (
           <View style={styles.timeGrid}>
             {availableCourts.map(c => {
-              const priceTag = c.price_per_hour != null ? ` (₹${Number(c.price_per_hour)}/hr)` : '';
+              const priceTag = c.price_per_hour != null ? ` (${formatCurrency(c.price_per_hour)}/hr)` : '';
               return (
                 <Button
                   key={c.court_id}
@@ -436,11 +437,11 @@ export function BookingFlowModal({
       : 'You';
 
     const rateText = serverPrice != null
-      ? `₹${Number(serverPrice.price_per_hour).toLocaleString('en-IN')}/hour`
-      : (court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN')}/hour` : 'Free / Included');
+      ? `${formatCurrency(serverPrice.price_per_hour)}/hour`
+      : (court?.price_per_hour != null ? `${formatCurrency(court.price_per_hour)}/hour` : 'Free / Included');
     const totalText = serverPrice != null
-      ? `₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
-      : (court?.price_per_hour != null ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '₹0.00 (Included)');
+      ? formatCurrency(serverPrice.total_price)
+      : (court?.price_per_hour != null ? formatCurrency(court.price_per_hour) : '$0.00 (Included)');
     const durationText = serverPrice?.duration_minutes ? `${serverPrice.duration_minutes} minutes` : '1 hour';
 
     return (
@@ -476,10 +477,10 @@ export function BookingFlowModal({
   const renderStage3 = () => {
     const court = availableCourts.find(c => c.court_id === courtId);
     const totalAmount = serverPrice != null
-      ? `₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      ? formatCurrency(serverPrice.total_price)
       : (court?.price_per_hour != null 
-        ? `₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}` 
-        : '₹0.00');
+        ? formatCurrency(court.price_per_hour) 
+        : '$0.00');
 
     return (
       <View style={styles.formContainer}>
@@ -492,9 +493,9 @@ export function BookingFlowModal({
           
           <AppText variant="caption" color="tertiary">
             {serverPrice != null && Number(serverPrice.total_price) > 0
-              ? `Calculated server court rate is ₹${Number(serverPrice.price_per_hour)}/hour for ${serverPrice.duration_minutes}m duration.`
+              ? `Calculated server court rate is ${formatCurrency(serverPrice.price_per_hour)}/hour for ${serverPrice.duration_minutes}m duration.`
               : (court?.price_per_hour != null && Number(court.price_per_hour) > 0
-                ? `Court rate is ₹${Number(court.price_per_hour)}/hour. Price is calculated and confirmed by the server.` 
+                ? `Court rate is ${formatCurrency(court.price_per_hour)}/hour. Price is calculated and confirmed by the server.` 
                 : 'This booking is fully covered by membership or internal staff credit. No external payment required at this time.')}
           </AppText>
         </Card>
@@ -520,11 +521,11 @@ export function BookingFlowModal({
     const confirmedStart = confirmedBooking?.start_at ? new Date(confirmedBooking.start_at) : (slot?.start_at ? new Date(slot.start_at) : null);
     const confirmedEnd = confirmedBooking?.end_at ? new Date(confirmedBooking.end_at) : (slot?.end_at ? new Date(slot.end_at) : null);
     const confirmedTotal = confirmedBooking?.total_price != null
-      ? `Total: ₹${Number(confirmedBooking.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+      ? `Total: ${formatCurrency(confirmedBooking.total_price)}`
       : (serverPrice != null
-        ? `Total: ₹${Number(serverPrice.total_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+        ? `Total: ${formatCurrency(serverPrice.total_price)}`
         : (court?.price_per_hour != null
-          ? `Total: ₹${Number(court.price_per_hour).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+          ? `Total: ${formatCurrency(court.price_per_hour)}`
           : 'Free / Included'));
 
     return (

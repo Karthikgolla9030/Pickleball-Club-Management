@@ -160,7 +160,7 @@ class MembershipPlan(Base):
     currency: Mapped[str] = mapped_column(
         String(3),
         nullable=False,
-        default="INR",
+        default="USD",
     )
 
     # Benefits: structured JSON list of benefit strings/objects

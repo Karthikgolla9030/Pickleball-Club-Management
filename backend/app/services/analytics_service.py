@@ -440,7 +440,7 @@ class AnalyticsService:
             failed_amount=failed_amount,
             cancelled_count=cancelled_count,
             cancelled_amount=cancelled_amount,
-            currency="INR",
+            currency="USD",
             by_method=method_items,
         )
 
@@ -819,7 +819,7 @@ class AnalyticsService:
                 plan_id=row[0],
                 plan_name=row[1],
                 price=Decimal(str(row[2] or 0)),
-                currency=row[3] or "INR",
+                currency=row[3] or "USD",
                 active_subscribers=row[4] or 0,
             )
             for row in plan_rows
@@ -1012,7 +1012,7 @@ class AnalyticsService:
                     _sanitize_csv_cell(c_name),
                     _sanitize_csv_cell(c_num or ""),
                     _sanitize_csv_cell(f"{price:.2f}" if price is not None else "0.00"),
-                    _sanitize_csv_cell(curr or "INR"),
+                    _sanitize_csv_cell(curr or "USD"),
                 ])
 
         elif report_type_clean == "memberships":

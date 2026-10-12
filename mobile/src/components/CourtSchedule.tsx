@@ -41,6 +41,7 @@ import { ModalSheet } from './ModalSheet';
 import { ErrorState, LoadingState } from './StateViews';
 import { useActiveClub, useClubCourtAvailability } from '@/hooks';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { CourtEnvironment, SlotStatus } from '@/types';
 
 export interface CourtScheduleProps {
@@ -277,7 +278,7 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                     </AppText>
                     <AppText style={styles.courtSubtitle} numberOfLines={1}>
                       {`${formatEnv(court.indoor_outdoor)} • ${formatSurface(court.surface_type)}${
-                        court.price_per_hour != null ? ` • ₹${Number(court.price_per_hour)}/hr` : ''
+                        court.price_per_hour != null ? ` • ${formatCurrency(court.price_per_hour)}/hr` : ''
                       }`}
                     </AppText>
                   </View>

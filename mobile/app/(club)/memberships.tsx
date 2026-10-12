@@ -56,6 +56,7 @@ import {
   useMembershipPlans,
   usePermission,
 } from '@/hooks';
+import { formatCurrency } from '@/utils';
 import type {
   CreateMembershipPlanPayload,
   MemberSubscription,
@@ -213,7 +214,7 @@ export default function MembershipsScreen() {
       description: planDesc.trim() || null,
       duration_unit: planDuration,
       price: priceNum.toFixed(2),
-      currency: 'INR',
+      currency: 'USD',
       benefits: planBenefits,
       booking_limit: planBookingLimit ? parseInt(planBookingLimit, 10) : null,
       advance_booking_days: planAdvanceDays ? parseInt(planAdvanceDays, 10) : null,
@@ -593,7 +594,7 @@ export default function MembershipsScreen() {
         <View style={styles.subActionRow}>
           <View style={styles.subBillingInfo}>
             <AppText style={styles.subBillingText}>
-              Billing: {item.plan_duration || 'Monthly'} · {item.plan_currency || 'INR'} {item.plan_price || ''}
+              Billing: {item.plan_duration || 'Monthly'} · {formatCurrency(item.plan_price, item.plan_currency || 'USD')}
             </AppText>
           </View>
 
@@ -750,10 +751,10 @@ export default function MembershipsScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <AppText style={styles.formLabel}>Price (INR) *</AppText>
+                <AppText style={styles.formLabel}>Price (USD) *</AppText>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="999.00"
+                  placeholder="49.00"
                   placeholderTextColor="#8C9BA5"
                   keyboardType="decimal-pad"
                   value={planPrice}

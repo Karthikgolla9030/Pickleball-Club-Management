@@ -56,6 +56,7 @@ import {
 } from '@/hooks';
 import { analyticsApi } from '@/services/api';
 import { Colors, Radius, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { AnalyticsQueryFilters } from '@/types';
 
 type PresetType = '7d' | '30d' | '90d' | 'custom';
@@ -349,13 +350,12 @@ export default function AnalyticsScreen() {
                         <Badge label="Collected" variant="success" />
                       </View>
                       <AppText style={styles.kpiValueText}>
-                        ₹{Number(summary.payments.total_collected_amount).toLocaleString()}
+                        {formatCurrency(summary.payments.total_collected_amount)}
                       </AppText>
                       <AppText style={styles.kpiLabelText}>Revenue Collected</AppText>
                       <View style={styles.kpiSubRow}>
                         <AppText style={styles.kpiSubText}>
-                          {summary.payments.succeeded_count} Paid • ₹
-                          {Number(summary.payments.pending_amount).toLocaleString()} Pending
+                          {summary.payments.succeeded_count} Paid • {formatCurrency(summary.payments.pending_amount)} Pending
                         </AppText>
                       </View>
                     </Card>
@@ -523,7 +523,7 @@ export default function AnalyticsScreen() {
                             <View>
                               <AppText style={styles.planNameText}>{plan.plan_name}</AppText>
                               <AppText style={styles.planPriceText}>
-                                ₹{plan.price} {plan.currency}
+                                {formatCurrency(plan.price, plan.currency || 'USD')}
                               </AppText>
                             </View>
                             <Badge
@@ -620,7 +620,7 @@ export default function AnalyticsScreen() {
                     <Card style={[styles.sectionCard, styles.heroFinancialCard]}>
                       <AppText style={styles.financialHeroLabel}>Total Revenue Collected</AppText>
                       <AppText style={styles.financialHeroValue}>
-                        ₹{Number(paymentsQuery.data.summary.total_collected_amount).toLocaleString()}
+                        {formatCurrency(Number(paymentsQuery.data.summary.total_collected_amount))}
                       </AppText>
                       <AppText style={styles.financialHeroSub}>
                         {paymentsQuery.data.summary.succeeded_count} successful transactions in period
@@ -666,7 +666,7 @@ export default function AnalyticsScreen() {
                             <AppText style={styles.methodCountText}>{meth.count} transactions</AppText>
                           </View>
                           <AppText style={styles.methodAmountText}>
-                            ₹{Number(meth.amount).toLocaleString()}
+                            {formatCurrency(Number(meth.amount))}
                           </AppText>
                         </View>
                       ))}

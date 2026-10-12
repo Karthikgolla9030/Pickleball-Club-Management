@@ -50,6 +50,7 @@ import {
   useSucceedPayment,
 } from '@/hooks';
 import { Colors, Layout, Radius, Spacing, Typography } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type {
   Payment,
   PaymentMethod,
@@ -104,8 +105,7 @@ function PaymentCard({
 
       <View style={styles.amountRow}>
         <AppText style={styles.amountText}>
-          {payment.currency === 'INR' ? '₹' : payment.currency + ' '}
-          {Number(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          {formatCurrency(payment.amount, payment.currency)}
         </AppText>
         <Badge
           label={payment.payment_method_label || payment.payment_method}
@@ -270,7 +270,7 @@ export default function ClubPaymentsScreen() {
         player_id: selectedPlayerId,
         subscription_id: selectedSubId,
         amount: num,
-        currency: 'INR',
+        currency: 'USD',
         payment_method: paymentMethod,
         purpose: 'membership',
         notes: notes.trim() || null,
@@ -323,7 +323,7 @@ export default function ClubPaymentsScreen() {
           <Card style={styles.metricCard}>
             <AppText style={styles.metricLabel}>Total Collected</AppText>
             <AppText style={[styles.metricValue, { color: Colors.status.success }]}>
-              ₹{Number(summary?.total_amount_collected ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              {formatCurrency(summary?.total_amount_collected ?? 0)}
             </AppText>
           </Card>
 
@@ -476,8 +476,8 @@ export default function ClubPaymentsScreen() {
 
           {/* Amount */}
           <Input
-            label="Amount (₹)"
-            placeholder="e.g. 999"
+            label="Amount (USD)"
+            placeholder="e.g. 49.00"
             keyboardType="numeric"
             value={amountStr}
             onChangeText={setAmountStr}

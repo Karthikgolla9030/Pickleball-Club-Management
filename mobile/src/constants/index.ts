@@ -444,8 +444,19 @@ export const QUERY_KEYS = {
 
 
 
+export const APP_BRANDING = {
+  PRODUCT_NAME: 'Pickleball',
+  COMPANY_NAME: 'Pickleball Inc.',
+  TAGLINE: 'Play. Connect. Build Community.',
+  DEFAULT_CURRENCY: 'USD',
+  CURRENCY_SYMBOL: '$',
+  DEFAULT_LOCALE: 'en-US',
+  SUPPORT_EMAIL: 'support@pickleball.com',
+  SUPPORT_PHONE: '+1 (800) 555-0199',
+} as const;
+
 export const APP_CONFIG = {
-  NAME: 'Aught2 Pickleball',
+  NAME: 'Pickleball',
   VERSION: '1.0.0',
   /** Timeout for read (GET) requests */
   API_TIMEOUT_MS: 10000,

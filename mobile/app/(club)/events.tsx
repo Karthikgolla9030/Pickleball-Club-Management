@@ -70,6 +70,7 @@ import {
   useStaffRegisterPlayer,
 } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import {
   EVENT_REGISTRATION_STATUS_LABELS,
   EVENT_STATUS_LABELS,
@@ -213,7 +214,7 @@ function EventCard({
 
   const feeDisplay =
     Number(event.registration_fee) > 0
-      ? `₹${Number(event.registration_fee)}`
+      ? formatCurrency(Number(event.registration_fee))
       : 'Free';
 
   const handleOptionsPress = () => {
@@ -790,8 +791,8 @@ function CreateEventModal({
         />
 
         <Input
-          label="Registration Fee (₹, 0 for free)"
-          placeholder="0"
+          label="Registration Fee ($ USD, 0 for free)"
+          placeholder="0.00"
           value={fee}
           onChangeText={setFee}
           keyboardType="numeric"

@@ -87,7 +87,7 @@ export default function PlatformLoginScreen() {
           {/* Header & Brand */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/aught2_brand_logo_transparent.png')}
+              source={require('../../assets/pickleball_logo_transparent.png')}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -101,7 +101,7 @@ export default function PlatformLoginScreen() {
               Platform Administration
             </AppText>
             <AppText variant="bodySmall" color="secondary" center style={styles.subtitle}>
-              Dedicated access for authorized Aught2 Pickleball platform administrators.
+              Dedicated access for authorized Pickleball platform administrators.
             </AppText>
           </View>
 
@@ -123,7 +123,7 @@ export default function PlatformLoginScreen() {
                   if (emailError) setEmailError('');
                   clearError();
                 }}
-                placeholder="platform.owner@aught2.com"
+                placeholder="admin@pickleball.com"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"

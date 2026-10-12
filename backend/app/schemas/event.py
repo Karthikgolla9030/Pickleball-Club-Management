@@ -35,7 +35,7 @@ class EventCreateRequest(BaseModel):
     registration_opens_at: datetime | None = None
     registration_closes_at: datetime | None = None
     registration_fee: Decimal = Field(default=Decimal("0.00"), ge=0)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
 
     @field_validator("registration_fee")
     @classmethod

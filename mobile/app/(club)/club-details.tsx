@@ -918,7 +918,7 @@ export default function ClubDetailsScreen() {
                   </View>
                   <View style={styles.previewTitleBlock}>
                     <AppText style={styles.previewClubName}>
-                      {name || 'Aught2 Pickleball'}
+                      {name || 'Pickleball Club'}
                     </AppText>
                     {city || state ? (
                       <View style={styles.previewCityRow}>

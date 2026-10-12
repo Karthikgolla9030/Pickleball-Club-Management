@@ -43,7 +43,7 @@ export default function IndexScreen() {
 
   return (
     <Screen>
-      <LoadingState message="Starting Aught2 Pickleball..." />
+      <LoadingState message="Starting Pickleball..." />
     </Screen>
   );
 }

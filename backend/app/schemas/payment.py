@@ -47,7 +47,7 @@ class CreatePaymentRequest(BaseModel):
     player_id: UUID = Field(..., description="ID of the user receiving the membership")
     subscription_id: UUID = Field(..., description="ID of the member subscription")
     amount: Decimal = Field(..., gt=0, decimal_places=2, description="Payment amount (> 0)")
-    currency: str = Field(default="INR", min_length=3, max_length=3, description="Currency code")
+    currency: str = Field(default="USD", min_length=3, max_length=3, description="Currency code")
     payment_method: PaymentMethod = Field(..., description="Payment method: cash, bank_transfer, online, other")
     purpose: PaymentPurpose = Field(default=PaymentPurpose.MEMBERSHIP, description="Payment purpose")
     notes: str | None = Field(default=None, max_length=1000, description="Optional notes")
@@ -201,4 +201,4 @@ class PaymentSummaryResponse(BaseModel):
     pending_count: int
     failed_count: int
     total_amount_collected: Decimal
-    currency: str = "INR"
+    currency: str = "USD"

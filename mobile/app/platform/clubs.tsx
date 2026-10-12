@@ -114,7 +114,7 @@ export default function PlatformClubsScreen() {
         <View style={styles.brandRow}>
           <ShieldCheck size={20} color="#18794E" />
           <AppText variant="heading3" color="primary" style={styles.brandTitle}>
-            Aught2 Platform
+            Pickleball Platform
           </AppText>
         </View>
 

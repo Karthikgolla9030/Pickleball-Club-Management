@@ -64,7 +64,7 @@ class LessonTypeCreateRequest(BaseModel):
     duration_minutes: int = Field(default=60, gt=0, description="Duration in minutes, must be positive")
     default_capacity: int | None = Field(default=None, gt=0, description="Default capacity if configured, must be positive")
     default_price: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
     is_private: bool = Field(default=False)
 
     @field_validator("currency")
@@ -117,7 +117,7 @@ class LessonCreateRequest(BaseModel):
     end_at: datetime
     capacity: int | None = Field(default=None, gt=0)
     price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
     registration_opens_at: datetime | None = None
     registration_closes_at: datetime | None = None
 

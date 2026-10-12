@@ -66,6 +66,7 @@ import {
 } from '@/hooks';
 import { clubsApi, courtApi, leagueApi, tournamentApi } from '@/services/api';
 import { Colors, Radius, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { Club, LeagueSummary, MembershipPlan, PlayerCourt, TournamentDiscoveryItem } from '@/types';
 
 function getFullImageUrl(url: string | null | undefined): string | null {
@@ -497,7 +498,7 @@ export default function PublicClubDetailScreen() {
                 const envLabel = court.indoor_outdoor === 'indoor' ? 'Indoor' : 'Outdoor';
                 const priceLabel =
                   court.price_per_hour != null
-                    ? `₹${Number(court.price_per_hour).toLocaleString('en-IN')}/hr`
+                    ? `${formatCurrency(court.price_per_hour)}/hr`
                     : 'Included';
                 return (
                   <View key={court.id} style={styles.courtItem}>
@@ -560,7 +561,7 @@ export default function PublicClubDetailScreen() {
                       {p.name}
                     </AppText>
                     <AppText variant="heading3" color="primary">
-                      ₹{p.price}
+                      {formatCurrency(p.price)}
                     </AppText>
                   </View>
                   <AppText variant="caption" color="secondary">
@@ -892,7 +893,7 @@ export default function PublicClubDetailScreen() {
                   Plan Rate
                 </AppText>
                 <AppText variant="heading2" color="primary">
-                  ₹{selectedPlanForSubscribe?.price}
+                  {formatCurrency(selectedPlanForSubscribe?.price)}
                   <AppText variant="bodySmall" color="secondary">
                     {' '}/ {selectedPlanForSubscribe?.duration_label || selectedPlanForSubscribe?.duration_unit}
                   </AppText>

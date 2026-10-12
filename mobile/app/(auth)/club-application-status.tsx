@@ -121,7 +121,7 @@ export default function ClubApplicationStatusScreen() {
                 </AppText>
               </View>
               <AppText variant="bodySmall" style={styles.bannerText}>
-                Your club registration request has been submitted successfully. Your application is awaiting review by the Aught2 Pickleball platform team.
+                Your club registration request has been submitted successfully. Your application is awaiting review by the Pickleball platform team.
               </AppText>
               <AppText variant="caption" style={styles.bannerSubtext}>
                 Please save your Application Reference Number below to track your application review progress.

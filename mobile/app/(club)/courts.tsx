@@ -68,6 +68,7 @@ import {
 import { useActiveClub, useClubCourts, usePermission } from '@/hooks';
 import { courtApi, bookingApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type {
   Court,
   CourtCreateRequest,
@@ -328,7 +329,7 @@ export default function ClubCourtsScreen() {
     if (formPrice.trim()) {
       const num = parseFloat(formPrice.trim());
       if (isNaN(num) || num < 0) {
-        setFormError('Price must be a valid non-negative amount (₹)');
+        setFormError('Price must be a valid non-negative amount ($)');
         return;
       }
       parsedPrice = Math.round(num * 100) / 100;
@@ -366,7 +367,7 @@ export default function ClubCourtsScreen() {
     if (formPrice.trim()) {
       const num = parseFloat(formPrice.trim());
       if (isNaN(num) || num < 0) {
-        setFormError('Price must be a valid non-negative amount (₹)');
+        setFormError('Price must be a valid non-negative amount ($)');
         return;
       }
       parsedPrice = Math.round(num * 100) / 100;
@@ -792,7 +793,7 @@ export default function ClubCourtsScreen() {
                               ]}
                             >
                               {item.price_per_hour != null
-                                ? `₹${Number(item.price_per_hour).toLocaleString('en-IN')}/hr`
+                                ? `${formatCurrency(item.price_per_hour)}/hr`
                                 : 'Unpriced'}
                             </AppText>
                           </View>
@@ -900,11 +901,11 @@ export default function ClubCourtsScreen() {
           />
 
           <Input
-            label="Court Booking Price (₹ / hour)"
+            label="Court Booking Price ($ / hour)"
             value={formPrice}
             onChangeText={setFormPrice}
             keyboardType="numeric"
-            placeholder="e.g. 400"
+            placeholder="e.g. 25.00"
           />
 
           <AppText variant="caption" style={styles.fieldLabel}>
@@ -1020,11 +1021,11 @@ export default function ClubCourtsScreen() {
           />
 
           <Input
-            label="Court Booking Price (₹ / hour)"
+            label="Court Booking Price ($ / hour)"
             value={formPrice}
             onChangeText={setFormPrice}
             keyboardType="numeric"
-            placeholder="e.g. 400"
+            placeholder="e.g. 25.00"
           />
 
           <AppText variant="caption" style={styles.fieldLabel}>

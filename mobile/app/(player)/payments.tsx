@@ -32,6 +32,7 @@ import {
 } from '@/components';
 import { usePlayerPayments } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
+import { formatCurrency } from '@/utils';
 import type { PaymentStatus, PlayerPayment } from '@/types';
 
 // ─── Status Badge Helper ──────────────────────────────────────────────────────
@@ -79,8 +80,7 @@ function PlayerPaymentCard({
 
         <View style={styles.amountRow}>
           <AppText style={styles.amountText}>
-            {payment.currency === 'INR' ? '₹' : payment.currency + ' '}
-            {Number(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            {formatCurrency(payment.amount, payment.currency)}
           </AppText>
           <Badge
             label={payment.payment_method_label || payment.payment_method}
@@ -196,8 +196,7 @@ export default function PlayerPaymentsScreen() {
                 <View style={styles.receiptRow}>
                   <AppText style={styles.receiptLabel}>Amount</AppText>
                   <AppText style={[styles.receiptValue, styles.amountHighlight]}>
-                    {selectedPayment.currency === 'INR' ? '₹' : selectedPayment.currency + ' '}
-                    {Number(selectedPayment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    {formatCurrency(selectedPayment.amount, selectedPayment.currency)}
                   </AppText>
                 </View>
 

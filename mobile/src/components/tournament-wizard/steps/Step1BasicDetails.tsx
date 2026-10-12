@@ -39,7 +39,7 @@ export function Step1BasicDetails({
         </AppText>
         <View style={styles.clubNameRow}>
           <AppText variant="heading3" style={styles.clubName}>
-            {clubName || 'Aught2 Pickleball Club'}
+            {clubName || 'Pickleball Club'}
           </AppText>
           <Badge label="Active Club" variant="info" />
         </View>
@@ -61,7 +61,7 @@ export function Step1BasicDetails({
       {/* Venue / Location */}
       <Input
         label="Venue / Location"
-        placeholder="e.g. Aught2 Pickleball Central, Courts 1-6"
+        placeholder="e.g. Pickleball Central, Courts 1-6"
         value={state.locationName}
         onChangeText={(locationName) => onChange({ locationName })}
         error={errors?.locationName}

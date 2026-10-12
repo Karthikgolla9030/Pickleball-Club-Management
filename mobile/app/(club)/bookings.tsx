@@ -64,6 +64,7 @@ import {
   useClubStaffBookings,
   usePermission,
 } from '@/hooks';
+import { formatCurrency } from '@/utils';
 import type { Booking } from '@/types';
 
 type TimeTab = 'all' | 'today' | 'upcoming' | 'past';
@@ -466,9 +467,9 @@ export default function ClubStaffBookingsScreen() {
               <View style={styles.priceBadgeMini}>
                 <AppText style={styles.priceBadgeMiniText}>
                   {b.total_price != null
-                    ? `₹${Number(b.total_price).toLocaleString('en-IN')}`
+                    ? formatCurrency(b.total_price)
                     : b.court?.price_per_hour != null
-                      ? `₹${Number(b.court.price_per_hour).toLocaleString('en-IN')}`
+                      ? `${formatCurrency(b.court.price_per_hour)}/hr`
                       : 'Free'}
                 </AppText>
               </View>

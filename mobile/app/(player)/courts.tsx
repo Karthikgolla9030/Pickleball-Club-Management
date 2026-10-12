@@ -201,7 +201,7 @@ export default function PlayerCourtsScreen() {
         <View style={styles.centerContainer}>
           <EmptyState
             title="No Club Selected"
-            description="Please join or select an Aught2 club to view court schedules and make reservations."
+            description="Please join or select a club to view court schedules and make reservations."
           />
         </View>
       </Screen>

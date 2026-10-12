@@ -175,7 +175,7 @@ class Booking(Base):
     currency: Mapped[str] = mapped_column(
         String(10),
         nullable=False,
-        default="INR",
+        default="USD",
     )
 
     # ─── Relationships ────────────────────────────────────────────────────────

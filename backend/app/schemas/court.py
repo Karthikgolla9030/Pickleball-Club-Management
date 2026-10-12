@@ -34,7 +34,7 @@ class CourtCreateRequest(BaseModel):
     status: CourtStatus = Field(default=CourtStatus.ACTIVE, description="Active or inactive status")
     is_active: bool = Field(default=True, description="Active flag")
     display_order: int | None = Field(None, ge=0, description="Manual display sort order")
-    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
+    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in USD")
     operating_hours: WeeklyOperatingHours | dict[str, Any] | None = Field(None, description="Optional court-level operating hours override")
 
     @field_validator("name")
@@ -56,7 +56,7 @@ class CourtUpdateRequest(BaseModel):
     status: CourtStatus | None = None
     is_active: bool | None = None
     display_order: int | None = Field(None, ge=0)
-    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in INR")
+    price_per_hour: Decimal | None = Field(None, ge=0, description="Court booking price per hour in USD")
     operating_hours: WeeklyOperatingHours | dict[str, Any] | None = None
 
     @field_validator("name")
