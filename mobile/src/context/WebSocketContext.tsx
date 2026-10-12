@@ -8,11 +8,10 @@
  */
 /* eslint-disable no-console */
 import React, { createContext, useContext, useEffect, useRef, useState, useMemo } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { API_ENDPOINTS, SECURE_STORE_KEYS } from '@/constants';
-import { useAuthStore } from '@/store';
+import { useAuthStore, getStoredAccessToken } from '@/store';
 import { WebSocketClient, type WebSocketEvent } from '@/services/websocket/WebSocketClient';
 
 interface WebSocketContextValue {
@@ -36,7 +35,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   if (!clientRef.current) {
     clientRef.current = new WebSocketClient(
       API_ENDPOINTS.WS,
-      async () => SecureStore.getItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN)
+      getStoredAccessToken
     );
   }
 

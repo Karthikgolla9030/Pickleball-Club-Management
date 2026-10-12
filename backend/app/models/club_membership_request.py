@@ -77,6 +77,7 @@ class ClubMembershipRequest(Base):
         Enum(
             MembershipRequestStatus,
             name="membership_request_status",
+            values_callable=lambda obj: [e.value for e in obj],
             create_type=True,
         ),
         default=MembershipRequestStatus.PENDING,

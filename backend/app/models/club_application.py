@@ -136,6 +136,7 @@ class ClubApplication(Base):
         Enum(
             ClubApplicationStatus,
             name="club_application_status",
+            values_callable=lambda obj: [e.value for e in obj],
             create_type=True,
         ),
         default=ClubApplicationStatus.PENDING,

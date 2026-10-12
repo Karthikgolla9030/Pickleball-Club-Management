@@ -83,8 +83,9 @@ class ClubApplicationRepository:
         count_query = select(func.count(ClubApplication.id))
 
         if status is not None:
-            query = query.where(ClubApplication.status == status)
-            count_query = count_query.where(ClubApplication.status == status)
+            status_val = status.value if hasattr(status, "value") else str(status)
+            query = query.where(ClubApplication.status == status_val)
+            count_query = count_query.where(ClubApplication.status == status_val)
 
         query = query.order_by(ClubApplication.created_at.desc())
         query = query.offset((page - 1) * page_size).limit(page_size)
