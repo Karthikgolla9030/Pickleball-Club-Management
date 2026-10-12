@@ -178,7 +178,7 @@ export function ClubSwitcher({
                 activeOpacity={0.8}
               >
                 <Plus size={16} color="#176F5B" strokeWidth={2.5} />
-                <AppText style={styles.registerNewClubText}>Register New Club</AppText>
+                <AppText style={styles.registerNewClubText}>Apply for New Club</AppText>
               </TouchableOpacity>
             </Pressable>
           </Pressable>
@@ -316,7 +316,7 @@ export function ClubSwitcher({
               activeOpacity={0.8}
             >
               <Plus size={16} color="#176F5B" strokeWidth={2.5} />
-              <AppText style={styles.registerNewClubText}>Register New Club</AppText>
+              <AppText style={styles.registerNewClubText}>Apply for New Club</AppText>
             </TouchableOpacity>
           </Pressable>
         </Pressable>

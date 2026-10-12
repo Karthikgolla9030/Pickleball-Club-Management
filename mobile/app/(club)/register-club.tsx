@@ -38,7 +38,7 @@ import {
   FormField,
   Screen,
 } from '@/components';
-import { clubsApi } from '@/services/api';
+import { clubsApi, clubApplicationsApi } from '@/services/api';
 import { useActiveClub } from '@/hooks';
 import { useAuthStore } from '@/store';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -140,12 +140,17 @@ export default function RegisterClubScreen() {
 
     setIsSubmitting(true);
     try {
-      const payload: CreateClubPayload = {
-        name: name.trim(),
+      const user = useAuthStore.getState().user;
+      const result = await clubApplicationsApi.submit({
+        applicant_name: user?.full_name || 'Club Owner',
+        applicant_email: user?.email || contactEmail.trim().toLowerCase() || 'owner@aught2.com',
+        applicant_phone: contactPhone.trim() || undefined,
+        applicant_password: 'AuthenticatedOwnerSession2026!',
+        club_name: name.trim(),
         slug: slug.trim(),
         short_description: shortDescription.trim() || undefined,
         description: description.trim() || undefined,
-        contact_email: contactEmail.trim() || undefined,
+        contact_email: contactEmail.trim().toLowerCase() || undefined,
         contact_phone: contactPhone.trim() || undefined,
         website: website.trim() || undefined,
         established_year: establishedYear.trim() ? parseInt(establishedYear.trim(), 10) : undefined,
@@ -160,38 +165,21 @@ export default function RegisterClubScreen() {
         closing_time: closingTime.trim() || '22:00:00',
         timezone: timezone.trim() || 'UTC',
         facilities_summary: facilitiesSummary.trim() || undefined,
-      };
-
-      const result = await clubsApi.createClub(payload);
-
-      // Refresh staff memberships from backend
-      await refreshMemberships();
-
-      // Establish new active club context
-      const newMembership: MembershipInfo = {
-        membership_id: result.membership_id,
-        club_id: result.id,
-        club_name: result.name,
-        club_slug: result.slug,
-        role: 'club_owner',
-        role_label: 'Club Owner',
-        is_active: true,
-      };
-      switchClub(newMembership);
+      });
 
       Alert.alert(
-        'Club Registered!',
-        `Welcome to ${result.name}. You are now the Club Owner.`,
+        'Application Submitted for Review',
+        `Your application for ${result.club_name} (Ref: ${result.reference_number}) is awaiting review by the platform team. You will be able to manage this club once approved.`,
         [
           {
-            text: 'Go to Club Dashboard',
-            onPress: () => router.replace('/(club)/club-details' as any),
+            text: 'OK',
+            onPress: () => router.replace('/(club)/' as any),
           },
         ],
       );
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to register club';
-      Alert.alert('Registration Error', msg);
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to submit club application';
+      Alert.alert('Submission Error', msg);
     } finally {
       setIsSubmitting(false);
     }

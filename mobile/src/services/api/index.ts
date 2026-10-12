@@ -18,3 +18,4 @@ export { lessonApi } from './lessons';
 export { schedulingApi } from './scheduling';
 export { notificationsApi, type NotificationItem, type NotificationListResponse, type NotificationPreference } from './notifications';
 export { analyticsApi } from './analytics';
+export { clubApplicationsApi, platformApplicationsApi, type SubmitClubApplicationPayload, type ClubApplicationResponse, type ClubApplicationStatusLookupResponse } from './clubApplications';

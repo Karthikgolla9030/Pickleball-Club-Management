@@ -200,7 +200,8 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       ];
       clubSection2 = [
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
-        { key: 'register_club', label: 'Register New Club', icon: PlusCircle, route: '/(club)/register-club' },
+        { key: 'register_club', label: 'Apply for New Club', icon: PlusCircle, route: '/(club)/register-club' },
+        { key: 'platform_applications', label: 'Platform Applications', icon: ShieldCheck, route: '/(club)/platform-applications' },
         { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members' },
         { key: 'billing', label: 'Subscription & Billing', icon: CreditCard, route: '/(club)/payments' },
       ];

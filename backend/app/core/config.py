@@ -84,6 +84,30 @@ class Settings(BaseSettings):
 
     MIGRATION_SECRET: str | None = None
 
+    # ─── Platform Owners (distinct from club staff roles) ─────────
+    PLATFORM_OWNER_EMAILS: Union[list[str], str] = [
+        "platform.owner@aught2.com",
+        "platform@aught2.com",
+        "admin@aught2.com",
+    ]
+
+    @field_validator("PLATFORM_OWNER_EMAILS", mode="before")
+    @classmethod
+    def parse_platform_owner_emails(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return ["platform.owner@aught2.com", "platform@aught2.com"]
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    return [e.strip().lower() for e in json.loads(v)]
+                except Exception:
+                    pass
+            return [e.strip().lower() for e in v.replace(";", ",").split(",") if e.strip()]
+        elif isinstance(v, (list, tuple, set)):
+            return [str(e).strip().lower() for e in v if str(e).strip()]
+        return ["platform.owner@aught2.com", "platform@aught2.com"]
+
     @model_validator(mode="after")
     def validate_production_settings(self) -> Settings:
         """

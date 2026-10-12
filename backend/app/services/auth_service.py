@@ -67,6 +67,37 @@ class AuthService:
             user.id, include_inactive=True
         )
         if not all_memberships:
+            # Check if user has a pending or rejected club application
+            from sqlalchemy import select
+            from app.models.club_application import ClubApplication, ClubApplicationStatus
+
+            app_result = await self.db.execute(
+                select(ClubApplication)
+                .where(
+                    (ClubApplication.user_id == user.id)
+                    | (ClubApplication.applicant_email == user.email.lower().strip())
+                )
+                .order_by(ClubApplication.created_at.desc())
+            )
+            latest_app = app_result.scalars().first()
+            if latest_app:
+                if latest_app.status == ClubApplicationStatus.PENDING:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            f"Your club registration application for '{latest_app.club_name}' "
+                            f"(Ref: {latest_app.reference_number}) is awaiting review by the platform team."
+                        ),
+                    )
+                elif latest_app.status == ClubApplicationStatus.REJECTED:
+                    reason_part = f" Reason: {latest_app.rejection_reason}" if latest_app.rejection_reason else ""
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
+                            f"Your club registration application for '{latest_app.club_name}' was not approved.{reason_part}"
+                        ),
+                    )
+
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You don't have access to Club Management.",

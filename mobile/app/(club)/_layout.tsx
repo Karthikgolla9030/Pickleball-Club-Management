@@ -36,8 +36,13 @@ export default function ClubLayout() {
       router.replace('/(auth)/login');
       return;
     }
-    // Allow club registration for any authenticated user
-    if (pathname === '/(club)/register-club' || pathname.startsWith('/(club)/register-club')) {
+    // Allow club registration and platform applications for authenticated users
+    if (
+      pathname === '/(club)/register-club' ||
+      pathname.startsWith('/(club)/register-club') ||
+      pathname === '/(club)/platform-applications' ||
+      pathname.startsWith('/(club)/platform-applications')
+    ) {
       return;
     }
 
@@ -102,6 +107,7 @@ export default function ClubLayout() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="club-details" />
+          <Stack.Screen name="platform-applications" />
         </Stack>
       </View>
 

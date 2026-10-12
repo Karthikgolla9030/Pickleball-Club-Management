@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     get_club_membership,
     get_current_active_user,
+    get_current_platform_owner,
     get_current_user,
     require_permission,
 )
@@ -90,20 +91,20 @@ async def list_user_clubs(
     response_model=UserClubResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new club",
-    description="Creates a new club with the authenticated user as the initial Club Owner. Fully transactional.",
+    description="Creates a new club. Restricted to authorized platform owners. Regular applicants must submit an application via POST /api/v1/club-applications.",
     responses={
         400: {"description": "Validation error or slug already taken"},
         401: {"description": "Not authenticated"},
-        403: {"description": "Account disabled"},
+        403: {"description": "Platform owner authorization required"},
         422: {"description": "Malformed request payload"},
     },
 )
 async def create_club(
     payload: ClubCreateRequest,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_platform_owner),
     db: AsyncSession = Depends(get_db),
 ) -> UserClubResponse:
-    """Create a new club and assign current user as initial Club Owner."""
+    """Create a new club. Restricted to platform owners."""
     return await ClubService(db).create_club(
         owner_user_id=current_user.id,
         payload=payload,

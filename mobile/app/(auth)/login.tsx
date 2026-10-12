@@ -285,7 +285,29 @@ export default function LoginScreen() {
                 variant="ghost"
               />
 
-              {portal === 'player' && (
+              {portal === 'club' ? (
+                <View style={styles.clubRegisterSection}>
+                  <View style={styles.divider} />
+                  <AppText variant="bodySmall" color="secondary" center style={styles.newClubPrompt}>
+                    New to Aught2? Register your club facility
+                  </AppText>
+                  <Button
+                    testID="register-club-button"
+                    label="Register a Club"
+                    variant="outline"
+                    onPress={() => router.push('/(auth)/register-club' as any)}
+                  />
+                  <TouchableOpacity
+                    onPress={() => router.push('/(auth)/club-application-status' as any)}
+                    style={styles.checkStatusLink}
+                    activeOpacity={0.7}
+                  >
+                    <AppText variant="caption" style={styles.checkStatusText} center>
+                      📋 Already applied? Check Application Status
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              ) : (
                 <TouchableOpacity
                   onPress={() => router.push('/(auth)/register' as any)}
                   style={styles.registerLink}
@@ -420,6 +442,27 @@ const styles = StyleSheet.create({
   registerHighlight: {
     color: Colors.brand.primary,
     fontWeight: '600',
+  },
+  clubRegisterSection: {
+    marginTop: Spacing[2],
+    gap: Spacing[3],
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: Spacing[1],
+  },
+  newClubPrompt: {
+    fontSize: 13,
+  },
+  checkStatusLink: {
+    paddingVertical: Spacing[1],
+    alignItems: 'center',
+  },
+  checkStatusText: {
+    color: '#18794E',
+    fontWeight: '600',
+    fontSize: 12,
   },
   footer: {
     marginTop: Spacing[4],

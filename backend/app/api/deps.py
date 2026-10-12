@@ -157,3 +157,24 @@ def require_permission(permission: Permission):
         return membership
 
     return _check
+
+
+async def get_current_platform_owner(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Dependency: requires the current authenticated user to be an authorized platform owner.
+    Platform owners are explicitly configured in settings.PLATFORM_OWNER_EMAILS.
+    Does NOT use or modify ClubRole (preserves exactly the 3 club staff roles).
+    Fails closed with 403 Forbidden if not authorized.
+    """
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    allowed = {e.lower().strip() for e in settings.PLATFORM_OWNER_EMAILS}
+    if not current_user.email or current_user.email.lower().strip() not in allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Platform owner authorization required.",
+        )
+    return current_user

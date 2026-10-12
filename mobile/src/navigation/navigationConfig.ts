@@ -113,7 +113,8 @@ export const CLUB_NAV_SECTIONS: NavSection[] = [
     label: 'CLUB PROFILE',
     items: [
       { key: 'club_details', label: 'Club Details', icon: 'Building2', route: '/(club)/club-details', permission: 'canManageClub' },
-      { key: 'register_club', label: 'Register New Club', icon: 'PlusCircle', route: '/(club)/register-club' },
+      { key: 'register_club', label: 'Apply for New Club', icon: 'PlusCircle', route: '/(club)/register-club' },
+      { key: 'platform_applications', label: 'Platform Applications', icon: 'ShieldCheck', route: '/(club)/platform-applications' },
     ],
   },
   {
