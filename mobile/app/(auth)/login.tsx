@@ -337,7 +337,7 @@ export default function LoginScreen() {
               Aught2 Pickleball © 2026
             </AppText>
             <TouchableOpacity
-              onPress={() => router.push('/(platform)/login' as any)}
+              onPress={() => router.push('/platform/login' as any)}
               style={styles.platformLinkBtn}
               activeOpacity={0.7}
             >

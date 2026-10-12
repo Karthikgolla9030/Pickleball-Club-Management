@@ -50,7 +50,7 @@ function RootLayoutContent() {
   useEffect(() => {
     if (isLoading) return;
     const seg = segments[0] as string | undefined;
-    const inAuthGroup = seg === '(auth)' || seg === '(platform)';
+    const inAuthGroup = seg === '(auth)' || seg === 'platform';
 
     if (!isAuthenticated && !inAuthGroup) {
       router.replace('/(auth)/login');
@@ -65,7 +65,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(player)" />
         <Stack.Screen name="(club)" />
-        <Stack.Screen name="(platform)" />
+        <Stack.Screen name="platform" />
       </Stack>
     </>
   );

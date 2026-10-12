@@ -198,7 +198,7 @@ export default function PlatformApplicationsScreen() {
 
   const handleSignOut = async () => {
     await logout();
-    router.replace('/(platform)/login' as any);
+    router.replace('/platform/login' as any);
   };
 
   return (
@@ -224,7 +224,7 @@ export default function PlatformApplicationsScreen() {
 
           <TouchableOpacity
             style={styles.platformNavLink}
-            onPress={() => router.push('/(platform)/clubs' as any)}
+            onPress={() => router.push('/platform/clubs' as any)}
             activeOpacity={0.8}
           >
             <AppText style={styles.platformNavLinkText}>Clubs</AppText>

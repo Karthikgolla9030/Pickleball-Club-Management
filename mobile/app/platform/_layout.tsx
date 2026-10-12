@@ -1,15 +1,15 @@
 /**
- * Aught2 Pickleball — Platform Administration Group Layout
+ * Aught2 Pickleball — Platform Administration Layout
  *
  * Provides dedicated routing and server-enforced platform authorization guard:
- * - Direct entry point for authorized platform owners
+ * - Direct entry point at /platform/login for authorized platform owners
  * - Completely separate from Club Staff and Player experiences
  * - Verifies caller has platform-owner authorization via backend /api/v1/platform/me
  */
 
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { ShieldAlert } from 'lucide-react-native';
 
 import { AppText, Button, Card, LoadingState, Screen } from '@/components';
@@ -19,28 +19,32 @@ import { Colors, Radius, Spacing } from '@/theme';
 
 export default function PlatformLayout() {
   const router = useRouter();
-  const pathname = usePathname();
+  const segments = useSegments();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
 
-  const [isVerifying, setIsVerifying] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const isLoginPage = pathname === '/(platform)/login' || pathname.endsWith('/platform/login');
+  // Sub-route within /platform (e.g., 'login', 'applications', 'clubs', '')
+  const subRoute = segments[1] || '';
+  const isLoginPage = subRoute === 'login';
 
   useEffect(() => {
     if (isLoading) return;
 
+    // Login page requires no platform guard
     if (isLoginPage) {
       setIsVerifying(false);
       return;
     }
 
+    // Unauthenticated visitors to protected platform screens must go to platform login
     if (!isAuthenticated) {
-      router.replace('/(platform)/login' as any);
+      router.replace('/platform/login' as any);
       return;
     }
 
@@ -73,73 +77,68 @@ export default function PlatformLayout() {
     };
   }, [isLoading, isAuthenticated, isLoginPage, router]);
 
-  if (isLoginPage) {
-    return (
-      <View style={styles.container}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="login" />
-        </Stack>
-      </View>
-    );
+  // Protected screen authorization checks
+  if (!isLoginPage) {
+    if (isVerifying || isLoading) {
+      return (
+        <Screen style={styles.container}>
+          <LoadingState message="Verifying platform owner authorization..." />
+        </Screen>
+      );
+    }
+
+    if (!isAuthorized && isAuthenticated) {
+      return (
+        <Screen style={styles.container}>
+          <View style={styles.centerBox}>
+            <Card style={styles.forbiddenCard}>
+              <View style={styles.forbiddenIconCircle}>
+                <ShieldAlert size={40} color="#DC2626" />
+              </View>
+              <AppText variant="heading2" color="primary" style={styles.forbiddenTitle}>
+                Platform Access Restricted
+              </AppText>
+              <AppText variant="body" color="secondary" style={styles.forbiddenBody}>
+                {errorMsg || 'You do not have administrative authorization to access the Aught2 Platform Portal.'}
+              </AppText>
+              <AppText variant="caption" color="secondary" style={styles.forbiddenEmail}>
+                Signed in as: {user?.email || 'Unknown'}
+              </AppText>
+              <View style={styles.actionRow}>
+                <Button
+                  label="Sign In as Platform Owner"
+                  variant="primary"
+                  onPress={() => router.replace('/platform/login' as any)}
+                  style={styles.actionBtn}
+                />
+                <Button
+                  label="Return to Main Portal"
+                  variant="outline"
+                  onPress={async () => {
+                    await logout();
+                    router.replace('/(auth)/login');
+                  }}
+                  style={styles.actionBtn}
+                />
+              </View>
+            </Card>
+          </View>
+        </Screen>
+      );
+    }
   }
 
-  if (isVerifying || isLoading) {
-    return (
-      <Screen style={styles.container}>
-        <LoadingState message="Verifying platform owner authorization..." />
-      </Screen>
-    );
-  }
-
-  if (!isAuthorized) {
-    return (
-      <Screen style={styles.container}>
-        <View style={styles.centerBox}>
-          <Card style={styles.forbiddenCard}>
-            <View style={styles.forbiddenIconCircle}>
-              <ShieldAlert size={40} color="#DC2626" />
-            </View>
-            <AppText variant="heading2" color="primary" style={styles.forbiddenTitle}>
-              Platform Access Restricted
-            </AppText>
-            <AppText variant="body" color="secondary" style={styles.forbiddenBody}>
-              {errorMsg || 'You do not have administrative authorization to access the Aught2 Platform Portal.'}
-            </AppText>
-            <AppText variant="caption" color="secondary" style={styles.forbiddenEmail}>
-              Signed in as: {user?.email || 'Unknown'}
-            </AppText>
-            <View style={styles.actionRow}>
-              <Button
-                label="Sign In as Platform Owner"
-                variant="primary"
-                onPress={() => router.replace('/(platform)/login' as any)}
-                style={styles.actionBtn}
-              />
-              <Button
-                label="Return to Main Portal"
-                variant="outline"
-                onPress={async () => {
-                  await logout();
-                  router.replace('/(auth)/login');
-                }}
-                style={styles.actionBtn}
-              />
-            </View>
-          </Card>
-        </View>
-      </Screen>
-    );
-  }
-
+  // Unified Stack navigator for all screens in /platform
   return (
     <View style={styles.container}>
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.background.primary },
+          contentStyle: { backgroundColor: '#F8FAF9' },
           animation: 'fade',
         }}
       >
+        <Stack.Screen name="login" />
         <Stack.Screen name="index" />
         <Stack.Screen name="applications" />
         <Stack.Screen name="clubs" />
@@ -179,22 +178,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   forbiddenTitle: {
+    marginBottom: 8,
     textAlign: 'center',
-    marginBottom: 10,
   },
   forbiddenBody: {
     textAlign: 'center',
-    marginBottom: 12,
     lineHeight: 20,
+    marginBottom: 12,
   },
   forbiddenEmail: {
-    fontWeight: '600',
-    color: '#1A2E2B',
-    marginBottom: 24,
+    marginBottom: 20,
+    textAlign: 'center',
   },
   actionRow: {
     width: '100%',
-    gap: 12,
+    gap: 10,
   },
   actionBtn: {
     width: '100%',

@@ -10,7 +10,7 @@ export default function DeprecatedClubPlatformApplicationsRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/(platform)/applications' as any);
+    router.replace('/platform/applications' as any);
   }, [router]);
 
   return (

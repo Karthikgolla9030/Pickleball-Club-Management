@@ -62,7 +62,7 @@ export default function PlatformLoginScreen() {
     if (!validate()) return;
     try {
       await loginPlatform(email.trim(), password);
-      router.replace('/(platform)/applications' as any);
+      router.replace('/platform/applications' as any);
     } catch {
       // error is handled by store and displayed below
     }
