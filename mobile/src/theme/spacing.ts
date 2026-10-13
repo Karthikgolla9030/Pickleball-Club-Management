@@ -81,11 +81,18 @@ export const Shadows = {
 
 export const Dimensions = {
   buttonHeight: {
-    sm: 40,
-    md: 48,
-    lg: 48,
+    xs: 32,
+    sm: 38,
+    md: 46,
+    lg: 52,
   },
-  inputHeight: 52,
+  cardActionHeight: 36,
+  iconButtonSize: {
+    sm: 36,
+    md: 40,
+    lg: 46,
+  },
+  inputHeight: 48,
   headerHeight: 56,
   tabBarHeight: 64,
   borderWidth: {

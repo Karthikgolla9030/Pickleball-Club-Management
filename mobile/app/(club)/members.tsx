@@ -48,6 +48,7 @@ import {
 
 import { API_ENDPOINTS } from '@/constants';
 import {
+  AppHeader,
   AppText,
   EmptyState,
   ErrorState,
@@ -522,20 +523,7 @@ export default function ClubMembersScreen() {
     return (
       <Screen style={styles.screenContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
-        <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity
-            onPress={openDrawer}
-            style={styles.hamburgerBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Open navigation menu"
-          >
-            <Menu size={24} color="#102F2A" strokeWidth={2.2} />
-          </TouchableOpacity>
-          <View style={styles.headerTitles}>
-            <AppText style={styles.headerTitle}>Members</AppText>
-            <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
-          </View>
-        </View>
+        <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
         <ErrorState
           title="Access Denied"
           message="You do not have permission to view or manage club members."
@@ -556,20 +544,7 @@ export default function ClubMembersScreen() {
     return (
       <Screen style={styles.screenContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
-        <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
-          <TouchableOpacity
-            onPress={openDrawer}
-            style={styles.hamburgerBtn}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Open navigation menu"
-          >
-            <Menu size={24} color="#102F2A" strokeWidth={2.2} />
-          </TouchableOpacity>
-          <View style={styles.headerTitles}>
-            <AppText style={styles.headerTitle}>Members</AppText>
-            <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
-          </View>
-        </View>
+        <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
         <ErrorState
           title="Unable to Load Members"
           message={currentError.message || 'A network error occurred.'}
@@ -583,23 +558,7 @@ export default function ClubMembersScreen() {
 
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* 1. Header with Hamburger Menu & Titles */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
-        <TouchableOpacity
-          onPress={openDrawer}
-          style={styles.hamburgerBtn}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Open navigation menu"
-        >
-          <Menu size={24} color="#102F2A" strokeWidth={2.2} />
-        </TouchableOpacity>
-        <View style={styles.headerTitles}>
-          <AppText style={styles.headerTitle}>Members</AppText>
-          <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
-        </View>
-      </View>
-
-      {/* 2. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll ] */}
+      {/* 1. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll ] */}
       <View style={styles.mainActionsRow}>
         <TouchableOpacity
           style={[styles.mainActionBtn, activeTab === 'players' && styles.mainActionBtnActive]}
@@ -914,7 +873,7 @@ export default function ClubMembersScreen() {
         : 'Staff Member';
 
     const roleConfig = {
-      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#0E5E54' },
+      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
       club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
       tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
     }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
@@ -1024,8 +983,8 @@ export default function ClubMembersScreen() {
                 </>
               ) : (
                 <>
-                  <UserCheck size={15} color="#0E5E54" strokeWidth={1.9} />
-                  <AppText style={[styles.cardActionText, { color: '#0E5E54' }]}>Enable</AppText>
+                  <UserCheck size={15} color="#176B57" strokeWidth={1.9} />
+                  <AppText style={[styles.cardActionText, { color: '#176B57' }]}>Enable</AppText>
                 </>
               )}
             </TouchableOpacity>
@@ -1046,7 +1005,8 @@ export default function ClubMembersScreen() {
 
   return (
     <Screen style={styles.screenContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F8F5" />
+      <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
 
       {/* Main List */}
       <View style={styles.screenInner}>
@@ -1086,7 +1046,7 @@ export default function ClubMembersScreen() {
               <RefreshControl
                 refreshing={isRefetching}
                 onRefresh={onRefresh}
-                tintColor="#0E5E54"
+                tintColor="#176B57"
               />
             }
           />
@@ -1120,7 +1080,7 @@ export default function ClubMembersScreen() {
               <RefreshControl
                 refreshing={isRefetching}
                 onRefresh={onRefresh}
-                tintColor="#0E5E54"
+                tintColor="#176B57"
               />
             }
           />
@@ -1680,8 +1640,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   mainActionBtnActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   mainActionBtnText: {
     fontSize: 14,
@@ -1699,7 +1659,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    backgroundColor: '#0E5E54',
+    backgroundColor: '#176B57',
     borderRadius: 12,
   },
   enrollActionBtnText: {
@@ -1724,8 +1684,8 @@ const styles = StyleSheet.create({
     borderColor: '#DFE7E3',
   },
   filterPillActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   filterPillText: {
     fontSize: 12.5,
@@ -1794,7 +1754,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#0E5E54',
+    backgroundColor: '#176B57',
     paddingHorizontal: 14,
     height: 44,
     borderRadius: 12,
@@ -1843,7 +1803,7 @@ const styles = StyleSheet.create({
   },
   avatarInitialsText: {
     fontWeight: '700',
-    color: '#0E5E54',
+    color: '#176B57',
     letterSpacing: 0.5,
   },
 
@@ -2072,8 +2032,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E8E4',
   },
   statusSelectOptionActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   statusSelectOptionText: {
     fontSize: 12,
@@ -2094,7 +2054,7 @@ const styles = StyleSheet.create({
   },
   roleSelectOptionActive: {
     backgroundColor: '#DEF2E6',
-    borderColor: '#0E5E54',
+    borderColor: '#176B57',
   },
   roleSelectOptionText: {
     fontSize: 13,
@@ -2102,7 +2062,7 @@ const styles = StyleSheet.create({
     color: '#102F2A',
   },
   roleSelectOptionTextActive: {
-    color: '#0E5E54',
+    color: '#176B57',
   },
   modalActionButtons: {
     flexDirection: 'row',
@@ -2129,7 +2089,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#0E5E54',
+    backgroundColor: '#176B57',
     alignItems: 'center',
     justifyContent: 'center',
   },

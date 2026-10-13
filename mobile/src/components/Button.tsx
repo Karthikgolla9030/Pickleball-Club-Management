@@ -25,7 +25,7 @@ import {
 import { Colors, Dimensions, Radius, Shadows, Spacing, Typography } from '@/theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps {
   onPress: () => void;
@@ -63,7 +63,7 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const hasFlex = style && typeof style === 'object' && ('flex' in style || 'flexGrow' in style);
-  const isFullWidth = fullWidth !== undefined ? fullWidth : (!hasFlex && size !== 'sm');
+  const isFullWidth = fullWidth !== undefined ? fullWidth : (!hasFlex && size !== 'sm' && size !== 'xs');
 
   return (
     <Pressable
@@ -213,9 +213,10 @@ const styles = StyleSheet.create({
   },
 
   // ─── Sizes ────────────────────────────────────────────────────────────────
-  size_sm: { height: Dimensions.buttonHeight.sm, paddingHorizontal: Spacing[3] },
-  size_md: { height: Dimensions.buttonHeight.md, paddingHorizontal: Spacing[4] },
-  size_lg: { height: Dimensions.buttonHeight.lg, paddingHorizontal: Spacing[5] },
+  size_xs: { height: Dimensions.buttonHeight.xs, paddingHorizontal: Spacing[2.5], borderRadius: 10 },
+  size_sm: { height: Dimensions.buttonHeight.sm, paddingHorizontal: Spacing[3], borderRadius: 10 },
+  size_md: { height: Dimensions.buttonHeight.md, paddingHorizontal: Spacing[4], borderRadius: 12 },
+  size_lg: { height: Dimensions.buttonHeight.lg, paddingHorizontal: Spacing[5], borderRadius: 14 },
 
   // ─── Label Colors ─────────────────────────────────────────────────────────
   label: { fontWeight: Typography.weight.semibold },
@@ -224,7 +225,8 @@ const styles = StyleSheet.create({
   label_ghost: { color: Colors.brand.primary },
   label_outline: { color: Colors.text.primary },
   label_danger: { color: Colors.status.error },
-  labelSize_sm: { fontSize: Typography.size.sm },
-  labelSize_md: { fontSize: Typography.size.sm + 1 }, // 14px
-  labelSize_lg: { fontSize: Typography.size.base },
+  labelSize_xs: { fontSize: Typography.size.xs + 1 }, // 12px
+  labelSize_sm: { fontSize: Typography.size.sm },      // 13px
+  labelSize_md: { fontSize: Typography.size.sm + 1 },  // 14px
+  labelSize_lg: { fontSize: Typography.size.base },    // 15px
 });

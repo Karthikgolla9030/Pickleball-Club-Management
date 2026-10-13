@@ -55,7 +55,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppText, ModalSheet } from '@/components';
+import { AppHeader, AppText, ModalSheet } from '@/components';
 import {
   useActiveClub,
   useClubBranding,
@@ -260,22 +260,12 @@ export default function PlayerLessonsScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
-      <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
-        <Pressable
-          onPress={openDrawer}
-          style={styles.menuButton}
-          hitSlop={8}
-          accessibilityLabel="Open menu"
-          accessibilityRole="button"
-        >
-          <Menu size={24} color="#0F2922" strokeWidth={2.2} />
-        </Pressable>
-        <AppText style={styles.headerTitle}>Lessons</AppText>
-      </View>
-
-      <AppText style={styles.headerSubtitle}>
-        Explore coaching sessions and improve your game
-      </AppText>
+      <AppHeader
+        title="Lessons"
+        subtitle="Explore coaching sessions and improve your game"
+        showMenu
+        borderless
+      />
 
       {/* ─── Segmented Control (Tabs) ─── */}
       <View style={styles.segmentedContainer}>

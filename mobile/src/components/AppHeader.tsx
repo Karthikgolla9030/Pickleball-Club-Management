@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Menu, ArrowLeft } from 'lucide-react-native';
@@ -46,6 +46,15 @@ export function AppHeader({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const { width: windowWidth } = useWindowDimensions();
+
+  // Dynamically adapt header font size based on title length and presence of right action
+  const hasRightAction = !!rightElement;
+  const isCompactScreen = windowWidth < 380;
+  const isLongTitle = title.length > 14;
+
+  const titleFontSize = isCompactScreen || (isLongTitle && hasRightAction) ? 19 : isLongTitle ? 20.5 : 22;
+  const titleLineHeight = titleFontSize + 4;
 
   return (
     <View
@@ -87,9 +96,10 @@ export function AppHeader({
           <AppText
             variant="title"
             numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.85}
-            style={styles.title}
+            style={[
+              styles.title,
+              { fontSize: titleFontSize, lineHeight: titleLineHeight },
+            ]}
           >
             {title}
           </AppText>
@@ -97,9 +107,7 @@ export function AppHeader({
             <AppText
               variant="caption"
               color="secondary"
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.9}
+              numberOfLines={2}
               style={styles.subtitle}
             >
               {subtitle}
@@ -132,34 +140,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 8,
-    gap: 8,
+    gap: 10,
   },
   iconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   iconPlaceholder: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     flexShrink: 0,
   },
   titleBlock: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
+    gap: 1.5,
+    justifyContent: 'center',
   },
   title: {
     textAlign: 'left',
-    fontSize: 22,
     fontWeight: '700',
     color: '#102B2A',
+    letterSpacing: -0.3,
   },
   subtitle: {
     textAlign: 'left',
-    fontSize: 13,
+    fontSize: 12,
+    lineHeight: 15,
     color: '#667776',
   },
   rightSlot: {

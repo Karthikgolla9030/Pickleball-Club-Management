@@ -1133,16 +1133,16 @@ const styles = StyleSheet.create({
   // Header Button
   headerCreateBtn: {
     backgroundColor: '#176B57',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    height: 34,
+    paddingHorizontal: 13,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerCreateBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 
   // Club Card

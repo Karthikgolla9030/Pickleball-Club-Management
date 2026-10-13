@@ -1718,7 +1718,7 @@ const styles = StyleSheet.create({
   },
   scheduleHeaderBtn: {
     backgroundColor: '#176B57',
-    paddingHorizontal: 16,
+    paddingHorizontal: 13,
     height: 34,
     borderRadius: 17,
     alignItems: 'center',
@@ -1726,7 +1726,7 @@ const styles = StyleSheet.create({
   },
   scheduleHeaderBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   listContent: {

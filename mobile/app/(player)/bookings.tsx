@@ -33,7 +33,7 @@ import {
   ChevronRight,
 } from 'lucide-react-native';
 
-import { AppText, BookingDetailsModal } from '@/components';
+import { AppHeader, AppText, BookingDetailsModal } from '@/components';
 import { useActiveClub, useClubBranding, usePlayerBookings } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
@@ -385,23 +385,7 @@ export default function PlayerBookingsScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
-      <View
-        style={[
-          styles.headerRow,
-          { paddingTop: Math.max(insets.top, 12) + 8 },
-        ]}
-      >
-        <Pressable
-          onPress={openDrawer}
-          style={styles.menuButton}
-          hitSlop={8}
-          accessibilityLabel="Open menu"
-          accessibilityRole="button"
-        >
-          <Menu size={24} color="#0F2922" strokeWidth={2.2} />
-        </Pressable>
-        <AppText style={styles.headerTitle}>Bookings</AppText>
-      </View>
+      <AppHeader title="Bookings" showMenu borderless />
 
       {/* ─── 3 Filter Tabs / Pills ─── */}
       <View style={styles.filterTabsRow}>

@@ -13,7 +13,6 @@ import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   BackHandler,
-  Dimensions,
   Easing,
   Image,
   Platform,
@@ -21,6 +20,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
@@ -55,9 +55,6 @@ import { AppText } from './AppText';
 import { useDrawerStore } from '@/navigation';
 import { useAuth, useActiveClub } from '@/hooks';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.84, 340);
-
 interface NavItemConfig {
   key: string;
   label: string;
@@ -73,6 +70,10 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+
+  // Responsive drawer width: comfortably fits narrow screens (320px) while leaving tap-to-dismiss margin
+  const drawerWidth = Math.min(Math.max(windowWidth * 0.82, 280), 340);
 
   const { user, memberships, logout } = useAuth();
   const { role, activeMembership } = useActiveClub();
@@ -92,16 +93,16 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   }, [isOpen, closeDrawer]);
 
   // Slide animation from LEFT
-  const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
+  const translateX = useRef(new Animated.Value(-340)).current;
 
   useEffect(() => {
     Animated.timing(translateX, {
-      toValue: isOpen ? 0 : -DRAWER_WIDTH,
+      toValue: isOpen ? 0 : -drawerWidth,
       duration: 250,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: Platform.OS !== 'web',
     }).start();
-  }, [isOpen, translateX]);
+  }, [isOpen, drawerWidth, translateX]);
 
   // Normalized path matching
   const normalizedPath = pathname.replace(/\/$/, '') || '/';
@@ -263,24 +264,26 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       >
         <View style={styles.navRowLeft}>
           <Icon
-            size={19}
+            size={18}
             color={isActive ? '#176F5B' : '#2A4540'}
-            strokeWidth={isActive ? 2.3 : 1.9}
+            strokeWidth={isActive ? 2.2 : 2.0}
           />
           <AppText
             style={[
               styles.navRowLabel,
               isActive && styles.navRowLabelActive,
             ]}
+            numberOfLines={1}
           >
             {item.label}
           </AppText>
         </View>
 
         <ChevronRight
-          size={15}
-          color={isActive ? '#176F5B' : '#B0BCB7'}
+          size={14}
+          color={isActive ? '#176F5B' : '#A0B0AB'}
           strokeWidth={2}
+          style={styles.chevronIcon}
         />
       </Pressable>
     );
@@ -291,15 +294,14 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       style={[
         styles.drawer,
         {
-          width: DRAWER_WIDTH,
+          width: drawerWidth,
           paddingTop: insets.top + 6,
-          paddingBottom: Math.max(insets.bottom, 14),
           transform: [{ translateX }],
         },
       ]}
       pointerEvents={isOpen ? 'auto' : 'none'}
     >
-      {/* 1. Header with Logo & Close Button */}
+      {/* 1. Header with Logo & Close Button (Fixed at Top) */}
       <View style={styles.headerRow}>
         <Image
           source={require('../../assets/pickleball_logo_transparent.png')}
@@ -320,36 +322,41 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         </TouchableOpacity>
       </View>
 
-      {/* 2. User Profile Identity Section */}
-      <View style={styles.profileSection}>
-        <View style={styles.avatarCircle}>
-          <AppText style={styles.avatarInitial}>{initial}</AppText>
-        </View>
-
-        <View style={styles.profileDetails}>
-          <AppText style={styles.profileName} numberOfLines={1}>
-            {displayName}
-          </AppText>
-          <AppText style={styles.profileEmail} numberOfLines={1}>
-            {email}
-          </AppText>
-
-          {/* Role Pill Badge */}
-          <View style={[styles.roleBadgePill, { backgroundColor: roleBadgeBg }]}>
-            <RoleIcon size={11} color={roleBadgeColor} strokeWidth={2.4} />
-            <AppText style={[styles.roleBadgeText, { color: roleBadgeColor }]}>
-              {roleLabel}
-            </AppText>
-          </View>
-        </View>
-      </View>
-
-      {/* 3. Scrollable Navigation List */}
+      {/* 2. Scrollable Navigation List with Profile at Top */}
       <ScrollView
         style={styles.scrollList}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom + 28, 40) },
+        ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* User Profile Identity Section */}
+        <View style={styles.profileSection}>
+          <View style={styles.avatarCircle}>
+            <AppText style={styles.avatarInitial}>{initial}</AppText>
+          </View>
+
+          <View style={styles.profileDetails}>
+            <AppText style={styles.profileName} numberOfLines={1}>
+              {displayName}
+            </AppText>
+            <AppText style={styles.profileEmail} numberOfLines={1}>
+              {email}
+            </AppText>
+
+            {/* Role Pill Badge */}
+            <View style={[styles.roleBadgePill, { backgroundColor: roleBadgeBg }]}>
+              <RoleIcon size={11} color={roleBadgeColor} strokeWidth={2.4} />
+              <AppText style={[styles.roleBadgeText, { color: roleBadgeColor }]}>
+                {roleLabel}
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.profileDivider} />
+
         {isPlayer ? (
           <>
             {/* Player Main Activities */}
@@ -399,7 +406,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
           accessibilityLabel="Sign Out"
           accessibilityRole="button"
         >
-          <LogOut size={17} color="#DC2626" strokeWidth={2.3} />
+          <LogOut size={16} color="#DC2626" strokeWidth={2.2} />
           <AppText style={styles.signOutText}>Sign Out</AppText>
         </TouchableOpacity>
 
@@ -433,77 +440,90 @@ const styles = StyleSheet.create({
     elevation: 20,
   },
 
-  // 1. Header Row
+  // 1. Header Row (Fixed at Top)
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 14,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
   },
   logoImage: {
     width: 96,
-    height: 42,
+    height: 40,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#F3F6F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  // 2. Profile Section
+  // 2. Profile Section (Inside ScrollView)
   profileSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 14,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 12,
   },
   avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#D7EFE7',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   avatarInitial: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#18794E',
   },
   profileDetails: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
+    gap: 1.5,
   },
   profileName: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#102F2B',
+    lineHeight: 18,
   },
   profileEmail: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#667773',
+    lineHeight: 15,
   },
   roleBadgePill: {
     alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: '#E4F4EC',
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 12,
-    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginTop: 3,
   },
   roleBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#176F5B',
+  },
+  profileDivider: {
+    height: 1,
+    backgroundColor: '#EEF2F0',
+    marginHorizontal: 16,
+    marginBottom: 8,
   },
 
   // 3. Navigation List
@@ -511,20 +531,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
+    paddingHorizontal: 12,
+    paddingTop: 4,
   },
   itemGroup: {
-    gap: 2,
+    gap: 1.5,
   },
   navRow: {
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    borderRadius: 10,
   },
   navRowActive: {
     backgroundColor: '#EAF6F0',
@@ -533,29 +552,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F8F5',
   },
   navRowLeft: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 13,
+    gap: 11,
   },
   navRowLabel: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
     color: '#2A4540',
+    flexShrink: 1,
   },
   navRowLabelActive: {
     color: '#176F5B',
     fontWeight: '700',
   },
+  chevronIcon: {
+    flexShrink: 0,
+    marginLeft: 6,
+  },
 
   divider: {
     height: 1,
     backgroundColor: '#EEF2F0',
-    marginVertical: 10,
+    marginVertical: 8,
     marginHorizontal: 8,
   },
 
   // 4. Sign Out Button
   signOutButton: {
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -563,13 +590,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE8E8',
     borderColor: '#FECDCA',
     borderWidth: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
-    marginTop: 18,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginTop: 16,
+    marginBottom: 14,
+    marginHorizontal: 4,
   },
   signOutText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#DC2626',
   },
@@ -581,23 +608,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 8,
     paddingTop: 4,
-    paddingBottom: 10,
+    paddingBottom: 8,
   },
   footerBrandCol: {
     gap: 2,
   },
   footerBrandTitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#8F9F9A',
     letterSpacing: 0.8,
   },
   footerBrandMotto: {
-    fontSize: 9.5,
+    fontSize: 9,
     color: '#A0B0AB',
   },
   footerVersion: {
-    fontSize: 10,
+    fontSize: 9.5,
     color: '#A0B0AB',
     fontWeight: '500',
   },

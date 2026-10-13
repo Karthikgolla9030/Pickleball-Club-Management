@@ -54,7 +54,7 @@ import {
   Users,
 } from 'lucide-react-native';
 
-import { AppText, Badge, Button, ModalSheet } from '@/components';
+import { AppHeader, AppText, Badge, Button, ModalSheet } from '@/components';
 import { useActiveClub, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
@@ -246,22 +246,12 @@ export default function PlayerMembershipScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
-      <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 14) + 6 }]}>
-        <Pressable
-          onPress={openDrawer}
-          style={styles.menuButton}
-          hitSlop={8}
-          accessibilityLabel="Open menu"
-          accessibilityRole="button"
-        >
-          <Menu size={24} color="#0F2922" strokeWidth={2.2} />
-        </Pressable>
-        <AppText style={styles.headerTitle}>My Membership</AppText>
-      </View>
-
-      <AppText style={styles.headerSubtitle}>
-        View your active subscriptions and privileges across clubs
-      </AppText>
+      <AppHeader
+        title="My Membership"
+        subtitle="View your active subscriptions and privileges across clubs"
+        showMenu
+        borderless
+      />
 
       {/* Multi-Club Tabs if player belongs to multiple clubs */}
       {memberships.length > 1 ? (

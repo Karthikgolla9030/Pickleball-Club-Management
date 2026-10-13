@@ -491,7 +491,7 @@ export default function ClubDetailsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#176F5B"
+              tintColor="#176B57"
             />
           }
         >
@@ -504,7 +504,7 @@ export default function ClubDetailsScreen() {
               <Card style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.sectionIconBadge}>
-                    <Building2 size={18} color="#176F5B" />
+                    <Building2 size={18} color="#176B57" />
                   </View>
                   <View style={styles.sectionTitleBlock}>
                     <AppText style={styles.sectionTitle}>Club Information</AppText>
@@ -525,7 +525,7 @@ export default function ClubDetailsScreen() {
                       />
                     ) : (
                       <View style={styles.logoFallback}>
-                        <Building2 size={36} color="#176F5B" />
+                        <Building2 size={36} color="#176B57" />
                       </View>
                     )}
                     {isOwner && (
@@ -652,7 +652,7 @@ export default function ClubDetailsScreen() {
               <Card style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.sectionIconBadge}>
-                    <MapPin size={18} color="#176F5B" />
+                    <MapPin size={18} color="#176B57" />
                   </View>
                   <View style={styles.sectionTitleBlock}>
                     <AppText style={styles.sectionTitle}>Location & Address</AppText>
@@ -725,7 +725,7 @@ export default function ClubDetailsScreen() {
               <Card style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.sectionIconBadge}>
-                    <Clock size={18} color="#176F5B" />
+                    <Clock size={18} color="#176B57" />
                   </View>
                   <View style={styles.sectionTitleBlock}>
                     <AppText style={styles.sectionTitle}>Operating Hours & Schedule</AppText>
@@ -834,7 +834,7 @@ export default function ClubDetailsScreen() {
                             {opt.label}
                           </AppText>
                           {opt.value === timezone && (
-                            <Check size={16} color="#176F5B" strokeWidth={2.5} />
+                            <Check size={16} color="#176B57" strokeWidth={2.5} />
                           )}
                         </TouchableOpacity>
                       ))}
@@ -901,7 +901,7 @@ export default function ClubDetailsScreen() {
                ═════════════════════════════════════════════════════════════════════════ */
             <View style={styles.previewWrapper}>
               <View style={styles.previewModeBanner}>
-                <Eye size={16} color="#176F5B" />
+                <Eye size={16} color="#176B57" />
                 <AppText style={styles.previewModeText}>
                   Player Live Preview: This is exactly what enrolled and visiting players see.
                 </AppText>
@@ -918,7 +918,7 @@ export default function ClubDetailsScreen() {
                         resizeMode="cover"
                       />
                     ) : (
-                      <Building2 size={32} color="#176F5B" />
+                      <Building2 size={32} color="#176B57" />
                     )}
                   </View>
                   <View style={styles.previewTitleBlock}>
@@ -962,7 +962,7 @@ export default function ClubDetailsScreen() {
               {(addressLine1 || city || state || postalCode) ? (
                 <Card style={styles.previewSectionCard}>
                   <View style={styles.previewHeaderRow}>
-                    <MapPin size={18} color="#176F5B" />
+                    <MapPin size={18} color="#176B57" />
                     <AppText style={styles.previewCardTitle}>Location & Directions</AppText>
                   </View>
                   <View style={styles.previewAddressBlock}>
@@ -985,7 +985,7 @@ export default function ClubDetailsScreen() {
               {/* Operating Hours Card */}
               <Card style={styles.previewSectionCard}>
                 <View style={styles.previewHeaderRow}>
-                  <Clock size={18} color="#176F5B" />
+                  <Clock size={18} color="#176B57" />
                   <AppText style={styles.previewCardTitle}>Operating Hours</AppText>
                 </View>
 
@@ -1019,7 +1019,7 @@ export default function ClubDetailsScreen() {
               {facilitiesSummary ? (
                 <Card style={styles.previewSectionCard}>
                   <View style={styles.previewHeaderRow}>
-                    <Sparkles size={18} color="#176F5B" />
+                    <Sparkles size={18} color="#176B57" />
                     <AppText style={styles.previewCardTitle}>Facilities & Amenities</AppText>
                   </View>
                   <AppText style={styles.previewBodyText}>{facilitiesSummary}</AppText>
@@ -1030,7 +1030,7 @@ export default function ClubDetailsScreen() {
               {(contactEmail || contactPhone || website) ? (
                 <Card style={styles.previewSectionCard}>
                   <View style={styles.previewHeaderRow}>
-                    <Phone size={18} color="#176F5B" />
+                    <Phone size={18} color="#176B57" />
                     <AppText style={styles.previewCardTitle}>Contact & Connect</AppText>
                   </View>
 
@@ -1039,7 +1039,7 @@ export default function ClubDetailsScreen() {
                       style={styles.previewContactItem}
                       onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
                     >
-                      <Mail size={16} color="#176F5B" />
+                      <Mail size={16} color="#176B57" />
                       <AppText style={styles.previewContactLink}>{contactEmail}</AppText>
                     </TouchableOpacity>
                   ) : null}
@@ -1049,7 +1049,7 @@ export default function ClubDetailsScreen() {
                       style={styles.previewContactItem}
                       onPress={() => Linking.openURL(`tel:${contactPhone}`)}
                     >
-                      <Phone size={16} color="#176F5B" />
+                      <Phone size={16} color="#176B57" />
                       <AppText style={styles.previewContactLink}>{contactPhone}</AppText>
                     </TouchableOpacity>
                   ) : null}
@@ -1059,7 +1059,7 @@ export default function ClubDetailsScreen() {
                       style={styles.previewContactItem}
                       onPress={() => Linking.openURL(website)}
                     >
-                      <Globe size={16} color="#176F5B" />
+                      <Globe size={16} color="#176B57" />
                       <AppText style={styles.previewContactLink}>{website}</AppText>
                     </TouchableOpacity>
                   ) : null}
@@ -1211,7 +1211,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#176F5B',
+    backgroundColor: '#176B57',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
@@ -1238,7 +1238,7 @@ const styles = StyleSheet.create({
   logoActionLinkText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
   rowTwoCols: {
     flexDirection: 'row',
@@ -1269,8 +1269,8 @@ const styles = StyleSheet.create({
     borderColor: '#D4E5DE',
   },
   dayPillSelected: {
-    backgroundColor: '#176F5B',
-    borderColor: '#176F5B',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   dayPillDisabled: {
     opacity: 0.8,
@@ -1337,7 +1337,7 @@ const styles = StyleSheet.create({
   },
   dropdownItemTextSelected: {
     fontWeight: '700',
-    color: '#176F5B',
+    color: '#176B57',
   },
   actionButtonsRow: {
     flexDirection: 'row',
@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     flex: 2,
     flexDirection: 'row',
-    backgroundColor: '#176F5B',
+    backgroundColor: '#176B57',
     borderRadius: Radius.md,
     paddingVertical: Spacing[3.5],
     alignItems: 'center',
@@ -1398,7 +1398,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
   previewHeroCard: {
     backgroundColor: '#FFFFFF',
@@ -1459,7 +1459,7 @@ const styles = StyleSheet.create({
     padding: Spacing[3],
     borderRadius: Radius.md,
     borderLeftWidth: 3,
-    borderLeftColor: '#176F5B',
+    borderLeftColor: '#176B57',
   },
   previewTaglineText: {
     fontSize: 13,
@@ -1542,7 +1542,7 @@ const styles = StyleSheet.create({
   previewContactLink: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
     textDecorationLine: 'underline',
   },
 });

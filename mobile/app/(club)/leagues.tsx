@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Menu } from 'lucide-react-native';
 
 import {
+  AppHeader,
   AppText,
   CreateLeagueModal,
   EmptyState,
@@ -353,36 +354,27 @@ export default function ClubLeaguesScreen() {
 
   return (
     <Screen style={styles.screenContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F4F8F5" />
 
-      {/* Top Header matching Screen 1: Hamburger Menu, Title, Subtitle, + Create League Button */}
-      <View style={[styles.topHeader, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.drawerButton}
-          onPress={openDrawer}
-          accessibilityLabel="Open drawer menu"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Menu size={22} color="#111827" strokeWidth={2.4} />
-        </TouchableOpacity>
-
-        <View style={styles.titleContainer}>
-          <AppText style={styles.screenTitle}>Leagues</AppText>
-          <AppText style={styles.screenSubtitle}>Manage and run your club leagues</AppText>
-        </View>
-
-        {canManage && (
-          <TouchableOpacity
-            style={styles.createButton}
-            onPress={handleOpenCreateModal}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Create League"
-          >
-            <AppText style={styles.createButtonText}>+ Create League</AppText>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Standardized Unified Top Header */}
+      <AppHeader
+        title="Leagues"
+        subtitle="Manage and run your club leagues"
+        borderless
+        rightElement={
+          canManage ? (
+            <TouchableOpacity
+              style={styles.headerCreateBtn}
+              onPress={handleOpenCreateModal}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Create League"
+            >
+              <AppText style={styles.headerCreateBtnText}>+ Create League</AppText>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
       {/* Main List Area */}
       {isLoading ? (
@@ -509,41 +501,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
     gap: 12,
   },
-  drawerButton: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+  headerCreateBtn: {
+    backgroundColor: '#176B57',
+    paddingHorizontal: 13,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  titleContainer: {
-    flex: 1,
-  },
-  screenTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111827',
-    lineHeight: 24,
-  },
-  screenSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 1,
-  },
-  createButton: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-  },
-  createButtonText: {
+  headerCreateBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   filterSectionContainer: {
     backgroundColor: '#FFFFFF',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#EEF2F0',
     marginBottom: 10,
   },
   filterScroll: {
@@ -554,13 +529,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F3F6F5',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2EAE6',
   },
   filterPillActive: {
-    backgroundColor: '#064E3B',
-    borderColor: '#064E3B',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   filterPillText: {
     fontSize: 12.5,

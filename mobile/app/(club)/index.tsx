@@ -190,7 +190,7 @@ export default function ClubHomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#176F5B"
+            tintColor="#176B57"
           />
         }
       >
@@ -656,7 +656,7 @@ const styles = StyleSheet.create({
   viewAllLink: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
 
   // Quick Actions Grid (2 rows × 3 cols)
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
   scheduleBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
   scheduleMetaRow: {
     flexDirection: 'row',

@@ -103,7 +103,7 @@ export default function ClubProfileScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#176F5B"
+            tintColor="#176B57"
           />
         }
       >
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
 
   // 1. Top Green Curved Header
   headerContainer: {
-    backgroundColor: '#176F5B',
+    backgroundColor: '#176B57',
     paddingHorizontal: 20,
     paddingBottom: 55,
     borderBottomLeftRadius: 36,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#176F5B',
+    backgroundColor: '#176B57',
     borderWidth: 2,
     borderColor: '#FFFFFF',
     alignItems: 'center',

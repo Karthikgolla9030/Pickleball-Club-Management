@@ -492,7 +492,7 @@ export default function MembershipsScreen() {
         <View style={styles.benefitsList}>
           {benefits.map((b, i) => (
             <View key={i} style={styles.benefitRow}>
-              <Check size={14} color="#176B59" style={styles.checkmarkIcon} />
+              <Check size={14} color="#176B57" style={styles.checkmarkIcon} />
               <AppText style={styles.benefitText}>{b}</AppText>
             </View>
           ))}
@@ -645,7 +645,7 @@ export default function MembershipsScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={onRefresh}
-              tintColor="#176B59"
+              tintColor="#176B57"
             />
           }
         />
@@ -672,7 +672,7 @@ export default function MembershipsScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={onRefresh}
-              tintColor="#176B59"
+              tintColor="#176B57"
             />
           }
         />
@@ -779,7 +779,7 @@ export default function MembershipsScreen() {
                 <AppText style={styles.formLabel}>Plan Benefits</AppText>
                 {planBenefits.map((b, i) => (
                   <View key={i} style={styles.benefitEditItem}>
-                    <Check size={14} color="#176B59" />
+                    <Check size={14} color="#176B57" />
                     <AppText style={styles.benefitEditText}>{b}</AppText>
                     <TouchableOpacity
                       onPress={() => handleRemoveBenefit(i)}
@@ -1049,16 +1049,18 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   newPlanButton: {
-    backgroundColor: '#176B59',
+    backgroundColor: '#176B57',
     alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    height: 36,
+    paddingHorizontal: 15,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   newPlanButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   segmentedContainer: {
     flexDirection: 'row',
@@ -1077,7 +1079,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
   },
   segmentedTabActive: {
-    backgroundColor: '#176B59',
+    backgroundColor: '#176B57',
   },
   segmentedTabText: {
     fontSize: 13,
@@ -1115,7 +1117,7 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   enrollSubBtn: {
-    backgroundColor: '#176B59',
+    backgroundColor: '#176B57',
     paddingHorizontal: 14,
     height: 42,
     borderRadius: 10,
@@ -1181,7 +1183,7 @@ const styles = StyleSheet.create({
   statusActiveText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#176B59',
+    color: '#176B57',
     letterSpacing: 0.3,
   },
   statusInactive: {
@@ -1292,7 +1294,7 @@ const styles = StyleSheet.create({
   reactivatePlanBtnText: {
     fontSize: 13.5,
     fontWeight: '600',
-    color: '#176B59',
+    color: '#176B57',
   },
   subscriberCard: {
     backgroundColor: '#FFFFFF',
@@ -1467,8 +1469,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   durationOptionActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   durationOptionText: {
     fontSize: 12.5,
@@ -1514,7 +1516,7 @@ const styles = StyleSheet.create({
   addBenefitBtn: {
     height: 40,
     paddingHorizontal: 14,
-    backgroundColor: '#176B59',
+    backgroundColor: '#176B57',
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1553,7 +1555,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#176B59',
+    backgroundColor: '#176B57',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1587,7 +1589,7 @@ const styles = StyleSheet.create({
   },
   selectionItemTextActive: {
     fontWeight: '700',
-    color: '#176B59',
+    color: '#176B57',
   },
   autoRenewRow: {
     flexDirection: 'row',
@@ -1606,8 +1608,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxChecked: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   autoRenewText: {
     fontSize: 13,

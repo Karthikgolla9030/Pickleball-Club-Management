@@ -276,7 +276,7 @@ export default function PlayerNotificationsScreen() {
             onPress={handleMarkAllRead}
             activeOpacity={0.7}
           >
-            <CheckCheck size={16} color="#176F5B" strokeWidth={2.2} style={{ marginRight: 4 }} />
+            <CheckCheck size={16} color="#176B57" strokeWidth={2.2} style={{ marginRight: 4 }} />
             <AppText style={styles.markAllText}>Mark read</AppText>
           </TouchableOpacity>
         )}
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
   markAllText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
   filterRow: {
     flexDirection: 'row',

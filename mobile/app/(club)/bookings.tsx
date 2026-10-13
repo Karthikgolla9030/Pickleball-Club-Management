@@ -545,7 +545,7 @@ export default function ClubStaffBookingsScreen() {
         >
           <SlidersHorizontal
             size={17}
-            color={activeFiltersCount > 0 ? '#176F5B' : '#102F2B'}
+            color={activeFiltersCount > 0 ? '#176B57' : '#102F2B'}
           />
         </TouchableOpacity>
       </View>
@@ -592,7 +592,7 @@ export default function ClubStaffBookingsScreen() {
         >
           <Calendar
             size={16}
-            color={isCustomDateSelected ? '#176F5B' : '#667773'}
+            color={isCustomDateSelected ? '#176B57' : '#667773'}
             strokeWidth={1.8}
           />
           <AppText
@@ -687,7 +687,7 @@ export default function ClubStaffBookingsScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor="#176F5B"
+            tintColor="#176B57"
           />
         }
         ListEmptyComponent={
@@ -808,7 +808,7 @@ export default function ClubStaffBookingsScreen() {
               }}
               activeOpacity={0.7}
             >
-              <LayoutGrid size={18} color="#176F5B" />
+              <LayoutGrid size={18} color="#176B57" />
               <AppText style={styles.actionSheetRowText}>View Details</AppText>
             </TouchableOpacity>
 
@@ -917,16 +917,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#176F5B',
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-    borderRadius: 10,
+    backgroundColor: '#176B57',
+    height: 34,
+    paddingHorizontal: 13,
+    borderRadius: 17,
     flexShrink: 0,
   },
   newBookingBtnText: {
     color: '#FFFFFF',
     fontSize: 12.5,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 
   // 2. 4 Equal-width Tabs
@@ -946,8 +946,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tabItemActive: {
-    backgroundColor: '#176F5B',
-    borderColor: '#176F5B',
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   tabItemText: {
     fontSize: 14,
@@ -999,7 +999,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   filterIconButtonActive: {
-    borderColor: '#176F5B',
+    borderColor: '#176B57',
     backgroundColor: '#E8F5EE',
   },
 
@@ -1030,7 +1030,7 @@ const styles = StyleSheet.create({
   },
   dateCardActive: {
     backgroundColor: '#E8F5EE',
-    borderColor: '#176F5B',
+    borderColor: '#176B57',
     borderWidth: 1.5,
   },
   dateCardSub: {
@@ -1039,7 +1039,7 @@ const styles = StyleSheet.create({
     color: '#667773',
   },
   dateCardSubActive: {
-    color: '#176F5B',
+    color: '#176B57',
     fontWeight: '600',
   },
   dateCardTitle: {
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
     color: '#102F2B',
   },
   dateCardTitleActive: {
-    color: '#176F5B',
+    color: '#176B57',
   },
   pickDateCard: {
     flex: 1.15,
@@ -1314,7 +1314,7 @@ const styles = StyleSheet.create({
   viewDetailsText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#176F5B',
+    color: '#176B57',
   },
 
   // Skeleton

@@ -51,7 +51,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppText, ModalSheet } from '@/components';
+import { AppHeader, AppText, ModalSheet } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useAuth, usePlayerProfile } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -328,17 +328,7 @@ export default function PlayerProfileScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Page Header ───────────────────────────────────────────────────── */}
-      <View style={[styles.headerRow, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity
-          style={styles.menuButton}
-          onPress={() => useDrawerStore.getState().openDrawer()}
-          activeOpacity={0.7}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Menu size={24} color="#0F2922" strokeWidth={2.4} />
-        </TouchableOpacity>
-        <AppText style={styles.headerTitle}>Profile</AppText>
-      </View>
+      <AppHeader title="Profile" showMenu borderless />
 
       <ScrollView
         style={styles.scrollView}

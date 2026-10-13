@@ -376,7 +376,7 @@ export default function PlayerHomeScreen() {
                 style={styles.viewAllRow}
               >
                 <AppText style={styles.viewAllText}>View All</AppText>
-                <ChevronRight size={15} color="#176F5B" strokeWidth={2.2} />
+                <ChevronRight size={15} color="#176B57" strokeWidth={2.2} />
               </Pressable>
             </View>
 
@@ -480,7 +480,7 @@ export default function PlayerHomeScreen() {
                 style={styles.viewAllRow}
               >
                 <AppText style={styles.viewAllText}>View All</AppText>
-                <ChevronRight size={15} color="#176F5B" strokeWidth={2.2} />
+                <ChevronRight size={15} color="#176B57" strokeWidth={2.2} />
               </Pressable>
             </View>
 
@@ -568,7 +568,7 @@ export default function PlayerHomeScreen() {
                 style={styles.viewAllRow}
               >
                 <AppText style={styles.viewAllText}>View All</AppText>
-                <ChevronRight size={15} color="#176F5B" strokeWidth={2.2} />
+                <ChevronRight size={15} color="#176B57" strokeWidth={2.2} />
               </Pressable>
             </View>
 
@@ -662,7 +662,7 @@ export default function PlayerHomeScreen() {
           >
             {/* Lightbulb in pale green circle */}
             <View style={styles.discoverIconPill}>
-              <Lightbulb size={23} color="#176F5B" strokeWidth={2.2} />
+              <Lightbulb size={23} color="#176B57" strokeWidth={2.2} />
             </View>
 
             {/* Description */}
@@ -851,7 +851,7 @@ const styles = StyleSheet.create({
   viewAllText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#176F5B',
+    color: '#176B57',
   },
 
   // Cards Generic
