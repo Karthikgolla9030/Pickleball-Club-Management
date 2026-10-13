@@ -124,8 +124,12 @@ async function request<T>(
   const isMutation = options.method && options.method !== 'GET';
   const timeoutMs = isMutation ? APP_CONFIG.API_MUTATION_TIMEOUT_MS : APP_CONFIG.API_TIMEOUT_MS;
 
+  let timedOut = false;
   const timeoutId = setTimeout(
-    () => controller.abort(),
+    () => {
+      timedOut = true;
+      controller.abort();
+    },
     timeoutMs,
   );
 
@@ -241,8 +245,13 @@ async function request<T>(
       String(error).includes('aborted');
 
     if (isCancel) {
-      // Just log debug level for cancellations to avoid spamming the console
-      console.log(`[API CANCELLED] ${options.method || 'GET'} ${url}`);
+      console.log(`[API CANCELLED] ${options.method || 'GET'} ${url}${timedOut ? ' (Timed Out)' : ''}`);
+      if (timedOut) {
+        throw new ApiClientError(
+          'The server is taking longer than expected to respond (it may be waking up from cold start). Please try again in a moment.',
+          'NETWORK_ERROR'
+        );
+      }
       throw new ApiClientError(
         "Couldn't confirm the request completed. Please check the result and try again if needed.",
         'NETWORK_ERROR'

@@ -477,9 +477,9 @@ export const APP_CONFIG = {
   NAME: 'Pickleball',
   VERSION: '1.0.0',
   /** Timeout for read (GET) requests */
-  API_TIMEOUT_MS: 10000,
+  API_TIMEOUT_MS: 30000,
   /** Timeout for mutation requests (POST/PATCH/PUT/DELETE).
-   *  Score saving triggers DB transactions + standings calculations, so needs more time. */
-  API_MUTATION_TIMEOUT_MS: 30000,
+   *  Accommodates cold starts and multi-step transactions. */
+  API_MUTATION_TIMEOUT_MS: 60000,
   TOKEN_REFRESH_BUFFER_MS: 60 * 1000, // Refresh 60s before expiry
 } as const;
