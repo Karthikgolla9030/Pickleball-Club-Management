@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { useActiveClub, useClubBranding, useClubCarouselSlides } from '@/hooks';
@@ -190,18 +190,6 @@ export function ClubHeroCarousel({
     }
   };
 
-  const handlePrev = () => {
-    if (activeSlide > 0) {
-      scrollToSlide(activeSlide - 1);
-    }
-  };
-
-  const handleNext = () => {
-    if (activeSlide < slides.length - 1) {
-      scrollToSlide(activeSlide + 1);
-    }
-  };
-
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     pauseAutoPlayTemporarily();
     const offsetX = event.nativeEvent.contentOffset.x;
@@ -277,8 +265,8 @@ export function ClubHeroCarousel({
               <View style={styles.heroOverlay} />
 
               <View style={styles.heroInner}>
-                {/* Top content */}
-                <View style={styles.heroContentBlock}>
+                {/* 1. Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
+                <View style={styles.heroUpperBlock}>
                   <AppText style={styles.heroTagText}>{slide.tag}</AppText>
                   <AppText
                     style={styles.heroHeading}
@@ -288,8 +276,16 @@ export function ClubHeroCarousel({
                   >
                     {slide.title}
                   </AppText>
-                  <AppText style={styles.heroSupportingText}>{slide.supportingText}</AppText>
+                  <AppText style={styles.heroSupportingText} numberOfLines={2}>
+                    {slide.supportingText}
+                  </AppText>
+                </View>
 
+                {/* 2. Flexible spacing to keep CTA near the bottom */}
+                <View style={styles.heroSpacer} />
+
+                {/* 3. Lower portion: CTA button on the left, Decorative Script Motto on the right */}
+                <View style={styles.heroBottomRow}>
                   <TouchableOpacity
                     style={styles.heroCtaButton}
                     onPress={() => router.push(slide.route as any)}
@@ -297,24 +293,22 @@ export function ClubHeroCarousel({
                     accessibilityLabel={slide.ctaText}
                     accessibilityRole="button"
                   >
-                    <AppText style={styles.heroCtaText}>{slide.ctaText}</AppText>
+                    <AppText style={styles.heroCtaText} numberOfLines={1}>
+                      {slide.ctaText}
+                    </AppText>
                     <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
                   </TouchableOpacity>
-                </View>
 
-                {/* Bottom footer row */}
-                <View style={styles.heroFooterRow}>
-                  {/* Spacer for bottom-left pagination dots */}
-                  <View style={styles.footerDotsSpacer} />
-
-                  {/* Script Motto */}
-                  <View style={styles.heroScriptMotto}>
-                    {slide.scriptLines.map((line, lIdx) => (
-                      <AppText key={lIdx} style={styles.scriptLine}>
-                        {line}
-                      </AppText>
-                    ))}
-                  </View>
+                  {/* Decorative Script Motto (Right side) */}
+                  {slide.scriptLines && slide.scriptLines.length > 0 && (
+                    <View style={styles.heroScriptMotto}>
+                      {slide.scriptLines.map((line, lIdx) => (
+                        <AppText key={lIdx} style={styles.scriptLine}>
+                          {line}
+                        </AppText>
+                      ))}
+                    </View>
+                  )}
                 </View>
               </View>
             </ImageBackground>
@@ -322,7 +316,7 @@ export function ClubHeroCarousel({
         ))}
       </ScrollView>
 
-      {/* ── Fixed Interactive Pagination Dots (Bottom-Left) ── */}
+      {/* ── Fixed Interactive Pagination Dots (Bottom-Left Edge, below CTA) ── */}
       {slides.length > 1 && (
         <View style={styles.floatingDotsContainer} pointerEvents="box-none">
           {slides.map((_, dotIndex) => {
@@ -332,7 +326,7 @@ export function ClubHeroCarousel({
                 key={dotIndex}
                 onPress={() => scrollToSlide(dotIndex)}
                 activeOpacity={0.75}
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                 accessibilityLabel={`Go to banner ${dotIndex + 1} of ${slides.length}`}
                 accessibilityRole="button"
                 style={[
@@ -344,33 +338,6 @@ export function ClubHeroCarousel({
             );
           })}
         </View>
-      )}
-
-      {/* ── Optional Navigation Chevrons ── */}
-      {slides.length > 1 && activeSlide > 0 && (
-        <TouchableOpacity
-          style={[styles.arrowButton, styles.arrowButtonLeft]}
-          onPress={handlePrev}
-          activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Previous banner"
-          accessibilityRole="button"
-        >
-          <ChevronLeft size={16} color="#FFFFFF" strokeWidth={2.6} />
-        </TouchableOpacity>
-      )}
-
-      {slides.length > 1 && activeSlide < slides.length - 1 && (
-        <TouchableOpacity
-          style={[styles.arrowButton, styles.arrowButtonRight]}
-          onPress={handleNext}
-          activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Next banner"
-          accessibilityRole="button"
-        >
-          <ChevronRight size={16} color="#FFFFFF" strokeWidth={2.6} />
-        </TouchableOpacity>
       )}
     </View>
   );
@@ -393,7 +360,7 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     width: '100%',
-    minHeight: 205,
+    minHeight: 220,
   },
   heroCardImage: {
     borderRadius: 20,
@@ -404,18 +371,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(16, 47, 43, 0.44)',
+    backgroundColor: 'rgba(16, 47, 43, 0.46)',
     borderRadius: 20,
   },
   heroInner: {
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 30,
     justifyContent: 'space-between',
     flex: 1,
-    minHeight: 205,
+    minHeight: 220,
   },
-  heroContentBlock: {
-    gap: 6,
+  heroUpperBlock: {
+    gap: 4,
     alignItems: 'flex-start',
+    width: '100%',
   },
   heroTagText: {
     fontSize: 10.5,
@@ -435,18 +405,28 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: 'rgba(255, 255, 255, 0.88)',
     lineHeight: 15.5,
-    maxWidth: '85%',
-    marginTop: 1,
+    maxWidth: '90%',
+  },
+  heroSpacer: {
+    flex: 1,
+    minHeight: 10,
+  },
+  heroBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    width: '100%',
+    gap: 10,
   },
   heroCtaButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
-    paddingVertical: 7.5,
-    paddingHorizontal: 15,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     borderRadius: 999,
-    marginTop: 6,
+    maxWidth: '70%',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -458,30 +438,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#102F2B',
   },
-  heroFooterRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  footerDotsSpacer: {
-    width: 60,
-  },
   heroScriptMotto: {
     alignItems: 'flex-end',
     gap: -2,
+    flexShrink: 0,
   },
   scriptLine: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontStyle: 'italic',
     fontWeight: '400',
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: 'rgba(255, 255, 255, 0.82)',
     letterSpacing: 0.2,
-    lineHeight: 14,
+    lineHeight: 13.5,
   },
   floatingDotsContainer: {
     position: 'absolute',
-    bottom: 14,
+    bottom: 11,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -500,23 +472,5 @@ const styles = StyleSheet.create({
   },
   dotActive: {
     backgroundColor: '#FFFFFF',
-  },
-  arrowButton: {
-    position: 'absolute',
-    top: '50%',
-    marginTop: -16,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(16, 47, 43, 0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 12,
-  },
-  arrowButtonLeft: {
-    left: 8,
-  },
-  arrowButtonRight: {
-    right: 8,
   },
 });
