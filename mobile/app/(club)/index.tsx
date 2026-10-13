@@ -142,7 +142,7 @@ export default function ClubHomeScreen() {
         {/* Left: Aught2 Pickleball Logo */}
         <View style={styles.logoSlot}>
           <Image
-            source={require('../../assets/pickleball_logo.png')}
+            source={require('../../assets/pickleball_logo_transparent.png')}
             style={styles.headerLogoImage}
             resizeMode="contain"
             accessibilityLabel="Pickleball"

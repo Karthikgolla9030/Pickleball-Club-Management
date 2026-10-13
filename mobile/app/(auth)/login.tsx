@@ -103,7 +103,7 @@ export default function LoginScreen() {
           {/* Logo / Brand */}
           <View style={styles.header}>
             <Image
-              source={require('../../assets/pickleball_logo.png')}
+              source={require('../../assets/pickleball_logo_transparent.png')}
               style={styles.logoImage}
               resizeMode="contain"
               accessibilityLabel="Pickleball"
