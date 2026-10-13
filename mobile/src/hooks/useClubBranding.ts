@@ -11,14 +11,19 @@ import { clubAssetsApi } from '@/services/api';
 import type { ClubBranding, ClubCarouselSlide } from '@/types';
 
 export function useClubBranding(clubId?: string | null) {
-  const query = useQuery<ClubBranding>({
+  const query = useQuery<ClubBranding | null>({
     queryKey: ['club-branding', clubId],
-    queryFn: () => {
-      if (!clubId) throw new Error('clubId is required');
-      return clubAssetsApi.getClubBranding(clubId);
+    queryFn: async () => {
+      if (!clubId) return null;
+      try {
+        return await clubAssetsApi.getClubBranding(clubId);
+      } catch (err) {
+        return null;
+      }
     },
     enabled: Boolean(clubId),
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: 1,
   });
 
   return {
@@ -66,12 +71,17 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
 export function useClubCarouselSlides(clubId?: string | null, activeOnly: boolean = true) {
   const query = useQuery<ClubCarouselSlide[]>({
     queryKey: ['club-carousel-slides', clubId, activeOnly],
-    queryFn: () => {
-      if (!clubId) throw new Error('clubId is required');
-      return clubAssetsApi.getCarouselSlides(clubId, activeOnly);
+    queryFn: async () => {
+      if (!clubId) return [];
+      try {
+        return await clubAssetsApi.getCarouselSlides(clubId, activeOnly);
+      } catch (err) {
+        return [];
+      }
     },
     enabled: Boolean(clubId),
     staleTime: 1000 * 60 * 3, // 3 minutes
+    retry: 1,
   });
 
   return {
