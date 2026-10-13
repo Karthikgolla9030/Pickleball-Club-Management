@@ -105,7 +105,8 @@ export function Button({
               labelStyle,
             ]}
             numberOfLines={1}
-            adjustsFontSizeToFit={false}
+            adjustsFontSizeToFit={true}
+            minimumFontScale={0.82}
           >
             {label}
           </Text>

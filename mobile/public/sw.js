@@ -8,7 +8,7 @@
  *   Ensures zero caching of private user data, tokens, auth state, or live match scores.
  */
 
-const CACHE_NAME = 'aught2-shell-v2';
+const CACHE_NAME = 'aught2-shell-v3';
 
 // Essential app shell and static resources precached during install
 const PRECACHE_ASSETS = [

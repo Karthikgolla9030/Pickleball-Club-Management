@@ -653,10 +653,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   titleText: {
     flex: 1,
+    minWidth: 160,
     fontSize: 16,
     lineHeight: 22,
     fontWeight: '700',

@@ -67,6 +67,8 @@ export function FilterChips<T extends string>({
             isActive ? styles.chipLabelActive : styles.chipLabelInactive,
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
         >
           {chip.label}
         </AppText>

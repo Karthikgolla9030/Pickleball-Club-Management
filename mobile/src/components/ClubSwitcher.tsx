@@ -494,6 +494,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#102B2A',
+    flexShrink: 1,
   },
   compactChevron: {
     marginLeft: 2,

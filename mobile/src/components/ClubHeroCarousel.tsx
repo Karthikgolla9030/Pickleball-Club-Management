@@ -280,7 +280,14 @@ export function ClubHeroCarousel({
                 {/* Top content */}
                 <View style={styles.heroContentBlock}>
                   <AppText style={styles.heroTagText}>{slide.tag}</AppText>
-                  <AppText style={styles.heroHeading}>{slide.title}</AppText>
+                  <AppText
+                    style={styles.heroHeading}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.88}
+                  >
+                    {slide.title}
+                  </AppText>
                   <AppText style={styles.heroSupportingText}>{slide.supportingText}</AppText>
 
                   <TouchableOpacity
@@ -428,7 +435,7 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: 'rgba(255, 255, 255, 0.88)',
     lineHeight: 15.5,
-    maxWidth: 240,
+    maxWidth: '85%',
     marginTop: 1,
   },
   heroCtaButton: {

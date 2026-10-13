@@ -86,7 +86,9 @@ export function AppHeader({
         <View style={styles.titleBlock}>
           <AppText
             variant="title"
-            numberOfLines={1}
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
             style={styles.title}
           >
             {title}
@@ -96,6 +98,8 @@ export function AppHeader({
               variant="caption"
               color="secondary"
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.9}
               style={styles.subtitle}
             >
               {subtitle}

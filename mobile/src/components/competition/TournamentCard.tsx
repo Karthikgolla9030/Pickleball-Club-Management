@@ -318,12 +318,9 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
 
-  // Hero Banner (Standardized 142px height for all formats)
   heroBanner: {
     position: 'relative',
-    height: 142,
     minHeight: 142,
-    maxHeight: 142,
     paddingTop: 12,
     paddingHorizontal: 14,
     paddingBottom: 12,
@@ -336,7 +333,7 @@ const styles = StyleSheet.create({
   bannerImage: {
     ...StyleSheet.absoluteFill,
     width: '100%',
-    height: 142,
+    height: '100%',
   },
   darkScrim: {
     ...StyleSheet.absoluteFill,

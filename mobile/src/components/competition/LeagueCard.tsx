@@ -300,7 +300,12 @@ export function LeagueCard({
           ) : null}
 
           {/* Subtitle: Weeks • Teams • Format */}
-          <AppText style={styles.subtitleText} numberOfLines={1}>
+          <AppText
+            style={styles.subtitleText}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             {`${totalWeeks} Weeks  •  ${maxTeams || teamCount} Teams  •  ${formatLabel}`}
           </AppText>
 
@@ -311,7 +316,12 @@ export function LeagueCard({
                 <AppText style={styles.progressWeekText}>
                   Week {currentWeek} of {totalWeeks}
                 </AppText>
-                <AppText style={styles.progressMatchesText}>
+                <AppText
+                  style={styles.progressMatchesText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
                   {completedMatches} of {totalMatches} matches{'   '}
                   <AppText style={styles.progressPctText}>{progressPct}%</AppText>
                 </AppText>

@@ -102,13 +102,17 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="heading3"
               style={[styles.value, { color: valueColor }]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {String(metric.value)}
             </AppText>
             <AppText
               variant="caption"
               style={[styles.label, { color: variantLabelColor[variant] }]}
-              numberOfLines={1}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.88}
             >
               {metric.label}
             </AppText>
@@ -118,7 +122,9 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
             <AppText
               variant="caption"
               style={[styles.label, { color: variantLabelColor[variant] }]}
-              numberOfLines={1}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.88}
             >
               {metric.label}
             </AppText>
@@ -126,13 +132,21 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="heading3"
               style={[styles.value, { color: valueColor }]}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.8}
             >
               {String(metric.value)}
             </AppText>
           </>
         )}
         {metric.sublabel ? (
-          <AppText variant="caption" color="secondary" numberOfLines={1}>
+          <AppText
+            variant="caption"
+            color="secondary"
+            numberOfLines={2}
+            adjustsFontSizeToFit
+            minimumFontScale={0.9}
+          >
             {metric.sublabel}
           </AppText>
         ) : null}

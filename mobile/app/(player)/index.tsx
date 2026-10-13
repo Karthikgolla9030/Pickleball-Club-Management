@@ -337,7 +337,12 @@ export default function PlayerHomeScreen() {
             {/* Content on Left */}
             <View style={styles.heroContent}>
               <AppText style={styles.heroTagline}>WELCOME BACK</AppText>
-              <AppText style={styles.heroGreeting}>
+              <AppText
+                style={styles.heroGreeting}
+                numberOfLines={2}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+              >
                 Hello,{'\n'}{displayName}
               </AppText>
               <AppText style={styles.heroDescription}>

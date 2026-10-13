@@ -199,12 +199,8 @@ export default function ClubHomeScreen() {
         <View style={styles.welcomeRow}>
           <View style={styles.welcomeTextCol}>
             <AppText style={styles.welcomeSub}>Welcome back,</AppText>
-            <AppText
-              style={styles.welcomeMain}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
-              Let's make today amazing at {clubName || 'your club'}.
+            <AppText style={styles.welcomeMain}>
+              Let's make today amazing
             </AppText>
           </View>
 
@@ -592,24 +588,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 2,
-    marginBottom: 2,
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 4,
+    marginBottom: 6,
   },
   welcomeTextCol: {
     flex: 1,
-    gap: 1,
+    minWidth: 200,
+    gap: 2,
   },
   welcomeSub: {
-    fontSize: 13,
-    color: '#667773',
-    fontWeight: '400',
+    fontSize: 14,
+    color: '#5E736E',
+    fontWeight: '500',
+    lineHeight: 18,
   },
   welcomeMain: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '800',
     color: '#102F2B',
-    letterSpacing: -0.2,
+    lineHeight: 30,
+    letterSpacing: -0.3,
   },
   locationPill: {
     flexDirection: 'row',
@@ -619,9 +619,10 @@ const styles = StyleSheet.create({
     borderColor: '#D0EADB',
     borderWidth: 1,
     borderRadius: 16,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     flexShrink: 0,
+    alignSelf: 'flex-start',
   },
   locationTextStack: {
     gap: 0.5,
@@ -665,8 +666,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   quickCard: {
-    width: '31%',
+    flexBasis: '30%',
     flexGrow: 1,
+    minWidth: 96,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderColor: '#E5EFE9',
@@ -692,9 +694,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 2,
   },
   quickLabel: {
-    fontSize: 12.5,
+    flex: 1,
+    fontSize: 12,
     fontWeight: '600',
     color: '#12231E',
   },
@@ -786,16 +790,19 @@ const styles = StyleSheet.create({
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   statCard: {
-    flex: 1,
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: '#FFFFFF',
     borderColor: '#E5EFE9',
     borderWidth: 1,
     borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     alignItems: 'center',
     gap: 4,
     shadowColor: '#102F2B',
@@ -805,23 +812,24 @@ const styles = StyleSheet.create({
     elevation: 1.5,
   },
   statIconSlot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
   statNumber: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: '#102F2B',
   },
   statLabel: {
-    fontSize: 10.5,
+    fontSize: 11.5,
     fontWeight: '500',
     color: '#667773',
     textAlign: 'center',
+    lineHeight: 15,
   },
   emptyScheduleCard: {
     flexDirection: 'row',

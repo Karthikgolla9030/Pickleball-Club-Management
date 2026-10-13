@@ -62,6 +62,8 @@ export function SegmentedTabs<T extends string>({
             isActive ? styles.labelActive : styles.labelInactive,
           ]}
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.85}
         >
           {tab.label}
         </AppText>
