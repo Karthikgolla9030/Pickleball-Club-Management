@@ -14,6 +14,8 @@
  */
 
 import '@/utils/alertPolyfill';
+import '@/utils/webA11yPolyfill';
+import { blurActiveElement } from '@/utils';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -45,6 +47,11 @@ function RootLayoutContent() {
   useEffect(() => {
     initialize();
   }, [initialize]);
+
+  // Clear lingering DOM focus when changing routes to eliminate aria-hidden violations
+  useEffect(() => {
+    blurActiveElement();
+  }, [segments]);
 
   const rootSegment = segments[0] as string | undefined;
 

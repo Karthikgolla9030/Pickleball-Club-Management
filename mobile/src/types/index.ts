@@ -158,6 +158,7 @@ export interface ClubMember {
   is_active: boolean;
   user_email: string;
   user_full_name: string | null;
+  profile_image_url?: string | null;
   created_at: string;
   updated_at: string;
 }

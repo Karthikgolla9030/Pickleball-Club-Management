@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.models.club import Club
 
 from app.models.booking import Booking, BookingStatus
+from app.models.club_membership import ClubMembership
 from app.models.club_player_membership import (
     ClubPlayerMembership,
     PlayerMembershipStatus,
@@ -365,11 +366,17 @@ class PlayerService:
     async def list_club_player_memberships(
         self, club_id: UUID
     ) -> list[ClubPlayerMembershipResponse]:
-        """List all player memberships for a club."""
+        """List all player memberships for a club, strictly excluding club staff."""
         memberships = await self.player_membership_repo.get_club_player_memberships(
             club_id
         )
-        return [_build_club_player_response(m) for m in memberships]
+        # Fetch staff user IDs for this club to enforce strict separation
+        staff_stmt = select(ClubMembership.user_id).where(ClubMembership.club_id == club_id)
+        staff_res = await self.db.execute(staff_stmt)
+        staff_user_ids = set(staff_res.scalars().all())
+
+        filtered = [m for m in memberships if m.user_id not in staff_user_ids]
+        return [_build_club_player_response(m) for m in filtered]
 
     async def add_club_player_membership(
         self, club_id: UUID, payload: CreateClubPlayerMembershipRequest

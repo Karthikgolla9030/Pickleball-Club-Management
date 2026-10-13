@@ -59,6 +59,10 @@ from app.schemas.club_membership import (
 
 
 def _build_member_response(m: ClubMembership) -> MemberResponse:
+    profile_img: str | None = None
+    if m.user and getattr(m.user, "player_profile", None):
+        profile_img = m.user.player_profile.profile_image_url
+
     return MemberResponse(
         id=m.id,
         user_id=m.user_id,
@@ -68,6 +72,7 @@ def _build_member_response(m: ClubMembership) -> MemberResponse:
         is_active=m.is_active,
         user_email=m.user.email if m.user else "",
         user_full_name=m.user.full_name if m.user else None,
+        profile_image_url=profile_img,
         created_at=m.created_at,
         updated_at=m.updated_at,
     )

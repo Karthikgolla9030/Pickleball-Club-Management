@@ -2,15 +2,17 @@
  * Aught2 Pickleball — Club Members Management Screen
  *
  * Exact visual match to reference design:
- * - Clean mobile header: Hamburger icon, "Members" title, and subtitle
- * - Club Card with "Play. Connect. Build Community." and "♛ CLUB OWNER >"
- * - 3-option Action Area: [ Players ] [ Staff ] [ + Enroll ]
- * - Filter Pills: All Players, Subscribers, Normal Users + Filter icon button
+ * - Pale mint/green page background with deep pine teal accents
+ * - Header: Hamburger menu icon, "Members" title, and subtitle "Manage staff roles and enrolled players"
+ * - 3-button Action Area: [ Players ] [ Staff ] [ + Enroll ]
+ * - Filter Pills: All Players, Subscribers, Normal Users + Filter settings button
  * - Full-width search bar: "Search players by name or email..."
- * - Player cards: Circular avatar, bold name, muted email, ID badge, ● ACTIVE badge, Edit Status, Message
- * - Staff view: Dedicated view with search, + Add Staff, and role-badged cards (Club Owner, Club Manager, Tournament Director)
- * - Mobile-first Enrollment and Edit flows
- * - Real data, permissions, tenant isolation, and error handling preserved
+ * - Member cards: Circular avatar (real profile photo with initials fallback, no screenshot crops),
+ *   bold name, muted email, #AUG-P-xxx ID badge, green dot ACTIVE pill, subtle divider,
+ *   [Edit Status] | [Message] action buttons
+ * - Staff view: Dedicated view with search, + Add Staff, role-badged cards (Owner, Manager, Tournament Director)
+ * - Strict separation between Players and Staff (both backend & frontend enforced)
+ * - Real API queries, mutations, permissions, tenant isolation, and error handling preserved
  */
 
 import React, { useMemo, useState } from 'react';
@@ -18,7 +20,6 @@ import {
   Alert,
   FlatList,
   Image,
-  ImageSourcePropType,
   Linking,
   Modal,
   Pressable,
@@ -32,24 +33,28 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Mail,
+  Menu,
   MoreVertical,
+  Plus,
   Search,
   SlidersHorizontal,
   SquarePen,
+  User,
   UserCheck,
+  Users,
   UserX,
   X,
 } from 'lucide-react-native';
 
 import { API_ENDPOINTS } from '@/constants';
 import {
-  AppHeader,
   AppText,
   EmptyState,
   ErrorState,
   LoadingState,
   Screen,
 } from '@/components';
+import { useDrawerStore } from '@/navigation';
 import {
   useActiveClub,
   useClubMembers,
@@ -57,6 +62,7 @@ import {
   useClubSubscriptions,
   usePermission,
 } from '@/hooks';
+import { blurActiveElement } from '@/utils';
 import type {
   ClubMember,
   ClubPlayerMember,
@@ -64,28 +70,78 @@ import type {
   PlayerMembershipStatus,
 } from '@/types';
 
-// Avatar cycles matching reference
-const PLAYER_AVATARS: ImageSourcePropType[] = [
-  require('../../assets/members/avatar1.jpg'),
-  require('../../assets/members/avatar2.jpg'),
-  require('../../assets/members/avatar3.jpg'),
-  require('../../assets/members/avatar4.jpg'),
-];
+// ─── Avatar Component with Real Photo & Initials Fallback ─────────────────────
 
-function getMemberAvatarSource(
-  profileImageUrl: string | null | undefined,
-  fallbackIndex: number,
-): ImageSourcePropType {
-  if (profileImageUrl && profileImageUrl.trim().length > 0) {
-    const cleanUrl = profileImageUrl.trim();
-    const uri =
-      cleanUrl.startsWith('http') || cleanUrl.startsWith('data:')
-        ? cleanUrl
-        : `${API_ENDPOINTS.BASE}${cleanUrl.startsWith('/') ? '' : '/'}${cleanUrl}`;
-    return { uri };
-  }
-  return PLAYER_AVATARS[fallbackIndex % PLAYER_AVATARS.length];
+interface MemberAvatarProps {
+  imageUrl?: string | null;
+  name: string;
+  size?: number;
 }
+
+function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
+  const [loadError, setLoadError] = useState(false);
+
+  const resolvedUri = useMemo(() => {
+    if (!imageUrl) return null;
+    const cleanUrl = imageUrl.trim();
+    if (!cleanUrl) return null;
+
+    if (
+      cleanUrl.startsWith('http://') ||
+      cleanUrl.startsWith('https://') ||
+      cleanUrl.startsWith('data:image/')
+    ) {
+      return cleanUrl;
+    }
+    const path = cleanUrl.startsWith('/') ? cleanUrl : `/${cleanUrl}`;
+    return `${API_ENDPOINTS.BASE}${path}`;
+  }, [imageUrl]);
+
+  const initials = useMemo(() => {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    if (parts.length === 1 && parts[0].length > 0) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return 'PB';
+  }, [name]);
+
+  if (resolvedUri && !loadError) {
+    return (
+      <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+        <Image
+          source={{ uri: resolvedUri }}
+          style={[styles.avatarImg, { width: size, height: size, borderRadius: size / 2 }]}
+          resizeMode="cover"
+          onError={() => setLoadError(true)}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.avatarContainer,
+        styles.avatarFallback,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
+      <AppText
+        style={[
+          styles.avatarInitialsText,
+          { fontSize: Math.round(size * 0.34) },
+        ]}
+      >
+        {initials}
+      </AppText>
+    </View>
+  );
+}
+
+// ─── Filter & Role Constants ──────────────────────────────────────────────────
 
 type PlayerFilterType = 'all' | 'subscribers' | 'normal';
 
@@ -104,7 +160,7 @@ const VALID_STATUSES: { status: PlayerMembershipStatus; label: string }[] = [
 
 function formatPlayerName(member: ClubPlayerMember): string {
   if (member.user_full_name && member.user_full_name.trim().length > 0) {
-    return member.user_full_name;
+    return member.user_full_name.trim();
   }
   const prefix = member.user_email ? member.user_email.split('@')[0] : 'Player';
   return prefix
@@ -116,6 +172,7 @@ function formatPlayerName(member: ClubPlayerMember): string {
 
 export default function ClubMembersScreen() {
   const insets = useSafeAreaInsets();
+  const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId } = useActiveClub();
   const { canManageMembers, canManageRoles } = usePermission();
 
@@ -126,7 +183,7 @@ export default function ClubMembersScreen() {
 
   // ─── Data Queries ────────────────────────────────────────────────────────────
 
-  // Staff members query
+  // Staff members query (strictly staff with club roles)
   const {
     members: staffMembers = [],
     isLoading: isStaffLoading,
@@ -156,7 +213,7 @@ export default function ClubMembersScreen() {
   // Subscriptions query (for subscriber identification)
   const { data: subscriptions = [] } = useClubSubscriptions(clubId || '');
 
-  // Set of user IDs with active subscriptions (excludes scheduled, expired, cancelled, and pending payments)
+  // Map of user IDs with active subscriptions
   const subscriberMap = useMemo(() => {
     const map = new Map<string, string>();
     subscriptions.forEach((s) => {
@@ -166,6 +223,70 @@ export default function ClubMembersScreen() {
     });
     return map;
   }, [subscriptions]);
+
+  // Set of staff user IDs and emails to strictly exclude from Players section
+  const staffUserIds = useMemo(() => {
+    const set = new Set<string>();
+    staffMembers.forEach((s) => {
+      if (s.user_id) set.add(s.user_id);
+    });
+    return set;
+  }, [staffMembers]);
+
+  const staffEmails = useMemo(() => {
+    const set = new Set<string>();
+    staffMembers.forEach((s) => {
+      if (s.user_email) set.add(s.user_email.toLowerCase().trim());
+    });
+    return set;
+  }, [staffMembers]);
+
+  // ─── Filtered Players List (STRICT STAFF EXCLUSION) ──────────────────────────
+
+  const filteredPlayers = useMemo(() => {
+    // 1. Strictly exclude all staff accounts from player list
+    let list = playerMembers.filter(
+      (p) =>
+        !staffUserIds.has(p.user_id) &&
+        !staffEmails.has(p.user_email?.toLowerCase().trim())
+    );
+
+    // 2. Filter by tab pill
+    if (playerFilter === 'subscribers') {
+      list = list.filter((p) => subscriberMap.has(p.user_id));
+    } else if (playerFilter === 'normal') {
+      list = list.filter((p) => !subscriberMap.has(p.user_id));
+    }
+
+    // 3. Filter by search query
+    if (playerSearchQuery.trim()) {
+      const q = playerSearchQuery.toLowerCase().trim();
+      list = list.filter((p) => {
+        const emailMatch = p.user_email?.toLowerCase().includes(q);
+        const nameMatch = formatPlayerName(p).toLowerCase().includes(q);
+        const numMatch = p.membership_number?.toLowerCase().includes(q);
+        return emailMatch || nameMatch || numMatch;
+      });
+    }
+
+    return list;
+  }, [playerMembers, staffUserIds, staffEmails, playerFilter, playerSearchQuery, subscriberMap]);
+
+  // ─── Filtered Staff List ─────────────────────────────────────────────────────
+
+  const filteredStaff = useMemo(() => {
+    let list = staffMembers;
+    if (staffSearchQuery.trim()) {
+      const q = staffSearchQuery.toLowerCase().trim();
+      list = list.filter((s) => {
+        const emailMatch = s.user_email?.toLowerCase().includes(q);
+        const nameMatch = s.user_full_name?.toLowerCase().includes(q);
+        const roleMatch = s.role?.toLowerCase().includes(q) || s.role_label?.toLowerCase().includes(q);
+        return emailMatch || nameMatch || roleMatch;
+      });
+    }
+    return list;
+  }, [staffMembers, staffSearchQuery]);
 
   // ─── Modal States ────────────────────────────────────────────────────────────
 
@@ -196,44 +317,8 @@ export default function ClubMembersScreen() {
   const [selectedStaffMember, setSelectedStaffMember] = useState<ClubMember | null>(null);
   const [selectedRole, setSelectedRole] = useState<ClubRole>('club_manager');
 
-  // ─── Filtered Lists ──────────────────────────────────────────────────────────
-
-  const filteredPlayers = useMemo(() => {
-    let list = playerMembers;
-
-    // Filter by tab pill
-    if (playerFilter === 'subscribers') {
-      list = list.filter((p) => subscriberMap.has(p.user_id));
-    } else if (playerFilter === 'normal') {
-      list = list.filter((p) => !subscriberMap.has(p.user_id));
-    }
-
-    // Filter by search query
-    if (playerSearchQuery.trim()) {
-      const q = playerSearchQuery.toLowerCase().trim();
-      list = list.filter((p) => {
-        const emailMatch = p.user_email?.toLowerCase().includes(q);
-        const nameMatch = formatPlayerName(p).toLowerCase().includes(q);
-        const numMatch = p.membership_number?.toLowerCase().includes(q);
-        return emailMatch || nameMatch || numMatch;
-      });
-    }
-
-    return list;
-  }, [playerMembers, playerFilter, playerSearchQuery, subscriberMap]);
-
-  const filteredStaff = useMemo(() => {
-    let list = staffMembers;
-    if (staffSearchQuery.trim()) {
-      const q = staffSearchQuery.toLowerCase().trim();
-      list = list.filter((s) => {
-        const emailMatch = s.user_email?.toLowerCase().includes(q);
-        const roleMatch = s.role?.toLowerCase().includes(q);
-        return emailMatch || roleMatch;
-      });
-    }
-    return list;
-  }, [staffMembers, staffSearchQuery]);
+  // Filter settings info modal
+  const [filterInfoVisible, setFilterInfoVisible] = useState(false);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
 
@@ -249,6 +334,7 @@ export default function ClubMembersScreen() {
         status: newPlayerStatus,
         membership_number: newPlayerNumber.trim() || null,
       });
+      blurActiveElement();
       setEnrollModalVisible(false);
       setNewPlayerEmail('');
       setNewPlayerNumber('');
@@ -259,6 +345,7 @@ export default function ClubMembersScreen() {
   };
 
   const handleOpenEditPlayer = (player: ClubPlayerMember) => {
+    blurActiveElement();
     setSelectedPlayer(player);
     setEditPlayerStatus(player.status);
     setEditPlayerNumber(player.membership_number || '');
@@ -277,6 +364,7 @@ export default function ClubMembersScreen() {
           membership_number: editPlayerNumber.trim() || null,
         },
       });
+      blurActiveElement();
       setEditPlayerModalVisible(false);
       setSelectedPlayer(null);
     } catch (err: unknown) {
@@ -292,13 +380,41 @@ export default function ClubMembersScreen() {
     }
   };
 
+  const handleMessageStaff = (staff: ClubMember) => {
+    if (staff.user_email) {
+      Linking.openURL(`mailto:${staff.user_email}`);
+    } else {
+      Alert.alert('Message Staff', 'No email address registered for this staff member.');
+    }
+  };
+
   const handlePlayerMenu = (player: ClubPlayerMember) => {
+    blurActiveElement();
     Alert.alert(
       formatPlayerName(player),
       `Email: ${player.user_email}\nStatus: ${player.status.toUpperCase()}\nNumber: ${player.membership_number || 'N/A'}`,
       [
         { text: 'Edit Status', onPress: () => handleOpenEditPlayer(player) },
         { text: 'Send Message', onPress: () => handleMessagePlayer(player) },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleStaffMenu = (member: ClubMember) => {
+    blurActiveElement();
+    const formattedName = member.user_full_name || member.user_email.split('@')[0];
+    Alert.alert(
+      formattedName,
+      `Email: ${member.user_email}\nRole: ${member.role_label || member.role}\nStatus: ${member.is_active ? 'ACTIVE' : 'DISABLED'}`,
+      [
+        { text: 'Edit Role', onPress: () => handleOpenEditRole(member) },
+        { text: 'Send Message', onPress: () => handleMessageStaff(member) },
+        {
+          text: member.is_active ? 'Disable Access' : 'Enable Access',
+          style: member.is_active ? 'destructive' : 'default',
+          onPress: () => handleToggleStaffActive(member),
+        },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -321,6 +437,7 @@ export default function ClubMembersScreen() {
         full_name: newStaffName.trim(),
         temporary_password: newStaffPassword.trim() || undefined,
       });
+      blurActiveElement();
       setAddStaffModalVisible(false);
       setNewStaffEmail('');
       setNewStaffName('');
@@ -332,6 +449,7 @@ export default function ClubMembersScreen() {
   };
 
   const handleOpenEditRole = (member: ClubMember) => {
+    blurActiveElement();
     setSelectedStaffMember(member);
     setSelectedRole(member.role);
     setRoleModalVisible(true);
@@ -340,6 +458,7 @@ export default function ClubMembersScreen() {
   const handleSaveRole = async () => {
     if (!selectedStaffMember) return;
     if (selectedRole === selectedStaffMember.role) {
+      blurActiveElement();
       setRoleModalVisible(false);
       setSelectedStaffMember(null);
       return;
@@ -359,6 +478,7 @@ export default function ClubMembersScreen() {
                 membershipId: selectedStaffMember.id,
                 payload: { role: selectedRole },
               });
+              blurActiveElement();
               setRoleModalVisible(false);
               setSelectedStaffMember(null);
             } catch (err: unknown) {
@@ -401,12 +521,21 @@ export default function ClubMembersScreen() {
   if (!canManageMembers) {
     return (
       <Screen style={styles.screenContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
-        <AppHeader
-          title="Members"
-          subtitle="Manage staff roles and enrolled players"
-          borderless
-        />
+        <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            onPress={openDrawer}
+            style={styles.hamburgerBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Open navigation menu"
+          >
+            <Menu size={24} color="#102F2A" strokeWidth={2.2} />
+          </TouchableOpacity>
+          <View style={styles.headerTitles}>
+            <AppText style={styles.headerTitle}>Members</AppText>
+            <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
+          </View>
+        </View>
         <ErrorState
           title="Access Denied"
           message="You do not have permission to view or manage club members."
@@ -426,12 +555,21 @@ export default function ClubMembersScreen() {
   if (currentError) {
     return (
       <Screen style={styles.screenContainer}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
-        <AppHeader
-          title="Members"
-          subtitle="Manage staff roles and enrolled players"
-          borderless
-        />
+        <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity
+            onPress={openDrawer}
+            style={styles.hamburgerBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Open navigation menu"
+          >
+            <Menu size={24} color="#102F2A" strokeWidth={2.2} />
+          </TouchableOpacity>
+          <View style={styles.headerTitles}>
+            <AppText style={styles.headerTitle}>Members</AppText>
+            <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
+          </View>
+        </View>
         <ErrorState
           title="Unable to Load Members"
           message={currentError.message || 'A network error occurred.'}
@@ -445,27 +583,59 @@ export default function ClubMembersScreen() {
 
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* 1. Action Area: 3-Option Row [ Players ] [ Staff ] [ + Enroll ] */}
-      <View style={styles.actionPillRow}>
+      {/* 1. Header with Hamburger Menu & Titles */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
         <TouchableOpacity
-          style={[styles.actionTab, activeTab === 'players' && styles.actionTabActive]}
+          onPress={openDrawer}
+          style={styles.hamburgerBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Open navigation menu"
+        >
+          <Menu size={24} color="#102F2A" strokeWidth={2.2} />
+        </TouchableOpacity>
+        <View style={styles.headerTitles}>
+          <AppText style={styles.headerTitle}>Members</AppText>
+          <AppText style={styles.headerSubtitle}>Manage staff roles and enrolled players</AppText>
+        </View>
+      </View>
+
+      {/* 2. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll ] */}
+      <View style={styles.mainActionsRow}>
+        <TouchableOpacity
+          style={[styles.mainActionBtn, activeTab === 'players' && styles.mainActionBtnActive]}
           onPress={() => setActiveTab('players')}
           activeOpacity={0.8}
         >
+          <Users
+            size={17}
+            color={activeTab === 'players' ? '#FFFFFF' : '#102F2A'}
+            strokeWidth={2}
+          />
           <AppText
-            style={[styles.actionTabText, activeTab === 'players' && styles.actionTabTextActive]}
+            style={[
+              styles.mainActionBtnText,
+              activeTab === 'players' && styles.mainActionBtnTextActive,
+            ]}
           >
             Players
           </AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.actionTab, activeTab === 'staff' && styles.actionTabActive]}
+          style={[styles.mainActionBtn, activeTab === 'staff' && styles.mainActionBtnActive]}
           onPress={() => setActiveTab('staff')}
           activeOpacity={0.8}
         >
+          <User
+            size={17}
+            color={activeTab === 'staff' ? '#FFFFFF' : '#102F2A'}
+            strokeWidth={2}
+          />
           <AppText
-            style={[styles.actionTabText, activeTab === 'staff' && styles.actionTabTextActive]}
+            style={[
+              styles.mainActionBtnText,
+              activeTab === 'staff' && styles.mainActionBtnTextActive,
+            ]}
           >
             Staff
           </AppText>
@@ -473,17 +643,21 @@ export default function ClubMembersScreen() {
 
         <TouchableOpacity
           style={styles.enrollActionBtn}
-          onPress={() => setEnrollModalVisible(true)}
+          onPress={() => {
+            blurActiveElement();
+            setEnrollModalVisible(true);
+          }}
           activeOpacity={0.8}
         >
-          <AppText style={styles.enrollActionBtnText}>+ Enroll</AppText>
+          <Plus size={17} color="#FFFFFF" strokeWidth={2.4} />
+          <AppText style={styles.enrollActionBtnText}>Enroll</AppText>
         </TouchableOpacity>
       </View>
 
-      {/* 3. Sub-Filters & Search for Players */}
+      {/* 3. Section Controls (Players vs Staff) */}
       {activeTab === 'players' ? (
         <>
-          {/* Member Filter Pills */}
+          {/* Sub-Filters: All Players, Subscribers, Normal Users + Settings Button */}
           <View style={styles.filterPillsRow}>
             <TouchableOpacity
               style={[
@@ -539,14 +713,22 @@ export default function ClubMembersScreen() {
               </AppText>
             </TouchableOpacity>
 
-            <View style={styles.filterIconButton}>
-              <SlidersHorizontal size={15} color="#102F2A" />
-            </View>
+            <TouchableOpacity
+              style={styles.filterIconButton}
+              onPress={() => {
+                blurActiveElement();
+                setFilterInfoVisible(true);
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel="Filter settings"
+            >
+              <SlidersHorizontal size={17} color="#102F2A" strokeWidth={2} />
+            </TouchableOpacity>
           </View>
 
           {/* Search Bar */}
           <View style={styles.searchContainer}>
-            <Search size={16} color="#647570" style={styles.searchIcon} />
+            <Search size={18} color="#718096" strokeWidth={2} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search players by name or email..."
@@ -554,13 +736,15 @@ export default function ClubMembersScreen() {
               value={playerSearchQuery}
               onChangeText={setPlayerSearchQuery}
               returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
             {playerSearchQuery.length > 0 && (
               <TouchableOpacity
                 onPress={() => setPlayerSearchQuery('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={15} color="#647570" />
+                <X size={16} color="#718096" />
               </TouchableOpacity>
             )}
           </View>
@@ -570,20 +754,23 @@ export default function ClubMembersScreen() {
         <View style={styles.staffControlsContainer}>
           <View style={styles.staffSearchAndAddRow}>
             <View style={styles.staffSearchBox}>
-              <Search size={16} color="#647570" style={styles.searchIcon} />
+              <Search size={18} color="#718096" strokeWidth={2} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search staff by email or role..."
+                placeholder="Search staff by name, email or role..."
                 placeholderTextColor="#8C9BA5"
                 value={staffSearchQuery}
                 onChangeText={setStaffSearchQuery}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               {staffSearchQuery.length > 0 && (
                 <TouchableOpacity
                   onPress={() => setStaffSearchQuery('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <X size={15} color="#647570" />
+                  <X size={16} color="#718096" />
                 </TouchableOpacity>
               )}
             </View>
@@ -591,10 +778,14 @@ export default function ClubMembersScreen() {
             {canManageRoles && (
               <TouchableOpacity
                 style={styles.addStaffBtn}
-                onPress={() => setAddStaffModalVisible(true)}
+                onPress={() => {
+                  blurActiveElement();
+                  setAddStaffModalVisible(true);
+                }}
                 activeOpacity={0.8}
               >
-                <AppText style={styles.addStaffBtnText}>+ Add Staff</AppText>
+                <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
+                <AppText style={styles.addStaffBtnText}>Staff</AppText>
               </TouchableOpacity>
             )}
           </View>
@@ -606,46 +797,53 @@ export default function ClubMembersScreen() {
   // ─── Render Player Card ──────────────────────────────────────────────────────
 
   const renderPlayerItem = ({ item, index }: { item: ClubPlayerMember; index: number }) => {
-    const avatarSource = getMemberAvatarSource(item.profile_image_url, index);
     const playerName = formatPlayerName(item);
-    const planName = subscriberMap.get(item.user_id);
-    const isSubscriber = Boolean(planName);
 
-    // Dynamic player ID badge display
+    // Dynamic membership number matching reference `#AUG-P-xxx`
     const playerId = item.membership_number
       ? `#${item.membership_number.replace(/^#/, '')}`
-      : `#AUG-P-0${(index + 12).toString().padStart(2, '0')}`;
+      : `#AUG-P-${(index + 16).toString().padStart(3, '0')}`;
 
     return (
       <View style={styles.memberCard}>
-        {/* Top Content Row */}
+        {/* Top Profile Information Area */}
         <View style={styles.cardTopRow}>
-          {/* Avatar */}
-          <View style={styles.avatarWrapper}>
-            <Image source={avatarSource} style={styles.avatarImage} resizeMode="cover" />
-          </View>
+          {/* Avatar on Left */}
+          <MemberAvatar
+            imageUrl={item.profile_image_url}
+            name={playerName}
+            size={64}
+          />
 
-          {/* Details Column */}
+          {/* Details Column on Right */}
           <View style={styles.cardDetailsColumn}>
+            {/* Row 1: Name, ID Badge, Three-dot Menu */}
             <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName}>{playerName}</AppText>
-              <View style={styles.idBadge}>
-                <AppText style={styles.idBadgeText}>{playerId}</AppText>
+              <AppText style={styles.playerName} numberOfLines={1}>
+                {playerName}
+              </AppText>
+              <View style={styles.badgeAndMenuRow}>
+                <View style={styles.idBadge}>
+                  <AppText style={styles.idBadgeText}>{playerId}</AppText>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handlePlayerMenu(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.threeDotBtn}
+                  accessibilityLabel="Player actions"
+                >
+                  <MoreVertical size={18} color="#647570" strokeWidth={2} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => handlePlayerMenu(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.threeDotBtn}
-              >
-                <MoreVertical size={16} color="#647570" />
-              </TouchableOpacity>
             </View>
 
-            {/* Email */}
-            <AppText style={styles.playerEmail}>{item.user_email}</AppText>
+            {/* Row 2: Email */}
+            <AppText style={styles.playerEmail} numberOfLines={1}>
+              {item.user_email}
+            </AppText>
 
-            {/* Status & Plan Row */}
-            <View style={styles.statusAndPlanRow}>
+            {/* Row 3: Status Badge */}
+            <View style={styles.statusRow}>
               <View
                 style={[
                   styles.statusBadge,
@@ -673,37 +871,32 @@ export default function ClubMembersScreen() {
                   {item.status.toUpperCase()}
                 </AppText>
               </View>
-
-              {isSubscriber ? (
-                <View style={styles.planBadge}>
-                  <AppText style={styles.planBadgeText}>{planName}</AppText>
-                </View>
-              ) : playerFilter === 'normal' ? (
-                <View style={styles.normalUserBadge}>
-                  <AppText style={styles.normalUserBadgeText}>NORMAL USER</AppText>
-                </View>
-              ) : null}
             </View>
           </View>
         </View>
 
-        {/* Bottom Actions Row */}
+        {/* Subtle Horizontal Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Bottom Actions Row: [Edit Status] | [Message] */}
         <View style={styles.cardActionRow}>
           <TouchableOpacity
             style={styles.cardActionItem}
             onPress={() => handleOpenEditPlayer(item)}
             activeOpacity={0.7}
           >
-            <SquarePen size={15} color="#102F2A" style={styles.actionIcon} />
+            <SquarePen size={15} color="#102F2A" strokeWidth={1.9} />
             <AppText style={styles.cardActionText}>Edit Status</AppText>
           </TouchableOpacity>
+
+          <View style={styles.actionVerticalDivider} />
 
           <TouchableOpacity
             style={styles.cardActionItem}
             onPress={() => handleMessagePlayer(item)}
             activeOpacity={0.7}
           >
-            <Mail size={15} color="#102F2A" style={styles.actionIcon} />
+            <Mail size={15} color="#102F2A" strokeWidth={1.9} />
             <AppText style={styles.cardActionText}>Message</AppText>
           </TouchableOpacity>
         </View>
@@ -713,48 +906,59 @@ export default function ClubMembersScreen() {
 
   // ─── Render Staff Card ───────────────────────────────────────────────────────
 
-  const renderStaffItem = ({ item, index }: { item: ClubMember; index: number }) => {
-    const avatarSource = PLAYER_AVATARS[index % PLAYER_AVATARS.length];
-    const staffName = item.user_email ? item.user_email.split('@')[0].replace(/[._-]+/g, ' ') : 'Staff Member';
-    const formattedName = staffName
-      .split(' ')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
+  const renderStaffItem = ({ item }: { item: ClubMember; index: number }) => {
+    const staffName = item.user_full_name && item.user_full_name.trim().length > 0
+      ? item.user_full_name.trim()
+      : item.user_email
+        ? item.user_email.split('@')[0].replace(/[._-]+/g, ' ').split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+        : 'Staff Member';
 
     const roleConfig = {
-      club_owner: { label: 'Club Owner', bg: '#E4F4EB', text: '#176B59' },
+      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#0E5E54' },
       club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
       tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
-    }[item.role] || { label: item.role, bg: '#EAF0EC', text: '#102F2A' };
+    }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
 
     return (
       <View style={styles.memberCard}>
+        {/* Top Information Area */}
         <View style={styles.cardTopRow}>
-          <View style={styles.avatarWrapper}>
-            <Image source={avatarSource} style={styles.avatarImage} resizeMode="cover" />
-          </View>
+          <MemberAvatar
+            imageUrl={item.profile_image_url}
+            name={staffName}
+            size={64}
+          />
 
           <View style={styles.cardDetailsColumn}>
+            {/* Row 1: Name, Role Badge, Three-dot Menu */}
             <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName}>{formattedName}</AppText>
-              <TouchableOpacity
-                onPress={() => handleOpenEditRole(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.threeDotBtn}
-              >
-                <MoreVertical size={16} color="#647570" />
-              </TouchableOpacity>
+              <AppText style={styles.playerName} numberOfLines={1}>
+                {staffName}
+              </AppText>
+              <View style={styles.badgeAndMenuRow}>
+                <View style={[styles.roleBadge, { backgroundColor: roleConfig.bg }]}>
+                  <AppText style={[styles.roleBadgeText, { color: roleConfig.text }]}>
+                    {roleConfig.label}
+                  </AppText>
+                </View>
+                <TouchableOpacity
+                  onPress={() => handleStaffMenu(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.threeDotBtn}
+                  accessibilityLabel="Staff actions"
+                >
+                  <MoreVertical size={18} color="#647570" strokeWidth={2} />
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <AppText style={styles.playerEmail}>{item.user_email}</AppText>
+            {/* Row 2: Email */}
+            <AppText style={styles.playerEmail} numberOfLines={1}>
+              {item.user_email}
+            </AppText>
 
-            <View style={styles.statusAndPlanRow}>
-              <View style={[styles.roleBadge, { backgroundColor: roleConfig.bg }]}>
-                <AppText style={[styles.roleBadgeText, { color: roleConfig.text }]}>
-                  {roleConfig.label}
-                </AppText>
-              </View>
-
+            {/* Row 3: Status Badge */}
+            <View style={styles.statusRow}>
               <View
                 style={[
                   styles.statusBadge,
@@ -780,20 +984,34 @@ export default function ClubMembersScreen() {
           </View>
         </View>
 
-        {/* Staff Actions */}
+        {/* Subtle Horizontal Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Bottom Actions Row */}
         <View style={styles.cardActionRow}>
-          {canManageRoles && (
+          {canManageRoles ? (
             <TouchableOpacity
               style={styles.cardActionItem}
               onPress={() => handleOpenEditRole(item)}
               activeOpacity={0.7}
             >
-              <SquarePen size={15} color="#102F2A" style={styles.actionIcon} />
+              <SquarePen size={15} color="#102F2A" strokeWidth={1.9} />
               <AppText style={styles.cardActionText}>Edit Role</AppText>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.cardActionItem}
+              onPress={() => handleMessageStaff(item)}
+              activeOpacity={0.7}
+            >
+              <Mail size={15} color="#102F2A" strokeWidth={1.9} />
+              <AppText style={styles.cardActionText}>Message</AppText>
             </TouchableOpacity>
           )}
 
-          {canManageRoles && item.role !== 'club_owner' && (
+          <View style={styles.actionVerticalDivider} />
+
+          {canManageRoles && item.role !== 'club_owner' ? (
             <TouchableOpacity
               style={styles.cardActionItem}
               onPress={() => handleToggleStaffActive(item)}
@@ -801,15 +1019,24 @@ export default function ClubMembersScreen() {
             >
               {item.is_active ? (
                 <>
-                  <UserX size={15} color="#B91C1C" style={styles.actionIcon} />
+                  <UserX size={15} color="#B91C1C" strokeWidth={1.9} />
                   <AppText style={[styles.cardActionText, { color: '#B91C1C' }]}>Disable</AppText>
                 </>
               ) : (
                 <>
-                  <UserCheck size={15} color="#176B59" style={styles.actionIcon} />
-                  <AppText style={[styles.cardActionText, { color: '#176B59' }]}>Enable</AppText>
+                  <UserCheck size={15} color="#0E5E54" strokeWidth={1.9} />
+                  <AppText style={[styles.cardActionText, { color: '#0E5E54' }]}>Enable</AppText>
                 </>
               )}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.cardActionItem}
+              onPress={() => handleMessageStaff(item)}
+              activeOpacity={0.7}
+            >
+              <Mail size={15} color="#102F2A" strokeWidth={1.9} />
+              <AppText style={styles.cardActionText}>Message</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -819,80 +1046,103 @@ export default function ClubMembersScreen() {
 
   return (
     <Screen style={styles.screenContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
-
-      {/* Top Mobile Header */}
-      <AppHeader
-        title="Members"
-        subtitle="Manage staff roles and enrolled players"
-        borderless
-      />
+      <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
 
       {/* Main List */}
-      {isLoading ? (
-        <LoadingState message="Loading club members..." />
-      ) : activeTab === 'players' ? (
-        <FlatList
-          data={filteredPlayers}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={renderListHeader}
-          contentContainerStyle={styles.listContentContainer}
-          renderItem={renderPlayerItem}
-          ListEmptyComponent={
-            <EmptyState
-              title="No Players Found"
-              description={
-                playerSearchQuery.trim()
-                  ? 'No players matched your search.'
-                  : 'Enroll your first club player to begin managing participation.'
-              }
-              actionLabel="+ Enroll Player"
-              onAction={() => setEnrollModalVisible(true)}
-            />
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={onRefresh}
-              tintColor="#176B59"
-            />
-          }
-        />
-      ) : (
-        <FlatList
-          data={filteredStaff}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={renderListHeader}
-          contentContainerStyle={styles.listContentContainer}
-          renderItem={renderStaffItem}
-          ListEmptyComponent={
-            <EmptyState
-              title="No Staff Found"
-              description="No staff members currently match your search criteria."
-              actionLabel={canManageRoles ? '+ Add Staff' : undefined}
-              onAction={canManageRoles ? () => setAddStaffModalVisible(true) : undefined}
-            />
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={onRefresh}
-              tintColor="#176B59"
-            />
-          }
-        />
-      )}
+      <View style={styles.screenInner}>
+        {isLoading ? (
+          <LoadingState message="Loading club members..." />
+        ) : activeTab === 'players' ? (
+          <FlatList
+            data={filteredPlayers}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={renderListHeader}
+            contentContainerStyle={[
+              styles.listContentContainer,
+              { paddingBottom: insets.bottom + 100 },
+            ]}
+            renderItem={renderPlayerItem}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <EmptyState
+                title="No Players Found"
+                description={
+                  playerSearchQuery.trim()
+                    ? 'No players matched your search.'
+                    : playerFilter === 'subscribers'
+                    ? 'No players currently have active subscriptions.'
+                    : playerFilter === 'normal'
+                    ? 'No normal users currently registered.'
+                    : 'Enroll your first club player to begin managing participation.'
+                }
+                actionLabel="+ Enroll Player"
+                onAction={() => {
+                  blurActiveElement();
+                  setEnrollModalVisible(true);
+                }}
+              />
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={onRefresh}
+                tintColor="#0E5E54"
+              />
+            }
+          />
+        ) : (
+          <FlatList
+            data={filteredStaff}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={renderListHeader}
+            contentContainerStyle={[
+              styles.listContentContainer,
+              { paddingBottom: insets.bottom + 100 },
+            ]}
+            renderItem={renderStaffItem}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <EmptyState
+                title="No Staff Found"
+                description="No staff members currently match your search criteria."
+                actionLabel={canManageRoles ? '+ Add Staff' : undefined}
+                onAction={
+                  canManageRoles
+                    ? () => {
+                        blurActiveElement();
+                        setAddStaffModalVisible(true);
+                      }
+                    : undefined
+                }
+              />
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={onRefresh}
+                tintColor="#0E5E54"
+              />
+            }
+          />
+        )}
+      </View>
 
       {/* ─── Enroll Player Modal ──────────────────────────────────────────────── */}
       <Modal
         visible={enrollModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setEnrollModalVisible(false)}
+        onRequestClose={() => {
+          blurActiveElement();
+          setEnrollModalVisible(false);
+        }}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setEnrollModalVisible(false)}
+          onPress={() => {
+            blurActiveElement();
+            setEnrollModalVisible(false);
+          }}
         >
           <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
@@ -901,7 +1151,10 @@ export default function ClubMembersScreen() {
                 <AppText style={styles.modalSubtitle}>Add an enrolled player to this club</AppText>
               </View>
               <TouchableOpacity
-                onPress={() => setEnrollModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setEnrollModalVisible(false);
+                }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={20} color="#647570" />
@@ -966,7 +1219,10 @@ export default function ClubMembersScreen() {
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
                 style={styles.cancelModalBtn}
-                onPress={() => setEnrollModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setEnrollModalVisible(false);
+                }}
               >
                 <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
               </TouchableOpacity>
@@ -990,11 +1246,17 @@ export default function ClubMembersScreen() {
         visible={editPlayerModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setEditPlayerModalVisible(false)}
+        onRequestClose={() => {
+          blurActiveElement();
+          setEditPlayerModalVisible(false);
+        }}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setEditPlayerModalVisible(false)}
+          onPress={() => {
+            blurActiveElement();
+            setEditPlayerModalVisible(false);
+          }}
         >
           <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
@@ -1005,7 +1267,10 @@ export default function ClubMembersScreen() {
                 </AppText>
               </View>
               <TouchableOpacity
-                onPress={() => setEditPlayerModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setEditPlayerModalVisible(false);
+                }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={20} color="#647570" />
@@ -1057,7 +1322,10 @@ export default function ClubMembersScreen() {
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
                 style={styles.cancelModalBtn}
-                onPress={() => setEditPlayerModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setEditPlayerModalVisible(false);
+                }}
               >
                 <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
               </TouchableOpacity>
@@ -1081,11 +1349,17 @@ export default function ClubMembersScreen() {
         visible={addStaffModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setAddStaffModalVisible(false)}
+        onRequestClose={() => {
+          blurActiveElement();
+          setAddStaffModalVisible(false);
+        }}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setAddStaffModalVisible(false)}
+          onPress={() => {
+            blurActiveElement();
+            setAddStaffModalVisible(false);
+          }}
         >
           <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
@@ -1094,7 +1368,10 @@ export default function ClubMembersScreen() {
                 <AppText style={styles.modalSubtitle}>Assign a management role in this club</AppText>
               </View>
               <TouchableOpacity
-                onPress={() => setAddStaffModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setAddStaffModalVisible(false);
+                }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={20} color="#647570" />
@@ -1170,7 +1447,10 @@ export default function ClubMembersScreen() {
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
                 style={styles.cancelModalBtn}
-                onPress={() => setAddStaffModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setAddStaffModalVisible(false);
+                }}
               >
                 <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
               </TouchableOpacity>
@@ -1194,11 +1474,17 @@ export default function ClubMembersScreen() {
         visible={roleModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={() => setRoleModalVisible(false)}
+        onRequestClose={() => {
+          blurActiveElement();
+          setRoleModalVisible(false);
+        }}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => setRoleModalVisible(false)}
+          onPress={() => {
+            blurActiveElement();
+            setRoleModalVisible(false);
+          }}
         >
           <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeaderRow}>
@@ -1209,7 +1495,10 @@ export default function ClubMembersScreen() {
                 </AppText>
               </View>
               <TouchableOpacity
-                onPress={() => setRoleModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setRoleModalVisible(false);
+                }}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <X size={20} color="#647570" />
@@ -1242,7 +1531,10 @@ export default function ClubMembersScreen() {
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
                 style={styles.cancelModalBtn}
-                onPress={() => setRoleModalVisible(false)}
+                onPress={() => {
+                  blurActiveElement();
+                  setRoleModalVisible(false);
+                }}
               >
                 <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
               </TouchableOpacity>
@@ -1260,6 +1552,58 @@ export default function ClubMembersScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* ─── Filter Info Modal ────────────────────────────────────────────────── */}
+      <Modal
+        visible={filterInfoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          blurActiveElement();
+          setFilterInfoVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            blurActiveElement();
+            setFilterInfoVisible(false);
+          }}
+        >
+          <Pressable style={styles.filterModalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeaderRow}>
+              <AppText style={styles.modalTitle}>Player Filters</AppText>
+              <TouchableOpacity
+                onPress={() => {
+                  blurActiveElement();
+                  setFilterInfoVisible(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#647570" />
+              </TouchableOpacity>
+            </View>
+            <AppText style={styles.filterExplanation}>
+              • <AppText style={{ fontWeight: '700' }}>All Players</AppText>: Displays all enrolled facility players. Staff members are strictly excluded.
+            </AppText>
+            <AppText style={styles.filterExplanation}>
+              • <AppText style={{ fontWeight: '700' }}>Subscribers</AppText>: Players who currently have an active membership subscription plan.
+            </AppText>
+            <AppText style={styles.filterExplanation}>
+              • <AppText style={{ fontWeight: '700' }}>Normal Users</AppText>: Enrolled facility players without an active subscription plan.
+            </AppText>
+            <TouchableOpacity
+              style={[styles.submitModalBtn, { marginTop: 16 }]}
+              onPress={() => {
+                blurActiveElement();
+                setFilterInfoVisible(false);
+              }}
+            >
+              <AppText style={styles.submitModalBtnText}>Got it</AppText>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
@@ -1267,88 +1611,104 @@ export default function ClubMembersScreen() {
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F3F8F5',
+    backgroundColor: '#F2F8F5',
   },
-  topHeaderBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  screenInner: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 600,
+    alignSelf: 'center',
+  },
+
+  // ─── Header ──────────────────────────────────────────────────────────────────
+  headerContainer: {
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 10,
-    backgroundColor: '#F3F8F5',
-    gap: 12,
+    paddingBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
   },
-  menuButton: {
-    padding: 4,
+  hamburgerBtn: {
+    marginTop: 4,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitles: {
     flex: 1,
   },
-  headerMainTitle: {
-    fontSize: 24,
-    fontWeight: '700',
+  headerTitle: {
+    fontSize: 27,
+    fontWeight: '800',
     color: '#102F2A',
-    lineHeight: 28,
+    letterSpacing: -0.4,
+    lineHeight: 32,
   },
   headerSubtitle: {
-    fontSize: 11.5,
-    color: '#647570',
-    marginTop: 1,
-    lineHeight: 15,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#5E716D',
+    marginTop: 3,
+    lineHeight: 18,
   },
+
+  // ─── List Content ────────────────────────────────────────────────────────────
   listContentContainer: {
     paddingHorizontal: 16,
-    paddingBottom: 24,
   },
   listHeaderWrapper: {
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  clubCardContainer: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  actionPillRow: {
+
+  // ─── Main Action 3-Button Row ────────────────────────────────────────────────
+  mainActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
   },
-  actionTab: {
+  mainActionBtn: {
     flex: 1,
-    height: 42,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E0E8E4',
-    borderRadius: 10,
+    height: 44,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 7,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DFE7E3',
+    borderRadius: 12,
   },
-  actionTabActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
+  mainActionBtnActive: {
+    backgroundColor: '#0E5E54',
+    borderColor: '#0E5E54',
   },
-  actionTabText: {
-    fontSize: 13.5,
+  mainActionBtnText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#102F2A',
   },
-  actionTabTextActive: {
+  mainActionBtnTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
   enrollActionBtn: {
     flex: 1,
-    height: 42,
-    backgroundColor: '#176B59',
-    borderRadius: 10,
+    height: 44,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#0E5E54',
+    borderRadius: 12,
   },
   enrollActionBtnText: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
   },
+
+  // ─── Filter Pills ────────────────────────────────────────────────────────────
   filterPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1356,59 +1716,63 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   filterPill: {
-    paddingVertical: 7,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E8E4',
+    borderColor: '#DFE7E3',
   },
   filterPillActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
+    backgroundColor: '#0E5E54',
+    borderColor: '#0E5E54',
   },
   filterPillText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#334155',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
   filterIconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E8E4',
+    borderColor: '#DFE7E3',
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 'auto',
   },
+
+  // ─── Search Container ────────────────────────────────────────────────────────
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E8E4',
+    borderColor: '#DFE7E3',
     borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 44,
-    marginBottom: 12,
+    paddingHorizontal: 14,
+    height: 46,
+    marginBottom: 14,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#102F2A',
     paddingVertical: 0,
   },
+
+  // ─── Staff Controls ──────────────────────────────────────────────────────────
   staffControlsContainer: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   staffSearchAndAddRow: {
     flexDirection: 'row',
@@ -1421,52 +1785,69 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E8E4',
+    borderColor: '#DFE7E3',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
   },
   addStaffBtn: {
-    backgroundColor: '#176B59',
-    paddingHorizontal: 14,
-    height: 42,
-    borderRadius: 10,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0E5E54',
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
   },
   addStaffBtnText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
   },
+
+  // ─── Member Card ─────────────────────────────────────────────────────────────
   memberCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E0E8E4',
-    padding: 14,
+    borderColor: '#E2EAE5',
+    padding: 16,
     marginBottom: 12,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1.5,
   },
   cardTopRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 14,
+    alignItems: 'flex-start',
   },
-  avatarWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+
+  // ─── Avatar ──────────────────────────────────────────────────────────────────
+  avatarContainer: {
     overflow: 'hidden',
-    backgroundColor: '#E4F4EB',
+    backgroundColor: '#E8F3EE',
   },
-  avatarImage: {
+  avatarImg: {
     width: '100%',
     height: '100%',
   },
+  avatarFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D4E8DD',
+  },
+  avatarInitialsText: {
+    fontWeight: '700',
+    color: '#0E5E54',
+    letterSpacing: 0.5,
+  },
+
+  // ─── Card Details Column ─────────────────────────────────────────────────────
   cardDetailsColumn: {
     flex: 1,
   },
@@ -1474,145 +1855,138 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 8,
   },
   playerName: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: '#102F2A',
-    lineHeight: 21,
+    lineHeight: 22,
+  },
+  badgeAndMenuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   idBadge: {
-    backgroundColor: '#F0F4F2',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    backgroundColor: '#EEF2F0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   idBadgeText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#647570',
-    letterSpacing: 0.2,
+    color: '#5E716D',
+    letterSpacing: 0.3,
   },
   threeDotBtn: {
     padding: 2,
   },
   playerEmail: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#647570',
-    marginTop: 2,
-    marginBottom: 6,
+    marginTop: 3,
+    marginBottom: 8,
   },
-  statusAndPlanRow: {
+
+  // ─── Status Badge ────────────────────────────────────────────────────────────
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    borderRadius: 14,
     backgroundColor: '#EAF0EC',
-    gap: 5,
+    gap: 6,
   },
   statusBadgeActive: {
-    backgroundColor: '#E4F4EB',
+    backgroundColor: '#DEF2E6',
   },
   statusBadgeWarning: {
-    backgroundColor: '#FFF3D8',
+    backgroundColor: '#FEF3C7',
   },
   statusBadgeDanger: {
-    backgroundColor: '#FBE5E5',
+    backgroundColor: '#FEE2E2',
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#647570',
   },
   statusDotActive: {
-    backgroundColor: '#176B59',
+    backgroundColor: '#15803D',
   },
   statusDotWarning: {
-    backgroundColor: '#8C6500',
+    backgroundColor: '#D97706',
   },
   statusDotDanger: {
-    backgroundColor: '#B91C1C',
+    backgroundColor: '#DC2626',
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.4,
     color: '#647570',
   },
   statusBadgeTextActive: {
-    color: '#176B59',
+    color: '#15803D',
   },
   statusBadgeTextWarning: {
-    color: '#8C6500',
+    color: '#B45309',
   },
   statusBadgeTextDanger: {
-    color: '#B91C1C',
-  },
-  planBadge: {
-    backgroundColor: '#E7F0FB',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  planBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1D4ED8',
-  },
-  normalUserBadge: {
-    backgroundColor: '#F1F5F3',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  normalUserBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#475569',
+    color: '#DC2626',
   },
   roleBadge: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 12,
+    borderRadius: 6,
   },
   roleBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
+  },
+
+  // ─── Divider & Actions ───────────────────────────────────────────────────────
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F0F4F2',
+    marginTop: 14,
+    marginBottom: 2,
   },
   cardActionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F6F4',
+    height: 42,
   },
   cardActionItem: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
+    height: '100%',
   },
-  actionIcon: {
-    marginTop: 0.5,
+  actionVerticalDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#E2EAE5',
   },
   cardActionText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
     color: '#102F2A',
   },
+
+  // ─── Modals ──────────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
@@ -1624,6 +1998,14 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     padding: 20,
     maxHeight: '90%',
+  },
+  filterModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginHorizontal: 24,
+    marginBottom: 'auto',
+    marginTop: 'auto',
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -1640,6 +2022,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#647570',
     marginTop: 2,
+  },
+  filterExplanation: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 20,
+    marginBottom: 8,
   },
   modalErrorBox: {
     backgroundColor: '#FBE5E5',
@@ -1684,8 +2072,8 @@ const styles = StyleSheet.create({
     borderColor: '#E0E8E4',
   },
   statusSelectOptionActive: {
-    backgroundColor: '#176B59',
-    borderColor: '#176B59',
+    backgroundColor: '#0E5E54',
+    borderColor: '#0E5E54',
   },
   statusSelectOptionText: {
     fontSize: 12,
@@ -1705,8 +2093,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   roleSelectOptionActive: {
-    backgroundColor: '#E4F4EB',
-    borderColor: '#176B59',
+    backgroundColor: '#DEF2E6',
+    borderColor: '#0E5E54',
   },
   roleSelectOptionText: {
     fontSize: 13,
@@ -1714,7 +2102,7 @@ const styles = StyleSheet.create({
     color: '#102F2A',
   },
   roleSelectOptionTextActive: {
-    color: '#176B59',
+    color: '#0E5E54',
   },
   modalActionButtons: {
     flexDirection: 'row',
@@ -1741,7 +2129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#176B59',
+    backgroundColor: '#0E5E54',
     alignItems: 'center',
     justifyContent: 'center',
   },

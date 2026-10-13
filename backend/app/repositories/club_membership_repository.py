@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.club_membership import ClubMembership, ClubRole
+from app.models.user import User
 
 
 class ClubMembershipRepository:
@@ -15,12 +16,12 @@ class ClubMembershipRepository:
         self.db = db
 
     async def get_by_id(self, membership_id: UUID) -> ClubMembership | None:
-        """Get membership by its UUID primary key, loading club and user."""
+        """Get membership by its UUID primary key, loading club, user, and player_profile."""
         result = await self.db.execute(
             select(ClubMembership)
             .options(
                 selectinload(ClubMembership.club),
-                selectinload(ClubMembership.user),
+                selectinload(ClubMembership.user).selectinload(User.player_profile),
             )
             .where(ClubMembership.id == membership_id)
         )
@@ -49,7 +50,7 @@ class ClubMembershipRepository:
             select(ClubMembership)
             .options(
                 selectinload(ClubMembership.club),
-                selectinload(ClubMembership.user),
+                selectinload(ClubMembership.user).selectinload(User.player_profile),
             )
             .where(
                 ClubMembership.user_id == user_id,
@@ -84,10 +85,12 @@ class ClubMembershipRepository:
     async def get_club_members(
         self, club_id: UUID, include_inactive: bool = True
     ) -> list[ClubMembership]:
-        """Get all members of a club, loading the user profile."""
+        """Get all members of a club, loading the user and player profile."""
         stmt = (
             select(ClubMembership)
-            .options(selectinload(ClubMembership.user))
+            .options(
+                selectinload(ClubMembership.user).selectinload(User.player_profile)
+            )
             .where(ClubMembership.club_id == club_id)
             .order_by(ClubMembership.created_at)
         )

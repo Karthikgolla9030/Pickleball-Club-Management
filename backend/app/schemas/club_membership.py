@@ -51,6 +51,7 @@ class MemberResponse(BaseModel):
     is_active: bool
     user_email: str
     user_full_name: str | None = None
+    profile_image_url: str | None = None
     created_at: datetime
     updated_at: datetime
 
