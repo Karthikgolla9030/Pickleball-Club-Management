@@ -19,7 +19,8 @@ import { ChevronDown, ChevronRight, Crown, Building2, Trophy, Plus } from 'lucid
 
 import { AppText } from './AppText';
 import { Badge } from './Badge';
-import { useActiveClub } from '@/hooks';
+import { useActiveClub, useClubBranding } from '@/hooks';
+import { resolveMediaUrl } from '@/utils';
 import { Colors, Layout, Radius, Shadows, Spacing } from '@/theme';
 import type { MembershipInfo } from '@/types';
 
@@ -39,6 +40,11 @@ export function ClubSwitcher({
     canSwitchClub,
     switchClub,
   } = useActiveClub();
+
+  const { branding } = useClubBranding(activeMembership?.club_id);
+  const clubLogoSource = branding?.logo_url
+    ? { uri: resolveMediaUrl(branding.logo_url) }
+    : require('../../assets/lessons/paddle_icon.png');
 
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
@@ -72,7 +78,7 @@ export function ClubSwitcher({
           <View style={styles.compactLeft}>
             <View style={styles.compactIconCircle}>
               <Image
-                source={require('../../assets/lessons/paddle_icon.png')}
+                source={clubLogoSource}
                 style={styles.compactPaddleImg}
                 resizeMode="contain"
               />
@@ -187,7 +193,7 @@ export function ClubSwitcher({
         <View style={styles.leftRow}>
           <View style={styles.iconCircle}>
             <Image
-              source={require('../../assets/lessons/paddle_icon.png')}
+              source={clubLogoSource}
               style={styles.paddleImg}
               resizeMode="contain"
             />

@@ -42,13 +42,14 @@ import {
 import { AppText, ModalSheet } from '@/components';
 import {
   useActiveClub,
+  useClubBranding,
   useCancelEventRegistration,
   useDiscoverClubEvents,
   useMyEvents,
   useRegisterForEvent,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
-import { formatCurrency, formatDateTime } from '@/utils';
+import { formatCurrency, formatDateTime, resolveMediaUrl } from '@/utils';
 import type { ClubEvent, EventRegistration } from '@/types';
 
 type MainTab = 'discover' | 'my_registrations';
@@ -65,6 +66,7 @@ export default function PlayerEventsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId } = useActiveClub();
+  const { data: clubBranding } = useClubBranding(clubId || '');
 
   const [activeTab, setActiveTab] = useState<MainTab>('discover');
   const [selectedDetailEvent, setSelectedDetailEvent] = useState<ClubEvent | null>(null);
@@ -144,6 +146,15 @@ export default function PlayerEventsScreen() {
   };
 
   const getEventImage = (event: ClubEvent, index: number) => {
+    // 1. Entity-level custom image
+    if (event.cover_image_url) {
+      return { uri: resolveMediaUrl(event.cover_image_url) };
+    }
+    // 2. Club-level cover fallback
+    if (clubBranding?.cover_image_url) {
+      return { uri: resolveMediaUrl(clubBranding.cover_image_url) };
+    }
+    // 3. Platform neutral fallback
     const t = event.title?.toLowerCase() || '';
     if (t.includes('social')) return COURT_IMAGES[0];
     if (t.includes('clinic')) return COURT_IMAGES[1];
@@ -359,7 +370,12 @@ export default function PlayerEventsScreen() {
   const renderRegistrationCard = (reg: EventRegistration, index: number) => {
     const eventDateStr = reg.event_start_at || reg.registered_at;
     const { month, day, weekday, formattedDate } = parseEventDate(eventDateStr);
-    const imageSource = COURT_IMAGES[index % COURT_IMAGES.length];
+    const matchingEvent = discoverEvents.find((e) => e.id === reg.event_id);
+    const imageSource = matchingEvent?.cover_image_url
+      ? { uri: resolveMediaUrl(matchingEvent.cover_image_url) }
+      : clubBranding?.cover_image_url
+      ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+      : COURT_IMAGES[index % COURT_IMAGES.length];
     const isCancelled = reg.status === 'cancelled';
     const isWaitlisted = reg.status === 'waitlisted';
 
@@ -484,7 +500,11 @@ export default function PlayerEventsScreen() {
         {/* ─── Hero Banner ─── */}
         <View style={styles.heroBannerContainer}>
           <Image
-            source={require('../../assets/events/hero_events_banner.png')}
+            source={
+              clubBranding?.cover_image_url
+                ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+                : require('../../assets/events/hero_events_banner.png')
+            }
             style={styles.heroBannerImage}
             resizeMode="cover"
           />

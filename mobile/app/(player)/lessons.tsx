@@ -58,6 +58,7 @@ import {
 import { AppText, ModalSheet } from '@/components';
 import {
   useActiveClub,
+  useClubBranding,
   useDiscoverLessons,
   useMyLessons,
   usePlayerCancelLessonRegistration,
@@ -65,7 +66,7 @@ import {
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type {
   LessonRegistration,
   LessonRegistrationStatus,
@@ -80,7 +81,21 @@ const LESSON_CARDS = [
   require('../../assets/lessons/card3.jpg'),
 ];
 
-function getLessonThumbnail(title: string, index: number) {
+function getLessonThumbnail(
+  title: string,
+  index: number,
+  customImageUrl?: string | null,
+  clubCoverUrl?: string | null
+) {
+  // 1. Entity-level custom image
+  if (customImageUrl) {
+    return { uri: resolveMediaUrl(customImageUrl) };
+  }
+  // 2. Club-level cover fallback
+  if (clubCoverUrl) {
+    return { uri: resolveMediaUrl(clubCoverUrl) };
+  }
+  // 3. Platform neutral fallback
   const t = (title || '').toLowerCase();
   if (t.includes('beginner') || t.includes('clinic')) return LESSON_CARDS[0];
   if (t.includes('third-shot') || t.includes('mastery') || t.includes('intermediate'))
@@ -128,6 +143,7 @@ export default function PlayerLessonsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, clubName } = useActiveClub();
+  const { data: clubBranding } = useClubBranding(clubId || '');
 
   const [activeTab, setActiveTab] = useState<TabKey>('discover');
 
@@ -342,7 +358,12 @@ export default function PlayerLessonsScreen() {
             )
           }
           renderItem={({ item, index }) => {
-            const thumbnail = getLessonThumbnail(item.title, index);
+            const thumbnail = getLessonThumbnail(
+              item.title,
+              index,
+              item.image_url,
+              clubBranding?.cover_image_url
+            );
             const myReg = getPlayerRegistration(item.id);
             const isRegistered = !!myReg;
             const availableSpots = item.available_spots ?? 0;
@@ -507,7 +528,12 @@ export default function PlayerLessonsScreen() {
             )
           }
           renderItem={({ item, index }) => {
-            const thumbnail = getLessonThumbnail(item.lesson_title || '', index);
+            const thumbnail = getLessonThumbnail(
+              item.lesson_title || '',
+              index,
+              item.lesson_image_url,
+              clubBranding?.cover_image_url
+            );
             const isRegistered = item.status === 'registered';
             const isAttended = item.status === 'attended';
             const isCancelled = item.status === 'cancelled';

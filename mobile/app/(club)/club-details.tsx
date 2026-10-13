@@ -63,6 +63,7 @@ import {
   LoadingState,
   Screen,
   SegmentedTabs,
+  ClubBrandingSection,
 } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useActiveClub, useClubDetails } from '@/hooks';
@@ -125,8 +126,8 @@ export default function ClubDetailsScreen() {
     isUploadingLogo,
   } = useClubDetails(clubId);
 
-  // Active view tab: 'edit' or 'preview'
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit');
+  // Active view tab: 'edit', 'branding', or 'preview'
+  const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'preview'>('edit');
   const [refreshing, setRefreshing] = useState(false);
 
   // Form State
@@ -444,16 +445,17 @@ export default function ClubDetailsScreen() {
       <View style={styles.tabsContainer}>
         <SegmentedTabs
           tabs={[
-            { key: 'edit', label: isOwner ? 'Edit Club Profile' : 'Club Profile' },
+            { key: 'edit', label: isOwner ? 'Profile' : 'Club Profile' },
+            { key: 'branding', label: 'Branding & Assets' },
             { key: 'preview', label: 'Player Preview' },
           ]}
           activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab)}
+          onTabChange={(tab) => setActiveTab(tab as any)}
         />
       </View>
 
       {/* Non-owner notification banner */}
-      {!isOwner && (
+      {!isOwner && activeTab === 'edit' && (
         <View style={styles.roleNoticeBanner}>
           <Lock size={16} color="#B45309" />
           <AppText style={styles.roleNoticeText}>
@@ -470,10 +472,13 @@ export default function ClubDetailsScreen() {
         </View>
       )}
 
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      {activeTab === 'branding' ? (
+        <ClubBrandingSection clubId={clubId || ''} isOwner={isOwner} />
+      ) : (
+        <KeyboardAvoidingView
+          style={styles.keyboardContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         <ScrollView
           style={styles.scrollArea}
           contentContainerStyle={[
@@ -1064,6 +1069,7 @@ export default function ClubDetailsScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
     </Screen>
   );
 }

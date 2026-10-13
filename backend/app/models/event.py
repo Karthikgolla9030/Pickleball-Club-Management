@@ -96,6 +96,10 @@ class Event(Base):
         Text,
         nullable=True,
     )
+    cover_image_url: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
     event_type: Mapped[EventType] = mapped_column(
         Enum(EventType, name="event_type", create_type=True),
         nullable=False,
@@ -182,6 +186,18 @@ class Event(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+
+    @property
+    def event_type_label(self) -> str:
+        return self.event_type.value.capitalize() if self.event_type else ""
+
+    @property
+    def status_label(self) -> str:
+        return self.status.value.capitalize() if self.status else ""
+
+    @property
+    def visibility_label(self) -> str:
+        return self.visibility.value.replace("_", " ").capitalize() if self.visibility else ""
 
     # ─── Relationships ────────────────────────────────────────────
     club: Mapped["Club"] = relationship(  # noqa: F821

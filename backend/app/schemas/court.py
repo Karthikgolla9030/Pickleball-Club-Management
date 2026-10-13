@@ -28,6 +28,7 @@ class CourtCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Court name (e.g. 'Court 1', 'Center Court')")
     display_name: str | None = Field(None, max_length=100, description="Optional custom human-friendly display label")
     description: str | None = Field(None, description="Optional informational notes")
+    photo_url: str | None = Field(None, max_length=1000, description="Optional court photo image URL")
     court_number: int | None = Field(None, ge=1, description="Optional unique court number within the club")
     surface_type: str | None = Field(None, max_length=50, description="Court playing surface")
     indoor_outdoor: CourtEnvironment = Field(default=CourtEnvironment.INDOOR, description="Indoor, outdoor, or covered")
@@ -50,6 +51,7 @@ class CourtUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     display_name: str | None = Field(None, max_length=100)
     description: str | None = None
+    photo_url: str | None = Field(None, max_length=1000)
     court_number: int | None = Field(None, ge=1)
     surface_type: str | None = Field(None, max_length=50)
     indoor_outdoor: CourtEnvironment | None = None
@@ -84,6 +86,7 @@ class CourtResponse(BaseModel):
     name: str
     display_name: str | None = None
     description: str | None = None
+    photo_url: str | None = None
     court_number: int | None = None
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
@@ -105,6 +108,7 @@ class PlayerCourtResponse(BaseModel):
     name: str
     display_name: str | None = None
     description: str | None = None
+    photo_url: str | None = None
     court_number: int | None = None
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment

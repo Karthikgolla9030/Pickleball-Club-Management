@@ -45,10 +45,12 @@ import { AppText } from '@/components/AppText';
 import { Shadows } from '@/theme';
 import type { TournamentDiscoveryItem, TournamentFormat } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { resolveMediaUrl } from '@/utils';
 
 export interface PlayerTournamentCardProps {
   tournament: TournamentDiscoveryItem;
   index?: number;
+  clubCoverUrl?: string | null;
   isFavorite?: boolean;
   isRegistered?: boolean;
   registrationStatus?: string | null;
@@ -66,7 +68,15 @@ const COURT_IMAGES = {
   scramble: require('../../../assets/tournaments/banner2.jpg'),
 };
 
-function getCardImage(format: TournamentFormat, index: number) {
+function getCardImage(tournament: TournamentDiscoveryItem, index: number, clubCoverUrl?: string | null) {
+  if (tournament.banner_image_url) {
+    return { uri: resolveMediaUrl(tournament.banner_image_url) };
+  }
+  if (clubCoverUrl) {
+    return { uri: resolveMediaUrl(clubCoverUrl) };
+  }
+
+  const format = tournament.format;
   if (format === 'pool_play') return COURT_IMAGES.pool_play;
   if (format === 'round_robin') return COURT_IMAGES.round_robin;
   if (format === 'bracket') return COURT_IMAGES.bracket;
@@ -96,6 +106,7 @@ function formatTournamentDateRange(startStr: string, endStr: string): string {
 export function PlayerTournamentCard({
   tournament,
   index = 0,
+  clubCoverUrl,
   isFavorite = false,
   isRegistered: isRegisteredProp,
   registrationStatus: registrationStatusProp,
@@ -163,7 +174,7 @@ export function PlayerTournamentCard({
   const currentCount = tournament.participant_count || 0;
   const isFull = maxCap > 0 && currentCount >= maxCap;
 
-  const imageSource = getCardImage(format, index);
+  const imageSource = getCardImage(tournament, index, clubCoverUrl);
 
   // Status Badge rendered on the top-left of the banner image
   const renderStatusBadge = () => {

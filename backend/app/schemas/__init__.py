@@ -1,6 +1,16 @@
 """Schemas package."""
 from app.schemas.auth import AuthResponse, LoginRequest, TokenRefreshRequest, TokenRefreshResponse
 from app.schemas.club import ClubDashboardResponse, ClubResponse, UserClubResponse
+from app.schemas.club_asset import (
+    ClubBrandingResponse,
+    ClubBrandingUpdateRequest,
+    ClubCarouselSlideCreateRequest,
+    ClubCarouselSlideResponse,
+    ClubCarouselSlideUpdateRequest,
+    EntityImageUpdateRequest,
+    MediaUploadResponse,
+    ReorderSlidesRequest,
+)
 from app.schemas.club_membership import (
     AddMemberRequest,
     ClubMembershipDetailResponse,
@@ -127,6 +137,11 @@ __all__ = [
     "BookingResponse",
     "CancelSubscriptionRequest",
     "ClubAvailabilityResponse",
+    "ClubBrandingResponse",
+    "ClubBrandingUpdateRequest",
+    "ClubCarouselSlideCreateRequest",
+    "ClubCarouselSlideResponse",
+    "ClubCarouselSlideUpdateRequest",
     "ClubMembershipDetailResponse",
     "ClubPlayerMembershipResponse",
     "ClubResponse",
@@ -140,6 +155,7 @@ __all__ = [
     "CreateClubPlayerMembershipRequest",
     "CreateMembershipPlanRequest",
     "CreateSubscriptionRequest",
+    "EntityImageUpdateRequest",
     "EventCreateRequest",
     "EventDetailResponse",
     "EventRegistrationResponse",
@@ -158,6 +174,7 @@ __all__ = [
     "MemberSubscriptionResponse",
     "MembershipInfo",
     "MembershipPlanDetailResponse",
+    "MediaUploadResponse",
     "MembershipPlanResponse",
     "PaymentCancelRequest",
     "PaymentFailRequest",
@@ -176,6 +193,7 @@ __all__ = [
     "PlayerRegisterRequest",
     "PlayerSelfRegistrationResponse",
     "PlayerSubscribeRequest",
+    "ReorderSlidesRequest",
     "RescheduleMatchRequest",
     "ScheduleMatchRequest",
     "ScheduledMatchResponse",

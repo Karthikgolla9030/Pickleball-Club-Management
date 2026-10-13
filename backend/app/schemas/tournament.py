@@ -137,6 +137,7 @@ class ScoringRulesSchema(BaseModel):
 class TournamentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=5000)
+    banner_image_url: str | None = Field(default=None, max_length=1000)
     format: TournamentFormat
     visibility: TournamentVisibility = TournamentVisibility.PUBLIC
     start_date: datetime
@@ -232,6 +233,7 @@ class TournamentCreate(TournamentBase):
 class TournamentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    banner_image_url: str | None = Field(default=None, max_length=1000)
     format: TournamentFormat | None = None
     visibility: TournamentVisibility | None = None
     start_date: datetime | None = None
@@ -322,6 +324,7 @@ class TournamentResponse(BaseModel):
     created_by_user_id: UUID | None = None
     name: str
     description: str | None = None
+    banner_image_url: str | None = None
     status: TournamentStatus
     status_label: str
     format: TournamentFormat
@@ -355,6 +358,7 @@ class TournamentDiscoveryResponse(BaseModel):
     club_slug: str
     name: str
     description: str | None = None
+    banner_image_url: str | None = None
     format: TournamentFormat
     format_label: str
     status: TournamentStatus

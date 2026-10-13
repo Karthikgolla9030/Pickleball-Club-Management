@@ -84,6 +84,18 @@ class Settings(BaseSettings):
 
     MIGRATION_SECRET: str | None = None
 
+    # ─── Storage Configuration ──────────────────────────────────
+    STORAGE_BACKEND: str = "local"  # "local" or "s3"
+    UPLOAD_DIR: str | None = None
+    UPLOAD_BASE_URL: str = "/uploads"
+    MAX_UPLOAD_SIZE_BYTES: int = 5 * 1024 * 1024  # 5 MB
+    S3_BUCKET: str | None = None
+    S3_REGION: str | None = None
+    S3_ACCESS_KEY_ID: str | None = None
+    S3_SECRET_ACCESS_KEY: str | None = None
+    S3_ENDPOINT_URL: str | None = None
+    S3_PUBLIC_URL_PREFIX: str | None = None
+
     # ─── Platform Owners (distinct from club staff roles) ─────────
     PLATFORM_OWNER_EMAILS: Union[list[str], str] = [
         "platform.owner@pickleball.com",

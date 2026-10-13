@@ -31,6 +31,7 @@ class Club(Base):
         index=True,
     )
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cover_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     short_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -150,6 +151,17 @@ class Club(Base):
     )
     lessons: Mapped[list["Lesson"]] = relationship(  # noqa: F821
         "Lesson",
+        back_populates="club",
+        cascade="all, delete-orphan",
+    )
+    carousel_slides: Mapped[list["ClubCarouselSlide"]] = relationship(  # noqa: F821
+        "ClubCarouselSlide",
+        back_populates="club",
+        cascade="all, delete-orphan",
+        order_by="ClubCarouselSlide.display_order",
+    )
+    media_assets: Mapped[list["ClubMediaAsset"]] = relationship(  # noqa: F821
+        "ClubMediaAsset",
         back_populates="club",
         cascade="all, delete-orphan",
     )

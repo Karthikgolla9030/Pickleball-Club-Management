@@ -34,10 +34,10 @@ import {
 } from 'lucide-react-native';
 
 import { AppText, BookingDetailsModal } from '@/components';
-import { useActiveClub, usePlayerBookings } from '@/hooks';
+import { useActiveClub, useClubBranding, usePlayerBookings } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Booking } from '@/types';
 
 type FilterTab = 'upcoming' | 'past' | 'cancelled';
@@ -54,6 +54,7 @@ export default function PlayerBookingsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId: selectedClubId } = useActiveClub();
+  const { data: clubBranding } = useClubBranding(selectedClubId ?? '');
 
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -169,6 +170,15 @@ export default function PlayerBookingsScreen() {
   };
 
   const getCourtImage = (booking: Booking, index: number) => {
+    // 1. Entity-level custom image
+    if (booking.court?.photo_url) {
+      return { uri: resolveMediaUrl(booking.court.photo_url) };
+    }
+    // 2. Club-level cover fallback
+    if (clubBranding?.cover_image_url) {
+      return { uri: resolveMediaUrl(clubBranding.cover_image_url) };
+    }
+    // 3. Platform neutral fallback
     const courtName = booking.court?.display_name || booking.court?.name || '';
     if (courtName.includes('2')) return COURT_IMAGES[1];
     if (courtName.includes('3')) return COURT_IMAGES[2];

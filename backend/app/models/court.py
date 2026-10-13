@@ -97,6 +97,10 @@ class Court(Base):
         Text,
         nullable=True,
     )
+    photo_url: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
 
     court_number: Mapped[int | None] = mapped_column(
         SmallInteger,

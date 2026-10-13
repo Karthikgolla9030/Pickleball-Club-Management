@@ -73,6 +73,24 @@ export const API_ENDPOINTS = {
   CLUB_DASHBOARD: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/dashboard`,
   CLUB_MEMBER_DETAIL: (clubId: string, membershipId: string) =>
     `${API_BASE}/api/v1/clubs/${clubId}/members/${membershipId}`,
+  CLUB_BRANDING: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/branding`,
+  CLUB_MEDIA_UPLOAD: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/media/upload`,
+  CLUB_CAROUSEL_SLIDES: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/carousel-slides`,
+  CLUB_CAROUSEL_SLIDE_DETAIL: (clubId: string, slideId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/carousel-slides/${slideId}`,
+  CLUB_CAROUSEL_REORDER: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/carousel-slides/reorder`,
+  CLUB_TOURNAMENT_IMAGE: (clubId: string, tournamentId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/tournaments/${tournamentId}/image`,
+  CLUB_LEAGUE_IMAGE: (clubId: string, leagueId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/leagues/${leagueId}/image`,
+  CLUB_EVENT_IMAGE: (clubId: string, eventId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/events/${eventId}/image`,
+  CLUB_COURT_IMAGE: (clubId: string, courtId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/courts/${courtId}/image`,
+  CLUB_LESSON_IMAGE: (clubId: string, lessonId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/lessons/${lessonId}/image`,
+  CLUB_LESSON_TYPE_IMAGE: (clubId: string, lessonTypeId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/lesson-types/${lessonTypeId}/image`,
 
   // Player (Phase 3+)
   PLAYER_PROFILE: `${API_BASE}/api/v1/player/profile`,

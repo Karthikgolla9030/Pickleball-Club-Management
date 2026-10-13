@@ -53,6 +53,7 @@ import {
 } from '@/components';
 import {
   useActiveClub,
+  useClubBranding,
   useCancelClubLesson,
   useClubCoaches,
   useClubCourts,
@@ -89,7 +90,7 @@ import {
   type LessonStatus,
   type LessonType,
 } from '@/types';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
 
@@ -153,7 +154,16 @@ function formatLessonSchedule(iso: string): string {
   }
 }
 
-function getLessonCardImage(item: ClubLesson) {
+function getLessonCardImage(item: ClubLesson, clubCoverUrl?: string | null) {
+  // 1. Entity-level custom image
+  if (item.image_url) {
+    return { uri: resolveMediaUrl(item.image_url) };
+  }
+  // 2. Club-level cover fallback
+  if (clubCoverUrl) {
+    return { uri: resolveMediaUrl(clubCoverUrl) };
+  }
+  // 3. Platform neutral fallback
   const t = (item.title || '').toLowerCase();
   if (t.includes('doubles') || t.includes('strategy') || t.includes('workshop') || t.includes('past')) {
     return require('../../assets/lessons/card1.jpg');
@@ -170,6 +180,7 @@ function getLessonCardImage(item: ClubLesson) {
 export default function ClubLessonsScreen() {
   const { clubId: activeClubId, clubName } = useActiveClub();
   const { canManageLessons } = usePermission();
+  const { data: clubBranding } = useClubBranding(activeClubId ?? '');
 
   const [activeTab, setActiveTab] = useState<StaffTab>('lessons');
   const [statusFilter, setStatusFilter] = useState<LessonStatus | 'all'>('all');
@@ -557,7 +568,11 @@ export default function ClubLessonsScreen() {
       {/* 2. HERO / BANNER SECTION */}
       <View style={styles.promoBannerContainer}>
         <Image
-          source={require('../../assets/lessons/hero_decor.jpg')}
+          source={
+            clubBranding?.cover_image_url
+              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+              : require('../../assets/lessons/hero_decor.jpg')
+          }
           style={styles.promoBannerDecor}
           resizeMode="cover"
         />
@@ -650,7 +665,7 @@ export default function ClubLessonsScreen() {
   );
 
   const renderLessonCard = ({ item }: { item: ClubLesson }) => {
-    const cardImg = getLessonCardImage(item);
+    const cardImg = getLessonCardImage(item, clubBranding?.cover_image_url);
     const rosterLabel = item.status === 'completed' ? 'Roster →' : 'View Roster →';
     const tagLabel = item.lesson_type_name?.toUpperCase() || (item.is_private ? 'PRIVATE' : 'DOUBLES STRATEGY');
 

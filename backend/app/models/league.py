@@ -118,6 +118,7 @@ class League(Base):
 
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    banner_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
 
     status: Mapped[LeagueStatus] = mapped_column(
         Enum(LeagueStatus, name="league_status", native_enum=True),

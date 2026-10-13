@@ -41,6 +41,7 @@ import { AppText } from '@/components';
 import {
   useActiveClub,
   useAuth,
+  useClubBranding,
   useDiscoverClubEvents,
   usePlayerActivity,
   usePlayerBookings,
@@ -50,7 +51,7 @@ import {
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Booking, PlayerActivityItem, TournamentDiscoveryItem } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export default function PlayerHomeScreen() {
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
   const { clubId, clubName } = useActiveClub();
+  const { data: clubBranding } = useClubBranding(clubId || '');
 
   // 1. Next Booking (real authenticated player bookings)
   const {
@@ -190,6 +192,7 @@ export default function PlayerHomeScreen() {
       skillBadge?: string;
       statusBadge: string;
       isTournament: boolean;
+      imageUrl?: string | null;
     }> = [];
 
     // Tournaments
@@ -205,6 +208,7 @@ export default function PlayerHomeScreen() {
           skillBadge: t.format_label || 'All Levels',
           statusBadge: t.is_registration_open ? 'Registration Open' : 'Upcoming',
           isTournament: true,
+          imageUrl: t.banner_image_url || null,
         });
       }
     });
@@ -222,6 +226,7 @@ export default function PlayerHomeScreen() {
           skillBadge: undefined,
           statusBadge: 'Registration Open',
           isTournament: false,
+          imageUrl: e.cover_image_url || null,
         });
       }
     });
@@ -252,13 +257,23 @@ export default function PlayerHomeScreen() {
           },
         ]}
       >
-        {/* Logo on Left */}
-        <Image
-          source={require('../../assets/pickleball_logo_transparent.png')}
-          style={styles.logoImage}
-          resizeMode="contain"
-          accessibilityLabel="Pickleball"
-        />
+        {/* Logo and Club Brand on Left */}
+        <View style={styles.headerLogoContainer}>
+          <Image
+            source={require('../../assets/pickleball_logo_transparent.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="Pickleball"
+          />
+          {clubBranding?.logo_url ? (
+            <Image
+              source={{ uri: resolveMediaUrl(clubBranding.logo_url) }}
+              style={styles.clubLogoBadge}
+              resizeMode="contain"
+              accessibilityLabel={clubName || 'Club Logo'}
+            />
+          ) : null}
+        </View>
 
         {/* Action Icons on Right */}
         <View style={styles.headerActions}>
@@ -308,7 +323,11 @@ export default function PlayerHomeScreen() {
           <View style={styles.heroCard}>
             {/* Background Court Photo on Right */}
             <Image
-              source={require('../../assets/events/pickleball_hero.jpg')}
+              source={
+                clubBranding?.cover_image_url
+                  ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+                  : require('../../assets/events/pickleball_hero.jpg')
+              }
               style={styles.heroImage}
               resizeMode="cover"
             />
@@ -470,7 +489,13 @@ export default function PlayerHomeScreen() {
             >
               {/* Event Thumbnail */}
               <Image
-                source={require('../../assets/events/card1.jpg')}
+                source={
+                  upcomingEvent.imageUrl
+                    ? { uri: resolveMediaUrl(upcomingEvent.imageUrl) }
+                    : clubBranding?.cover_image_url
+                    ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+                    : require('../../assets/events/card1.jpg')
+                }
                 style={styles.eventThumbnail}
                 resizeMode="cover"
               />
@@ -676,9 +701,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#F4F9F6',
     zIndex: 10,
   },
+  headerLogoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   logoImage: {
     width: 106,
     height: 46,
+  },
+  clubLogoBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
   },
   headerActions: {
     flexDirection: 'row',

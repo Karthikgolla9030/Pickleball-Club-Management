@@ -32,6 +32,7 @@ export interface Club {
   name: string;
   slug: string;
   logo_url?: string | null;
+  cover_image_url?: string | null;
   short_description?: string | null;
   description: string | null;
   is_active: boolean;
@@ -63,9 +64,34 @@ export interface Club {
   updated_at: string;
 }
 
+export interface ClubBranding {
+  club_id: string;
+  name: string;
+  logo_url: string | null;
+  cover_image_url: string | null;
+  has_custom_logo: boolean;
+  has_custom_cover: boolean;
+}
+
+export interface ClubCarouselSlide {
+  id: string;
+  club_id: string;
+  title?: string | null;
+  subtitle?: string | null;
+  tag?: string | null;
+  image_url: string;
+  cta_text?: string | null;
+  cta_route?: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface UpdateClubPayload {
   name?: string;
   logo_url?: string | null;
+  cover_image_url?: string | null;
   short_description?: string | null;
   description?: string | null;
   contact_email?: string | null;
@@ -633,6 +659,7 @@ export interface Tournament {
   created_by_user_id: string | null;
   name: string;
   description: string | null;
+  banner_image_url?: string | null;
   status: TournamentStatus;
   status_label: string;
   format: TournamentFormat;
@@ -670,6 +697,7 @@ export interface TournamentDiscoveryItem {
   club_slug: string;
   name: string;
   description: string | null;
+  banner_image_url?: string | null;
   status: TournamentStatus;
   status_label: string;
   format: TournamentFormat;
@@ -700,6 +728,7 @@ export interface TournamentDiscoveryItem {
 export interface CreateTournamentPayload {
   name: string;
   description?: string | null;
+  banner_image_url?: string | null;
   format: TournamentFormat;
   visibility?: TournamentVisibility;
   start_date: string;
@@ -717,6 +746,7 @@ export interface CreateTournamentPayload {
 export interface UpdateTournamentPayload {
   name?: string;
   description?: string | null;
+  banner_image_url?: string | null;
   format?: TournamentFormat;
   visibility?: TournamentVisibility;
   start_date?: string;
@@ -1126,6 +1156,7 @@ export interface LeagueSummary {
   club_slug?: string | null;
   name: string;
   description: string | null;
+  banner_image_url?: string | null;
   status: LeagueStatus;
   status_display: string;
   number_of_weeks: number;
@@ -1299,6 +1330,7 @@ export interface LeaguePlayoffsResponse {
 export interface CreateLeaguePayload {
   name: string;
   description?: string | null;
+  banner_image_url?: string | null;
   number_of_weeks?: number;
   team_size?: number;
   playoff_team_count?: number;
@@ -1330,6 +1362,7 @@ export interface Court {
   description: string | null;
   court_number: number | null;
   surface_type: string | null;
+  photo_url?: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
   status: CourtStatus;
@@ -1347,6 +1380,7 @@ export interface PlayerCourt {
   display_name: string | null;
   court_number: number | null;
   surface_type: string | null;
+  photo_url?: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
   display_order: number;
@@ -1360,6 +1394,7 @@ export interface CourtCreateRequest {
   description?: string | null;
   court_number?: number | null;
   surface_type?: string | null;
+  photo_url?: string | null;
   indoor_outdoor?: CourtEnvironment;
   price_per_hour?: number | string | null;
   is_active?: boolean;
@@ -1373,6 +1408,7 @@ export interface CourtUpdateRequest {
   description?: string | null;
   court_number?: number | null;
   surface_type?: string | null;
+  photo_url?: string | null;
   indoor_outdoor?: CourtEnvironment;
   price_per_hour?: number | string | null;
   is_active?: boolean;
@@ -1464,6 +1500,7 @@ export interface BookingCourtInfo {
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
+  photo_url?: string | null;
 }
 
 export interface BookingPlayerInfo {
@@ -1867,6 +1904,7 @@ export interface ClubEvent {
   club_id: string;
   title: string;
   description: string | null;
+  cover_image_url?: string | null;
   event_type: EventType;
   event_type_label: string;
   status: EventStatus;
@@ -1914,6 +1952,7 @@ export interface EventRegistration {
 export interface CreateEventPayload {
   title: string;
   description?: string | null;
+  cover_image_url?: string | null;
   event_type?: EventType;
   visibility?: EventVisibility;
   start_at: string;
@@ -1930,6 +1969,7 @@ export interface CreateEventPayload {
 export interface UpdateEventPayload {
   title?: string;
   description?: string | null;
+  cover_image_url?: string | null;
   event_type?: EventType;
   visibility?: EventVisibility;
   start_at?: string;
@@ -2005,6 +2045,7 @@ export interface LessonType {
   club_id: string;
   name: string;
   description: string | null;
+  image_url?: string | null;
   duration_minutes: number;
   default_capacity: number | null;
   default_price: number | string;
@@ -2023,6 +2064,7 @@ export interface ClubLesson {
   court_id: string | null;
   title: string;
   description: string | null;
+  image_url?: string | null;
   start_at: string;
   end_at: string;
   capacity: number | null;
@@ -2064,6 +2106,7 @@ export interface LessonRegistration {
   user_email: string | null;
   lesson_title: string | null;
   lesson_start_at: string | null;
+  lesson_image_url?: string | null;
 }
 
 export interface PlayerLessonDetail extends ClubLesson {
@@ -2093,6 +2136,7 @@ export interface UpdateCoachPayload {
 export interface CreateLessonTypePayload {
   name: string;
   description?: string | null;
+  image_url?: string | null;
   duration_minutes?: number;
   default_capacity?: number | null;
   default_price?: number;
@@ -2103,6 +2147,7 @@ export interface CreateLessonTypePayload {
 export interface UpdateLessonTypePayload {
   name?: string;
   description?: string | null;
+  image_url?: string | null;
   duration_minutes?: number;
   default_capacity?: number | null;
   default_price?: number;
@@ -2116,6 +2161,7 @@ export interface CreateLessonPayload {
   court_id?: string | null;
   title: string;
   description?: string | null;
+  image_url?: string | null;
   start_at: string;
   end_at: string;
   capacity?: number | null;
@@ -2131,6 +2177,7 @@ export interface UpdateLessonPayload {
   court_id?: string | null;
   title?: string;
   description?: string | null;
+  image_url?: string | null;
   start_at?: string;
   end_at?: string;
   capacity?: number | null;

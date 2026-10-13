@@ -158,6 +158,10 @@ class LessonType(Base):
         Text,
         nullable=True,
     )
+    image_url: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+    )
     duration_minutes: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -255,6 +259,10 @@ class Lesson(Base):
     )
     description: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+    image_url: Mapped[str | None] = mapped_column(
+        String(1000),
         nullable=True,
     )
     start_at: Mapped[datetime] = mapped_column(

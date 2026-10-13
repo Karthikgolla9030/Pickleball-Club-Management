@@ -40,6 +40,7 @@ import { AppText } from '@/components/AppText';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { LeagueStatus, LeagueSummary } from '@/types';
 import { formatDate } from '@/utils/formatters';
+import { resolveMediaUrl } from '@/utils';
 
 const LEAGUE_CARD_IMAGES: ImageSourcePropType[] = [
   require('../../../assets/leagues/card1.jpg'),
@@ -55,6 +56,7 @@ export interface LeagueCardProps {
   onViewRegistrationPress?: () => void;
   onClubPress?: (clubId: string) => void;
   imageIndex?: number;
+  clubCoverUrl?: string | null;
   onOptionsPress?: () => void;
   onManagePress?: () => void;
   actionLabel?: string;
@@ -146,6 +148,7 @@ export function LeagueCard({
   onViewRegistrationPress,
   onClubPress,
   imageIndex = 0,
+  clubCoverUrl,
   onOptionsPress,
   onManagePress,
   actionLabel,
@@ -169,7 +172,11 @@ export function LeagueCard({
   const completedMatches = league.completed_matches_count || 0;
   const progressPct = totalMatches > 0 ? Math.min(100, Math.round((completedMatches / totalMatches) * 100)) : 0;
 
-  const imgSource = LEAGUE_CARD_IMAGES[Math.abs(imageIndex) % LEAGUE_CARD_IMAGES.length];
+  const imgSource = league.banner_image_url
+    ? { uri: resolveMediaUrl(league.banner_image_url) }
+    : clubCoverUrl
+    ? { uri: resolveMediaUrl(clubCoverUrl) }
+    : LEAGUE_CARD_IMAGES[Math.abs(imageIndex) % LEAGUE_CARD_IMAGES.length];
 
   const formatCardDate = (dateStr?: string | null): string => {
     if (!dateStr) return '';

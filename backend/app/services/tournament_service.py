@@ -89,6 +89,7 @@ def _build_tournament_response(
         created_by_user_id=t.created_by_user_id,
         name=t.name,
         description=t.description,
+        banner_image_url=getattr(t, "banner_image_url", None),
         status=t.status,
         status_label=t.status.display_label,
         format=t.format,
@@ -112,6 +113,9 @@ def _build_tournament_response(
         my_registration_id=my_registration_id,
         my_registration_status=my_registration_status,
     )
+
+
+build_tournament_response = _build_tournament_response
 
 
 def _build_registration_response(

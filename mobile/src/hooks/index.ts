@@ -56,4 +56,5 @@ export * from './useClubDiscovery';
 export * from './useMembershipRequests';
 export * from './usePlayerMembershipRequests';
 export * from './useAnalytics';
+export * from './useClubBranding';
 

@@ -24,8 +24,8 @@ from app.models.event import (
 class EventCreateRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    cover_image_url: str | None = Field(None, max_length=1000)
     event_type: EventType = Field(default=EventType.SOCIAL)
-    visibility: EventVisibility = Field(default=EventType.SOCIAL)  # Will default to PUBLIC below
     visibility: EventVisibility = Field(default=EventVisibility.PUBLIC)
     start_at: datetime
     end_at: datetime
@@ -57,6 +57,7 @@ class EventCreateRequest(BaseModel):
 class EventUpdateRequest(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = None
+    cover_image_url: str | None = Field(None, max_length=1000)
     event_type: EventType | None = None
     visibility: EventVisibility | None = None
     start_at: datetime | None = None
@@ -84,6 +85,7 @@ class EventResponse(BaseModel):
     club_id: UUID
     title: str
     description: str | None = None
+    cover_image_url: str | None = None
     event_type: EventType
     event_type_label: str
     status: EventStatus

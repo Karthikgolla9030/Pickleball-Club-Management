@@ -57,6 +57,7 @@ import {
 } from '@/components';
 import {
   useActiveClub,
+  useClubBranding,
   useCancelClubEvent,
   useClubEvents,
   useCompleteClubEvent,
@@ -70,7 +71,7 @@ import {
   useStaffRegisterPlayer,
 } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import {
   EVENT_REGISTRATION_STATUS_LABELS,
   EVENT_STATUS_LABELS,
@@ -135,7 +136,16 @@ function parseEventLocation(loc: string | null) {
   return { court: loc, city: 'Tirupati, AP' };
 }
 
-function getEventCardImage(event: ClubEvent, index: number) {
+function getEventCardImage(event: ClubEvent, index: number, clubCoverUrl?: string | null) {
+  // 1. Entity-level custom image
+  if (event.cover_image_url) {
+    return { uri: resolveMediaUrl(event.cover_image_url) };
+  }
+  // 2. Club-level cover fallback
+  if (clubCoverUrl) {
+    return { uri: resolveMediaUrl(clubCoverUrl) };
+  }
+  // 3. Platform neutral fallback
   if (event.event_type === 'clinic') {
     return require('../../assets/events/card3_clean.jpg');
   }
@@ -189,6 +199,7 @@ function getRegStatusBadgeVariant(
 function EventCard({
   event,
   index,
+  clubCoverUrl,
   onViewRoster,
   onPublish,
   onCancel,
@@ -197,6 +208,7 @@ function EventCard({
 }: {
   event: ClubEvent;
   index: number;
+  clubCoverUrl?: string | null;
   onViewRoster: (event: ClubEvent) => void;
   onPublish: (event: ClubEvent) => void;
   onCancel: (event: ClubEvent) => void;
@@ -210,7 +222,7 @@ function EventCard({
   const thumbnailDate = getEventThumbnailDate(event.start_at);
   const schedule = formatEventSchedule(event.start_at, event.end_at);
   const loc = parseEventLocation(event.location);
-  const cardImg = getEventCardImage(event, index);
+  const cardImg = getEventCardImage(event, index, clubCoverUrl);
 
   const feeDisplay =
     Number(event.registration_fee) > 0
@@ -808,6 +820,7 @@ export default function ClubEventsScreen() {
   const { clubId: rawClubId } = useActiveClub();
   const { canManageEvents } = usePermission();
   const clubId = rawClubId || '';
+  const { data: clubBranding } = useClubBranding(clubId);
 
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all');
   const [selectedRosterEvent, setSelectedRosterEvent] = useState<ClubEvent | null>(null);
@@ -903,7 +916,11 @@ export default function ClubEventsScreen() {
       {/* 1. HERO BANNER */}
       <View style={styles.heroContainer}>
         <Image
-          source={require('../../assets/events/hero_decor.jpg')}
+          source={
+            clubBranding?.cover_image_url
+              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+              : require('../../assets/events/hero_decor.jpg')
+          }
           style={styles.heroDecorImage}
           resizeMode="cover"
         />
@@ -1066,6 +1083,7 @@ export default function ClubEventsScreen() {
             <EventCard
               event={item}
               index={index}
+              clubCoverUrl={clubBranding?.cover_image_url}
               onViewRoster={(ev) => setSelectedRosterEvent(ev)}
               onPublish={handlePublish}
               onCancel={handleCancelEvent}

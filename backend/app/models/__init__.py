@@ -3,6 +3,7 @@ Models package — import all models here so Alembic can discover them
 for autogenerate migrations.
 """
 from app.models.club import Club
+from app.models.club_asset import ClubCarouselSlide, ClubMediaAsset
 from app.models.club_application import ClubApplication, ClubApplicationStatus
 from app.models.membership import (
     MembershipPlan,
@@ -80,6 +81,8 @@ __all__ = [
     "Club",
     "ClubApplication",
     "ClubApplicationStatus",
+    "ClubCarouselSlide",
+    "ClubMediaAsset",
     "ClubMembership",
     "ClubMembershipRequest",
     "ClubPlayerMembership",

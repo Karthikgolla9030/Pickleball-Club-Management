@@ -65,10 +65,10 @@ import {
   ModalSheet,
   Screen,
 } from '@/components';
-import { useActiveClub, useClubCourts, usePermission } from '@/hooks';
+import { useActiveClub, useClubBranding, useClubCourts, usePermission } from '@/hooks';
 import { courtApi, bookingApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type {
   Court,
   CourtCreateRequest,
@@ -87,7 +87,16 @@ const COURT_IMAGES = [
   require('../../assets/courts/court_5.jpg'),
 ];
 
-function getCourtThumbnail(court: Court, index: number) {
+function getCourtThumbnail(court: Court, index: number, clubCoverUrl?: string | null) {
+  // 1. Entity-level custom image
+  if (court.photo_url) {
+    return { uri: resolveMediaUrl(court.photo_url) };
+  }
+  // 2. Club-level cover fallback
+  if (clubCoverUrl) {
+    return { uri: resolveMediaUrl(clubCoverUrl) };
+  }
+  // 3. Platform neutral fallback
   if (court.court_number && court.court_number >= 1 && court.court_number <= COURT_IMAGES.length) {
     return COURT_IMAGES[court.court_number - 1];
   }
@@ -194,6 +203,7 @@ function CourtGlyph({
 export default function ClubCourtsScreen() {
   const { clubId, clubName } = useActiveClub();
   const { canManageCourts } = usePermission();
+  const { data: clubBranding } = useClubBranding(clubId || '');
 
   // Navigation switcher: Schedule on LEFT, Management on RIGHT (Schedule active by default)
   const [topTab, setTopTab] = useState<'schedule' | 'management'>('schedule');
@@ -695,7 +705,7 @@ export default function ClubCourtsScreen() {
                   />
                 }
                 renderItem={({ item, index }) => {
-                  const thumbnailSource = getCourtThumbnail(item, index);
+                  const thumbnailSource = getCourtThumbnail(item, index, clubBranding?.cover_image_url);
                   const locationText = getCourtLocation(item, index);
                   const surfaceText = getSurfaceLabel(item.surface_type);
                   const courtNumberText =

@@ -17,6 +17,7 @@ class ClubResponse(BaseModel):
     name: str
     slug: str
     logo_url: str | None = None
+    cover_image_url: str | None = None
     short_description: str | None = None
     description: str | None = None
     is_active: bool
@@ -56,6 +57,7 @@ class PublicClubResponse(BaseModel):
     name: str
     slug: str
     logo_url: str | None = None
+    cover_image_url: str | None = None
     short_description: str | None = None
     description: str | None = None
     contact_email: str | None = None
@@ -89,6 +91,7 @@ class UserClubResponse(BaseModel):
     name: str
     slug: str
     logo_url: str | None = None
+    cover_image_url: str | None = None
     short_description: str | None = None
     description: str | None = None
     city: str | None = None
@@ -108,6 +111,7 @@ class ClubUpdateRequest(BaseModel):
     """Payload for updating club information (Owner only)."""
     name: str | None = Field(None, min_length=1, max_length=255)
     logo_url: str | None = Field(None, max_length=500)
+    cover_image_url: str | None = Field(None, max_length=1000)
     short_description: str | None = Field(None, max_length=255)
     description: str | None = Field(None, max_length=2000)
     contact_email: str | None = None

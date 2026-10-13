@@ -20,6 +20,7 @@ from app.models.league import LeagueStatus, LeagueWeekStatus, LeagueWeekType
 class LeagueCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="League display name")
     description: str | None = Field(None, max_length=2000)
+    banner_image_url: str | None = Field(None, max_length=1000)
     number_of_weeks: int = Field(4, ge=2, le=52, description="Total duration (Weeks 1..N-1 Regular Season, Week N Playoffs)")
     team_size: int = Field(2, ge=1, le=4, description="Default 2 for doubles, 1 for singles")
     playoff_team_count: int = Field(4, ge=2, le=32, description="Number of teams qualifying for playoffs")
@@ -35,6 +36,7 @@ class LeagueCreateRequest(BaseModel):
 class LeagueUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=2000)
+    banner_image_url: str | None = Field(None, max_length=1000)
     number_of_weeks: int | None = Field(None, ge=2, le=52)
     team_size: int | None = Field(None, ge=1, le=4)
     playoff_team_count: int | None = Field(None, ge=2, le=32)
@@ -64,6 +66,7 @@ class LeagueResponse(BaseModel):
     club_slug: str | None = None
     name: str
     description: str | None
+    banner_image_url: str | None = None
     status: LeagueStatus
     status_display: str | None = None
     number_of_weeks: int

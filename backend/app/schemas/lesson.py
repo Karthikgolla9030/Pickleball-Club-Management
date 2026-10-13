@@ -61,6 +61,7 @@ class CoachResponse(BaseModel):
 class LessonTypeCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    image_url: str | None = Field(default=None, max_length=1000)
     duration_minutes: int = Field(default=60, gt=0, description="Duration in minutes, must be positive")
     default_capacity: int | None = Field(default=None, gt=0, description="Default capacity if configured, must be positive")
     default_price: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
@@ -76,6 +77,7 @@ class LessonTypeCreateRequest(BaseModel):
 class LessonTypeUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    image_url: str | None = Field(default=None, max_length=1000)
     duration_minutes: int | None = Field(default=None, gt=0)
     default_capacity: int | None = Field(default=None, gt=0)
     default_price: Decimal | None = Field(default=None, ge=0, decimal_places=2)
@@ -95,6 +97,7 @@ class LessonTypeResponse(BaseModel):
     club_id: UUID
     name: str
     description: str | None = None
+    image_url: str | None = None
     duration_minutes: int
     default_capacity: int | None = None
     default_price: Decimal
@@ -113,6 +116,7 @@ class LessonCreateRequest(BaseModel):
     court_id: UUID | None = None
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    image_url: str | None = Field(default=None, max_length=1000)
     start_at: datetime
     end_at: datetime
     capacity: int | None = Field(default=None, gt=0)
@@ -142,6 +146,7 @@ class LessonUpdateRequest(BaseModel):
     court_id: UUID | None = None
     title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
+    image_url: str | None = Field(default=None, max_length=1000)
     start_at: datetime | None = None
     end_at: datetime | None = None
     capacity: int | None = Field(default=None, gt=0)
@@ -175,6 +180,7 @@ class LessonResponse(BaseModel):
     court_id: UUID | None = None
     title: str
     description: str | None = None
+    image_url: str | None = None
     start_at: datetime
     end_at: datetime
     capacity: int | None = None
