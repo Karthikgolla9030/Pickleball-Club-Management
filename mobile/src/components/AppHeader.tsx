@@ -144,6 +144,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 8,
     gap: 10,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   iconButton: {
     width: 38,

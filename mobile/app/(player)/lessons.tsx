@@ -632,7 +632,7 @@ export default function PlayerLessonsScreen() {
             ) : sortedLessons.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconCircle}>
-                  <UserPlus size={34} color="#0D5C46" strokeWidth={1.8} />
+                  <UserPlus size={28} color="#0D5C46" strokeWidth={1.8} />
                 </View>
                 <AppText style={styles.emptyTitle}>No Lessons Available</AppText>
                 <AppText style={styles.emptyDescription}>
@@ -647,9 +647,9 @@ export default function PlayerLessonsScreen() {
                   accessibilityLabel="Refresh Lessons"
                 >
                   {isRefetchingDiscover ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
                   ) : (
-                    <RotateCw size={17} color="#FFFFFF" strokeWidth={2.2} style={{ marginRight: 8 }} />
+                    <RotateCw size={15} color="#FFFFFF" strokeWidth={2.2} style={{ marginRight: 6 }} />
                   )}
                   <AppText style={styles.refreshButtonText}>Refresh</AppText>
                 </TouchableOpacity>
@@ -914,6 +914,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
     paddingBottom: 110,
     maxWidth: 680,
     width: '100%',
@@ -928,8 +930,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2ECE7',
     padding: 4,
-    marginHorizontal: 16,
-    marginBottom: 16,
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -964,11 +965,11 @@ const styles = StyleSheet.create({
   // ─── Lesson Card ───────────────────────────────────────────────────────────
   lessonCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#E8EDEA',
+    borderColor: '#EEF3F0',
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
@@ -1143,16 +1144,15 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#E2ECE7',
-    paddingVertical: 44,
-    paddingHorizontal: 24,
-    marginHorizontal: 16,
+    paddingVertical: 26,
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 20,
+    marginTop: 2,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -1160,35 +1160,35 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: '#E0F2E9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 14,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '700',
     color: '#0F2922',
-    marginBottom: 8,
+    marginBottom: 6,
     textAlign: 'center',
     letterSpacing: -0.2,
   },
   emptyDescription: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#64748B',
     textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 320,
-    marginBottom: 22,
+    lineHeight: 18,
+    maxWidth: 300,
+    marginBottom: 18,
   },
   refreshButton: {
     backgroundColor: '#0D3E33',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
+    height: 38,
+    paddingHorizontal: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1201,7 +1201,7 @@ const styles = StyleSheet.create({
   refreshButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 14.5,
+    fontSize: 13.5,
   },
 
   // ─── Modal Styles ──────────────────────────────────────────────────────────

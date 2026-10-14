@@ -80,20 +80,18 @@ export function PlayerHeroBanner({
         accessibilityLabel={`${currentSlide.tag} banner photo`}
       />
 
-      {/* ─── Dark Forest Green Layer 1: Ambient Tint ─── */}
-      <View style={styles.ambientOverlay} />
-
-      {/* ─── Dark Forest Green Layer 2: Directional Gradient / Left Shade ─── */}
+      {/* ─── Dark Forest Green Layer: Directional Gradient / Left Shade ─── */}
       <View
         style={[
           styles.gradientOverlay,
           Platform.OS === 'web'
             ? ({
                 backgroundImage:
-                  'linear-gradient(90deg, #052820 0%, #062D24 45%, rgba(6, 45, 36, 0.85) 65%, rgba(6, 45, 36, 0.2) 95%, rgba(6, 45, 36, 0.05) 100%)',
+                  'linear-gradient(90deg, rgba(5, 34, 27, 0.94) 0%, rgba(6, 42, 33, 0.88) 36%, rgba(6, 42, 33, 0.5) 60%, rgba(6, 42, 33, 0.1) 82%, rgba(6, 42, 33, 0.0) 100%)',
                 width: '100%',
+                backgroundColor: 'transparent',
               } as any)
-            : { width: isNarrowScreen ? '85%' : '72%' },
+            : { width: isNarrowScreen ? '85%' : '70%' },
         ]}
       />
 
@@ -183,61 +181,49 @@ export function PlayerHeroBanner({
 
 const styles = StyleSheet.create({
   container: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    borderRadius: 18,
-    overflow: 'hidden',
-    backgroundColor: '#062B23', // Deep forest green
-    height: 255, // Proportionate 240-270px on mobile
-    position: 'relative',
-    maxWidth: 680,
     width: '100%',
-    alignSelf: 'center',
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#062B23',
+    height: 215, // Proportionate ~200-225px target
+    position: 'relative',
+    marginBottom: 18, // Gap between banner and tabs: 16-20px
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   bannerImage: {
     position: 'absolute',
     top: 0,
     right: 0,
     bottom: 0,
+    left: 0,
     width: '100%',
     height: '100%',
-  },
-  ambientOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(5, 38, 30, 0.38)',
   },
   gradientOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     bottom: 0,
-    backgroundColor: '#062B23',
-    opacity: 0.92,
+    backgroundColor: 'rgba(5, 34, 27, 0.88)',
   },
   contentLayer: {
     flex: 1,
-    paddingTop: 20,
-    paddingBottom: 16,
-    paddingLeft: 20,
+    paddingTop: 16,
+    paddingBottom: 14,
+    paddingLeft: 18,
     justifyContent: 'space-between',
     zIndex: 2,
   },
   topTextBlock: {
-    gap: 4,
+    gap: 3,
   },
   eyebrowText: {
     color: '#A7F3D0', // Mint/light green
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 1.1,
     textTransform: 'uppercase',
@@ -245,42 +231,43 @@ const styles = StyleSheet.create({
   },
   headingText: {
     color: '#FFFFFF',
-    fontSize: 21,
+    fontSize: 19,
     fontWeight: '700',
-    lineHeight: 27,
-    letterSpacing: -0.4,
+    lineHeight: 24,
+    letterSpacing: -0.3,
   },
   descriptionText: {
     color: '#E2ECE7',
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontSize: 12,
+    lineHeight: 16,
     marginTop: 2,
+    maxWidth: 250,
   },
   bottomBlock: {
-    gap: 12,
+    gap: 10,
     alignItems: 'flex-start',
   },
   ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 22,
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
   },
   ctaText: {
     color: '#072C24',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   ctaArrow: {
-    marginLeft: 6,
+    marginLeft: 5,
   },
   dotsRow: {
     flexDirection: 'row',
