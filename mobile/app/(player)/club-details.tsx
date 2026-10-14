@@ -1,8 +1,19 @@
 /**
  * Aught2 Pickleball — Public Club Profile (Player View)
  *
- * Displays public facility details, active membership plans, courts,
- * and handles the player membership application lifecycle.
+ * Exact Reference Implementation matching the approved Club Profile design:
+ *   - Compact header with back arrow button and dynamic club name
+ *   - Inset rounded photographic Hero Banner with dark-green gradient overlay,
+ *     dynamic club cover photo, club logo container, dynamic club name,
+ *     capsule "ACTIVE" badge, location with pin, and operating hours with clock
+ *   - Membership Status card (green circular checkmark, dynamic membership state,
+ *     clear subtext, and deep green "Book Court" action)
+ *   - Courts & Facilities card with icon, dynamic courts count badge,
+ *     one row per actual court with court-specific photograph thumbnail,
+ *     court title, surface & environment subtext, access status, and "Book" button
+ *   - Side-by-side shortcut cards: "Upcoming Events" and "Lessons & Coaching"
+ *   - "About This Club" card with icon, dynamic description, and view full details dialog
+ *   - Preserves player bottom navigation with generous safe area scroll padding
  */
 
 import React, { useMemo, useState } from 'react';
@@ -17,13 +28,14 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Award,
+  ArrowLeft,
   Building2,
   Calendar,
   CheckCircle2,
@@ -31,32 +43,16 @@ import {
   Clock,
   ExternalLink,
   Globe,
-  Grid,
   Info,
   LayoutGrid,
   Mail,
   MapPin,
-  Medal,
   Phone,
-  Send,
-  Sparkles,
-  Trophy,
   UserCheck,
   X,
 } from 'lucide-react-native';
 
-import {
-  AppHeader,
-  AppText,
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Screen,
-} from '@/components';
-import { API_ENDPOINTS } from '@/constants';
+import { AppText, Button, Card, ErrorState, LoadingState, Screen } from '@/components';
 import {
   usePlayerClubMembershipRequest,
   usePlayerClubs,
@@ -64,24 +60,44 @@ import {
   usePlayerMembershipRequests,
   usePlayerSubscribe,
 } from '@/hooks';
-import { clubsApi, courtApi, leagueApi, tournamentApi } from '@/services/api';
+import { clubsApi, courtApi } from '@/services/api';
 import { Colors, Radius, Spacing } from '@/theme';
-import { formatCurrency } from '@/utils';
-import type { Club, LeagueSummary, MembershipPlan, PlayerCourt, TournamentDiscoveryItem } from '@/types';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
+import type { Club, MembershipPlan, PlayerCourt } from '@/types';
 
-function getFullImageUrl(url: string | null | undefined): string | null {
-  if (!url || !url.trim()) return null;
-  const clean = url.trim();
-  if (clean.startsWith('http') || clean.startsWith('data:')) return clean;
-  const base = API_ENDPOINTS.BASE.replace(/\/$/, '');
-  const path = clean.startsWith('/') ? clean : `/${clean}`;
-  return `${base}${path}`;
+// ─── Default & Fallback Assets ───────────────────────────────────────────────
+
+const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
+const DEFAULT_LOGO = require('../../assets/aught2_pickleball_logo.png');
+
+const COURT_FALLBACKS = [
+  require('../../assets/courts/court_1.jpg'),
+  require('../../assets/courts/court_2.jpg'),
+  require('../../assets/courts/court_3.jpg'),
+  require('../../assets/courts/court_4.jpg'),
+  require('../../assets/courts/court_5.jpg'),
+];
+
+function formatOperatingHours(openingTime?: string | null, closingTime?: string | null): string {
+  if (!openingTime || !closingTime) return '6:00 AM - 10:00 PM';
+  const formatTime = (t: string) => {
+    const parts = String(t).split(':');
+    if (parts.length < 2) return String(t);
+    let hour = parseInt(parts[0], 10);
+    const minute = parts[1];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    hour = hour % 12;
+    if (hour === 0) hour = 12;
+    return `${hour}:${minute} ${ampm}`;
+  };
+  return `${formatTime(String(openingTime))} - ${formatTime(String(closingTime))}`;
 }
 
 export default function PublicClubDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
 
   const clubId = Array.isArray(id) ? id[0] : id;
 
@@ -98,18 +114,7 @@ export default function PublicClubDetailScreen() {
     enabled: Boolean(clubId),
   });
 
-  // 2. Fetch public membership plans
-  const {
-    data: plans = [],
-    isLoading: isLoadingPlans,
-    refetch: refetchPlans,
-  } = useQuery<MembershipPlan[], Error>({
-    queryKey: ['public-membership-plans', clubId],
-    queryFn: () => clubsApi.getPublicMembershipPlans(clubId!),
-    enabled: Boolean(clubId),
-  });
-
-  // 3. Fetch active courts for this club
+  // 2. Fetch active courts for this club
   const {
     data: activeCourts = [],
     isLoading: isLoadingCourts,
@@ -120,35 +125,23 @@ export default function PublicClubDetailScreen() {
     enabled: Boolean(clubId),
   });
 
-  // 4. Fetch public tournaments for this club
+  // 3. Fetch public membership plans (for subscription capability)
   const {
-    data: clubTournaments = [],
-    isLoading: isLoadingTournaments,
-    refetch: refetchTournaments,
-  } = useQuery<TournamentDiscoveryItem[], Error>({
-    queryKey: ['club-public-tournaments', clubId],
-    queryFn: () => tournamentApi.discoverTournaments(clubId!),
+    data: plans = [],
+    refetch: refetchPlans,
+  } = useQuery<MembershipPlan[], Error>({
+    queryKey: ['public-membership-plans', clubId],
+    queryFn: () => clubsApi.getPublicMembershipPlans(clubId!),
     enabled: Boolean(clubId),
   });
 
-  // 5. Fetch public leagues for this club
-  const {
-    data: clubLeagues = [],
-    isLoading: isLoadingLeagues,
-    refetch: refetchLeagues,
-  } = useQuery<LeagueSummary[], Error>({
-    queryKey: ['club-public-leagues', clubId],
-    queryFn: () => leagueApi.listPlayerLeagues(undefined, clubId!),
-    enabled: Boolean(clubId),
-  });
-
-  // 6. Check caller's enrolled club memberships
+  // 4. Check caller's enrolled club memberships
   const { clubs: myClubs, refetch: refetchMyClubs } = usePlayerClubs();
   const isEnrolled = useMemo(() => {
     return myClubs.some((c) => c.club_id === clubId && c.status === 'active');
   }, [myClubs, clubId]);
 
-  // 4. Check caller's membership request status for this club
+  // 5. Check caller's membership request status for this club
   const {
     request: existingRequest,
     refetch: refetchRequest,
@@ -163,12 +156,13 @@ export default function PublicClubDetailScreen() {
 
   const { mutateAsync: joinClub, isPending: isJoiningClub } = useJoinClub();
   const { mutateAsync: subscribeToPlan, isPending: isSubscribing } = usePlayerSubscribe();
-  const [selectedPlanForSubscribe, setSelectedPlanForSubscribe] = useState<MembershipPlan | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
 
-  // Modal for application message
+  // Modals state
   const [modalVisible, setModalVisible] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
+  const [selectedPlanForSubscribe, setSelectedPlanForSubscribe] = useState<MembershipPlan | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
+  const [isAboutModalVisible, setIsAboutModalVisible] = useState(false);
 
   const handleJoinClub = async () => {
     if (!clubId || isJoiningClub) return;
@@ -183,60 +177,6 @@ export default function PublicClubDetailScreen() {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to join club';
       Alert.alert('Error', msg);
     }
-  };
-
-  const handleConfirmSubscribe = async () => {
-    if (!clubId || !selectedPlanForSubscribe || isSubscribing) return;
-    try {
-      await subscribeToPlan({
-        clubId,
-        planId: selectedPlanForSubscribe.id,
-        payload: {
-          payment_method: selectedPaymentMethod,
-        },
-      });
-      const planName = selectedPlanForSubscribe.name;
-      const isFree = Number(selectedPlanForSubscribe.price) === 0;
-      setSelectedPlanForSubscribe(null);
-      await refetchMyClubs();
-      Alert.alert(
-        isFree ? 'Subscription Activated!' : 'Subscription Created',
-        isFree
-          ? `You have successfully enrolled in ${planName}. Your privileges are now active!`
-          : `You have enrolled in ${planName}. A pending payment record has been generated. Once confirmed by the club, your privileges will be activated.`,
-        [
-          { text: 'OK' },
-          {
-            text: 'View Memberships',
-            onPress: () => router.push('/(player)/membership' as any),
-          },
-        ]
-      );
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to enroll in membership plan';
-      Alert.alert('Subscription Error', msg);
-    }
-  };
-
-  const fullAddress = [
-    club?.address_line1,
-    club?.address_line2,
-    club?.city,
-    club?.state,
-    club?.postal_code,
-  ]
-    .filter(Boolean)
-    .join(', ');
-
-  const handleOpenDirections = () => {
-    if (!fullAddress) return;
-    const query = encodeURIComponent(`${club?.name || ''} ${fullAddress}`.trim());
-    const url = Platform.select({
-      ios: `maps:0,0?q=${query}`,
-      android: `geo:0,0?q=${query}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
-    });
-    if (url) Linking.openURL(url);
   };
 
   const handleSubmitApplication = async () => {
@@ -283,10 +223,42 @@ export default function PublicClubDetailScreen() {
     );
   };
 
+  const handleConfirmSubscribe = async () => {
+    if (!clubId || !selectedPlanForSubscribe || isSubscribing) return;
+    try {
+      await subscribeToPlan({
+        clubId,
+        planId: selectedPlanForSubscribe.id,
+        payload: {
+          payment_method: selectedPaymentMethod,
+        },
+      });
+      const planName = selectedPlanForSubscribe.name;
+      const isFree = Number(selectedPlanForSubscribe.price) === 0;
+      setSelectedPlanForSubscribe(null);
+      await refetchMyClubs();
+      Alert.alert(
+        isFree ? 'Subscription Activated!' : 'Subscription Created',
+        isFree
+          ? `You have successfully enrolled in ${planName}. Your privileges are now active!`
+          : `You have enrolled in ${planName}. A pending payment record has been generated. Once confirmed by the club, your privileges will be activated.`,
+        [
+          { text: 'OK' },
+          {
+            text: 'View Memberships',
+            onPress: () => router.push('/(player)/membership' as any),
+          },
+        ]
+      );
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail || err?.message || 'Failed to enroll in membership plan';
+      Alert.alert('Subscription Error', msg);
+    }
+  };
+
   if (isLoadingClub && !club) {
     return (
       <Screen style={styles.screen}>
-        <AppHeader title="Club Profile" showBack />
         <LoadingState message="Loading club details..." />
       </Screen>
     );
@@ -295,7 +267,6 @@ export default function PublicClubDetailScreen() {
   if (clubError || !club) {
     return (
       <Screen style={styles.screen}>
-        <AppHeader title="Club Profile" showBack />
         <ErrorState
           title="Club Not Found"
           message={clubError?.message || 'Unable to retrieve club information.'}
@@ -305,509 +276,470 @@ export default function PublicClubDetailScreen() {
     );
   }
 
-  const logoUri = getFullImageUrl(club.logo_url);
   const isPending = existingRequest?.status === 'pending';
+  const logoUri = club.logo_url ? resolveMediaUrl(club.logo_url) : null;
+  const bannerUri = club.cover_image_url ? resolveMediaUrl(club.cover_image_url) : null;
+  const bannerSource = bannerUri ? { uri: bannerUri } : DEFAULT_BANNER;
+
+  const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Tirupati, AP';
+  const hoursText = formatOperatingHours(club.opening_time, club.closing_time);
+
+  const fullAddress = [
+    club.address_line1,
+    club.address_line2,
+    club.city,
+    club.state,
+    club.postal_code,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const handleOpenDirections = () => {
+    if (!fullAddress) return;
+    const query = encodeURIComponent(`${club.name} ${fullAddress}`.trim());
+    const url = Platform.select({
+      ios: `maps:0,0?q=${query}`,
+      android: `geo:0,0?q=${query}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+    });
+    if (url) Linking.openURL(url);
+  };
+
+  const isNarrowScreen = windowWidth < 380;
 
   return (
     <Screen style={styles.screen}>
-      <AppHeader
-        title={club.name}
-        showBack
-      />
+      {/* ─── A. Compact Header ────────────────────────────────────────────── */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+          accessibilityLabel="Go back"
+        >
+          <ArrowLeft size={20} color="#102B2A" strokeWidth={2.4} />
+        </TouchableOpacity>
+        <AppText style={styles.headerTitle} numberOfLines={1}>
+          {club.name}
+        </AppText>
+      </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 24) + 80 },
+          { paddingBottom: Math.max(insets.bottom, 24) + 110 },
         ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefetchingClub}
             onRefresh={() => {
               refetchClub();
+              refetchCourts();
               refetchPlans();
               refetchRequest();
-              refetchCourts();
-              refetchTournaments();
-              refetchLeagues();
+              refetchMyClubs();
             }}
             tintColor="#18794E"
           />
         }
       >
-        {/* 1. Hero Card */}
-        <Card style={styles.heroCard}>
-          <View style={styles.heroHeader}>
-            <View style={styles.heroLogoWrapper}>
-              {logoUri ? (
-                <Image source={{ uri: logoUri }} style={styles.heroLogo} resizeMode="cover" />
-              ) : (
-                <View style={styles.heroPlaceholderLogo}>
-                  <Building2 size={32} color="#18794E" />
-                </View>
-              )}
-            </View>
+        <View style={styles.contentContainer}>
+          {/* ─── B. Club Hero Banner ───────────────────────────────────────── */}
+          <View style={styles.heroBanner}>
+            <Image
+              source={bannerSource}
+              style={styles.heroBackgroundImage}
+              resizeMode="cover"
+            />
+            {/* Dark-Green Gradient Overlay: photo clearly visible above, dark green below */}
+            <View style={styles.heroOverlay} />
 
-            <View style={styles.heroTitles}>
-              <AppText variant="heading3" color="primary">
-                {club.name}
-              </AppText>
-              {fullAddress ? (
-                <TouchableOpacity onPress={handleOpenDirections} style={styles.locationLink}>
-                  <MapPin size={14} color="#18794E" />
-                  <AppText variant="caption" color="primary" numberOfLines={2}>
-                    {fullAddress}
+            {/* Hero Information Row positioned at bottom */}
+            <View style={styles.heroContentRow}>
+              {/* Club Logo */}
+              <View style={styles.logoContainer}>
+                {logoUri ? (
+                  <Image source={{ uri: logoUri }} style={styles.logoImage} resizeMode="cover" />
+                ) : (
+                  <Image source={DEFAULT_LOGO} style={styles.logoImage} resizeMode="contain" />
+                )}
+              </View>
+
+              {/* Title, Badge, Location, and Hours */}
+              <View style={styles.heroDetailsCol}>
+                <View style={styles.nameRow}>
+                  <AppText style={styles.clubNameText} numberOfLines={1}>
+                    {club.name}
                   </AppText>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
-
-          {club.short_description ? (
-            <AppText variant="body" color="secondary" style={styles.shortDesc}>
-              {club.short_description}
-            </AppText>
-          ) : null}
-
-          {/* Contact Pills */}
-          <View style={styles.contactRow}>
-            {club.contact_email ? (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(`mailto:${club.contact_email}`)}
-                style={styles.contactPill}
-              >
-                <Mail size={13} color="#18794E" />
-                <AppText variant="caption" color="primary">
-                  {club.contact_email}
-                </AppText>
-              </TouchableOpacity>
-            ) : null}
-
-            {club.contact_phone ? (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(`tel:${club.contact_phone}`)}
-                style={styles.contactPill}
-              >
-                <Phone size={13} color="#18794E" />
-                <AppText variant="caption" color="primary">
-                  {club.contact_phone}
-                </AppText>
-              </TouchableOpacity>
-            ) : null}
-
-            {club.website ? (
-              <TouchableOpacity
-                onPress={() => Linking.openURL(club.website!)}
-                style={styles.contactPill}
-              >
-                <Globe size={13} color="#18794E" />
-                <AppText variant="caption" color="primary">
-                  Website
-                </AppText>
-                <ExternalLink size={11} color="#18794E" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </Card>
-
-        {/* 2. Membership Status & Booking Eligibility Card */}
-        <Card style={styles.statusCard}>
-          {isEnrolled ? (
-            <View style={styles.statusContent}>
-              <View style={styles.statusIconCircleGreen}>
-                <CheckCircle2 size={24} color="#18794E" />
-              </View>
-              <View style={styles.statusTextCol}>
-                <AppText variant="heading3" color="primary">
-                  Active Player Member
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Eligible for court reservations and club events.
-                </AppText>
-              </View>
-              <Button
-                label="Book Court"
-                size="sm"
-                onPress={() => router.push(`/(player)/courts?clubId=${club.id}` as any)}
-              />
-            </View>
-          ) : isPending ? (
-            <View style={styles.statusContent}>
-              <View style={styles.statusIconCircleAmber}>
-                <Clock size={24} color="#B45309" />
-              </View>
-              <View style={styles.statusTextCol}>
-                <AppText variant="heading3" style={{ color: '#92400E' }}>
-                  Application Pending
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Your membership request is awaiting club review.
-                </AppText>
-              </View>
-              <Button
-                label={isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
-                variant="outline"
-                size="sm"
-                onPress={handleWithdraw}
-                disabled={isWithdrawing}
-              />
-            </View>
-          ) : (
-            <View style={styles.joinContent}>
-              <View style={styles.joinTextCol}>
-                <AppText variant="heading3" color="primary">
-                  Join This Club
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Join immediately to become an active player member and unlock court booking.
-                </AppText>
-              </View>
-              <Button
-                label={isJoiningClub ? 'Joining...' : 'Join Club'}
-                onPress={handleJoinClub}
-                disabled={isJoiningClub}
-              />
-            </View>
-          )}
-        </Card>
-
-        {/* 3. Active Courts & Facilities */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderBetween}>
-            <View style={styles.sectionHeader}>
-              <LayoutGrid size={18} color="#18794E" />
-              <AppText variant="heading3" style={styles.sectionTitle}>
-                Active Courts & Facilities
-              </AppText>
-            </View>
-            <View style={styles.countBadge}>
-              <AppText variant="caption" style={styles.countBadgeText}>
-                {activeCourts.length} Courts
-              </AppText>
-            </View>
-          </View>
-
-          {activeCourts.length === 0 ? (
-            <AppText variant="bodySmall" color="secondary">
-              No active courts currently available at this facility.
-            </AppText>
-          ) : (
-            <View style={styles.courtsList}>
-              {activeCourts.map((court) => {
-                const envLabel = court.indoor_outdoor === 'indoor' ? 'Indoor' : 'Outdoor';
-                const priceLabel =
-                  court.price_per_hour != null
-                    ? `${formatCurrency(court.price_per_hour)}/hr`
-                    : 'Included';
-                return (
-                  <View key={court.id} style={styles.courtItem}>
-                    <View style={styles.courtItemInfo}>
-                      <AppText variant="heading3" color="primary">
-                        {court.display_name || court.name}
-                      </AppText>
-                      <AppText variant="caption" color="secondary">
-                        {envLabel} • {court.surface_type || 'Standard surface'}
-                      </AppText>
+                  {club.is_active !== false && (
+                    <View style={styles.activeBadge}>
+                      <AppText style={styles.activeBadgeText}>ACTIVE</AppText>
                     </View>
-                    <View style={styles.courtItemRight}>
-                      <AppText variant="heading3" color="primary">
-                        {priceLabel}
-                      </AppText>
-                      {isEnrolled && (
-                        <TouchableOpacity
-                          style={styles.quickBookPill}
-                          onPress={() => router.push(`/(player)/courts?clubId=${club.id}` as any)}
-                        >
-                          <AppText variant="caption" style={styles.quickBookText}>
-                            Book
-                          </AppText>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </Card>
-
-        {/* 4. Available Membership Plans */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderBetween}>
-            <View style={styles.sectionHeader}>
-              <Award size={18} color="#18794E" />
-              <AppText variant="heading3" style={styles.sectionTitle}>
-                Membership Plans
-              </AppText>
-            </View>
-            <View style={styles.countBadge}>
-              <AppText variant="caption" style={styles.countBadgeText}>
-                {plans.length} Plans
-              </AppText>
-            </View>
-          </View>
-
-          {plans.length === 0 ? (
-            <AppText variant="bodySmall" color="secondary">
-              No public membership tiers currently configured for this club.
-            </AppText>
-          ) : (
-            <View style={styles.plansList}>
-              {plans.map((p) => (
-                <View key={p.id} style={styles.planItem}>
-                  <View style={styles.planTopRow}>
-                    <AppText variant="heading3" color="primary">
-                      {p.name}
-                    </AppText>
-                    <AppText variant="heading3" color="primary">
-                      {formatCurrency(p.price)}
-                    </AppText>
-                  </View>
-                  <AppText variant="caption" color="secondary">
-                    Billed {p.duration_label || p.duration_unit}
-                  </AppText>
-                  {p.description ? (
-                    <AppText variant="bodySmall" color="secondary" style={styles.planDesc}>
-                      {p.description}
-                    </AppText>
-                  ) : null}
-                  <View style={styles.planPrivilegesRow}>
-                    {p.advance_booking_days ? (
-                      <AppText variant="caption" color="secondary">
-                        • {p.advance_booking_days} days advance booking
-                      </AppText>
-                    ) : null}
-                    {p.booking_limit ? (
-                      <AppText variant="caption" color="secondary">
-                        • Max {p.booking_limit} active bookings
-                      </AppText>
-                    ) : null}
-                  </View>
-                  <View style={styles.planActionRow}>
-                    <Button
-                      label={isEnrolled ? 'Subscribe' : 'Join Club to Subscribe'}
-                      size="sm"
-                      variant={isEnrolled ? 'primary' : 'outline'}
-                      onPress={() => {
-                        if (!isEnrolled) {
-                          if (isPending) {
-                            Alert.alert(
-                              'Application Pending',
-                              'Your membership request is currently awaiting club review. You can subscribe once approved.',
-                            );
-                          } else {
-                            Alert.alert(
-                              'Club Membership Required',
-                              'You must be an approved club member to subscribe to a membership plan. Would you like to request club membership now?',
-                              [
-                                { text: 'Cancel', style: 'cancel' },
-                                { text: 'Request Membership', onPress: () => setModalVisible(true) },
-                              ],
-                            );
-                          }
-                        } else {
-                          setSelectedPlanForSubscribe(p);
-                        }
-                      }}
-                    />
-                  </View>
+                  )}
                 </View>
-              ))}
-            </View>
-          )}
-        </Card>
 
-        {/* 5. Public Upcoming Tournaments */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderBetween}>
-            <View style={styles.sectionHeader}>
-              <Trophy size={18} color="#18794E" />
-              <AppText variant="heading3" style={styles.sectionTitle}>
-                Tournaments
-              </AppText>
+                <View style={styles.metaRow}>
+                  <MapPin size={13} color="#D1FAE5" />
+                  <AppText style={styles.metaText} numberOfLines={1}>
+                    {locationText}
+                  </AppText>
+                </View>
+
+                <View style={styles.metaRow}>
+                  <Clock size={13} color="#D1FAE5" />
+                  <AppText style={styles.metaText} numberOfLines={1}>
+                    {club.operating_days || 'Mon - Sun'}  |  {hoursText}
+                  </AppText>
+                </View>
+              </View>
             </View>
-            <TouchableOpacity
-              onPress={() => router.push(`/(player)/tournaments?clubId=${club.id}` as any)}
-              style={styles.seeAllRow}
-            >
-              <AppText variant="caption" style={styles.seeAllText}>
-                Browse All
-              </AppText>
-              <ChevronRight size={14} color="#18794E" />
-            </TouchableOpacity>
           </View>
 
-          {clubTournaments.length === 0 ? (
-            <AppText variant="bodySmall" color="secondary">
-              No upcoming public tournaments currently scheduled at this club.
-            </AppText>
-          ) : (
-            <View style={styles.competitionsList}>
-              {clubTournaments.slice(0, 3).map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={styles.competitionItem}
-                  onPress={() => router.push(`/(player)/tournaments?clubId=${club.id}` as any)}
-                >
-                  <View style={styles.competitionItemLeft}>
-                    <AppText variant="heading3" color="primary" numberOfLines={1}>
-                      {t.name}
-                    </AppText>
-                    <AppText variant="caption" color="secondary">
-                      {t.format_label || t.format} • {t.start_date ? new Date(t.start_date).toLocaleDateString() : 'Dates TBA'}
-                    </AppText>
-                  </View>
-                  <View style={styles.competitionItemRight}>
-                    <Badge
-                      label={t.is_registered ? 'Registered' : t.is_registration_open ? 'Open' : t.status_label || t.status}
-                      variant={t.is_registered ? 'success' : t.is_registration_open ? 'success' : 'default'}
-                      size="sm"
-                    />
-                    <ChevronRight size={16} color="#94A3B8" />
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </Card>
+          {/* ─── C. Membership Status Card ─────────────────────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.membershipRow}>
+              <View style={styles.membershipLeft}>
+                <View style={isEnrolled ? styles.checkCircleGreen : styles.checkCircleNeutral}>
+                  <CheckCircle2
+                    size={24}
+                    color={isEnrolled ? '#18794E' : '#71857E'}
+                    strokeWidth={2.4}
+                  />
+                </View>
+                <View style={styles.membershipTextCol}>
+                  <AppText style={styles.membershipHeading}>
+                    {isEnrolled
+                      ? 'Active Player Member'
+                      : isPending
+                      ? 'Application Pending'
+                      : 'Player Membership'}
+                  </AppText>
+                  <AppText style={styles.membershipSubtext}>
+                    {isEnrolled
+                      ? 'Eligible for court reservations and club events.'
+                      : isPending
+                      ? 'Your membership request is currently awaiting club review.'
+                      : 'Join to reserve courts and access club events.'}
+                  </AppText>
+                </View>
+              </View>
 
-        {/* 6. Public Upcoming Leagues */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderBetween}>
-            <View style={styles.sectionHeader}>
-              <Medal size={18} color="#18794E" />
-              <AppText variant="heading3" style={styles.sectionTitle}>
-                Leagues
-              </AppText>
-            </View>
-            <TouchableOpacity
-              onPress={() => router.push(`/(player)/leagues?clubId=${club.id}` as any)}
-              style={styles.seeAllRow}
-            >
-              <AppText variant="caption" style={styles.seeAllText}>
-                Browse All
-              </AppText>
-              <ChevronRight size={14} color="#18794E" />
-            </TouchableOpacity>
-          </View>
-
-          {clubLeagues.length === 0 ? (
-            <AppText variant="bodySmall" color="secondary">
-              No upcoming public leagues currently scheduled at this club.
-            </AppText>
-          ) : (
-            <View style={styles.competitionsList}>
-              {clubLeagues.slice(0, 3).map((l) => (
+              {isEnrolled ? (
                 <TouchableOpacity
-                  key={l.id}
-                  style={styles.competitionItem}
+                  style={styles.bookCourtBtn}
                   onPress={() =>
                     router.push({
-                      pathname: '/(player)/league-details',
-                      params: { id: l.id },
+                      pathname: '/(player)/courts',
+                      params: { clubId: club.id },
                     } as any)
                   }
+                  activeOpacity={0.88}
                 >
-                  <View style={styles.competitionItemLeft}>
-                    <AppText variant="heading3" color="primary" numberOfLines={1}>
-                      {l.name}
-                    </AppText>
-                    <AppText variant="caption" color="secondary">
-                      {l.number_of_weeks} Weeks • {l.status_display || l.status}
-                    </AppText>
-                  </View>
-                  <View style={styles.competitionItemRight}>
-                    <Badge
-                      label={l.is_registered ? 'Registered' : l.status_display || l.status}
-                      variant={l.is_registered ? 'success' : 'default'}
-                      size="sm"
-                    />
-                    <ChevronRight size={16} color="#94A3B8" />
-                  </View>
+                  <AppText style={styles.bookCourtBtnText}>Book Court</AppText>
                 </TouchableOpacity>
-              ))}
+              ) : isPending ? (
+                <TouchableOpacity
+                  style={styles.withdrawBtn}
+                  onPress={handleWithdraw}
+                  disabled={isWithdrawing}
+                  activeOpacity={0.88}
+                >
+                  <AppText style={styles.withdrawBtnText}>
+                    {isWithdrawing ? 'Withdrawing...' : 'Withdraw'}
+                  </AppText>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.bookCourtBtn}
+                  onPress={handleJoinClub}
+                  disabled={isJoiningClub}
+                  activeOpacity={0.88}
+                >
+                  <AppText style={styles.bookCourtBtnText}>
+                    {isJoiningClub ? 'Joining...' : 'Join Club'}
+                  </AppText>
+                </TouchableOpacity>
+              )}
             </View>
-          )}
-        </Card>
-
-        {/* 7. Facilities & Operations */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Clock size={18} color="#18794E" />
-            <AppText variant="heading3" style={styles.sectionTitle}>
-              Operating Hours & Facilities
-            </AppText>
           </View>
 
-          <View style={styles.infoRow}>
-            <AppText variant="caption" color="secondary" style={styles.infoLabel}>
-              Days:
-            </AppText>
-            <AppText variant="bodySmall" color="primary">
-              {club.operating_days || 'Monday - Sunday'}
-            </AppText>
-          </View>
-
-          <View style={styles.infoRow}>
-            <AppText variant="caption" color="secondary" style={styles.infoLabel}>
-              Hours:
-            </AppText>
-            <AppText variant="bodySmall" color="primary">
-              {String(club.opening_time).slice(0, 5)} - {String(club.closing_time).slice(0, 5)} ({club.timezone})
-            </AppText>
-          </View>
-
-          {club.facilities_summary ? (
-            <View style={styles.infoRow}>
-              <AppText variant="caption" color="secondary" style={styles.infoLabel}>
-                Amenities:
-              </AppText>
-              <AppText variant="bodySmall" color="primary" style={styles.infoValue}>
-                {club.facilities_summary}
-              </AppText>
+          {/* ─── D. Courts & Facilities ────────────────────────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderBetween}>
+              <View style={styles.sectionHeaderLeft}>
+                <LayoutGrid size={19} color="#18794E" strokeWidth={2.2} />
+                <AppText style={styles.sectionCardTitle}>Courts & Facilities</AppText>
+              </View>
+              <View style={styles.courtsCountBadge}>
+                <AppText style={styles.courtsCountBadgeText}>
+                  {activeCourts.length} {activeCourts.length === 1 ? 'Court' : 'Courts'}
+                </AppText>
+              </View>
             </View>
-          ) : null}
-        </Card>
 
-        {/* 8. Quick Shortcuts Row */}
-        <View style={styles.shortcutsRow}>
-          <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => router.push(`/(player)/tournaments?clubId=${club.id}` as any)}
-            activeOpacity={0.8}
-          >
-            <Trophy size={18} color="#18794E" />
-            <AppText variant="label" color="primary">
-              Tournaments
-            </AppText>
-          </TouchableOpacity>
+            {activeCourts.length === 0 ? (
+              <View style={styles.emptyCourtsBox}>
+                <AppText style={styles.emptyCourtsText}>
+                  No active courts currently available at this club.
+                </AppText>
+              </View>
+            ) : (
+              <View style={styles.courtsList}>
+                {activeCourts.map((court, index) => {
+                  const envLabel = court.indoor_outdoor === 'indoor' ? 'Indoor' : 'Outdoor';
+                  const surfaceLabel = court.surface_type || 'Sport Court';
+                  const isIncluded =
+                    court.price_per_hour == null || Number(court.price_per_hour) === 0;
+                  const courtImageUri = court.photo_url ? resolveMediaUrl(court.photo_url) : null;
+                  const courtFallback = COURT_FALLBACKS[index % COURT_FALLBACKS.length];
 
-          <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => router.push(`/(player)/leagues?clubId=${club.id}` as any)}
-            activeOpacity={0.8}
-          >
-            <Calendar size={18} color="#18794E" />
-            <AppText variant="label" color="primary">
-              Leagues
-            </AppText>
-          </TouchableOpacity>
+                  return (
+                    <View
+                      key={court.id}
+                      style={[
+                        styles.courtRow,
+                        index === 0 && { borderTopWidth: 0, paddingTop: 6 },
+                      ]}
+                    >
+                      {/* Court Thumbnail */}
+                      <View style={styles.courtThumbWrapper}>
+                        <Image
+                          source={courtImageUri ? { uri: courtImageUri } : courtFallback}
+                          style={styles.courtThumbImage}
+                          resizeMode="cover"
+                        />
+                      </View>
 
+                      {/* Court Info */}
+                      <View style={styles.courtInfoCol}>
+                        <AppText style={styles.courtNameText} numberOfLines={1}>
+                          {court.display_name || court.name}
+                        </AppText>
+                        <AppText style={styles.courtSurfaceText} numberOfLines={1}>
+                          {envLabel} • {surfaceLabel}
+                        </AppText>
+                      </View>
+
+                      {/* Right Access Tag & Book Button */}
+                      <View style={styles.courtActionCol}>
+                        <View style={styles.includedTag}>
+                          <AppText style={styles.includedTagText}>
+                            {isIncluded ? 'Included' : `${formatCurrency(court.price_per_hour)}/hr`}
+                          </AppText>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.quickBookPill}
+                          onPress={() =>
+                            router.push({
+                              pathname: '/(player)/courts',
+                              params: { clubId: club.id, courtId: court.id },
+                            } as any)
+                          }
+                          activeOpacity={0.85}
+                        >
+                          <AppText style={styles.quickBookPillText}>Book</AppText>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* ─── E & F. Shortcut Cards: Side by Side ───────────────────────── */}
+          <View style={[styles.shortcutsRow, isNarrowScreen && styles.shortcutsRowWrapped]}>
+            {/* Upcoming Events */}
+            <TouchableOpacity
+              style={styles.shortcutCard}
+              onPress={() =>
+                router.push({
+                  pathname: '/(player)/events',
+                  params: { clubId: club.id },
+                } as any)
+              }
+              activeOpacity={0.85}
+            >
+              <View style={styles.shortcutIconCircle}>
+                <Calendar size={18} color="#18794E" strokeWidth={2.2} />
+              </View>
+              <View style={styles.shortcutTextCol}>
+                <AppText style={styles.shortcutHeading} numberOfLines={1}>
+                  Upcoming Events
+                </AppText>
+                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
+                  View socials and tournaments
+                </AppText>
+              </View>
+              <ChevronRight size={16} color="#6B7E76" />
+            </TouchableOpacity>
+
+            {/* Lessons & Coaching */}
+            <TouchableOpacity
+              style={styles.shortcutCard}
+              onPress={() =>
+                router.push({
+                  pathname: '/(player)/lessons',
+                  params: { clubId: club.id },
+                } as any)
+              }
+              activeOpacity={0.85}
+            >
+              <View style={styles.shortcutIconCircle}>
+                <UserCheck size={18} color="#18794E" strokeWidth={2.2} />
+              </View>
+              <View style={styles.shortcutTextCol}>
+                <AppText style={styles.shortcutHeading} numberOfLines={1}>
+                  Lessons & Coaching
+                </AppText>
+                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
+                  Book a session with our coaches
+                </AppText>
+              </View>
+              <ChevronRight size={16} color="#6B7E76" />
+            </TouchableOpacity>
+          </View>
+
+          {/* ─── G. About This Club ────────────────────────────────────────── */}
           <TouchableOpacity
-            style={styles.shortcutBtn}
-            onPress={() => router.push(`/(player)/courts?clubId=${club.id}` as any)}
-            activeOpacity={0.8}
+            style={styles.card}
+            onPress={() => setIsAboutModalVisible(true)}
+            activeOpacity={0.88}
           >
-            <LayoutGrid size={18} color="#18794E" />
-            <AppText variant="label" color="primary">
-              Courts
-            </AppText>
+            <View style={styles.aboutRow}>
+              <View style={styles.aboutIconCircle}>
+                <Info size={19} color="#18794E" strokeWidth={2.2} />
+              </View>
+              <View style={styles.aboutTextCol}>
+                <AppText style={styles.aboutHeading}>About This Club</AppText>
+                <AppText style={styles.aboutDescription} numberOfLines={3}>
+                  {club.description ||
+                    'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
+                </AppText>
+              </View>
+              <ChevronRight size={16} color="#6B7E76" style={styles.aboutChevron} />
+            </View>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* Application Request Modal */}
+      {/* ─── Modal: About This Club Details ─────────────────────────────────── */}
+      <Modal
+        visible={isAboutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsAboutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={styles.modalDialog}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="heading3" color="primary">
+                  {club.name}
+                </AppText>
+                <AppText variant="caption" color="secondary">
+                  {locationText}
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsAboutModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#667776" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 300 }}>
+              <AppText variant="bodySmall" color="primary" style={{ lineHeight: 22 }}>
+                {club.description ||
+                  'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
+              </AppText>
+
+              {fullAddress ? (
+                <View style={{ marginTop: 14 }}>
+                  <AppText variant="label" color="primary" style={{ marginBottom: 4 }}>
+                    Address
+                  </AppText>
+                  <TouchableOpacity onPress={handleOpenDirections} style={styles.addressLink}>
+                    <MapPin size={14} color="#18794E" />
+                    <AppText variant="bodySmall" style={{ color: '#18794E', flex: 1 }}>
+                      {fullAddress} (Get Directions)
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {/* Operating Hours Summary */}
+              <View style={{ marginTop: 14 }}>
+                <AppText variant="label" color="primary" style={{ marginBottom: 4 }}>
+                  Operating Hours
+                </AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Clock size={14} color="#667776" />
+                  <AppText variant="bodySmall" color="secondary">
+                    {club.operating_days || 'Mon - Sun'}: {hoursText}
+                  </AppText>
+                </View>
+              </View>
+
+              {/* Contact information */}
+              {(club.contact_email || club.contact_phone || club.website) && (
+                <View style={{ marginTop: 14, gap: 8 }}>
+                  <AppText variant="label" color="primary">
+                    Contact & Website
+                  </AppText>
+                  {club.contact_email && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`mailto:${club.contact_email}`)}
+                      style={styles.contactRow}
+                    >
+                      <Mail size={14} color="#18794E" />
+                      <AppText variant="bodySmall" style={{ color: '#18794E' }}>
+                        {club.contact_email}
+                      </AppText>
+                    </TouchableOpacity>
+                  )}
+                  {club.contact_phone && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(`tel:${club.contact_phone}`)}
+                      style={styles.contactRow}
+                    >
+                      <Phone size={14} color="#18794E" />
+                      <AppText variant="bodySmall" style={{ color: '#18794E' }}>
+                        {club.contact_phone}
+                      </AppText>
+                    </TouchableOpacity>
+                  )}
+                  {club.website && (
+                    <TouchableOpacity
+                      onPress={() => Linking.openURL(club.website!)}
+                      style={styles.contactRow}
+                    >
+                      <Globe size={14} color="#18794E" />
+                      <AppText variant="bodySmall" style={{ color: '#18794E' }}>
+                        Visit Website
+                      </AppText>
+                      <ExternalLink size={12} color="#18794E" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <Button
+                label="Close"
+                variant="outline"
+                onPress={() => setIsAboutModalVisible(false)}
+                style={{ width: '100%' }}
+              />
+            </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* ─── Modal: Membership Application ──────────────────────────────────── */}
       <Modal
         visible={modalVisible}
         transparent
@@ -854,14 +786,14 @@ export default function PublicClubDetailScreen() {
                 label={isSubmitting ? 'Submitting...' : 'Submit Application'}
                 onPress={handleSubmitApplication}
                 disabled={isSubmitting}
-                style={styles.submitModalBtn}
+                style={{ width: '100%' }}
               />
             </View>
           </Card>
         </View>
       </Modal>
 
-      {/* Plan Subscription Modal */}
+      {/* ─── Modal: Membership Plan Subscription ────────────────────────────── */}
       <Modal
         visible={Boolean(selectedPlanForSubscribe)}
         transparent
@@ -952,7 +884,7 @@ export default function PublicClubDetailScreen() {
                 label={isSubscribing ? 'Enrolling...' : 'Confirm Subscription'}
                 onPress={handleConfirmSubscribe}
                 disabled={isSubscribing}
-                style={styles.submitModalBtn}
+                style={{ width: '100%' }}
               />
             </View>
           </Card>
@@ -962,262 +894,452 @@ export default function PublicClubDetailScreen() {
   );
 }
 
+// ─── Stylesheet ──────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F5F8F7',
+    backgroundColor: '#F4F8F6',
   },
+
+  // A. Header
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: '#F4F8F6',
+    gap: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  headerTitle: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#102B2A',
+    flex: 1,
+    letterSpacing: -0.3,
+  },
+
+  // Scroll Container
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing.md,
-    gap: Spacing.md,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
-  heroCard: {
-    padding: Spacing.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    gap: Spacing.sm,
+  contentContainer: {
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+    gap: 14,
   },
-  heroHeader: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    alignItems: 'center',
-  },
-  heroLogoWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.md,
+
+  // B. Hero Banner
+  heroBanner: {
+    width: '100%',
+    height: 205,
+    borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: '#E4F4EC',
+    position: 'relative',
+    backgroundColor: '#0E3628',
+    shadowColor: '#0A261D',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  heroLogo: {
+  heroBackgroundImage: {
     width: '100%',
     height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
   },
-  heroPlaceholderLogo: {
-    width: '100%',
-    height: '100%',
+  heroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    ...(Platform.OS === 'web'
+      ? ({
+          backgroundImage:
+            'linear-gradient(180deg, rgba(8, 28, 22, 0.08) 0%, rgba(8, 28, 22, 0.42) 42%, rgba(6, 22, 17, 0.94) 100%)',
+        } as any)
+      : {
+          backgroundColor: 'rgba(7, 24, 18, 0.58)',
+        }),
+  },
+  heroContentRow: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  logoContainer: {
+    width: 74,
+    height: 74,
+    borderRadius: 14,
+    backgroundColor: '#0D382A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  heroTitles: {
+  logoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroDetailsCol: {
     flex: 1,
-    gap: 4,
+    justifyContent: 'center',
+    gap: 3,
   },
-  locationLink: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  shortDesc: {
-    lineHeight: 20,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
-    marginTop: 4,
   },
-  contactPill: {
+  clubNameText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
+    flexShrink: 1,
+  },
+  activeBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  activeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.3,
+  },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#F0F6F3',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
   },
-  statusCard: {
-    padding: Spacing.md,
+  metaText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#E2E8F0',
+  },
+
+  // Generic Card Style
+  card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2EAE6',
+    borderColor: '#E5ECE8',
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  statusContent: {
+
+  // C. Membership Card
+  membershipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    justifyContent: 'space-between',
+    gap: 12,
   },
-  statusIconCircleGreen: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  membershipLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checkCircleGreen: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#E4F4EC',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusIconCircleAmber: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FEF3C7',
+  checkCircleNeutral: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EEF3F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusTextCol: {
+  membershipTextCol: {
     flex: 1,
-  },
-  joinContent: {
-    gap: Spacing.sm,
-  },
-  joinTextCol: {
     gap: 2,
   },
-  sectionCard: {
-    padding: Spacing.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    gap: Spacing.sm,
+  membershipHeading: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#102B2A',
+    letterSpacing: -0.2,
   },
-  sectionHeader: {
-    flexDirection: 'row',
+  membershipSubtext: {
+    fontSize: 12,
+    color: '#667776',
+    lineHeight: 16,
+  },
+  bookCourtBtn: {
+    backgroundColor: '#18563E',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     alignItems: 'center',
-    gap: Spacing.xs,
+    justifyContent: 'center',
   },
+  bookCourtBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  withdrawBtn: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  withdrawBtnText: {
+    color: '#DC2626',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+
+  // D. Courts & Facilities
   sectionHeaderBetween: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  countBadge: {
-    backgroundColor: '#E4F4EC',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-  },
-  countBadgeText: {
-    color: '#18794E',
-    fontWeight: '700',
-  },
-  seeAllRow: {
+  sectionHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 8,
   },
-  seeAllText: {
-    color: '#18794E',
-    fontWeight: '600',
-  },
-  sectionTitle: {
+  sectionCardTitle: {
+    fontSize: 17,
+    fontWeight: '700',
     color: '#102B2A',
+    letterSpacing: -0.2,
+  },
+  courtsCountBadge: {
+    backgroundColor: '#E4F4EC',
+    paddingHorizontal: 10,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  courtsCountBadgeText: {
+    color: '#18794E',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  emptyCourtsBox: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  emptyCourtsText: {
+    fontSize: 13,
+    color: '#667776',
   },
   courtsList: {
-    gap: Spacing.sm,
+    gap: 0,
   },
-  courtItem: {
+  courtRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.sm,
-    backgroundColor: '#F9FBFB',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E8EFEA',
+    paddingVertical: 11,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+    gap: 12,
   },
-  courtItemInfo: {
+  courtThumbWrapper: {
+    width: 82,
+    height: 56,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#E8EFEA',
+  },
+  courtThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  courtInfoCol: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
-  courtItemRight: {
+  courtNameText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+    letterSpacing: -0.2,
+  },
+  courtSurfaceText: {
+    fontSize: 12,
+    color: '#667776',
+  },
+  courtActionCol: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 5,
+  },
+  includedTag: {
+    backgroundColor: '#E8F5EE',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+  },
+  includedTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#18794E',
   },
   quickBookPill: {
-    backgroundColor: '#18794E',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
+    backgroundColor: '#18563E',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  quickBookText: {
+  quickBookPillText: {
     color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 11,
   },
-  competitionsList: {
-    gap: Spacing.sm,
-  },
-  competitionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: Spacing.sm,
-    backgroundColor: '#F9FBFB',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E8EFEA',
-  },
-  competitionItemLeft: {
-    flex: 1,
-    gap: 2,
-    marginRight: Spacing.sm,
-  },
-  competitionItemRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  plansList: {
-    gap: Spacing.sm,
-  },
-  planItem: {
-    padding: Spacing.sm,
-    backgroundColor: '#F9FBFB',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E8EFEA',
-  },
-  planTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  planDesc: {
-    marginTop: 4,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  infoLabel: {
-    width: 80,
-  },
-  infoValue: {
-    flex: 1,
-  },
+
+  // E & F. Shortcuts
   shortcutsRow: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    gap: 12,
   },
-  shortcutBtn: {
+  shortcutsRowWrapped: {
+    flexDirection: 'column',
+  },
+  shortcutCard: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    padding: 13,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.xs,
-    paddingVertical: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
+  shortcutIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E4F4EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shortcutTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  shortcutHeading: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#102B2A',
+    letterSpacing: -0.1,
+  },
+  shortcutSubtext: {
+    fontSize: 11.5,
+    color: '#667776',
+  },
+
+  // G. About This Club
+  aboutRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  aboutIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E4F4EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  aboutTextCol: {
+    flex: 1,
+    gap: 3,
+  },
+  aboutHeading: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#102B2A',
+    letterSpacing: -0.2,
+  },
+  aboutDescription: {
+    fontSize: 12.5,
+    color: '#667776',
+    lineHeight: 18,
+  },
+  aboutChevron: {
+    marginTop: 10,
+  },
+
+  // Modals
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
     justifyContent: 'center',
-    padding: Spacing.md,
+    padding: 16,
   },
   modalDialog: {
-    padding: Spacing.md,
+    padding: 18,
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    gap: Spacing.md,
+    borderRadius: 18,
+    gap: 14,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1225,60 +1347,61 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalBody: {
-    gap: Spacing.sm,
-  },
-  messageInput: {
-    backgroundColor: '#F5F8F7',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#D4E2DC',
-    padding: Spacing.sm,
-    color: '#102B2A',
-    minHeight: 80,
-    textAlignVertical: 'top',
-    fontSize: 14,
-    fontFamily: 'Inter',
+    gap: 12,
   },
   modalFooter: {
     alignItems: 'center',
   },
-  submitModalBtn: {
-    width: '100%',
+  addressLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F7F4',
+    padding: 10,
+    borderRadius: 8,
   },
-  planPrivilegesRow: {
-    marginTop: 4,
-    gap: 2,
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  planActionRow: {
-    marginTop: Spacing.xs,
-    alignItems: 'flex-start',
+  messageInput: {
+    backgroundColor: '#F5F8F7',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+    padding: 10,
+    color: '#102B2A',
+    minHeight: 80,
+    textAlignVertical: 'top',
+    fontSize: 14,
   },
   subscribePriceBox: {
     backgroundColor: '#F5F8F7',
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
+    padding: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
   noticeBoxGreen: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.xs,
+    gap: 8,
     backgroundColor: '#E8F5E9',
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
+    padding: 10,
+    borderRadius: 8,
   },
   paymentMethodSection: {
-    gap: Spacing.xs,
+    gap: 6,
   },
   paymentMethodOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.xs,
+    gap: 8,
   },
   paymentMethodOption: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: Radius.md,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#D4E2DC',
     backgroundColor: '#F5F8F7',

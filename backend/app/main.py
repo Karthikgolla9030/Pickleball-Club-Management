@@ -181,6 +181,8 @@ def create_app() -> FastAPI:
     uploads_dir = os.path.join(backend_dir, "uploads")
     os.makedirs(os.path.join(uploads_dir, "avatars"), exist_ok=True)
     os.makedirs(os.path.join(uploads_dir, "logos"), exist_ok=True)
+    os.makedirs(os.path.join(uploads_dir, "cover"), exist_ok=True)
+    os.makedirs(os.path.join(uploads_dir, "courts"), exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
     # ─── Routers ──────────────────────────────────────────────────────────────

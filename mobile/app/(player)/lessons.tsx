@@ -38,6 +38,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import {
   ArrowRight,
   Award,
@@ -145,7 +146,9 @@ export default function PlayerLessonsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, clubName } = useActiveClub();
-  const { data: clubBranding } = useClubBranding(clubId || '');
+  const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
+  const effectiveClubId = paramClubId || clubId || '';
+  const { data: clubBranding } = useClubBranding(effectiveClubId);
 
   const [activeTab, setActiveTab] = useState<TabKey>('discover');
 
@@ -155,7 +158,7 @@ export default function PlayerLessonsScreen() {
     isLoading: isLoadingDiscover,
     isRefetching: isRefetchingDiscover,
     refetch: refetchDiscover,
-  } = useDiscoverLessons(clubId || '');
+  } = useDiscoverLessons(effectiveClubId || '');
 
   const {
     data: myRegistrations = [],

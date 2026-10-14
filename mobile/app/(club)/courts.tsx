@@ -49,7 +49,11 @@ import {
   X,
   Check,
   ShieldAlert,
+  Camera,
+  Trash2,
+  UploadCloud,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 import {
   AppHeader,
@@ -66,7 +70,7 @@ import {
   Screen,
 } from '@/components';
 import { useActiveClub, useClubBranding, useClubCourts, usePermission } from '@/hooks';
-import { courtApi, bookingApi } from '@/services/api';
+import { courtApi, bookingApi, clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type {
@@ -251,6 +255,8 @@ export default function ClubCourtsScreen() {
   const [formSurface, setFormSurface] = useState('Acrylic');
   const [formDescription, setFormDescription] = useState('');
   const [formPrice, setFormPrice] = useState('');
+  const [formPhotoUrl, setFormPhotoUrl] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -305,6 +311,46 @@ export default function ClubCourtsScreen() {
     });
   }, [sortedAllCourts, filterStatus, filterEnv, searchQuery]);
 
+  // Photo Upload Handler
+  const handlePickCourtPhoto = async () => {
+    if (!clubId) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 10],
+        quality: 0.85,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      const pickedAsset = result.assets[0];
+
+      setIsUploadingPhoto(true);
+      try {
+        const uploadRes = await clubAssetsApi.uploadClubMedia(
+          clubId,
+          {
+            uri: pickedAsset.uri,
+            name: 'court_image.jpg',
+            type: 'image/jpeg',
+          },
+          'court',
+          'court',
+          editingCourt ? editingCourt.id : undefined
+        );
+        setFormPhotoUrl(uploadRes.public_url);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Photo upload failed';
+        Alert.alert('Upload Error', msg);
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error selecting photo';
+      Alert.alert('Selection Error', msg);
+    }
+  };
+
   // Form Handlers
   const openCreateModal = () => {
     setFormName('');
@@ -314,6 +360,7 @@ export default function ClubCourtsScreen() {
     setFormSurface('Acrylic');
     setFormDescription('');
     setFormPrice('');
+    setFormPhotoUrl(null);
     setFormError(null);
     setIsCreateModalOpen(true);
   };
@@ -327,6 +374,7 @@ export default function ClubCourtsScreen() {
     setFormSurface(court.surface_type || 'Acrylic');
     setFormDescription(court.description || '');
     setFormPrice(court.price_per_hour !== null && court.price_per_hour !== undefined ? String(court.price_per_hour) : '');
+    setFormPhotoUrl(court.photo_url || null);
     setFormError(null);
   };
 
@@ -355,6 +403,7 @@ export default function ClubCourtsScreen() {
         surface_type: formSurface.trim() || null,
         description: formDescription.trim() || null,
         price_per_hour: parsedPrice,
+        photo_url: formPhotoUrl,
       };
       await createCourt(payload);
       setIsCreateModalOpen(false);
@@ -393,6 +442,7 @@ export default function ClubCourtsScreen() {
         surface_type: formSurface.trim() || null,
         description: formDescription.trim() || null,
         price_per_hour: parsedPrice,
+        photo_url: formPhotoUrl,
       };
       await courtApi.updateCourt(clubId, editingCourt.id, payload);
       setEditingCourt(null);
@@ -918,6 +968,57 @@ export default function ClubCourtsScreen() {
             placeholder="e.g. 25.00"
           />
 
+          {/* Court Photo Upload */}
+          <View style={styles.photoFieldContainer}>
+            <AppText variant="caption" style={styles.fieldLabel}>
+              Court Photo (Optional)
+            </AppText>
+            {formPhotoUrl ? (
+              <View style={styles.photoPreviewWrapper}>
+                <Image
+                  source={{ uri: resolveMediaUrl(formPhotoUrl) }}
+                  style={styles.photoPreviewImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.photoActionRow}>
+                  <TouchableOpacity
+                    style={styles.photoChangeButton}
+                    onPress={handlePickCourtPhoto}
+                    disabled={isUploadingPhoto}
+                  >
+                    <Camera size={13} color="#176B57" />
+                    <AppText style={styles.photoChangeText}>
+                      {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
+                    </AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.photoRemoveButton}
+                    onPress={() => setFormPhotoUrl(null)}
+                    disabled={isUploadingPhoto}
+                  >
+                    <Trash2 size={13} color="#DC2626" />
+                    <AppText style={styles.photoRemoveText}>Remove</AppText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.photoUploadBox}
+                onPress={handlePickCourtPhoto}
+                disabled={isUploadingPhoto}
+                activeOpacity={0.8}
+              >
+                <UploadCloud size={24} color="#176B57" />
+                <AppText style={styles.photoUploadTitle}>
+                  {isUploadingPhoto ? 'Uploading photo...' : 'Upload Court Photograph'}
+                </AppText>
+                <AppText style={styles.photoUploadSubtitle}>
+                  JPG or PNG, recommended 16:10 aspect ratio
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+
           <AppText variant="caption" style={styles.fieldLabel}>
             Environment
           </AppText>
@@ -1037,6 +1138,57 @@ export default function ClubCourtsScreen() {
             keyboardType="numeric"
             placeholder="e.g. 25.00"
           />
+
+          {/* Court Photo Upload */}
+          <View style={styles.photoFieldContainer}>
+            <AppText variant="caption" style={styles.fieldLabel}>
+              Court Photo (Optional)
+            </AppText>
+            {formPhotoUrl ? (
+              <View style={styles.photoPreviewWrapper}>
+                <Image
+                  source={{ uri: resolveMediaUrl(formPhotoUrl) }}
+                  style={styles.photoPreviewImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.photoActionRow}>
+                  <TouchableOpacity
+                    style={styles.photoChangeButton}
+                    onPress={handlePickCourtPhoto}
+                    disabled={isUploadingPhoto}
+                  >
+                    <Camera size={13} color="#176B57" />
+                    <AppText style={styles.photoChangeText}>
+                      {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
+                    </AppText>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.photoRemoveButton}
+                    onPress={() => setFormPhotoUrl(null)}
+                    disabled={isUploadingPhoto}
+                  >
+                    <Trash2 size={13} color="#DC2626" />
+                    <AppText style={styles.photoRemoveText}>Remove</AppText>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.photoUploadBox}
+                onPress={handlePickCourtPhoto}
+                disabled={isUploadingPhoto}
+                activeOpacity={0.8}
+              >
+                <UploadCloud size={24} color="#176B57" />
+                <AppText style={styles.photoUploadTitle}>
+                  {isUploadingPhoto ? 'Uploading photo...' : 'Upload Court Photograph'}
+                </AppText>
+                <AppText style={styles.photoUploadSubtitle}>
+                  JPG or PNG, recommended 16:10 aspect ratio
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <AppText variant="caption" style={styles.fieldLabel}>
             Environment
@@ -1969,4 +2121,79 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: '500',
   },
+
+  // Court Photo Styles
+  photoFieldContainer: {
+    gap: 6,
+  },
+  photoPreviewWrapper: {
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#D4E2DC',
+    backgroundColor: '#F5F8F7',
+  },
+  photoPreviewImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#E8EFEA',
+  },
+  photoActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    padding: 8,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E8EFEA',
+  },
+  photoChangeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#E8F5EE',
+  },
+  photoChangeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  photoRemoveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+  },
+  photoRemoveText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  photoUploadBox: {
+    borderWidth: 1.5,
+    borderColor: '#C5D6CF',
+    borderStyle: 'dashed',
+    borderRadius: Radius.md,
+    padding: Spacing[4],
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7FAF9',
+    gap: 4,
+  },
+  photoUploadTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#176B57',
+    marginTop: 2,
+  },
+  photoUploadSubtitle: {
+    fontSize: 11,
+    color: '#667776',
+  },
 });
+

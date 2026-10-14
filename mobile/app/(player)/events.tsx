@@ -29,7 +29,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
@@ -67,7 +67,9 @@ export default function PlayerEventsScreen() {
   const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, role } = useActiveClub();
-  const { data: clubBranding } = useClubBranding(clubId || '');
+  const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
+  const effectiveClubId = paramClubId || clubId || '';
+  const { data: clubBranding } = useClubBranding(effectiveClubId);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [activeTab, setActiveTab] = useState<MainTab>('discover');
@@ -143,7 +145,7 @@ export default function PlayerEventsScreen() {
     isError: isDiscoverError,
     error: discoverError,
     refetch: refetchDiscover,
-  } = useDiscoverClubEvents(clubId || '');
+  } = useDiscoverClubEvents(effectiveClubId || '');
 
   // My Events query
   const {
@@ -158,11 +160,11 @@ export default function PlayerEventsScreen() {
   // Mutations
   const registerMutation = useRegisterForEvent(
     selectedDetailEvent?.id || '',
-    clubId || undefined
+    effectiveClubId || undefined
   );
   const cancelMutation = useCancelEventRegistration(
     selectedDetailEvent?.id || '',
-    clubId || undefined
+    effectiveClubId || undefined
   );
 
   // Auto-refresh when screen gains focus
