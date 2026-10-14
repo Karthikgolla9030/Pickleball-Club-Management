@@ -1248,13 +1248,76 @@ async def test_manual_promote_waitlisted_player(
     reg2_id = r2.json()["id"]
     assert r2.json()["status"] == "waitlisted"
 
-    # Staff manual promote
+    # Staff manual promote when full should fail with 400 (capacity check)
+    prom_fail = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/events/{event_id}/registrations/{reg2_id}/promote",
+        headers=get_headers(owner_user),
+    )
+    assert prom_fail.status_code == 400
+    assert "capacity" in prom_fail.json()["detail"].lower()
+
+    # Expand capacity to 2 spots
+    upd = await async_client.patch(
+        f"/api/v1/clubs/{club_a.id}/events/{event_id}",
+        json={"capacity": 2},
+        headers=get_headers(owner_user),
+    )
+    assert upd.status_code == 200
+
+    # Staff manual promote should now succeed
     prom = await async_client.post(
         f"/api/v1/clubs/{club_a.id}/events/{event_id}/registrations/{reg2_id}/promote",
         headers=get_headers(owner_user),
     )
     assert prom.status_code == 200
     assert prom.json()["status"] == "registered"
+
+
+@pytest.mark.asyncio
+async def test_reset_player_attendance(
+    async_client: AsyncClient,
+    club_a: Club,
+    owner_user: User,
+    player_member_user: User,
+):
+    now = datetime.now(timezone.utc)
+    c_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/events",
+        json={
+            "title": "Reset Attendance Test Event",
+            "capacity": 5,
+            "start_at": (now + timedelta(days=2)).isoformat(),
+            "end_at": (now + timedelta(days=2, hours=2)).isoformat(),
+        },
+        headers=get_headers(owner_user),
+    )
+    event_id = c_resp.json()["id"]
+    await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/events/{event_id}/publish",
+        headers=get_headers(owner_user),
+    )
+
+    r = await async_client.post(
+        f"/api/v1/players/me/events/{event_id}/register",
+        headers=get_headers(player_member_user),
+    )
+    reg_id = r.json()["id"]
+
+    # Mark attended
+    att = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/events/{event_id}/registrations/{reg_id}/attend",
+        headers=get_headers(owner_user),
+    )
+    assert att.status_code == 200
+    assert att.json()["status"] == "attended"
+
+    # Reset attendance back to registered
+    rst = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/events/{event_id}/registrations/{reg_id}/reset-attendance",
+        headers=get_headers(owner_user),
+    )
+    assert rst.status_code == 200
+    assert rst.json()["status"] == "registered"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -1,21 +1,25 @@
 /**
- * Aught2 Pickleball — Club Events Management Screen (Phase 14 Redesign)
+ * Aught2 Pickleball — Club Events Management & Roster Redesign
  *
- * Light premium sports-club management design matching reference UI:
- *   - Status bar & mobile header with hamburger, title & '+ Create Event' button
- *   - Club Information Card (Aught2 Pickleball, 'Play. Connect. Build Community.', '♛ CLUB OWNER')
- *   - Hero Banner ('CLUB EVENTS', 'More Than a Game', 'Play Meet Belong')
- *   - 4 Statistics cards in 1 row (Total, Published, Draft, Completed)
+ * Implements a clean, mobile-first Events dashboard matching reference standards:
+ *   - Status bar & mobile header with hamburger, title & '+ Create' button
+ *   - Promotional Hero Banner ('More Than a Game', 'Social nights, clinics, and community events...')
+ *   - 4 Dynamic Statistics cards (Total, Published, Draft, Completed)
  *   - Horizontally scrollable status filter chips + settings sliders button
- *   - Horizontal Event Cards:
- *       * Left image thumbnail with dark translucent green date badge overlay
- *       * Title, status badge, type & audience badges, description
- *       * 3-column metadata (schedule, location, registered / capacity)
- *       * Entry Fee tag & 'View Roster →' / 'Edit Event →' action button
- *       * Options menu (publish, complete, cancel, roster)
- *   - Bottom 'Host an Event' CTA card with '+ Create Event' button
- *   - Full Roster Management Modal (attendance, waitlist promotion, manual add)
- *   - Create Event Modal with validation & type/visibility configuration
+ *   - Streamlined Event Cards with clear hierarchy, date badges, capacity indicators,
+ *     explicit 'Free' or entry fees, 'View Roster →' primary CTA, and 3-dot overflow menu
+ *   - Full-featured, responsive Roster Management Dialog (not a clipped sheet!):
+ *       * Pinned header with title, subtitle & clear close control
+ *       * Real-time participant summary metric pills (Registered, Waitlist, Attended, No Show, Cancelled)
+ *       * Horizontally scrollable status filter tabs with counts
+ *       * Clean participant cards with real full names, email, timestamp, status badge
+ *       * Specific, unambiguous actions for each status:
+ *           - Registered: Mark Attended, Mark No Show, Cancel Spot (with confirm)
+ *           - Attended: Attended indicator, Reset Attendance, Mark No Show
+ *           - No Show: No Show indicator, Reset Attendance, Mark Attended
+ *           - Waitlisted: Promote to Registered (with capacity verification), Cancel Waitlist
+ *           - Cancelled: Cancelled indicator, excluded from active capacity
+ *       * Staff manual player registration
  */
 
 import React, { useMemo, useState } from 'react';
@@ -23,22 +27,35 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  AlertCircle,
   Calendar,
+  Check,
   CheckCircle2,
+  Clock,
   FileText,
   MapPin,
   MoreVertical,
+  RotateCcw,
   SlidersHorizontal,
   Tag,
+  UserCheck,
+  UserMinus,
+  UserPlus,
   Users,
+  UserX,
+  X,
 } from 'lucide-react-native';
 
 import {
@@ -48,7 +65,6 @@ import {
   Button,
   Card,
   EmptyState,
-  FilterChips,
   Input,
   LoadingState,
   MetricGrid,
@@ -69,6 +85,7 @@ import {
   useStaffMarkAttendance,
   useStaffPromoteWaitlisted,
   useStaffRegisterPlayer,
+  useStaffResetAttendance,
 } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
@@ -137,15 +154,12 @@ function parseEventLocation(loc: string | null) {
 }
 
 function getEventCardImage(event: ClubEvent, index: number, clubCoverUrl?: string | null) {
-  // 1. Entity-level custom image
   if (event.cover_image_url) {
     return { uri: resolveMediaUrl(event.cover_image_url) };
   }
-  // 2. Club-level cover fallback
   if (clubCoverUrl) {
     return { uri: resolveMediaUrl(clubCoverUrl) };
   }
-  // 3. Platform neutral fallback
   if (event.event_type === 'clinic') {
     return require('../../assets/events/card3_clean.jpg');
   }
@@ -178,20 +192,13 @@ function formatDate(iso: string): string {
   }
 }
 
-function getRegStatusBadgeVariant(
-  status: EventRegistrationStatus,
-): 'success' | 'warning' | 'error' | 'info' | 'default' {
-  switch (status) {
-    case 'attended':
-    case 'registered':
-      return 'success';
-    case 'waitlisted':
-      return 'warning';
-    case 'no_show':
-    case 'cancelled':
-    default:
-      return 'error';
+function getPlayerInitials(name: string): string {
+  if (!name) return 'P';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }
+  return name.slice(0, 2).toUpperCase();
 }
 
 // ─── Event Card Component ─────────────────────────────────────────────────────
@@ -248,7 +255,6 @@ function EventCard({
     Alert.alert(event.title, 'Manage Event Actions', options);
   };
 
-  // Status badge styles
   const getStatusBadgeStyle = () => {
     switch (event.status) {
       case 'completed':
@@ -262,7 +268,6 @@ function EventCard({
     }
   };
 
-  // Audience badge style
   const getAudienceBadgeStyle = () => {
     if (event.visibility === 'public') {
       return { bg: '#EAF2FB', text: '#2563A8' };
@@ -292,7 +297,7 @@ function EventCard({
         <View style={styles.infoContainer}>
           {/* Header Row: Title, Status Badge, More Menu */}
           <View style={styles.cardHeaderRow}>
-            <AppText style={styles.cardTitle}>
+            <AppText style={styles.cardTitle} numberOfLines={2}>
               {event.title}
             </AppText>
             <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
@@ -323,10 +328,10 @@ function EventCard({
             </View>
           </View>
 
-          {/* Description */}
-          <AppText style={styles.descriptionText}>
+          {/* Description (scannable, clean) */}
+          <AppText style={styles.descriptionText} numberOfLines={2}>
             {event.description ||
-              'Free demo day for local residents to try pickleball and tour facilities.'}
+              'Community pickleball event with match play, drills, and social networking.'}
           </AppText>
 
           {/* 3-Column Metadata Row */}
@@ -335,10 +340,10 @@ function EventCard({
             <View style={styles.metaCol}>
               <Calendar size={12} color="#657776" style={styles.metaIcon} />
               <View style={styles.metaTextCol}>
-                <AppText style={styles.metaPrimaryText}>
+                <AppText style={styles.metaPrimaryText} numberOfLines={1}>
                   {schedule.date}
                 </AppText>
-                <AppText style={styles.metaSecondaryText}>
+                <AppText style={styles.metaSecondaryText} numberOfLines={1}>
                   {schedule.time}
                 </AppText>
               </View>
@@ -348,10 +353,10 @@ function EventCard({
             <View style={styles.metaCol}>
               <MapPin size={12} color="#657776" style={styles.metaIcon} />
               <View style={styles.metaTextCol}>
-                <AppText style={styles.metaPrimaryText}>
+                <AppText style={styles.metaPrimaryText} numberOfLines={1}>
                   {loc.court}
                 </AppText>
-                <AppText style={styles.metaSecondaryText}>
+                <AppText style={styles.metaSecondaryText} numberOfLines={1}>
                   {loc.city}
                 </AppText>
               </View>
@@ -361,10 +366,10 @@ function EventCard({
             <View style={styles.metaCol}>
               <Users size={12} color="#657776" style={styles.metaIcon} />
               <View style={styles.metaTextCol}>
-                <AppText style={styles.metaPrimaryText}>
-                  {event.registered_count} / {event.capacity ?? 50}
+                <AppText style={styles.metaPrimaryText} numberOfLines={1}>
+                  {event.registered_count} / {event.capacity ?? '∞'}
                 </AppText>
-                <AppText style={styles.metaSecondaryText}>
+                <AppText style={styles.metaSecondaryText} numberOfLines={1}>
                   registered
                 </AppText>
               </View>
@@ -375,19 +380,19 @@ function EventCard({
           <View style={styles.cardFooterRow}>
             {/* Left: Entry Fee */}
             <View style={styles.feeGroup}>
-              <Tag size={12} color="#657776" />
-              <AppText style={styles.feeLabel}>Entry Fee</AppText>
+              <Tag size={12} color="#18794E" />
+              <AppText style={styles.feeLabel}>Entry:</AppText>
               <AppText style={styles.feeValue}>{feeDisplay}</AppText>
             </View>
 
             {/* Right: Action Button */}
             <TouchableOpacity
               style={styles.cardActionBtn}
-              onPress={() => (isDraft ? handleOptionsPress() : onViewRoster(event))}
+              onPress={() => onViewRoster(event)}
               activeOpacity={0.75}
             >
               <AppText style={styles.cardActionBtnText}>
-                {isDraft ? 'Edit Event →' : 'View Roster →'}
+                View Roster →
               </AppText>
             </TouchableOpacity>
           </View>
@@ -397,7 +402,7 @@ function EventCard({
   );
 }
 
-// ─── Roster Modal ─────────────────────────────────────────────────────────────
+// ─── Modern Event Roster Modal ────────────────────────────────────────────────
 
 function RosterModal({
   visible,
@@ -410,31 +415,127 @@ function RosterModal({
   clubId: string;
   onClose: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isDesktop = Platform.OS === 'web' && windowWidth >= 768;
+
   const [filterStatus, setFilterStatus] = useState<EventRegistrationStatus | 'all'>('all');
   const [manualUserId, setManualUserId] = useState('');
   const [showManualRegister, setShowManualRegister] = useState(false);
 
   const eventId = event?.id || '';
 
-  const { data: registrations = [], isLoading, refetch } = useEventRegistrations(
-    clubId,
-    eventId,
-    filterStatus === 'all' ? undefined : filterStatus,
-  );
+  // Fetch full registrations list for this event
+  const {
+    data: registrations = [],
+    isLoading,
+    refetch,
+  } = useEventRegistrations(clubId, eventId);
 
   const markAttendanceMutation = useStaffMarkAttendance(clubId, eventId);
+  const resetAttendanceMutation = useStaffResetAttendance(clubId, eventId);
   const cancelRegMutation = useStaffCancelRegistration(clubId, eventId);
   const promoteMutation = useStaffPromoteWaitlisted(clubId, eventId);
   const registerPlayerMutation = useStaffRegisterPlayer(clubId, eventId);
 
+  // Accurate real-time counts calculated directly from registration data
+  const counts = useMemo(() => {
+    let reg = 0;
+    let wait = 0;
+    let att = 0;
+    let noShow = 0;
+    let canc = 0;
+
+    for (const r of registrations) {
+      if (r.status === 'registered') reg++;
+      else if (r.status === 'waitlisted') wait++;
+      else if (r.status === 'attended') att++;
+      else if (r.status === 'no_show') noShow++;
+      else if (r.status === 'cancelled') canc++;
+    }
+
+    // Active capacity spots used = registered + attended + no_show
+    const activeSpots = reg + att + noShow;
+    return { reg, wait, att, noShow, canc, activeSpots, total: registrations.length };
+  }, [registrations]);
+
+  // Filtered view
   const filteredRegistrations = useMemo(() => {
     if (filterStatus === 'all') return registrations;
     return registrations.filter((r) => r.status === filterStatus);
   }, [registrations, filterStatus]);
 
+  // Attendance actions
+  const handleMarkAttendance = async (registrationId: string, attended: boolean) => {
+    try {
+      await markAttendanceMutation.mutateAsync({ registrationId, attended });
+      refetch();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update attendance';
+      Alert.alert('Attendance Error', msg);
+    }
+  };
+
+  const handleResetAttendance = async (registrationId: string) => {
+    try {
+      await resetAttendanceMutation.mutateAsync(registrationId);
+      refetch();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to reset attendance';
+      Alert.alert('Reset Error', msg);
+    }
+  };
+
+  const handlePromote = async (reg: EventRegistration) => {
+    // Check if capacity is reached
+    if (event?.capacity !== null && event?.capacity !== undefined) {
+      if (counts.activeSpots >= event.capacity) {
+        Alert.alert(
+          'Capacity Full',
+          `This event is at maximum capacity (${counts.activeSpots}/${event.capacity} active spots). Cannot promote player until a spot opens up.`,
+        );
+        return;
+      }
+    }
+
+    try {
+      await promoteMutation.mutateAsync(reg.id);
+      refetch();
+      Alert.alert('Player Promoted', `${reg.user_full_name || reg.user_name || 'Player'} has been promoted to Registered.`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Promotion failed';
+      Alert.alert('Promotion Failed', msg);
+    }
+  };
+
+  const handleCancelRegistration = (reg: EventRegistration) => {
+    const isWaitlisted = reg.status === 'waitlisted';
+    const title = isWaitlisted ? 'Cancel Waitlist' : 'Cancel Registration';
+    const message = isWaitlisted
+      ? `Remove ${reg.user_full_name || reg.user_name || reg.user_email || 'this player'} from the waitlist?`
+      : `Cancel registration for ${reg.user_full_name || reg.user_name || reg.user_email || 'this player'}? If an eligible waitlisted player exists, they will be auto-promoted.`;
+
+    Alert.alert(title, message, [
+      { text: 'Keep Spot', style: 'cancel' },
+      {
+        text: 'Confirm Cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelRegMutation.mutateAsync(reg.id);
+            refetch();
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Cancellation failed';
+            Alert.alert('Error', msg);
+          }
+        },
+      },
+    ]);
+  };
+
   const handleManualRegister = async () => {
     if (!manualUserId.trim()) {
-      Alert.alert('Error', 'Please enter a valid User UUID');
+      Alert.alert('Validation Error', 'Please enter a valid Player User ID or UUID.');
       return;
     }
     try {
@@ -444,210 +545,379 @@ function RosterModal({
       setManualUserId('');
       setShowManualRegister(false);
       refetch();
-      Alert.alert('Success', 'Player registered successfully');
+      Alert.alert('Success', 'Player registered successfully.');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to register player';
       Alert.alert('Registration Failed', msg);
     }
   };
 
-  const handleCancelRegistration = (reg: EventRegistration) => {
-    Alert.alert(
-      'Cancel Registration',
-      `Cancel registration for ${reg.user_name || reg.user_email || 'this player'}? If registered, earliest waitlisted player will be auto-promoted.`,
-      [
-        { text: 'Back', style: 'cancel' },
-        {
-          text: 'Cancel Spot',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await cancelRegMutation.mutateAsync(reg.id);
-              refetch();
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Cancellation failed';
-              Alert.alert('Error', msg);
-            }
-          },
-        },
-      ],
-    );
-  };
+  if (!event || !visible) return null;
 
-  if (!event) return null;
+  const capacityInfo =
+    event.capacity !== null && event.capacity !== undefined
+      ? `${counts.activeSpots} / ${event.capacity} spots filled`
+      : `${counts.activeSpots} participants (unlimited capacity)`;
 
   return (
-    <ModalSheet
+    <Modal
       visible={visible}
-      onClose={onClose}
-      title={event.title}
-      subtitle="Participant Roster"
-      actions={[
-        {
-          label: 'Close',
-          variant: 'secondary',
-          onPress: onClose,
-        },
-      ]}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={{ gap: Spacing[3], paddingBottom: Spacing[4] }}>
-        {/* Stats Row */}
-        <View style={styles.rosterStatsRow}>
-          <View style={styles.rosterStat}>
-            <AppText style={styles.rosterStatValue}>{event.registered_count}</AppText>
-            <AppText style={styles.rosterStatLabel}>Registered</AppText>
-          </View>
-          <View style={styles.rosterStat}>
-            <AppText style={styles.rosterStatValue}>{event.waitlisted_count}</AppText>
-            <AppText style={styles.rosterStatLabel}>Waitlist</AppText>
-          </View>
-          <View style={styles.rosterStat}>
-            <AppText style={styles.rosterStatValue}>{event.attended_count}</AppText>
-            <AppText style={styles.rosterStatLabel}>Attended</AppText>
-          </View>
-          <View style={styles.rosterStat}>
-            <AppText style={styles.rosterStatValue}>{event.no_show_count}</AppText>
-            <AppText style={styles.rosterStatLabel}>No Show</AppText>
-          </View>
-        </View>
-
-        {/* Filter Chips */}
-        <FilterChips<EventRegistrationStatus | 'all'>
-          chips={[
-            { key: 'all', label: 'All' },
-            { key: 'registered', label: 'Registered' },
-            { key: 'waitlisted', label: 'Waitlisted' },
-            { key: 'attended', label: 'Attended' },
-            { key: 'no_show', label: 'No Show' },
-            { key: 'cancelled', label: 'Cancelled' },
+      <View style={styles.modalBackdrop}>
+        <View
+          style={[
+            styles.modalSheetContainer,
+            isDesktop
+              ? styles.modalDialogDesktop
+              : [
+                  styles.modalSheetMobile,
+                  { maxHeight: windowHeight - insets.top - 20 },
+                ],
           ]}
-          activeChip={filterStatus}
-          onChipPress={setFilterStatus}
-        />
+        >
+          {/* Mobile Drag Indicator */}
+          {!isDesktop && <View style={styles.sheetHandle} />}
 
-        {/* Action Bar */}
-        <View style={styles.rosterActionBar}>
-          <Button
-            label={showManualRegister ? 'Cancel Add' : '+ Add Player'}
-            variant="secondary"
-            size="sm"
-            fullWidth={false}
-            onPress={() => setShowManualRegister(!showManualRegister)}
-          />
-        </View>
+          {/* 1. Pinned Header */}
+          <View style={styles.rosterHeader}>
+            <View style={styles.rosterHeaderText}>
+              <AppText style={styles.rosterTitle} numberOfLines={2}>
+                {event.title}
+              </AppText>
+              <AppText style={styles.rosterSubtitle}>
+                Participant Roster • {capacityInfo}
+              </AppText>
+            </View>
+            <TouchableOpacity
+              style={styles.rosterCloseBtn}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X size={18} color="#102B2A" />
+            </TouchableOpacity>
+          </View>
 
-        {showManualRegister && (
-          <Card style={styles.manualRegisterCard}>
-            <AppText style={styles.manualRegisterTitle}>Staff Manual Registration</AppText>
-            <Input
-              label="Player User UUID"
-              placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
-              value={manualUserId}
-              onChangeText={setManualUserId}
-              autoCapitalize="none"
-            />
-            <Button
-              label="Register Player"
-              variant="primary"
-              size="sm"
-              loading={registerPlayerMutation.isPending}
-              onPress={handleManualRegister}
-              style={{ marginTop: Spacing[2] }}
-            />
-          </Card>
-        )}
+          {/* 2. Pinned Metrics Bar */}
+          <View style={styles.rosterMetricsContainer}>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={styles.rosterMetricNumber}>{counts.activeSpots}</AppText>
+              <AppText style={styles.rosterMetricLabel}>Active Spots</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricNumber, { color: '#9A6B00' }]}>
+                {counts.wait}
+              </AppText>
+              <AppText style={styles.rosterMetricLabel}>Waitlist</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricNumber, { color: '#18794E' }]}>
+                {counts.att}
+              </AppText>
+              <AppText style={styles.rosterMetricLabel}>Attended</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricNumber, { color: '#B42318' }]}>
+                {counts.noShow}
+              </AppText>
+              <AppText style={styles.rosterMetricLabel}>No Show</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricNumber, { color: '#64748B' }]}>
+                {counts.canc}
+              </AppText>
+              <AppText style={styles.rosterMetricLabel}>Cancelled</AppText>
+            </View>
+          </View>
 
-        {/* Registrations List */}
-        {isLoading ? (
-          <LoadingState message="Loading participants..." />
-        ) : filteredRegistrations.length === 0 ? (
-          <EmptyState
-            title="No Registrations"
-            description="No players found for the selected filter."
-          />
-        ) : (
-          filteredRegistrations.map((item) => (
-            <Card key={item.id} style={styles.regCard}>
-              <View style={styles.regCardHeader}>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.regUserName}>
-                    {item.user_name || item.user_email || 'Unknown User'}
-                  </AppText>
-                  {item.user_email && item.user_name ? (
-                    <AppText style={styles.regUserEmail}>{item.user_email}</AppText>
-                  ) : null}
-                  <AppText style={styles.regTimestamp}>
-                    Registered: {formatDate(item.registered_at)}
-                  </AppText>
-                </View>
-                <Badge
-                  label={EVENT_REGISTRATION_STATUS_LABELS[item.status] || item.status}
-                  variant={getRegStatusBadgeVariant(item.status)}
+          {/* 3. Pinned Status Filter Tabs */}
+          <View style={styles.rosterTabsSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rosterTabsContent}
+            >
+              {[
+                { key: 'all' as const, label: `All (${counts.total})` },
+                { key: 'registered' as const, label: `Registered (${counts.reg})` },
+                { key: 'waitlisted' as const, label: `Waitlisted (${counts.wait})` },
+                { key: 'attended' as const, label: `Attended (${counts.att})` },
+                { key: 'no_show' as const, label: `No Show (${counts.noShow})` },
+                { key: 'cancelled' as const, label: `Cancelled (${counts.canc})` },
+              ].map((tab) => {
+                const isSelected = filterStatus === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[
+                      styles.rosterTabChip,
+                      isSelected && styles.rosterTabChipSelected,
+                    ]}
+                    onPress={() => setFilterStatus(tab.key)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterTabChipText,
+                        isSelected && styles.rosterTabChipTextSelected,
+                      ]}
+                    >
+                      {tab.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* 4. Staff Controls / Add Player */}
+          <View style={styles.rosterControlRow}>
+            <AppText style={styles.rosterCountText}>
+              Showing {filteredRegistrations.length} of {counts.total} participant{counts.total === 1 ? '' : 's'}
+            </AppText>
+            <TouchableOpacity
+              style={styles.addPlayerBtn}
+              onPress={() => setShowManualRegister(!showManualRegister)}
+              activeOpacity={0.75}
+            >
+              <UserPlus size={13} color="#176B57" style={{ marginRight: 4 }} />
+              <AppText style={styles.addPlayerBtnText}>
+                {showManualRegister ? 'Close Form' : '+ Add Player'}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+
+          {showManualRegister && (
+            <View style={styles.manualRegisterBox}>
+              <AppText style={styles.manualRegisterTitle}>Staff Manual Player Registration</AppText>
+              <Input
+                label="Player User UUID"
+                placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
+                value={manualUserId}
+                onChangeText={setManualUserId}
+                autoCapitalize="none"
+              />
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <Button
+                  label="Register Player"
+                  variant="primary"
+                  size="sm"
+                  loading={registerPlayerMutation.isPending}
+                  onPress={handleManualRegister}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Cancel"
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => setShowManualRegister(false)}
                 />
               </View>
+            </View>
+          )}
 
-              {/* Actions per registration status */}
-              <View style={styles.regActions}>
-                {item.status === 'registered' && (
-                  <>
-                    <Button
-                      label="Attended"
-                      variant="primary"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() =>
-                        markAttendanceMutation.mutate({
-                          registrationId: item.id,
-                          attended: true,
-                        })
-                      }
-                    />
-                    <Button
-                      label="No Show"
-                      variant="secondary"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() =>
-                        markAttendanceMutation.mutate({
-                          registrationId: item.id,
-                          attended: false,
-                        })
-                      }
-                    />
-                    <Button
-                      label="Cancel"
-                      variant="ghost"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() => handleCancelRegistration(item)}
-                    />
-                  </>
-                )}
+          {/* 5. Scrollable Participant List */}
+          <View style={styles.rosterListContainer}>
+            {isLoading ? (
+              <LoadingState message="Loading roster participants..." />
+            ) : filteredRegistrations.length === 0 ? (
+              <EmptyState
+                title="No Participants"
+                description={`No players found with status "${filterStatus}".`}
+              />
+            ) : (
+              <FlatList
+                data={filteredRegistrations}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={[
+                  styles.rosterScrollContent,
+                  { paddingBottom: insets.bottom + 40 },
+                ]}
+                renderItem={({ item }) => {
+                  const displayName =
+                    item.user_full_name || item.user_name || (item.user_email ? item.user_email.split('@')[0] : 'Participant');
+                  const initials = getPlayerInitials(displayName);
 
-                {item.status === 'waitlisted' && (
-                  <>
-                    <Button
-                      label="Promote"
-                      variant="primary"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() => promoteMutation.mutate(item.id)}
-                    />
-                    <Button
-                      label="Cancel"
-                      variant="ghost"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() => handleCancelRegistration(item)}
-                    />
-                  </>
-                )}
-              </View>
-            </Card>
-          ))
-        )}
+                  return (
+                    <View style={styles.participantCard}>
+                      {/* Card Top: Avatar, Name, Email, Status Badge */}
+                      <View style={styles.participantHeaderRow}>
+                        <View style={styles.avatarCircle}>
+                          <AppText style={styles.avatarInitials}>{initials}</AppText>
+                        </View>
+                        <View style={styles.participantInfoCol}>
+                          <AppText style={styles.participantName} numberOfLines={1}>
+                            {displayName}
+                          </AppText>
+                          {item.user_email ? (
+                            <AppText style={styles.participantEmail} numberOfLines={1}>
+                              {item.user_email}
+                            </AppText>
+                          ) : null}
+                          <AppText style={styles.participantTimestamp}>
+                            Registered {formatDate(item.registered_at)}
+                          </AppText>
+                        </View>
+                        <View style={styles.participantBadgeCol}>
+                          <Badge
+                            label={EVENT_REGISTRATION_STATUS_LABELS[item.status] || item.status}
+                            variant={
+                              item.status === 'attended' || item.status === 'registered'
+                                ? 'success'
+                                : item.status === 'waitlisted'
+                                ? 'warning'
+                                : 'error'
+                            }
+                          />
+                        </View>
+                      </View>
+
+                      {/* Optional Notes */}
+                      {item.notes ? (
+                        <View style={styles.participantNotesBox}>
+                          <AppText style={styles.participantNotesText}>
+                            Note: {item.notes}
+                          </AppText>
+                        </View>
+                      ) : null}
+
+                      {/* Status-Specific Actions */}
+                      <View style={styles.participantActionsRow}>
+                        {/* CASE A: REGISTERED */}
+                        {item.status === 'registered' && (
+                          <View style={styles.actionButtonGroup}>
+                            <TouchableOpacity
+                              style={styles.actionBtnAttended}
+                              onPress={() => handleMarkAttendance(item.id, true)}
+                              activeOpacity={0.8}
+                            >
+                              <Check size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              <AppText style={styles.actionBtnAttendedText}>Mark Attended</AppText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.actionBtnNoShow}
+                              onPress={() => handleMarkAttendance(item.id, false)}
+                              activeOpacity={0.8}
+                            >
+                              <UserX size={13} color="#B42318" style={{ marginRight: 4 }} />
+                              <AppText style={styles.actionBtnNoShowText}>Mark No Show</AppText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.actionBtnCancel}
+                              onPress={() => handleCancelRegistration(item)}
+                              activeOpacity={0.7}
+                            >
+                              <AppText style={styles.actionBtnCancelText}>Cancel Spot</AppText>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {/* CASE B: ATTENDED */}
+                        {item.status === 'attended' && (
+                          <View style={styles.statusStateRow}>
+                            <View style={styles.statusStateTagSuccess}>
+                              <UserCheck size={13} color="#18794E" style={{ marginRight: 4 }} />
+                              <AppText style={styles.statusStateTagSuccessText}>
+                                Attendance Confirmed
+                              </AppText>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              <TouchableOpacity
+                                style={styles.actionBtnOutline}
+                                onPress={() => handleResetAttendance(item.id)}
+                                activeOpacity={0.8}
+                              >
+                                <RotateCcw size={12} color="#475569" style={{ marginRight: 3 }} />
+                                <AppText style={styles.actionBtnOutlineText}>Reset</AppText>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionBtnNoShow}
+                                onPress={() => handleMarkAttendance(item.id, false)}
+                                activeOpacity={0.8}
+                              >
+                                <AppText style={styles.actionBtnNoShowText}>No Show</AppText>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* CASE C: NO SHOW */}
+                        {item.status === 'no_show' && (
+                          <View style={styles.statusStateRow}>
+                            <View style={styles.statusStateTagError}>
+                              <AlertCircle size={13} color="#B42318" style={{ marginRight: 4 }} />
+                              <AppText style={styles.statusStateTagErrorText}>
+                                Player Did Not Attend
+                              </AppText>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              <TouchableOpacity
+                                style={styles.actionBtnOutline}
+                                onPress={() => handleResetAttendance(item.id)}
+                                activeOpacity={0.8}
+                              >
+                                <RotateCcw size={12} color="#475569" style={{ marginRight: 3 }} />
+                                <AppText style={styles.actionBtnOutlineText}>Reset</AppText>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionBtnAttended}
+                                onPress={() => handleMarkAttendance(item.id, true)}
+                                activeOpacity={0.8}
+                              >
+                                <AppText style={styles.actionBtnAttendedText}>Attended</AppText>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* CASE D: WAITLISTED */}
+                        {item.status === 'waitlisted' && (
+                          <View style={styles.actionButtonGroup}>
+                            <TouchableOpacity
+                              style={styles.actionBtnPromote}
+                              onPress={() => handlePromote(item)}
+                              activeOpacity={0.8}
+                            >
+                              <UserPlus size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              <AppText style={styles.actionBtnPromoteText}>
+                                Promote to Registered
+                              </AppText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.actionBtnCancel}
+                              onPress={() => handleCancelRegistration(item)}
+                              activeOpacity={0.7}
+                            >
+                              <AppText style={styles.actionBtnCancelText}>Cancel Waitlist</AppText>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {/* CASE E: CANCELLED */}
+                        {item.status === 'cancelled' && (
+                          <View style={styles.cancelledNoticeRow}>
+                            <UserMinus size={13} color="#94A3B8" style={{ marginRight: 4 }} />
+                            <AppText style={styles.cancelledNoticeText}>
+                              Registration cancelled • Excluded from active event capacity
+                            </AppText>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
       </View>
-    </ModalSheet>
+    </Modal>
   );
 }
 
@@ -938,7 +1208,7 @@ export default function ClubEventsScreen() {
         </View>
       </View>
 
-      {/* 3. 4-COLUMN STATISTICS ROW */}
+      {/* 2. 4-COLUMN STATISTICS ROW */}
       <MetricGrid
         columns={4}
         valueFirst={true}
@@ -970,7 +1240,7 @@ export default function ClubEventsScreen() {
         ]}
       />
 
-      {/* 4. FILTER ROW */}
+      {/* 3. FILTER ROW */}
       <View style={styles.filterSection}>
         <ScrollView
           horizontal
@@ -1009,7 +1279,7 @@ export default function ClubEventsScreen() {
           onPress={() => {
             Alert.alert(
               'Filter Options',
-              'Select a status filter from the tabs above or sort by schedule.',
+              'Select a status filter from the tabs above to manage specific event categories.',
             );
           }}
           activeOpacity={0.7}
@@ -1098,7 +1368,7 @@ export default function ClubEventsScreen() {
         />
       )}
 
-      {/* Modals */}
+      {/* Dedicated Full-Screen/Desktop Roster Dialog */}
       <RosterModal
         visible={!!selectedRosterEvent}
         event={selectedRosterEvent}
@@ -1128,6 +1398,9 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 110,
+    maxWidth: 760,
+    width: '100%',
+    alignSelf: 'center',
   },
 
   // Header Button
@@ -1143,13 +1416,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12.5,
     fontWeight: '700',
-  },
-
-  // Club Card
-  clubCardWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 12,
   },
 
   // Hero Banner
@@ -1551,78 +1817,397 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Roster Modal Styles
-  rosterStatsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    padding: 12,
-    justifyContent: 'space-around',
-  },
-  rosterStat: {
+  // ─── Roster Modal Styles ───────────────────────────────────────────────────
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
-  rosterStatValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#102B2A',
+  modalSheetContainer: {
+    backgroundColor: '#F8FAF9',
+    width: '100%',
+    overflow: 'hidden',
   },
-  rosterStatLabel: {
-    fontSize: 11,
-    color: '#657776',
+  modalSheetMobile: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalDialogDesktop: {
+    maxWidth: 680,
+    width: '92%',
+    maxHeight: '90%',
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginVertical: 'auto',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  // Pinned Roster Header
+  rosterHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEFEA',
+  },
+  rosterHeaderText: {
+    flex: 1,
+    marginRight: 12,
+  },
+  rosterTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#102B2A',
+    lineHeight: 22,
+  },
+  rosterSubtitle: {
+    fontSize: 12,
+    color: '#5A756C',
     marginTop: 2,
   },
-  rosterActionBar: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+  rosterCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#EFF5F2',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  manualRegisterCard: {
-    padding: 12,
+
+  // Pinned Roster Metrics
+  rosterMetricsContainer: {
+    flexDirection: 'row',
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEFEA',
+    gap: 8,
+  },
+  rosterMetricCard: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#F3F8F5',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E4ECE7',
+  },
+  rosterMetricNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#102B2A',
+  },
+  rosterMetricLabel: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: '#5A756C',
+    marginTop: 1,
+    textAlign: 'center',
+  },
+
+  // Pinned Status Tabs
+  rosterTabsSection: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAEFEA',
+    paddingVertical: 8,
+  },
+  rosterTabsContent: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rosterTabChip: {
+    backgroundColor: '#F4F7F5',
+    borderWidth: 1,
+    borderColor: '#DCE7E1',
+    borderRadius: 16,
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  rosterTabChipSelected: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
+  },
+  rosterTabChipText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#3D544F',
+  },
+  rosterTabChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  // Staff Control Bar
+  rosterControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  rosterCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5A756C',
+  },
+  addPlayerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F4EE',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2EAE6',
+    borderColor: '#CDE5D9',
+  },
+  addPlayerBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+
+  // Manual Register Box
+  manualRegisterBox: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#DCE7E1',
+    padding: 12,
   },
   manualRegisterTitle: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#102B2A',
-    marginBottom: 8,
+    marginBottom: 6,
   },
-  regCard: {
-    padding: 12,
+
+  // Scrollable Roster Container
+  rosterListContainer: {
+    flex: 1,
+    minHeight: 200,
+  },
+  rosterScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 2,
+  },
+
+  // Participant Card
+  participantCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    marginBottom: 8,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  regCardHeader: {
+  participantHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  regUserName: {
+  avatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E5F3EC',
+    borderWidth: 1,
+    borderColor: '#CDE5D9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarInitials: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#176B57',
+  },
+  participantInfoCol: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
+  },
+  participantName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#102B2A',
+    lineHeight: 18,
   },
-  regUserEmail: {
-    fontSize: 12,
-    color: '#657776',
+  participantEmail: {
+    fontSize: 11.5,
+    color: '#5A756C',
     marginTop: 1,
   },
-  regTimestamp: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 4,
+  participantTimestamp: {
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
   },
-  regActions: {
-    flexDirection: 'row',
-    gap: 8,
+  participantBadgeCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+
+  participantNotesBox: {
+    marginTop: 8,
+    backgroundColor: '#F8FAF9',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#EAEFEA',
+  },
+  participantNotesText: {
+    fontSize: 11,
+    color: '#475569',
+    fontStyle: 'italic',
+  },
+
+  // Action Buttons inside participant card
+  participantActionsRow: {
     marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  actionButtonGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  actionBtnAttended: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#176B57',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  actionBtnAttendedText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  actionBtnNoShow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F5',
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+  },
+  actionBtnNoShowText: {
+    color: '#B42318',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  actionBtnCancel: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  actionBtnCancelText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+
+  actionBtnPromote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#176B57',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+  },
+  actionBtnPromoteText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  // State Confirmation Rows (for Attended / No Show)
+  statusStateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  statusStateTagSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusStateTagSuccessText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#18794E',
+  },
+  statusStateTagError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusStateTagErrorText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B42318',
+  },
+  actionBtnOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 4,
+    paddingHorizontal: 9,
+    borderRadius: 12,
+  },
+  actionBtnOutlineText: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  cancelledNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cancelledNoticeText: {
+    fontSize: 11,
+    color: '#64748B',
   },
 });

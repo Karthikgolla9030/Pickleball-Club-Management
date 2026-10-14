@@ -138,6 +138,20 @@ export const eventApi = {
   },
 
   /**
+   * Staff resets attendance status back to registered (pending attendance).
+   */
+  staffResetAttendance(
+    clubId: string,
+    eventId: string,
+    registrationId: string,
+  ): Promise<EventRegistration> {
+    return apiClient.post<EventRegistration>(
+      API_ENDPOINTS.CLUB_EVENT_REGISTRATION_RESET(clubId, eventId, registrationId),
+      {},
+    );
+  },
+
+  /**
    * Staff manually promotes a waitlisted player.
    */
   staffPromoteWaitlisted(

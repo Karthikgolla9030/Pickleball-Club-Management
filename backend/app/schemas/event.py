@@ -145,6 +145,7 @@ class EventRegistrationResponse(BaseModel):
     cancelled_at: datetime | None = None
     notes: str | None = None
     user_full_name: str | None = None
+    user_name: str | None = None
     user_email: str | None = None
     event_title: str | None = None
     event_start_at: datetime | None = None

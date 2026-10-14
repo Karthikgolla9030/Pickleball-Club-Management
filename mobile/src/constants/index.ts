@@ -164,6 +164,8 @@ export const API_ENDPOINTS = {
     `${API_BASE}/api/v1/clubs/${clubId}/events/${eventId}/registrations/${registrationId}/attend`,
   CLUB_EVENT_REGISTRATION_NOSHOW: (clubId: string, eventId: string, registrationId: string) =>
     `${API_BASE}/api/v1/clubs/${clubId}/events/${eventId}/registrations/${registrationId}/no-show`,
+  CLUB_EVENT_REGISTRATION_RESET: (clubId: string, eventId: string, registrationId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/events/${eventId}/registrations/${registrationId}/reset-attendance`,
   CLUB_EVENT_REGISTRATION_PROMOTE: (clubId: string, eventId: string, registrationId: string) =>
     `${API_BASE}/api/v1/clubs/${clubId}/events/${eventId}/registrations/${registrationId}/promote`,
   PLAYER_EVENTS_DISCOVER: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/events/discover`,

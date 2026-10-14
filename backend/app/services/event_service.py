@@ -569,10 +569,11 @@ class EventService:
         if attendance_status not in (
             EventRegistrationStatus.ATTENDED,
             EventRegistrationStatus.NO_SHOW,
+            EventRegistrationStatus.REGISTERED,
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Status must be 'attended' or 'no_show'",
+                detail="Status must be 'attended', 'no_show', or 'registered'",
             )
 
         # Verify event belongs to club
@@ -614,7 +615,7 @@ class EventService:
         registration_id: UUID,
         club_id: UUID,
     ) -> EventRegistrationResponse:
-        """Staff manually promotes a waitlisted player to registered."""
+        """Staff manually promotes a waitlisted player to registered, verifying capacity."""
         event = await self.event_repo.get_by_id(event_id, club_id=club_id)
         if not event:
             raise HTTPException(
@@ -636,6 +637,16 @@ class EventService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Only waitlisted registrations can be promoted. Current status: '{registration.status.value}'",
             )
+
+        # Enforce capacity invariant
+        if event.capacity is not None:
+            counts = await self.event_repo.get_registration_counts(event.id)
+            registered_count = counts.get("registered_count", 0)
+            if registered_count >= event.capacity:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Event is at full capacity ({event.capacity} spots). Cannot promote waitlisted player.",
+                )
 
         registration.status = EventRegistrationStatus.REGISTERED
         await self.event_repo.update_registration(registration)
@@ -801,6 +812,7 @@ class EventService:
             cancelled_at=_ensure_utc(reg.cancelled_at),
             notes=reg.notes,
             user_full_name=user_name,
+            user_name=user_name,
             user_email=user_email,
             event_title=event_title,
             event_start_at=event_start_at,

@@ -207,6 +207,26 @@ export function useStaffMarkAttendance(clubId: string, eventId: string) {
 }
 
 /**
+ * Staff resets attendance status back to registered (pending attendance).
+ */
+export function useStaffResetAttendance(clubId: string, eventId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (registrationId: string) =>
+      eventApi.staffResetAttendance(clubId, eventId, registrationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['clubs', clubId, 'events', eventId, 'registrations'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.CLUB_EVENT_DETAIL(clubId, eventId),
+      });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'events'] });
+    },
+  });
+}
+
+/**
  * Staff promotes a waitlisted player to registered.
  */
 export function useStaffPromoteWaitlisted(clubId: string, eventId: string) {

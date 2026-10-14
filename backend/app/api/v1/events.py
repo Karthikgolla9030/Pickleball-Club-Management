@@ -323,6 +323,28 @@ async def mark_player_no_show(
 
 
 @club_events_router.post(
+    "/{event_id}/registrations/{registration_id}/reset-attendance",
+    response_model=EventRegistrationResponse,
+    summary="Reset attendance to registered",
+    description="Staff resets attendance status back to registered (pending attendance).",
+)
+async def reset_player_attendance(
+    club_id: UUID,
+    event_id: UUID,
+    registration_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_EVENTS)),
+    db: AsyncSession = Depends(get_db),
+) -> EventRegistrationResponse:
+    service = EventService(db)
+    return await service.mark_attendance(
+        event_id=event_id,
+        registration_id=registration_id,
+        club_id=club_id,
+        attendance_status=EventRegistrationStatus.REGISTERED,
+    )
+
+
+@club_events_router.post(
     "/{event_id}/registrations/{registration_id}/promote",
     response_model=EventRegistrationResponse,
     summary="Promote waitlisted player",

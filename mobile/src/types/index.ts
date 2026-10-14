@@ -1945,6 +1945,7 @@ export interface EventRegistration {
   created_at: string;
   updated_at: string;
   user_name: string | null;
+  user_full_name?: string | null;
   user_email: string | null;
   event_title: string | null;
   event_start_at: string | null;
