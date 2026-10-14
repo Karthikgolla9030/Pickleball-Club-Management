@@ -872,10 +872,10 @@ class LessonService:
         club_id: UUID,
         target_status: LessonRegistrationStatus,
     ) -> LessonRegistrationResponse:
-        if target_status not in [LessonRegistrationStatus.ATTENDED, LessonRegistrationStatus.NO_SHOW]:
+        if target_status not in [LessonRegistrationStatus.ATTENDED, LessonRegistrationStatus.NO_SHOW, LessonRegistrationStatus.REGISTERED]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Target status must be 'attended' or 'no_show'",
+                detail="Target status must be 'attended', 'no_show', or 'registered'",
             )
 
         lesson = await self.lesson_repo.get_by_id(lesson_id, club_id=club_id)
@@ -898,7 +898,7 @@ class LessonService:
                 detail="Cannot mark attendance for a cancelled registration",
             )
 
-        if registration.status in [LessonRegistrationStatus.ATTENDED, LessonRegistrationStatus.NO_SHOW]:
+        if registration.status == target_status:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Attendance has already been recorded as '{registration.status.value}'",
@@ -907,6 +907,8 @@ class LessonService:
         registration.status = target_status
         if target_status == LessonRegistrationStatus.ATTENDED:
             registration.attended_at = datetime.now(timezone.utc)
+        else:
+            registration.attended_at = None
         registration = await self.registration_repo.update(registration)
         return self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
 
@@ -1088,8 +1090,10 @@ class LessonService:
     ) -> LessonRegistrationResponse:
         user_name = None
         user_email = None
+        user_full_name = None
         if reg.user:
-            user_name = getattr(reg.user, "full_name", None) or reg.user.email
+            user_full_name = getattr(reg.user, "full_name", None)
+            user_name = user_full_name or reg.user.email
             user_email = reg.user.email
 
         return LessonRegistrationResponse(
@@ -1104,6 +1108,7 @@ class LessonService:
             created_at=reg.created_at,
             updated_at=reg.updated_at,
             user_name=user_name,
+            user_full_name=user_full_name,
             user_email=user_email,
             lesson_title=lesson_title,
             lesson_start_at=lesson_start_at,

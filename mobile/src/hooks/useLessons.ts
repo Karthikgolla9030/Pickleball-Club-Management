@@ -313,6 +313,23 @@ export function useStaffMarkLessonAttendance(clubId: string, lessonId: string) {
   });
 }
 
+export function useStaffResetLessonAttendance(clubId: string, lessonId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (registrationId: string) =>
+      lessonApi.staffResetAttendance(clubId, lessonId, registrationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['clubs', clubId, 'lessons', lessonId, 'registrations'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
+      });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+    },
+  });
+}
+
 // ─── Player Hooks ────────────────────────────────────────────────────────────
 
 export function useDiscoverLessons(clubId: string) {

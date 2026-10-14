@@ -2105,6 +2105,7 @@ export interface LessonRegistration {
   created_at: string;
   updated_at: string;
   user_name: string | null;
+  user_full_name?: string | null;
   user_email: string | null;
   lesson_title: string | null;
   lesson_start_at: string | null;

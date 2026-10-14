@@ -198,6 +198,8 @@ export const API_ENDPOINTS = {
     `${API_BASE}/api/v1/clubs/${clubId}/lessons/${lessonId}/registrations/${registrationId}/attend`,
   CLUB_LESSON_REGISTRATION_NOSHOW: (clubId: string, lessonId: string, registrationId: string) =>
     `${API_BASE}/api/v1/clubs/${clubId}/lessons/${lessonId}/registrations/${registrationId}/no-show`,
+  CLUB_LESSON_REGISTRATION_RESET: (clubId: string, lessonId: string, registrationId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/lessons/${lessonId}/registrations/${registrationId}/reset-attendance`,
 
   PLAYER_LESSONS_DISCOVER: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lessons/discover`,
   PLAYER_MY_LESSONS: `${API_BASE}/api/v1/players/me/lessons`,

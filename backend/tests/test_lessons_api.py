@@ -936,6 +936,29 @@ async def test_staff_attendance_tracking(
     assert noshow_resp.status_code == 200
     assert noshow_resp.json()["status"] == "no_show"
 
+    # Reset player 1 attendance back to registered
+    reset_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons/{lesson_id}/registrations/{reg_1_id}/reset-attendance",
+        headers=headers_owner,
+    )
+    assert reset_resp.status_code == 200
+    assert reset_resp.json()["status"] == "registered"
+
+    # Resetting again when already registered returns 400
+    reset_dup = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons/{lesson_id}/registrations/{reg_1_id}/reset-attendance",
+        headers=headers_owner,
+    )
+    assert reset_dup.status_code == 400
+
+    # Correction: player 2 can be updated from no_show to attended
+    correct_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons/{lesson_id}/registrations/{reg_2_id}/attend",
+        headers=headers_owner,
+    )
+    assert correct_resp.status_code == 200
+    assert correct_resp.json()["status"] == "attended"
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # 8. HISTORICAL PRICE INTEGRITY

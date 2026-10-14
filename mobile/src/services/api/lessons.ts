@@ -235,6 +235,20 @@ export const lessonApi = {
     return apiClient.post<LessonRegistration>(endpoint, {});
   },
 
+  /**
+   * Staff resets attendance for a registered participant back to registered.
+   */
+  staffResetAttendance(
+    clubId: string,
+    lessonId: string,
+    registrationId: string,
+  ): Promise<LessonRegistration> {
+    return apiClient.post<LessonRegistration>(
+      API_ENDPOINTS.CLUB_LESSON_REGISTRATION_RESET(clubId, lessonId, registrationId),
+      {},
+    );
+  },
+
   // ─── Player Endpoints ──────────────────────────────────────────────────────
 
   /**

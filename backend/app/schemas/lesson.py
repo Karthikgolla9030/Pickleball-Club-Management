@@ -236,6 +236,7 @@ class LessonRegistrationResponse(BaseModel):
 
     # Display extras
     user_name: str | None = None
+    user_full_name: str | None = None
     user_email: str | None = None
     lesson_title: str | None = None
     lesson_start_at: datetime | None = None

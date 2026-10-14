@@ -1,39 +1,62 @@
 /**
- * Aught2 Pickleball — Club Lessons & Coaching Screen (Phase 15)
+ * Aught2 Pickleball — Club Lessons & Coaching Screen
  *
- * Staff management for coaching, lesson types, lessons, and player registrations:
+ * Owner & Staff management for coaching, lesson types, lessons, and participant rosters:
  *   - Segmented navigation: Lessons | Coaches | Lesson Types
- *   - Overview metric cards: Total Lessons, Published, Completed, Draft
+ *   - Statistics metric cards: Total, Published, Draft, Completed
  *   - Status filtering: All, Draft, Published, Completed, Cancelled
- *   - Lesson scheduling with conflict detection, capacity, court & coach assignment
- *   - Lesson lifecycle: Publish, Cancel, Complete
- *   - Roster Management Modal:
- *       * View registered players & status
- *       * Mark attendance (attended / no-show)
- *       * Manual staff player registration
- *       * Staff registration cancellation
+ *   - Clean lesson cards with clear hierarchy, compact metadata, and View Roster primary action
+ *   - Modern, responsive Lesson Roster Dialog:
+ *       * Pinned header with capacity ratio and close button
+ *       * Pinned summary metrics bar (Enrolled, Attended, No Show, Available Spots)
+ *       * Pinned status filter chips (All, Enrolled, Attended, No Show, Cancelled)
+ *       * Dedicated scrollable participant list with real player full names & avatars
+ *       * Real-time attendance tracking (Mark Attended, Mark No Show, Reset Attendance)
+ *       * User-friendly Player Registration Workflow (search active club members by name/email,
+ *         view booking summary & fee, one-click registration without manual UUID copying)
  *   - Coach management: List, Add, Edit, Deactivate, Reactivate
  *   - Lesson Type configuration: List, Add, Edit, Deactivate, Reactivate
- *
- * Authorization:
- *   - Requires manage_lessons permission (club_owner & club_manager)
- *   - Blocked for tournament directors with clear message
  */
 
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Image,
+  Modal,
   RefreshControl,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Switch,
+  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
-  ImageBackground,
-  Image,
-  StatusBar,
 } from 'react-native';
-import { Calendar, CheckCircle, FileText, SlidersHorizontal, MapPin, User, Users, MoreVertical, CalendarPlus, CheckCircle2 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Calendar,
+  Check,
+  CheckCircle2,
+  Clock,
+  DollarSign,
+  FileText,
+  Mail,
+  MapPin,
+  Menu,
+  MoreVertical,
+  Phone,
+  Plus,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  User,
+  UserCheck,
+  Users,
+  UserX,
+  X,
+} from 'lucide-react-native';
 
 import {
   AppHeader,
@@ -48,7 +71,6 @@ import {
   MetricGrid,
   ModalSheet,
   Screen,
-  ScreenHeader,
   SegmentedTabs,
 } from '@/components';
 import {
@@ -59,6 +81,7 @@ import {
   useClubCourts,
   useClubLessons,
   useClubLessonTypes,
+  useClubPlayerMembers,
   useCompleteClubLesson,
   useCreateClubLesson,
   useCreateCoach,
@@ -73,14 +96,17 @@ import {
   useStaffCancelLessonRegistration,
   useStaffMarkLessonAttendance,
   useStaffRegisterLessonPlayer,
+  useStaffResetLessonAttendance,
   useUpdateCoach,
   useUpdateLessonType,
 } from '@/hooks';
-import { Colors, Layout, Radius, Spacing } from '@/theme';
+import { useDrawerStore } from '@/navigation';
+import { Colors, Radius, Spacing } from '@/theme';
 import {
   LESSON_REGISTRATION_STATUS_LABELS,
   LESSON_STATUS_LABELS,
   type ClubLesson,
+  type ClubPlayerMember,
   type Coach,
   type CreateCoachPayload,
   type CreateLessonPayload,
@@ -93,51 +119,6 @@ import {
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
-
-function getLessonStatusBadgeVariant(
-  status: LessonStatus,
-): 'success' | 'warning' | 'error' | 'info' | 'default' {
-  switch (status) {
-    case 'published':
-      return 'success';
-    case 'draft':
-      return 'warning';
-    case 'completed':
-      return 'info';
-    case 'cancelled':
-    default:
-      return 'error';
-  }
-}
-
-function getRegStatusBadgeVariant(
-  status: LessonRegistrationStatus,
-): 'success' | 'warning' | 'error' | 'info' | 'default' {
-  switch (status) {
-    case 'attended':
-    case 'registered':
-      return 'success';
-    case 'no_show':
-    case 'cancelled':
-    default:
-      return 'error';
-  }
-}
-
-function formatDate(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
 
 function formatLessonSchedule(iso: string): string {
   try {
@@ -155,15 +136,12 @@ function formatLessonSchedule(iso: string): string {
 }
 
 function getLessonCardImage(item: ClubLesson, clubCoverUrl?: string | null) {
-  // 1. Entity-level custom image
   if (item.image_url) {
     return { uri: resolveMediaUrl(item.image_url) };
   }
-  // 2. Club-level cover fallback
   if (clubCoverUrl) {
     return { uri: resolveMediaUrl(clubCoverUrl) };
   }
-  // 3. Platform neutral fallback
   const t = (item.title || '').toLowerCase();
   if (t.includes('doubles') || t.includes('strategy') || t.includes('workshop') || t.includes('past')) {
     return require('../../assets/lessons/card1.jpg');
@@ -181,6 +159,7 @@ export default function ClubLessonsScreen() {
   const { clubId: activeClubId, clubName } = useActiveClub();
   const { canManageLessons } = usePermission();
   const { data: clubBranding } = useClubBranding(activeClubId ?? '');
+  const toggleDrawer = useDrawerStore((s) => s.toggleDrawer);
 
   const [activeTab, setActiveTab] = useState<StaffTab>('lessons');
   const [statusFilter, setStatusFilter] = useState<LessonStatus | 'all'>('all');
@@ -262,7 +241,7 @@ export default function ClubLessonsScreen() {
   const [typePrice, setTypePrice] = useState('0.00');
   const [typeIsPrivate, setTypeIsPrivate] = useState(false);
 
-  // Metrics
+  // Metrics (calculated from persisted lessons)
   const metrics = useMemo(() => {
     if (!lessons) return { total: 0, published: 0, completed: 0, draft: 0 };
     return {
@@ -428,11 +407,10 @@ export default function ClubLessonsScreen() {
     setTypeIsPrivate(false);
   };
 
-  // Quick action alerts
   const handlePublish = (lesson: ClubLesson) => {
     Alert.alert(
       'Publish Lesson',
-      `Are you sure you want to publish "${lesson.title}"? Once published, players can register.`,
+      `Publish "${lesson.title}"? Once published, eligible club members can register.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -453,7 +431,7 @@ export default function ClubLessonsScreen() {
   const handleCancelLesson = (lesson: ClubLesson) => {
     Alert.alert(
       'Cancel Lesson',
-      `Are you sure you want to cancel "${lesson.title}"? All active registrations will be cancelled.`,
+      `Cancel "${lesson.title}"? All active registrations will be cancelled.`,
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -519,7 +497,8 @@ export default function ClubLessonsScreen() {
           }}
           activeOpacity={0.8}
         >
-          <AppText style={styles.scheduleHeaderBtnText}>+ Schedule</AppText>
+          <Plus size={15} color="#FFFFFF" />
+          <AppText style={styles.scheduleHeaderBtnText}>Schedule</AppText>
         </TouchableOpacity>
       );
     }
@@ -533,7 +512,8 @@ export default function ClubLessonsScreen() {
           }}
           activeOpacity={0.8}
         >
-          <AppText style={styles.scheduleHeaderBtnText}>+ Coach</AppText>
+          <Plus size={15} color="#FFFFFF" />
+          <AppText style={styles.scheduleHeaderBtnText}>Coach</AppText>
         </TouchableOpacity>
       );
     }
@@ -546,12 +526,12 @@ export default function ClubLessonsScreen() {
         }}
         activeOpacity={0.8}
       >
-        <AppText style={styles.scheduleHeaderBtnText}>+ Type</AppText>
+        <Plus size={15} color="#FFFFFF" />
+        <AppText style={styles.scheduleHeaderBtnText}>Type</AppText>
       </TouchableOpacity>
     );
   }, [activeTab]);
 
-  // Auth gate
   if (!canManageLessons) {
     return (
       <Screen style={styles.container}>
@@ -581,7 +561,7 @@ export default function ClubLessonsScreen() {
             Better Players{'\n'}Stronger Community
           </AppText>
           <AppText style={styles.promoSubtitle}>
-            Manage lessons, coaching programs{'\n'}and help your members grow.
+            Manage lessons, coaching programs and help your members grow.
           </AppText>
         </View>
         <View style={styles.promoScriptContainer}>
@@ -666,8 +646,8 @@ export default function ClubLessonsScreen() {
 
   const renderLessonCard = ({ item }: { item: ClubLesson }) => {
     const cardImg = getLessonCardImage(item, clubBranding?.cover_image_url);
-    const rosterLabel = item.status === 'completed' ? 'Roster →' : 'View Roster →';
-    const tagLabel = item.lesson_type_name?.toUpperCase() || (item.is_private ? 'PRIVATE' : 'DOUBLES STRATEGY');
+    const rosterLabel = item.status === 'completed' ? 'View Attendance →' : 'View Roster →';
+    const tagLabel = item.lesson_type_name?.toUpperCase() || (item.is_private ? 'PRIVATE' : 'GROUP LESSON');
 
     const descriptionText = item.description || (
       item.title.toLowerCase().includes('doubles')
@@ -714,11 +694,11 @@ export default function ClubLessonsScreen() {
               </View>
             </View>
 
-            <AppText style={styles.lessonTitle}>
+            <AppText style={styles.lessonTitle} numberOfLines={1}>
               {item.title}
             </AppText>
 
-            <AppText style={styles.lessonDescription}>
+            <AppText style={styles.lessonDescription} numberOfLines={2}>
               {descriptionText}
             </AppText>
           </View>
@@ -726,46 +706,46 @@ export default function ClubLessonsScreen() {
 
         {/* 4-Column Metadata Row */}
         <View style={styles.metaRow}>
-          {/* Coach */}
-          <View style={styles.metaCol}>
-            <User size={13} color="#176B57" style={styles.metaIcon} />
-            <View style={styles.metaColText}>
-              <AppText style={styles.metaLabel}>Coach</AppText>
-              <AppText style={styles.metaVal}>
-                {item.coach_name ?? 'Daniel Lee'}
-              </AppText>
+          {item.coach_name ? (
+            <View style={styles.metaCol}>
+              <User size={12} color="#176B57" style={styles.metaIcon} />
+              <View style={styles.metaColText}>
+                <AppText style={styles.metaLabel}>Coach</AppText>
+                <AppText style={styles.metaVal} numberOfLines={1}>
+                  {item.coach_name}
+                </AppText>
+              </View>
             </View>
-          </View>
+          ) : null}
 
-          {/* Court */}
-          <View style={styles.metaCol}>
-            <MapPin size={13} color="#667776" style={styles.metaIcon} />
-            <View style={styles.metaColText}>
-              <AppText style={styles.metaLabel}>Court</AppText>
-              <AppText style={styles.metaVal}>
-                {item.court_name ?? 'Court 1'}
-              </AppText>
+          {item.court_name ? (
+            <View style={styles.metaCol}>
+              <MapPin size={12} color="#667776" style={styles.metaIcon} />
+              <View style={styles.metaColText}>
+                <AppText style={styles.metaLabel}>Court</AppText>
+                <AppText style={styles.metaVal} numberOfLines={1}>
+                  {item.court_name}
+                </AppText>
+              </View>
             </View>
-          </View>
+          ) : null}
 
-          {/* Schedule */}
           <View style={[styles.metaCol, { flex: 1.25 }]}>
-            <Calendar size={13} color="#667776" style={styles.metaIcon} />
+            <Calendar size={12} color="#667776" style={styles.metaIcon} />
             <View style={styles.metaColText}>
               <AppText style={styles.metaLabel}>Schedule</AppText>
-              <AppText style={styles.metaVal}>
+              <AppText style={styles.metaVal} numberOfLines={1}>
                 {formatLessonSchedule(item.start_at)}
               </AppText>
             </View>
           </View>
 
-          {/* Capacity */}
           <View style={styles.metaCol}>
-            <Users size={13} color="#667776" style={styles.metaIcon} />
+            <Users size={12} color="#667776" style={styles.metaIcon} />
             <View style={styles.metaColText}>
               <AppText style={styles.metaLabel}>Capacity</AppText>
               <AppText style={styles.metaVal}>
-                {item.registered_count ?? 0} / {item.capacity ?? 8}
+                {item.registered_count ?? 0} / {item.capacity ?? '∞'}
               </AppText>
             </View>
           </View>
@@ -780,7 +760,7 @@ export default function ClubLessonsScreen() {
           <TouchableOpacity
             style={styles.rosterActionBtn}
             onPress={() => setRosterLesson(item)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
             <AppText style={styles.rosterActionText}>{rosterLabel}</AppText>
           </TouchableOpacity>
@@ -813,7 +793,10 @@ export default function ClubLessonsScreen() {
                 title="No Lessons Scheduled"
                 description="Schedule your first coaching lesson or training clinic."
                 actionLabel="+ Schedule Lesson"
-                onAction={() => setCreateLessonVisible(true)}
+                onAction={() => {
+                  resetLessonForm();
+                  setCreateLessonVisible(true);
+                }}
               />
             )
           }
@@ -831,271 +814,250 @@ export default function ClubLessonsScreen() {
 
       {/* ─── TAB 2: COACHES ──────────────────────────────────────────────── */}
       {activeTab === 'coaches' && (
-        <>
-            <FlatList
-              data={coaches}
-              keyExtractor={(item) => item.id}
-              ListHeaderComponent={renderHeader}
-              ListEmptyComponent={
-                isLoadingCoaches ? (
-                  <LoadingState message="Loading coaches..." />
-                ) : (
-                  <EmptyState
-                    title="No Coaches Found"
-                    description="Add coaching personnel to your club."
-                    actionLabel="+ Add Coach"
-                    onAction={() => {
-                      resetCoachForm();
-                      setCreateCoachVisible(true);
+        <FlatList
+          data={coaches}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            isLoadingCoaches ? (
+              <LoadingState message="Loading coaches..." />
+            ) : (
+              <EmptyState
+                title="No Coaches Found"
+                description="Add coaching personnel to your club."
+                actionLabel="+ Add Coach"
+                onAction={() => {
+                  resetCoachForm();
+                  setCreateCoachVisible(true);
+                }}
+              />
+            )
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetchingCoaches}
+              onRefresh={refetchCoaches}
+              tintColor="#176B57"
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <Card style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={styles.coachAvatarCircle}>
+                    <AppText style={styles.coachAvatarInitials}>
+                      {item.name.slice(0, 2).toUpperCase()}
+                    </AppText>
+                  </View>
+                  <View>
+                    <AppText variant="heading3" style={styles.lessonTitle}>
+                      {item.name}
+                    </AppText>
+                    {item.specialization ? (
+                      <AppText variant="bodySmall" style={styles.coachSpec}>
+                        {item.specialization}
+                      </AppText>
+                    ) : null}
+                  </View>
+                </View>
+                <Badge
+                  label={item.is_active ? 'Active' : 'Inactive'}
+                  variant={item.is_active ? 'success' : 'default'}
+                />
+              </View>
+
+              {item.bio ? (
+                <AppText variant="bodySmall" style={styles.bioText} numberOfLines={2}>
+                  {item.bio}
+                </AppText>
+              ) : null}
+
+              <View style={styles.detailsGrid}>
+                {item.email ? (
+                  <View style={styles.detailRow}>
+                    <Mail size={13} color="#667776" />
+                    <AppText variant="bodySmall" style={styles.detailValue}>
+                      {item.email}
+                    </AppText>
+                  </View>
+                ) : null}
+                {item.phone ? (
+                  <View style={styles.detailRow}>
+                    <Phone size={13} color="#667776" />
+                    <AppText variant="bodySmall" style={styles.detailValue}>
+                      {item.phone}
+                    </AppText>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.actionRow}>
+                <Button
+                  label="Edit"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => {
+                    setCoachName(item.name);
+                    setCoachBio(item.bio ?? '');
+                    setCoachSpecialization(item.specialization ?? '');
+                    setCoachPhone(item.phone ?? '');
+                    setCoachEmail(item.email ?? '');
+                    setEditCoach(item);
+                  }}
+                />
+                {item.is_active ? (
+                  <Button
+                    label="Deactivate"
+                    variant="ghost"
+                    size="sm"
+                    fullWidth={false}
+                    onPress={() => {
+                      Alert.alert('Deactivate Coach', `Deactivate ${item.name}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Deactivate',
+                          style: 'destructive',
+                          onPress: () => deactivateCoachMutation.mutate(item.id),
+                        },
+                      ]);
                     }}
                   />
-                )
-              }
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefetchingCoaches}
-                  onRefresh={refetchCoaches}
-                  tintColor={Colors.brand.primary}
-                />
-              }
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <Card style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View>
-                      <AppText variant="heading3" style={styles.lessonTitle}>
-                        {item.name}
-                      </AppText>
-                      {item.specialization ? (
-                        <AppText variant="bodySmall" style={styles.coachSpec}>
-                          {item.specialization}
-                        </AppText>
-                      ) : null}
-                    </View>
+                ) : (
+                  <Button
+                    label="Reactivate"
+                    variant="primary"
+                    size="sm"
+                    fullWidth={false}
+                    onPress={() => reactivateCoachMutation.mutate(item.id)}
+                  />
+                )}
+              </View>
+            </Card>
+          )}
+        />
+      )}
+
+      {/* ─── TAB 3: LESSON TYPES ─────────────────────────────────────────── */}
+      {activeTab === 'lesson_types' && (
+        <FlatList
+          data={lessonTypes}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={
+            isLoadingLessonTypes ? (
+              <LoadingState message="Loading lesson types..." />
+            ) : (
+              <EmptyState
+                title="No Lesson Types"
+                description="Create lesson types (e.g. Beginner Clinic, 1-on-1, Advanced Dinking)."
+                actionLabel="+ Add Lesson Type"
+                onAction={() => {
+                  resetLessonTypeForm();
+                  setCreateLessonTypeVisible(true);
+                }}
+              />
+            )
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetchingLessonTypes}
+              onRefresh={refetchLessonTypes}
+              tintColor="#176B57"
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <Card style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={styles.cardTitleCol}>
+                  <AppText variant="heading3" style={styles.lessonTitle}>
+                    {item.name}
+                  </AppText>
+                  <View style={styles.badgeGroup}>
+                    <Badge
+                      label={item.is_private ? 'Private (1:1)' : 'Group'}
+                      variant={item.is_private ? 'info' : 'default'}
+                    />
                     <Badge
                       label={item.is_active ? 'Active' : 'Inactive'}
                       variant={item.is_active ? 'success' : 'default'}
                     />
                   </View>
+                </View>
+                <AppText style={styles.typePriceBadge}>
+                  {Number(item.default_price) === 0 ? 'Free' : formatCurrency(Number(item.default_price))}
+                </AppText>
+              </View>
 
-                  {item.bio ? (
-                    <AppText variant="bodySmall" style={styles.bioText} numberOfLines={2}>
-                      {item.bio}
-                    </AppText>
-                  ) : null}
+              {item.description ? (
+                <AppText variant="bodySmall" style={styles.bioText} numberOfLines={2}>
+                  {item.description}
+                </AppText>
+              ) : null}
 
-                  <View style={styles.detailsGrid}>
-                    {item.email ? (
-                      <View style={styles.detailRow}>
-                        <AppText variant="caption" style={styles.detailLabel}>
-                          Email:
-                        </AppText>
-                        <AppText variant="bodySmall" style={styles.detailValue}>
-                          {item.email}
-                        </AppText>
-                      </View>
-                    ) : null}
-                    {item.phone ? (
-                      <View style={styles.detailRow}>
-                        <AppText variant="caption" style={styles.detailLabel}>
-                          Phone:
-                        </AppText>
-                        <AppText variant="bodySmall" style={styles.detailValue}>
-                          {item.phone}
-                        </AppText>
-                      </View>
-                    ) : null}
-                  </View>
+              <View style={styles.detailsGrid}>
+                <View style={styles.detailRow}>
+                  <Clock size={13} color="#667776" />
+                  <AppText variant="bodySmall" style={styles.detailValue}>
+                    {item.duration_minutes} minutes
+                  </AppText>
+                </View>
+                <View style={styles.detailRow}>
+                  <Users size={13} color="#667776" />
+                  <AppText variant="bodySmall" style={styles.detailValue}>
+                    {item.default_capacity ? `Default Capacity: ${item.default_capacity}` : 'Variable capacity'}
+                  </AppText>
+                </View>
+              </View>
 
-                  <View style={styles.actionRow}>
-                    <Button
-                      label="Edit"
-                      variant="secondary"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() => {
-                        setCoachName(item.name);
-                        setCoachBio(item.bio ?? '');
-                        setCoachSpecialization(item.specialization ?? '');
-                        setCoachPhone(item.phone ?? '');
-                        setCoachEmail(item.email ?? '');
-                        setEditCoach(item);
-                      }}
-                    />
-                    {item.is_active ? (
-                      <Button
-                        label="Deactivate"
-                        variant="ghost"
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => {
-                          Alert.alert('Deactivate Coach', `Deactivate ${item.name}?`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Deactivate',
-                              style: 'destructive',
-                              onPress: () => deactivateCoachMutation.mutate(item.id),
-                            },
-                          ]);
-                        }}
-                      />
-                    ) : (
-                      <Button
-                        label="Reactivate"
-                        variant="primary"
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => reactivateCoachMutation.mutate(item.id)}
-                      />
-                    )}
-                  </View>
-                </Card>
-              )}
-            />
-          </>
-        )}
-
-      {/* ─── TAB 3: LESSON TYPES ─────────────────────────────────────────── */}
-      {activeTab === 'lesson_types' && (
-        <>
-            <FlatList
-              data={lessonTypes}
-              keyExtractor={(item) => item.id}
-              ListHeaderComponent={renderHeader}
-              ListEmptyComponent={
-                isLoadingLessonTypes ? (
-                  <LoadingState message="Loading lesson types..." />
-                ) : (
-                  <EmptyState
-                    title="No Lesson Types"
-                    description="Create lesson types (e.g. Beginner Clinic, 1-on-1, Advanced Dinking)."
-                    actionLabel="+ Add Lesson Type"
-                    onAction={() => {
-                      resetLessonTypeForm();
-                      setCreateLessonTypeVisible(true);
+              <View style={styles.actionRow}>
+                <Button
+                  label="Edit"
+                  variant="secondary"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => {
+                    setTypeName(item.name);
+                    setTypeDesc(item.description ?? '');
+                    setTypeDuration(String(item.duration_minutes));
+                    setTypeCapacity(item.default_capacity ? String(item.default_capacity) : '');
+                    setTypePrice(item.default_price ? String(item.default_price) : '0.00');
+                    setTypeIsPrivate(item.is_private);
+                    setEditLessonType(item);
+                  }}
+                />
+                {item.is_active ? (
+                  <Button
+                    label="Deactivate"
+                    variant="ghost"
+                    size="sm"
+                    fullWidth={false}
+                    onPress={() => {
+                      Alert.alert('Deactivate Lesson Type', `Deactivate ${item.name}?`, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Deactivate',
+                          style: 'destructive',
+                          onPress: () => deactivateLessonTypeMutation.mutate(item.id),
+                        },
+                      ]);
                     }}
                   />
-                )
-              }
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefetchingLessonTypes}
-                  onRefresh={refetchLessonTypes}
-                  tintColor={Colors.brand.primary}
-                />
-              }
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <Card style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardTitleCol}>
-                      <AppText variant="heading3" style={styles.lessonTitle}>
-                        {item.name}
-                      </AppText>
-                      <View style={styles.badgeGroup}>
-                        <Badge
-                          label={item.is_private ? 'Private (1:1)' : 'Group'}
-                          variant={item.is_private ? 'info' : 'default'}
-                        />
-                        <Badge
-                          label={item.is_active ? 'Active' : 'Inactive'}
-                          variant={item.is_active ? 'success' : 'default'}
-                        />
-                      </View>
-                    </View>
-                    <AppText variant="heading3" style={styles.priceText}>
-                      {Number(item.default_price) === 0 ? 'Free' : formatCurrency(Number(item.default_price))}
-                    </AppText>
-                  </View>
-
-                  {item.description ? (
-                    <AppText variant="bodySmall" style={styles.bioText} numberOfLines={2}>
-                      {item.description}
-                    </AppText>
-                  ) : null}
-
-                  <View style={styles.detailsGrid}>
-                    <View style={styles.detailRow}>
-                      <AppText variant="caption" style={styles.detailLabel}>
-                        Duration:
-                      </AppText>
-                      <AppText variant="bodySmall" style={styles.detailValue}>
-                        {item.duration_minutes} mins
-                      </AppText>
-                    </View>
-                    <View style={styles.detailRow}>
-                      <AppText variant="caption" style={styles.detailLabel}>
-                        Default Cap:
-                      </AppText>
-                      <AppText variant="bodySmall" style={styles.detailValue}>
-                        {item.is_private ? '1 (Enforced)' : item.default_capacity ?? 'Unset'}
-                      </AppText>
-                    </View>
-                  </View>
-
-                  <View style={styles.actionRow}>
-                    <Button
-                      label="Edit"
-                      variant="secondary"
-                      size="sm"
-                      fullWidth={false}
-                      onPress={() => {
-                        setTypeName(item.name);
-                        setTypeDesc(item.description ?? '');
-                        setTypeDuration(String(item.duration_minutes));
-                        setTypeCapacity(item.default_capacity ? String(item.default_capacity) : '');
-                        setTypePrice(String(item.default_price));
-                        setTypeIsPrivate(item.is_private);
-                        setEditLessonType(item);
-                      }}
-                    />
-                    {item.is_active ? (
-                      <Button
-                        label="Deactivate"
-                        variant="ghost"
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => {
-                          Alert.alert('Deactivate', `Deactivate ${item.name}?`, [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Deactivate',
-                              style: 'destructive',
-                              onPress: () => deactivateLessonTypeMutation.mutate(item.id),
-                            },
-                          ]);
-                        }}
-                      />
-                    ) : (
-                      <Button
-                        label="Reactivate"
-                        variant="primary"
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => reactivateLessonTypeMutation.mutate(item.id)}
-                      />
-                    )}
-                  </View>
-                </Card>
-              )}
-            />
-          </>
-        )}
-
-      {/* ─── 9. FLOATING ACTION BUTTON ─────────────────────────────────── */}
-      {activeTab === 'lessons' && (
-        <TouchableOpacity
-          style={styles.fab}
-          activeOpacity={0.85}
-          onPress={() => {
-            resetLessonForm();
-            setCreateLessonVisible(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Schedule new lesson"
-        >
-          <CalendarPlus size={24} color="#FFFFFF" strokeWidth={2.2} />
-        </TouchableOpacity>
+                ) : (
+                  <Button
+                    label="Reactivate"
+                    variant="primary"
+                    size="sm"
+                    fullWidth={false}
+                    onPress={() => reactivateLessonTypeMutation.mutate(item.id)}
+                  />
+                )}
+              </View>
+            </Card>
+          )}
+        />
       )}
 
       {/* ─── MODAL: CREATE LESSON ─────────────────────────────────────────── */}
@@ -1118,21 +1080,21 @@ export default function ClubLessonsScreen() {
           },
         ]}
       >
-        <View style={{ gap: Spacing[4], paddingBottom: Spacing[6], paddingTop: Spacing[2] }}>
+        <View style={{ gap: Spacing[3], paddingBottom: Spacing[4] }}>
           <Input
             label="Lesson Title *"
-            placeholder="e.g. Master the Third Shot Drop"
+            placeholder="e.g. Saturday Dinking Clinic"
             value={lessonTitle}
             onChangeText={setLessonTitle}
           />
 
           <Input
             label="Description"
-            placeholder="What players will learn in this session"
+            placeholder="What will players learn in this session?"
             value={lessonDesc}
             onChangeText={setLessonDesc}
             multiline
-            numberOfLines={3}
+            numberOfLines={2}
           />
 
           {/* Select Lesson Type */}
@@ -1140,61 +1102,51 @@ export default function ClubLessonsScreen() {
             Lesson Type *
           </AppText>
           <View style={styles.selectorGrid}>
-            {lessonTypes
-              ?.filter((t) => t.is_active)
-              .map((t) => (
-                <TouchableOpacity
-                  key={t.id}
+            {lessonTypes?.filter((lt) => lt.is_active).map((lt) => (
+              <TouchableOpacity
+                key={lt.id}
+                style={[styles.selectorItem, lessonTypeId === lt.id && styles.selectorItemActive]}
+                onPress={() => {
+                  setLessonTypeId(lt.id);
+                  if (lt.default_capacity) setLessonCapacity(String(lt.default_capacity));
+                  if (lt.default_price) setLessonPrice(String(lt.default_price));
+                }}
+              >
+                <AppText
+                  variant="bodySmall"
                   style={[
-                    styles.selectorItem,
-                    lessonTypeId === t.id && styles.selectorItemActive,
+                    styles.selectorItemText,
+                    lessonTypeId === lt.id && styles.selectorItemTextActive,
                   ]}
-                  onPress={() => {
-                    setLessonTypeId(t.id);
-                    if (t.default_price && !lessonPrice) setLessonPrice(String(t.default_price));
-                    if (t.default_capacity && !lessonCapacity) setLessonCapacity(String(t.default_capacity));
-                  }}
                 >
-                  <AppText
-                    variant="bodySmall"
-                    style={[
-                      styles.selectorItemText,
-                      lessonTypeId === t.id && styles.selectorItemTextActive,
-                    ]}
-                  >
-                    {t.name} ({t.duration_minutes}m)
-                  </AppText>
-                </TouchableOpacity>
-              ))}
+                  {lt.name}
+                </AppText>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Select Coach */}
           <AppText variant="caption" style={styles.inputLabel}>
-            Coach *
+            Coach Assignment *
           </AppText>
           <View style={styles.selectorGrid}>
-            {coaches
-              ?.filter((c) => c.is_active)
-              .map((c) => (
-                <TouchableOpacity
-                  key={c.id}
+            {coaches?.filter((c) => c.is_active).map((c) => (
+              <TouchableOpacity
+                key={c.id}
+                style={[styles.selectorItem, coachId === c.id && styles.selectorItemActive]}
+                onPress={() => setCoachId(c.id)}
+              >
+                <AppText
+                  variant="bodySmall"
                   style={[
-                    styles.selectorItem,
-                    coachId === c.id && styles.selectorItemActive,
+                    styles.selectorItemText,
+                    coachId === c.id && styles.selectorItemTextActive,
                   ]}
-                  onPress={() => setCoachId(c.id)}
                 >
-                  <AppText
-                    variant="bodySmall"
-                    style={[
-                      styles.selectorItemText,
-                      coachId === c.id && styles.selectorItemTextActive,
-                    ]}
-                  >
-                    {c.name}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
+                  {c.name}
+                </AppText>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {/* Select Court (Optional) */}
@@ -1267,7 +1219,6 @@ export default function ClubLessonsScreen() {
         </View>
       </ModalSheet>
 
-      {/* ─── MODAL: CREATE / EDIT COACH ──────────────────────────────────── */}
       {/* ─── MODAL: CREATE / EDIT COACH ──────────────────────────────────── */}
       <ModalSheet
         visible={createCoachVisible || !!editCoach}
@@ -1448,54 +1399,108 @@ function RosterModal({
   lesson: ClubLesson;
   onClose: () => void;
 }) {
-  const { data: registrations, isLoading, refetch } = useLessonRegistrations(
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const isDesktop = windowWidth >= 768;
+
+  const { data: registrations = [], isLoading, refetch } = useLessonRegistrations(
     clubId,
     lesson.id,
   );
   const markAttendanceMutation = useStaffMarkLessonAttendance(clubId, lesson.id);
+  const resetAttendanceMutation = useStaffResetLessonAttendance(clubId, lesson.id);
   const cancelRegMutation = useStaffCancelLessonRegistration(clubId, lesson.id);
   const registerPlayerMutation = useStaffRegisterLessonPlayer(clubId, lesson.id);
 
-  const [manualUserId, setManualUserId] = useState('');
-  const [manualNotes, setManualNotes] = useState('');
+  // Club player members query for search & registration
+  const { playerMembers, isLoading: isLoadingPlayers } = useClubPlayerMembers(clubId);
 
-  const handleManualRegister = async () => {
-    if (!manualUserId.trim()) {
-      Alert.alert('Validation Error', 'Player User UUID is required.');
-      return;
+  // State
+  const [filterStatus, setFilterStatus] = useState<LessonRegistrationStatus | 'all'>('all');
+  const [showAddParticipant, setShowAddParticipant] = useState(false);
+  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
+  const [selectedPlayer, setSelectedPlayer] = useState<ClubPlayerMember | null>(null);
+  const [staffNotes, setStaffNotes] = useState('');
+
+  // Persisted metrics calculation
+  const counts = useMemo(() => {
+    let reg = 0;
+    let att = 0;
+    let noShow = 0;
+    let canc = 0;
+
+    for (const r of registrations) {
+      if (r.status === 'registered') reg++;
+      else if (r.status === 'attended') att++;
+      else if (r.status === 'no_show') noShow++;
+      else if (r.status === 'cancelled') canc++;
     }
+
+    // Active spots used = registered + attended + no_show
+    const activeSpots = reg + att + noShow;
+    const availableSpots =
+      lesson.capacity !== null && lesson.capacity !== undefined
+        ? Math.max(0, lesson.capacity - activeSpots)
+        : null;
+
+    return { reg, att, noShow, canc, activeSpots, availableSpots, total: registrations.length };
+  }, [registrations, lesson.capacity]);
+
+  // Filtered view
+  const filteredRegistrations = useMemo(() => {
+    if (filterStatus === 'all') return registrations;
+    return registrations.filter((r) => r.status === filterStatus);
+  }, [registrations, filterStatus]);
+
+  // Already registered user IDs
+  const activeUserIds = useMemo(() => {
+    return new Set(
+      registrations
+        .filter((r) => r.status !== 'cancelled')
+        .map((r) => r.user_id),
+    );
+  }, [registrations]);
+
+  // Filtered eligible players for search
+  const filteredClubPlayers = useMemo(() => {
+    const q = playerSearchQuery.trim().toLowerCase();
+    return playerMembers.filter((pm) => {
+      if (!q) return true;
+      const name = (pm.user_full_name || '').toLowerCase();
+      const email = (pm.user_email || '').toLowerCase();
+      const num = (pm.membership_number || '').toLowerCase();
+      return name.includes(q) || email.includes(q) || num.includes(q);
+    });
+  }, [playerMembers, playerSearchQuery]);
+
+  // Attendance actions
+  const handleMarkAttendance = async (registrationId: string, attended: boolean) => {
     try {
-      await registerPlayerMutation.mutateAsync({
-        user_id: manualUserId.trim(),
-        notes: manualNotes.trim() || null,
-      });
-      Alert.alert('Success', 'Player registered for lesson.');
-      setManualUserId('');
-      setManualNotes('');
+      await markAttendanceMutation.mutateAsync({ registrationId, attended });
       refetch();
-    } catch (err: any) {
-      Alert.alert('Registration Error', err.message || 'Failed to register player.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update attendance';
+      Alert.alert('Attendance Error', msg);
     }
   };
 
-  const handleMarkAttendance = async (reg: LessonRegistration, attended: boolean) => {
+  const handleResetAttendance = async (registrationId: string) => {
     try {
-      await markAttendanceMutation.mutateAsync({
-        registrationId: reg.id,
-        attended,
-      });
+      await resetAttendanceMutation.mutateAsync(registrationId);
       refetch();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update attendance.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to reset attendance';
+      Alert.alert('Reset Error', msg);
     }
   };
 
-  const handleCancelReg = (reg: LessonRegistration) => {
+  const handleCancelRegistration = (reg: LessonRegistration) => {
+    const playerName = reg.user_full_name || reg.user_name || reg.user_email || 'this participant';
     Alert.alert(
       'Cancel Registration',
-      `Cancel registration for ${reg.user_name ?? reg.user_email ?? 'this participant'}?`,
+      `Cancel registration for ${playerName}? This participant will be excluded from the active capacity count.`,
       [
-        { text: 'Back', style: 'cancel' },
+        { text: 'Keep Spot', style: 'cancel' },
         {
           text: 'Confirm Cancel',
           style: 'destructive',
@@ -1503,8 +1508,9 @@ function RosterModal({
             try {
               await cancelRegMutation.mutateAsync(reg.id);
               refetch();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to cancel registration.');
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Cancellation failed';
+              Alert.alert('Error', msg);
             }
           },
         },
@@ -1512,116 +1518,641 @@ function RosterModal({
     );
   };
 
+  const handleConfirmRegistration = async () => {
+    if (!selectedPlayer) {
+      Alert.alert('Selection Error', 'Please select a player to register.');
+      return;
+    }
+
+    // Capacity verification
+    if (lesson.capacity !== null && lesson.capacity !== undefined) {
+      if (counts.activeSpots >= lesson.capacity) {
+        Alert.alert(
+          'Lesson Full',
+          `This lesson is currently at maximum capacity (${counts.activeSpots}/${lesson.capacity} enrolled).`,
+        );
+        return;
+      }
+    }
+
+    try {
+      await registerPlayerMutation.mutateAsync({
+        user_id: selectedPlayer.user_id,
+        notes: staffNotes.trim() || undefined,
+      });
+      setSelectedPlayer(null);
+      setStaffNotes('');
+      setPlayerSearchQuery('');
+      setShowAddParticipant(false);
+      refetch();
+      Alert.alert(
+        'Player Registered',
+        `${selectedPlayer.user_full_name || selectedPlayer.user_email} has been registered for "${lesson.title}".`,
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to register player';
+      Alert.alert('Registration Failed', msg);
+    }
+  };
+
+  const capacityInfo =
+    lesson.capacity !== null && lesson.capacity !== undefined
+      ? `${counts.activeSpots} / ${lesson.capacity} spots filled`
+      : `${counts.activeSpots} participants (unlimited capacity)`;
+
+  const isLessonClosed = lesson.status === 'completed' || lesson.status === 'cancelled';
+  const isLessonFull =
+    lesson.capacity !== null && lesson.capacity !== undefined && counts.activeSpots >= lesson.capacity;
+
   return (
-    <ModalSheet
+    <Modal
       visible
-      onClose={onClose}
-      title="Lesson Roster"
-      subtitle={`${lesson.title} (${lesson.registered_count ?? 0}${lesson.capacity ? ` / ${lesson.capacity}` : ''})`}
-      actions={[
-        {
-          label: 'Close',
-          variant: 'secondary',
-          onPress: onClose,
-        },
-      ]}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={{ gap: Spacing[3], paddingBottom: Spacing[4] }}>
-        {/* Manual Register Section */}
-        <Card style={styles.manualCard}>
-          <AppText variant="heading3" style={styles.manualTitle}>
-            Register Participant (Staff)
-          </AppText>
-          <Input
-            label="Player User ID (UUID) *"
-            placeholder="e.g. 11111111-1111-1111-1111-111111111111"
-            value={manualUserId}
-            onChangeText={setManualUserId}
-          />
-          <Input
-            label="Staff Notes"
-            placeholder="Special instructions or skill notes"
-            value={manualNotes}
-            onChangeText={setManualNotes}
-          />
-          <Button
-            label={registerPlayerMutation.isPending ? 'Registering...' : 'Register Player'}
-            variant="secondary"
-            size="sm"
-            fullWidth={false}
-            onPress={handleManualRegister}
-            disabled={registerPlayerMutation.isPending}
-          />
-        </Card>
+      <View style={styles.modalBackdrop}>
+        <View
+          style={[
+            styles.modalSheetContainer,
+            isDesktop
+              ? styles.modalDialogDesktop
+              : [
+                  styles.modalSheetMobile,
+                  { maxHeight: windowHeight - insets.top - 20 },
+                ],
+          ]}
+        >
+          {/* Mobile Handle */}
+          {!isDesktop && <View style={styles.sheetHandle} />}
 
-        {/* Participant List */}
-        <AppText variant="heading3" style={styles.sectionHeading}>
-          Registered Participants ({registrations?.length ?? 0})
-        </AppText>
+          {/* 1. PINNED HEADER */}
+          <View style={styles.rosterHeader}>
+            <View style={styles.rosterHeaderText}>
+              <AppText style={styles.rosterTitle} numberOfLines={1}>
+                Lesson Roster
+              </AppText>
+              <AppText style={styles.rosterSubtitle} numberOfLines={1}>
+                {lesson.title} • {capacityInfo}
+              </AppText>
+            </View>
+            <TouchableOpacity
+              style={styles.rosterCloseBtn}
+              onPress={onClose}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <X size={18} color="#102B2A" />
+            </TouchableOpacity>
+          </View>
 
-        {isLoading ? (
-          <LoadingState message="Loading roster..." />
-        ) : !registrations || registrations.length === 0 ? (
-          <AppText variant="bodySmall" style={styles.emptyRosterText}>
-            No players registered for this session yet.
-          </AppText>
-        ) : (
-          registrations.map((reg) => (
-            <Card key={reg.id} style={styles.rosterCard}>
-              <View style={styles.cardHeader}>
-                <View>
-                  <AppText variant="body" style={styles.participantName}>
-                    {reg.user_name ?? reg.user_email ?? 'Unknown Player'}
-                  </AppText>
-                  {reg.user_email ? (
-                    <AppText variant="caption" style={styles.participantEmail}>
-                      {reg.user_email}
+          {/* 2. PINNED SUMMARY METRICS BAR */}
+          <View style={styles.rosterMetricsBar}>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={styles.rosterMetricVal}>{counts.activeSpots}</AppText>
+              <AppText style={styles.rosterMetricLabel}>Enrolled</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricVal, { color: '#0F766E' }]}>{counts.att}</AppText>
+              <AppText style={styles.rosterMetricLabel}>Attended</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricVal, { color: '#D97706' }]}>{counts.noShow}</AppText>
+              <AppText style={styles.rosterMetricLabel}>No Show</AppText>
+            </View>
+            <View style={styles.rosterMetricCard}>
+              <AppText style={[styles.rosterMetricVal, { color: '#137333' }]}>
+                {counts.availableSpots !== null ? counts.availableSpots : '∞'}
+              </AppText>
+              <AppText style={styles.rosterMetricLabel}>Available</AppText>
+            </View>
+          </View>
+
+          {/* 3. PINNED ACTION & FILTER BAR */}
+          <View style={styles.rosterActionsBar}>
+            {!showAddParticipant ? (
+              <TouchableOpacity
+                style={[
+                  styles.addParticipantBtn,
+                  (isLessonClosed || isLessonFull) && styles.addParticipantBtnDisabled,
+                ]}
+                onPress={() => {
+                  if (isLessonClosed) {
+                    Alert.alert('Registration Closed', `Cannot register players for a ${lesson.status} lesson.`);
+                    return;
+                  }
+                  if (isLessonFull) {
+                    Alert.alert('Lesson Full', `Maximum capacity of ${lesson.capacity} spots reached.`);
+                    return;
+                  }
+                  setSelectedPlayer(null);
+                  setPlayerSearchQuery('');
+                  setShowAddParticipant(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <Plus size={15} color="#FFFFFF" />
+                <AppText style={styles.addParticipantBtnText}>
+                  {isLessonClosed ? 'Registration Closed' : isLessonFull ? 'Lesson Full' : 'Add Participant'}
+                </AppText>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.cancelAddParticipantBtn}
+                onPress={() => {
+                  setShowAddParticipant(false);
+                  setSelectedPlayer(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <X size={14} color="#102B2A" />
+                <AppText style={styles.cancelAddParticipantText}>Back to Roster</AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* 4. CONTENT AREA: EITHER PLAYER REGISTRATION FLOW OR PARTICIPANT LIST */}
+          {showAddParticipant ? (
+            /* ─── WORKFLOW: REGISTER PLAYER ─── */
+            <ScrollView
+              style={styles.rosterScrollList}
+              contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Lesson Context Banner */}
+              <View style={styles.registrationContextCard}>
+                <View style={styles.contextHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <AppText style={styles.contextLessonTitle} numberOfLines={1}>
+                      {lesson.title}
                     </AppText>
-                  ) : null}
+                    <AppText style={styles.contextLessonMeta}>
+                      {formatLessonSchedule(lesson.start_at)}
+                      {lesson.court_name ? ` • ${lesson.court_name}` : ''}
+                      {lesson.coach_name ? ` • Coach ${lesson.coach_name}` : ''}
+                    </AppText>
+                  </View>
+                  <View style={styles.contextPricePill}>
+                    <AppText style={styles.contextPriceText}>
+                      {Number(lesson.price) === 0 ? 'Free' : formatCurrency(Number(lesson.price))}
+                    </AppText>
+                  </View>
                 </View>
-                <Badge
-                  label={LESSON_REGISTRATION_STATUS_LABELS[reg.status]}
-                  variant={getRegStatusBadgeVariant(reg.status)}
-                />
+                <View style={styles.contextSpotsRow}>
+                  <Users size={13} color="#137333" />
+                  <AppText style={styles.contextSpotsText}>
+                    {counts.availableSpots !== null
+                      ? `${counts.availableSpots} of ${lesson.capacity} spots remaining`
+                      : 'Unlimited capacity'}
+                  </AppText>
+                </View>
               </View>
 
-              {reg.notes ? (
-                <AppText variant="caption" style={styles.participantNotes}>
-                  Notes: {reg.notes}
-                </AppText>
-              ) : null}
+              {!selectedPlayer ? (
+                /* STEP 1: SEARCH & SELECT PLAYER */
+                <View style={{ marginTop: 12 }}>
+                  <AppText style={styles.stepTitle}>Select Player</AppText>
+                  <AppText style={styles.stepSubtitle}>
+                    Search registered club members by player name or email address.
+                  </AppText>
 
-              {/* Attendance Actions */}
-              {reg.status === 'registered' && (
-                <View style={styles.rosterActions}>
-                  <Button
-                    label="Attended"
-                    variant="primary"
-                    size="sm"
-                    fullWidth={false}
-                    onPress={() => handleMarkAttendance(reg, true)}
-                  />
-                  <Button
-                    label="No Show"
-                    variant="secondary"
-                    size="sm"
-                    fullWidth={false}
-                    onPress={() => handleMarkAttendance(reg, false)}
-                  />
-                  <Button
-                    label="Cancel"
-                    variant="ghost"
-                    size="sm"
-                    fullWidth={false}
-                    onPress={() => handleCancelReg(reg)}
-                  />
+                  {/* Search Input */}
+                  <View style={styles.playerSearchBox}>
+                    <Search size={16} color="#667776" />
+                    <TextInput
+                      style={styles.playerSearchInput}
+                      placeholder="Search club players..."
+                      placeholderTextColor="#889998"
+                      value={playerSearchQuery}
+                      onChangeText={setPlayerSearchQuery}
+                      autoCapitalize="none"
+                    />
+                    {playerSearchQuery ? (
+                      <TouchableOpacity onPress={() => setPlayerSearchQuery('')}>
+                        <X size={15} color="#889998" />
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {/* Player Candidates */}
+                  {isLoadingPlayers ? (
+                    <LoadingState message="Loading club players..." />
+                  ) : filteredClubPlayers.length === 0 ? (
+                    <View style={styles.noPlayersFoundBox}>
+                      <AppText style={styles.noPlayersFoundText}>
+                        No club members found matching "{playerSearchQuery}".
+                      </AppText>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8, marginTop: 8 }}>
+                      {filteredClubPlayers.slice(0, 15).map((pm) => {
+                        const isEnrolled = activeUserIds.has(pm.user_id);
+                        const isInactive = pm.status !== 'active';
+                        const disabled = isEnrolled || isInactive;
+
+                        return (
+                          <TouchableOpacity
+                            key={pm.id}
+                            style={[
+                              styles.playerCandidateCard,
+                              disabled && styles.playerCandidateDisabled,
+                            ]}
+                            onPress={() => {
+                              if (!disabled) {
+                                setSelectedPlayer(pm);
+                              }
+                            }}
+                            activeOpacity={disabled ? 1 : 0.7}
+                          >
+                            <View style={styles.playerAvatarCircle}>
+                              <AppText style={styles.playerAvatarInitials}>
+                                {(pm.user_full_name || pm.user_email || 'PL').slice(0, 2).toUpperCase()}
+                              </AppText>
+                            </View>
+
+                            <View style={{ flex: 1, minWidth: 0 }}>
+                              <AppText style={styles.playerCandidateName} numberOfLines={1}>
+                                {pm.user_full_name || pm.user_email}
+                              </AppText>
+                              <AppText style={styles.playerCandidateEmail} numberOfLines={1}>
+                                {pm.user_email}
+                                {pm.membership_number ? ` • #${pm.membership_number}` : ''}
+                              </AppText>
+                            </View>
+
+                            {isEnrolled ? (
+                              <View style={styles.alreadyEnrolledBadge}>
+                                <AppText style={styles.alreadyEnrolledText}>Already Enrolled</AppText>
+                              </View>
+                            ) : isInactive ? (
+                              <View style={styles.inactiveMemberBadge}>
+                                <AppText style={styles.inactiveMemberText}>Inactive</AppText>
+                              </View>
+                            ) : (
+                              <View style={styles.selectPlayerBadge}>
+                                <AppText style={styles.selectPlayerText}>Select</AppText>
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                /* STEP 2: CONFIRM REGISTRATION & NOTES */
+                <View style={{ marginTop: 12 }}>
+                  <AppText style={styles.stepTitle}>Confirm Registration</AppText>
+                  <AppText style={styles.stepSubtitle}>
+                    Review player and enrollment details before confirming.
+                  </AppText>
+
+                  {/* Selected Player Card */}
+                  <View style={styles.selectedPlayerSummaryCard}>
+                    <View style={styles.playerAvatarCircleSelected}>
+                      <AppText style={styles.playerAvatarInitialsSelected}>
+                        {(selectedPlayer.user_full_name || selectedPlayer.user_email || 'PL').slice(0, 2).toUpperCase()}
+                      </AppText>
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <AppText style={styles.selectedPlayerName}>
+                        {selectedPlayer.user_full_name || selectedPlayer.user_email}
+                      </AppText>
+                      <AppText style={styles.selectedPlayerEmail}>
+                        {selectedPlayer.user_email}
+                      </AppText>
+                      {selectedPlayer.membership_number ? (
+                        <AppText style={styles.selectedPlayerMemberNum}>
+                          Member #{selectedPlayer.membership_number} • Active
+                        </AppText>
+                      ) : null}
+                    </View>
+                    <TouchableOpacity
+                      style={styles.changePlayerBtn}
+                      onPress={() => setSelectedPlayer(null)}
+                    >
+                      <AppText style={styles.changePlayerBtnText}>Change</AppText>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Staff Notes */}
+                  <View style={{ marginTop: 16 }}>
+                    <AppText style={styles.inputLabel}>
+                      Staff Notes (Optional)
+                    </AppText>
+                    <TextInput
+                      style={styles.notesInput}
+                      placeholder="Special instructions, skill notes, or payment reference..."
+                      placeholderTextColor="#889998"
+                      value={staffNotes}
+                      onChangeText={setStaffNotes}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.confirmRegActionsRow}>
+                    <Button
+                      label="Back"
+                      variant="secondary"
+                      size="md"
+                      onPress={() => setSelectedPlayer(null)}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      label={registerPlayerMutation.isPending ? 'Registering...' : 'Confirm Registration'}
+                      variant="primary"
+                      size="md"
+                      loading={registerPlayerMutation.isPending}
+                      onPress={handleConfirmRegistration}
+                      style={{ flex: 2 }}
+                    />
+                  </View>
                 </View>
               )}
-            </Card>
-          ))
-        )}
+            </ScrollView>
+          ) : (
+            /* ─── PARTICIPANT ROSTER LIST ─── */
+            <>
+              {/* Horizontal Status Filter Chips */}
+              <View style={styles.rosterChipsContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.rosterChipsContent}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.rosterChip,
+                      filterStatus === 'all' && styles.rosterChipActive,
+                    ]}
+                    onPress={() => setFilterStatus('all')}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterChipText,
+                        filterStatus === 'all' && styles.rosterChipTextActive,
+                      ]}
+                    >
+                      All ({counts.total})
+                    </AppText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.rosterChip,
+                      filterStatus === 'registered' && styles.rosterChipActive,
+                    ]}
+                    onPress={() => setFilterStatus('registered')}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterChipText,
+                        filterStatus === 'registered' && styles.rosterChipTextActive,
+                      ]}
+                    >
+                      Registered ({counts.reg})
+                    </AppText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.rosterChip,
+                      filterStatus === 'attended' && styles.rosterChipActive,
+                    ]}
+                    onPress={() => setFilterStatus('attended')}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterChipText,
+                        filterStatus === 'attended' && styles.rosterChipTextActive,
+                      ]}
+                    >
+                      Attended ({counts.att})
+                    </AppText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.rosterChip,
+                      filterStatus === 'no_show' && styles.rosterChipActive,
+                    ]}
+                    onPress={() => setFilterStatus('no_show')}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterChipText,
+                        filterStatus === 'no_show' && styles.rosterChipTextActive,
+                      ]}
+                    >
+                      No Show ({counts.noShow})
+                    </AppText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.rosterChip,
+                      filterStatus === 'cancelled' && styles.rosterChipActive,
+                    ]}
+                    onPress={() => setFilterStatus('cancelled')}
+                  >
+                    <AppText
+                      style={[
+                        styles.rosterChipText,
+                        filterStatus === 'cancelled' && styles.rosterChipTextActive,
+                      ]}
+                    >
+                      Cancelled ({counts.canc})
+                    </AppText>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+
+              {/* Scrollable Participant List */}
+              <ScrollView
+                style={styles.rosterScrollList}
+                contentContainerStyle={styles.rosterScrollContent}
+              >
+                {isLoading ? (
+                  <LoadingState message="Loading lesson roster..." />
+                ) : filteredRegistrations.length === 0 ? (
+                  <View style={styles.rosterEmptyContainer}>
+                    <Users size={32} color="#889998" />
+                    <AppText style={styles.rosterEmptyTitle}>
+                      {filterStatus === 'all'
+                        ? 'No Registered Participants'
+                        : `No ${LESSON_REGISTRATION_STATUS_LABELS[filterStatus]} Participants`}
+                    </AppText>
+                    <AppText style={styles.rosterEmptySub}>
+                      {filterStatus === 'all'
+                        ? 'Use "+ Add Participant" above to enroll eligible players.'
+                        : 'Filter is empty for this session.'}
+                    </AppText>
+                  </View>
+                ) : (
+                  filteredRegistrations.map((reg) => {
+                    const displayName =
+                      reg.user_full_name || reg.user_name || reg.user_email || 'Participant';
+                    const initials = displayName.slice(0, 2).toUpperCase();
+
+                    return (
+                      <View key={reg.id} style={styles.rosterParticipantCard}>
+                        {/* Top: Avatar, Name, Status Badge */}
+                        <View style={styles.participantTopRow}>
+                          <View style={styles.participantAvatar}>
+                            <AppText style={styles.participantAvatarText}>
+                              {initials}
+                            </AppText>
+                          </View>
+
+                          <View style={styles.participantInfoCol}>
+                            <AppText style={styles.participantNameText} numberOfLines={1}>
+                              {displayName}
+                            </AppText>
+                            {reg.user_email && reg.user_email !== displayName ? (
+                              <AppText style={styles.participantEmailText} numberOfLines={1}>
+                                {reg.user_email}
+                              </AppText>
+                            ) : null}
+                          </View>
+
+                          <View
+                            style={[
+                              styles.regBadge,
+                              reg.status === 'registered' && styles.regBadge_registered,
+                              reg.status === 'attended' && styles.regBadge_attended,
+                              reg.status === 'no_show' && styles.regBadge_noshow,
+                              reg.status === 'cancelled' && styles.regBadge_cancelled,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.regBadgeText,
+                                reg.status === 'registered' && styles.regBadgeText_registered,
+                                reg.status === 'attended' && styles.regBadgeText_attended,
+                                reg.status === 'no_show' && styles.regBadgeText_noshow,
+                                reg.status === 'cancelled' && styles.regBadgeText_cancelled,
+                              ]}
+                            >
+                              {LESSON_REGISTRATION_STATUS_LABELS[reg.status].toUpperCase()}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        {/* Notes if available */}
+                        {reg.notes ? (
+                          <View style={styles.notesBox}>
+                            <AppText style={styles.notesText}>
+                              Note: {reg.notes}
+                            </AppText>
+                          </View>
+                        ) : null}
+
+                        {/* Status-Specific Actions */}
+                        {reg.status === 'registered' && (
+                          <View style={styles.participantActionsRow}>
+                            <TouchableOpacity
+                              style={styles.markAttendedBtn}
+                              onPress={() => handleMarkAttendance(reg.id, true)}
+                              activeOpacity={0.8}
+                            >
+                              <Check size={13} color="#FFFFFF" />
+                              <AppText style={styles.markAttendedBtnText}>Mark Attended</AppText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.markNoShowBtn}
+                              onPress={() => handleMarkAttendance(reg.id, false)}
+                              activeOpacity={0.8}
+                            >
+                              <X size={13} color="#78350F" />
+                              <AppText style={styles.markNoShowBtnText}>Mark No Show</AppText>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.cancelRegBtn}
+                              onPress={() => handleCancelRegistration(reg)}
+                              activeOpacity={0.8}
+                            >
+                              <AppText style={styles.cancelRegBtnText}>Cancel</AppText>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+
+                        {reg.status === 'attended' && (
+                          <View style={styles.attendanceStateRow}>
+                            <View style={styles.confirmedAttendanceTag}>
+                              <CheckCircle2 size={13} color="#0F766E" />
+                              <AppText style={styles.confirmedAttendanceText}>
+                                Attendance Confirmed
+                              </AppText>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TouchableOpacity
+                                style={styles.resetAttendanceBtn}
+                                onPress={() => handleResetAttendance(reg.id)}
+                                activeOpacity={0.8}
+                              >
+                                <RotateCcw size={12} color="#102B2A" />
+                                <AppText style={styles.resetAttendanceBtnText}>Reset</AppText>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.switchAttendanceBtn}
+                                onPress={() => handleMarkAttendance(reg.id, false)}
+                                activeOpacity={0.8}
+                              >
+                                <AppText style={styles.switchAttendanceBtnText}>No Show</AppText>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {reg.status === 'no_show' && (
+                          <View style={styles.attendanceStateRow}>
+                            <View style={styles.confirmedNoShowTag}>
+                              <X size={13} color="#B45309" />
+                              <AppText style={styles.confirmedNoShowText}>
+                                Did Not Attend
+                              </AppText>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TouchableOpacity
+                                style={styles.resetAttendanceBtn}
+                                onPress={() => handleResetAttendance(reg.id)}
+                                activeOpacity={0.8}
+                              >
+                                <RotateCcw size={12} color="#102B2A" />
+                                <AppText style={styles.resetAttendanceBtnText}>Reset</AppText>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.switchAttendanceBtnAttended}
+                                onPress={() => handleMarkAttendance(reg.id, true)}
+                                activeOpacity={0.8}
+                              >
+                                <AppText style={styles.switchAttendanceBtnTextAttended}>Attended</AppText>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {reg.status === 'cancelled' && (
+                          <View style={styles.cancelledNoticeBox}>
+                            <AppText style={styles.cancelledNoticeText}>
+                              Registration cancelled • Excluded from active lesson capacity
+                            </AppText>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </>
+          )}
+        </View>
       </View>
-    </ModalSheet>
+    </Modal>
   );
 }
 
@@ -1632,17 +2163,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F8F5',
   },
-  clubCardWrapper: {
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    marginTop: 4,
+  hamburgerBtn: {
+    padding: 6,
+    borderRadius: 8,
+    marginRight: 6,
   },
+  scheduleHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#0F392D',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#194A3C',
+  },
+  scheduleHeaderBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Promo Banner
   promoBannerContainer: {
     marginHorizontal: 16,
     marginBottom: 14,
+    marginTop: 4,
     borderRadius: 16,
     overflow: 'hidden',
-    height: 125,
+    height: 110,
     backgroundColor: '#0F392D',
     position: 'relative',
     borderWidth: 1,
@@ -1654,117 +2204,111 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
-    width: '46%',
+    width: '50%',
     height: '100%',
+    opacity: 0.35,
   },
   promoTextContainer: {
     paddingLeft: 18,
-    paddingRight: 8,
-    width: '66%',
+    paddingRight: 100,
     zIndex: 2,
+    justifyContent: 'center',
   },
   promoHeading: {
-    fontSize: 20,
-    fontWeight: '700',
     color: '#FFFFFF',
-    lineHeight: 24,
-    letterSpacing: -0.2,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 21,
+    letterSpacing: -0.3,
   },
   promoSubtitle: {
-    fontSize: 11,
-    color: '#D1FAE5',
-    lineHeight: 14.5,
-    marginTop: 5,
+    color: '#9FE1C3',
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginTop: 4,
+    lineHeight: 15,
   },
   promoScriptContainer: {
     position: 'absolute',
     right: 14,
     top: 14,
-    zIndex: 3,
+    zIndex: 2,
   },
   promoScriptText: {
-    color: '#D1FAE5',
-    fontSize: 13.5,
-    lineHeight: 16,
+    color: 'rgba(255, 255, 255, 0.45)',
+    fontSize: 11,
     fontStyle: 'italic',
     textAlign: 'right',
-    opacity: 0.9,
+    lineHeight: 15,
+    fontWeight: '600',
   },
+
+  // Tab & Filters
   tabContainer: {
     paddingHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   metricsGrid: {
     paddingHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
     gap: 8,
   },
   settingsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2EAE6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  scheduleHeaderBtn: {
-    backgroundColor: '#176B57',
-    paddingHorizontal: 13,
-    height: 34,
-    borderRadius: 17,
+    borderColor: '#E6ECE8',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scheduleHeaderBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
+
   listContent: {
-    paddingBottom: 90,
-    paddingTop: 4,
+    paddingBottom: 40,
   },
+
+  // Lesson Card
   lessonCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
     marginHorizontal: 16,
-    marginBottom: 14,
-    padding: 13,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
-    elevation: 1,
+    elevation: 2,
   },
   cardTopRow: {
     flexDirection: 'row',
     gap: 12,
   },
   cardThumbnail: {
-    width: 74,
-    height: 74,
-    borderRadius: 10,
-    backgroundColor: '#E5F6EC',
+    width: 82,
+    height: 82,
+    borderRadius: 12,
+    backgroundColor: '#E6ECE8',
   },
   cardMain: {
     flex: 1,
     minWidth: 0,
+    justifyContent: 'space-between',
   },
   cardTopMeta: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   badgeGroup: {
     flexDirection: 'row',
@@ -1773,311 +2317,943 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   statusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
-  },
-  statusBadge_completed: {
-    backgroundColor: '#E7F0FB',
-  },
-  statusBadgeText_completed: {
-    color: '#2563A8',
-  },
-  statusBadge_published: {
-    backgroundColor: '#E5F6EC',
-  },
-  statusBadgeText_published: {
-    color: '#18794E',
-  },
-  statusBadge_draft: {
-    backgroundColor: '#FFF5D8',
-  },
-  statusBadgeText_draft: {
-    color: '#9A6B00',
-  },
-  statusBadge_cancelled: {
-    backgroundColor: '#FDE8E8',
-  },
-  statusBadgeText_cancelled: {
-    color: '#B42318',
   },
   statusBadgeText: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  statusBadge_published: {
+    backgroundColor: '#E6F4EA',
+  },
+  statusBadgeText_published: {
+    color: '#137333',
+  },
+  statusBadge_draft: {
+    backgroundColor: '#FEF7E0',
+  },
+  statusBadgeText_draft: {
+    color: '#B06000',
+  },
+  statusBadge_completed: {
+    backgroundColor: '#E8F0FE',
+  },
+  statusBadgeText_completed: {
+    color: '#1A73E8',
+  },
+  statusBadge_cancelled: {
+    backgroundColor: '#FCE8E6',
+  },
+  statusBadgeText_cancelled: {
+    color: '#C5221F',
   },
   categoryBadge: {
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
   },
   categoryBadgeText: {
-    color: '#475467',
-    fontSize: 10,
+    color: '#15803D',
+    fontSize: 9.5,
     fontWeight: '700',
-    letterSpacing: 0.3,
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
   },
   priceText: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#102B2A',
-    fontSize: 17,
-    fontWeight: '700',
   },
   moreBtn: {
     padding: 2,
   },
   lessonTitle: {
-    color: '#102B2A',
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '700',
-    marginTop: 4,
-    lineHeight: 18,
+    color: '#102B2A',
+    marginBottom: 2,
   },
   lessonDescription: {
-    color: '#657776',
-    fontSize: 11,
-    lineHeight: 14.5,
-    marginTop: 3,
+    fontSize: 11.5,
+    color: '#667776',
+    lineHeight: 16,
   },
+
+  // Metadata Row
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#F8FAF9',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     marginTop: 10,
-    paddingTop: 9,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F4F8',
+    marginBottom: 10,
+    gap: 8,
   },
   metaCol: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 5,
     minWidth: 0,
   },
   metaIcon: {
-    marginTop: 2,
     flexShrink: 0,
   },
   metaColText: {
-    flex: 1,
     minWidth: 0,
+    flex: 1,
   },
   metaLabel: {
-    fontSize: 9.5,
-    color: '#657776',
-    fontWeight: '500',
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#889998',
+    textTransform: 'uppercase',
   },
   metaVal: {
-    fontSize: 10.5,
-    color: '#102B2A',
+    fontSize: 11,
     fontWeight: '700',
-    marginTop: 1,
-    lineHeight: 13.5,
+    color: '#102B2A',
   },
+
+  // Bottom Row
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    paddingTop: 2,
   },
   bottomTag: {
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#EEF6F2',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   bottomTagText: {
-    color: '#475467',
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    color: '#0F392D',
   },
   rosterActionBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    borderRadius: 16,
+    backgroundColor: '#0F392D',
     paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingVertical: 7,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rosterActionText: {
-    color: '#102B2A',
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  // Card styles for coaches/types
+
+  // Coaches & Types Cards
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
     marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
     padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 6,
+    marginBottom: 8,
   },
-  cardTitleCol: {
-    flex: 1,
-    minWidth: 0,
+  coachAvatarCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0F392D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  coachAvatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  coachSpec: {
+    color: '#15803D',
+    fontWeight: '600',
+    fontSize: 11.5,
+    marginTop: 1,
+  },
+  bioText: {
+    color: '#667776',
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 10,
   },
   detailsGrid: {
-    marginTop: 8,
-    gap: 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+    marginBottom: 10,
   },
   detailRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  detailLabel: {
-    color: Colors.text.tertiary,
-  },
   detailValue: {
-    color: Colors.text.secondary,
+    color: '#102B2A',
+    fontWeight: '600',
+    fontSize: 12,
   },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: Spacing[1],
-    marginTop: Spacing[2],
-    paddingTop: Spacing[1],
-    borderTopWidth: 1,
-    borderTopColor: Colors.surface.border,
+    gap: 8,
+    alignItems: 'center',
   },
-  coachSpec: {
-    color: Colors.brand.primary,
-    marginTop: 2,
+  cardTitleCol: {
+    flex: 1,
+    gap: 4,
   },
-  bioText: {
-    color: Colors.text.secondary,
-    marginTop: Spacing[1],
+  typePriceBadge: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#102B2A',
   },
-  blockedTitle: {
-    color: Colors.status.warning,
-    marginBottom: Spacing[1],
-  },
-  blockedText: {
-    color: Colors.text.secondary,
-  },
+
+  // Form selectors
   inputLabel: {
-    color: Colors.text.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#102B2A',
     marginBottom: 4,
-    marginTop: Spacing[1],
   },
   selectorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing[1],
-    marginBottom: Spacing[2],
+    gap: 8,
+    marginBottom: 8,
   },
   selectorItem: {
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 6,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.background.secondary,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F0F4F2',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: '#E6ECE8',
   },
   selectorItemActive: {
-    borderColor: Colors.brand.primary,
-    backgroundColor: Colors.surface.elevated,
+    backgroundColor: '#0F392D',
+    borderColor: '#0F392D',
   },
   selectorItemText: {
-    color: Colors.text.secondary,
+    color: '#102B2A',
+    fontWeight: '600',
   },
   selectorItemTextActive: {
-    color: Colors.brand.primary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   switchRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginVertical: Spacing[4],
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E6ECE8',
+    marginTop: 4,
   },
   switchLabelCol: {
     flex: 1,
-    marginRight: Spacing[4],
+    marginRight: 12,
   },
   switchTitle: {
-    color: Colors.text.primary,
     fontWeight: '600',
+    color: '#102B2A',
   },
   switchSubtitle: {
-    color: Colors.text.tertiary,
+    color: '#667776',
     marginTop: 2,
   },
-  manualCard: {
-    padding: Spacing[4],
-    marginBottom: Spacing[4],
-  },
-  manualTitle: {
-    color: Colors.text.primary,
-    marginBottom: Spacing[1],
-  },
-  sectionHeading: {
-    color: Colors.text.primary,
-    marginBottom: Spacing[2],
-  },
-  emptyRosterText: {
-    color: Colors.text.tertiary,
-    fontStyle: 'italic',
-  },
-  rosterCard: {
-    padding: Spacing[2] + 2,
-    marginBottom: Spacing[1],
-  },
-  participantName: {
-    color: Colors.text.primary,
-    fontWeight: '600',
-  },
-  participantEmail: {
-    color: Colors.text.tertiary,
-  },
-  participantNotes: {
-    color: Colors.text.secondary,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  rosterActions: {
-    flexDirection: 'row',
+
+  // ─── ROSTER MODAL STYLES ──────────────────────────────────────────────────
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'flex-end',
-    gap: Spacing[1],
-    marginTop: Spacing[1],
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: Colors.surface.border,
+    alignItems: 'center',
   },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 20,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#176B57', // dark forest green
+  modalSheetContainer: {
+    backgroundColor: '#FFFFFF',
+    width: '100%',
+    overflow: 'hidden',
+  },
+  modalDialogDesktop: {
+    maxWidth: 680,
+    maxHeight: '90%',
+    borderRadius: 24,
+    marginBottom: 'auto',
+    marginTop: 'auto',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalSheetMobile: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 16,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  rosterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
+  },
+  rosterHeaderText: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  rosterTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#102B2A',
+    letterSpacing: -0.3,
+  },
+  rosterSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0F766E',
+    marginTop: 2,
+  },
+  rosterCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F0F4F2',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Roster Metrics Bar
+  rosterMetricsBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAF9',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E6ECE8',
+    gap: 8,
+  },
+  rosterMetricCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+  },
+  rosterMetricVal: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#102B2A',
+  },
+  rosterMetricLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#667776',
+    textTransform: 'uppercase',
+    marginTop: 1,
+  },
+
+  // Roster Actions Bar
+  rosterActionsBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
+    backgroundColor: '#FFFFFF',
+  },
+  addParticipantBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#0F392D',
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  addParticipantBtnDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  addParticipantBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cancelAddParticipantBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#F0F4F2',
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  cancelAddParticipantText: {
+    color: '#102B2A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // Roster Chips
+  rosterChipsContainer: {
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
+  },
+  rosterChipsContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  rosterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F0F4F2',
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+  },
+  rosterChipActive: {
+    backgroundColor: '#102B2A',
+    borderColor: '#102B2A',
+  },
+  rosterChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#667776',
+  },
+  rosterChipTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // Roster List
+  rosterScrollList: {
+    flex: 1,
+    backgroundColor: '#F8FAF9',
+  },
+  rosterScrollContent: {
+    padding: 16,
+    paddingBottom: 32,
+    gap: 10,
+  },
+  rosterEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  rosterEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+    marginTop: 10,
+  },
+  rosterEmptySub: {
+    fontSize: 12,
+    color: '#667776',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // Participant Card
+  rosterParticipantCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
-    zIndex: 999,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  participantTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  participantAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  participantAvatarText: {
+    color: '#137333',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  participantInfoCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  participantNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  participantEmailText: {
+    fontSize: 11.5,
+    color: '#667776',
+    marginTop: 1,
+  },
+
+  // Registration Status Badges
+  regBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  regBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  regBadge_registered: {
+    backgroundColor: '#E6F4EA',
+  },
+  regBadgeText_registered: {
+    color: '#137333',
+  },
+  regBadge_attended: {
+    backgroundColor: '#CCFBF1',
+  },
+  regBadgeText_attended: {
+    color: '#0F766E',
+  },
+  regBadge_noshow: {
+    backgroundColor: '#FEF3C7',
+  },
+  regBadgeText_noshow: {
+    color: '#B45309',
+  },
+  regBadge_cancelled: {
+    backgroundColor: '#F1F5F9',
+  },
+  regBadgeText_cancelled: {
+    color: '#64748B',
+  },
+
+  notesBox: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+  },
+  notesText: {
+    fontSize: 11,
+    color: '#475569',
+    fontStyle: 'italic',
+  },
+
+  participantActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  markAttendedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#137333',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  markAttendedBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  markNoShowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
+    borderRadius: 8,
+  },
+  markNoShowBtnText: {
+    color: '#92400E',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  cancelRegBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 'auto',
+  },
+  cancelRegBtnText: {
+    color: '#DC2626',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  attendanceStateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  confirmedAttendanceTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  confirmedAttendanceText: {
+    color: '#0F766E',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  confirmedNoShowTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  confirmedNoShowText: {
+    color: '#B45309',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  resetAttendanceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F4F2',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  resetAttendanceBtnText: {
+    color: '#102B2A',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  switchAttendanceBtn: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  switchAttendanceBtnText: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  switchAttendanceBtnAttended: {
+    backgroundColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  switchAttendanceBtnTextAttended: {
+    color: '#0F766E',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  cancelledNoticeBox: {
+    marginTop: 8,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  cancelledNoticeText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+
+  // ─── REGISTRATION WORKFLOW STYLES ───
+  registrationContextCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    padding: 12,
+  },
+  contextHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  contextLessonTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#102B2A',
+  },
+  contextLessonMeta: {
+    fontSize: 11.5,
+    color: '#667776',
+    marginTop: 2,
+  },
+  contextPricePill: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  contextPriceText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  contextSpotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  contextSpotsText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#137333',
+  },
+
+  stepTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#102B2A',
+    marginBottom: 2,
+  },
+  stepSubtitle: {
+    fontSize: 11.5,
+    color: '#667776',
+    marginBottom: 8,
+  },
+  playerSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  playerSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#102B2A',
+    padding: 0,
+  },
+  noPlayersFoundBox: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+  },
+  noPlayersFoundText: {
+    fontSize: 12,
+    color: '#667776',
+    textAlign: 'center',
+  },
+  playerCandidateCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    padding: 10,
+  },
+  playerCandidateDisabled: {
+    opacity: 0.6,
+    backgroundColor: '#F8FAF9',
+  },
+  playerAvatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0F392D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playerAvatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  playerCandidateName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  playerCandidateEmail: {
+    fontSize: 11,
+    color: '#667776',
+  },
+  selectPlayerBadge: {
+    backgroundColor: '#0F392D',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  selectPlayerText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  alreadyEnrolledBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  alreadyEnrolledText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  inactiveMemberBadge: {
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  inactiveMemberText: {
+    color: '#EF4444',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // Selected Player Summary
+  selectedPlayerSummaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+  },
+  playerAvatarCircleSelected: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#15803D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playerAvatarInitialsSelected: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  selectedPlayerName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#14532D',
+  },
+  selectedPlayerEmail: {
+    fontSize: 11.5,
+    color: '#166534',
+  },
+  selectedPlayerMemberNum: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#15803D',
+    marginTop: 1,
+  },
+  changePlayerBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#DCFCE7',
+  },
+  changePlayerBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#14532D',
+  },
+  notesInput: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 13,
+    color: '#102B2A',
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  confirmRegActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
   },
 });

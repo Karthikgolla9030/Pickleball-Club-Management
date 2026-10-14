@@ -509,6 +509,27 @@ async def mark_no_show(
     )
 
 
+@club_lessons_router.post(
+    "/lessons/{lesson_id}/registrations/{registration_id}/reset-attendance",
+    response_model=LessonRegistrationResponse,
+    summary="Reset participant attendance back to registered",
+)
+async def reset_attendance(
+    club_id: UUID,
+    lesson_id: UUID,
+    registration_id: UUID,
+    membership: ClubMembership = Depends(require_permission(Permission.MANAGE_LESSONS)),
+    db: AsyncSession = Depends(get_db),
+) -> LessonRegistrationResponse:
+    service = LessonService(db)
+    return await service.mark_attendance(
+        lesson_id=lesson_id,
+        registration_id=registration_id,
+        club_id=club_id,
+        target_status=LessonRegistrationStatus.REGISTERED,
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PLAYER LESSON ENDPOINTS
 # ══════════════════════════════════════════════════════════════════════════════
