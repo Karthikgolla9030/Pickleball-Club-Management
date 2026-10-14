@@ -20,6 +20,7 @@ from app.models.membership import (
     MembershipPlan,
     SubscriptionStatus,
 )
+from app.models.user import User
 
 
 class MemberSubscriptionRepository:
@@ -31,9 +32,9 @@ class MemberSubscriptionRepository:
             select(MemberSubscription)
             .options(
                 selectinload(MemberSubscription.plan),
-                selectinload(MemberSubscription.player_membership).selectinload(
-                    ClubPlayerMembership.user
-                ),
+                selectinload(MemberSubscription.player_membership)
+                .selectinload(ClubPlayerMembership.user)
+                .selectinload(User.player_profile),
                 selectinload(MemberSubscription.club),
                 selectinload(MemberSubscription.payments),
             )

@@ -146,6 +146,7 @@ class SubscriptionPlayerInfo(BaseModel):
     user_id: UUID
     user_email: str
     user_full_name: str | None = None
+    profile_image_url: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -187,11 +188,14 @@ class MemberSubscriptionResponse(BaseModel):
         player_info = None
         if sub.player_membership and sub.player_membership.user:
             u = sub.player_membership.user
+            prof = getattr(u, "player_profile", None)
+            prof_img = getattr(prof, "profile_image_url", None) if prof else None
             player_info = SubscriptionPlayerInfo(
                 player_membership_id=sub.player_membership_id,
                 user_id=u.id,
                 user_email=u.email,
                 user_full_name=u.full_name,
+                profile_image_url=prof_img,
             )
         plan = sub.plan
         club_name = sub.club.name if getattr(sub, "club", None) else None

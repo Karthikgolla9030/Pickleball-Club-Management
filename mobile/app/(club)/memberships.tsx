@@ -1,30 +1,27 @@
 /**
- * Aught2 Pickleball — Modern Memberships Dashboard (Club Owner Experience)
+ * Aught2 Pickleball — Club Membership Management Screen
  *
- * Exact visual match to the Modern Memberships Dashboard reference specification:
+ * Exact visual match to the reference specification:
  * - Header: Hamburger menu on left, bold "Memberships" title, and subtitle
  *   "Plans, tiers, and subscriber management" in deep forest-green typography.
- * - Sports-themed decorative background: Soft pale mint (#F0F8F2) page background,
- *   subtle curved abstract green concentric arcs in the upper-right corner, and
- *   an overlapping lime-green sports ball with tennis/pickleball seams.
- * - Main action row: 3 large horizontally aligned buttons:
- *   [ 👥 Players ] (deep teal filled when selected) | [ 👤 Staff ] | [ + Enroll ]
- * - Player filter controls:
- *   [ All Players ] (filled when selected) | [ Subscribers ] | [ Normal Users ] | [ 🎛️ ] Settings button
- * - Full-width white search bar: "Search players by name or email..."
- * - Member cards:
- *   - Circular real profile avatar (object-fit: cover) with clean initials fallback
- *   - Bold member name in dark forest-green typography
- *   - Muted email address
- *   - Compact pale-gray rounded badge near upper-right (#AUG-P-xxx)
- *   - Vertical three-dot overflow menu (MoreVertical)
- *   - Restrained status badge (● Active) with green indicator
+ * - Promotional Hero Banner: Wide rounded sports-themed banner with pickleball court,
+ *   headline "Flexible Plans. Stronger Community.", supporting text "Give players more ways to play, belong and grow.",
+ *   and dark green accent bar.
+ * - "+ New Plan" prominent deep-green rounded pill button.
+ * - Segmented Control: [ Plans ({plans.length}) ] | [ Subscribers ({subscriptions.length}) ]
+ * - Subscriber Search & Enroll: Search input with search icon + deep-green "+ Enroll" button.
+ * - Subscriber Cards:
+ *   - Circular profile avatar (cover cropped, neutral initials fallback)
+ *   - Bold subscriber name in dark forest green (#123D38)
+ *   - Subscriber email
+ *   - Upper-right subscription status badge (ACTIVE, CANCELLED, EXPIRED)
+ *   - Membership plan badge (soft pale blue pill, e.g. "Basic Monthly")
+ *   - Renewal date with calendar icon (e.g. "Renews 6 Oct 2026")
  *   - Thin horizontal divider
- *   - Balanced bottom action row: [ 📝 Edit Status ] | [ ✉️ Message ]
- * - Dedicated Staff section with role badges (Owner, Manager, Tournament Director)
- *   and strict backend-enforced separation between players and staff.
- * - Complete enrollment, status editing, role assignment, messaging, and plan management.
- * - Responsive layout with generous bottom padding clearing the fixed AppBottomNav.
+ *   - Bottom row: CreditCard icon + "Billing: Monthly · $999.00" on left, MoreVertical 3-dot menu on right.
+ * - Plans Tab:
+ *   - Plan cards with name, duration, price, description, benefits checklist, booking limits, advance days, Edit & Deactivate.
+ * - Real API integrations, tenant isolation, and error handling preserved.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -32,7 +29,7 @@ import {
   Alert,
   FlatList,
   Image,
-  Linking,
+  ImageBackground,
   Modal,
   Platform,
   Pressable,
@@ -40,74 +37,83 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
 import {
   Calendar,
   Check,
-  Crown,
-  Mail,
+  CreditCard,
   Menu,
   MoreVertical,
   Plus,
   Search,
-  ShieldCheck,
-  SlidersHorizontal,
-  SquarePen,
-  Trash2,
-  Trophy,
-  User,
-  UserCheck,
-  Users,
-  UserX,
+  Target,
   X,
 } from 'lucide-react-native';
 
-import { API_ENDPOINTS } from '@/constants';
 import {
   AppText,
   EmptyState,
+  ErrorState,
   LoadingState,
   Screen,
 } from '@/components';
 import { useDrawerStore } from '@/navigation';
 import {
   useActiveClub,
-  useClubMembers,
   useClubPlayerMembers,
   useClubSubscriptions,
+  useCreateMembershipPlan,
+  useCreateSubscription,
   useMembershipPlans,
   usePermission,
 } from '@/hooks';
-import { blurActiveElement, formatCurrency, resolveMediaUrl } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type {
-  ClubMember,
-  ClubPlayerMember,
-  ClubRole,
+  CreateMembershipPlanPayload,
+  MemberSubscription,
   MembershipPlan,
-  PlayerMembershipStatus,
+  PlanDurationUnit,
 } from '@/types';
 
-// ─── Circular Member Avatar Component ─────────────────────────────────────────
+const DURATION_OPTIONS: { value: PlanDurationUnit; label: string }[] = [
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'yearly', label: 'Yearly' },
+];
 
-interface MemberAvatarProps {
+function formatRenewalDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    const day = d.getDate();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+// ─── Circular Subscriber Avatar ───────────────────────────────────────────────
+
+interface SubscriberAvatarProps {
   imageUrl?: string | null;
   name: string;
   size?: number;
 }
 
-function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
+function SubscriberAvatar({ imageUrl, name, size = 64 }: SubscriberAvatarProps) {
   const [loadError, setLoadError] = useState(false);
 
   const resolvedUri = useMemo(() => {
-    if (!imageUrl) return null;
-    const cleanUrl = imageUrl.trim();
-    if (!cleanUrl) return null;
-    return resolveMediaUrl(cleanUrl);
+    if (!imageUrl || typeof imageUrl !== 'string' || !imageUrl.trim()) return null;
+    return resolveMediaUrl(imageUrl);
   }, [imageUrl]);
 
   const initials = useMemo(() => {
@@ -123,10 +129,10 @@ function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
 
   if (resolvedUri && !loadError) {
     return (
-      <View style={[styles.avatarContainer, { width: size, height: size, borderRadius: size / 2 }]}>
+      <View style={[styles.avatarWrapper, { width: size, height: size, borderRadius: size / 2 }]}>
         <Image
           source={{ uri: resolvedUri }}
-          style={[styles.avatarImg, { width: size, height: size, borderRadius: size / 2 }]}
+          style={[styles.avatarImage, { width: size, height: size, borderRadius: size / 2 }]}
           resizeMode="cover"
           onError={() => setLoadError(true)}
         />
@@ -137,15 +143,15 @@ function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
   return (
     <View
       style={[
-        styles.avatarContainer,
+        styles.avatarWrapper,
         styles.avatarFallback,
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
       <AppText
         style={[
-          styles.avatarInitialsText,
-          { fontSize: Math.round(size * 0.35) },
+          styles.avatarInitials,
+          { fontSize: Math.round(size * 0.36) },
         ]}
       >
         {initials}
@@ -154,1492 +160,1041 @@ function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
   );
 }
 
-// ─── Filter & Role Constants ──────────────────────────────────────────────────
-
-type PlayerFilterType = 'all' | 'subscribers' | 'normal';
-
-const VALID_ROLES: { role: ClubRole; label: string }[] = [
-  { role: 'club_owner', label: 'Club Owner' },
-  { role: 'club_manager', label: 'Club Manager' },
-  { role: 'tournament_director', label: 'Tournament Director' },
-];
-
-const VALID_STATUSES: { status: PlayerMembershipStatus; label: string }[] = [
-  { status: 'active', label: 'Active' },
-  { status: 'inactive', label: 'Inactive' },
-  { status: 'suspended', label: 'Suspended' },
-  { status: 'expired', label: 'Expired' },
-];
-
-function formatPlayerName(member: ClubPlayerMember): string {
-  if (member.user_full_name && member.user_full_name.trim().length > 0) {
-    return member.user_full_name.trim();
-  }
-  const prefix = member.user_email ? member.user_email.split('@')[0] : 'Player';
-  return prefix
-    .replace(/[._-]+/g, ' ')
-    .split(' ')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-}
+// ─── Main Memberships Screen ──────────────────────────────────────────────────
 
 export default function MembershipsScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const { clubId } = useActiveClub();
-  const { canManageMembers, canManageRoles } = usePermission();
-  const params = useLocalSearchParams<{ tab?: string }>();
+  const { clubId: activeClubId } = useActiveClub();
+  const { canManageMemberships } = usePermission();
+  const clubId = activeClubId ?? '';
 
-  const [activeTab, setActiveTab] = useState<'players' | 'staff'>(
-    params?.tab === 'staff' ? 'staff' : 'players'
+  const [activeTab, setActiveTab] = useState<'plans' | 'subscribers'>('subscribers');
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+
+  // Queries
+  const plansQuery = useMembershipPlans(clubId);
+  const subsQuery = useClubSubscriptions(clubId);
+  const { playerMembers = [] } = useClubPlayerMembers(clubId);
+
+  // Mutations
+  const createPlanMutation = useCreateMembershipPlan(clubId);
+  const createSubMutation = useCreateSubscription(clubId);
+
+  // Plan Form States
+  const [planName, setPlanName] = useState('');
+  const [planDesc, setPlanDesc] = useState('');
+  const [planDuration, setPlanDuration] = useState<PlanDurationUnit>('monthly');
+  const [planPrice, setPlanPrice] = useState('');
+  const [planBookingLimit, setPlanBookingLimit] = useState('');
+  const [planAdvanceDays, setPlanAdvanceDays] = useState('');
+  const [planBenefits, setPlanBenefits] = useState<string[]>([
+    'Court booking access',
+    'Member-only events',
+    '3 upcoming bookings',
+  ]);
+  const [newBenefitInput, setNewBenefitInput] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  // Enroll Modal States
+  const [enrollPlayerId, setEnrollPlayerId] = useState('');
+  const [enrollPlanId, setEnrollPlanId] = useState('');
+  const [enrollStartDate, setEnrollStartDate] = useState(
+    new Date().toISOString().split('T')[0]
   );
-  const [playerFilter, setPlayerFilter] = useState<PlayerFilterType>('all');
-  const [playerSearchQuery, setPlayerSearchQuery] = useState('');
-  const [staffSearchQuery, setStaffSearchQuery] = useState('');
-
-  // ─── Data Queries ────────────────────────────────────────────────────────────
-
-  // 1. Staff members query (strictly staff with club roles)
-  const {
-    members: staffMembers = [],
-    isLoading: isStaffLoading,
-    isRefetching: isStaffRefetching,
-    refetch: refetchStaff,
-    addMember,
-    isAddingMember,
-    updateMember,
-    isUpdatingMember,
-    deactivateMember,
-  } = useClubMembers(clubId);
-
-  // 2. Player members query (strictly enrolled facility players)
-  const {
-    playerMembers = [],
-    isLoading: isPlayersLoading,
-    isRefetching: isPlayersRefetching,
-    refetch: refetchPlayers,
-    addPlayerMember,
-    isAddingPlayerMember,
-    updatePlayerMember,
-    isUpdatingPlayerMember,
-  } = useClubPlayerMembers(clubId);
-
-  // 3. Subscriptions query (for subscriber identification)
-  const { data: subscriptions = [], refetch: refetchSubs } = useClubSubscriptions(clubId || '');
-
-  // 4. Membership plans query (for plan tiers management)
-  const { data: membershipPlans = [] } = useMembershipPlans(clubId || '');
-
-  const isLoading = isPlayersLoading || isStaffLoading;
-  const isRefetching = isPlayersRefetching || isStaffRefetching;
-
-  const onRefresh = () => {
-    void refetchPlayers();
-    void refetchStaff();
-    void refetchSubs();
-  };
-
-  // Map of user IDs with active subscriptions
-  const subscriberMap = useMemo(() => {
-    const map = new Map<string, string>();
-    subscriptions.forEach((s) => {
-      if (s.effective_status === 'active' && s.player?.user_id) {
-        map.set(s.player.user_id, s.plan_name || 'Active Subscriber');
-      }
-    });
-    return map;
-  }, [subscriptions]);
-
-  // Set of staff user IDs and emails to strictly exclude from Players section
-  const staffUserIds = useMemo(() => {
-    const set = new Set<string>();
-    staffMembers.forEach((s) => {
-      if (s.user_id) set.add(s.user_id);
-    });
-    return set;
-  }, [staffMembers]);
-
-  const staffEmails = useMemo(() => {
-    const set = new Set<string>();
-    staffMembers.forEach((s) => {
-      if (s.user_email) set.add(s.user_email.toLowerCase().trim());
-    });
-    return set;
-  }, [staffMembers]);
-
-  // ─── Filtered Players List (STRICT STAFF EXCLUSION) ──────────────────────────
-
-  const filteredPlayers = useMemo(() => {
-    // 1. Strictly exclude all staff accounts from player list
-    let list = playerMembers.filter(
-      (p) =>
-        !staffUserIds.has(p.user_id) &&
-        !staffEmails.has(p.user_email?.toLowerCase().trim())
-    );
-
-    // 2. Filter by tab pill
-    if (playerFilter === 'subscribers') {
-      list = list.filter((p) => subscriberMap.has(p.user_id));
-    } else if (playerFilter === 'normal') {
-      list = list.filter((p) => !subscriberMap.has(p.user_id));
-    }
-
-    // 3. Filter by search query
-    if (playerSearchQuery.trim()) {
-      const q = playerSearchQuery.toLowerCase().trim();
-      list = list.filter((p) => {
-        const emailMatch = p.user_email?.toLowerCase().includes(q);
-        const nameMatch = formatPlayerName(p).toLowerCase().includes(q);
-        const numMatch = p.membership_number?.toLowerCase().includes(q);
-        return emailMatch || nameMatch || numMatch;
-      });
-    }
-
-    return list;
-  }, [playerMembers, staffUserIds, staffEmails, playerFilter, playerSearchQuery, subscriberMap]);
-
-  // ─── Filtered Staff List ─────────────────────────────────────────────────────
-
-  const filteredStaff = useMemo(() => {
-    let list = staffMembers;
-    if (staffSearchQuery.trim()) {
-      const q = staffSearchQuery.toLowerCase().trim();
-      list = list.filter((s) => {
-        const emailMatch = s.user_email?.toLowerCase().includes(q);
-        const nameMatch = s.user_full_name?.toLowerCase().includes(q);
-        const roleMatch = s.role?.toLowerCase().includes(q) || s.role_label?.toLowerCase().includes(q);
-        return emailMatch || nameMatch || roleMatch;
-      });
-    }
-    return list;
-  }, [staffMembers, staffSearchQuery]);
-
-  // ─── Modal States ────────────────────────────────────────────────────────────
-
-  // Enroll Player Modal
-  const [enrollModalVisible, setEnrollModalVisible] = useState(false);
-  const [newPlayerEmail, setNewPlayerEmail] = useState('');
-  const [newPlayerNumber, setNewPlayerNumber] = useState('');
-  const [newPlayerStatus, setNewPlayerStatus] = useState<PlayerMembershipStatus>('active');
+  const [enrollAutoRenew, setEnrollAutoRenew] = useState(true);
   const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [enrolling, setEnrolling] = useState(false);
 
-  // Add Staff Modal
-  const [addStaffModalVisible, setAddStaffModalVisible] = useState(false);
-  const [newStaffEmail, setNewStaffEmail] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState<ClubRole>('club_manager');
-  const [staffErrorState, setStaffErrorState] = useState<string | null>(null);
+  // Search Filter
+  const [subscriberSearch, setSubscriberSearch] = useState('');
 
-  // Edit Player Status Modal
-  const [editPlayerModalVisible, setEditPlayerModalVisible] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState<ClubPlayerMember | null>(null);
-  const [selectedPlayerStatus, setSelectedPlayerStatus] = useState<PlayerMembershipStatus>('active');
-  const [editPlayerError, setEditPlayerError] = useState<string | null>(null);
+  const plans = useMemo(() => plansQuery.data ?? [], [plansQuery.data]);
+  const subscriptions = useMemo(() => subsQuery.data ?? [], [subsQuery.data]);
 
-  // Edit Staff Role Modal
-  const [editStaffModalVisible, setEditStaffModalVisible] = useState(false);
-  const [selectedStaff, setSelectedStaff] = useState<ClubMember | null>(null);
-  const [selectedStaffRole, setSelectedStaffRole] = useState<ClubRole>('club_manager');
-  const [editStaffError, setEditStaffError] = useState<string | null>(null);
-
-  // Filter / Plans Settings Modal
-  const [filterInfoVisible, setFilterInfoVisible] = useState(false);
-
-  // Action Sheet Overflow Modal
-  const [actionMenuVisible, setActionMenuVisible] = useState(false);
-  const [menuPlayer, setMenuPlayer] = useState<ClubPlayerMember | null>(null);
-
-  // Message Modal
-  const [messageModalVisible, setMessageModalVisible] = useState(false);
-  const [messageTarget, setMessageTarget] = useState<{ name: string; email: string } | null>(null);
-  const [messageSubject, setMessageSubject] = useState('');
-  const [messageBody, setMessageBody] = useState('');
-
-  // ─── Mutation Handlers ───────────────────────────────────────────────────────
-
-  const handleEnrollPlayerSubmit = async () => {
-    if (!newPlayerEmail.trim()) {
-      setEnrollError('Email address is required');
-      return;
+  // Map player memberships for avatars and details fallback
+  const playerMembersMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const pm of playerMembers) {
+      if (pm.profile_image_url) {
+        map.set(pm.id, pm.profile_image_url);
+        map.set(pm.user_id, pm.profile_image_url);
+      }
     }
-    try {
-      setEnrollError(null);
-      await addPlayerMember({
-        email: newPlayerEmail.trim().toLowerCase(),
-        status: newPlayerStatus,
-        membership_number: newPlayerNumber.trim() || undefined,
-      });
-      setEnrollModalVisible(false);
-      setNewPlayerEmail('');
-      setNewPlayerNumber('');
-      setNewPlayerStatus('active');
-      Alert.alert('Success', 'Player enrolled successfully in this club.');
-    } catch (err: any) {
-      setEnrollError(err?.message || 'Failed to enroll player. Please verify the email address.');
-    }
-  };
+    return map;
+  }, [playerMembers]);
 
-  const handleAddStaffSubmit = async () => {
-    if (!newStaffEmail.trim()) {
-      setStaffErrorState('Email address is required');
-      return;
-    }
-    try {
-      setStaffErrorState(null);
-      await addMember({
-        email: newStaffEmail.trim().toLowerCase(),
-        role: newStaffRole,
-      });
-      setAddStaffModalVisible(false);
-      setNewStaffEmail('');
-      setNewStaffRole('club_manager');
-      Alert.alert('Success', 'Staff member added successfully.');
-    } catch (err: any) {
-      setStaffErrorState(err?.message || 'Failed to add staff member. Verify the user account exists.');
-    }
-  };
-
-  const handleUpdatePlayerStatusSubmit = async () => {
-    if (!selectedPlayer) return;
-    try {
-      setEditPlayerError(null);
-      await updatePlayerMember({
-        membershipId: selectedPlayer.id,
-        payload: { status: selectedPlayerStatus },
-      });
-      setEditPlayerModalVisible(false);
-      setSelectedPlayer(null);
-      Alert.alert('Updated', 'Player membership status updated.');
-    } catch (err: any) {
-      setEditPlayerError(err?.message || 'Failed to update player status.');
-    }
-  };
-
-  const handleUpdateStaffRoleSubmit = async () => {
-    if (!selectedStaff) return;
-    try {
-      setEditStaffError(null);
-      await updateMember({
-        membershipId: selectedStaff.id,
-        payload: { role: selectedStaffRole },
-      });
-      setEditStaffModalVisible(false);
-      setSelectedStaff(null);
-      Alert.alert('Updated', 'Staff member role updated.');
-    } catch (err: any) {
-      setEditStaffError(err?.message || 'Failed to update staff role.');
-    }
-  };
-
-  const handleOpenEditPlayer = (player: ClubPlayerMember) => {
-    blurActiveElement();
-    setSelectedPlayer(player);
-    setSelectedPlayerStatus(player.status);
-    setEditPlayerError(null);
-    setEditPlayerModalVisible(true);
-  };
-
-  const handleOpenEditStaff = (staff: ClubMember) => {
-    blurActiveElement();
-    setSelectedStaff(staff);
-    setSelectedStaffRole(staff.role);
-    setEditStaffError(null);
-    setEditStaffModalVisible(true);
-  };
-
-  const handleMessagePlayer = (player: ClubPlayerMember) => {
-    blurActiveElement();
-    const name = formatPlayerName(player);
-    setMessageTarget({ name, email: player.user_email });
-    setMessageSubject(`Update from ${clubId ? 'Club' : 'Pickleball Club'}`);
-    setMessageBody(`Hi ${name},\n\n`);
-    setMessageModalVisible(true);
-  };
-
-  const handleMessageStaff = (staff: ClubMember) => {
-    blurActiveElement();
-    const name = staff.user_full_name || staff.user_email;
-    setMessageTarget({ name, email: staff.user_email });
-    setMessageSubject(`Staff Notice`);
-    setMessageBody(`Hi ${name},\n\n`);
-    setMessageModalVisible(true);
-  };
-
-  const handleSendEmail = () => {
-    if (!messageTarget?.email) return;
-    const url = `mailto:${messageTarget.email}?subject=${encodeURIComponent(
-      messageSubject
-    )}&body=${encodeURIComponent(messageBody)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert('Email Client', `Could not open mail app. You can reach out directly to ${messageTarget.email}`);
+  // Filter subscribers based on search query
+  const filteredSubscriptions = useMemo(() => {
+    if (!subscriberSearch.trim()) return subscriptions;
+    const q = subscriberSearch.toLowerCase().trim();
+    return subscriptions.filter((s) => {
+      const name = s.player?.user_full_name?.toLowerCase() || '';
+      const email = s.player?.user_email?.toLowerCase() || '';
+      const plan = s.plan_name?.toLowerCase() || '';
+      const status = s.effective_status?.toLowerCase() || s.status?.toLowerCase() || '';
+      return name.includes(q) || email.includes(q) || plan.includes(q) || status.includes(q);
     });
-    setMessageModalVisible(false);
+  }, [subscriptions, subscriberSearch]);
+
+  // ─── Plan Handlers ─────────────────────────────────────────────────────────
+
+  const handleOpenCreatePlan = () => {
+    setEditingPlan(null);
+    setPlanName('');
+    setPlanDesc('Standard membership with court booking privileges.');
+    setPlanDuration('monthly');
+    setPlanPrice('999.00');
+    setPlanBookingLimit('3');
+    setPlanAdvanceDays('14');
+    setPlanBenefits([
+      'Court booking access',
+      'Member-only events',
+      '3 upcoming bookings',
+    ]);
+    setNewBenefitInput('');
+    setFormError(null);
+    setShowCreatePlan(true);
   };
 
-  // ─── Header & Section Controls Component ─────────────────────────────────────
+  const handleOpenEditPlan = (plan: MembershipPlan) => {
+    setEditingPlan(plan);
+    setPlanName(plan.name);
+    setPlanDesc(plan.description || '');
+    setPlanDuration((plan.duration_unit as PlanDurationUnit) || 'monthly');
+    setPlanPrice(parseFloat(plan.price).toFixed(2));
+    setPlanBookingLimit(plan.booking_limit != null ? String(plan.booking_limit) : '');
+    setPlanAdvanceDays(plan.advance_booking_days != null ? String(plan.advance_booking_days) : '');
+    setPlanBenefits(plan.benefits && plan.benefits.length > 0 ? plan.benefits : ['Court booking access']);
+    setNewBenefitInput('');
+    setFormError(null);
+    setShowCreatePlan(true);
+  };
+
+  const handleAddBenefit = () => {
+    if (newBenefitInput.trim()) {
+      setPlanBenefits([...planBenefits, newBenefitInput.trim()]);
+      setNewBenefitInput('');
+    }
+  };
+
+  const handleRemoveBenefit = (index: number) => {
+    setPlanBenefits(planBenefits.filter((_, i) => i !== index));
+  };
+
+  const handleSavePlan = async () => {
+    if (!planName.trim() || !planPrice.trim()) {
+      setFormError('Plan name and price are required.');
+      return;
+    }
+    const priceNum = parseFloat(planPrice);
+    if (isNaN(priceNum) || priceNum < 0) {
+      setFormError('Please enter a valid price (≥ 0).');
+      return;
+    }
+
+    const payload: CreateMembershipPlanPayload = {
+      name: planName.trim(),
+      description: planDesc.trim() || null,
+      duration_unit: planDuration,
+      price: priceNum.toFixed(2),
+      currency: 'USD',
+      benefits: planBenefits,
+      booking_limit: planBookingLimit ? parseInt(planBookingLimit, 10) : null,
+      advance_booking_days: planAdvanceDays ? parseInt(planAdvanceDays, 10) : null,
+    };
+
+    setSavingPlan(true);
+    setFormError(null);
+    try {
+      if (editingPlan) {
+        const { membershipApi } = await import('@/services/api');
+        await membershipApi.updatePlan(clubId, editingPlan.id, payload);
+        Alert.alert('Plan Updated', `"${planName}" was updated successfully.`);
+      } else {
+        await createPlanMutation.mutateAsync(payload);
+        Alert.alert('Plan Created', `"${planName}" was created successfully.`);
+      }
+      setShowCreatePlan(false);
+      plansQuery.refetch();
+    } catch (e: any) {
+      setFormError(e?.message ?? 'Failed to save plan.');
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const handleDeactivatePlan = (plan: MembershipPlan) => {
+    Alert.alert(
+      'Deactivate Plan',
+      `Deactivating "${plan.name}" will prevent new subscriptions. Active subscriptions will remain valid until expiry.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Deactivate',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { membershipApi } = await import('@/services/api');
+              await membershipApi.deactivatePlan(clubId, plan.id);
+              plansQuery.refetch();
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Failed to deactivate plan.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleReactivatePlan = async (plan: MembershipPlan) => {
+    try {
+      const { membershipApi } = await import('@/services/api');
+      await membershipApi.reactivatePlan(clubId, plan.id);
+      plansQuery.refetch();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Failed to reactivate plan.');
+    }
+  };
+
+  const handlePlanMenu = (plan: MembershipPlan) => {
+    Alert.alert(plan.name, `${plan.duration_label || plan.duration_unit} · ${plan.currency || 'USD'} ${plan.price}`, [
+      { text: 'Edit Plan', onPress: () => handleOpenEditPlan(plan) },
+      plan.status === 'active'
+        ? { text: 'Deactivate', style: 'destructive', onPress: () => handleDeactivatePlan(plan) }
+        : { text: 'Reactivate', onPress: () => handleReactivatePlan(plan) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  // ─── Subscription Handlers ─────────────────────────────────────────────────
+
+  const handleCancelSub = (sub: MemberSubscription) => {
+    const subscriberName = sub.player?.user_full_name ?? sub.player?.user_email ?? 'Subscriber';
+    Alert.alert(
+      'Cancel Subscription',
+      `Are you sure you want to cancel the subscription for ${subscriberName}?`,
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Cancel Subscription',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { membershipApi } = await import('@/services/api');
+              await membershipApi.cancelSubscription(clubId, sub.id, { cancellation_reason: 'Admin cancelled' });
+              subsQuery.refetch();
+            } catch (e: any) {
+              Alert.alert('Error', e?.message ?? 'Failed to cancel subscription.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSubMenu = (sub: MemberSubscription) => {
+    const name = sub.player?.user_full_name || sub.player?.user_email || 'Subscriber';
+    const status = sub.effective_status || sub.status;
+    const actions: any[] = [
+      {
+        text: 'View Details',
+        onPress: () => {
+          Alert.alert(
+            `Subscriber: ${name}`,
+            `Plan: ${sub.plan_name || 'Membership'}\nStatus: ${status.toUpperCase()}\nExpires: ${formatRenewalDate(sub.end_date)}\nAuto Renew: ${sub.auto_renew ? 'Yes' : 'No'}`
+          );
+        },
+      },
+    ];
+
+    if (status === 'active') {
+      actions.push({
+        text: 'Cancel Subscription',
+        style: 'destructive',
+        onPress: () => handleCancelSub(sub),
+      });
+    }
+
+    actions.push({ text: 'Close', style: 'cancel' });
+    Alert.alert(name, `Plan: ${sub.plan_name || 'Membership'} (${status.toUpperCase()})`, actions);
+  };
+
+  const handleEnrollSubmit = async () => {
+    if (!enrollPlayerId || !enrollPlanId) {
+      setEnrollError('Please select both a player and a plan.');
+      return;
+    }
+    setEnrolling(true);
+    setEnrollError(null);
+    try {
+      await createSubMutation.mutateAsync({
+        player_membership_id: enrollPlayerId,
+        membership_plan_id: enrollPlanId,
+        start_date: enrollStartDate,
+        auto_renew: enrollAutoRenew,
+      });
+      setShowEnrollModal(false);
+      subsQuery.refetch();
+      Alert.alert('Success', 'Player enrolled in membership.');
+    } catch (e: any) {
+      setEnrollError(e?.message ?? 'Failed to enroll player.');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  if (!canManageMemberships) {
+    return (
+      <Screen style={styles.screenContainer}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F0F8F4" />
+        <View style={styles.headerContainer}>
+          <TouchableOpacity onPress={openDrawer} style={styles.hamburgerBtn} hitSlop={8}>
+            <Menu size={26} color="#123D38" strokeWidth={2.2} />
+          </TouchableOpacity>
+          <View style={styles.headerTextCol}>
+            <AppText style={styles.headerTitle}>Memberships</AppText>
+            <AppText style={styles.headerSubtitle}>Plans, tiers, and subscriber management</AppText>
+          </View>
+        </View>
+        <ErrorState
+          title="Access Restricted"
+          message="Membership management requires Club Owner or Manager role."
+        />
+      </Screen>
+    );
+  }
+
+  const isLoading = plansQuery.isLoading || subsQuery.isLoading;
+  const isRefetching = plansQuery.isRefetching || subsQuery.isRefetching;
+  const onRefresh = () => {
+    plansQuery.refetch();
+    subsQuery.refetch();
+  };
+
+  // ─── Header Component (Hero, New Plan, Switcher, Search) ───────────────────
 
   const renderListHeader = () => (
-    <View style={styles.headerBlock}>
-      {/* ─── 1. Top Header with Hamburger and Decorative Background ─── */}
-      <View style={[styles.customHeaderRow, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
+    <View style={styles.headerSectionWrapper}>
+      {/* 1. Header Bar: Hamburger Menu, Title & Subtitle */}
+      <View style={styles.headerContainer}>
         <TouchableOpacity
           onPress={openDrawer}
-          style={styles.hamburgerButton}
-          activeOpacity={0.7}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Open navigation drawer"
-          accessibilityRole="button"
+          style={styles.hamburgerBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Open Navigation Drawer"
         >
-          <Menu size={25} color="#123D38" strokeWidth={2.2} />
+          <Menu size={26} color="#123D38" strokeWidth={2.2} />
         </TouchableOpacity>
-
-        <View style={styles.headerTitleContainer}>
-          <AppText style={styles.pageTitle}>Memberships</AppText>
-          <AppText style={styles.pageSubtitle}>Plans, tiers, and subscriber management</AppText>
-        </View>
-
-        {/* ─── Upper-Right Sports-Themed Decorative Background ─── */}
-        <View style={styles.decorativeBgContainer} pointerEvents="none">
-          {/* Outer mint circle arc */}
-          <View style={styles.decorativeOuterCircle} />
-          {/* Inner deep teal circle arc */}
-          <View style={styles.decorativeInnerCircle} />
-          {/* Overlapping lime-green sports ball */}
-          <Image
-            source={require('../../assets/memberships/sports_ball.png')}
-            style={styles.decorativeBall}
-            resizeMode="contain"
-          />
+        <View style={styles.headerTextCol}>
+          <AppText style={styles.headerTitle}>Memberships</AppText>
+          <AppText style={styles.headerSubtitle}>Plans, tiers, and subscriber management</AppText>
         </View>
       </View>
 
-      {/* ─── 2. Main 3-Button Action Row: [ Players ] [ Staff ] [ + Enroll ] ─── */}
-      <View style={styles.mainActionRow}>
-        {/* Players Button */}
-        <TouchableOpacity
-          style={[
-            styles.mainActionBtn,
-            activeTab === 'players' && styles.mainActionBtnActive,
-          ]}
-          onPress={() => setActiveTab('players')}
-          activeOpacity={0.8}
-          accessibilityLabel="Players view"
-          accessibilityRole="tab"
+      {/* 2. Promotional Hero Banner */}
+      <View style={styles.heroBannerContainer}>
+        <ImageBackground
+          source={require('../../assets/memberships/hero_banner.jpg')}
+          style={styles.heroBannerBackground}
+          imageStyle={styles.heroBannerImage}
+          resizeMode="cover"
         >
-          <Users
-            size={18}
-            color={activeTab === 'players' ? '#FFFFFF' : '#123D38'}
-            strokeWidth={activeTab === 'players' ? 2.4 : 2}
-          />
-          <AppText
-            style={[
-              styles.mainActionBtnText,
-              activeTab === 'players' && styles.mainActionBtnTextActive,
-            ]}
-          >
-            Players
-          </AppText>
-        </TouchableOpacity>
+          {/* Subtle soft gradient wash on the left to guarantee optimal text contrast */}
+          <View style={styles.heroWashOverlay} />
 
-        {/* Staff Button */}
-        <TouchableOpacity
-          style={[
-            styles.mainActionBtn,
-            activeTab === 'staff' && styles.mainActionBtnActive,
-          ]}
-          onPress={() => setActiveTab('staff')}
-          activeOpacity={0.8}
-          accessibilityLabel="Staff view"
-          accessibilityRole="tab"
-        >
-          <User
-            size={18}
-            color={activeTab === 'staff' ? '#FFFFFF' : '#123D38'}
-            strokeWidth={activeTab === 'staff' ? 2.4 : 2}
-          />
-          <AppText
-            style={[
-              styles.mainActionBtnText,
-              activeTab === 'staff' && styles.mainActionBtnTextActive,
-            ]}
-          >
-            Staff
-          </AppText>
-        </TouchableOpacity>
-
-        {/* + Enroll Button (White card style matching reference) */}
-        <TouchableOpacity
-          style={styles.mainActionBtnSecondary}
-          onPress={() => {
-            blurActiveElement();
-            if (activeTab === 'staff') {
-              setAddStaffModalVisible(true);
-            } else {
-              setEnrollModalVisible(true);
-            }
-          }}
-          activeOpacity={0.8}
-          accessibilityLabel="Enroll player or staff"
-          accessibilityRole="button"
-        >
-          <Plus size={18} color="#123D38" strokeWidth={2.4} />
-          <AppText style={styles.mainActionBtnSecondaryText}>Enroll</AppText>
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── 3. Section Controls (Players vs Staff) ─── */}
-      {activeTab === 'players' ? (
-        <>
-          {/* Sub-Filters: All Players, Subscribers, Normal Users + Settings Button */}
-          <View style={styles.filterPillsRow}>
-            {/* All Players */}
-            <TouchableOpacity
-              style={[
-                styles.filterPill,
-                playerFilter === 'all' && styles.filterPillActive,
-              ]}
-              onPress={() => setPlayerFilter('all')}
-              activeOpacity={0.8}
-            >
-              <AppText
-                style={[
-                  styles.filterPillText,
-                  playerFilter === 'all' && styles.filterPillTextActive,
-                ]}
-              >
-                All Players
-              </AppText>
-            </TouchableOpacity>
-
-            {/* Subscribers */}
-            <TouchableOpacity
-              style={[
-                styles.filterPill,
-                playerFilter === 'subscribers' && styles.filterPillActive,
-              ]}
-              onPress={() => setPlayerFilter('subscribers')}
-              activeOpacity={0.8}
-            >
-              <AppText
-                style={[
-                  styles.filterPillText,
-                  playerFilter === 'subscribers' && styles.filterPillTextActive,
-                ]}
-              >
-                Subscribers
-              </AppText>
-            </TouchableOpacity>
-
-            {/* Normal Users */}
-            <TouchableOpacity
-              style={[
-                styles.filterPill,
-                playerFilter === 'normal' && styles.filterPillActive,
-              ]}
-              onPress={() => setPlayerFilter('normal')}
-              activeOpacity={0.8}
-            >
-              <AppText
-                style={[
-                  styles.filterPillText,
-                  playerFilter === 'normal' && styles.filterPillTextActive,
-                ]}
-              >
-                Normal Users
-              </AppText>
-            </TouchableOpacity>
-
-            {/* Filter / Plans Settings Button */}
-            <TouchableOpacity
-              style={styles.filterIconButton}
-              onPress={() => {
-                blurActiveElement();
-                setFilterInfoVisible(true);
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel="Filter and membership plans settings"
-              accessibilityRole="button"
-            >
-              <SlidersHorizontal size={17} color="#123D38" strokeWidth={2} />
-            </TouchableOpacity>
+          <View style={styles.heroContentLeft}>
+            <AppText style={styles.heroHeadline}>
+              Flexible Plans.{'\n'}Stronger Community.
+            </AppText>
+            <AppText style={styles.heroSubtext}>
+              Give players more ways to play,{'\n'}belong and grow.
+            </AppText>
+            <View style={styles.heroAccentBar} />
           </View>
+        </ImageBackground>
+      </View>
 
-          {/* Full-width Search Bar */}
-          <View style={styles.searchContainer}>
-            <Search size={18} color="#71828A" strokeWidth={2} style={styles.searchIcon} />
+      {/* 3. + New Plan Button */}
+      <View style={styles.newPlanRow}>
+        <TouchableOpacity
+          style={styles.newPlanBtn}
+          onPress={handleOpenCreatePlan}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Create New Plan"
+        >
+          <Plus size={16} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 6 }} />
+          <AppText style={styles.newPlanBtnText}>New Plan</AppText>
+        </TouchableOpacity>
+      </View>
+
+      {/* 4. Plans / Subscribers Switcher (Segmented Control) */}
+      <View style={styles.segmentedContainer}>
+        <TouchableOpacity
+          style={[styles.segmentedTab, activeTab === 'plans' && styles.segmentedTabActive]}
+          onPress={() => setActiveTab('plans')}
+          activeOpacity={0.85}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'plans' }}
+        >
+          <AppText
+            style={[
+              styles.segmentedTabText,
+              activeTab === 'plans' && styles.segmentedTabTextActive,
+            ]}
+          >
+            Plans ({plans.length})
+          </AppText>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.segmentedTab, activeTab === 'subscribers' && styles.segmentedTabActive]}
+          onPress={() => setActiveTab('subscribers')}
+          activeOpacity={0.85}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: activeTab === 'subscribers' }}
+        >
+          <AppText
+            style={[
+              styles.segmentedTabText,
+              activeTab === 'subscribers' && styles.segmentedTabTextActive,
+            ]}
+          >
+            Subscribers ({subscriptions.length})
+          </AppText>
+        </TouchableOpacity>
+      </View>
+
+      {/* 5. Subscriber Search & Enroll Row (Visible when Subscribers tab is active) */}
+      {activeTab === 'subscribers' && (
+        <View style={styles.subscriberSearchRow}>
+          <View style={styles.searchBox}>
+            <Search size={18} color="#647570" strokeWidth={2} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search players by name or email..."
+              placeholder="Search subscribers by name, email, plan..."
               placeholderTextColor="#8C9BA5"
-              value={playerSearchQuery}
-              onChangeText={setPlayerSearchQuery}
-              returnKeyType="search"
+              value={subscriberSearch}
+              onChangeText={setSubscriberSearch}
               autoCapitalize="none"
               autoCorrect={false}
+              clearButtonMode="while-editing"
             />
-            {playerSearchQuery.length > 0 && (
+            {subscriberSearch.length > 0 && (
               <TouchableOpacity
-                onPress={() => setPlayerSearchQuery('')}
+                onPress={() => setSubscriberSearch('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={16} color="#71828A" />
+                <X size={16} color="#647570" />
               </TouchableOpacity>
             )}
           </View>
-        </>
-      ) : (
-        /* Staff Controls */
-        <View style={styles.staffControlsContainer}>
-          <View style={styles.staffSearchAndAddRow}>
-            <View style={styles.staffSearchBox}>
-              <Search size={18} color="#71828A" strokeWidth={2} style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search staff by name, email or role..."
-                placeholderTextColor="#8C9BA5"
-                value={staffSearchQuery}
-                onChangeText={setStaffSearchQuery}
-                returnKeyType="search"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              {staffSearchQuery.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => setStaffSearchQuery('')}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <X size={16} color="#71828A" />
-                </TouchableOpacity>
-              )}
-            </View>
 
-            {canManageRoles && (
-              <TouchableOpacity
-                style={styles.addStaffBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setAddStaffModalVisible(true);
-                }}
-                activeOpacity={0.8}
-              >
-                <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
-                <AppText style={styles.addStaffBtnText}>Staff</AppText>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.enrollBtn}
+            onPress={() => {
+              setEnrollError(null);
+              setShowEnrollModal(true);
+            }}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Enroll Subscriber"
+          >
+            <Plus size={15} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 4 }} />
+            <AppText style={styles.enrollBtnText}>Enroll</AppText>
+          </TouchableOpacity>
         </View>
       )}
     </View>
   );
 
-  // ─── Render Player Card ──────────────────────────────────────────────────────
+  // ─── Render Subscriber Card ────────────────────────────────────────────────
 
-  const renderPlayerItem = ({ item, index }: { item: ClubPlayerMember; index: number }) => {
-    const playerName = formatPlayerName(item);
-    const memberIdBadge = item.membership_number
-      ? (item.membership_number.startsWith('#') ? item.membership_number : `#${item.membership_number}`)
-      : `#AUG-P-${String((index + 1) * 7).padStart(3, '0')}`;
+  const renderSubscriberCard = ({ item }: { item: MemberSubscription }) => {
+    const playerName = item.player?.user_full_name || item.player?.user_email?.split('@')[0] || 'Subscriber';
+    const playerEmail = item.player?.user_email || '—';
+    const status = (item.effective_status || item.status || 'active').toLowerCase();
+
+    // Map status colors
+    const statusConfig = {
+      cancelled: { bg: '#FDECEB', text: '#D32F2F', label: 'CANCELLED' },
+      expired: { bg: '#FEF6E6', text: '#B7791F', label: 'EXPIRED' },
+      active: { bg: '#E8F5E9', text: '#2E7D32', label: 'ACTIVE' },
+      scheduled: { bg: '#E7F0FB', text: '#1E69D2', label: 'SCHEDULED' },
+    }[status] || { bg: '#EAF0EC', text: '#5A6E67', label: status.toUpperCase() };
+
+    const planName = item.plan_name || 'Basic Monthly';
+    const renewalDate = formatRenewalDate(item.end_date);
+    const rawDuration = item.plan_duration || 'monthly';
+    const durationLabel = rawDuration.charAt(0).toUpperCase() + rawDuration.slice(1);
+    const formattedPrice = formatCurrency(item.plan_price || '999.00', item.plan_currency || 'USD');
+
+    // Retrieve avatar from subscriber response or player members mapping
+    const avatarUrl =
+      item.player?.profile_image_url ||
+      (item.player_membership_id ? playerMembersMap.get(item.player_membership_id) : null) ||
+      (item.player?.user_id ? playerMembersMap.get(item.player.user_id) : null);
 
     return (
-      <View style={styles.memberCard}>
-        {/* Top Profile Row: Avatar + Details */}
-        <View style={styles.cardTopRow}>
-          {/* Circular Profile Avatar (Real Photo with Initials Fallback) */}
-          <MemberAvatar
-            imageUrl={item.profile_image_url}
+      <View style={styles.subscriberCard}>
+        {/* Top Information Area */}
+        <View style={styles.subCardTopRow}>
+          <SubscriberAvatar
+            imageUrl={avatarUrl}
             name={playerName}
             size={64}
           />
 
-          {/* Details Column */}
-          <View style={styles.cardDetailsColumn}>
-            {/* Row 1: Name + Member ID badge + Three-dot Menu */}
-            <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={1}>
+          <View style={styles.subCardDetails}>
+            {/* Row 1: Name and Status Badge */}
+            <View style={styles.subNameAndBadgeRow}>
+              <AppText style={styles.subPlayerName} numberOfLines={1}>
                 {playerName}
               </AppText>
-              <View style={styles.idAndMenuRow}>
-                <View style={styles.idBadge}>
-                  <AppText style={styles.idBadgeText}>{memberIdBadge}</AppText>
-                </View>
-                <TouchableOpacity
-                  style={styles.moreMenuButton}
-                  onPress={() => {
-                    blurActiveElement();
-                    setMenuPlayer(item);
-                    setActionMenuVisible(true);
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Member actions menu"
-                >
-                  <MoreVertical size={19} color="#475569" />
-                </TouchableOpacity>
+              <View style={[styles.subStatusBadge, { backgroundColor: statusConfig.bg }]}>
+                <AppText style={[styles.subStatusBadgeText, { color: statusConfig.text }]}>
+                  {statusConfig.label}
+                </AppText>
               </View>
             </View>
 
             {/* Row 2: Email */}
-            <AppText style={styles.playerEmail} numberOfLines={1}>
-              {item.user_email}
+            <AppText style={styles.subPlayerEmail} numberOfLines={1}>
+              {playerEmail}
             </AppText>
 
-            {/* Row 3: Status Badge */}
-            <View style={styles.statusRow}>
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.status === 'active' && styles.statusBadgeActive,
-                  item.status === 'suspended' && styles.statusBadgeWarning,
-                  item.status === 'expired' && styles.statusBadgeDanger,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    item.status === 'active' && styles.statusDotActive,
-                    item.status === 'suspended' && styles.statusDotWarning,
-                    item.status === 'expired' && styles.statusDotDanger,
-                  ]}
-                />
-                <AppText
-                  style={[
-                    styles.statusBadgeText,
-                    item.status === 'active' && styles.statusBadgeTextActive,
-                    item.status === 'suspended' && styles.statusBadgeTextWarning,
-                    item.status === 'expired' && styles.statusBadgeTextDanger,
-                  ]}
-                >
-                  {item.status === 'active' ? 'Active' : item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            {/* Row 3: Plan Badge and Renewal Date */}
+            <View style={styles.subPlanAndRenewalRow}>
+              <View style={styles.subPlanBadge}>
+                <AppText style={styles.subPlanBadgeText} numberOfLines={1}>
+                  {planName}
+                </AppText>
+              </View>
+              <View style={styles.subRenewalContainer}>
+                <Calendar size={13} color="#647570" strokeWidth={1.8} />
+                <AppText style={styles.subRenewalText}>
+                  Renews {renewalDate}
                 </AppText>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Subtle Horizontal Divider */}
-        <View style={styles.cardDivider} />
+        {/* Thin Horizontal Divider */}
+        <View style={styles.subCardDivider} />
 
-        {/* Bottom Actions Row: [Edit Status] | [Message] */}
-        <View style={styles.cardActionRow}>
-          <TouchableOpacity
-            style={styles.cardActionItem}
-            onPress={() => handleOpenEditPlayer(item)}
-            activeOpacity={0.7}
-          >
-            <SquarePen size={15} color="#123D38" strokeWidth={2} />
-            <AppText style={styles.cardActionText}>Edit Status</AppText>
-          </TouchableOpacity>
-
-          <View style={styles.actionVerticalDivider} />
+        {/* Bottom Information Area */}
+        <View style={styles.subCardBottomRow}>
+          <View style={styles.subBillingContainer}>
+            <CreditCard size={16} color="#647570" strokeWidth={1.8} />
+            <AppText style={styles.subBillingText}>
+              Billing: {durationLabel} · {formattedPrice}
+            </AppText>
+          </View>
 
           <TouchableOpacity
-            style={styles.cardActionItem}
-            onPress={() => handleMessagePlayer(item)}
-            activeOpacity={0.7}
+            onPress={() => handleSubMenu(item)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.threeDotBtn}
+            accessibilityLabel="Subscription actions"
           >
-            <Mail size={15} color="#123D38" strokeWidth={2} />
-            <AppText style={styles.cardActionText}>Message</AppText>
+            <MoreVertical size={18} color="#647570" strokeWidth={2} />
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
-  // ─── Render Staff Card ───────────────────────────────────────────────────────
+  // ─── Render Membership Plan Card ───────────────────────────────────────────
 
-  const renderStaffItem = ({ item }: { item: ClubMember }) => {
-    const staffName =
-      item.user_full_name && item.user_full_name.trim().length > 0
-        ? item.user_full_name.trim()
-        : item.user_email
-        ? item.user_email.split('@')[0]
-        : 'Staff Member';
+  const renderPlanCard = ({ item }: { item: MembershipPlan }) => {
+    const isActive = item.status === 'active';
+    const benefits = item.benefits && item.benefits.length > 0
+      ? item.benefits
+      : ['Court booking access', 'Member-only events'];
 
-    const roleConfig = {
-      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
-      club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
-      tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
-    }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
+    const durationLabel = item.duration_label || (item.duration_unit === 'yearly' ? 'Yearly' : item.duration_unit === 'quarterly' ? 'Quarterly' : 'Monthly');
+    const priceDisplay = formatCurrency(item.price, item.currency || 'USD');
 
     return (
-      <View style={styles.memberCard}>
-        <View style={styles.cardTopRow}>
-          <MemberAvatar
-            imageUrl={item.profile_image_url}
-            name={staffName}
-            size={64}
-          />
+      <View style={styles.planCard}>
+        {/* Header Row: Title, Duration, Status Badge, Three dots */}
+        <View style={styles.planHeaderRow}>
+          <View style={styles.planTitleContainer}>
+            <AppText style={styles.planName}>{item.name}</AppText>
+            <AppText style={styles.planDurationSubtitle}>{durationLabel}</AppText>
+          </View>
 
-          <View style={styles.cardDetailsColumn}>
-            <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={1}>
-                {staffName}
+          <View style={styles.planStatusAndMenu}>
+            <View style={[styles.planStatusBadge, isActive ? styles.planStatusActive : styles.planStatusInactive]}>
+              <AppText style={[styles.planStatusBadgeText, isActive ? styles.planStatusActiveText : styles.planStatusInactiveText]}>
+                {item.status.toUpperCase()}
               </AppText>
-              <View style={[styles.roleBadge, { backgroundColor: roleConfig.bg }]}>
-                <AppText style={[styles.roleBadgeText, { color: roleConfig.text }]}>
-                  {roleConfig.label}
-                </AppText>
-              </View>
             </View>
-
-            <AppText style={styles.playerEmail} numberOfLines={1}>
-              {item.user_email}
-            </AppText>
-
-            <View style={styles.statusRow}>
-              <View style={[styles.statusBadge, styles.statusBadgeActive]}>
-                <View style={[styles.statusDot, styles.statusDotActive]} />
-                <AppText style={[styles.statusBadgeText, styles.statusBadgeTextActive]}>
-                  Active
-                </AppText>
-              </View>
-            </View>
+            <TouchableOpacity
+              onPress={() => handlePlanMenu(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.threeDotBtn}
+              accessibilityLabel="Plan actions"
+            >
+              <MoreVertical size={18} color="#647570" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        <View style={styles.cardDivider} />
+        {/* Price Row */}
+        <View style={styles.planPriceContainer}>
+          <AppText style={styles.planPriceText}>{priceDisplay}</AppText>
+          <AppText style={styles.planPriceUnitText}> / {durationLabel.toLowerCase()}</AppText>
+        </View>
 
-        <View style={styles.cardActionRow}>
-          {canManageRoles ? (
+        {/* Description */}
+        {item.description ? (
+          <AppText style={styles.planDescText}>{item.description}</AppText>
+        ) : null}
+
+        {/* Benefits Checklist */}
+        <View style={styles.planBenefitsContainer}>
+          {benefits.map((b, idx) => (
+            <View key={idx} style={styles.planBenefitItem}>
+              <View style={styles.checkIconWrapper}>
+                <Check size={11} color="#176B57" strokeWidth={2.8} />
+              </View>
+              <AppText style={styles.planBenefitText}>{b}</AppText>
+            </View>
+          ))}
+        </View>
+
+        {/* Limits & Rules */}
+        {(item.booking_limit != null || item.advance_booking_days != null) && (
+          <View style={styles.planLimitsContainer}>
+            {item.booking_limit != null && (
+              <View style={styles.planLimitItem}>
+                <Target size={13} color="#D97706" />
+                <AppText style={styles.planLimitText}>{item.booking_limit} max active bookings</AppText>
+              </View>
+            )}
+            {item.advance_booking_days != null && (
+              <View style={styles.planLimitItem}>
+                <Calendar size={13} color="#2563EB" />
+                <AppText style={styles.planLimitText}>{item.advance_booking_days}-day advance window</AppText>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Actions Row */}
+        <View style={styles.planCardActionsRow}>
+          <TouchableOpacity
+            style={styles.planEditBtn}
+            onPress={() => handleOpenEditPlan(item)}
+            activeOpacity={0.8}
+          >
+            <AppText style={styles.planEditBtnText}>Edit Plan</AppText>
+          </TouchableOpacity>
+
+          {isActive ? (
             <TouchableOpacity
-              style={styles.cardActionItem}
-              onPress={() => handleOpenEditStaff(item)}
-              activeOpacity={0.7}
+              style={styles.planDeactivateBtn}
+              onPress={() => handleDeactivatePlan(item)}
+              activeOpacity={0.8}
             >
-              <SquarePen size={15} color="#123D38" strokeWidth={2} />
-              <AppText style={styles.cardActionText}>Edit Role</AppText>
+              <AppText style={styles.planDeactivateBtnText}>Deactivate</AppText>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity
-              style={styles.cardActionItem}
-              onPress={() => handleMessageStaff(item)}
-              activeOpacity={0.7}
+              style={styles.planReactivateBtn}
+              onPress={() => handleReactivatePlan(item)}
+              activeOpacity={0.8}
             >
-              <Mail size={15} color="#123D38" strokeWidth={2} />
-              <AppText style={styles.cardActionText}>Message</AppText>
+              <AppText style={styles.planReactivateBtnText}>Reactivate</AppText>
             </TouchableOpacity>
           )}
-
-          <View style={styles.actionVerticalDivider} />
-
-          <TouchableOpacity
-            style={styles.cardActionItem}
-            onPress={() => handleMessageStaff(item)}
-            activeOpacity={0.7}
-          >
-            <Mail size={15} color="#123D38" strokeWidth={2} />
-            <AppText style={styles.cardActionText}>Message</AppText>
-          </TouchableOpacity>
         </View>
       </View>
     );
   };
 
   return (
-    <Screen style={styles.screenContainer} safeArea={false}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F0F8F2" />
+    <Screen style={styles.screenContainer}>
+      <StatusBar barStyle="dark-content" backgroundColor="#F0F8F4" />
 
-      {/* Main Responsive List Container */}
-      <View style={styles.screenInner}>
-        {isLoading ? (
-          <LoadingState message="Loading memberships..." />
-        ) : activeTab === 'players' ? (
-          <FlatList
-            data={filteredPlayers}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={renderListHeader}
-            contentContainerStyle={[
-              styles.listContentContainer,
-              { paddingBottom: insets.bottom + 110 },
-            ]}
-            renderItem={renderPlayerItem}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <EmptyState
-                title="No Players Found"
-                description={
-                  playerSearchQuery.trim()
-                    ? 'No players matched your search.'
-                    : playerFilter === 'subscribers'
-                    ? 'No players currently have active subscriptions.'
-                    : playerFilter === 'normal'
-                    ? 'No normal users currently registered.'
-                    : 'Enroll your first club player to begin managing participation.'
-                }
-                actionLabel="+ Enroll Player"
-                onAction={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(true);
-                }}
-              />
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefetching}
-                onRefresh={onRefresh}
-                tintColor="#176B57"
-              />
-            }
-          />
-        ) : (
-          <FlatList
-            data={filteredStaff}
-            keyExtractor={(item) => item.id}
-            ListHeaderComponent={renderListHeader}
-            contentContainerStyle={[
-              styles.listContentContainer,
-              { paddingBottom: insets.bottom + 110 },
-            ]}
-            renderItem={renderStaffItem}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <EmptyState
-                title="No Staff Found"
-                description="No staff members currently match your search criteria."
-                actionLabel={canManageRoles ? '+ Add Staff' : undefined}
-                onAction={
-                  canManageRoles
-                    ? () => {
-                        blurActiveElement();
-                        setAddStaffModalVisible(true);
-                      }
-                    : undefined
-                }
-              />
-            }
-            refreshControl={
-              <RefreshControl
-                refreshing={isRefetching}
-                onRefresh={onRefresh}
-                tintColor="#176B57"
-              />
-            }
-          />
-        )}
-      </View>
+      {isLoading ? (
+        <LoadingState message="Loading memberships..." />
+      ) : activeTab === 'plans' ? (
+        <FlatList
+          data={plans}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderListHeader}
+          contentContainerStyle={[
+            styles.listContentContainer,
+            { paddingBottom: insets.bottom + 115 },
+          ]}
+          renderItem={renderPlanCard}
+          ListEmptyComponent={
+            <EmptyState
+              title="No Membership Plans"
+              description="Create flexible plans to provide players with structured court booking access."
+              actionLabel="+ New Plan"
+              onAction={handleOpenCreatePlan}
+            />
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={onRefresh}
+              tintColor="#176B57"
+            />
+          }
+        />
+      ) : (
+        <FlatList
+          data={filteredSubscriptions}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={renderListHeader}
+          contentContainerStyle={[
+            styles.listContentContainer,
+            { paddingBottom: insets.bottom + 115 },
+          ]}
+          renderItem={renderSubscriberCard}
+          ListEmptyComponent={
+            <EmptyState
+              title={subscriberSearch ? 'No Subscribers Found' : 'No Active Subscribers'}
+              description={
+                subscriberSearch
+                  ? `No subscriptions match "${subscriberSearch}". Try a different name, email, or plan.`
+                  : 'Enroll club members into membership plans to manage recurring access.'
+              }
+              actionLabel={subscriberSearch ? 'Clear Search' : '+ Enroll Subscriber'}
+              onAction={
+                subscriberSearch
+                  ? () => setSubscriberSearch('')
+                  : () => {
+                      setEnrollError(null);
+                      setShowEnrollModal(true);
+                    }
+              }
+            />
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={onRefresh}
+              tintColor="#176B57"
+            />
+          }
+        />
+      )}
 
-      {/* ─── Enroll Player Modal ──────────────────────────────────────────────── */}
+      {/* ─── Create/Edit Plan Modal ─────────────────────────────────────────── */}
       <Modal
-        visible={enrollModalVisible}
+        visible={showCreatePlan}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          blurActiveElement();
-          setEnrollModalVisible(false);
-        }}
+        onRequestClose={() => setShowCreatePlan(false)}
       >
         <Pressable
           style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setEnrollModalVisible(false);
-          }}
+          onPress={() => setShowCreatePlan(false)}
         >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Enroll New Player</AppText>
+          <Pressable
+            style={[styles.modalCard, { maxHeight: '90%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <AppText style={styles.modalTitle}>
+                {editingPlan ? 'Edit Membership Plan' : 'Create Membership Plan'}
+              </AppText>
               <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(false);
-                }}
+                onPress={() => setShowCreatePlan(false)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={20} color="#667776" />
+                <X size={20} color="#123D38" />
               </TouchableOpacity>
             </View>
 
-            <AppText style={styles.modalSubtitle}>
-              Add an existing user as an enrolled player in this club.
-            </AppText>
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
+              {formError ? (
+                <View style={styles.modalErrorBox}>
+                  <AppText style={styles.modalErrorText}>{formError}</AppText>
+                </View>
+              ) : null}
 
-            {enrollError && (
-              <View style={styles.modalErrorBox}>
-                <AppText style={styles.modalErrorText}>{enrollError}</AppText>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>User Email *</AppText>
+              {/* Plan Name */}
+              <AppText style={styles.inputLabel}>Plan Name *</AppText>
               <TextInput
-                style={styles.textInput}
-                placeholder="player@example.com"
-                placeholderTextColor="#94A3B8"
-                value={newPlayerEmail}
-                onChangeText={setNewPlayerEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
+                style={styles.inputField}
+                placeholder="e.g. Basic Monthly, Annual Premium"
+                placeholderTextColor="#8C9BA5"
+                value={planName}
+                onChangeText={setPlanName}
               />
-            </View>
 
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Membership ID (Optional)</AppText>
+              {/* Description */}
+              <AppText style={styles.inputLabel}>Description</AppText>
               <TextInput
-                style={styles.textInput}
-                placeholder="e.g. AUG-P-105"
-                placeholderTextColor="#94A3B8"
-                value={newPlayerNumber}
-                onChangeText={setNewPlayerNumber}
-                autoCapitalize="characters"
+                style={[styles.inputField, { height: 70, textAlignVertical: 'top' }]}
+                placeholder="Describe plan access, perks, and restrictions..."
+                placeholderTextColor="#8C9BA5"
+                value={planDesc}
+                onChangeText={setPlanDesc}
+                multiline
               />
-            </View>
 
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Initial Status</AppText>
-              <View style={styles.statusSelectRow}>
-                {VALID_STATUSES.map((st) => (
+              {/* Duration Unit */}
+              <AppText style={styles.inputLabel}>Billing Cycle *</AppText>
+              <View style={styles.durationRow}>
+                {DURATION_OPTIONS.map((opt) => (
                   <TouchableOpacity
-                    key={st.status}
+                    key={opt.value}
                     style={[
-                      styles.statusSelectOption,
-                      newPlayerStatus === st.status && styles.statusSelectOptionActive,
+                      styles.durationBtn,
+                      planDuration === opt.value && styles.durationBtnActive,
                     ]}
-                    onPress={() => setNewPlayerStatus(st.status)}
+                    onPress={() => setPlanDuration(opt.value)}
                   >
                     <AppText
                       style={[
-                        styles.statusSelectOptionText,
-                        newPlayerStatus === st.status && styles.statusSelectOptionTextActive,
+                        styles.durationBtnText,
+                        planDuration === opt.value && styles.durationBtnTextActive,
                       ]}
                     >
-                      {st.label}
+                      {opt.label}
                     </AppText>
                   </TouchableOpacity>
                 ))}
               </View>
-            </View>
 
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(false);
-                }}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleEnrollPlayerSubmit}
-                disabled={isAddingPlayerMember}
-              >
-                <AppText style={styles.submitModalBtnText}>
-                  {isAddingPlayerMember ? 'Enrolling...' : 'Enroll Player'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Add Staff Modal ─────────────────────────────────────────────────── */}
-      <Modal
-        visible={addStaffModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          blurActiveElement();
-          setAddStaffModalVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setAddStaffModalVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Add Staff Member</AppText>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setAddStaffModalVisible(false);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            <AppText style={styles.modalSubtitle}>
-              Grant administrative or management permissions for this facility.
-            </AppText>
-
-            {staffErrorState && (
-              <View style={styles.modalErrorBox}>
-                <AppText style={styles.modalErrorText}>{staffErrorState}</AppText>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Staff User Email *</AppText>
+              {/* Price */}
+              <AppText style={styles.inputLabel}>Price (USD) *</AppText>
               <TextInput
-                style={styles.textInput}
-                placeholder="staff@example.com"
-                placeholderTextColor="#94A3B8"
-                value={newStaffEmail}
-                onChangeText={setNewStaffEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
+                style={styles.inputField}
+                placeholder="999.00"
+                placeholderTextColor="#8C9BA5"
+                value={planPrice}
+                onChangeText={setPlanPrice}
+                keyboardType="decimal-pad"
               />
-            </View>
 
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Assign Role</AppText>
-              {VALID_ROLES.map((r) => (
-                <TouchableOpacity
-                  key={r.role}
-                  style={[
-                    styles.roleSelectOption,
-                    newStaffRole === r.role && styles.roleSelectOptionActive,
-                  ]}
-                  onPress={() => setNewStaffRole(r.role)}
-                >
-                  <AppText
-                    style={[
-                      styles.roleSelectOptionText,
-                      newStaffRole === r.role && styles.roleSelectOptionTextActive,
-                    ]}
+              {/* Limits */}
+              <View style={styles.formRowTwoCol}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <AppText style={styles.inputLabel}>Max Active Bookings</AppText>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="e.g. 3"
+                    placeholderTextColor="#8C9BA5"
+                    value={planBookingLimit}
+                    onChangeText={setPlanBookingLimit}
+                    keyboardType="number-pad"
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <AppText style={styles.inputLabel}>Advance Days</AppText>
+                  <TextInput
+                    style={styles.inputField}
+                    placeholder="e.g. 14"
+                    placeholderTextColor="#8C9BA5"
+                    value={planAdvanceDays}
+                    onChangeText={setPlanAdvanceDays}
+                    keyboardType="number-pad"
+                  />
+                </View>
+              </View>
+
+              {/* Benefits Checklist */}
+              <AppText style={styles.inputLabel}>Plan Benefits</AppText>
+              {planBenefits.map((b, idx) => (
+                <View key={idx} style={styles.benefitInputRow}>
+                  <Check size={14} color="#176B57" style={{ marginRight: 8 }} />
+                  <AppText style={styles.benefitInputText}>{b}</AppText>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveBenefit(idx)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    {r.label}
-                  </AppText>
-                </TouchableOpacity>
+                    <X size={15} color="#D32F2F" />
+                  </TouchableOpacity>
+                </View>
               ))}
-            </View>
 
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setAddStaffModalVisible(false);
-                }}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleAddStaffSubmit}
-                disabled={isAddingMember}
-              >
-                <AppText style={styles.submitModalBtnText}>
-                  {isAddingMember ? 'Adding...' : 'Add Staff'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Edit Player Status Modal ────────────────────────────────────────── */}
-      <Modal
-        visible={editPlayerModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          blurActiveElement();
-          setEditPlayerModalVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setEditPlayerModalVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Edit Player Status</AppText>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setEditPlayerModalVisible(false);
-                }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            {selectedPlayer && (
-              <AppText style={styles.modalSubtitle}>
-                Updating status for {formatPlayerName(selectedPlayer)} ({selectedPlayer.user_email})
-              </AppText>
-            )}
-
-            {editPlayerError && (
-              <View style={styles.modalErrorBox}>
-                <AppText style={styles.modalErrorText}>{editPlayerError}</AppText>
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              {VALID_STATUSES.map((st) => (
+              <View style={styles.addBenefitRow}>
+                <TextInput
+                  style={[styles.inputField, { flex: 1, marginBottom: 0 }]}
+                  placeholder="Add another benefit..."
+                  placeholderTextColor="#8C9BA5"
+                  value={newBenefitInput}
+                  onChangeText={setNewBenefitInput}
+                  onSubmitEditing={handleAddBenefit}
+                />
                 <TouchableOpacity
-                  key={st.status}
-                  style={[
-                    styles.roleSelectOption,
-                    selectedPlayerStatus === st.status && styles.roleSelectOptionActive,
-                  ]}
-                  onPress={() => setSelectedPlayerStatus(st.status)}
+                  style={styles.addBenefitBtn}
+                  onPress={handleAddBenefit}
                 >
-                  <AppText
-                    style={[
-                      styles.roleSelectOptionText,
-                      selectedPlayerStatus === st.status && styles.roleSelectOptionTextActive,
-                    ]}
-                  >
-                    {st.label}
-                  </AppText>
+                  <AppText style={styles.addBenefitBtnText}>Add</AppText>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setEditPlayerModalVisible(false);
-                }}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleUpdatePlayerStatusSubmit}
-                disabled={isUpdatingPlayerMember}
-              >
-                <AppText style={styles.submitModalBtnText}>
-                  {isUpdatingPlayerMember ? 'Saving...' : 'Save Status'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Edit Staff Role Modal ───────────────────────────────────────────── */}
-      <Modal
-        visible={editStaffModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          blurActiveElement();
-          setEditStaffModalVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setEditStaffModalVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Edit Staff Role</AppText>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setEditStaffModalVisible(false);
-                }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            {selectedStaff && (
-              <AppText style={styles.modalSubtitle}>
-                Updating role for {selectedStaff.user_full_name || selectedStaff.user_email}
-              </AppText>
-            )}
-
-            {editStaffError && (
-              <View style={styles.modalErrorBox}>
-                <AppText style={styles.modalErrorText}>{editStaffError}</AppText>
               </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              {VALID_ROLES.map((r) => (
-                <TouchableOpacity
-                  key={r.role}
-                  style={[
-                    styles.roleSelectOption,
-                    selectedStaffRole === r.role && styles.roleSelectOptionActive,
-                  ]}
-                  onPress={() => setSelectedStaffRole(r.role)}
-                >
-                  <AppText
-                    style={[
-                      styles.roleSelectOptionText,
-                      selectedStaffRole === r.role && styles.roleSelectOptionTextActive,
-                    ]}
-                  >
-                    {r.label}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setEditStaffModalVisible(false);
-                }}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleUpdateStaffRoleSubmit}
-                disabled={isUpdatingMember}
-              >
-                <AppText style={styles.submitModalBtnText}>
-                  {isUpdatingMember ? 'Saving...' : 'Save Role'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Filter & Membership Plan Tiers Modal ────────────────────────────── */}
-      <Modal
-        visible={filterInfoVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          blurActiveElement();
-          setFilterInfoVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setFilterInfoVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Membership Filters & Plans</AppText>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setFilterInfoVisible(false);
-                }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              <AppText style={styles.sectionHeadingModal}>Player Classifications</AppText>
-
-              <View style={styles.filterExplainerItem}>
-                <AppText style={styles.filterExplainerTitle}>• All Players ({filteredPlayers.length})</AppText>
-                <AppText style={styles.filterExplainerBody}>
-                  Displays all enrolled player accounts registered to play at this facility.
-                </AppText>
-              </View>
-
-              <View style={styles.filterExplainerItem}>
-                <AppText style={styles.filterExplainerTitle}>• Subscribers</AppText>
-                <AppText style={styles.filterExplainerBody}>
-                  Active paid membership subscribers enrolled in recurring club plans.
-                </AppText>
-              </View>
-
-              <View style={styles.filterExplainerItem}>
-                <AppText style={styles.filterExplainerTitle}>• Normal Users</AppText>
-                <AppText style={styles.filterExplainerBody}>
-                  Enrolled players participating on standard pay-per-booking rates.
-                </AppText>
-              </View>
-
-              <View style={styles.dividerModal} />
-
-              <AppText style={styles.sectionHeadingModal}>Active Membership Plans ({membershipPlans.length})</AppText>
-              {membershipPlans.length === 0 ? (
-                <AppText style={styles.filterExplainerBody}>No plans created yet.</AppText>
-              ) : (
-                membershipPlans.map((plan) => (
-                  <View key={plan.id} style={styles.planOverviewRow}>
-                    <View style={{ flex: 1 }}>
-                      <AppText style={styles.planOverviewName}>{plan.name}</AppText>
-                      <AppText style={styles.planOverviewMeta}>
-                        {formatCurrency(plan.price, plan.currency || 'USD')} / {plan.duration_unit}
-                      </AppText>
-                    </View>
-                    <View style={styles.statusBadgeActive}>
-                      <AppText style={styles.statusBadgeTextActive}>Active Plan</AppText>
-                    </View>
-                  </View>
-                ))
-              )}
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.submitModalBtn, { marginTop: 16 }]}
-              onPress={() => {
-                blurActiveElement();
-                setFilterInfoVisible(false);
-              }}
-            >
-              <AppText style={styles.submitModalBtnText}>Done</AppText>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Member Card Three-Dot Action Sheet ─────────────────────────────── */}
-      <Modal
-        visible={actionMenuVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => {
-          blurActiveElement();
-          setActionMenuVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setActionMenuVisible(false);
-          }}
-        >
-          <Pressable style={styles.menuSheetContent} onPress={(e) => e.stopPropagation()}>
-            {menuPlayer && (
-              <>
-                <View style={styles.menuSheetHeader}>
-                  <AppText style={styles.menuSheetTitle}>{formatPlayerName(menuPlayer)}</AppText>
-                  <AppText style={styles.menuSheetSubtitle}>{menuPlayer.user_email}</AppText>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.menuSheetOption}
-                  onPress={() => {
-                    setActionMenuVisible(false);
-                    handleOpenEditPlayer(menuPlayer);
-                  }}
-                >
-                  <SquarePen size={18} color="#123D38" />
-                  <AppText style={styles.menuSheetOptionText}>Edit Membership Status</AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.menuSheetOption}
-                  onPress={() => {
-                    setActionMenuVisible(false);
-                    handleMessagePlayer(menuPlayer);
-                  }}
-                >
-                  <Mail size={18} color="#123D38" />
-                  <AppText style={styles.menuSheetOptionText}>Send Message / Email</AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.menuSheetOption}
-                  onPress={() => {
-                    setActionMenuVisible(false);
-                    Alert.alert(
-                      'Member Details',
-                      `Name: ${formatPlayerName(menuPlayer)}\nEmail: ${menuPlayer.user_email}\nStatus: ${menuPlayer.status}\nJoined: ${new Date(menuPlayer.joined_at).toLocaleDateString()}`
-                    );
-                  }}
-                >
-                  <UserCheck size={18} color="#123D38" />
-                  <AppText style={styles.menuSheetOptionText}>View Profile Details</AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.menuSheetOption, { borderBottomWidth: 0 }]}
-                  onPress={() => {
-                    setActionMenuVisible(false);
-                  }}
-                >
-                  <X size={18} color="#667776" />
-                  <AppText style={[styles.menuSheetOptionText, { color: '#667776' }]}>Cancel</AppText>
-                </TouchableOpacity>
-              </>
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      {/* ─── Send Message / Notice Modal ────────────────────────────────────── */}
-      <Modal
-        visible={messageModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          blurActiveElement();
-          setMessageModalVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setMessageModalVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <AppText style={styles.modalTitle}>Message Member</AppText>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setMessageModalVisible(false);
-                }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            {messageTarget && (
-              <AppText style={styles.modalSubtitle}>
-                To: {messageTarget.name} ({messageTarget.email})
-              </AppText>
-            )}
-
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Subject</AppText>
-              <TextInput
-                style={styles.textInput}
-                value={messageSubject}
-                onChangeText={setMessageSubject}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <AppText style={styles.inputLabel}>Message</AppText>
-              <TextInput
-                style={[styles.textInput, { height: 100, textAlignVertical: 'top', paddingTop: 10 }]}
-                value={messageBody}
-                onChangeText={setMessageBody}
-                multiline
-              />
-            </View>
-
-            <View style={styles.modalActionButtons}>
+            <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setMessageModalVisible(false);
-                }}
+                onPress={() => setShowCreatePlan(false)}
               >
                 <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.submitModalBtn} onPress={handleSendEmail}>
-                <AppText style={styles.submitModalBtnText}>Send via Email</AppText>
+              <TouchableOpacity
+                style={styles.saveModalBtn}
+                onPress={handleSavePlan}
+                disabled={savingPlan}
+              >
+                <AppText style={styles.saveModalBtnText}>
+                  {savingPlan ? 'Saving...' : editingPlan ? 'Update Plan' : 'Save Plan'}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ─── Enroll Subscriber Modal ────────────────────────────────────────── */}
+      <Modal
+        visible={showEnrollModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEnrollModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowEnrollModal(false)}
+        >
+          <Pressable
+            style={[styles.modalCard, { maxHeight: '85%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <AppText style={styles.modalTitle}>Enroll Subscriber</AppText>
+              <TouchableOpacity
+                onPress={() => setShowEnrollModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#123D38" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
+              {enrollError ? (
+                <View style={styles.modalErrorBox}>
+                  <AppText style={styles.modalErrorText}>{enrollError}</AppText>
+                </View>
+              ) : null}
+
+              {/* Select Player */}
+              <AppText style={styles.inputLabel}>Select Player *</AppText>
+              <View style={styles.pickerContainer}>
+                {playerMembers.length === 0 ? (
+                  <AppText style={{ color: '#8C9BA5', padding: 12 }}>No players available to enroll.</AppText>
+                ) : (
+                  playerMembers.slice(0, 15).map((pm) => (
+                    <TouchableOpacity
+                      key={pm.id}
+                      style={[
+                        styles.pickerOption,
+                        enrollPlayerId === pm.id && styles.pickerOptionSelected,
+                      ]}
+                      onPress={() => setEnrollPlayerId(pm.id)}
+                    >
+                      <AppText
+                        style={[
+                          styles.pickerOptionText,
+                          enrollPlayerId === pm.id && styles.pickerOptionTextSelected,
+                        ]}
+                      >
+                        {pm.user_full_name || pm.user_email}
+                      </AppText>
+                      {enrollPlayerId === pm.id && <Check size={16} color="#176B57" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              {/* Select Plan */}
+              <AppText style={[styles.inputLabel, { marginTop: 14 }]}>Select Plan *</AppText>
+              <View style={styles.pickerContainer}>
+                {plans.length === 0 ? (
+                  <AppText style={{ color: '#8C9BA5', padding: 12 }}>No membership plans found.</AppText>
+                ) : (
+                  plans.map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[
+                        styles.pickerOption,
+                        enrollPlanId === p.id && styles.pickerOptionSelected,
+                      ]}
+                      onPress={() => setEnrollPlanId(p.id)}
+                    >
+                      <View>
+                        <AppText
+                          style={[
+                            styles.pickerOptionText,
+                            enrollPlanId === p.id && styles.pickerOptionTextSelected,
+                          ]}
+                        >
+                          {p.name}
+                        </AppText>
+                        <AppText style={{ fontSize: 12, color: '#647570', marginTop: 2 }}>
+                          {formatCurrency(p.price, p.currency || 'USD')} · {p.duration_label || p.duration_unit}
+                        </AppText>
+                      </View>
+                      {enrollPlanId === p.id && <Check size={16} color="#176B57" />}
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+
+              {/* Start Date */}
+              <AppText style={[styles.inputLabel, { marginTop: 14 }]}>Start Date (YYYY-MM-DD)</AppText>
+              <TextInput
+                style={styles.inputField}
+                placeholder="2026-10-14"
+                placeholderTextColor="#8C9BA5"
+                value={enrollStartDate}
+                onChangeText={setEnrollStartDate}
+              />
+
+              {/* Auto Renew Switch */}
+              <View style={styles.switchRow}>
+                <View style={{ flex: 1 }}>
+                  <AppText style={styles.switchTitle}>Auto Renew</AppText>
+                  <AppText style={styles.switchSubtitle}>Automatically renew upon expiration</AppText>
+                </View>
+                <Switch
+                  value={enrollAutoRenew}
+                  onValueChange={setEnrollAutoRenew}
+                  trackColor={{ false: '#D1D5DB', true: '#176B57' }}
+                  thumbColor="#FFFFFF"
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => setShowEnrollModal(false)}
+              >
+                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveModalBtn}
+                onPress={handleEnrollSubmit}
+                disabled={enrolling}
+              >
+                <AppText style={styles.saveModalBtnText}>
+                  {enrolling ? 'Enrolling...' : 'Enroll Player'}
+                </AppText>
               </TouchableOpacity>
             </View>
           </Pressable>
@@ -1649,222 +1204,183 @@ export default function MembershipsScreen() {
   );
 }
 
-// ─── Stylesheet (Exact Match to Modern Memberships Dashboard Reference) ─────────
+// ─── Stylesheet ───────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
-    backgroundColor: '#F0F8F2',
+    backgroundColor: '#F0F8F4',
   },
-  screenInner: {
-    flex: 1,
-    maxWidth: 960,
+  listContentContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    maxWidth: 720,
     width: '100%',
     alignSelf: 'center',
   },
-  listContentContainer: {
-    paddingBottom: 110, // Generous padding to clear fixed AppBottomNav
-  },
 
-  // ─── Header & Decorative Sports Background ──────────────────────────────────
-  headerBlock: {
-    marginBottom: 4,
-    position: 'relative',
-    overflow: 'hidden',
+  // Header Bar
+  headerSectionWrapper: {
+    marginBottom: 8,
   },
-  customHeaderRow: {
+  headerContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingBottom: 6,
-    position: 'relative',
-  },
-  hamburgerButton: {
-    width: 38,
-    height: 38,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
+    paddingVertical: 14,
   },
-  headerTitleContainer: {
+  hamburgerBtn: {
+    padding: 6,
+    marginRight: 12,
+  },
+  headerTextCol: {
     flex: 1,
-    zIndex: 2,
   },
-  pageTitle: {
-    fontSize: 26,
+  headerTitle: {
+    fontSize: 24,
     fontWeight: '800',
     color: '#123D38',
     letterSpacing: -0.4,
-    lineHeight: 32,
   },
-  pageSubtitle: {
-    fontSize: 13.5,
-    fontWeight: '500',
-    color: '#667776',
-    marginTop: 3,
-    lineHeight: 18,
-  },
-
-  // Top-Right Sports Graphic
-  decorativeBgContainer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 140,
-    height: 120,
-    overflow: 'hidden',
-    zIndex: 1,
-  },
-  decorativeOuterCircle: {
-    position: 'absolute',
-    top: -50,
-    right: -40,
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: 'rgba(196, 234, 211, 0.45)',
-  },
-  decorativeInnerCircle: {
-    position: 'absolute',
-    top: -25,
-    right: -20,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(54, 158, 119, 0.35)',
-  },
-  decorativeBall: {
-    position: 'absolute',
-    top: 26,
-    right: 14,
-    width: 44,
-    height: 44,
-  },
-
-  // ─── Main Action Row: [ Players ] [ Staff ] [ + Enroll ] ─────────────────────
-  mainActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    paddingHorizontal: 16,
-    marginTop: 18,
-    marginBottom: 14,
-  },
-  mainActionBtn: {
-    flex: 1,
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFE7E3',
-    borderRadius: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  mainActionBtnActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
-  },
-  mainActionBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#123D38',
-  },
-  mainActionBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  mainActionBtnSecondary: {
-    flex: 1,
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFE7E3',
-    borderRadius: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  mainActionBtnSecondaryText: {
-    color: '#123D38',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-
-  // ─── Filter Pills Row: [ All Players ] [ Subscribers ] [ Normal Users ] [ 🎛️ ] ──
-  filterPillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  filterPill: {
-    paddingVertical: 7.5,
-    paddingHorizontal: 15,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFE7E3',
-  },
-  filterPillActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
-  },
-  filterPillText: {
+  headerSubtitle: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    color: '#5A756C',
+    marginTop: 2,
+    fontWeight: '500',
   },
-  filterPillTextActive: {
+
+  // Hero Promotional Banner
+  heroBannerContainer: {
+    width: '100%',
+    height: 175,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#DCE7E1',
+    backgroundColor: '#D9ECE1',
+    marginTop: 4,
+    marginBottom: 14,
+  },
+  heroBannerBackground: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  heroBannerImage: {
+    borderRadius: 18,
+  },
+  heroWashOverlay: {
+    ...StyleSheet.absoluteFill,
+    width: '70%',
+    borderRadius: 18,
+    backgroundColor: 'rgba(240, 248, 244, 0.70)',
+    ...Platform.select({
+      web: {
+        background: 'linear-gradient(90deg, rgba(240, 248, 244, 0.92) 0%, rgba(240, 248, 244, 0.75) 55%, rgba(240, 248, 244, 0) 100%)',
+      },
+    }),
+  },
+  heroContentLeft: {
+    maxWidth: '66%',
+    justifyContent: 'center',
+  },
+  heroHeadline: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F2E28',
+    lineHeight: 25,
+    letterSpacing: -0.3,
+  },
+  heroSubtext: {
+    fontSize: 12.5,
+    color: '#1C493E',
+    lineHeight: 17,
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  heroAccentBar: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#176B57',
+    marginTop: 12,
+  },
+
+  // New Plan Button
+  newPlanRow: {
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  newPlanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#176B57',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    shadowColor: '#176B57',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  newPlanBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14.5,
+    fontWeight: '700',
+  },
+
+  // Plans & Subscribers Switcher
+  segmentedContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#E2ECE6',
+    marginBottom: 14,
+  },
+  segmentedTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+    backgroundColor: 'transparent',
+  },
+  segmentedTabActive: {
+    backgroundColor: '#176B57',
+  },
+  segmentedTabText: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: '#123D38',
+  },
+  segmentedTabTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
-  filterIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFE7E3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 'auto',
-  },
 
-  // ─── Search Container ────────────────────────────────────────────────────────
-  searchContainer: {
+  // Subscriber Search & Enroll Row
+  subscriberSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2EAE5',
-    marginHorizontal: 16,
-    marginBottom: 14,
-    paddingHorizontal: 14,
-    height: 48,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: '#DCE7E1',
+    paddingHorizontal: 12,
+    height: 46,
   },
   searchIcon: {
-    marginRight: 9,
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
@@ -1873,448 +1389,502 @@ const styles = StyleSheet.create({
     height: '100%',
     paddingVertical: 0,
   },
-
-  // ─── Staff Controls ──────────────────────────────────────────────────────────
-  staffControlsContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 14,
-  },
-  staffSearchAndAddRow: {
+  enrollBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  staffSearchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2EAE5',
-    paddingHorizontal: 12,
-    height: 46,
-  },
-  addStaffBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#0E5E54',
-    paddingHorizontal: 15,
-    height: 46,
+    backgroundColor: '#176B57',
     borderRadius: 14,
-    justifyContent: 'center',
+    height: 46,
+    paddingHorizontal: 18,
+    marginLeft: 10,
   },
-  addStaffBtnText: {
+  enrollBtnText: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
   },
 
-  // ─── Member Card ─────────────────────────────────────────────────────────────
-  memberCard: {
+  // Subscriber Cards
+  subscriberCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2EAE5',
+    borderRadius: 18,
     padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  cardTopRow: {
+  subCardTopRow: {
     flexDirection: 'row',
-    gap: 14,
     alignItems: 'flex-start',
   },
-
-  // Avatar
-  avatarContainer: {
-    overflow: 'hidden',
-    backgroundColor: '#DEF2E6',
-  },
-  avatarImg: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarFallback: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#D4E8DD',
-  },
-  avatarInitialsText: {
-    fontWeight: '700',
-    color: '#0E5E54',
-    letterSpacing: 0.5,
-  },
-
-  // Card Details Column
-  cardDetailsColumn: {
+  subCardDetails: {
     flex: 1,
+    marginLeft: 14,
   },
-  nameAndIdRow: {
+  subNameAndBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
   },
-  playerName: {
-    fontSize: 17.5,
+  subPlayerName: {
+    flex: 1,
+    fontSize: 18,
     fontWeight: '700',
     color: '#123D38',
-    flex: 1,
-    letterSpacing: -0.2,
+    marginRight: 8,
   },
-  idAndMenuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  idBadge: {
-    backgroundColor: '#EDF2EF',
+  subStatusBadge: {
     paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
-  idBadgeText: {
-    fontSize: 11.5,
+  subStatusBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#5A6B65',
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
   },
-  moreMenuButton: {
-    padding: 2,
-    marginLeft: 2,
-  },
-  playerEmail: {
+  subPlayerEmail: {
     fontSize: 13.5,
-    color: '#71828A',
+    color: '#647570',
     marginTop: 2,
   },
-
-  // Status Badge
-  statusRow: {
-    marginTop: 8,
-  },
-  statusBadge: {
+  subPlanAndRenewalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 12,
-    backgroundColor: '#EDF2EF',
+    marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  statusBadgeActive: {
-    backgroundColor: '#DEF2E6',
+  subPlanBadge: {
+    backgroundColor: '#E7F0FB',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  statusBadgeWarning: {
-    backgroundColor: '#FFF4E5',
-  },
-  statusBadgeDanger: {
-    backgroundColor: '#FDE8E8',
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#667776',
-  },
-  statusDotActive: {
-    backgroundColor: '#107548',
-  },
-  statusDotWarning: {
-    backgroundColor: '#D97706',
-  },
-  statusDotDanger: {
-    backgroundColor: '#DC2626',
-  },
-  statusBadgeText: {
+  subPlanBadgeText: {
+    color: '#1E69D2',
     fontSize: 12,
-    fontWeight: '700',
-    color: '#667776',
+    fontWeight: '600',
   },
-  statusBadgeTextActive: {
-    color: '#107548',
+  subRenewalContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  statusBadgeTextWarning: {
-    color: '#D97706',
+  subRenewalText: {
+    fontSize: 12.5,
+    color: '#647570',
+    marginLeft: 4,
+    fontWeight: '500',
   },
-  statusBadgeTextDanger: {
-    color: '#DC2626',
+  subCardDivider: {
+    height: 1,
+    backgroundColor: '#F0F3F1',
+    marginVertical: 12,
+  },
+  subCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  subBillingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  subBillingText: {
+    fontSize: 13.5,
+    color: '#5A6E67',
+    fontWeight: '500',
+    marginLeft: 8,
+  },
+  threeDotBtn: {
+    padding: 4,
   },
 
-  // Role Badge (Staff)
-  roleBadge: {
+  // Avatar
+  avatarWrapper: {
+    overflow: 'hidden',
+    backgroundColor: '#E8EFEA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarImage: {
+    backgroundColor: '#E8EFEA',
+  },
+  avatarFallback: {
+    backgroundColor: '#DEF2E6',
+  },
+  avatarInitials: {
+    fontWeight: '700',
+    color: '#176B57',
+  },
+
+  // Plans Tab Card
+  planCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  planHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  planTitleContainer: {
+    flex: 1,
+  },
+  planName: {
+    fontSize: 19,
+    fontWeight: '700',
+    color: '#123D38',
+  },
+  planDurationSubtitle: {
+    fontSize: 13,
+    color: '#647570',
+    marginTop: 2,
+  },
+  planStatusAndMenu: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  planStatusBadge: {
     paddingHorizontal: 9,
     paddingVertical: 3.5,
     borderRadius: 10,
   },
-  roleBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '700',
+  planStatusActive: {
+    backgroundColor: '#E8F5E9',
   },
-
-  // Card Divider & Actions
-  cardDivider: {
-    height: 1,
-    backgroundColor: '#F0F4F2',
-    marginTop: 14,
+  planStatusInactive: {
+    backgroundColor: '#F3F4F6',
+  },
+  planStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  planStatusActiveText: {
+    color: '#2E7D32',
+  },
+  planStatusInactiveText: {
+    color: '#6B7280',
+  },
+  planPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: 10,
     marginBottom: 6,
   },
-  cardActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardActionItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 6,
-  },
-  cardActionText: {
-    fontSize: 13.5,
-    fontWeight: '600',
+  planPriceText: {
+    fontSize: 24,
+    fontWeight: '800',
     color: '#123D38',
   },
-  actionVerticalDivider: {
-    width: 1,
+  planPriceUnitText: {
+    fontSize: 14,
+    color: '#647570',
+    fontWeight: '500',
+  },
+  planDescText: {
+    fontSize: 13.5,
+    color: '#5A6E67',
+    lineHeight: 19,
+    marginBottom: 12,
+  },
+  planBenefitsContainer: {
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  planBenefitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  checkIconWrapper: {
+    width: 18,
     height: 18,
-    backgroundColor: '#E2EAE5',
+    borderRadius: 9,
+    backgroundColor: '#DEF2E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  planBenefitText: {
+    fontSize: 13.5,
+    color: '#293D38',
+  },
+  planLimitsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F3F1',
+    marginBottom: 14,
+  },
+  planLimitItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  planLimitText: {
+    fontSize: 12.5,
+    color: '#647570',
+    fontWeight: '500',
+  },
+  planCardActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  planEditBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#F0F4F2',
+    alignItems: 'center',
+  },
+  planEditBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#123D38',
+  },
+  planDeactivateBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#FDECEB',
+    alignItems: 'center',
+  },
+  planDeactivateBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#D32F2F',
+  },
+  planReactivateBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+  },
+  planReactivateBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#2E7D32',
   },
 
-  // ─── Modal Styles ────────────────────────────────────────────────────────────
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  modalCard: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-    maxHeight: '90%',
+    paddingBottom: 28,
   },
-  modalHeaderRow: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F3F1',
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#102F2A',
+    fontWeight: '800',
+    color: '#123D38',
   },
-  modalSubtitle: {
-    fontSize: 13,
-    color: '#667776',
-    marginBottom: 16,
-    lineHeight: 18,
+  modalBody: {
+    marginBottom: 14,
   },
   modalErrorBox: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FDECEB',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 12,
   },
   modalErrorText: {
-    color: '#B91C1C',
-    fontSize: 12.5,
-  },
-  inputGroup: {
-    marginBottom: 14,
+    color: '#D32F2F',
+    fontSize: 13,
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#2D3748',
     marginBottom: 6,
   },
-  textInput: {
+  inputField: {
     backgroundColor: '#F8FAF9',
     borderWidth: 1,
-    borderColor: '#D4E5DE',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
-    fontSize: 14,
-    color: '#102F2A',
-  },
-  statusSelectRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  statusSelectOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: '#F0F4F2',
-    borderWidth: 1,
-    borderColor: '#E0E8E4',
-  },
-  statusSelectOptionActive: {
-    backgroundColor: '#0E5E54',
-    borderColor: '#0E5E54',
-  },
-  statusSelectOptionText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#102F2A',
-  },
-  statusSelectOptionTextActive: {
-    color: '#FFFFFF',
-  },
-  roleSelectOption: {
+    borderColor: '#DCE7E1',
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    fontSize: 14,
+    color: '#123D38',
+    marginBottom: 14,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  durationBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 10,
     backgroundColor: '#F0F4F2',
     borderWidth: 1,
-    borderColor: '#E0E8E4',
-    marginBottom: 6,
+    borderColor: '#DCE7E1',
   },
-  roleSelectOptionActive: {
-    backgroundColor: '#DEF2E6',
-    borderColor: '#0E5E54',
+  durationBtnActive: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
-  roleSelectOptionText: {
+  durationBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#123D38',
   },
-  roleSelectOptionTextActive: {
-    color: '#0E5E54',
-  },
-  modalActionButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 16,
-    marginBottom: 10,
-  },
-  cancelModalBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#E0E8E4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  cancelModalBtnText: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#647570',
-  },
-  submitModalBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#0E5E54',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitModalBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
+  durationBtnTextActive: {
     color: '#FFFFFF',
-  },
-
-  // Filter Explainer & Plan Overview in Modal
-  sectionHeadingModal: {
-    fontSize: 14,
     fontWeight: '700',
-    color: '#102F2A',
-    marginBottom: 8,
-    marginTop: 4,
   },
-  filterExplainerItem: {
-    marginBottom: 10,
+  formRowTwoCol: {
+    flexDirection: 'row',
   },
-  filterExplainerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#102F2A',
-    marginBottom: 2,
-  },
-  filterExplainerBody: {
-    fontSize: 12.5,
-    color: '#667776',
-    lineHeight: 17,
-  },
-  dividerModal: {
-    height: 1,
-    backgroundColor: '#E2EAE5',
-    marginVertical: 12,
-  },
-  planOverviewRow: {
+  benefitInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F4F2',
+    backgroundColor: '#F8FAF9',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
   },
-  planOverviewName: {
-    fontSize: 13.5,
-    fontWeight: '600',
-    color: '#102F2A',
+  benefitInputText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#293D38',
   },
-  planOverviewMeta: {
-    fontSize: 12,
-    color: '#667776',
-    marginTop: 1,
-  },
-
-  // Action Menu Sheet
-  menuSheetContent: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingTop: 16,
-    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
-  },
-  menuSheetHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F4F2',
-  },
-  menuSheetTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102F2A',
-  },
-  menuSheetSubtitle: {
-    fontSize: 12.5,
-    color: '#667776',
-    marginTop: 2,
-  },
-  menuSheetOption: {
+  addBenefitRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F4F2',
+    marginTop: 4,
+    marginBottom: 14,
+    gap: 8,
   },
-  menuSheetOptionText: {
+  addBenefitBtn: {
+    backgroundColor: '#176B57',
+    paddingHorizontal: 16,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addBenefitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  pickerContainer: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#DCE7E1',
+    maxHeight: 180,
+    overflow: 'hidden',
+  },
+  pickerOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F0',
+  },
+  pickerOptionSelected: {
+    backgroundColor: '#DEF2E6',
+  },
+  pickerOptionText: {
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: '#123D38',
+  },
+  pickerOptionTextSelected: {
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingVertical: 8,
+  },
+  switchTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#123D38',
+  },
+  switchSubtitle: {
+    fontSize: 12,
+    color: '#647570',
+    marginTop: 2,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+  },
+  cancelModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#F0F4F2',
+    alignItems: 'center',
+  },
+  cancelModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#647570',
+  },
+  saveModalBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#176B57',
+    alignItems: 'center',
+  },
+  saveModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

@@ -1668,6 +1668,7 @@ export interface SubscriptionPlayerInfo {
   user_id: string;
   user_email: string;
   user_full_name: string | null;
+  profile_image_url?: string | null;
 }
 
 export interface MemberSubscription {
