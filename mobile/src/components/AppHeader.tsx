@@ -121,7 +121,7 @@ export function AppHeader({
         {/* Right element */}
         {rightElement ? (
           <View style={styles.rightSlot}>{rightElement}</View>
-        ) : (
+        ) : subtitle ? null : (
           <View style={styles.iconPlaceholder} />
         )}
       </View>

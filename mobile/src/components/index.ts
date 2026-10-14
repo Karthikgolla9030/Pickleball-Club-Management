@@ -39,3 +39,5 @@ export * from './tournament-registration';
 export * from './tournament-management';
 export { ClubHeroCarousel } from './ClubHeroCarousel';
 export { ClubBrandingSection } from './ClubBrandingSection';
+export { PlayerHeroBanner } from './PlayerHeroBanner';
+export type { BannerSlide } from './PlayerHeroBanner';

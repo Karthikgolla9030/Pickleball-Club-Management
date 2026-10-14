@@ -24,14 +24,14 @@
  *   - Interactive registration confirmation modal with live server validation
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -49,13 +49,15 @@ import {
   Info,
   MapPin,
   Menu,
+  RotateCw,
   ShieldAlert,
   Sparkles,
+  UserPlus,
   Users,
   X,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, ModalSheet } from '@/components';
+import { AppHeader, AppText, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
   useActiveClub,
   useClubBranding,
@@ -257,6 +259,285 @@ export default function PlayerLessonsScreen() {
     );
   }, [myRegistrations]);
 
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const lessonBannerSlides: BannerSlide[] = useMemo(
+    () => [
+      {
+        tag: 'COACHING & LESSONS',
+        title: 'Learn. Improve. Play with Confidence.',
+        description: 'Book coaching sessions with our certified coaches.',
+        ctaText: 'Explore Lessons →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'PRIVATE SESSIONS',
+        title: 'Tailored 1-on-1 Guidance',
+        description: 'Accelerate your technique, strategy, and game confidence.',
+        ctaText: 'Explore Lessons →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'GROUP CLINICS',
+        title: 'Master The Soft Game & Drops',
+        description: 'Targeted drills for positioning, transitions, and winning dinks.',
+        ctaText: 'Explore Lessons →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+    ],
+    []
+  );
+
+  const renderDiscoverCard = (item: PlayerLessonDetail, index: number) => {
+    const thumbnail = getLessonThumbnail(
+      item.title,
+      index,
+      item.image_url,
+      clubBranding?.cover_image_url
+    );
+    const myReg = getPlayerRegistration(item.id);
+    const isRegistered = !!myReg;
+    const availableSpots = item.available_spots ?? 0;
+    const isFull = availableSpots <= 0 && !isRegistered;
+    const scheduleText = formatLessonSchedule(
+      item.start_at,
+      item.duration_minutes
+    );
+    const courtName = item.court_name || `Court ${index + 1}`;
+    const priceNum = Number(item.price);
+    const priceText = isNaN(priceNum) || priceNum === 0 ? 'Free' : formatCurrency(priceNum);
+
+    return (
+      <View key={item.id} style={styles.lessonCard}>
+        {/* Main Card Section (clickable for details) */}
+        <TouchableOpacity
+          style={styles.cardHeaderArea}
+          onPress={() => setSelectedLesson(item)}
+          activeOpacity={0.85}
+        >
+          {/* Left: Thumbnail Image */}
+          <Image source={thumbnail} style={styles.thumbnail} />
+
+          {/* Right: Info */}
+          <View style={styles.cardRightCol}>
+            {/* Title & Price Row */}
+            <View style={styles.titlePriceRow}>
+              <AppText style={styles.cardTitle} numberOfLines={1}>
+                {item.title}
+              </AppText>
+              <AppText style={styles.cardPrice}>{priceText}</AppText>
+            </View>
+
+            {/* Badges Row */}
+            <View style={styles.badgesRow}>
+              <View style={styles.badgePill}>
+                <AppText style={styles.badgePillText}>
+                  {item.is_private ? 'Private 1:1' : 'Group Clinic'}
+                </AppText>
+              </View>
+              {item.lesson_type_name ? (
+                <View style={styles.badgePill}>
+                  <AppText style={styles.badgePillText}>
+                    {item.lesson_type_name}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Meta Rows (Date, Court, Spots) & Chevron */}
+            <View style={styles.metaWithChevronRow}>
+              <View style={styles.metaRowsContainer}>
+                {/* Date & Duration */}
+                <View style={styles.metaRow}>
+                  <Calendar size={13} color="#647570" strokeWidth={1.8} />
+                  <AppText style={styles.metaText} numberOfLines={1}>
+                    {scheduleText}
+                  </AppText>
+                </View>
+
+                {/* Court / Venue */}
+                <View style={styles.metaRow}>
+                  <MapPin size={13} color="#647570" strokeWidth={1.8} />
+                  <AppText style={styles.metaText}>{courtName}</AppText>
+                </View>
+
+                {/* Available Spots */}
+                <View style={styles.metaRow}>
+                  <Users size={13} color="#647570" strokeWidth={1.8} />
+                  <AppText
+                    style={[
+                      styles.metaText,
+                      isFull && { color: '#DC2626', fontWeight: '700' },
+                    ]}
+                  >
+                    {isFull
+                      ? 'Session full'
+                      : `${availableSpots} spot${availableSpots === 1 ? '' : 's'} open`}
+                  </AppText>
+                </View>
+              </View>
+
+              {/* Right Chevron */}
+              <ChevronRight size={18} color="#718279" strokeWidth={1.8} />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Bottom Full-Width Action Button */}
+        {isRegistered ? (
+          <TouchableOpacity
+            style={styles.registeredButton}
+            onPress={() => handleCancelRegistration(item.id, item.title)}
+            activeOpacity={0.8}
+          >
+            <Check size={16} color="#166534" strokeWidth={2.2} />
+            <AppText style={styles.registeredButtonText}>
+              Registered (Cancel)
+            </AppText>
+          </TouchableOpacity>
+        ) : isFull ? (
+          <View style={styles.disabledButton}>
+            <AppText style={styles.disabledButtonText}>Session Full</AppText>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.registerButton}
+            onPress={() => handleOpenRegister(item)}
+            activeOpacity={0.85}
+          >
+            <AppText style={styles.registerButtonText}>
+              Register for Lesson
+            </AppText>
+            <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.2} />
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
+  const renderRegistrationCard = (item: LessonRegistration, index: number) => {
+    const thumbnail = getLessonThumbnail(
+      item.lesson_title || '',
+      index,
+      item.lesson_image_url,
+      clubBranding?.cover_image_url
+    );
+    const isRegistered = item.status === 'registered';
+    const isAttended = item.status === 'attended';
+    const isCancelled = item.status === 'cancelled';
+
+    const statusLabel =
+      item.status === 'registered'
+        ? 'Registered'
+        : item.status === 'attended'
+        ? 'Attended'
+        : item.status === 'cancelled'
+        ? 'Cancelled'
+        : item.status;
+
+    const statusColors = isRegistered
+      ? { bg: '#E8F5E9', text: '#166534', dot: '#16A34A' }
+      : isAttended
+      ? { bg: '#EFF6FF', text: '#1D4ED8', dot: '#2563EB' }
+      : { bg: '#FEE2E2', text: '#DC2626', dot: '#DC2626' };
+
+    const scheduleText = item.lesson_start_at
+      ? formatLessonSchedule(item.lesson_start_at)
+      : 'Upcoming Clinic';
+
+    return (
+      <View key={item.id} style={styles.lessonCard}>
+        <View style={styles.cardHeaderArea}>
+          {/* Left: Thumbnail Image */}
+          <Image source={thumbnail} style={styles.thumbnail} />
+
+          {/* Right: Info */}
+          <View style={styles.cardRightCol}>
+            {/* Title & Status Row */}
+            <View style={styles.titlePriceRow}>
+              <AppText style={styles.cardTitle} numberOfLines={1}>
+                {item.lesson_title || 'Pickleball Lesson'}
+              </AppText>
+              <View
+                style={[
+                  styles.statusBadgeCapsule,
+                  { backgroundColor: statusColors.bg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDotSmall,
+                    { backgroundColor: statusColors.dot },
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.statusBadgeCapsuleText,
+                    { color: statusColors.text },
+                  ]}
+                >
+                  {statusLabel}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Meta Rows */}
+            <View style={styles.metaRowsContainer}>
+              {/* Session schedule */}
+              <View style={styles.metaRow}>
+                <Calendar size={13} color="#647570" strokeWidth={1.8} />
+                <AppText style={styles.metaText} numberOfLines={1}>
+                  {scheduleText}
+                </AppText>
+              </View>
+
+              {/* Registered Date */}
+              <View style={styles.metaRow}>
+                <Clock size={13} color="#647570" strokeWidth={1.8} />
+                <AppText style={styles.metaText}>
+                  Booked on {formatSimpleDate(item.registered_at)}
+                </AppText>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Cancellation Action if registered */}
+        {isRegistered && (
+          <TouchableOpacity
+            style={styles.cancelRegButton}
+            onPress={() =>
+              handleCancelRegistration(
+                item.lesson_id,
+                item.lesson_title || 'Lesson'
+              )
+            }
+            disabled={cancellingLessonId === item.lesson_id}
+            activeOpacity={0.8}
+          >
+            {cancellingLessonId === item.lesson_id ? (
+              <ActivityIndicator size="small" color="#DC2626" />
+            ) : (
+              <X size={15} color="#DC2626" strokeWidth={2} />
+            )}
+            <AppText style={styles.cancelRegButtonText}>
+              Cancel Registration
+            </AppText>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
@@ -267,240 +548,130 @@ export default function PlayerLessonsScreen() {
         borderless
       />
 
-      {/* ─── Segmented Control (Tabs) ─── */}
-      <View style={styles.segmentedContainer}>
-        <TouchableOpacity
-          style={[
-            styles.segmentButton,
-            activeTab === 'discover' && styles.segmentButtonActive,
-          ]}
-          onPress={() => setActiveTab('discover')}
-          activeOpacity={0.8}
-        >
-          <AppText
-            style={[
-              styles.segmentText,
-              activeTab === 'discover' && styles.segmentTextActive,
-            ]}
-          >
-            Discover Lessons
-          </AppText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.segmentButton,
-            activeTab === 'my_registrations' && styles.segmentButtonActive,
-          ]}
-          onPress={() => setActiveTab('my_registrations')}
-          activeOpacity={0.8}
-        >
-          <AppText
-            style={[
-              styles.segmentText,
-              activeTab === 'my_registrations' && styles.segmentTextActive,
-            ]}
-          >
-            My Registrations
-          </AppText>
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── TAB 1: Discover Lessons ─── */}
-      {activeTab === 'discover' && (
-        <FlatList
-          data={sortedLessons}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetchingDiscover}
-              onRefresh={refetchDiscover}
-              colors={['#114D3F']}
-              tintColor="#114D3F"
-            />
+      {/* ─── Content ScrollView ─── */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetchingDiscover || isRefetchingMyLessons}
+            onRefresh={() => {
+              refetchDiscover();
+              refetchMyLessons();
+            }}
+            colors={['#0D3E33']}
+            tintColor="#0D3E33"
+          />
+        }
+      >
+        {/* ─── Hero Banner ─── */}
+        <PlayerHeroBanner
+          slides={lessonBannerSlides}
+          imageSource={
+            clubBranding?.cover_image_url
+              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+              : require('../../assets/lessons/hero_lessons_photo.jpg')
           }
-          ListEmptyComponent={
-            isLoadingDiscover && !isRefetchingDiscover ? (
+        />
+
+        {/* ─── Segmented Control (Tabs) ─── */}
+        <View style={styles.segmentedContainer}>
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              activeTab === 'discover' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setActiveTab('discover')}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'discover' }}
+            accessibilityLabel="Discover Lessons"
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activeTab === 'discover' && styles.segmentTextActive,
+              ]}
+            >
+              Discover Lessons
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              activeTab === 'my_registrations' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setActiveTab('my_registrations')}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'my_registrations' }}
+            accessibilityLabel="My Registrations"
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activeTab === 'my_registrations' && styles.segmentTextActive,
+              ]}
+            >
+              My Registrations
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── TAB 1: Discover Lessons ─── */}
+        {activeTab === 'discover' && (
+          <>
+            {isLoadingDiscover && !isRefetchingDiscover ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#114D3F" />
+                <ActivityIndicator size="large" color="#0D3E33" />
                 <AppText style={styles.loadingText}>Loading coaching sessions...</AppText>
               </View>
-            ) : (
+            ) : sortedLessons.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconCircle}>
-                  <Users size={32} color="#114D3F" strokeWidth={1.8} />
+                  <UserPlus size={34} color="#0D5C46" strokeWidth={1.8} />
                 </View>
                 <AppText style={styles.emptyTitle}>No Lessons Available</AppText>
                 <AppText style={styles.emptyDescription}>
-                  There are no published coaching clinics scheduled right now at{' '}
-                  {clubName || 'this club'}. Check back soon or pull to refresh.
+                  There are no published coaching sessions scheduled right now at{' '}
+                  {clubName || 'Aught2 Downtown'}. Check back soon or pull to refresh.
                 </AppText>
                 <TouchableOpacity
-                  style={styles.emptyButton}
+                  style={styles.refreshButton}
                   onPress={() => refetchDiscover()}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Refresh Lessons"
                 >
-                  <AppText style={styles.emptyButtonText}>Refresh</AppText>
+                  {isRefetchingDiscover ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                  ) : (
+                    <RotateCw size={17} color="#FFFFFF" strokeWidth={2.2} style={{ marginRight: 8 }} />
+                  )}
+                  <AppText style={styles.refreshButtonText}>Refresh</AppText>
                 </TouchableOpacity>
-              </View>
-            )
-          }
-          renderItem={({ item, index }) => {
-            const thumbnail = getLessonThumbnail(
-              item.title,
-              index,
-              item.image_url,
-              clubBranding?.cover_image_url
-            );
-            const myReg = getPlayerRegistration(item.id);
-            const isRegistered = !!myReg;
-            const availableSpots = item.available_spots ?? 0;
-            const isFull = availableSpots <= 0 && !isRegistered;
-            const scheduleText = formatLessonSchedule(
-              item.start_at,
-              item.duration_minutes
-            );
-            const courtName = item.court_name || `Court ${index + 1}`;
-            const priceNum = Number(item.price);
-            const priceText = isNaN(priceNum) || priceNum === 0 ? 'Free' : formatCurrency(priceNum);
-
-            return (
-              <View style={styles.lessonCard}>
-                {/* Main Card Section (clickable for details) */}
-                <TouchableOpacity
-                  style={styles.cardHeaderArea}
-                  onPress={() => setSelectedLesson(item)}
-                  activeOpacity={0.85}
-                >
-                  {/* Left: Thumbnail Image */}
-                  <Image source={thumbnail} style={styles.thumbnail} />
-
-                  {/* Right: Info */}
-                  <View style={styles.cardRightCol}>
-                    {/* Title & Price Row */}
-                    <View style={styles.titlePriceRow}>
-                      <AppText style={styles.cardTitle} numberOfLines={1}>
-                        {item.title}
-                      </AppText>
-                      <AppText style={styles.cardPrice}>{priceText}</AppText>
-                    </View>
-
-                    {/* Badges Row */}
-                    <View style={styles.badgesRow}>
-                      <View style={styles.badgePill}>
-                        <AppText style={styles.badgePillText}>
-                          {item.is_private ? 'Private 1:1' : 'Group Clinic'}
-                        </AppText>
-                      </View>
-                      {item.lesson_type_name ? (
-                        <View style={styles.badgePill}>
-                          <AppText style={styles.badgePillText}>
-                            {item.lesson_type_name}
-                          </AppText>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {/* Meta Rows (Date, Court, Spots) & Chevron */}
-                    <View style={styles.metaWithChevronRow}>
-                      <View style={styles.metaRowsContainer}>
-                        {/* Date & Duration */}
-                        <View style={styles.metaRow}>
-                          <Calendar size={13} color="#647570" strokeWidth={1.8} />
-                          <AppText style={styles.metaText} numberOfLines={1}>
-                            {scheduleText}
-                          </AppText>
-                        </View>
-
-                        {/* Court / Venue */}
-                        <View style={styles.metaRow}>
-                          <MapPin size={13} color="#647570" strokeWidth={1.8} />
-                          <AppText style={styles.metaText}>{courtName}</AppText>
-                        </View>
-
-                        {/* Available Spots */}
-                        <View style={styles.metaRow}>
-                          <Users size={13} color="#647570" strokeWidth={1.8} />
-                          <AppText
-                            style={[
-                              styles.metaText,
-                              isFull && { color: '#DC2626', fontWeight: '700' },
-                            ]}
-                          >
-                            {isFull
-                              ? 'Session full'
-                              : `${availableSpots} spot${availableSpots === 1 ? '' : 's'} open`}
-                          </AppText>
-                        </View>
-                      </View>
-
-                      {/* Right Chevron */}
-                      <ChevronRight size={18} color="#718279" strokeWidth={1.8} />
-                    </View>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Bottom Full-Width Action Button */}
-                {isRegistered ? (
-                  <TouchableOpacity
-                    style={styles.registeredButton}
-                    onPress={() => handleCancelRegistration(item.id, item.title)}
-                    activeOpacity={0.8}
-                  >
-                    <Check size={16} color="#166534" strokeWidth={2.2} />
-                    <AppText style={styles.registeredButtonText}>
-                      Registered (Cancel)
-                    </AppText>
-                  </TouchableOpacity>
-                ) : isFull ? (
-                  <View style={styles.disabledButton}>
-                    <AppText style={styles.disabledButtonText}>Session Full</AppText>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.registerButton}
-                    onPress={() => handleOpenRegister(item)}
-                    activeOpacity={0.85}
-                  >
-                    <AppText style={styles.registerButtonText}>
-                      Register for Lesson
-                    </AppText>
-                    <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.2} />
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
-        />
-      )}
-
-      {/* ─── TAB 2: My Registrations ─── */}
-      {activeTab === 'my_registrations' && (
-        <FlatList
-          data={sortedRegistrations}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetchingMyLessons}
-              onRefresh={refetchMyLessons}
-              colors={['#114D3F']}
-              tintColor="#114D3F"
-            />
-          }
-          ListEmptyComponent={
-            isLoadingMyLessons && !isRefetchingMyLessons ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#114D3F" />
-                <AppText style={styles.loadingText}>Loading registrations...</AppText>
               </View>
             ) : (
+              sortedLessons.map((item, index) => renderDiscoverCard(item, index))
+            )}
+          </>
+        )}
+
+        {/* ─── TAB 2: My Registrations ─── */}
+        {activeTab === 'my_registrations' && (
+          <>
+            {isLoadingMyLessons && !isRefetchingMyLessons ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0D3E33" />
+                <AppText style={styles.loadingText}>Loading registrations...</AppText>
+              </View>
+            ) : sortedRegistrations.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconCircle}>
-                  <Calendar size={32} color="#114D3F" strokeWidth={1.8} />
+                  <Calendar size={28} color="#0D5C46" strokeWidth={1.8} />
                 </View>
                 <AppText style={styles.emptyTitle}>No Lesson Registrations</AppText>
                 <AppText style={styles.emptyDescription}>
@@ -508,134 +679,21 @@ export default function PlayerLessonsScreen() {
                   lessons to improve your skills with certified club coaches!
                 </AppText>
                 <TouchableOpacity
-                  style={styles.emptyButton}
+                  style={styles.refreshButton}
                   onPress={() => setActiveTab('discover')}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="Discover Lessons"
                 >
-                  <AppText style={styles.emptyButtonText}>Discover Lessons</AppText>
+                  <AppText style={styles.refreshButtonText}>Discover Lessons</AppText>
                 </TouchableOpacity>
               </View>
-            )
-          }
-          renderItem={({ item, index }) => {
-            const thumbnail = getLessonThumbnail(
-              item.lesson_title || '',
-              index,
-              item.lesson_image_url,
-              clubBranding?.cover_image_url
-            );
-            const isRegistered = item.status === 'registered';
-            const isAttended = item.status === 'attended';
-            const isCancelled = item.status === 'cancelled';
-
-            const statusLabel =
-              item.status === 'registered'
-                ? 'Registered'
-                : item.status === 'attended'
-                ? 'Attended'
-                : item.status === 'cancelled'
-                ? 'Cancelled'
-                : item.status;
-
-            const statusColors = isRegistered
-              ? { bg: '#E8F5E9', text: '#166534', dot: '#16A34A' }
-              : isAttended
-              ? { bg: '#EFF6FF', text: '#1D4ED8', dot: '#2563EB' }
-              : { bg: '#FEE2E2', text: '#DC2626', dot: '#DC2626' };
-
-            const scheduleText = item.lesson_start_at
-              ? formatLessonSchedule(item.lesson_start_at)
-              : 'Upcoming Clinic';
-
-            return (
-              <View style={styles.lessonCard}>
-                <View style={styles.cardHeaderArea}>
-                  {/* Left: Thumbnail Image */}
-                  <Image source={thumbnail} style={styles.thumbnail} />
-
-                  {/* Right: Info */}
-                  <View style={styles.cardRightCol}>
-                    {/* Title & Status Row */}
-                    <View style={styles.titlePriceRow}>
-                      <AppText style={styles.cardTitle} numberOfLines={1}>
-                        {item.lesson_title || 'Pickleball Lesson'}
-                      </AppText>
-                      <View
-                        style={[
-                          styles.statusBadgeCapsule,
-                          { backgroundColor: statusColors.bg },
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.statusDotSmall,
-                            { backgroundColor: statusColors.dot },
-                          ]}
-                        />
-                        <AppText
-                          style={[
-                            styles.statusBadgeCapsuleText,
-                            { color: statusColors.text },
-                          ]}
-                        >
-                          {statusLabel}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Meta Rows */}
-                    <View style={styles.metaRowsContainer}>
-                      {/* Session schedule */}
-                      <View style={styles.metaRow}>
-                        <Calendar size={13} color="#647570" strokeWidth={1.8} />
-                        <AppText style={styles.metaText} numberOfLines={1}>
-                          {scheduleText}
-                        </AppText>
-                      </View>
-
-                      {/* Registered Date */}
-                      <View style={styles.metaRow}>
-                        <Clock size={13} color="#647570" strokeWidth={1.8} />
-                        <AppText style={styles.metaText}>
-                          Booked on {formatSimpleDate(item.registered_at)}
-                        </AppText>
-                      </View>
-
-                      {item.notes ? (
-                        <View style={styles.metaRow}>
-                          <Info size={13} color="#647570" strokeWidth={1.8} />
-                          <AppText style={styles.metaText} numberOfLines={1}>
-                            "{item.notes}"
-                          </AppText>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Cancel Action if active */}
-                {isRegistered && (
-                  <TouchableOpacity
-                    style={styles.cancelRegButton}
-                    onPress={() =>
-                      handleCancelRegistration(
-                        item.lesson_id,
-                        item.lesson_title || 'Lesson'
-                      )
-                    }
-                    activeOpacity={0.8}
-                  >
-                    <X size={15} color="#DC2626" strokeWidth={2} />
-                    <AppText style={styles.cancelRegButtonText}>
-                      Cancel Registration
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
-        />
-      )}
+            ) : (
+              sortedRegistrations.map((item, index) => renderRegistrationCard(item, index))
+            )}
+          </>
+        )}
+      </ScrollView>
 
       {/* ─── Registration Modal Sheet ─── */}
       <ModalSheet
@@ -852,42 +910,55 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 110,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
+
   // ─── Segmented Tabs ────────────────────────────────────────────────────────
   segmentedContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 9999,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E8EDEA',
+    borderColor: '#E2ECE7',
     padding: 4,
     marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   segmentButton: {
     flex: 1,
-    paddingVertical: 10,
+    height: 42,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 9999,
-    backgroundColor: 'transparent',
   },
   segmentButtonActive: {
-    backgroundColor: '#114D3F',
+    backgroundColor: '#0D3E33',
+    shadowColor: '#0D3E33',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
   },
   segmentText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
-    color: '#0F2922',
+    color: '#475569',
   },
   segmentTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  // ─── List Content ──────────────────────────────────────────────────────────
-  listContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 110, // Generous padding to clear AppBottomNav
+    fontWeight: '600',
   },
 
   // ─── Lesson Card ───────────────────────────────────────────────────────────
@@ -1072,21 +1143,30 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E8EDEA',
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E8F5E9',
+    borderColor: '#E2ECE7',
+    paddingVertical: 44,
+    paddingHorizontal: 24,
+    marginHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginTop: 4,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#E0F2E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
   },
   emptyTitle: {
     fontSize: 18,
@@ -1094,24 +1174,34 @@ const styles = StyleSheet.create({
     color: '#0F2922',
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   emptyDescription: {
-    fontSize: 14,
-    color: '#718279',
+    fontSize: 13.5,
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 20,
+    maxWidth: 320,
+    marginBottom: 22,
   },
-  emptyButton: {
-    backgroundColor: '#114D3F',
+  refreshButton: {
+    backgroundColor: '#0D3E33',
     borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0D3E33',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  emptyButtonText: {
+  refreshButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 14.5,
   },
 
   // ─── Modal Styles ──────────────────────────────────────────────────────────

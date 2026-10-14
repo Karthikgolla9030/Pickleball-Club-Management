@@ -16,7 +16,7 @@
  *   - Real backend data integration with separate loading, error, and empty states
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -29,7 +29,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calendar,
   ChevronRight,
@@ -39,7 +39,7 @@ import {
   Users,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, ModalSheet } from '@/components';
+import { AppHeader, AppText, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
   useActiveClub,
   useClubBranding,
@@ -64,12 +64,76 @@ const COURT_IMAGES = [
 
 export default function PlayerEventsScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const { clubId } = useActiveClub();
+  const { clubId, role } = useActiveClub();
   const { data: clubBranding } = useClubBranding(clubId || '');
+  const scrollViewRef = useRef<ScrollView>(null);
 
   const [activeTab, setActiveTab] = useState<MainTab>('discover');
   const [selectedDetailEvent, setSelectedDetailEvent] = useState<ClubEvent | null>(null);
+
+  const eventBannerSlides: BannerSlide[] = useMemo(
+    () => [
+      {
+        tag: 'CLUB EVENTS',
+        title: 'Play Together, Get Better',
+        description: 'Join socials, clinics and tournaments at your club.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'TOURNAMENTS',
+        title: 'Compete & Win Together',
+        description: 'Challenge your skills in club tournaments and leagues.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'SOCIAL OPEN PLAY',
+        title: 'Connect With Players',
+        description: 'Weekly open play and social mixers for all levels.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+    ],
+    []
+  );
+
+  const handleHostEvent = () => {
+    const isStaff =
+      role === 'club_owner' ||
+      role === 'club_manager' ||
+      role === 'tournament_director';
+    if (isStaff) {
+      Alert.alert(
+        'Host an Event',
+        'As club staff, you can organize, schedule, and publish official events in Club Management.',
+        [
+          { text: 'Dismiss', style: 'cancel' },
+          {
+            text: 'Go to Club Events',
+            onPress: () => router.push('/(club)/events' as any),
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Host an Event',
+        'Clinics, socials and tournaments bring our community together.\n\nInterested in proposing a club clinic, social mixer, or tournament? Reach out to club organizers or staff to get started!',
+        [{ text: 'Got it', style: 'default' }]
+      );
+    }
+  };
 
   // Discover Events query
   const {
@@ -461,11 +525,16 @@ export default function PlayerEventsScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
-      {/* ─── Header ─── */}
-      <AppHeader title="Events" showMenu borderless />
+      <AppHeader
+        title="Events"
+        subtitle="Join events and connect with our community"
+        showMenu
+        borderless
+      />
 
       {/* ─── Content ScrollView ─── */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -476,23 +545,20 @@ export default function PlayerEventsScreen() {
               refetchDiscover();
               refetchMyEvents();
             }}
-            colors={['#114D3F']}
-            tintColor="#114D3F"
+            colors={['#0D3E33']}
+            tintColor="#0D3E33"
           />
         }
       >
         {/* ─── Hero Banner ─── */}
-        <View style={styles.heroBannerContainer}>
-          <Image
-            source={
-              clubBranding?.cover_image_url
-                ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
-                : require('../../assets/events/hero_events_banner.png')
-            }
-            style={styles.heroBannerImage}
-            resizeMode="cover"
-          />
-        </View>
+        <PlayerHeroBanner
+          slides={eventBannerSlides}
+          imageSource={
+            clubBranding?.cover_image_url
+              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+              : require('../../assets/events/hero_events_photo.jpg')
+          }
+        />
 
         {/* ─── Segmented Control (Tabs) ─── */}
         <View style={styles.segmentedContainer}>
@@ -503,6 +569,9 @@ export default function PlayerEventsScreen() {
             ]}
             onPress={() => setActiveTab('discover')}
             activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'discover' }}
+            accessibilityLabel="Discover Events"
           >
             <AppText
               style={[
@@ -521,6 +590,9 @@ export default function PlayerEventsScreen() {
             ]}
             onPress={() => setActiveTab('my_registrations')}
             activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'my_registrations' }}
+            accessibilityLabel="My Registrations"
           >
             <AppText
               style={[
@@ -545,11 +617,13 @@ export default function PlayerEventsScreen() {
                   refetchDiscover();
                 }}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="View All Upcoming Events"
               >
                 <AppText style={styles.viewAllText}>View All</AppText>
                 <ChevronRight
-                  size={15}
-                  color="#135C48"
+                  size={14}
+                  color="#0D7A5F"
                   strokeWidth={2.4}
                   style={{ marginLeft: 2 }}
                 />
@@ -559,7 +633,7 @@ export default function PlayerEventsScreen() {
             {/* List Content */}
             {isDiscoverLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#114D3F" />
+                <ActivityIndicator size="large" color="#0D3E33" />
                 <AppText style={styles.loadingText}>Discovering club events...</AppText>
               </View>
             ) : isDiscoverError ? (
@@ -577,14 +651,12 @@ export default function PlayerEventsScreen() {
             ) : sortedUpcomingEvents.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconContainer}>
-                  <Calendar size={22} color="#176B57" strokeWidth={2.2} />
+                  <Calendar size={24} color="#0D5C46" strokeWidth={2} />
                 </View>
-                <View style={styles.emptyTextContainer}>
-                  <AppText style={styles.emptyTitle}>No upcoming events</AppText>
-                  <AppText style={styles.emptySubtitle}>
-                    There are currently no upcoming events scheduled at your club.
-                  </AppText>
-                </View>
+                <AppText style={styles.emptyTitle}>No upcoming events</AppText>
+                <AppText style={styles.emptySubtitle}>
+                  There are currently no upcoming events scheduled at your club.
+                </AppText>
               </View>
             ) : (
               sortedUpcomingEvents.map((item, index) => renderDiscoverCard(item, index))
@@ -609,7 +681,7 @@ export default function PlayerEventsScreen() {
             {/* List Content */}
             {isMyEventsLoading ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#114D3F" />
+                <ActivityIndicator size="large" color="#0D3E33" />
                 <AppText style={styles.loadingText}>Loading your registrations...</AppText>
               </View>
             ) : isMyEventsError ? (
@@ -628,16 +700,14 @@ export default function PlayerEventsScreen() {
             ) : myRegistrations.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconContainer}>
-                  <Calendar size={22} color="#176B57" strokeWidth={2.2} />
+                  <Calendar size={24} color="#0D5C46" strokeWidth={2} />
                 </View>
-                <View style={styles.emptyTextContainer}>
-                  <AppText style={styles.emptyTitle}>
-                    You haven't registered for any events yet
-                  </AppText>
-                  <AppText style={styles.emptySubtitle}>
-                    Explore the Discover Events tab to join clinics, socials, and tournaments.
-                  </AppText>
-                </View>
+                <AppText style={styles.emptyTitle}>
+                  You haven't registered for any events yet
+                </AppText>
+                <AppText style={styles.emptySubtitle}>
+                  Explore the Discover Events tab to join clinics, socials, and tournaments.
+                </AppText>
               </View>
             ) : (
               myRegistrations.map((reg, index) => renderRegistrationCard(reg, index))
@@ -648,17 +718,13 @@ export default function PlayerEventsScreen() {
         {/* ─── Host an Event? Card ─── */}
         <TouchableOpacity
           style={styles.hostCard}
-          onPress={() => {
-            Alert.alert(
-              'Host an Event',
-              'Interested in organizing a tournament, clinic, or social gathering? Reach out to club staff or management to propose your event!',
-              [{ text: 'Got it', style: 'default' }]
-            );
-          }}
+          onPress={handleHostEvent}
           activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Host an Event?"
         >
           <View style={styles.hostIconContainer}>
-            <Calendar size={22} color="#176B57" strokeWidth={2.2} />
+            <Users size={22} color="#0D5C46" strokeWidth={2.2} />
           </View>
           <View style={styles.hostTextContainer}>
             <AppText style={styles.hostTitle}>Host an Event?</AppText>
@@ -666,7 +732,7 @@ export default function PlayerEventsScreen() {
               Clinics, socials and tournaments bring our community together.
             </AppText>
           </View>
-          <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
+          <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
         </TouchableOpacity>
       </ScrollView>
 
@@ -811,23 +877,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 110,
-  },
-  // ─── Hero Banner ───
-  heroBannerContainer: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroBannerImage: {
+    maxWidth: 680,
     width: '100%',
-    aspectRatio: 440 / 220,
+    alignSelf: 'center',
   },
   // ─── Segmented Control ───
   segmentedContainer: {
@@ -835,7 +887,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E8EDEA',
+    borderColor: '#E2ECE7',
     padding: 4,
     marginHorizontal: 16,
     marginBottom: 16,
@@ -847,14 +899,14 @@ const styles = StyleSheet.create({
   },
   segmentButton: {
     flex: 1,
-    height: 40,
+    height: 42,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#114D3F',
-    shadowColor: '#114D3F',
+    backgroundColor: '#0D3E33',
+    shadowColor: '#0D3E33',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 3,
@@ -863,7 +915,7 @@ const styles = StyleSheet.create({
   segmentText: {
     fontSize: 13.5,
     fontWeight: '500',
-    color: '#5E6E66',
+    color: '#475569',
   },
   segmentTextActive: {
     color: '#FFFFFF',
@@ -1029,24 +1081,24 @@ const styles = StyleSheet.create({
   },
   // ─── Host an Event Card ───
   hostCard: {
-    backgroundColor: '#EDF7F2',
+    backgroundColor: '#F8FAF8',
     borderRadius: 16,
-    paddingVertical: 16,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     marginHorizontal: 16,
     marginTop: 6,
-    marginBottom: 16,
+    marginBottom: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     borderWidth: 1,
-    borderColor: '#E2ECE6',
+    borderColor: '#E2ECE7',
   },
   hostIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#D7EFE3',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E0F2E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1060,44 +1112,47 @@ const styles = StyleSheet.create({
   },
   hostSubtitle: {
     fontSize: 12,
-    color: '#5E7A6E',
+    color: '#64748B',
     marginTop: 2,
     lineHeight: 16,
   },
   // ─── Empty State ───
   emptyCard: {
-    backgroundColor: '#EDF7F2',
+    backgroundColor: '#F8FAF8',
     borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
     marginHorizontal: 16,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    marginTop: 6,
+    justifyContent: 'center',
+    marginTop: 4,
     marginBottom: 16,
   },
   emptyIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#D7EFE3',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#E0F2E9',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  emptyTextContainer: {
-    flex: 1,
+    marginBottom: 12,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F2922',
+    letterSpacing: -0.2,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 12.5,
-    color: '#5E7A6E',
-    marginTop: 2,
-    lineHeight: 17,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 290,
   },
   // ─── Loading & Error ───
   loadingContainer: {
