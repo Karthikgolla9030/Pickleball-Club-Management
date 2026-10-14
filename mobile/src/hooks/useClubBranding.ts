@@ -61,9 +61,11 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
       if (targetClubId) {
         queryClient.invalidateQueries({ queryKey: ['club-branding', targetClubId] });
         queryClient.invalidateQueries({ queryKey: ['club-details', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['public-club', targetClubId] });
       }
       queryClient.invalidateQueries({ queryKey: ['user-clubs'] });
       queryClient.invalidateQueries({ queryKey: ['player-clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
     },
   });
 }

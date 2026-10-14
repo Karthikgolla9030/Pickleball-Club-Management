@@ -78,6 +78,8 @@ class PublicClubResponse(BaseModel):
     holiday_closure_notes: str | None = None
     operating_hours: dict[str, Any] | None = None
     is_active: bool
+    court_count: int | None = None
+    member_count: int | None = None
 
     model_config = {"from_attributes": True}
 

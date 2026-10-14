@@ -59,6 +59,8 @@ export interface Club {
   holiday_closure_notes?: string | null;
   facilities_summary?: string | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  court_count?: number | null;
+  member_count?: number | null;
 
   created_at: string;
   updated_at: string;

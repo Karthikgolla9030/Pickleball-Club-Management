@@ -478,7 +478,22 @@ class ClubService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Club not found",
             )
-        return PublicClubResponse.model_validate(club)
+        from app.models.court import Court, CourtStatus
+        from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
+
+        court_count = await self.db.scalar(
+            select(func.count(Court.id)).where(Court.club_id == club.id, Court.status == CourtStatus.ACTIVE)
+        )
+        member_count = await self.db.scalar(
+            select(func.count(ClubPlayerMembership.id)).where(
+                ClubPlayerMembership.club_id == club.id,
+                ClubPlayerMembership.status == PlayerMembershipStatus.ACTIVE,
+            )
+        )
+        data = PublicClubResponse.model_validate(club)
+        data.court_count = court_count or 0
+        data.member_count = member_count or 0
+        return data
 
     async def get_membership(
         self, user_id: UUID, club_id: UUID
@@ -1062,8 +1077,24 @@ class ClubService:
         paged_query = query.order_by(Club.name.asc()).offset(offset).limit(page_size)
         result = await self.db.execute(paged_query)
         clubs = result.scalars().all()
+        from app.models.court import Court, CourtStatus
+        from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
 
-        items = [PublicClubResponse.model_validate(c) for c in clubs]
+        items = []
+        for c in clubs:
+            court_count = await self.db.scalar(
+                select(func.count(Court.id)).where(Court.club_id == c.id, Court.status == CourtStatus.ACTIVE)
+            )
+            member_count = await self.db.scalar(
+                select(func.count(ClubPlayerMembership.id)).where(
+                    ClubPlayerMembership.club_id == c.id,
+                    ClubPlayerMembership.status == PlayerMembershipStatus.ACTIVE,
+                )
+            )
+            item_data = PublicClubResponse.model_validate(c)
+            item_data.court_count = court_count or 0
+            item_data.member_count = member_count or 0
+            items.append(item_data)
         has_more = (offset + len(items)) < total
 
         return PublicClubDiscoveryResponse(

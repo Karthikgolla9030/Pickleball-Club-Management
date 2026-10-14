@@ -32,9 +32,12 @@ export function useClubDetails(overrideClubId?: string | null) {
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
+      queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
     },
   });
 
@@ -47,9 +50,12 @@ export function useClubDetails(overrideClubId?: string | null) {
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
+      queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
     },
   });
 

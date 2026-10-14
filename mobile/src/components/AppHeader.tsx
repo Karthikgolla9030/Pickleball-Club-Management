@@ -26,6 +26,8 @@ interface AppHeaderProps {
   showMenu?: boolean;
   /** Show back arrow instead of hamburger */
   showBack?: boolean;
+  /** Use clean minimal icon without round border */
+  minimalIcon?: boolean;
   /** Optional element rendered on the right side */
   rightElement?: React.ReactNode;
   /** Remove bottom border for seamless background */
@@ -39,6 +41,7 @@ export function AppHeader({
   subtitle,
   showMenu = true,
   showBack = false,
+  minimalIcon = false,
   rightElement,
   borderless = false,
   style,
@@ -70,7 +73,7 @@ export function AppHeader({
         {showBack ? (
           <Pressable
             onPress={() => router.back()}
-            style={styles.iconButton}
+            style={minimalIcon ? styles.iconButtonMinimal : styles.iconButton}
             hitSlop={8}
             accessibilityLabel="Go back"
             accessibilityRole="button"
@@ -80,12 +83,12 @@ export function AppHeader({
         ) : showMenu ? (
           <Pressable
             onPress={openDrawer}
-            style={styles.iconButton}
+            style={minimalIcon ? styles.iconButtonMinimal : styles.iconButton}
             hitSlop={8}
             accessibilityLabel="Open navigation menu"
             accessibilityRole="button"
           >
-            <Menu size={22} color={Colors.text.primary} strokeWidth={2} />
+            <Menu size={minimalIcon ? 24 : 22} color={Colors.text.primary} strokeWidth={2.2} />
           </Pressable>
         ) : (
           <View style={styles.iconPlaceholder} />
@@ -149,6 +152,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2ECE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  iconButtonMinimal: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
