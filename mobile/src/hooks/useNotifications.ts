@@ -67,7 +67,7 @@ export function useMarkAllNotificationsRead() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => notificationsApi.markAllAsRead(),
+    mutationFn: (clubId?: string) => notificationsApi.markAllAsRead(clubId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.NOTIFICATIONS_UNREAD_COUNT });

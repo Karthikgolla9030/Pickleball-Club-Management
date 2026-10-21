@@ -42,6 +42,7 @@ import {
   ChevronRight,
   Crown,
   Sparkles,
+  Trash2,
   Trophy,
   Users,
   X,
@@ -52,6 +53,7 @@ import {
   useNotifications,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
+  useDeleteNotification,
 } from '@/hooks';
 import { useAuthStore } from '@/store';
 
@@ -154,6 +156,10 @@ export default function ClubNotificationsScreen() {
 
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  const deleteNotif = useDeleteNotification();
+
+  // Local optimistic state
+  const [localDeletedIds, setLocalDeletedIds] = useState<Set<string>>(new Set());
 
   // Normalize raw backend notifications into typed display notifications
   const allNotifications: DisplayNotification[] = useMemo(() => {
@@ -161,7 +167,9 @@ export default function ClubNotificationsScreen() {
       return [];
     }
 
-    return backendData.items.map((item) => {
+    return backendData.items
+      .filter((item) => !localDeletedIds.has(item.id))
+      .map((item) => {
       const rawCat = (item.category || 'general').toLowerCase();
       let cat: 'bookings' | 'tournaments' | 'events' | 'memberships' | 'general' = 'general';
       let tagLabel = 'General';
@@ -240,7 +248,7 @@ export default function ClubNotificationsScreen() {
         route: navRoute,
       };
     });
-  }, [backendData, localReadIds]);
+  }, [backendData, localReadIds, localDeletedIds]);
 
   // Auto-focus latest notification date if today has no notifications and user hasn't manually selected
   useEffect(() => {
@@ -292,10 +300,17 @@ export default function ClubNotificationsScreen() {
 
   // Actions
   const handleMarkAllRead = () => {
-    markAllRead.mutate();
+    // Scope to the active club so we don't inadvertently mark
+    // player-side or other-club notifications as read
+    markAllRead.mutate(clubId ? String(clubId) : undefined);
     const updatedIds = new Set(localReadIds);
     dateNotifications.forEach((n) => updatedIds.add(n.id));
     setLocalReadIds(updatedIds);
+  };
+
+  const handleDismiss = (id: string) => {
+    setLocalDeletedIds((prev) => new Set([...prev, id]));
+    deleteNotif.mutate(id);
   };
 
   const handleCardPress = (item: DisplayNotification) => {
@@ -353,16 +368,19 @@ export default function ClubNotificationsScreen() {
           <AppText style={styles.headerTitle}>Notifications</AppText>
         </View>
 
-        <TouchableOpacity
-          style={styles.markAllBtn}
-          onPress={handleMarkAllRead}
-          activeOpacity={0.75}
-          accessibilityLabel="Mark all as read"
-          accessibilityRole="button"
-        >
-          <Check size={16} color="#166534" strokeWidth={2.6} style={{ marginRight: 4 }} />
-          <AppText style={styles.markAllText}>Mark all read</AppText>
-        </TouchableOpacity>
+        {/* Mark all read — shown only when there are unread items */}
+        {dateNotifications.some((n) => !n.read) && (
+          <TouchableOpacity
+            style={styles.markAllBtn}
+            onPress={handleMarkAllRead}
+            activeOpacity={0.75}
+            accessibilityLabel="Mark all as read"
+            accessibilityRole="button"
+          >
+            <Check size={16} color="#166534" strokeWidth={2.6} style={{ marginRight: 4 }} />
+            <AppText style={styles.markAllText}>Mark all read</AppText>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ─── 2. Date Selector — Dropdown Only ───────────────────────────────── */}
@@ -496,6 +514,17 @@ export default function ClubNotificationsScreen() {
                 <ChevronRight size={16} color="#94A3B8" strokeWidth={2} />
               </View>
             </View>
+
+            {/* Dismiss button */}
+            <TouchableOpacity
+              style={styles.dismissBtn}
+              onPress={() => handleDismiss(item.id)}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              accessibilityLabel="Dismiss notification"
+              accessibilityRole="button"
+            >
+              <Trash2 size={14} color="#CBD5E1" strokeWidth={2} />
+            </TouchableOpacity>
           </TouchableOpacity>
         )}
         ListEmptyComponent={
@@ -754,6 +783,12 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 3.5,
     marginRight: 6,
+  },
+  dismissBtn: {
+    padding: 6,
+    marginLeft: 4,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
   },
 
   /* Empty State */

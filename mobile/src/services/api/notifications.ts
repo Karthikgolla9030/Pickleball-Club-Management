@@ -74,11 +74,11 @@ export const notificationsApi = {
     );
   },
 
-  async markAllAsRead(): Promise<{ status: string; marked_read_count: number }> {
-    return apiClient.post<{ status: string; marked_read_count: number }>(
-      API_ENDPOINTS.NOTIFICATIONS_MARK_ALL_READ,
-      {}
-    );
+  async markAllAsRead(clubId?: string): Promise<{ status: string; marked_read_count: number }> {
+    const url = clubId
+      ? `${API_ENDPOINTS.NOTIFICATIONS_MARK_ALL_READ}?club_id=${clubId}`
+      : API_ENDPOINTS.NOTIFICATIONS_MARK_ALL_READ;
+    return apiClient.post<{ status: string; marked_read_count: number }>(url, {});
   },
 
   async deleteNotification(notificationId: string): Promise<{ status: string; id: string }> {

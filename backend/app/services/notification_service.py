@@ -174,12 +174,18 @@ class NotificationService:
         data: dict[str, Any] | None = None,
         mandatory: bool = False,
     ) -> list[Notification]:
-        """Notify all active staff members of a club and broadcast over WebSocket."""
+        """Notify active *staff* members of a club (owner/manager roles only).
+
+        Intentionally excludes regular player members so that internal
+        operational notifications are not leaked to the player inbox.
+        """
         from app.models.club_membership import ClubMembership
         staff_res = await self.db.execute(
             select(ClubMembership.user_id).where(
                 ClubMembership.club_id == club_id,
                 ClubMembership.is_active == True,
+                # Only owner and manager roles are considered staff
+                ClubMembership.role.in_(["owner", "manager"]),
             )
         )
         staff_uids = set(staff_res.scalars().all())
@@ -287,7 +293,11 @@ class NotificationService:
         return unread_res.scalar_one() or 0
 
     async def mark_as_read(self, notification_id: UUID, user_id: UUID) -> bool:
-        """Mark a single notification as read and record read_at."""
+        """Mark a single notification as read and record read_at.
+
+        Idempotent: repeated calls on an already-read notification succeed
+        without modifying read_at again.
+        """
         res = await self.db.execute(
             select(Notification).where(
                 Notification.id == notification_id,
@@ -298,23 +308,44 @@ class NotificationService:
         if not notification:
             return False
 
-        now = datetime.now(timezone.utc)
-        notification.is_read = True
-        notification.read_at = now
-        await self.db.flush()
+        # Idempotency guard — don't touch read_at if already read
+        if not notification.is_read:
+            now = datetime.now(timezone.utc)
+            notification.is_read = True
+            notification.read_at = now
+            await self.db.flush()
         return True
 
-    async def mark_all_as_read(self, user_id: UUID) -> int:
-        """Mark all unread notifications as read for a user and record read_at."""
+    async def mark_all_as_read(
+        self,
+        user_id: UUID,
+        club_id: UUID | None = None,
+    ) -> int:
+        """Mark all unread notifications as read for a user.
+
+        When *club_id* is provided the operation is scoped to notifications
+        belonging to that club (plus platform-wide general notifications).
+        This prevents the club management UI from accidentally marking
+        player-side or cross-club notifications as read.
+        """
         now = datetime.now(timezone.utc)
-        result = await self.db.execute(
+        stmt = (
             update(Notification)
             .where(
                 Notification.user_id == user_id,
                 Notification.is_read == False,
             )
-            .values(is_read=True, read_at=now)
         )
+        if club_id:
+            from sqlalchemy import or_
+            stmt = stmt.where(
+                or_(
+                    Notification.club_id == club_id,
+                    Notification.club_id.is_(None),
+                )
+            )
+        stmt = stmt.values(is_read=True, read_at=now)
+        result = await self.db.execute(stmt)
         await self.db.flush()
         return result.rowcount
 

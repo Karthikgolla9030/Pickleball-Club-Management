@@ -119,10 +119,16 @@ async def mark_notification_as_read(
 async def mark_all_notifications_as_read(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_active_user)],
+    club_id: UUID | None = Query(default=None, description="Optional club scope for mark-all operation"),
 ):
-    """Mark all unread notifications as read."""
+    """Mark all unread notifications as read.
+
+    When *club_id* is provided, only notifications belonging to that club
+    (and platform-wide general notifications) are marked read. This allows
+    the club management UI to limit the operation to the active club context.
+    """
     service = NotificationService(db)
-    count = await service.mark_all_as_read(user_id=current_user.id)
+    count = await service.mark_all_as_read(user_id=current_user.id, club_id=club_id)
     await db.commit()
     return {"status": "ok", "marked_read_count": count}
 
