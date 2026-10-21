@@ -179,13 +179,21 @@ class NotificationService:
         Intentionally excludes regular player members so that internal
         operational notifications are not leaked to the player inbox.
         """
-        from app.models.club_membership import ClubMembership
+        from app.models.club_membership import ClubMembership, ClubRole
+        staff_roles = [
+            ClubRole.CLUB_OWNER,
+            ClubRole.CLUB_MANAGER,
+            "club_owner",
+            "club_manager",
+            "owner",
+            "manager",
+        ]
         staff_res = await self.db.execute(
             select(ClubMembership.user_id).where(
                 ClubMembership.club_id == club_id,
                 ClubMembership.is_active == True,
-                # Only owner and manager roles are considered staff
-                ClubMembership.role.in_(["owner", "manager"]),
+                # Owner and manager roles are considered staff
+                ClubMembership.role.in_(staff_roles),
             )
         )
         staff_uids = set(staff_res.scalars().all())
