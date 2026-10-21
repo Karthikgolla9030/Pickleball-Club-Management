@@ -817,3 +817,150 @@ async def test_failed_replacement_preserves_previous_image_and_returns_sanitized
     # Confirm previously saved photo_url in database was preserved
     await db_session.refresh(court)
     assert court.photo_url == initial_photo_url
+
+
+@pytest.mark.asyncio
+async def test_branding_scope_persistence_and_platform_separation(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Regression Test:
+    1. Owner updates Club A logo; saved API response shows the new logo.
+    2. Player-facing Club A public details show Club A's updated logo and cover banner.
+    3. Club B's branding remains strictly untouched.
+    4. Owner updates Club A banner; it appears in Club A's branding and public responses.
+    5. Club with no logo/banner cleanly returns None (enabling intentional fallback).
+    6. Unauthorized users / cross-tenant owners cannot modify another club's branding (403).
+    """
+    owner_a = await create_user(db_session, full_name="Owner A")
+    owner_b = await create_user(db_session, full_name="Owner B")
+    manager_a = await create_user(db_session, full_name="Manager A")
+    player = await create_user(db_session, full_name="General Player")
+
+    club_a = await create_club(db_session, name="Coastal Pickleball Club A")
+    club_b = await create_club(db_session, name="Mountain Pickleball Club B")
+
+    await create_membership(db_session, owner_a.id, club_a.id, ClubRole.CLUB_OWNER)
+    await create_membership(db_session, owner_b.id, club_b.id, ClubRole.CLUB_OWNER)
+    await create_membership(db_session, manager_a.id, club_a.id, ClubRole.CLUB_MANAGER)
+    await db_session.commit()
+
+    # Step 1: Verify initial state — both clubs have no custom branding (neutral fallbacks)
+    res_init_a = await async_client.get(f"/api/v1/clubs/{club_a.id}/branding")
+    assert res_init_a.status_code == 200
+    data_init_a = res_init_a.json()
+    assert data_init_a["logo_url"] is None
+    assert data_init_a["cover_image_url"] is None
+    assert data_init_a["has_custom_logo"] is False
+    assert data_init_a["has_custom_cover"] is False
+
+    res_pub_init_a = await async_client.get(f"/api/v1/clubs/{club_a.id}/public")
+    assert res_pub_init_a.status_code == 200
+    pub_init_a = res_pub_init_a.json()
+    assert pub_init_a["logo_url"] is None
+    assert pub_init_a["cover_image_url"] is None
+
+    # Step 2: Owner A uploads logo for Club A via media upload
+    logo_bytes = make_test_image(format="PNG", size=(200, 200), color="blue")
+    upload_logo_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(owner_a),
+        data={"asset_type": "club_logo"},
+        files={"file": ("club_a_logo.png", logo_bytes, "image/png")},
+    )
+    assert upload_logo_resp.status_code == 200
+    club_a_logo_url = upload_logo_resp.json()["public_url"]
+
+    # Save logo in Club A branding
+    put_branding_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"logo_url": club_a_logo_url},
+    )
+    assert put_branding_resp.status_code == 200
+    data_branding_a = put_branding_resp.json()
+    assert data_branding_a["logo_url"] == club_a_logo_url
+    assert data_branding_a["has_custom_logo"] is True
+    assert data_branding_a["cover_image_url"] is None
+
+    # Step 3: Owner A updates Club A cover banner
+    cover_bytes = make_test_image(format="JPEG", size=(1280, 720), color="purple")
+    upload_cover_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(owner_a),
+        data={"asset_type": "club_cover"},
+        files={"file": ("club_a_cover.jpg", cover_bytes, "image/jpeg")},
+    )
+    assert upload_cover_resp.status_code == 200
+    club_a_cover_url = upload_cover_resp.json()["public_url"]
+
+    put_cover_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"cover_image_url": club_a_cover_url},
+    )
+    assert put_cover_resp.status_code == 200
+    data_updated_a = put_cover_resp.json()
+    assert data_updated_a["logo_url"] == club_a_logo_url
+    assert data_updated_a["cover_image_url"] == club_a_cover_url
+    assert data_updated_a["has_custom_cover"] is True
+
+    # Step 4: Player views Club A public profile — sees Club A's updated logo and banner
+    pub_a_resp = await async_client.get(f"/api/v1/clubs/{club_a.id}/public")
+    assert pub_a_resp.status_code == 200
+    pub_a_data = pub_a_resp.json()
+    assert pub_a_data["logo_url"] == club_a_logo_url
+    assert pub_a_data["cover_image_url"] == club_a_cover_url
+
+    # Step 5: Strictly verify Club B's branding remains completely untouched
+    branding_b_resp = await async_client.get(f"/api/v1/clubs/{club_b.id}/branding")
+    assert branding_b_resp.status_code == 200
+    branding_b_data = branding_b_resp.json()
+    assert branding_b_data["logo_url"] is None
+    assert branding_b_data["cover_image_url"] is None
+    assert branding_b_data["has_custom_logo"] is False
+    assert branding_b_data["has_custom_cover"] is False
+
+    pub_b_resp = await async_client.get(f"/api/v1/clubs/{club_b.id}/public")
+    assert pub_b_resp.status_code == 200
+    pub_b_data = pub_b_resp.json()
+    assert pub_b_data["logo_url"] is None
+    assert pub_b_data["cover_image_url"] is None
+
+    # Step 6: Cross-tenant modification rejection
+    # Owner B tries to update Club A's branding -> 403 Forbidden
+    cross_owner_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_b),
+        json={"logo_url": "https://malicious.local/bad_logo.png"},
+    )
+    assert cross_owner_resp.status_code == 403
+
+    # Club Manager (staff without MANAGE_CLUB) tries to update branding -> 403 Forbidden
+    manager_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(manager_a),
+        json={"logo_url": "https://malicious.local/bad_logo.png"},
+    )
+    assert manager_resp.status_code == 403
+
+    # Player tries to update Club A's branding -> 403 Forbidden
+    player_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(player),
+        json={"logo_url": "https://malicious.local/bad_logo.png"},
+    )
+    assert player_resp.status_code == 403
+
+    # Step 7: Removing logo cleanly restores null fallback
+    remove_logo_resp = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"logo_url": None},
+    )
+    assert remove_logo_resp.status_code == 200
+    assert remove_logo_resp.json()["logo_url"] is None
+    assert remove_logo_resp.json()["has_custom_logo"] is False
+    # Cover banner is retained
+    assert remove_logo_resp.json()["cover_image_url"] == club_a_cover_url
+

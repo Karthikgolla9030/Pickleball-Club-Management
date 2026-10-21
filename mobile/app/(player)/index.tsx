@@ -41,7 +41,6 @@ import { AppText } from '@/components';
 import {
   useActiveClub,
   useAuth,
-  useClubBranding,
   useDiscoverClubEvents,
   usePlayerActivity,
   usePlayerBookings,
@@ -133,7 +132,6 @@ export default function PlayerHomeScreen() {
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
   const { clubId, clubName } = useActiveClub();
-  const { data: clubBranding } = useClubBranding(clubId || '');
 
   // 1. Next Booking (real authenticated player bookings)
   const {
@@ -257,7 +255,7 @@ export default function PlayerHomeScreen() {
           },
         ]}
       >
-        {/* Logo and Club Brand on Left */}
+        {/* Platform Logo on Left */}
         <View style={styles.headerLogoContainer}>
           <Image
             source={require('../../assets/pickleball_logo_transparent.png')}
@@ -265,14 +263,6 @@ export default function PlayerHomeScreen() {
             resizeMode="contain"
             accessibilityLabel="Pickleball"
           />
-          {clubBranding?.logo_url ? (
-            <Image
-              source={{ uri: resolveMediaUrl(clubBranding.logo_url) }}
-              style={styles.clubLogoBadge}
-              resizeMode="contain"
-              accessibilityLabel={clubName || 'Club Logo'}
-            />
-          ) : null}
         </View>
 
         {/* Action Icons on Right */}
@@ -321,13 +311,9 @@ export default function PlayerHomeScreen() {
         {/* ─── 2. WELCOME HERO SECTION ───────────────────────────────────────── */}
         <View style={styles.heroSection}>
           <View style={styles.heroCard}>
-            {/* Background Court Photo on Right */}
+            {/* Platform Welcome Court Photo on Right */}
             <Image
-              source={
-                clubBranding?.cover_image_url
-                  ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
-                  : require('../../assets/events/pickleball_hero.jpg')
-              }
+              source={require('../../assets/events/pickleball_hero.jpg')}
               style={styles.heroImage}
               resizeMode="cover"
             />
@@ -497,8 +483,6 @@ export default function PlayerHomeScreen() {
                 source={
                   upcomingEvent.imageUrl
                     ? { uri: resolveMediaUrl(upcomingEvent.imageUrl) }
-                    : clubBranding?.cover_image_url
-                    ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
                     : require('../../assets/events/card1.jpg')
                 }
                 style={styles.eventThumbnail}
@@ -709,18 +693,10 @@ const styles = StyleSheet.create({
   headerLogoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   logoImage: {
     width: 106,
     height: 46,
-  },
-  clubLogoBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
   },
   headerActions: {
     flexDirection: 'row',

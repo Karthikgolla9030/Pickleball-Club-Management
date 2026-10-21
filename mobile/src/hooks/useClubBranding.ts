@@ -8,6 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clubAssetsApi } from '@/services/api';
+import { QUERY_KEYS } from '@/constants';
 import type { ClubBranding, ClubCarouselSlide } from '@/types';
 
 export function useClubBranding(clubId?: string | null) {
@@ -56,15 +57,17 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
         cover_image_url: cover,
       });
     },
-    onSuccess: (_, vars) => {
+    onSuccess: (updatedBranding, vars) => {
       const targetClubId = vars.clubId || clubIdParam;
       if (targetClubId) {
+        queryClient.setQueryData(['club-branding', targetClubId], updatedBranding);
         queryClient.invalidateQueries({ queryKey: ['club-branding', targetClubId] });
-        queryClient.invalidateQueries({ queryKey: ['club-details', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(targetClubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(targetClubId) });
       }
-      queryClient.invalidateQueries({ queryKey: ['user-clubs'] });
-      queryClient.invalidateQueries({ queryKey: ['player-clubs'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
       queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
     },
   });

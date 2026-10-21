@@ -17,7 +17,7 @@
  *    - Links directly to respective management screens
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -103,6 +103,16 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [logoImgError, setLogoImgError] = useState(false);
+  const [coverImgError, setCoverImgError] = useState(false);
+
+  useEffect(() => {
+    setLogoImgError(false);
+  }, [branding?.logo_url]);
+
+  useEffect(() => {
+    setCoverImgError(false);
+  }, [branding?.cover_image_url]);
 
   // Slide modal state
   const [slideModalVisible, setSlideModalVisible] = useState(false);
@@ -123,7 +133,9 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 
   // ─── Image Picker Helper ───────────────────────────────────────────────────
 
-  const pickImage = async (aspect?: [number, number]): Promise<string | null> => {
+  const pickImage = async (
+    aspect?: [number, number]
+  ): Promise<{ uri: string; name: string; type: string } | null> => {
     try {
       if (Platform.OS !== 'web') {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -147,7 +159,10 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           Alert.alert('File Too Large', 'Please select an image smaller than 5 MB.');
           return null;
         }
-        return asset.uri;
+        const mimeType = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const defaultExt = mimeType.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `club_asset_${Date.now()}.${defaultExt}`;
+        return { uri: asset.uri, name: fileName, type: mimeType };
       }
       return null;
     } catch (err: unknown) {
@@ -164,14 +179,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       Alert.alert('Permission Denied', 'Only the Club Owner can manage club branding.');
       return;
     }
-    const uri = await pickImage([1, 1]);
-    if (!uri) return;
+    const picked = await pickImage([1, 1]);
+    if (!picked) return;
 
     setIsUploadingLogo(true);
     try {
       const uploadRes = await clubAssetsApi.uploadClubMedia(
         clubId,
-        { uri, name: 'club_logo.jpg', type: 'image/jpeg' },
+        { uri: picked.uri, name: picked.name, type: picked.type },
         'logo'
       );
       await updateBrandingMutation.mutateAsync({ logo_url: uploadRes.public_url });
@@ -217,14 +232,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       Alert.alert('Permission Denied', 'Only the Club Owner can manage club branding.');
       return;
     }
-    const uri = await pickImage([16, 9]);
-    if (!uri) return;
+    const picked = await pickImage([16, 9]);
+    if (!picked) return;
 
     setIsUploadingCover(true);
     try {
       const uploadRes = await clubAssetsApi.uploadClubMedia(
         clubId,
-        { uri, name: 'club_cover.jpg', type: 'image/jpeg' },
+        { uri: picked.uri, name: picked.name, type: picked.type },
         'cover'
       );
       await updateBrandingMutation.mutateAsync({ cover_image_url: uploadRes.public_url });
@@ -289,14 +304,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   };
 
   const handlePickSlideImage = async () => {
-    const uri = await pickImage([16, 9]);
-    if (!uri) return;
+    const picked = await pickImage([16, 9]);
+    if (!picked) return;
 
     setIsUploadingSlideImage(true);
     try {
       const uploadRes = await clubAssetsApi.uploadClubMedia(
         clubId,
-        { uri, name: 'slide_image.jpg', type: 'image/jpeg' },
+        { uri: picked.uri, name: picked.name, type: picked.type },
         'carousel_slide'
       );
       setSlideFormImageUrl(uploadRes.public_url);
@@ -442,11 +457,12 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         {/* Logo Row */}
         <View style={styles.identityRow}>
           <View style={styles.logoPreviewWrapper}>
-            {branding?.logo_url ? (
+            {branding?.logo_url && !logoImgError ? (
               <Image
                 source={{ uri: resolveMediaUrl(branding.logo_url) }}
                 style={styles.logoImage}
-                resizeMode="cover"
+                resizeMode="contain"
+                onError={() => setLogoImgError(true)}
               />
             ) : (
               <View style={styles.logoPlaceholder}>
@@ -505,11 +521,12 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           </AppText>
 
           <View style={styles.coverPreviewWrapper}>
-            {branding?.cover_image_url ? (
+            {branding?.cover_image_url && !coverImgError ? (
               <Image
                 source={{ uri: resolveMediaUrl(branding.cover_image_url) }}
                 style={styles.coverImage}
                 resizeMode="cover"
+                onError={() => setCoverImgError(true)}
               />
             ) : (
               <View style={styles.coverPlaceholder}>

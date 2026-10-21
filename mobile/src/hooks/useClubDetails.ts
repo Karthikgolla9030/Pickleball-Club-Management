@@ -34,6 +34,7 @@ export function useClubDetails(overrideClubId?: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
@@ -52,6 +53,7 @@ export function useClubDetails(overrideClubId?: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });

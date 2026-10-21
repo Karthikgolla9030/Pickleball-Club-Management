@@ -67,8 +67,10 @@ import {
 } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useActiveClub, useClubDetails } from '@/hooks';
+import { clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { UpdateClubPayload } from '@/types';
+import { resolveMediaUrl } from '@/utils';
 
 // Common US timezones
 const TIMEZONE_OPTIONS = [
@@ -94,11 +96,7 @@ const DAYS_OF_WEEK = [
 
 function getFullImageUrl(url: string | null | undefined): string | null {
   if (!url || !url.trim()) return null;
-  const clean = url.trim();
-  if (clean.startsWith('http') || clean.startsWith('data:')) return clean;
-  const base = API_ENDPOINTS.BASE.replace(/\/$/, '');
-  const path = clean.startsWith('/') ? clean : `/${clean}`;
-  return `${base}${path}`;
+  return resolveMediaUrl(url);
 }
 
 function parseDaysList(rawDays: string | null | undefined): string[] {
@@ -157,6 +155,7 @@ export default function ClubDetailsScreen() {
 
   // Logo state
   const [logoPreviewUri, setLogoPreviewUri] = useState<string | null>(null);
+  const [logoError, setLogoError] = useState(false);
 
   // UI status messages
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -188,6 +187,7 @@ export default function ClubDetailsScreen() {
       setFacilitiesSummary(club.facilities_summary || '');
       setHolidayClosureNotes(club.holiday_closure_notes || '');
       setLogoPreviewUri(club.logo_url || null);
+      setLogoError(false);
     }
   }, [club]);
 
@@ -285,10 +285,9 @@ export default function ClubDetailsScreen() {
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        const mime = asset.mimeType || 'image/jpeg';
-        const b64 = asset.base64
-          ? `data:${mime};base64,${asset.base64}`
-          : asset.uri;
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `club_logo_${Date.now()}.${ext}`;
 
         // Check file size (approximate for base64: length * 3/4)
         if (asset.base64 && (asset.base64.length * 0.75) > 5 * 1024 * 1024) {
@@ -297,11 +296,25 @@ export default function ClubDetailsScreen() {
         }
 
         setLogoPreviewUri(asset.uri);
+        setLogoError(false);
 
         // Upload to server immediately
         try {
-          const updated = await uploadLogo(b64);
-          setLogoPreviewUri(updated.logo_url || asset.uri);
+          if (clubId) {
+            const uploadRes = await clubAssetsApi.uploadClubMedia(
+              clubId,
+              { uri: asset.uri, name: fileName, type: mime },
+              'logo'
+            );
+            const updated = await uploadLogo(uploadRes.public_url);
+            setLogoPreviewUri(updated.logo_url || uploadRes.public_url);
+          } else {
+            const b64 = asset.base64
+              ? `data:${mime};base64,${asset.base64}`
+              : asset.uri;
+            const updated = await uploadLogo(b64);
+            setLogoPreviewUri(updated.logo_url || asset.uri);
+          }
           setSaveSuccessMsg('Logo updated successfully!');
           setTimeout(() => setSaveSuccessMsg(null), 3000);
         } catch (uploadErr: any) {
@@ -517,11 +530,12 @@ export default function ClubDetailsScreen() {
                 {/* Logo Uploader */}
                 <View style={styles.logoSection}>
                   <View style={styles.logoContainer}>
-                    {currentLogoUri ? (
+                    {currentLogoUri && !logoError ? (
                       <Image
                         source={{ uri: currentLogoUri }}
                         style={styles.logoImage}
-                        resizeMode="cover"
+                        resizeMode="contain"
+                        onError={() => setLogoError(true)}
                       />
                     ) : (
                       <View style={styles.logoFallback}>

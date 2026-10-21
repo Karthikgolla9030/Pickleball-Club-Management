@@ -134,7 +134,12 @@ class MediaStorageService:
         # Re-encode to strip EXIF and metadata cleanly
         out_buffer = io.BytesIO()
         if fmt_key == "JPEG":
-            if image.mode in ("RGBA", "P"):
+            if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+                rgba_img = image.convert("RGBA")
+                bg = Image.new("RGB", rgba_img.size, (255, 255, 255))
+                bg.paste(rgba_img, mask=rgba_img.split()[3])
+                image = bg
+            elif image.mode != "RGB":
                 image = image.convert("RGB")
             image.save(out_buffer, format="JPEG", quality=88, optimize=True)
         elif fmt_key == "PNG":

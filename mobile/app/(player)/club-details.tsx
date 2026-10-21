@@ -16,7 +16,7 @@
  *   - Preserves player bottom navigation with generous safe area scroll padding
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -68,7 +68,6 @@ import type { Club, MembershipPlan, PlayerCourt } from '@/types';
 // ─── Default & Fallback Assets ───────────────────────────────────────────────
 
 const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
-const DEFAULT_LOGO = require('../../assets/aught2_pickleball_logo.png');
 
 const COURT_FALLBACKS = [
   require('../../assets/courts/court_1.jpg'),
@@ -100,6 +99,7 @@ export default function PublicClubDetailScreen() {
   const { width: windowWidth } = useWindowDimensions();
 
   const clubId = Array.isArray(id) ? id[0] : id;
+  const [logoError, setLogoError] = useState(false);
 
   // 1. Fetch public club data
   const {
@@ -113,6 +113,10 @@ export default function PublicClubDetailScreen() {
     queryFn: () => clubsApi.getPublicClub(clubId!),
     enabled: Boolean(clubId),
   });
+
+  useEffect(() => {
+    setLogoError(false);
+  }, [club?.logo_url]);
 
   // 2. Fetch active courts for this club
   const {
@@ -359,10 +363,18 @@ export default function PublicClubDetailScreen() {
             <View style={styles.heroContentRow}>
               {/* Club Logo */}
               <View style={styles.logoContainer}>
-                {logoUri ? (
-                  <Image source={{ uri: logoUri }} style={styles.logoImage} resizeMode="cover" />
+                {logoUri && !logoError ? (
+                  <Image
+                    source={{ uri: logoUri }}
+                    style={styles.logoImage}
+                    resizeMode="contain"
+                    onError={() => setLogoError(true)}
+                    accessibilityLabel={`${club.name} logo`}
+                  />
                 ) : (
-                  <Image source={DEFAULT_LOGO} style={styles.logoImage} resizeMode="contain" />
+                  <View style={styles.logoFallbackWrapper}>
+                    <Building2 size={34} color="#FFFFFF" strokeWidth={1.8} />
+                  </View>
                 )}
               </View>
 
@@ -999,9 +1011,9 @@ const styles = StyleSheet.create({
     width: 74,
     height: 74,
     borderRadius: 14,
-    backgroundColor: '#0D382A',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.28)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1010,10 +1022,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 2,
+    padding: 4,
   },
   logoImage: {
     width: '100%',
     height: '100%',
+  },
+  logoFallbackWrapper: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#176B57',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroDetailsCol: {
     flex: 1,

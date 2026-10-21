@@ -452,19 +452,18 @@ class ClubService:
                 detail="Image exceeds 5MB limit",
             )
 
-        backend_dir = os.path.dirname(
-            os.path.dirname(os.path.abspath(__file__))
+        from app.services.media_storage_service import MediaStorageService
+
+        storage = MediaStorageService(self.db)
+        public_url, _ = await storage.store_image(
+            raw_bytes=image_bytes,
+            category="logos",
+            club_id=club.id,
+            uploaded_by_user_id=None,
+            asset_type="club_logo",
+            original_filename=f"club_logo.{ext}",
         )
-        uploads_dir = os.path.join(backend_dir, "uploads", "logos")
-        os.makedirs(uploads_dir, exist_ok=True)
-
-        filename = f"club_{club_id}_{int(time.time())}.{ext}"
-        filepath = os.path.join(uploads_dir, filename)
-        with open(filepath, "wb") as f:
-            f.write(image_bytes)
-
-        relative_url = f"/uploads/logos/{filename}"
-        updated = await self.club_repo.update(club, logo_url=relative_url)
+        updated = await self.club_repo.update(club, logo_url=public_url)
         await self.db.commit()
         return ClubResponse.model_validate(updated)
 
