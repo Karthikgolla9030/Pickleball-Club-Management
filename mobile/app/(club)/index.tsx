@@ -36,7 +36,6 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -65,7 +64,6 @@ import {
 import { AppText, ClubHeroCarousel } from '@/components';
 import {
   useActiveClub,
-  useAuth,
   useClubDashboard,
   usePermission,
   useUnreadNotificationCount,
@@ -76,22 +74,11 @@ import { formatCurrency } from '@/utils';
 export default function ClubHomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
-  const { user } = useAuth();
   const { clubId, clubName } = useActiveClub();
   const { canManagePayments } = usePermission();
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
-
-  const userDisplayName = user?.full_name?.trim() || 'Staff';
-  const userInitial = userDisplayName
-    .split(' ')
-    .filter(Boolean)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'S';
 
   // Real server-aggregated dashboard query
   const { dashboard, refetch: refetchDashboard } = useClubDashboard(clubId);
@@ -162,25 +149,8 @@ export default function ClubHomeScreen() {
           />
         </View>
 
-        {/* Right: User Profile Chip, Menu & Notification Action Buttons */}
+        {/* Right: Menu & Notification Action Buttons */}
         <View style={styles.headerActionsGroup}>
-          <TouchableOpacity
-            style={styles.profileChip}
-            onPress={() => router.push('/(club)/club-details' as any)}
-            activeOpacity={0.8}
-            accessibilityLabel={`Signed in as ${userDisplayName}. Tap to view club details`}
-            accessibilityRole="button"
-          >
-            <View style={styles.avatarCircle}>
-              <AppText style={styles.avatarInitial}>{userInitial}</AppText>
-            </View>
-            {windowWidth >= 360 ? (
-              <AppText style={styles.headerUserName} numberOfLines={1}>
-                {userDisplayName}
-              </AppText>
-            ) : null}
-          </TouchableOpacity>
-
           {/* Menu Drawer Button */}
           <TouchableOpacity
             style={styles.iconCircleBtn}
@@ -584,38 +554,7 @@ const styles = StyleSheet.create({
   headerActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  profileChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    maxWidth: 160,
-  },
-  avatarCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#176B57',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  headerUserName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#102F2B',
-    maxWidth: 100,
+    gap: 10,
   },
   iconCircleBtn: {
     width: 40,
