@@ -19,12 +19,17 @@ from app.schemas.club_membership import MembershipInfo
 from app.schemas.user import UserResponse
 
 _EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Require at least one letter and one digit for new player registrations
+_HAS_LETTER = re.compile(r"[a-zA-Z]")
+_HAS_DIGIT = re.compile(r"[0-9]")
 
 
 class LoginRequest(BaseModel):
     """
     Login request — email and password only.
     The client NEVER specifies a role. Backend is authoritative.
+    Reject clearly-empty credentials at schema validation time before
+    touching the database, to avoid unnecessary DB round-trips.
     """
     email: str
     password: str
@@ -33,8 +38,17 @@ class LoginRequest(BaseModel):
     @classmethod
     def validate_email(cls, v: str) -> str:
         v = v.strip().lower()
+        if not v:
+            raise ValueError("Email is required")
         if not _EMAIL_REGEX.match(v):
             raise ValueError("Invalid email address format")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Password is required")
         return v
 
 
@@ -54,7 +68,12 @@ class PlatformLoginRequest(LoginRequest):
 
 
 class PlayerRegisterRequest(BaseModel):
-    """Player self-registration request."""
+    """
+    Player self-registration request.
+    Password policy: minimum 8 characters, must contain at least one
+    letter and one digit.  This mirrors typical platform security
+    guidelines without requiring special characters that frustrate users.
+    """
     email: str
     password: str
     full_name: str
@@ -63,6 +82,8 @@ class PlayerRegisterRequest(BaseModel):
     @classmethod
     def validate_email(cls, v: str) -> str:
         v = v.strip().lower()
+        if not v:
+            raise ValueError("Email is required")
         if not _EMAIL_REGEX.match(v):
             raise ValueError("Invalid email address format")
         return v
@@ -70,8 +91,12 @@ class PlayerRegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        if len(v) < 6:
-            raise ValueError("Password must be at least 6 characters")
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        if not _HAS_LETTER.search(v):
+            raise ValueError("Password must contain at least one letter")
+        if not _HAS_DIGIT.search(v):
+            raise ValueError("Password must contain at least one number")
         return v
 
     @field_validator("full_name")
@@ -80,11 +105,20 @@ class PlayerRegisterRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("Full name cannot be empty")
+        if len(v) > 255:
+            raise ValueError("Full name is too long")
         return v
 
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
+
+    @field_validator("refresh_token")
+    @classmethod
+    def validate_refresh_token_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("refresh_token is required")
+        return v
 
 
 class AuthResponse(BaseModel):

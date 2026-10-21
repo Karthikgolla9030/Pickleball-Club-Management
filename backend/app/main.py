@@ -82,8 +82,15 @@ async def _ensure_platform_admin_exists() -> None:
     """
     Ensure the primary platform administrator account exists in the database.
     Matches the emails configured in PLATFORM_OWNER_EMAILS.
+
+    Security: if the account does not exist yet a cryptographically secure
+    random one-time password is generated and written to stdout ONCE.
+    The operator MUST capture this password from the server log on first boot.
+    It is never stored in plaintext and is never logged again.
     """
     try:
+        import secrets
+        import string
         from app.core.database import AsyncSessionLocal
         from app.core.security import hash_password
         from app.models.user import User
@@ -101,17 +108,31 @@ async def _ensure_platform_admin_exists() -> None:
             )
             existing = result.scalar_one_or_none()
             if not existing:
-                default_password = "PlatformAdmin2024!"
+                # Generate a secure 20-char random password:
+                # letters + digits + a handful of safe punctuation
+                alphabet = string.ascii_letters + string.digits + "!@#%^&*"
+                one_time_password = "".join(secrets.choice(alphabet) for _ in range(20))
                 admin = User(
                     email=primary_email,
-                    hashed_password=hash_password(default_password),
+                    hashed_password=hash_password(one_time_password),
                     full_name="Aught2 Platform Administrator",
                     is_active=True,
                     is_verified=True,
                 )
                 session.add(admin)
                 await session.commit()
-                logger.info("Auto-provisioned platform administrator: %s", primary_email)
+                # Log the generated password exactly once — the operator must capture it now.
+                logger.warning(
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    "  Platform administrator account auto-provisioned!\n"
+                    "  Email   : %s\n"
+                    "  Password: %s\n"
+                    "  ⚠  Save this password now — it will NOT be shown again.\n"
+                    "     Change it immediately after first login.\n"
+                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                    primary_email,
+                    one_time_password,
+                )
     except Exception as exc:
         logger.warning("Platform administrator auto-provisioning skipped: %s", exc)
 
