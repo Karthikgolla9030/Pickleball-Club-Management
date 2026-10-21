@@ -44,6 +44,7 @@ export default function PlayerLayout() {
           <Stack.Screen name="explore-clubs" />
           <Stack.Screen name="club-details" />
           <Stack.Screen name="clubs" />
+          <Stack.Screen name="book-court-club" />
           <Stack.Screen name="courts" />
           <Stack.Screen name="bookings" />
           <Stack.Screen name="membership" />

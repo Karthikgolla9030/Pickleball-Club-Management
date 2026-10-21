@@ -368,7 +368,7 @@ export default function PlayerHomeScreen() {
                   styles.findCourtButton,
                   pressed && styles.findCourtButtonPressed,
                 ]}
-                onPress={() => router.push('/(player)/courts' as any)}
+                onPress={() => router.push('/(player)/book-court-club' as any)}
                 accessibilityRole="button"
                 accessibilityLabel="Find a Court"
               >

@@ -77,7 +77,9 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
   // Active checks for Player
   const isPlayerHomeActive = normalizedPath === '/(player)' || normalizedPath === '/(player)/index';
   const isPlayerBookingsActive = normalizedPath === '/(player)/bookings';
-  const isPlayerCourtsActive = normalizedPath === '/(player)/courts';
+  const isPlayerCourtsActive =
+    normalizedPath === '/(player)/courts' ||
+    normalizedPath === '/(player)/book-court-club';
   const isPlayerEventsActive = normalizedPath === '/(player)/events';
   const isPlayerProfileActive = normalizedPath === '/(player)/profile';
 
@@ -169,10 +171,10 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
             />
           </Pressable>
 
-          {/* 3. Center Floating Book Button (Direct Court Booking) */}
+          {/* 3. Center Floating Book Button → Club Selection first */}
           <View style={styles.centerFabSlot}>
             <TouchableOpacity
-              onPress={() => handleNavigate('/(player)/courts')}
+              onPress={() => handleNavigate('/(player)/book-court-club')}
               style={styles.centerFabButton}
               activeOpacity={0.88}
               accessibilityLabel="Book Court"

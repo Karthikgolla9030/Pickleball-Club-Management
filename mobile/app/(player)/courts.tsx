@@ -1,22 +1,18 @@
 /**
  * Aught2 Pickleball — Player Courts & Court Schedule Screen
  *
- * Implements the exact Club-Side Court Schedule and Court Booking system in the Player Side:
- *   - Reuses the exact CourtSchedule UI component (grid structure, court order, date picker,
- *     hourly timeline, status legend, and horizontal scrolling).
- *   - Prominent green primary "Book Court" button in the header that opens the booking flow.
- *   - Real-time availability reflecting actual bookings, maintenance, and blocked slots.
- *   - Interactive slot selection: tapping an AVAILABLE slot opens the pre-filled booking flow.
- *   - Reuses BookingFlowModal in mode="player" for self-booking with summary, validation, and confirmation.
- *   - Reuses BookingDetailsModal in mode="player" for viewing and cancelling own reservations.
- *   - Strict player-side separation: no admin controls, no Add/Edit/Deactivate court buttons,
- *     and other players' private details remain protected.
+ * IMPORTANT: This screen is always club-scoped. It must be reached via
+ * /(player)/book-court-club which sets an explicit clubId param. If a
+ * clubId param is missing the screen immediately redirects back to
+ * book-court-club so stale global state can never leak in.
+ *
+ * Direct links with a known clubId (e.g. from club-details) skip club
+ * selection and land here directly — that is the only permitted shortcut.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StatusBar,
   StyleSheet,
   TouchableOpacity,
@@ -24,7 +20,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Plus, ShieldAlert } from 'lucide-react-native';
+import { Plus, ShieldAlert } from 'lucide-react-native';
 
 import {
   AppHeader,
@@ -32,11 +28,9 @@ import {
   BookingDetailsModal,
   BookingFlowModal,
   CourtSchedule,
-  EmptyState,
-  LoadingState,
   Screen,
 } from '@/components';
-import { useActiveClub, useAuth, usePlayerClubs } from '@/hooks';
+import { useAuth, usePlayerClubs } from '@/hooks';
 import { bookingApi, clubsApi } from '@/services/api';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Booking } from '@/types';
@@ -44,45 +38,38 @@ import type { Booking } from '@/types';
 export default function PlayerCourtsScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { clubId: activeClubId, clubName: activeClubName } = useActiveClub();
   const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
   const { clubs: myClubs } = usePlayerClubs();
 
-  // If a club ID was passed via params, fetch its public details if not in enrolled clubs
+  // Redirect to club selection if no clubId param is supplied.
+  // This prevents stale global state from silently picking the wrong club.
+  const effectiveClubId = paramClubId || null;
+
+  React.useEffect(() => {
+    if (!effectiveClubId) {
+      router.replace('/(player)/book-court-club' as any);
+    }
+  }, [effectiveClubId, router]);
+
+  // Fetch public club details so we can show the name even if the player
+  // is not yet a member (e.g. browsing from club-details).
   const { data: paramClub } = useQuery({
-    queryKey: ['public-club', paramClubId],
-    queryFn: () => clubsApi.getPublicClub(paramClubId!),
-    enabled: Boolean(paramClubId),
+    queryKey: ['public-club', effectiveClubId],
+    queryFn: () => clubsApi.getPublicClub(effectiveClubId!),
+    enabled: Boolean(effectiveClubId),
   });
 
-  // Track the currently selected club on this screen
-  const [selectedClubId, setSelectedClubId] = useState<string | null>(
-    paramClubId || activeClubId || null
-  );
-
-  useEffect(() => {
-    if (paramClubId) {
-      setSelectedClubId(paramClubId);
-    } else if (!selectedClubId && (activeClubId || myClubs[0]?.club_id)) {
-      setSelectedClubId(activeClubId || myClubs[0]?.club_id || null);
-    }
-  }, [paramClubId, activeClubId, myClubs, selectedClubId]);
-
-  const effectiveClubId = selectedClubId || activeClubId || myClubs[0]?.club_id || null;
-
-  // Determine membership eligibility for the effective club
+  // Determine membership eligibility for the selected club
   const isMemberOfSelectedClub = useMemo(() => {
     if (!effectiveClubId) return false;
     return myClubs.some((c) => c.club_id === effectiveClubId && c.status === 'active');
   }, [myClubs, effectiveClubId]);
 
   const effectiveClubName = useMemo(() => {
-    if (paramClubId && paramClub?.name) return paramClub.name;
     const enrolledMatch = myClubs.find((c) => c.club_id === effectiveClubId);
     if (enrolledMatch) return enrolledMatch.club_name;
-    if (effectiveClubId === activeClubId && activeClubName) return activeClubName;
     return paramClub?.name || 'Selected Club';
-  }, [paramClubId, paramClub, myClubs, effectiveClubId, activeClubId, activeClubName]);
+  }, [paramClub, myClubs, effectiveClubId]);
 
   // Schedule & Booking Modal State
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -194,18 +181,9 @@ export default function PlayerCourtsScreen() {
     setBookingModalVisible(true);
   };
 
+  // While redirect is in flight show nothing
   if (!effectiveClubId) {
-    return (
-      <Screen safeArea={false} style={styles.screen}>
-        <AppHeader title="Courts" subtitle="Court schedule & reservations" showMenu borderless />
-        <View style={styles.centerContainer}>
-          <EmptyState
-            title="No Club Selected"
-            description="Please join or select a club to view court schedules and make reservations."
-          />
-        </View>
-      </Screen>
-    );
+    return null;
   }
 
   return (
@@ -214,10 +192,10 @@ export default function PlayerCourtsScreen() {
 
       {/* ─── Top Header with "Book Court" Primary Button ───────────────────── */}
       <AppHeader
-        title="Courts"
-        subtitle={effectiveClubName ? `Court schedule at ${effectiveClubName}` : 'Court schedule & reservations'}
+        title={effectiveClubName}
+        subtitle="Court schedule & reservations"
         borderless
-        showMenu
+        showBack
         rightElement={
           <TouchableOpacity
             style={styles.bookCourtButton}
@@ -231,33 +209,6 @@ export default function PlayerCourtsScreen() {
           </TouchableOpacity>
         }
       />
-
-      {/* ─── Enrolled Clubs Selector Bar (if player belongs to multiple clubs) ─ */}
-      {myClubs.length > 1 && (
-        <View style={styles.clubSelectorBar}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.clubPillsContainer}
-          >
-            {myClubs.map((c) => {
-              const isSelected = c.club_id === effectiveClubId;
-              return (
-                <TouchableOpacity
-                  key={c.club_id}
-                  style={[styles.clubPill, isSelected && styles.clubPillActive]}
-                  onPress={() => setSelectedClubId(c.club_id)}
-                >
-                  <Building2 size={13} color={isSelected ? '#FFFFFF' : '#18794E'} />
-                  <AppText style={[styles.clubPillText, isSelected && styles.clubPillTextActive]}>
-                    {c.club_name}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-      )}
 
       {/* ─── Non-member Warning Banner ───────────────────────────────────────── */}
       {!isMemberOfSelectedClub && (
@@ -323,17 +274,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F4F8F6',
   },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing[4],
-  },
   scheduleWrapper: {
     flex: 1,
   },
-
-  // Primary "Book Court" Green Button in Header
   bookCourtButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -353,40 +296,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-  },
-  clubSelectorBar: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2EAE6',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  clubPillsContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  clubPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#F0F6F3',
-    borderWidth: 1,
-    borderColor: '#D8E6DE',
-  },
-  clubPillActive: {
-    backgroundColor: '#18794E',
-    borderColor: '#18794E',
-  },
-  clubPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#18794E',
-  },
-  clubPillTextActive: {
-    color: '#FFFFFF',
   },
   nonMemberBanner: {
     flexDirection: 'row',

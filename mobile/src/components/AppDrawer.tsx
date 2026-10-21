@@ -164,7 +164,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     { key: 'player_explore', label: 'Explore Clubs', icon: Compass, route: '/(player)/explore-clubs' },
     { key: 'player_clubs', label: 'My Clubs', icon: Building2, route: '/(player)/clubs' },
     { key: 'player_bookings', label: 'My Bookings', icon: CalendarDays, route: '/(player)/bookings' },
-    { key: 'player_courts', label: 'Book a Court', icon: LayoutGrid, route: '/(player)/courts' },
+    { key: 'player_courts', label: 'Book a Court', icon: LayoutGrid, route: '/(player)/book-court-club' },
     { key: 'player_membership', label: 'My Memberships', icon: Crown, route: '/(player)/membership' },
     { key: 'player_payments', label: 'My Payments', icon: CreditCard, route: '/(player)/payments' },
     { key: 'player_tournaments', label: 'Tournaments', icon: Trophy, route: '/(player)/tournaments' },
