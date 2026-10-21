@@ -2,7 +2,7 @@
  * API services barrel export
  */
 
-export { apiClient, ApiClientError, setTokenProvider, setTokenRefreshHandler } from './client';
+export { apiClient, ApiClientError, getAccessToken, setTokenProvider, setTokenRefreshHandler } from './client';
 export { authApi } from './auth';
 export { clubsApi } from './clubs';
 export { competitionApi } from './competition';

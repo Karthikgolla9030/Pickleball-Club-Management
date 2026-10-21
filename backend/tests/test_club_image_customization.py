@@ -591,3 +591,229 @@ async def test_media_upload_validation_and_storage(
     assert body["height"] == 200
     assert "malicious_traversal" not in body["public_url"]
     assert body["public_url"].startswith("/uploads/")
+
+
+@pytest.mark.asyncio
+async def test_court_image_upload_and_replace_owner_and_manager(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Regression Test 1 & 2:
+    - Authorized club owner successfully uploads and replaces a court image.
+    - Authorized club manager (with MANAGE_COURTS permission) successfully uploads court photo.
+    - Tests both 'court_photo' and 'court' asset types.
+    - Updates court record in DB and confirms photo_url persists.
+    - Replacing the court image updates photo_url.
+    - Removing court image sets photo_url to None.
+    """
+    owner = await create_user(db_session, full_name="Club Owner")
+    manager = await create_user(db_session, full_name="Club Manager")
+    club = await create_club(db_session, name="Court Photo Club")
+
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await create_membership(db_session, manager.id, club.id, ClubRole.CLUB_MANAGER)
+
+    court = Court(
+        club_id=club.id,
+        name="Championship Court 1",
+        indoor_outdoor=CourtEnvironment.OUTDOOR,
+        display_order=1,
+    )
+    db_session.add(court)
+    await db_session.commit()
+    await db_session.refresh(court)
+
+    # 1. Owner uploads court image using asset_type="court_photo"
+    court_img_1 = make_test_image(format="JPEG", size=(640, 400), color="green")
+    upload_1 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        headers=make_auth_header(owner),
+        data={"asset_type": "court_photo", "entity_type": "court", "entity_id": str(court.id)},
+        files={"file": ("court1.jpg", court_img_1, "image/jpeg")},
+    )
+    assert upload_1.status_code == 200
+    res_1 = upload_1.json()
+    assert "public_url" in res_1
+    uploaded_url_1 = res_1["public_url"]
+
+    # Persist court update with uploaded image
+    update_res_1 = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court.id}",
+        headers=make_auth_header(owner),
+        json={"photo_url": uploaded_url_1},
+    )
+    assert update_res_1.status_code == 200
+    assert update_res_1.json()["photo_url"] == uploaded_url_1
+
+    # Verify persisted in database
+    await db_session.refresh(court)
+    assert court.photo_url == uploaded_url_1
+
+    # 2. Club Manager (has MANAGE_COURTS) uploads court image using asset_type="court"
+    court_img_2 = make_test_image(format="PNG", size=(640, 400), color="blue")
+    upload_2 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        headers=make_auth_header(manager),
+        data={"asset_type": "court", "entity_type": "court", "entity_id": str(court.id)},
+        files={"file": ("court2.png", court_img_2, "image/png")},
+    )
+    assert upload_2.status_code == 200
+    res_2 = upload_2.json()
+    uploaded_url_2 = res_2["public_url"]
+
+    # Manager updates court photo
+    update_res_2 = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court.id}/image",
+        headers=make_auth_header(manager),
+        json={"image_url": uploaded_url_2},
+    )
+    assert update_res_2.status_code == 200
+    assert update_res_2.json()["photo_url"] == uploaded_url_2
+
+    await db_session.refresh(court)
+    assert court.photo_url == uploaded_url_2
+
+    # 3. Manager clears court photo
+    clear_res = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court.id}/image",
+        headers=make_auth_header(manager),
+        json={"image_url": None},
+    )
+    assert clear_res.status_code == 200
+    assert clear_res.json()["photo_url"] is None
+
+    await db_session.refresh(court)
+    assert court.photo_url is None
+
+
+@pytest.mark.asyncio
+async def test_court_image_upload_authentication_and_authorization_failures(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Regression Test 3, 4 & 5:
+    - Unauthenticated upload is rejected with 401 "Not authenticated".
+    - Player without court management permissions is rejected with 403 Forbidden.
+    - Authenticated user from another club cannot upload to this club's endpoint.
+    - Cross-club entity validation: Club A user passing entity_id of Club B's court is rejected.
+    - Manager without MANAGE_CLUB cannot upload club_logo.
+    """
+    owner_a = await create_user(db_session, full_name="Owner Club A")
+    manager_a = await create_user(db_session, full_name="Manager Club A")
+    td_a = await create_user(db_session, full_name="TD Club A")
+    player_a = await create_user(db_session, full_name="Player Club A")
+    owner_b = await create_user(db_session, full_name="Owner Club B")
+
+    club_a = await create_club(db_session, name="Club A Security")
+    club_b = await create_club(db_session, name="Club B Security")
+
+    await create_membership(db_session, owner_a.id, club_a.id, ClubRole.CLUB_OWNER)
+    await create_membership(db_session, manager_a.id, club_a.id, ClubRole.CLUB_MANAGER)
+    await create_membership(db_session, td_a.id, club_a.id, ClubRole.TOURNAMENT_DIRECTOR)
+    # player_a has no club membership record
+    await create_membership(db_session, owner_b.id, club_b.id, ClubRole.CLUB_OWNER)
+
+    court_a = Court(club_id=club_a.id, name="Court A1", display_order=1)
+    court_b = Court(club_id=club_b.id, name="Court B1", display_order=1)
+    db_session.add_all([court_a, court_b])
+    await db_session.commit()
+
+    test_img = make_test_image(format="JPEG")
+
+    # 1. Unauthenticated request: NO Authorization header -> 401 "Not authenticated"
+    unauth_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        data={"asset_type": "court_photo"},
+        files={"file": ("court.jpg", test_img, "image/jpeg")},
+    )
+    assert unauth_res.status_code == 401
+    assert unauth_res.json()["detail"] == "Not authenticated"
+
+    # 2a. Tournament Director (has membership but lacks MANAGE_COURTS) -> 403 Forbidden
+    td_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(td_a),
+        data={"asset_type": "court_photo"},
+        files={"file": ("court.jpg", test_img, "image/jpeg")},
+    )
+    assert td_res.status_code == 403
+    assert "Permission denied: manage_courts required" in td_res.json()["detail"]
+
+    # 2b. Regular player (no membership in club) -> 403 Forbidden
+    player_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(player_a),
+        data={"asset_type": "court_photo"},
+        files={"file": ("court.jpg", test_img, "image/jpeg")},
+    )
+    assert player_res.status_code == 403
+    assert "not a member" in player_res.json()["detail"]
+
+    # 3. User from Club B cannot upload to Club A -> 403 Forbidden
+    cross_club_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(owner_b),
+        data={"asset_type": "court_photo"},
+        files={"file": ("court.jpg", test_img, "image/jpeg")},
+    )
+    assert cross_club_res.status_code == 403
+
+    # 4. Cross-club entity validation: Owner A specifying entity_id of Club B's court -> 404
+    foreign_court_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(owner_a),
+        data={"asset_type": "court_photo", "entity_type": "court", "entity_id": str(court_b.id)},
+        files={"file": ("court.jpg", test_img, "image/jpeg")},
+    )
+    assert foreign_court_res.status_code == 404
+    assert "Court not found in this club" in foreign_court_res.json()["detail"]
+
+    # 5. Club Manager (has MANAGE_COURTS but NOT MANAGE_CLUB) uploading club_logo -> 403 Forbidden
+    manager_logo_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/media/upload",
+        headers=make_auth_header(manager_a),
+        data={"asset_type": "club_logo"},
+        files={"file": ("logo.jpg", test_img, "image/jpeg")},
+    )
+    assert manager_logo_res.status_code == 403
+    assert "Permission denied: manage_club required" in manager_logo_res.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_failed_replacement_preserves_previous_image_and_returns_sanitized_error(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Regression Test 6 & 7:
+    - Failed upload returns sanitized, useful error (400 / 413).
+    - Failed replacement preserves the previously saved image in the database.
+    """
+    owner = await create_user(db_session, full_name="Club Owner Safe")
+    club = await create_club(db_session, name="Safe Upload Club")
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+
+    initial_photo_url = "https://assets.local/court-existing-photo.jpg"
+    court = Court(
+        club_id=club.id,
+        name="Preserved Court",
+        photo_url=initial_photo_url,
+        display_order=1,
+    )
+    db_session.add(court)
+    await db_session.commit()
+    await db_session.refresh(court)
+
+    # Attempt to upload corrupt data
+    corrupt_bytes = b"not an image at all - corrupt content payload"
+    fail_upload = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        headers=make_auth_header(owner),
+        data={"asset_type": "court_photo", "entity_type": "court", "entity_id": str(court.id)},
+        files={"file": ("corrupt.jpg", corrupt_bytes, "image/jpeg")},
+    )
+    assert fail_upload.status_code == 400
+    assert "Invalid image file or corrupt image data" in fail_upload.json()["detail"]
+
+    # Confirm previously saved photo_url in database was preserved
+    await db_session.refresh(court)
+    assert court.photo_url == initial_photo_url

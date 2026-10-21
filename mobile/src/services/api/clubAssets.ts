@@ -8,6 +8,7 @@
  * - Updating entity banners and photos (tournaments, leagues, events, courts, lessons)
  */
 
+import { Platform } from 'react-native';
 import { API_ENDPOINTS } from '@/constants';
 import { apiClient } from './client';
 import type {
@@ -96,20 +97,29 @@ export const clubAssetsApi = {
     entityId?: string
   ): Promise<{ asset_id: string; public_url: string; width?: number; height?: number }> {
     const formData = new FormData();
+    const fileName = fileInput.name || 'upload.jpg';
+    const mimeType = fileInput.type || 'image/jpeg';
 
     if (fileInput.blob) {
-      formData.append('file', fileInput.blob, fileInput.name || 'upload.jpg');
-    } else if (typeof window !== 'undefined' && fileInput.uri.startsWith('data:')) {
-      // Data URI in browser/web: convert to Blob
+      formData.append('file', fileInput.blob, fileName);
+    } else if (
+      Platform.OS === 'web' ||
+      (typeof window !== 'undefined' &&
+        (fileInput.uri.startsWith('blob:') ||
+          fileInput.uri.startsWith('data:') ||
+          fileInput.uri.startsWith('http://') ||
+          fileInput.uri.startsWith('https://')))
+    ) {
+      // Browser/Web environment: convert uri (blob:, data:, or http URL) to Blob
       const res = await fetch(fileInput.uri);
       const blob = await res.blob();
-      formData.append('file', blob, fileInput.name || 'upload.jpg');
+      formData.append('file', blob, fileName);
     } else {
-      // React Native file object
+      // React Native native mobile environment (iOS / Android)
       formData.append('file', {
         uri: fileInput.uri,
-        name: fileInput.name || 'upload.jpg',
-        type: fileInput.type || 'image/jpeg',
+        name: fileName,
+        type: mimeType,
       } as any);
     }
 
@@ -117,30 +127,12 @@ export const clubAssetsApi = {
     if (entityType) formData.append('entity_type', entityType);
     if (entityId) formData.append('entity_id', entityId);
 
-    const token = await (apiClient as any)._getAccessToken?.() || null;
     const uploadUrl = API_ENDPOINTS.CLUB_MEDIA_UPLOAD(clubId);
-
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      let errorMsg = `Upload failed (${response.status})`;
-      try {
-        const errJson = await response.json();
-        errorMsg = errJson.detail || errorMsg;
-      } catch {
-        // ignore
-      }
-      throw new Error(errorMsg);
-    }
-
-    return response.json();
+    return apiClient.upload<{ asset_id: string; public_url: string; width?: number; height?: number }>(
+      uploadUrl,
+      formData,
+      true
+    );
   },
 
   // ─── Entity Image Updaters ──────────────────────────────────────────────────

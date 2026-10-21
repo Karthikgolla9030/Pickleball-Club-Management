@@ -119,17 +119,22 @@ async def upload_club_media(
     Validate permissions based on asset type, then store and register image.
     """
     # Enforce role-appropriate permissions for each asset type
+    clean_asset_type = asset_type.lower().strip()
     required_permission = Permission.MANAGE_CLUB
-    if asset_type == "tournament_banner":
+    if clean_asset_type in ("tournament_banner", "tournament"):
         required_permission = Permission.MANAGE_TOURNAMENTS
-    elif asset_type == "league_banner":
+    elif clean_asset_type in ("league_banner", "league"):
         required_permission = Permission.MANAGE_LEAGUES
-    elif asset_type == "event_cover":
+    elif clean_asset_type in ("event_cover", "event"):
         required_permission = Permission.MANAGE_EVENTS
-    elif asset_type == "court_photo":
+    elif clean_asset_type in ("court_photo", "court", "court_image"):
         required_permission = Permission.MANAGE_COURTS
-    elif asset_type in ("lesson_image", "lesson_type_image"):
+    elif clean_asset_type in ("lesson_image", "lesson_type_image", "lesson", "lesson_type"):
         required_permission = Permission.MANAGE_LESSONS
+    elif clean_asset_type in ("club_logo", "logo", "club_cover", "cover", "carousel_slide", "slide", "general"):
+        required_permission = Permission.MANAGE_CLUB
+    else:
+        required_permission = Permission.MANAGE_CLUB
 
     if not has_permission(membership.role, required_permission):
         raise HTTPException(
@@ -141,7 +146,7 @@ async def upload_club_media(
         club_id=club_id,
         uploaded_by_user_id=current_user.id,
         file=file,
-        asset_type=asset_type,
+        asset_type=clean_asset_type,
         entity_type=entity_type,
         entity_id=entity_id,
     )

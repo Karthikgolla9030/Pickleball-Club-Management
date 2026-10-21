@@ -112,6 +112,11 @@ async def get_court(
     return await CourtService(db).get_court(club_id=club_id, court_id=court_id)
 
 
+@club_courts_router.put(
+    "/{court_id}",
+    response_model=CourtResponse,
+    include_in_schema=False,
+)
 @club_courts_router.patch(
     "/{court_id}",
     response_model=CourtResponse,

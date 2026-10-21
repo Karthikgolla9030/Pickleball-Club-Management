@@ -69,6 +69,8 @@ import {
   ModalSheet,
   Screen,
 } from '@/components';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '@/constants';
 import { useActiveClub, useClubBranding, useClubCourts, usePermission } from '@/hooks';
 import { courtApi, bookingApi, clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
@@ -205,6 +207,7 @@ function CourtGlyph({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ClubCourtsScreen() {
+  const queryClient = useQueryClient();
   const { clubId, clubName } = useActiveClub();
   const { canManageCourts } = usePermission();
   const { data: clubBranding } = useClubBranding(clubId || '');
@@ -325,21 +328,35 @@ export default function ClubCourtsScreen() {
       if (result.canceled || !result.assets || result.assets.length === 0) return;
       const pickedAsset = result.assets[0];
 
+      // Validate allowed file size (max 5 MB)
+      if (pickedAsset.fileSize && pickedAsset.fileSize > 5 * 1024 * 1024) {
+        Alert.alert('File Too Large', 'Court image must be less than 5 MB.');
+        return;
+      }
+
+      // Validate allowed image types
+      const mime = pickedAsset.mimeType?.toLowerCase();
+      if (mime && !['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mime)) {
+        Alert.alert('Unsupported Format', 'Please select a JPG, PNG, or WEBP image.');
+        return;
+      }
+
       setIsUploadingPhoto(true);
       try {
         const uploadRes = await clubAssetsApi.uploadClubMedia(
           clubId,
           {
             uri: pickedAsset.uri,
-            name: 'court_image.jpg',
-            type: 'image/jpeg',
+            name: pickedAsset.fileName || 'court_image.jpg',
+            type: pickedAsset.mimeType || 'image/jpeg',
           },
-          'court',
+          'court_photo',
           'court',
           editingCourt ? editingCourt.id : undefined
         );
         setFormPhotoUrl(uploadRes.public_url);
       } catch (err: unknown) {
+        // Keep previous image reference on failure
         const msg = err instanceof Error ? err.message : 'Photo upload failed';
         Alert.alert('Upload Error', msg);
       } finally {
@@ -406,6 +423,11 @@ export default function ClubCourtsScreen() {
         photo_url: formPhotoUrl,
       };
       await createCourt(payload);
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+      }
       setIsCreateModalOpen(false);
       refetchAll();
     } catch (err: unknown) {
@@ -445,6 +467,10 @@ export default function ClubCourtsScreen() {
         photo_url: formPhotoUrl,
       };
       await courtApi.updateCourt(clubId, editingCourt.id, payload);
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       setEditingCourt(null);
       refetchAll();
     } catch (err: unknown) {
@@ -918,13 +944,19 @@ export default function ClubCourtsScreen() {
           {
             label: 'Cancel',
             variant: 'secondary',
-            onPress: () => setIsCreateModalOpen(false),
+            disabled: isSubmitting || isUploadingPhoto,
+            onPress: () => {
+              if (!isUploadingPhoto) {
+                setIsCreateModalOpen(false);
+                setFormPhotoUrl(null);
+              }
+            },
           },
           {
             label: 'Create Court',
             variant: 'primary',
             loading: isSubmitting,
-            disabled: isSubmitting,
+            disabled: isSubmitting || isUploadingPhoto,
             onPress: handleCreateSubmit,
           },
         ]}
@@ -1089,13 +1121,19 @@ export default function ClubCourtsScreen() {
           {
             label: 'Cancel',
             variant: 'secondary',
-            onPress: () => setEditingCourt(null),
+            disabled: isSubmitting || isUploadingPhoto,
+            onPress: () => {
+              if (!isUploadingPhoto) {
+                setEditingCourt(null);
+                setFormPhotoUrl(null);
+              }
+            },
           },
           {
             label: 'Save Changes',
             variant: 'primary',
             loading: isSubmitting,
-            disabled: isSubmitting,
+            disabled: isSubmitting || isUploadingPhoto,
             onPress: handleEditSubmit,
           },
         ]}

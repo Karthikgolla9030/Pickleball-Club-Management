@@ -231,6 +231,10 @@ class ClubAssetService:
         if not club_check.scalar_one_or_none():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found")
 
+        # Verify entity belongs to this club if specified
+        if entity_id and entity_type:
+            await self._verify_entity_ownership(club_id, entity_type, entity_id)
+
         raw_bytes = await file.read()
         category = asset_type.replace("_", "-")
 
@@ -256,6 +260,66 @@ class ClubAssetService:
             height=media_asset.height,
             file_size_bytes=media_asset.file_size_bytes,
         )
+
+    async def _verify_entity_ownership(
+        self,
+        club_id: UUID,
+        entity_type: str,
+        entity_id: UUID,
+    ) -> None:
+        """
+        Verify that an entity referenced by entity_id belongs to the target club.
+        Rejects cross-club uploads server-side.
+        """
+        clean_type = entity_type.lower().strip()
+        if clean_type in ("court", "court_photo", "court_image"):
+            stmt = select(Court.id).where(Court.id == entity_id, Court.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Court not found in this club",
+                )
+        elif clean_type in ("tournament", "tournament_banner"):
+            stmt = select(Tournament.id).where(Tournament.id == entity_id, Tournament.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Tournament not found in this club",
+                )
+        elif clean_type in ("league", "league_banner"):
+            stmt = select(League.id).where(League.id == entity_id, League.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="League not found in this club",
+                )
+        elif clean_type in ("event", "event_cover"):
+            stmt = select(Event.id).where(Event.id == entity_id, Event.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Event not found in this club",
+                )
+        elif clean_type in ("lesson", "lesson_image"):
+            stmt = select(Lesson.id).where(Lesson.id == entity_id, Lesson.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Lesson not found in this club",
+                )
+        elif clean_type in ("lesson_type", "lesson_type_image"):
+            stmt = select(LessonType.id).where(LessonType.id == entity_id, LessonType.club_id == club_id)
+            res = await self.db.execute(stmt)
+            if not res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Lesson type not found in this club",
+                )
 
     # ─── Entity Image Management ──────────────────────────────────────────────
 

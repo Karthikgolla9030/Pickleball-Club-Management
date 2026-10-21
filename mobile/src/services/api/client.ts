@@ -101,6 +101,10 @@ export function setTokenRefreshHandler(handler: () => Promise<string | null>): v
   _refreshTokenHandler = handler;
 }
 
+export async function getAccessToken(): Promise<string | null> {
+  return _getAccessToken ? await _getAccessToken() : null;
+}
+
 // ─── Core Request Function ────────────────────────────────────────────────────
 
 async function request<T>(
@@ -134,12 +138,19 @@ async function request<T>(
   );
 
   try {
+    const isFormData =
+      (typeof FormData !== 'undefined' && options.body instanceof FormData) ||
+      (options.body && typeof options.body === 'object' && typeof (options.body as any).append === 'function');
+
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       Accept: 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
       ...(options.headers as Record<string, string>),
     };
+
+    if (!isFormData && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (requireAuth) {
       let token = _getAccessToken ? await _getAccessToken() : null;
@@ -300,7 +311,26 @@ export const apiClient = {
     );
   },
 
+  upload<T>(url: string, formData: FormData, requireAuth = true): Promise<T> {
+    return request<T>(
+      url,
+      {
+        method: 'POST',
+        body: formData,
+      },
+      requireAuth,
+    );
+  },
+
   delete<T>(url: string, requireAuth = true): Promise<T> {
     return request<T>(url, { method: 'DELETE' }, requireAuth);
+  },
+
+  getAccessToken(): Promise<string | null> {
+    return _getAccessToken ? _getAccessToken() : Promise.resolve(null);
+  },
+
+  _getAccessToken(): Promise<string | null> {
+    return _getAccessToken ? _getAccessToken() : Promise.resolve(null);
   },
 };
