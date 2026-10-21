@@ -10,6 +10,7 @@
 
 import { Platform } from 'react-native';
 import { API_ENDPOINTS } from '@/constants';
+import { prepareImageBlobForUpload } from '@/utils';
 import { apiClient } from './client';
 import type {
   ClubBranding,
@@ -110,9 +111,8 @@ export const clubAssetsApi = {
           fileInput.uri.startsWith('http://') ||
           fileInput.uri.startsWith('https://')))
     ) {
-      // Browser/Web environment: convert uri (blob:, data:, or http URL) to Blob
-      const res = await fetch(fileInput.uri);
-      const blob = await res.blob();
+      // Browser/Web environment: compress image maintaining high visual quality to reduce upload payload
+      const blob = await prepareImageBlobForUpload(fileInput.uri, mimeType, 1600, 0.85);
       formData.append('file', blob, fileName);
     } else {
       // React Native native mobile environment (iOS / Android)

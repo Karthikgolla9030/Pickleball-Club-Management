@@ -43,6 +43,7 @@ import {
   Lock,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   RefreshCw,
   Save,
@@ -126,6 +127,7 @@ export default function ClubDetailsScreen() {
 
   // Active view tab: 'edit', 'branding', or 'preview'
   const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'preview'>('edit');
+  const [isEditing, setIsEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Form State
@@ -329,6 +331,34 @@ export default function ClubDetailsScreen() {
     }
   };
 
+  // Cancel edit mode and reload saved backend data
+  const handleCancelEdit = () => {
+    if (club) {
+      setName(club.name || '');
+      setShortDescription(club.short_description || '');
+      setDescription(club.description || '');
+      setContactEmail(club.contact_email || '');
+      setContactPhone(club.contact_phone || '');
+      setWebsite(club.website || '');
+      setEstablishedYear(club.established_year ? String(club.established_year) : '');
+      setAddressLine1(club.address_line1 || '');
+      setAddressLine2(club.address_line2 || '');
+      setCity(club.city || '');
+      setState(club.state || '');
+      setPostalCode(club.postal_code || '');
+      setCountry(club.country || 'United States');
+      setSelectedDays(parseDaysList(club.operating_days));
+      setOpeningTime(club.opening_time ? club.opening_time.slice(0, 5) : '06:00');
+      setClosingTime(club.closing_time ? club.closing_time.slice(0, 5) : '22:00');
+      setTimezone(club.timezone || 'America/New_York');
+      setFacilitiesSummary(club.facilities_summary || '');
+      setHolidayClosureNotes(club.holiday_closure_notes || '');
+      setLogoPreviewUri(club.logo_url || null);
+      setValidationErrors({});
+    }
+    setIsEditing(false);
+  };
+
   // Save changes handler
   const handleSaveChanges = async () => {
     if (!isOwner) {
@@ -365,6 +395,8 @@ export default function ClubDetailsScreen() {
 
     try {
       await updateClub(payload);
+      await refetch();
+      setIsEditing(false);
       setSaveSuccessMsg('Club details saved successfully!');
       setTimeout(() => setSaveSuccessMsg(null), 4000);
     } catch (saveErr: any) {
@@ -373,45 +405,6 @@ export default function ClubDetailsScreen() {
         saveErr?.message || 'Failed to save changes. Your entered information is preserved.'
       );
     }
-  };
-
-  // Reset form to saved backend data
-  const handleReset = () => {
-    if (!club) return;
-    Alert.alert(
-      'Discard Changes',
-      'Are you sure you want to discard your unsaved edits and reload saved details?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Discard',
-          style: 'destructive',
-          onPress: () => {
-            setName(club.name || '');
-            setShortDescription(club.short_description || '');
-            setDescription(club.description || '');
-            setContactEmail(club.contact_email || '');
-            setContactPhone(club.contact_phone || '');
-            setWebsite(club.website || '');
-            setEstablishedYear(club.established_year ? String(club.established_year) : '');
-            setAddressLine1(club.address_line1 || '');
-            setAddressLine2(club.address_line2 || '');
-            setCity(club.city || '');
-            setState(club.state || '');
-            setPostalCode(club.postal_code || '');
-            setCountry(club.country || 'United States');
-            setSelectedDays(parseDaysList(club.operating_days));
-            setOpeningTime(club.opening_time ? club.opening_time.slice(0, 5) : '06:00');
-            setClosingTime(club.closing_time ? club.closing_time.slice(0, 5) : '22:00');
-            setTimezone(club.timezone || 'America/New_York');
-            setFacilitiesSummary(club.facilities_summary || '');
-            setHolidayClosureNotes(club.holiday_closure_notes || '');
-            setLogoPreviewUri(club.logo_url || null);
-            setValidationErrors({});
-          },
-        },
-      ]
-    );
   };
 
   const currentLogoUri = getFullImageUrl(logoPreviewUri || club?.logo_url);
@@ -454,11 +447,11 @@ export default function ClubDetailsScreen() {
         borderless
       />
 
-      {/* Tabs: Edit Profile vs Player Preview */}
+      {/* Tabs: Profile vs Branding vs Player Preview */}
       <View style={styles.tabsContainer}>
         <SegmentedTabs
           tabs={[
-            { key: 'edit', label: isOwner ? 'Profile' : 'Club Profile' },
+            { key: 'edit', label: isOwner ? (isEditing ? 'Editing Profile' : 'Profile') : 'Club Profile' },
             { key: 'branding', label: 'Branding & Assets' },
             { key: 'preview', label: 'Player Preview' },
           ]}
@@ -509,12 +502,260 @@ export default function ClubDetailsScreen() {
           }
         >
           {activeTab === 'edit' ? (
-            /* ═════════════════════════════════════════════════════════════════════════
-               EDIT PROFILE TAB
-               ═════════════════════════════════════════════════════════════════════════ */
-            <View style={styles.formWrapper}>
-              {/* SECTION A: CLUB INFORMATION */}
-              <Card style={styles.sectionCard}>
+            !isEditing ? (
+              /* ═════════════════════════════════════════════════════════════════════════
+                 VIEW PROFILE MODE (Default)
+                 ═════════════════════════════════════════════════════════════════════════ */
+              <View style={styles.viewModeWrapper}>
+                {/* Top Banner with Edit Button */}
+                <View style={styles.viewModeBanner}>
+                  <View style={styles.viewModeBannerLeft}>
+                    <View style={styles.savedBadge}>
+                      <CheckCircle2 size={14} color="#15803D" />
+                      <AppText style={styles.savedBadgeText}>Saved Profile</AppText>
+                    </View>
+                    <AppText style={styles.viewModeBannerSubtitle}>
+                      Current club settings visible to players
+                    </AppText>
+                  </View>
+                  {isOwner && (
+                    <TouchableOpacity
+                      style={styles.editModeToggleBtn}
+                      onPress={() => setIsEditing(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Pencil size={15} color="#FFFFFF" strokeWidth={2.5} />
+                      <AppText style={styles.editModeToggleBtnText}>Edit Details</AppText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* View Section 1: Club Information */}
+                <Card style={styles.viewSectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Building2 size={18} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Club Information</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Public identity and contact information
+                      </AppText>
+                    </View>
+                  </View>
+
+                  {/* Logo and Identity */}
+                  <View style={styles.viewIdentityRow}>
+                    <View style={styles.viewLogoBox}>
+                      {currentLogoUri && !logoError ? (
+                        <Image
+                          source={{ uri: currentLogoUri }}
+                          style={styles.viewLogoImg}
+                          resizeMode="contain"
+                          onError={() => setLogoError(true)}
+                        />
+                      ) : (
+                        <View style={styles.viewLogoFallback}>
+                          <Building2 size={32} color="#176B57" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.viewIdentityText}>
+                      <AppText style={styles.viewClubName}>{name || 'Unnamed Club'}</AppText>
+                      {shortDescription ? (
+                        <AppText style={styles.viewTaglineText}>"{shortDescription}"</AppText>
+                      ) : null}
+                      {establishedYear ? (
+                        <AppText style={styles.viewEstText}>Est. {establishedYear}</AppText>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {description ? (
+                    <View style={styles.viewDescBox}>
+                      <AppText style={styles.viewDescLabel}>About</AppText>
+                      <AppText style={styles.viewDescText}>{description}</AppText>
+                    </View>
+                  ) : null}
+
+                  {/* Contact grid */}
+                  <View style={styles.viewContactGrid}>
+                    {contactEmail ? (
+                      <View style={styles.viewContactItem}>
+                        <Mail size={15} color="#176B57" />
+                        <AppText style={styles.viewContactLabel}>Email:</AppText>
+                        <AppText style={styles.viewContactValue}>{contactEmail}</AppText>
+                      </View>
+                    ) : null}
+                    {contactPhone ? (
+                      <View style={styles.viewContactItem}>
+                        <Phone size={15} color="#176B57" />
+                        <AppText style={styles.viewContactLabel}>Phone:</AppText>
+                        <AppText style={styles.viewContactValue}>{contactPhone}</AppText>
+                      </View>
+                    ) : null}
+                    {website ? (
+                      <View style={styles.viewContactItem}>
+                        <Globe size={15} color="#176B57" />
+                        <AppText style={styles.viewContactLabel}>Website:</AppText>
+                        <TouchableOpacity onPress={() => Linking.openURL(website)}>
+                          <AppText style={styles.viewContactLink}>{website}</AppText>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                </Card>
+
+                {/* View Section 2: Location & Address */}
+                <Card style={styles.viewSectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <MapPin size={18} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Location & Address</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Physical location shown for player navigation
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <View style={styles.viewLocationBlock}>
+                    {addressLine1 ? (
+                      <AppText style={styles.viewAddressText}>{addressLine1}</AppText>
+                    ) : null}
+                    {addressLine2 ? (
+                      <AppText style={styles.viewAddressSubText}>{addressLine2}</AppText>
+                    ) : null}
+                    <AppText style={styles.viewCityStateText}>
+                      {[city, state, postalCode].filter(Boolean).join(', ') || 'No address specified'}
+                    </AppText>
+                    <AppText style={styles.viewCountryText}>{country || 'United States'}</AppText>
+                  </View>
+                </Card>
+
+                {/* View Section 3: Operating Hours & Schedule */}
+                <Card style={styles.viewSectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Clock size={18} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Operating Hours & Schedule</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Weekly schedule, timezone, and facility summary
+                      </AppText>
+                    </View>
+                  </View>
+
+                  {/* Operating Days */}
+                  <View style={styles.viewFieldGroup}>
+                    <AppText style={styles.viewFieldLabel}>Operating Days</AppText>
+                    <View style={styles.daysRow}>
+                      {DAYS_OF_WEEK.map((day) => {
+                        const isSelected = selectedDays.includes(day.key);
+                        return (
+                          <View
+                            key={day.key}
+                            style={[
+                              styles.dayPillView,
+                              isSelected && styles.dayPillSelectedView,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.dayPillTextView,
+                                isSelected && styles.dayPillTextSelectedView,
+                              ]}
+                            >
+                              {day.label}
+                            </AppText>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Hours & Timezone */}
+                  <View style={styles.viewHoursRow}>
+                    <View style={styles.viewHoursCol}>
+                      <AppText style={styles.viewHoursLabel}>Facility Hours</AppText>
+                      <AppText style={styles.viewHoursValue}>
+                        {openingTime} – {closingTime}
+                      </AppText>
+                    </View>
+                    <View style={styles.viewHoursCol}>
+                      <AppText style={styles.viewHoursLabel}>Club Timezone</AppText>
+                      <AppText style={styles.viewHoursValue}>
+                        {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label.split('(')[0].trim() || timezone}
+                      </AppText>
+                    </View>
+                  </View>
+
+                  {facilitiesSummary ? (
+                    <View style={styles.viewFieldGroup}>
+                      <AppText style={styles.viewFieldLabel}>Facilities & Amenities</AppText>
+                      <AppText style={styles.viewFacilitiesText}>{facilitiesSummary}</AppText>
+                    </View>
+                  ) : null}
+
+                  {holidayClosureNotes ? (
+                    <View style={styles.previewClosureNotice}>
+                      <Info size={14} color="#9A6B00" />
+                      <AppText style={styles.previewClosureText}>
+                        {holidayClosureNotes}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </Card>
+
+                {/* Bottom Edit Action Button */}
+                {isOwner && (
+                  <TouchableOpacity
+                    style={styles.bottomEditBtn}
+                    onPress={() => setIsEditing(true)}
+                    activeOpacity={0.85}
+                  >
+                    <Pencil size={18} color="#FFFFFF" strokeWidth={2.5} />
+                    <AppText style={styles.bottomEditBtnText}>Edit Club Details</AppText>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              /* ═════════════════════════════════════════════════════════════════════════
+                 EDIT PROFILE TAB (Active Edit Mode)
+                 ═════════════════════════════════════════════════════════════════════════ */
+              <View style={styles.formWrapper}>
+                {/* Top Editing Status Banner */}
+                <View style={styles.editingBanner}>
+                  <View style={styles.editingBannerLeft}>
+                    <Pencil size={16} color="#176B57" />
+                    <AppText style={styles.editingBannerTitle}>Editing Club Profile</AppText>
+                  </View>
+                  <View style={styles.editingBannerActions}>
+                    <TouchableOpacity
+                      style={styles.editingBannerCancelBtn}
+                      onPress={handleCancelEdit}
+                      disabled={isUpdating}
+                    >
+                      <AppText style={styles.editingBannerCancelText}>Cancel</AppText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.editingBannerSaveBtn, isUpdating && styles.saveBtnDisabled]}
+                      onPress={handleSaveChanges}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <AppText style={styles.editingBannerSaveText}>Save Changes</AppText>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* SECTION A: CLUB INFORMATION */}
+                <Card style={styles.sectionCard}>
                 <View style={styles.sectionHeaderRow}>
                   <View style={styles.sectionIconBadge}>
                     <Building2 size={18} color="#176B57" />
@@ -886,10 +1127,10 @@ export default function ClubDetailsScreen() {
                 <View style={styles.actionButtonsRow}>
                   <TouchableOpacity
                     style={styles.cancelBtn}
-                    onPress={handleReset}
+                    onPress={handleCancelEdit}
                     disabled={isUpdating}
                   >
-                    <AppText style={styles.cancelBtnText}>Discard</AppText>
+                    <AppText style={styles.cancelBtnText}>Cancel</AppText>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -909,6 +1150,7 @@ export default function ClubDetailsScreen() {
                 </View>
               )}
             </View>
+            )
           ) : (
             /* ═════════════════════════════════════════════════════════════════════════
                PLAYER PREVIEW TAB
@@ -1558,5 +1800,307 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#176B57',
     textDecorationLine: 'underline',
+  },
+  // View Mode & Edit Toggle Styles
+  viewModeWrapper: {
+    gap: Spacing[4],
+  },
+  viewModeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[3],
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+    ...Shadows.sm,
+  },
+  viewModeBannerLeft: {
+    gap: 3,
+    flex: 1,
+  },
+  savedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    alignSelf: 'flex-start',
+  },
+  savedBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  viewModeBannerSubtitle: {
+    fontSize: 12,
+    color: '#667776',
+    marginTop: 2,
+  },
+  editModeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#176B57',
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    ...Shadows.sm,
+  },
+  editModeToggleBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  viewSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing[4],
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+    gap: Spacing[3.5],
+    ...Shadows.sm,
+  },
+  viewIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3.5],
+    paddingVertical: Spacing[1],
+  },
+  viewLogoBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#F0F5F2',
+    borderWidth: 2,
+    borderColor: '#D4E5DE',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  viewLogoImg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+  },
+  viewLogoFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  viewIdentityText: {
+    flex: 1,
+    gap: 2,
+  },
+  viewClubName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#102B2A',
+  },
+  viewTaglineText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#2A4540',
+  },
+  viewEstText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#8A9C96',
+  },
+  viewDescBox: {
+    backgroundColor: '#F8FAF9',
+    padding: Spacing[3],
+    borderRadius: Radius.md,
+    gap: 4,
+  },
+  viewDescLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  viewDescText: {
+    fontSize: 13,
+    color: '#2A4540',
+    lineHeight: 19,
+  },
+  viewContactGrid: {
+    gap: Spacing[2],
+    paddingTop: Spacing[1],
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+  },
+  viewContactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  viewContactLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#667776',
+    width: 65,
+  },
+  viewContactValue: {
+    fontSize: 13,
+    color: '#102B2A',
+    flex: 1,
+  },
+  viewContactLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#176B57',
+    textDecorationLine: 'underline',
+  },
+  viewLocationBlock: {
+    gap: 3,
+    paddingVertical: Spacing[1],
+  },
+  viewAddressText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#102B2A',
+  },
+  viewAddressSubText: {
+    fontSize: 14,
+    color: '#49635E',
+  },
+  viewCityStateText: {
+    fontSize: 14,
+    color: '#2A4540',
+  },
+  viewCountryText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A9C96',
+    marginTop: 2,
+  },
+  viewFieldGroup: {
+    gap: Spacing[2],
+  },
+  viewFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#667776',
+  },
+  dayPillView: {
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: Spacing[1.5],
+    borderRadius: Radius.full,
+    backgroundColor: '#F0F4F2',
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+  },
+  dayPillSelectedView: {
+    backgroundColor: '#E5F6EC',
+    borderColor: '#176B57',
+  },
+  dayPillTextView: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8A9C96',
+  },
+  dayPillTextSelectedView: {
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  viewHoursRow: {
+    flexDirection: 'row',
+    gap: Spacing[3],
+    paddingVertical: Spacing[1],
+  },
+  viewHoursCol: {
+    flex: 1,
+    backgroundColor: '#F8FAF9',
+    padding: Spacing[2.5],
+    borderRadius: Radius.md,
+    gap: 3,
+  },
+  viewHoursLabel: {
+    fontSize: 12,
+    color: '#667776',
+  },
+  viewHoursValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  viewFacilitiesText: {
+    fontSize: 13,
+    color: '#2A4540',
+    lineHeight: 19,
+  },
+  bottomEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing[2],
+    backgroundColor: '#176B57',
+    paddingVertical: Spacing[3.5],
+    borderRadius: Radius.lg,
+    ...Shadows.md,
+  },
+  bottomEditBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  editingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EFF8F4',
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[3],
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: '#A8D5C2',
+  },
+  editingBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  editingBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  editingBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  editingBannerCancelBtn: {
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[1.5],
+    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4E5DE',
+  },
+  editingBannerCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#49635E',
+  },
+  editingBannerSaveBtn: {
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[1.5],
+    borderRadius: Radius.md,
+    backgroundColor: '#176B57',
+  },
+  editingBannerSaveText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

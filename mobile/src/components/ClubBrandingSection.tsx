@@ -808,7 +808,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           <View style={styles.hierarchyTextCol}>
             <AppText style={styles.hierarchyTitle}>Courts & Facilities</AppText>
             <AppText style={styles.hierarchyDesc}>
-              Individual court photo → Falls back to your Club Cover → Falls back to numbered court court art.
+              Individual court photo → Falls back to dedicated facility court art.
             </AppText>
           </View>
           <TouchableOpacity

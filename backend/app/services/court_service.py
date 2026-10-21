@@ -19,6 +19,7 @@ from app.models.booking import Booking, BookingStatus
 from app.models.court import Court, CourtStatus
 from app.repositories.club_repository import ClubRepository
 from app.repositories.court_repository import CourtRepository
+from app.services.media_storage_service import MediaStorageService
 from app.schemas.court import (
     CourtAffectedBookingsItem,
     CourtAffectedBookingsResponse,
@@ -119,6 +120,7 @@ class CourtService:
             display_order=display_order,
             price_per_hour=validated_price,
             operating_hours=operating_hours_dict,
+            photo_url=payload.photo_url,
         )
 
     async def get_court(self, club_id: UUID, court_id: UUID) -> Court:
@@ -218,7 +220,17 @@ class CourtService:
             if hasattr(val, "to_dict"):
                 update_data["operating_hours"] = val.to_dict()
 
-        return await self.court_repo.update(court, **update_data)
+        old_photo_url = court.photo_url
+        updated_court = await self.court_repo.update(court, **update_data)
+
+        # Safely clean up previous image file if photo_url was replaced with a new one
+        if "photo_url" in update_data and old_photo_url and old_photo_url != updated_court.photo_url:
+            try:
+                await MediaStorageService(self.db).cleanup_unreferenced_by_url(old_photo_url, club_id)
+            except Exception:
+                pass
+
+        return updated_court
 
     async def deactivate_court(self, club_id: UUID, court_id: UUID) -> Court:
         """

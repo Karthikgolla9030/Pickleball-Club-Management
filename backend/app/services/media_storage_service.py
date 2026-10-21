@@ -128,6 +128,12 @@ class MediaStorageService:
                 detail="Invalid image dimensions",
             )
 
+        # Scale down excessively large images to optimal high-res dimension (max 1920px) to boost performance and reduce payload
+        MAX_OPTIMAL_DIMENSION = 1920
+        if width > MAX_OPTIMAL_DIMENSION or height > MAX_OPTIMAL_DIMENSION:
+            image.thumbnail((MAX_OPTIMAL_DIMENSION, MAX_OPTIMAL_DIMENSION), Image.Resampling.LANCZOS)
+            width, height = image.size
+
         fmt_key = detected_format.upper()
         ext, mime = SUPPORTED_FORMATS[fmt_key]
 
@@ -270,3 +276,29 @@ class MediaStorageService:
         await self.db.delete(asset)
         await self.db.flush()
         return True
+
+    async def cleanup_unreferenced_by_url(self, public_url: str | None, club_id: UUID) -> bool:
+        """
+        Safely delete an asset and file if no other records reference it.
+        """
+        if not self.db or not public_url:
+            return False
+
+        stmt = select(ClubMediaAsset).where(
+            ClubMediaAsset.public_url == public_url,
+            ClubMediaAsset.club_id == club_id,
+        )
+        res = await self.db.execute(stmt)
+        asset = res.scalar_one_or_none()
+        if not asset:
+            return False
+
+        # Verify court references
+        from app.models.court import Court
+        court_check = await self.db.execute(
+            select(Court.id).where(Court.photo_url == public_url, Court.club_id == club_id)
+        )
+        if court_check.scalars().first():
+            return False
+
+        return await self.delete_asset(asset.id, club_id)

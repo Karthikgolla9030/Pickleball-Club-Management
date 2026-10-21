@@ -18,6 +18,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -93,16 +94,12 @@ const COURT_IMAGES = [
   require('../../assets/courts/court_5.jpg'),
 ];
 
-function getCourtThumbnail(court: Court, index: number, clubCoverUrl?: string | null) {
+function getCourtThumbnail(court: Court, index: number) {
   // 1. Entity-level custom image
   if (court.photo_url) {
     return { uri: resolveMediaUrl(court.photo_url) };
   }
-  // 2. Club-level cover fallback
-  if (clubCoverUrl) {
-    return { uri: resolveMediaUrl(clubCoverUrl) };
-  }
-  // 3. Platform neutral fallback
+  // 2. Platform neutral court fallback (never club banner or logo)
   if (court.court_number && court.court_number >= 1 && court.court_number <= COURT_IMAGES.length) {
     return COURT_IMAGES[court.court_number - 1];
   }
@@ -426,6 +423,7 @@ export default function ClubCourtsScreen() {
       if (clubId) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       }
       setIsCreateModalOpen(false);
@@ -470,6 +468,7 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+      queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
       setEditingCourt(null);
       refetchAll();
@@ -485,6 +484,9 @@ export default function ClubCourtsScreen() {
     if (!clubId) return;
     try {
       await courtApi.deactivateCourt(clubId, court.id);
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+      queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
       setDeactivatingCourt(null);
       refetchAll();
     } catch (err: unknown) {
@@ -497,6 +499,9 @@ export default function ClubCourtsScreen() {
     if (!clubId) return;
     try {
       await courtApi.reactivateCourt(clubId, court.id);
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
+      queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
       refetchAll();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to reactivate court';
@@ -781,7 +786,7 @@ export default function ClubCourtsScreen() {
                   />
                 }
                 renderItem={({ item, index }) => {
-                  const thumbnailSource = getCourtThumbnail(item, index, clubBranding?.cover_image_url);
+                  const thumbnailSource = getCourtThumbnail(item, index);
                   const locationText = getCourtLocation(item, index);
                   const surfaceText = getSurfaceLabel(item.surface_type);
                   const courtNumberText =
@@ -1040,9 +1045,13 @@ export default function ClubCourtsScreen() {
                 disabled={isUploadingPhoto}
                 activeOpacity={0.8}
               >
-                <UploadCloud size={24} color="#176B57" />
+                {isUploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#176B57" style={{ marginBottom: 4 }} />
+                ) : (
+                  <UploadCloud size={24} color="#176B57" />
+                )}
                 <AppText style={styles.photoUploadTitle}>
-                  {isUploadingPhoto ? 'Uploading photo...' : 'Upload Court Photograph'}
+                  {isUploadingPhoto ? 'Compressing & uploading photo...' : 'Upload Court Photograph'}
                 </AppText>
                 <AppText style={styles.photoUploadSubtitle}>
                   JPG or PNG, recommended 16:10 aspect ratio
@@ -1217,9 +1226,13 @@ export default function ClubCourtsScreen() {
                 disabled={isUploadingPhoto}
                 activeOpacity={0.8}
               >
-                <UploadCloud size={24} color="#176B57" />
+                {isUploadingPhoto ? (
+                  <ActivityIndicator size="small" color="#176B57" style={{ marginBottom: 4 }} />
+                ) : (
+                  <UploadCloud size={24} color="#176B57" />
+                )}
                 <AppText style={styles.photoUploadTitle}>
-                  {isUploadingPhoto ? 'Uploading photo...' : 'Upload Court Photograph'}
+                  {isUploadingPhoto ? 'Compressing & uploading photo...' : 'Upload Court Photograph'}
                 </AppText>
                 <AppText style={styles.photoUploadSubtitle}>
                   JPG or PNG, recommended 16:10 aspect ratio

@@ -18,6 +18,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -127,6 +128,7 @@ function formatEventDate(dateString: string): string {
 export default function PlayerHomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
   const { user } = useAuth();
@@ -161,6 +163,14 @@ export default function PlayerHomeScreen() {
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
 
   const displayName = profile?.display_name || user?.full_name || 'Player';
+  const userDisplayName = displayName;
+  const userInitial = userDisplayName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'P';
 
   // ─── Compute Next Upcoming Booking ─────────────────────────────────────────
   const nextBooking: Booking | null = useMemo(() => {
@@ -267,6 +277,24 @@ export default function PlayerHomeScreen() {
 
         {/* Action Icons on Right */}
         <View style={styles.headerActions}>
+          {/* User Profile Chip */}
+          <Pressable
+            onPress={() => router.push('/(player)/profile' as any)}
+            style={styles.profileChip}
+            hitSlop={6}
+            accessibilityLabel={`Signed in as ${userDisplayName}. Tap to view profile`}
+            accessibilityRole="button"
+          >
+            <View style={styles.avatarCircle}>
+              <AppText style={styles.avatarInitial}>{userInitial}</AppText>
+            </View>
+            {windowWidth >= 360 ? (
+              <AppText style={styles.headerUserName} numberOfLines={1}>
+                {userDisplayName}
+              </AppText>
+            ) : null}
+          </Pressable>
+
           <Pressable
             onPress={openDrawer}
             style={styles.headerIconButton}
@@ -274,7 +302,7 @@ export default function PlayerHomeScreen() {
             accessibilityLabel="Open menu"
             accessibilityRole="button"
           >
-            <Menu size={24} color="#102B2A" strokeWidth={2} />
+            <Menu size={22} color="#102B2A" strokeWidth={2.2} />
           </Pressable>
 
           <Pressable
@@ -284,7 +312,7 @@ export default function PlayerHomeScreen() {
             accessibilityLabel="Notifications"
             accessibilityRole="button"
           >
-            <Bell size={24} color="#102B2A" strokeWidth={2} />
+            <Bell size={22} color="#102B2A" strokeWidth={2.2} />
             {/* Real-Time Notification Unread Dot */}
             {(unreadNotifsCount ?? 0) > 0 && <View style={styles.notificationBadgeDot} />}
           </Pressable>
@@ -701,15 +729,49 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+  },
+  profileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    maxWidth: 160,
+  },
+  avatarCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#176B57',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  headerUserName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#102B2A',
+    maxWidth: 100,
   },
   headerIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
   },
   notificationBadgeDot: {
     position: 'absolute',

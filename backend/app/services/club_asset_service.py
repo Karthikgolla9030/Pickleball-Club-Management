@@ -410,9 +410,17 @@ class ClubAssetService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Court not found in this club",
             )
+        old_photo_url = court.photo_url
         court.photo_url = image_url
         await self.db.commit()
         await self.db.refresh(court)
+
+        if old_photo_url and old_photo_url != image_url:
+            try:
+                await self.storage.cleanup_unreferenced_by_url(old_photo_url, club_id)
+            except Exception:
+                pass
+
         return court
 
     async def update_lesson_image(

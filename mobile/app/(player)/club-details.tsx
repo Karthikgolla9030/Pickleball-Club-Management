@@ -61,6 +61,7 @@ import {
   usePlayerSubscribe,
 } from '@/hooks';
 import { clubsApi, courtApi } from '@/services/api';
+import { QUERY_KEYS } from '@/constants';
 import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Club, MembershipPlan, PlayerCourt } from '@/types';
@@ -100,6 +101,7 @@ export default function PublicClubDetailScreen() {
 
   const clubId = Array.isArray(id) ? id[0] : id;
   const [logoError, setLogoError] = useState(false);
+  const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
   // 1. Fetch public club data
   const {
@@ -118,13 +120,13 @@ export default function PublicClubDetailScreen() {
     setLogoError(false);
   }, [club?.logo_url]);
 
-  // 2. Fetch active courts for this club
+  // 2. Fetch active courts for this club (canonical PLAYER_COURTS query key)
   const {
     data: activeCourts = [],
     isLoading: isLoadingCourts,
     refetch: refetchCourts,
   } = useQuery<PlayerCourt[], Error>({
-    queryKey: ['club-active-courts', clubId],
+    queryKey: clubId ? QUERY_KEYS.PLAYER_COURTS(clubId) : ['clubs', 'none', 'player-courts'],
     queryFn: () => courtApi.getPlayerCourts(clubId!),
     enabled: Boolean(clubId),
   });
@@ -503,7 +505,8 @@ export default function PublicClubDetailScreen() {
                   const surfaceLabel = court.surface_type || 'Sport Court';
                   const isIncluded =
                     court.price_per_hour == null || Number(court.price_per_hour) === 0;
-                  const courtImageUri = court.photo_url ? resolveMediaUrl(court.photo_url) : null;
+                  const hasPhoto = Boolean(court.photo_url && !courtImageErrors[court.id]);
+                  const courtImageUri = hasPhoto ? resolveMediaUrl(court.photo_url) : null;
                   const courtFallback = COURT_FALLBACKS[index % COURT_FALLBACKS.length];
 
                   return (
@@ -520,6 +523,11 @@ export default function PublicClubDetailScreen() {
                           source={courtImageUri ? { uri: courtImageUri } : courtFallback}
                           style={styles.courtThumbImage}
                           resizeMode="cover"
+                          onError={() => {
+                            if (court.id) {
+                              setCourtImageErrors((prev) => ({ ...prev, [court.id]: true }));
+                            }
+                          }}
                         />
                       </View>
 

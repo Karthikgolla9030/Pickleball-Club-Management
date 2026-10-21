@@ -174,11 +174,7 @@ export default function PlayerBookingsScreen() {
     if (booking.court?.photo_url) {
       return { uri: resolveMediaUrl(booking.court.photo_url) };
     }
-    // 2. Club-level cover fallback
-    if (clubBranding?.cover_image_url) {
-      return { uri: resolveMediaUrl(clubBranding.cover_image_url) };
-    }
-    // 3. Platform neutral fallback
+    // 2. Platform neutral court fallback (never club banner or logo)
     const courtName = booking.court?.display_name || booking.court?.name || '';
     if (courtName.includes('2')) return COURT_IMAGES[1];
     if (courtName.includes('3')) return COURT_IMAGES[2];

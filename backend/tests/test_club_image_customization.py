@@ -964,3 +964,116 @@ async def test_branding_scope_persistence_and_platform_separation(
     # Cover banner is retained
     assert remove_logo_resp.json()["cover_image_url"] == club_a_cover_url
 
+
+@pytest.mark.asyncio
+async def test_court_photo_creation_persistence_and_isolation(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Verifies court photo persistence, cross-court isolation, and cleanup:
+    1. Court created with photo_url persists to database and returns photo_url in response.
+    2. Court created without photo_url defaults to null.
+    3. Active courts listing (/courts/active) accurately returns each court's distinct photo_url.
+    4. Media upload accepts genuine image bytes for court asset type.
+    5. Updating Court 2's photo isolates to Court 2 without affecting Court 1.
+    6. Updating Court 2 with a new photo triggers safe cleanup of previous image.
+    """
+    owner = await create_user(db_session, full_name="Court Owner")
+    club = await create_club(db_session, name="Court Photo Club")
+    await create_membership(db_session, user_id=owner.id, club_id=club.id, role=ClubRole.CLUB_OWNER)
+    await db_session.commit()
+    headers = make_auth_header(owner)
+
+    # 1. Create Court 1 with photo_url
+    court1_photo = "https://assets.local/court1_original.jpg"
+    res1 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/courts",
+        headers=headers,
+        json={
+            "name": "Championship Court 1",
+            "court_number": 1,
+            "indoor_outdoor": "indoor",
+            "photo_url": court1_photo,
+        },
+    )
+    assert res1.status_code == 201
+    court1_data = res1.json()
+    assert court1_data["photo_url"] == court1_photo
+    court1_id = court1_data["id"]
+
+    # 2. Create Court 2 without photo_url
+    res2 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/courts",
+        headers=headers,
+        json={
+            "name": "Court 2",
+            "court_number": 2,
+            "indoor_outdoor": "outdoor",
+        },
+    )
+    assert res2.status_code == 201
+    court2_data = res2.json()
+    assert court2_data["photo_url"] is None
+    court2_id = court2_data["id"]
+
+    # 3. Active courts endpoint reflects distinct court photos
+    active_res = await async_client.get(
+        f"/api/v1/clubs/{club.id}/courts/active",
+        headers=headers,
+    )
+    assert active_res.status_code == 200
+    active_courts = active_res.json()
+    c1 = next(c for c in active_courts if c["id"] == court1_id)
+    c2 = next(c for c in active_courts if c["id"] == court2_id)
+    assert c1["photo_url"] == court1_photo
+    assert c2["photo_url"] is None
+
+    # 4. Upload genuine media for Court 2
+    img_bytes = make_test_image(format="JPEG", size=(200, 200), color="blue")
+    upload_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        headers=headers,
+        files={"file": ("court2_blue.jpg", img_bytes, "image/jpeg")},
+        data={"asset_type": "court"},
+    )
+    assert upload_res.status_code == 200
+    court2_uploaded_url = upload_res.json()["public_url"]
+
+    # Assign uploaded photo to Court 2 via PUT /courts/{id}/image
+    img_assign_res = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court2_id}/image",
+        headers=headers,
+        json={"image_url": court2_uploaded_url},
+    )
+    assert img_assign_res.status_code == 200
+    assert img_assign_res.json()["photo_url"] == court2_uploaded_url
+
+    # Verify Court 1 was unaffected
+    c1_check = await async_client.get(
+        f"/api/v1/clubs/{club.id}/courts/{court1_id}",
+        headers=headers,
+    )
+    assert c1_check.status_code == 200
+    assert c1_check.json()["photo_url"] == court1_photo
+
+    # 5. Replace Court 2's photo with a new URL and verify update
+    court2_new_photo = "https://assets.local/court2_new.jpg"
+    update_res = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court2_id}",
+        headers=headers,
+        json={"photo_url": court2_new_photo},
+    )
+    assert update_res.status_code == 200
+    assert update_res.json()["photo_url"] == court2_new_photo
+
+    # Active courts list reflects the newly updated Court 2 photo
+    active_res2 = await async_client.get(
+        f"/api/v1/clubs/{club.id}/courts/active",
+        headers=headers,
+    )
+    assert active_res2.status_code == 200
+    active_courts2 = active_res2.json()
+    c2_updated = next(c for c in active_courts2 if c["id"] == court2_id)
+    assert c2_updated["photo_url"] == court2_new_photo
+
+

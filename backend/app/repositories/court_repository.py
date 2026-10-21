@@ -69,12 +69,14 @@ class CourtRepository:
         display_order: int = 0,
         price_per_hour: Decimal | None = None,
         operating_hours: dict | None = None,
+        photo_url: str | None = None,
     ) -> Court:
         court = Court(
             club_id=club_id,
             name=name.strip(),
             display_name=display_name.strip() if display_name else None,
             description=description.strip() if description else None,
+            photo_url=photo_url.strip() if photo_url else None,
             court_number=court_number,
             surface_type=surface_type.strip() if surface_type else None,
             indoor_outdoor=indoor_outdoor,
