@@ -102,6 +102,7 @@ export default function ClubLayout() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="club-details" />
+          <Stack.Screen name="help-support" />
         </Stack>
       </View>
 

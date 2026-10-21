@@ -285,7 +285,7 @@ export default function ClubProfileScreen() {
             {/* Help & Support */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Help & Support')}
+              onPress={() => handleRowPress('Help & Support', '/(club)/help-support')}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>

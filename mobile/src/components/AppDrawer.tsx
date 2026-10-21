@@ -205,7 +205,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       ];
       clubSection3 = [
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
         { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, route: '/(club)/settings' },
         { key: 'terms', label: 'Terms of Service', icon: FileText, route: '/(club)/settings' },
       ];
@@ -226,7 +226,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
     } else {
       // Tournament Director: Competitions only
@@ -238,7 +238,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       clubSection2 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
     }
   }
