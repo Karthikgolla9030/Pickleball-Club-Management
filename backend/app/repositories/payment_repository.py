@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.membership import MemberSubscription
 from app.models.payment import (
     Payment,
     PaymentMethod,
@@ -49,7 +50,7 @@ class PaymentRepository:
             .options(
                 selectinload(Payment.club),
                 selectinload(Payment.player),
-                selectinload(Payment.subscription),
+                selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
                 selectinload(Payment.created_by),
                 selectinload(Payment.status_changed_by),
             )
@@ -72,7 +73,7 @@ class PaymentRepository:
             .options(
                 selectinload(Payment.club),
                 selectinload(Payment.player),
-                selectinload(Payment.subscription),
+                selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
             )
             .where(Payment.reference == reference)
         )
@@ -102,7 +103,7 @@ class PaymentRepository:
             select(Payment)
             .options(
                 selectinload(Payment.player),
-                selectinload(Payment.subscription),
+                selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
             )
             .where(Payment.club_id == club_id)
         )
@@ -153,7 +154,7 @@ class PaymentRepository:
             select(Payment)
             .options(
                 selectinload(Payment.club),
-                selectinload(Payment.subscription),
+                selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
             )
             .where(Payment.player_id == player_id)
         )

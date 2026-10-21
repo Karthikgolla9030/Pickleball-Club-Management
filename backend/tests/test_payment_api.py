@@ -2003,3 +2003,42 @@ async def test_cancel_without_payload(
     assert resp.status_code == 200
     assert resp.json()["status"] == "cancelled"
 
+
+@pytest.mark.asyncio
+async def test_53_list_payments_eager_loads_subscription_plan_name(
+    async_client: AsyncClient,
+    club_a: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    player_user_1: User,
+    player_pm_1: ClubPlayerMembership,
+    subscription_1: MemberSubscription,
+):
+    """Test 53: Listing payments includes subscription plan_name without lazy-load or greenlet errors."""
+    c_resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/payments",
+        json={
+            "player_id": str(player_user_1.id),
+            "subscription_id": str(subscription_1.id),
+            "amount": 750.00,
+            "currency": "USD",
+            "payment_method": "cash",
+            "purpose": "membership",
+        },
+        headers=make_auth_header(owner_user),
+    )
+    assert c_resp.status_code == 201
+
+    list_resp = await async_client.get(
+        f"/api/v1/clubs/{club_a.id}/payments",
+        headers=make_auth_header(owner_user),
+    )
+    assert list_resp.status_code == 200
+    payments = list_resp.json()
+    assert len(payments) >= 1
+    p = payments[0]
+    assert p["subscription"] is not None
+    assert p["subscription"]["id"] == str(subscription_1.id)
+    assert p["subscription"]["plan_name"] is not None
+
+

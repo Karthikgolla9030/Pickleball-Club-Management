@@ -107,19 +107,29 @@ class PaymentResponse(BaseModel):
     def from_orm_model(cls, payment) -> "PaymentResponse":
         player_info = None
         if payment.player:
-            player_info = PaymentPlayerEmbeddedInfo(
-                id=payment.player.id,
-                email=payment.player.email,
-                full_name=payment.player.full_name,
-            )
+            try:
+                player_info = PaymentPlayerEmbeddedInfo(
+                    id=payment.player.id,
+                    email=payment.player.email,
+                    full_name=payment.player.full_name,
+                )
+            except Exception:
+                player_info = None
 
         sub_info = None
         if payment.subscription:
-            plan_name = payment.subscription.plan.name if payment.subscription.plan else None
-            sub_info = PaymentSubscriptionEmbeddedInfo(
-                id=payment.subscription.id,
-                plan_name=plan_name,
-            )
+            try:
+                plan = getattr(payment.subscription, "plan", None)
+                plan_name = plan.name if plan else None
+            except Exception:
+                plan_name = None
+            try:
+                sub_info = PaymentSubscriptionEmbeddedInfo(
+                    id=payment.subscription.id,
+                    plan_name=plan_name,
+                )
+            except Exception:
+                sub_info = None
 
         return cls(
             id=payment.id,
@@ -176,7 +186,10 @@ class PlayerPaymentResponse(BaseModel):
 
     @classmethod
     def from_orm_model(cls, payment) -> "PlayerPaymentResponse":
-        club_name = payment.club.name if payment.club else None
+        try:
+            club_name = payment.club.name if payment.club else None
+        except Exception:
+            club_name = None
         return cls(
             id=payment.id,
             reference=payment.reference,

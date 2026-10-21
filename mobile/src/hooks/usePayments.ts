@@ -28,6 +28,7 @@ export function useClubPayments(clubId: string, filters?: PaymentFilters) {
     queryFn: () => paymentApi.listClubPayments(clubId, filters),
     enabled: !!clubId,
     staleTime: 60 * 1000, // 1 min
+    retry: 1,
   });
 }
 
@@ -40,6 +41,7 @@ export function usePaymentSummary(clubId: string) {
     queryFn: () => paymentApi.getPaymentSummary(clubId),
     enabled: !!clubId,
     staleTime: 60 * 1000,
+    retry: 1,
   });
 }
 

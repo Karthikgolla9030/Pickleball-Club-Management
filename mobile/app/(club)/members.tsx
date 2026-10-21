@@ -15,7 +15,7 @@
  * - Real API queries, mutations, permissions, tenant isolation, and error handling preserved
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -31,6 +31,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Mail,
   Menu,
@@ -172,12 +173,30 @@ function formatPlayerName(member: ClubPlayerMember): string {
 }
 
 export default function ClubMembersScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId } = useActiveClub();
   const { canManageMembers, canManageRoles } = usePermission();
 
-  const [activeTab, setActiveTab] = useState<'players' | 'staff'>('players');
+  const [activeTab, setActiveTab] = useState<'players' | 'staff'>(() => {
+    return params.tab === 'staff' ? 'staff' : 'players';
+  });
+
+  // Synchronize activeTab with URL query param (handles deep linking, drawer navigation, refresh)
+  useEffect(() => {
+    if (params.tab === 'staff' && activeTab !== 'staff') {
+      setActiveTab('staff');
+    } else if (params.tab === 'players' && activeTab !== 'players') {
+      setActiveTab('players');
+    }
+  }, [params.tab]);
+
+  const handleTabChange = (newTab: 'players' | 'staff') => {
+    setActiveTab(newTab);
+    router.setParams({ tab: newTab });
+  };
   const [playerFilter, setPlayerFilter] = useState<PlayerFilterType>('all');
   const [playerSearchQuery, setPlayerSearchQuery] = useState('');
   const [staffSearchQuery, setStaffSearchQuery] = useState('');
@@ -558,11 +577,11 @@ export default function ClubMembersScreen() {
 
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* 1. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll ] */}
+      {/* 1. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll / + Staff ] */}
       <View style={styles.mainActionsRow}>
         <TouchableOpacity
           style={[styles.mainActionBtn, activeTab === 'players' && styles.mainActionBtnActive]}
-          onPress={() => setActiveTab('players')}
+          onPress={() => handleTabChange('players')}
           activeOpacity={0.8}
         >
           <Users
@@ -582,7 +601,7 @@ export default function ClubMembersScreen() {
 
         <TouchableOpacity
           style={[styles.mainActionBtn, activeTab === 'staff' && styles.mainActionBtnActive]}
-          onPress={() => setActiveTab('staff')}
+          onPress={() => handleTabChange('staff')}
           activeOpacity={0.8}
         >
           <User
@@ -604,12 +623,22 @@ export default function ClubMembersScreen() {
           style={styles.enrollActionBtn}
           onPress={() => {
             blurActiveElement();
-            setEnrollModalVisible(true);
+            if (activeTab === 'staff') {
+              if (canManageRoles) {
+                setAddStaffModalVisible(true);
+              } else {
+                Alert.alert('Permission Denied', 'Only club owners can add new staff members.');
+              }
+            } else {
+              setEnrollModalVisible(true);
+            }
           }}
           activeOpacity={0.8}
         >
           <Plus size={17} color="#FFFFFF" strokeWidth={2.4} />
-          <AppText style={styles.enrollActionBtnText}>Enroll</AppText>
+          <AppText style={styles.enrollActionBtnText}>
+            {activeTab === 'staff' ? 'Staff' : 'Enroll'}
+          </AppText>
         </TouchableOpacity>
       </View>
 

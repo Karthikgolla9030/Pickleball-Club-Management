@@ -31,6 +31,7 @@ import {
   Button,
   Card,
   EmptyState,
+  ErrorState,
   FilterChips,
   Input,
   LoadingState,
@@ -187,12 +188,17 @@ export default function ClubPaymentsScreen() {
   // Queries
   const {
     data: summary,
+    isLoading: isSummaryLoading,
+    isError: isSummaryError,
+    error: summaryError,
     refetch: refetchSummary,
   } = usePaymentSummary(clubId);
 
   const {
     data: payments = [],
     isLoading: isPaymentsLoading,
+    isError: isPaymentsError,
+    error: paymentsError,
     isRefetching,
     refetch: refetchPayments,
   } = useClubPayments(
@@ -371,6 +377,16 @@ export default function ClubPaymentsScreen() {
       {/* ─── Payments List ──────────────────────────────────── */}
       {isPaymentsLoading ? (
         <LoadingState message="Loading payments..." />
+      ) : isPaymentsError ? (
+        <ErrorState
+          title="Unable to Load Payments"
+          message={
+            paymentsError instanceof Error
+              ? paymentsError.message
+              : 'Failed to load payments. Please check your network and try again.'
+          }
+          onRetry={onRefresh}
+        />
       ) : payments.length === 0 ? (
         <EmptyState
           title="No Payments Found"

@@ -6,7 +6,7 @@
  *   - Overlapping circular avatar with white border and camera badge icon
  *   - Authenticated user name, email, and dynamic role badge ('♛ Club Owner')
  *   - Group 1 (Account): Personal Information, Account & Security, Notifications, Preferences
- *   - Group 2 (Club Management): Club Details, Staff & Permissions, Subscription & Billing
+ *   - Group 2 (Club Management): Club Details, Staff & Permissions, Payments
  *   - Group 3 (Support): Help & Support, Privacy Policy, Terms of Service
  *   - Soft red 'Sign Out' button hooked to auth store logout
  *   - Bottom navigation integration with safe area insets
@@ -253,7 +253,7 @@ export default function ClubProfileScreen() {
             {/* Staff & Permissions */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Staff & Permissions', '/(club)/members')}
+              onPress={() => handleRowPress('Staff & Permissions', '/(club)/members?tab=staff')}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>
@@ -265,15 +265,15 @@ export default function ClubProfileScreen() {
 
             <View style={styles.rowDivider} />
 
-            {/* Subscription & Billing */}
+            {/* Payments */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Subscription & Billing', '/(club)/payments')}
+              onPress={() => handleRowPress('Payments', '/(club)/payments')}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>
                 <CreditCard size={19} color="#293D38" strokeWidth={1.8} />
-                <AppText style={styles.rowLabel}>Subscription & Billing</AppText>
+                <AppText style={styles.rowLabel}>Payments</AppText>
               </View>
               <ChevronRight size={16} color="#94A3B8" strokeWidth={2} />
             </TouchableOpacity>

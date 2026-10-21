@@ -23,7 +23,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Bell,
@@ -69,6 +69,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   const router = useRouter();
   const pathname = usePathname();
+  const globalParams = useGlobalSearchParams<{ tab?: string }>();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -189,7 +190,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Owner: Full management
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
+        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
         { key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' },
@@ -200,8 +201,8 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       ];
       clubSection2 = [
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
-        { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members' },
-        { key: 'billing', label: 'Subscription & Billing', icon: CreditCard, route: '/(club)/payments' },
+        { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members?tab=staff' },
+        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
       ];
       clubSection3 = [
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
@@ -213,7 +214,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       // Club Manager: Operations only
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members' },
+        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
         { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
         { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
         { key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' },
@@ -224,6 +225,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       ];
       clubSection2 = [
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
+        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
@@ -245,9 +247,20 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   const renderNavRow = (item: NavItemConfig) => {
     const isItemHome = item.key === 'home' || item.key === 'player_home';
-    const isActive = isItemHome
-      ? (isPlayer ? normalizedPath === '/(player)' || normalizedPath === '/(player)/index' : normalizedPath === '/(club)' || normalizedPath === '/(club)/index')
-      : normalizedPath === item.route;
+    const itemRouteWithoutQuery = (item.route || '').split('?')[0];
+
+    let isActive = false;
+    if (isItemHome) {
+      isActive = isPlayer
+        ? normalizedPath === '/(player)' || normalizedPath === '/(player)/index'
+        : normalizedPath === '/(club)' || normalizedPath === '/(club)/index';
+    } else if (item.key === 'staff') {
+      isActive = normalizedPath === '/(club)/members' && globalParams.tab === 'staff';
+    } else if (item.key === 'members') {
+      isActive = normalizedPath === '/(club)/members' && globalParams.tab !== 'staff';
+    } else {
+      isActive = normalizedPath === itemRouteWithoutQuery;
+    }
     const Icon = item.icon;
 
     return (
