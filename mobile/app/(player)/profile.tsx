@@ -77,7 +77,6 @@ export default function PlayerProfileScreen() {
   const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
   const [playingDetailsModalVisible, setPlayingDetailsModalVisible] = useState(false);
   const [accountSettingsModalVisible, setAccountSettingsModalVisible] = useState(false);
-  const [helpSupportModalVisible, setHelpSupportModalVisible] = useState(false);
   const [photoOptionsModalVisible, setPhotoOptionsModalVisible] = useState(false);
   const [previewPhotoUri, setPreviewPhotoUri] = useState<string | null>(null);
   const [previewPhotoBase64, setPreviewPhotoBase64] = useState<string | null>(null);
@@ -522,7 +521,7 @@ export default function PlayerProfileScreen() {
           {/* 4. Help & Support */}
           <TouchableOpacity
             style={styles.settingCard}
-            onPress={() => setHelpSupportModalVisible(true)}
+            onPress={() => router.push('/(player)/help-support' as any)}
             activeOpacity={0.7}
           >
             <View style={styles.settingIconCircle}>
@@ -965,47 +964,6 @@ export default function PlayerProfileScreen() {
         </View>
       </ModalSheet>
 
-      {/* ─── Help & Support Modal ───────────────────────────────────────────── */}
-      <ModalSheet
-        visible={helpSupportModalVisible}
-        onClose={() => setHelpSupportModalVisible(false)}
-        title="Help & Support"
-      >
-        <ScrollView style={styles.infoModalContent} showsVerticalScrollIndicator={false}>
-          <AppText style={styles.helpHeader}>Pickleball Support</AppText>
-          <AppText style={styles.helpText}>
-            Need assistance with court bookings, tournament registrations, or membership plans?
-          </AppText>
-
-          <View style={styles.faqCard}>
-            <AppText style={styles.faqQuestion}>How do I book a court?</AppText>
-            <AppText style={styles.faqAnswer}>
-              Tap the center '+' button or visit Courts in the navigation bar to select a date, time slot, and court.
-            </AppText>
-          </View>
-
-          <View style={styles.faqCard}>
-            <AppText style={styles.faqQuestion}>How do I join tournaments and events?</AppText>
-            <AppText style={styles.faqAnswer}>
-              Go to the Events tab to discover upcoming club tournaments, clinics, and open play sessions.
-            </AppText>
-          </View>
-
-          <View style={styles.faqCard}>
-            <AppText style={styles.faqQuestion}>Contact Club Desk</AppText>
-            <AppText style={styles.faqAnswer}>
-              Email: support@pickleball.com{'\n'}Phone: +1 (800) 555-0199
-            </AppText>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.modalSaveBtn, { marginTop: 20, marginBottom: 20, width: '100%' }]}
-            onPress={() => setHelpSupportModalVisible(false)}
-          >
-            <AppText style={styles.modalSaveBtnText}>Close</AppText>
-          </TouchableOpacity>
-        </ScrollView>
-      </ModalSheet>
     </View>
   );
 }

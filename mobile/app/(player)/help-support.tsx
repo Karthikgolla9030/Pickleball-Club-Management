@@ -1,0 +1,308 @@
+﻿/**
+ * Aught2 Pickleball — Player Help & Support Screen
+ *
+ * Standalone screen reachable from:
+ *   - The side-menu "Help & Support" item  (direct, no Profile first)
+ *   - The Profile screen "Help & Support" card (router.push)
+ *
+ * Back navigation returns to whichever screen opened it.
+ */
+import React from 'react';
+import {
+  Linking,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import {
+  ArrowLeft,
+  HelpCircle,
+  Mail,
+  MessageCircle,
+  Phone,
+} from 'lucide-react-native';
+
+import { AppText } from '@/components';
+
+// FAQ data — single source of truth, same content previously in the Profile modal
+const FAQS = [
+  {
+    id: '1',
+    question: 'How do I book a court?',
+    answer:
+      "Tap the center '+' button or visit Courts in the navigation bar to select a date, time slot, and court.",
+  },
+  {
+    id: '2',
+    question: 'How do I join tournaments and events?',
+    answer:
+      'Go to the Events tab to discover upcoming club tournaments, clinics, and open play sessions.',
+  },
+  {
+    id: '3',
+    question: 'How do I manage my membership?',
+    answer:
+      'Open My Memberships from the side menu to view your active plans, renewal dates, and payment history.',
+  },
+  {
+    id: '4',
+    question: 'How do I cancel a court booking?',
+    answer:
+      'Go to My Bookings, tap the booking you want to cancel, and select Cancel Booking. Cancellation policies vary by club.',
+  },
+  {
+    id: '5',
+    question: 'I cannot log in. What should I do?',
+    answer:
+      'Use the Forgot Password link on the login screen. If the issue persists, contact support at support@aught2.com.',
+  },
+];
+
+const CONTACT = {
+  email: 'support@aught2.com',
+  phone: '+1 (800) 555-0199',
+  chat: 'Live chat available Mon–Fri, 9 AM – 6 PM IST',
+};
+
+export default function PlayerHelpSupportScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+
+  const handleBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(player)/' as any);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={handleBack}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+        >
+          <ArrowLeft size={22} color="#0F2922" strokeWidth={2.3} />
+        </TouchableOpacity>
+        <AppText style={styles.headerTitle}>Help & Support</AppText>
+        {/* Spacer to balance the back button */}
+        <View style={styles.headerSpacer} />
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroIcon}>
+            <HelpCircle size={28} color="#114D3F" strokeWidth={2} />
+          </View>
+          <View style={styles.heroText}>
+            <AppText style={styles.heroTitle}>Pickleball Support</AppText>
+            <AppText style={styles.heroSubtitle}>
+              Need help with court bookings, tournament registrations, or membership plans?
+            </AppText>
+          </View>
+        </View>
+
+        {/* FAQs */}
+        <AppText style={styles.sectionLabel}>Frequently Asked Questions</AppText>
+        {FAQS.map((faq) => (
+          <View key={faq.id} style={styles.faqCard}>
+            <AppText style={styles.faqQuestion}>{faq.question}</AppText>
+            <AppText style={styles.faqAnswer}>{faq.answer}</AppText>
+          </View>
+        ))}
+
+        {/* Contact */}
+        <AppText style={styles.sectionLabel}>Contact Us</AppText>
+
+        <TouchableOpacity
+          style={styles.contactRow}
+          onPress={() => Linking.openURL(`mailto:${CONTACT.email}`)}
+          activeOpacity={0.75}
+          accessibilityLabel={`Email support at ${CONTACT.email}`}
+          accessibilityRole="button"
+        >
+          <View style={styles.contactIcon}>
+            <Mail size={18} color="#114D3F" strokeWidth={2} />
+          </View>
+          <View style={styles.contactText}>
+            <AppText style={styles.contactLabel}>Email</AppText>
+            <AppText style={styles.contactValue}>{CONTACT.email}</AppText>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.contactRow}
+          onPress={() => Linking.openURL(`tel:${CONTACT.phone.replace(/[^+\d]/g, '')}`)}
+          activeOpacity={0.75}
+          accessibilityLabel={`Call support at ${CONTACT.phone}`}
+          accessibilityRole="button"
+        >
+          <View style={styles.contactIcon}>
+            <Phone size={18} color="#114D3F" strokeWidth={2} />
+          </View>
+          <View style={styles.contactText}>
+            <AppText style={styles.contactLabel}>Phone</AppText>
+            <AppText style={styles.contactValue}>{CONTACT.phone}</AppText>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.contactRow}>
+          <View style={styles.contactIcon}>
+            <MessageCircle size={18} color="#114D3F" strokeWidth={2} />
+          </View>
+          <View style={styles.contactText}>
+            <AppText style={styles.contactLabel}>Live Chat</AppText>
+            <AppText style={styles.contactValue}>{CONTACT.chat}</AppText>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8FAF9' },
+
+  /* Header */
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    backgroundColor: '#F8FAF9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EDEA',
+  },
+  backBtn: { padding: 6 },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F2922',
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  headerSpacer: { width: 34 }, // mirrors backBtn width
+
+  /* Scroll */
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 18, paddingTop: 20, gap: 0 },
+
+  /* Hero */
+  heroCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+    padding: 16,
+    marginBottom: 24,
+    gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  heroIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  heroText: { flex: 1 },
+  heroTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F2922',
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 13,
+    color: '#647570',
+    lineHeight: 18,
+  },
+
+  /* Section label */
+  sectionLabel: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#647570',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginTop: 4,
+  },
+
+  /* FAQ cards */
+  faqCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+  },
+  faqQuestion: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F2922',
+    marginBottom: 5,
+  },
+  faqAnswer: {
+    fontSize: 12.5,
+    color: '#647570',
+    lineHeight: 18,
+  },
+
+  /* Contact rows */
+  contactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+    gap: 14,
+  },
+  contactIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  contactText: { flex: 1 },
+  contactLabel: {
+    fontSize: 11.5,
+    color: '#647570',
+    marginBottom: 2,
+  },
+  contactValue: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0F2922',
+  },
+});

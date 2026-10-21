@@ -57,6 +57,7 @@ export default function PlayerLayout() {
           <Stack.Screen name="events" />
           <Stack.Screen name="lessons" />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="help-support" />
         </Stack>
       </View>
 
