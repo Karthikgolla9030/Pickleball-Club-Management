@@ -8,10 +8,12 @@
  */
 /* eslint-disable no-console */
 import React, { createContext, useContext, useEffect, useRef, useState, useMemo } from 'react';
+import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { API_ENDPOINTS, SECURE_STORE_KEYS } from '@/constants';
-import { useAuthStore, getStoredAccessToken } from '@/store';
+import { API_ENDPOINTS } from '@/constants';
+import { useAuthStore } from '@/store';
+import { getValidAccessToken } from '@/services/api';
 import { WebSocketClient, type WebSocketEvent } from '@/services/websocket/WebSocketClient';
 
 interface WebSocketContextValue {
@@ -31,11 +33,11 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
   const clientRef = useRef<WebSocketClient | null>(null);
 
-  // Initialize client once
+  // Initialize client once with proactive token validation and refresh
   if (!clientRef.current) {
     clientRef.current = new WebSocketClient(
       API_ENDPOINTS.WS,
-      getStoredAccessToken
+      getValidAccessToken
     );
   }
 
@@ -151,6 +153,81 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       unsubscribeConnect();
     };
   }, [isAuthenticated, user, activeMembership?.club_id, queryClient, wsClient]);
+
+  // Handle AppState (native) and Web Page Lifecycle (bfcache pagehide/pageshow, freeze/resume, visibilitychange)
+  useEffect(() => {
+    // 1. Native & General AppState listener
+    const appStateSubscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        if (isAuthenticated && user) {
+          wsClient.resume();
+          queryClient.invalidateQueries();
+        }
+      } else if (nextAppState === 'background') {
+        wsClient.pause();
+      }
+    });
+
+    // 2. Web specific Page Lifecycle (Back-Forward Cache support)
+    const cleanupWebListeners: Array<() => void> = [];
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handlePageHide = (event: any) => {
+        // When navigating away or entering Back-Forward Cache (bfcache),
+        // cleanly pause the WebSocket to prevent browser "Page entered Back-Forward Cache" failure.
+        wsClient.pause();
+      };
+
+      const handlePageShow = (event: any) => {
+        // If restored from Back-Forward Cache (event.persisted is true) or fresh navigation
+        if (event?.persisted && isAuthenticated && user) {
+          console.log('[WebSocketContext] Restored from Back-Forward Cache. Resuming WebSocket and resynchronizing queries...');
+          wsClient.resume();
+          queryClient.invalidateQueries();
+        }
+      };
+
+      const handleFreeze = () => {
+        wsClient.pause();
+      };
+
+      const handleResume = () => {
+        if (isAuthenticated && user) {
+          wsClient.resume();
+          queryClient.invalidateQueries();
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible' && isAuthenticated && user) {
+          wsClient.resume();
+        }
+      };
+
+      window.addEventListener('pagehide', handlePageHide);
+      window.addEventListener('pageshow', handlePageShow);
+      if (typeof document !== 'undefined') {
+        document.addEventListener('freeze', handleFreeze);
+        document.addEventListener('resume', handleResume);
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+      }
+
+      cleanupWebListeners.push(() => {
+        window.removeEventListener('pagehide', handlePageHide);
+        window.removeEventListener('pageshow', handlePageShow);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('freeze', handleFreeze);
+          document.removeEventListener('resume', handleResume);
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+        }
+      });
+    }
+
+    return () => {
+      appStateSubscription.remove();
+      cleanupWebListeners.forEach((cleanup) => cleanup());
+    };
+  }, [isAuthenticated, user, queryClient, wsClient]);
 
   const value = useMemo(
     () => ({

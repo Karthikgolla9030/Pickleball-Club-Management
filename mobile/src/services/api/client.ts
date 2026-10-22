@@ -105,6 +105,26 @@ export async function getAccessToken(): Promise<string | null> {
   return _getAccessToken ? await _getAccessToken() : null;
 }
 
+export async function getValidAccessToken(): Promise<string | null> {
+  let token = _getAccessToken ? await _getAccessToken() : null;
+  if ((!token || isJwtExpired(token)) && _refreshTokenHandler) {
+    try {
+      if (!_refreshPromise) {
+        _refreshPromise = _refreshTokenHandler().finally(() => {
+          _refreshPromise = null;
+        });
+      }
+      const refreshed = await _refreshPromise;
+      if (refreshed) {
+        token = refreshed;
+      }
+    } catch (e) {
+      console.warn('[AUTH] Proactive token refresh failed:', e);
+    }
+  }
+  return token;
+}
+
 // ─── Core Request Function ────────────────────────────────────────────────────
 
 async function request<T>(

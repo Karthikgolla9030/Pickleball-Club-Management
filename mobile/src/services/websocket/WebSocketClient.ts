@@ -27,6 +27,7 @@ export class WebSocketClient {
   private tokenProvider: () => Promise<string | null>;
   private socket: WebSocket | null = null;
   private isExplicitlyClosed = false;
+  private isPaused = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
   private baseReconnectDelayMs = 1500;
@@ -47,19 +48,56 @@ export class WebSocketClient {
 
   public connect(): void {
     this.isExplicitlyClosed = false;
+    this.isPaused = false;
     this.initiateConnection();
+  }
+
+  /**
+   * Pauses WebSocket connection when the page enters Back-Forward Cache (bfcache),
+   * freezes, or when the mobile app transitions to background.
+   * Closes with standard normal closure code (1000) so browsers do not raise an error.
+   */
+  public pause(): void {
+    this.isPaused = true;
+    this.clearTimers();
+    if (this.socket) {
+      try {
+        const sock = this.socket;
+        this.socket = null;
+        if (sock.readyState === WebSocket.OPEN || sock.readyState === WebSocket.CONNECTING) {
+          sock.close(1000, 'Page entering bfcache or background');
+        }
+      } catch (err) {
+        // Safe ignore
+      }
+    }
+    this.isConnected = false;
+  }
+
+  /**
+   * Resumes WebSocket connection when restored from bfcache or resumed from background.
+   */
+  public resume(): void {
+    if (!this.isPaused && this.isConnected) return;
+    this.isPaused = false;
+    this.reconnectAttempts = 0;
+    if (!this.isExplicitlyClosed) {
+      this.initiateConnection();
+    }
   }
 
   public disconnect(): void {
     this.isExplicitlyClosed = true;
+    this.isPaused = false;
     this.clearTimers();
     if (this.socket) {
       try {
-        this.socket.close();
+        const sock = this.socket;
+        this.socket = null;
+        sock.close(1000, 'Explicit client disconnect');
       } catch (err) {
         console.warn('[WS] Error closing socket:', err);
       }
-      this.socket = null;
     }
     this.isConnected = false;
   }
@@ -100,7 +138,15 @@ export class WebSocketClient {
   }
 
   private async initiateConnection(): Promise<void> {
-    if (this.isExplicitlyClosed) return;
+    if (this.isExplicitlyClosed || this.isPaused) return;
+
+    // Avoid duplicate connection attempts if already open or connecting
+    if (
+      this.socket &&
+      (this.socket.readyState === WebSocket.CONNECTING || this.socket.readyState === WebSocket.OPEN)
+    ) {
+      return;
+    }
 
     this.clearTimers();
     try {
@@ -110,6 +156,8 @@ export class WebSocketClient {
         return;
       }
 
+      if (this.isExplicitlyClosed || this.isPaused) return;
+
       const fullUrl = `${this.url}?token=${encodeURIComponent(token)}`;
       console.log('[WS] Connecting to:', this.url);
 
@@ -117,6 +165,10 @@ export class WebSocketClient {
       this.socket = ws;
 
       ws.onopen = () => {
+        if (this.socket !== ws) {
+          try { ws.close(); } catch {}
+          return;
+        }
         console.log('[WS] Connected successfully');
         this.isConnected = true;
         this.reconnectAttempts = 0;
@@ -149,28 +201,36 @@ export class WebSocketClient {
       };
 
       ws.onerror = (error) => {
+        if (this.isPaused) {
+          // Expected when browser enters bfcache or background
+          return;
+        }
         // Log cleanly to console without triggering React Native LogBox warning banner
         console.log('[WS] Socket error (connection recovery handled in onclose):', (error as any)?.message || error);
       };
 
       ws.onclose = (event) => {
+        if (this.socket === ws) {
+          this.socket = null;
+        }
         console.log('[WS] Disconnected, code:', event.code, 'reason:', event.reason);
         this.isConnected = false;
-        this.socket = null;
         this.clearTimers();
 
-        if (!this.isExplicitlyClosed) {
+        if (!this.isExplicitlyClosed && !this.isPaused) {
           this.scheduleReconnect();
         }
       };
     } catch (err) {
       console.log('[WS] Connection initialization issue:', err);
-      this.scheduleReconnect();
+      if (!this.isExplicitlyClosed && !this.isPaused) {
+        this.scheduleReconnect();
+      }
     }
   }
 
   private scheduleReconnect(): void {
-    if (this.isExplicitlyClosed) return;
+    if (this.isExplicitlyClosed || this.isPaused) return;
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.log('[WS] Max reconnect attempts reached. Backing off to max delay.');
