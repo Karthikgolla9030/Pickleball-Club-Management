@@ -143,7 +143,7 @@ export function useSubscription(clubId: string, subscriptionId: string) {
 }
 
 /**
- * Create a new subscription (enroll player in plan).
+ * @deprecated Manual staff enrollment is disabled. Subscriptions are created by players directly.
  */
 export function useCreateSubscription(clubId: string) {
   const queryClient = useQueryClient();
@@ -253,6 +253,8 @@ export function usePlayerSubscribe() {
       queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'clubs'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_SUBSCRIPTIONS(variables.clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.MEMBERSHIP_PLANS(variables.clubId) });
     },
   });
 }

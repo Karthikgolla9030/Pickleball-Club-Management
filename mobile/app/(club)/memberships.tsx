@@ -9,7 +9,7 @@
  *   and dark green accent bar.
  * - "+ New Plan" prominent deep-green rounded pill button.
  * - Segmented Control: [ Plans ({plans.length}) ] | [ Subscribers ({subscriptions.length}) ]
- * - Subscriber Search & Enroll: Search input with search icon + deep-green "+ Enroll" button.
+ * - Subscriber Search: Search input with search icon across full width.
  * - Subscriber Cards:
  *   - Circular profile avatar (cover cropped, neutral initials fallback)
  *   - Bold subscriber name in dark forest green (#123D38)
@@ -68,7 +68,6 @@ import {
   useClubPlayerMembers,
   useClubSubscriptions,
   useCreateMembershipPlan,
-  useCreateSubscription,
   useMembershipPlans,
   usePermission,
 } from '@/hooks';
@@ -169,10 +168,9 @@ export default function MembershipsScreen() {
   const { canManageMemberships } = usePermission();
   const clubId = activeClubId ?? '';
 
-  const [activeTab, setActiveTab] = useState<'plans' | 'subscribers'>('subscribers');
+  const [activeTab, setActiveTab] = useState<'plans' | 'subscribers'>('plans');
   const [showCreatePlan, setShowCreatePlan] = useState(false);
   const [editingPlan, setEditingPlan] = useState<MembershipPlan | null>(null);
-  const [showEnrollModal, setShowEnrollModal] = useState(false);
 
   // Queries
   const plansQuery = useMembershipPlans(clubId);
@@ -181,7 +179,6 @@ export default function MembershipsScreen() {
 
   // Mutations
   const createPlanMutation = useCreateMembershipPlan(clubId);
-  const createSubMutation = useCreateSubscription(clubId);
 
   // Plan Form States
   const [planName, setPlanName] = useState('');
@@ -198,16 +195,6 @@ export default function MembershipsScreen() {
   const [newBenefitInput, setNewBenefitInput] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [savingPlan, setSavingPlan] = useState(false);
-
-  // Enroll Modal States
-  const [enrollPlayerId, setEnrollPlayerId] = useState('');
-  const [enrollPlanId, setEnrollPlanId] = useState('');
-  const [enrollStartDate, setEnrollStartDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
-  const [enrollAutoRenew, setEnrollAutoRenew] = useState(true);
-  const [enrollError, setEnrollError] = useState<string | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
 
   // Search Filter
   const [subscriberSearch, setSubscriberSearch] = useState('');
@@ -423,29 +410,7 @@ export default function MembershipsScreen() {
     Alert.alert(name, `Plan: ${sub.plan_name || 'Membership'} (${status.toUpperCase()})`, actions);
   };
 
-  const handleEnrollSubmit = async () => {
-    if (!enrollPlayerId || !enrollPlanId) {
-      setEnrollError('Please select both a player and a plan.');
-      return;
-    }
-    setEnrolling(true);
-    setEnrollError(null);
-    try {
-      await createSubMutation.mutateAsync({
-        player_membership_id: enrollPlayerId,
-        membership_plan_id: enrollPlanId,
-        start_date: enrollStartDate,
-        auto_renew: enrollAutoRenew,
-      });
-      setShowEnrollModal(false);
-      subsQuery.refetch();
-      Alert.alert('Success', 'Player enrolled in membership.');
-    } catch (e: any) {
-      setEnrollError(e?.message ?? 'Failed to enroll player.');
-    } finally {
-      setEnrolling(false);
-    }
-  };
+
 
   if (!canManageMemberships) {
     return (
@@ -518,21 +483,7 @@ export default function MembershipsScreen() {
         </ImageBackground>
       </View>
 
-      {/* 3. + New Plan Button */}
-      <View style={styles.newPlanRow}>
-        <TouchableOpacity
-          style={styles.newPlanBtn}
-          onPress={handleOpenCreatePlan}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Create New Plan"
-        >
-          <Plus size={16} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 6 }} />
-          <AppText style={styles.newPlanBtnText}>New Plan</AppText>
-        </TouchableOpacity>
-      </View>
-
-      {/* 4. Plans / Subscribers Switcher (Segmented Control) */}
+      {/* 2. Plans / Subscribers Switcher (Segmented Control) */}
       <View style={styles.segmentedContainer}>
         <TouchableOpacity
           style={[styles.segmentedTab, activeTab === 'plans' && styles.segmentedTabActive]}
@@ -569,8 +520,25 @@ export default function MembershipsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 5. Subscriber Search & Enroll Row (Visible when Subscribers tab is active) */}
-      {activeTab === 'subscribers' && (
+      {/* 3. Tab Context Actions:
+             If Plans tab: "+ New Plan" action button.
+             If Subscribers tab: Subscriber search row (full width). */}
+      {activeTab === 'plans' ? (
+        canManageMemberships && (
+          <View style={styles.newPlanRow}>
+            <TouchableOpacity
+              style={styles.newPlanBtn}
+              onPress={handleOpenCreatePlan}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Create New Plan"
+            >
+              <Plus size={16} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 6 }} />
+              <AppText style={styles.newPlanBtnText}>New Plan</AppText>
+            </TouchableOpacity>
+          </View>
+        )
+      ) : (
         <View style={styles.subscriberSearchRow}>
           <View style={styles.searchBox}>
             <Search size={18} color="#647570" strokeWidth={2} style={styles.searchIcon} />
@@ -593,20 +561,6 @@ export default function MembershipsScreen() {
               </TouchableOpacity>
             )}
           </View>
-
-          <TouchableOpacity
-            style={styles.enrollBtn}
-            onPress={() => {
-              setEnrollError(null);
-              setShowEnrollModal(true);
-            }}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Enroll Subscriber"
-          >
-            <Plus size={15} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 4 }} />
-            <AppText style={styles.enrollBtnText}>Enroll</AppText>
-          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -625,6 +579,7 @@ export default function MembershipsScreen() {
       expired: { bg: '#FEF6E6', text: '#B7791F', label: 'EXPIRED' },
       active: { bg: '#E8F5E9', text: '#2E7D32', label: 'ACTIVE' },
       scheduled: { bg: '#E7F0FB', text: '#1E69D2', label: 'SCHEDULED' },
+      pending: { bg: '#FFF8E1', text: '#E65100', label: 'PENDING' },
     }[status] || { bg: '#EAF0EC', text: '#5A6E67', label: status.toUpperCase() };
 
     const planName = item.plan_name || 'Basic Monthly';
@@ -863,21 +818,14 @@ export default function MembershipsScreen() {
           renderItem={renderSubscriberCard}
           ListEmptyComponent={
             <EmptyState
-              title={subscriberSearch ? 'No Subscribers Found' : 'No Active Subscribers'}
+              title={subscriberSearch ? 'No Subscribers Found' : 'No Subscribers Yet'}
               description={
                 subscriberSearch
                   ? `No subscriptions match "${subscriberSearch}". Try a different name, email, or plan.`
-                  : 'Enroll club members into membership plans to manage recurring access.'
+                  : 'No players currently hold subscriptions for this club. Subscribers appear here after players purchase a membership plan.'
               }
-              actionLabel={subscriberSearch ? 'Clear Search' : '+ Enroll Subscriber'}
-              onAction={
-                subscriberSearch
-                  ? () => setSubscriberSearch('')
-                  : () => {
-                      setEnrollError(null);
-                      setShowEnrollModal(true);
-                    }
-              }
+              actionLabel={subscriberSearch ? 'Clear Search' : undefined}
+              onAction={subscriberSearch ? () => setSubscriberSearch('') : undefined}
             />
           }
           refreshControl={
@@ -1060,146 +1008,7 @@ export default function MembershipsScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── Enroll Subscriber Modal ────────────────────────────────────────── */}
-      <Modal
-        visible={showEnrollModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEnrollModal(false)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setShowEnrollModal(false)}
-        >
-          <Pressable
-            style={[styles.modalCard, { maxHeight: '85%' }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalHeader}>
-              <AppText style={styles.modalTitle}>Enroll Subscriber</AppText>
-              <TouchableOpacity
-                onPress={() => setShowEnrollModal(false)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={20} color="#123D38" />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.modalBody}>
-              {enrollError ? (
-                <View style={styles.modalErrorBox}>
-                  <AppText style={styles.modalErrorText}>{enrollError}</AppText>
-                </View>
-              ) : null}
-
-              {/* Select Player */}
-              <AppText style={styles.inputLabel}>Select Player *</AppText>
-              <View style={styles.pickerContainer}>
-                {playerMembers.length === 0 ? (
-                  <AppText style={{ color: '#8C9BA5', padding: 12 }}>No players available to enroll.</AppText>
-                ) : (
-                  playerMembers.slice(0, 15).map((pm) => (
-                    <TouchableOpacity
-                      key={pm.id}
-                      style={[
-                        styles.pickerOption,
-                        enrollPlayerId === pm.id && styles.pickerOptionSelected,
-                      ]}
-                      onPress={() => setEnrollPlayerId(pm.id)}
-                    >
-                      <AppText
-                        style={[
-                          styles.pickerOptionText,
-                          enrollPlayerId === pm.id && styles.pickerOptionTextSelected,
-                        ]}
-                      >
-                        {pm.user_full_name || pm.user_email}
-                      </AppText>
-                      {enrollPlayerId === pm.id && <Check size={16} color="#176B57" />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-
-              {/* Select Plan */}
-              <AppText style={[styles.inputLabel, { marginTop: 14 }]}>Select Plan *</AppText>
-              <View style={styles.pickerContainer}>
-                {plans.length === 0 ? (
-                  <AppText style={{ color: '#8C9BA5', padding: 12 }}>No membership plans found.</AppText>
-                ) : (
-                  plans.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        styles.pickerOption,
-                        enrollPlanId === p.id && styles.pickerOptionSelected,
-                      ]}
-                      onPress={() => setEnrollPlanId(p.id)}
-                    >
-                      <View>
-                        <AppText
-                          style={[
-                            styles.pickerOptionText,
-                            enrollPlanId === p.id && styles.pickerOptionTextSelected,
-                          ]}
-                        >
-                          {p.name}
-                        </AppText>
-                        <AppText style={{ fontSize: 12, color: '#647570', marginTop: 2 }}>
-                          {formatCurrency(p.price, p.currency || 'USD')} · {p.duration_label || p.duration_unit}
-                        </AppText>
-                      </View>
-                      {enrollPlanId === p.id && <Check size={16} color="#176B57" />}
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-
-              {/* Start Date */}
-              <AppText style={[styles.inputLabel, { marginTop: 14 }]}>Start Date (YYYY-MM-DD)</AppText>
-              <TextInput
-                style={styles.inputField}
-                placeholder="2026-10-14"
-                placeholderTextColor="#8C9BA5"
-                value={enrollStartDate}
-                onChangeText={setEnrollStartDate}
-              />
-
-              {/* Auto Renew Switch */}
-              <View style={styles.switchRow}>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.switchTitle}>Auto Renew</AppText>
-                  <AppText style={styles.switchSubtitle}>Automatically renew upon expiration</AppText>
-                </View>
-                <Switch
-                  value={enrollAutoRenew}
-                  onValueChange={setEnrollAutoRenew}
-                  trackColor={{ false: '#D1D5DB', true: '#176B57' }}
-                  thumbColor="#FFFFFF"
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => setShowEnrollModal(false)}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.saveModalBtn}
-                onPress={handleEnrollSubmit}
-                disabled={enrolling}
-              >
-                <AppText style={styles.saveModalBtnText}>
-                  {enrolling ? 'Enrolling...' : 'Enroll Player'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Screen>
   );
 }
@@ -1389,20 +1198,7 @@ const styles = StyleSheet.create({
     height: '100%',
     paddingVertical: 0,
   },
-  enrollBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#176B57',
-    borderRadius: 14,
-    height: 46,
-    paddingHorizontal: 18,
-    marginLeft: 10,
-  },
-  enrollBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+
 
   // Subscriber Cards
   subscriberCard: {

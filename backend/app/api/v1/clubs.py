@@ -508,14 +508,11 @@ async def list_club_player_memberships(
 @router.post(
     "/{club_id}/player-memberships",
     response_model=ClubPlayerMembershipResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Add / enroll a player in this club",
-    description="Enrolls an existing user as a player member in the club. If previously expired/inactive/suspended, reactivates the membership. Requires MANAGE_MEMBERS permission.",
+    status_code=status.HTTP_403_FORBIDDEN,
+    summary="Manual player enrollment is disabled",
+    description="Manual player enrollment by staff is disabled. Players must join the club via player self-service or through membership request approval.",
     responses={
-        400: {"description": "User already has an active player membership or validation error"},
-        401: {"description": "Not authenticated"},
-        403: {"description": "Insufficient permissions (manage_members required)"},
-        404: {"description": "User with email not found"},
+        403: {"description": "Manual player enrollment is disabled"},
     },
 )
 async def add_club_player_membership(
@@ -524,7 +521,7 @@ async def add_club_player_membership(
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
     db: AsyncSession = Depends(get_db),
 ) -> ClubPlayerMembershipResponse:
-    """Add a player member to the club."""
+    """Manual player enrollment by staff is disabled."""
     return await PlayerService(db).add_club_player_membership(
         club_id=club_id,
         payload=payload,

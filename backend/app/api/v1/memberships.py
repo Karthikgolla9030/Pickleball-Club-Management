@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -306,19 +306,14 @@ async def list_subscriptions(
 
 @subscriptions_router.post(
     "",
-    response_model=MemberSubscriptionResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Enroll a player in a membership plan",
+    status_code=status.HTTP_403_FORBIDDEN,
+    summary="Manual staff subscription creation is disabled",
     description=(
-        "Staff enrollment workflow: select player, plan, and start date. "
-        "Validates: active player membership, active plan, same club, no conflicting subscription."
+        "Club staff cannot manually create subscriptions or enroll players on their behalf. "
+        "Subscriptions must be created by players through the player membership purchase flow."
     ),
     responses={
-        400: {"description": "Validation error (inactive player/plan, past start date)"},
-        401: {"description": "Not authenticated"},
-        403: {"description": "Insufficient permissions"},
-        404: {"description": "Player or plan not found"},
-        409: {"description": "Player already has an active/scheduled subscription"},
+        403: {"description": "Manual staff subscription creation is disabled"},
     },
 )
 async def create_subscription(
@@ -327,12 +322,11 @@ async def create_subscription(
     current_user: User = Depends(get_current_user),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERSHIPS)),
     db: AsyncSession = Depends(get_db),
-) -> MemberSubscriptionResponse:
-    """Enroll a club player in a membership plan."""
-    return await MemberSubscriptionService(db).create_subscription(
-        club_id=club_id,
-        payload=payload,
-        staff_user_id=current_user.id,
+) -> None:
+    """Manual staff subscription creation is disabled. Subscriptions must be created by players through the player membership purchase flow."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Manual staff subscription creation is disabled. Subscriptions must be created by players through the player membership purchase flow.",
     )
 
 

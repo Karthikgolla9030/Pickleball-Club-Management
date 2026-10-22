@@ -455,14 +455,6 @@ export interface ClubPlayerMember {
   updated_at: string;
 }
 
-export interface AddClubPlayerMemberPayload {
-  email: string;
-  status?: PlayerMembershipStatus;
-  membership_number?: string | null;
-  joined_at?: string | null;
-  expires_at?: string | null;
-}
-
 export interface UpdateClubPlayerMemberPayload {
   status?: PlayerMembershipStatus;
   membership_number?: string | null;

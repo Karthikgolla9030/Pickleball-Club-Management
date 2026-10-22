@@ -520,7 +520,7 @@ class TestDurationCalculation:
 
 class TestSubscriptionCreate:
     @pytest.mark.asyncio
-    async def test_owner_can_create_subscription(
+    async def test_owner_cannot_manually_create_subscription(
         self,
         async_client: AsyncClient,
         club_a: Club,
@@ -529,6 +529,7 @@ class TestSubscriptionCreate:
         player_club_membership: ClubPlayerMembership,
         basic_plan: MembershipPlan,
     ):
+        """Staff cannot manually enroll players; endpoint returns 403 Forbidden."""
         today = date.today().isoformat()
         resp = await async_client.post(
             f"/api/v1/clubs/{club_a.id}/subscriptions",
@@ -539,13 +540,11 @@ class TestSubscriptionCreate:
             },
             headers=auth(owner_user),
         )
-        assert resp.status_code == 201, resp.text
-        data = resp.json()
-        assert data["status"] in ("active", "scheduled")
-        assert data["membership_plan_id"] == str(basic_plan.id)
+        assert resp.status_code == 403
+        assert "Manual staff subscription creation is disabled" in resp.json()["detail"]
 
     @pytest.mark.asyncio
-    async def test_manager_can_create_subscription(
+    async def test_manager_cannot_manually_create_subscription(
         self,
         async_client: AsyncClient,
         club_a: Club,
@@ -554,6 +553,7 @@ class TestSubscriptionCreate:
         player_club_membership: ClubPlayerMembership,
         basic_plan: MembershipPlan,
     ):
+        """Managers are also forbidden from manually creating subscriptions."""
         today = date.today().isoformat()
         resp = await async_client.post(
             f"/api/v1/clubs/{club_a.id}/subscriptions",
@@ -564,99 +564,8 @@ class TestSubscriptionCreate:
             },
             headers=auth(manager_user),
         )
-        assert resp.status_code == 201
-
-    @pytest.mark.asyncio
-    async def test_future_start_date_creates_scheduled(
-        self,
-        async_client: AsyncClient,
-        club_a: Club,
-        owner_user: User,
-        owner_membership: ClubMembership,
-        player_club_membership: ClubPlayerMembership,
-        basic_plan: MembershipPlan,
-    ):
-        future = (date.today() + timedelta(days=5)).isoformat()
-        resp = await async_client.post(
-            f"/api/v1/clubs/{club_a.id}/subscriptions",
-            json={
-                "player_membership_id": str(player_club_membership.id),
-                "membership_plan_id": str(basic_plan.id),
-                "start_date": future,
-            },
-            headers=auth(owner_user),
-        )
-        assert resp.status_code == 201
-        assert resp.json()["status"] == "scheduled"
-
-    @pytest.mark.asyncio
-    async def test_past_start_date_rejected(
-        self,
-        async_client: AsyncClient,
-        club_a: Club,
-        owner_user: User,
-        owner_membership: ClubMembership,
-        player_club_membership: ClubPlayerMembership,
-        basic_plan: MembershipPlan,
-    ):
-        past = (date.today() - timedelta(days=1)).isoformat()
-        resp = await async_client.post(
-            f"/api/v1/clubs/{club_a.id}/subscriptions",
-            json={
-                "player_membership_id": str(player_club_membership.id),
-                "membership_plan_id": str(basic_plan.id),
-                "start_date": past,
-            },
-            headers=auth(owner_user),
-        )
-        assert resp.status_code == 422
-
-    @pytest.mark.asyncio
-    async def test_inactive_plan_rejected(
-        self,
-        async_client: AsyncClient,
-        club_a: Club,
-        owner_user: User,
-        owner_membership: ClubMembership,
-        player_club_membership: ClubPlayerMembership,
-        inactive_plan: MembershipPlan,
-    ):
-        today = date.today().isoformat()
-        resp = await async_client.post(
-            f"/api/v1/clubs/{club_a.id}/subscriptions",
-            json={
-                "player_membership_id": str(player_club_membership.id),
-                "membership_plan_id": str(inactive_plan.id),
-                "start_date": today,
-            },
-            headers=auth(owner_user),
-        )
-        assert resp.status_code == 400
-        assert "inactive" in resp.json()["detail"].lower()
-
-    @pytest.mark.asyncio
-    async def test_duplicate_active_subscription_rejected(
-        self,
-        async_client: AsyncClient,
-        club_a: Club,
-        owner_user: User,
-        owner_membership: ClubMembership,
-        player_club_membership: ClubPlayerMembership,
-        basic_plan: MembershipPlan,
-        active_subscription: MemberSubscription,
-    ):
-        """Cannot create second active subscription for same player/club."""
-        today = date.today().isoformat()
-        resp = await async_client.post(
-            f"/api/v1/clubs/{club_a.id}/subscriptions",
-            json={
-                "player_membership_id": str(player_club_membership.id),
-                "membership_plan_id": str(basic_plan.id),
-                "start_date": today,
-            },
-            headers=auth(owner_user),
-        )
-        assert resp.status_code == 409
+        assert resp.status_code == 403
+        assert "Manual staff subscription creation is disabled" in resp.json()["detail"]
 
     @pytest.mark.asyncio
     async def test_tournament_director_denied_subscription_create(
@@ -679,6 +588,94 @@ class TestSubscriptionCreate:
             headers=auth(td_user),
         )
         assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_player_self_subscribe_future_start_date_creates_scheduled(
+        self,
+        async_client: AsyncClient,
+        club_a: Club,
+        player_user: User,
+        player_club_membership: ClubPlayerMembership,
+        basic_plan: MembershipPlan,
+    ):
+        future = (date.today() + timedelta(days=5)).isoformat()
+        resp = await async_client.post(
+            f"/api/v1/clubs/{club_a.id}/membership-plans/{basic_plan.id}/subscribe",
+            json={
+                "membership_plan_id": str(basic_plan.id),
+                "start_date": future,
+                "payment_method": "cash",
+            },
+            headers=auth(player_user),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["status"] == "scheduled"
+
+    @pytest.mark.asyncio
+    async def test_player_self_subscribe_past_start_date_rejected(
+        self,
+        async_client: AsyncClient,
+        club_a: Club,
+        player_user: User,
+        player_club_membership: ClubPlayerMembership,
+        basic_plan: MembershipPlan,
+    ):
+        past = (date.today() - timedelta(days=1)).isoformat()
+        resp = await async_client.post(
+            f"/api/v1/clubs/{club_a.id}/membership-plans/{basic_plan.id}/subscribe",
+            json={
+                "membership_plan_id": str(basic_plan.id),
+                "start_date": past,
+                "payment_method": "cash",
+            },
+            headers=auth(player_user),
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_player_self_subscribe_inactive_plan_rejected(
+        self,
+        async_client: AsyncClient,
+        club_a: Club,
+        player_user: User,
+        player_club_membership: ClubPlayerMembership,
+        inactive_plan: MembershipPlan,
+    ):
+        today = date.today().isoformat()
+        resp = await async_client.post(
+            f"/api/v1/clubs/{club_a.id}/membership-plans/{inactive_plan.id}/subscribe",
+            json={
+                "membership_plan_id": str(inactive_plan.id),
+                "start_date": today,
+                "payment_method": "cash",
+            },
+            headers=auth(player_user),
+        )
+        assert resp.status_code == 400
+        assert "inactive" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_player_self_subscribe_duplicate_active_subscription_rejected(
+        self,
+        async_client: AsyncClient,
+        club_a: Club,
+        player_user: User,
+        player_club_membership: ClubPlayerMembership,
+        basic_plan: MembershipPlan,
+        active_subscription: MemberSubscription,
+    ):
+        """Cannot create second active subscription for same player/club."""
+        today = date.today().isoformat()
+        resp = await async_client.post(
+            f"/api/v1/clubs/{club_a.id}/membership-plans/{basic_plan.id}/subscribe",
+            json={
+                "membership_plan_id": str(basic_plan.id),
+                "start_date": today,
+                "payment_method": "cash",
+            },
+            headers=auth(player_user),
+        )
+        assert resp.status_code == 409
 
 
 class TestSubscriptionLifecycle:
@@ -928,9 +925,10 @@ class TestTenantIsolation:
         club_b: Club,
         owner_user: User,
         owner_membership: ClubMembership,
+        player_user: User,
         player_club_membership: ClubPlayerMembership,
     ):
-        """Cannot enroll a player into a plan from another club."""
+        """Staff cannot enroll players (403), and player cannot subscribe to a plan from another club (404)."""
         # Create a plan in club_b
         plan_b = MembershipPlan(
             club_id=club_b.id,
@@ -943,7 +941,8 @@ class TestTenantIsolation:
         db_session.add(plan_b)
         await db_session.flush()
 
-        resp = await async_client.post(
+        # Staff enrollment is disabled
+        staff_resp = await async_client.post(
             f"/api/v1/clubs/{club_a.id}/subscriptions",
             json={
                 "player_membership_id": str(player_club_membership.id),
@@ -952,7 +951,19 @@ class TestTenantIsolation:
             },
             headers=auth(owner_user),
         )
-        assert resp.status_code == 404  # Plan not in club_a
+        assert staff_resp.status_code == 403
+
+        # Player cannot subscribe to club_b plan on club_a
+        player_resp = await async_client.post(
+            f"/api/v1/clubs/{club_a.id}/membership-plans/{plan_b.id}/subscribe",
+            json={
+                "membership_plan_id": str(plan_b.id),
+                "start_date": date.today().isoformat(),
+                "payment_method": "cash",
+            },
+            headers=auth(player_user),
+        )
+        assert player_resp.status_code == 404  # Plan not in club_a
 
     @pytest.mark.asyncio
     async def test_foreign_player_membership_rejected(
@@ -965,7 +976,7 @@ class TestTenantIsolation:
         owner_membership: ClubMembership,
         basic_plan: MembershipPlan,
     ):
-        """Cannot enroll a player from club_b into club_a subscription."""
+        """Staff cannot manually create subscriptions on behalf of any player."""
         # Create a player in club_b only
         other_user = User(
             email=f"other-{uuid.uuid4().hex[:6]}@test.local",
@@ -992,7 +1003,8 @@ class TestTenantIsolation:
             },
             headers=auth(owner_user),
         )
-        assert resp.status_code == 404  # Player membership not in club_a
+        assert resp.status_code == 403
+        assert "Manual staff subscription creation is disabled" in resp.json()["detail"]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

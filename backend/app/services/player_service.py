@@ -366,7 +366,7 @@ class PlayerService:
     async def list_club_player_memberships(
         self, club_id: UUID
     ) -> list[ClubPlayerMembershipResponse]:
-        """List all player memberships for a club, strictly excluding club staff."""
+        """List all player memberships for a club, strictly excluding club staff and unconfirmed checkouts."""
         memberships = await self.player_membership_repo.get_club_player_memberships(
             club_id
         )
@@ -375,49 +375,21 @@ class PlayerService:
         staff_res = await self.db.execute(staff_stmt)
         staff_user_ids = set(staff_res.scalars().all())
 
-        filtered = [m for m in memberships if m.user_id not in staff_user_ids]
+        filtered = [
+            m for m in memberships
+            if m.user_id not in staff_user_ids
+            and m.status != PlayerMembershipStatus.INACTIVE
+        ]
         return [_build_club_player_response(m) for m in filtered]
 
     async def add_club_player_membership(
         self, club_id: UUID, payload: CreateClubPlayerMembershipRequest
     ) -> ClubPlayerMembershipResponse:
-        """Enroll an existing user as a player member in the club."""
-        user = await self.user_repo.get_by_email(payload.email)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User with email '{payload.email}' not found",
-            )
-
-        existing = await self.player_membership_repo.get_by_user_and_club(
-            user.id, club_id
+        """Disabled: Staff cannot manually enroll players directly. Players must join via player self-service or approved request."""
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manual player enrollment is disabled. Players must join the club via player self-service or through membership request approval.",
         )
-        if existing:
-            if existing.status == PlayerMembershipStatus.ACTIVE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="User already has an active player membership in this club",
-                )
-            # Reactivate / update existing membership
-            updated = await self.player_membership_repo.update(
-                existing,
-                status=payload.status,
-                membership_number=payload.membership_number,
-                expires_at=payload.expires_at,
-            )
-            await self.db.commit()
-            return _build_club_player_response(updated)
-
-        membership = await self.player_membership_repo.create(
-            user_id=user.id,
-            club_id=club_id,
-            status=payload.status,
-            membership_number=payload.membership_number,
-            joined_at=payload.joined_at,
-            expires_at=payload.expires_at,
-        )
-        await self.db.commit()
-        return _build_club_player_response(membership)
 
     async def update_club_player_membership(
         self,

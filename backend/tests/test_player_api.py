@@ -366,7 +366,7 @@ async def test_11_user_with_no_staff_role_cannot_list_player_memberships(
 
 
 @pytest.mark.asyncio
-async def test_12_manager_can_enroll_player_into_club(
+async def test_12_manual_staff_enrollment_is_disabled_for_manager(
     async_client: AsyncClient, db_session: AsyncSession
 ):
     manager = await create_user(db_session)
@@ -387,104 +387,22 @@ async def test_12_manager_can_enroll_player_into_club(
         json=payload,
         headers=headers,
     )
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["user_email"] == "enroll_me@test.local"
-    assert data["membership_number"] == "ENR-001"
-    assert data["status"] == "active"
+    assert resp.status_code == 403
+    assert "manual player enrollment is disabled" in resp.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
-async def test_13_enrolling_non_existent_user_returns_404(
+async def test_13_manual_staff_enrollment_is_disabled_for_owner(
     async_client: AsyncClient, db_session: AsyncSession
 ):
     owner = await create_user(db_session)
-    club = await create_club(db_session)
-    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
-    await db_session.commit()
-
-    headers = make_auth_header(owner.id)
-    payload = {"email": "nobody@doesnotexist.local", "status": "active"}
-    resp = await async_client.post(
-        f"/api/v1/clubs/{club.id}/player-memberships",
-        json=payload,
-        headers=headers,
-    )
-    assert resp.status_code == 404
-    assert "not found" in resp.json()["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_14_enrolling_already_active_player_returns_400(
-    async_client: AsyncClient, db_session: AsyncSession
-):
-    owner = await create_user(db_session)
-    player = await create_user(db_session, email="already_active@test.local")
-    club = await create_club(db_session)
-
-    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
-    await create_player_membership(db_session, player, club, status=PlayerMembershipStatus.ACTIVE)
-    await db_session.commit()
-
-    headers = make_auth_header(owner.id)
-    payload = {"email": "already_active@test.local", "status": "active"}
-    resp = await async_client.post(
-        f"/api/v1/clubs/{club.id}/player-memberships",
-        json=payload,
-        headers=headers,
-    )
-    assert resp.status_code == 400
-    assert "already has an active player membership" in resp.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_15_enrolling_inactive_player_reactivates_membership(
-    async_client: AsyncClient, db_session: AsyncSession
-):
-    owner = await create_user(db_session)
-    player = await create_user(db_session, email="rejoin@test.local")
-    club = await create_club(db_session)
-
-    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
-    # Existing expired membership
-    await create_player_membership(
-        db_session,
-        player,
-        club,
-        status=PlayerMembershipStatus.EXPIRED,
-        membership_number="OLD-001",
-    )
-    await db_session.commit()
-
-    headers = make_auth_header(owner.id)
-    payload = {
-        "email": "rejoin@test.local",
-        "status": "active",
-        "membership_number": "REJOIN-001",
-    }
-    resp = await async_client.post(
-        f"/api/v1/clubs/{club.id}/player-memberships",
-        json=payload,
-        headers=headers,
-    )
-    assert resp.status_code == 201
-    data = resp.json()
-    assert data["status"] == "active"
-    assert data["membership_number"] == "REJOIN-001"
-
-
-@pytest.mark.asyncio
-async def test_16_tournament_director_cannot_enroll_player(
-    async_client: AsyncClient, db_session: AsyncSession
-):
-    td = await create_user(db_session)
     player = await create_user(db_session, email="candidate@test.local")
     club = await create_club(db_session)
 
-    await create_staff_membership(db_session, td, club, role=ClubRole.TOURNAMENT_DIRECTOR)
+    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
     await db_session.commit()
 
-    headers = make_auth_header(td.id)
+    headers = make_auth_header(owner.id)
     payload = {"email": "candidate@test.local", "status": "active"}
     resp = await async_client.post(
         f"/api/v1/clubs/{club.id}/player-memberships",
@@ -492,6 +410,109 @@ async def test_16_tournament_director_cannot_enroll_player(
         headers=headers,
     )
     assert resp.status_code == 403
+    assert "manual player enrollment is disabled" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_14_non_member_player_does_not_appear_in_club_player_list(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    owner = await create_user(db_session)
+    non_member = await create_user(db_session, email="unjoined_player@test.local")
+    club = await create_club(db_session)
+
+    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    headers = make_auth_header(owner.id)
+    resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-memberships",
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    player_emails = [p["user_email"] for p in resp.json()]
+    assert "unjoined_player@test.local" not in player_emails
+
+
+@pytest.mark.asyncio
+async def test_15_player_self_service_join_populates_club_player_list(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    owner = await create_user(db_session)
+    player = await create_user(db_session, email="joined_player@test.local")
+    club = await create_club(db_session)
+
+    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    # Player joins the club via self-service endpoint
+    player_headers = make_auth_header(player.id)
+    join_resp = await async_client.post(
+        f"/api/v1/player/clubs/{club.id}/join",
+        headers=player_headers,
+    )
+    assert join_resp.status_code == 201
+    assert join_resp.json()["status"] == "active"
+
+    # Now club owner views player list; joined player must appear
+    owner_headers = make_auth_header(owner.id)
+    resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-memberships",
+        headers=owner_headers,
+    )
+    assert resp.status_code == 200
+    player_emails = [p["user_email"] for p in resp.json()]
+    assert "joined_player@test.local" in player_emails
+
+
+@pytest.mark.asyncio
+async def test_16_pending_membership_request_only_appears_after_approval(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    owner = await create_user(db_session)
+    player = await create_user(db_session, email="applicant@test.local")
+    club = await create_club(db_session)
+
+    await create_staff_membership(db_session, owner, club, role=ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    # Player submits membership request
+    player_headers = make_auth_header(player.id)
+    req_resp = await async_client.post(
+        f"/api/v1/player/clubs/{club.id}/membership-requests",
+        headers=player_headers,
+        json={"message": "I would love to join your club!"},
+    )
+    assert req_resp.status_code == 201
+    req_id = req_resp.json()["id"]
+
+    owner_headers = make_auth_header(owner.id)
+
+    # Before approval, applicant must NOT appear in club's player memberships list
+    list_before = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-memberships",
+        headers=owner_headers,
+    )
+    assert list_before.status_code == 200
+    emails_before = [p["user_email"] for p in list_before.json()]
+    assert "applicant@test.local" not in emails_before
+
+    # Staff approves membership request
+    approve_resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/membership-requests/{req_id}/approve",
+        headers=owner_headers,
+    )
+    assert approve_resp.status_code == 200
+    assert approve_resp.json()["status"] == "approved"
+
+    # After approval, player must appear in club's player memberships list
+    list_after = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-memberships",
+        headers=owner_headers,
+    )
+    assert list_after.status_code == 200
+    emails_after = [p["user_email"] for p in list_after.json()]
+    assert "applicant@test.local" in emails_after
 
 
 @pytest.mark.asyncio

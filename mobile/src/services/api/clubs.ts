@@ -5,7 +5,6 @@
 import { API_ENDPOINTS } from '@/constants';
 import { apiClient } from './client';
 import type {
-  AddClubPlayerMemberPayload,
   AddMemberPayload,
   Club,
   ClubDashboardResponse,
@@ -169,20 +168,6 @@ export const clubsApi = {
   getClubPlayerMembers(clubId: string): Promise<ClubPlayerMember[]> {
     return apiClient.get<ClubPlayerMember[]>(
       `${API_ENDPOINTS.CLUBS}/${clubId}/player-memberships`,
-    );
-  },
-
-  /**
-   * Enroll / add a player to this club.
-   * Allowed for Club Owner and Club Manager (MANAGE_MEMBERS).
-   */
-  addClubPlayerMember(
-    clubId: string,
-    payload: AddClubPlayerMemberPayload,
-  ): Promise<ClubPlayerMember> {
-    return apiClient.post<ClubPlayerMember>(
-      `${API_ENDPOINTS.CLUBS}/${clubId}/player-memberships`,
-      payload,
     );
   },
 

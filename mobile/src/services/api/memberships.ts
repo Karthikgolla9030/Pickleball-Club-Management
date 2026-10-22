@@ -126,7 +126,7 @@ export const membershipApi = {
   },
 
   /**
-   * Enroll a player in a membership plan (staff workflow).
+   * @deprecated Manual staff enrollment is disabled. Subscriptions are created by players directly.
    */
   createSubscription(
     clubId: string,

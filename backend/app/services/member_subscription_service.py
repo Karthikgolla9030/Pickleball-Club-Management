@@ -82,132 +82,13 @@ class MemberSubscriptionService:
         staff_user_id: UUID,
     ) -> MemberSubscriptionResponse:
         """
-        Enroll an active club player into a plan.
-
-        Validates:
-          - player_membership belongs to this club
-          - player membership is active
-          - plan belongs to this club
-          - plan is active
-          - no conflicting active/scheduled subscription exists
-          - start_date is not in the past
-
-        Creates subscription with status:
-          - ACTIVE if start_date == today
-          - SCHEDULED if start_date > today
+        Manual staff subscription creation is disabled.
+        Subscriptions must be created by players through the player membership purchase flow.
         """
-        # 1. Validate player membership belongs to this club
-        player_membership = await self.player_repo.get_by_id(payload.player_membership_id)
-        if not player_membership or player_membership.club_id != club_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Player membership not found in this club",
-            )
-
-        # 2. Validate player membership is active
-        if player_membership.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Player must have an active club membership to receive a subscription",
-            )
-
-        # 3. Validate plan belongs to this club
-        plan = await self.plan_repo.get_by_id(
-            plan_id=payload.membership_plan_id, club_id=club_id
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manual staff subscription creation is disabled. Subscriptions must be created by players through the player membership purchase flow.",
         )
-        if not plan:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Membership plan not found in this club",
-            )
-
-        # 4. Validate plan is active (inactive plans cannot receive new subscriptions)
-        if plan.status != PlanStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot create a subscription for an inactive membership plan",
-            )
-
-        # 5. Validate no conflicting active/scheduled subscription
-        existing = await self.sub_repo.get_active_or_scheduled_for_player_in_club(
-            player_membership_id=payload.player_membership_id,
-            club_id=club_id,
-        )
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"Player already has an {existing.status.value} subscription "
-                    f"for this club. Cancel or expire it before creating a new one."
-                ),
-            )
-
-        # 6. Determine initial status
-        today = date.today()
-        initial_status = (
-            SubscriptionStatus.ACTIVE
-            if payload.start_date == today
-            else SubscriptionStatus.SCHEDULED
-        )
-
-        # 7. Calculate end_date from plan duration (calendar-correct)
-        end_date = MembershipPlanService.calculate_end_date(
-            start=payload.start_date,
-            unit=plan.duration_unit,
-        )
-
-        # 8. Create subscription
-        sub = await self.sub_repo.create(
-            club_id=club_id,
-            player_membership_id=payload.player_membership_id,
-            membership_plan_id=payload.membership_plan_id,
-            start_date=payload.start_date,
-            end_date=end_date,
-            status=initial_status,
-            auto_renew=payload.auto_renew,
-            notes=payload.notes,
-        )
-        await self.db.commit()
-        resp = MemberSubscriptionResponse.from_orm(sub)
-
-        try:
-            pm = await self.player_repo.get_by_id(payload.player_membership_id)
-            if pm:
-                plan_obj = await self.plan_repo.get_by_id(payload.membership_plan_id)
-                plan_name = plan_obj.name if plan_obj else "Membership Plan"
-                await dispatch_event(
-                    event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
-                    data={
-                        "subscription_id": str(sub.id),
-                        "club_id": str(club_id),
-                        "user_id": str(pm.user_id),
-                        "status": sub.status.value,
-                        "plan_name": plan_name,
-                    },
-                    club_id=club_id,
-                    user_id=pm.user_id,
-                )
-                notif_svc = NotificationService(self.db)
-                await notif_svc.create_notification(
-                    user_id=pm.user_id,
-                    club_id=club_id,
-                    category="membership",
-                    title="Membership Plan Enrolled",
-                    message=f"You have been enrolled in '{plan_name}'.",
-                    data={"subscription_id": str(sub.id)},
-                )
-                await notif_svc.notify_club_staff(
-                    club_id=club_id,
-                    category="membership",
-                    title="Membership Updated",
-                    message=f"Membership '{plan_name}' has been updated.",
-                    data={"subscription_id": str(sub.id), "player_id": str(pm.user_id)},
-                )
-                await self.db.commit()
-        except Exception:
-            pass
-
-        return resp
 
     # ─── Read Subscription ────────────────────────────────────────────────────
 
@@ -517,20 +398,27 @@ class MemberSubscriptionService:
                 detail="Cannot subscribe to an inactive membership plan",
             )
 
-        # 3. Ensure player membership in this club (auto-activate without manual approval)
+        # 3. Status determination & Player membership
+        is_free = (plan.price == Decimal("0.00") or plan.price == 0)
         now = datetime.now(timezone.utc)
         pm = await self.player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
         if not pm:
+            initial_pm_status = (
+                PlayerMembershipStatus.ACTIVE
+                if is_free
+                else PlayerMembershipStatus.INACTIVE
+            )
             pm = await self.player_repo.create(
                 user_id=user_id,
                 club_id=club_id,
-                status=PlayerMembershipStatus.ACTIVE,
-                joined_at=now,
+                status=initial_pm_status,
+                joined_at=now if is_free else None,
             )
-        elif pm.status != PlayerMembershipStatus.ACTIVE:
+        elif is_free and pm.status != PlayerMembershipStatus.ACTIVE:
             pm = await self.player_repo.update(
                 pm,
                 status=PlayerMembershipStatus.ACTIVE,
+                joined_at=now,
             )
 
         # 4. Verify no conflicting active/scheduled subscription
@@ -558,7 +446,6 @@ class MemberSubscriptionService:
         )
 
         # 6. Status determination
-        is_free = (plan.price == Decimal("0.00") or plan.price == 0)
         initial_status = (
             SubscriptionStatus.ACTIVE
             if (is_free and start_date == today)

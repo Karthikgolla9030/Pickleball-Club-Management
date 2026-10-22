@@ -224,8 +224,6 @@ export default function ClubMembersScreen() {
     isRefetching: isPlayersRefetching,
     error: playersError,
     refetch: refetchPlayers,
-    addPlayerMember,
-    isAddingPlayerMember,
     updatePlayerMember,
     isUpdatingPlayerMember,
   } = useClubPlayerMembers(clubId);
@@ -310,13 +308,6 @@ export default function ClubMembersScreen() {
 
   // ─── Modal States ────────────────────────────────────────────────────────────
 
-  // Enroll Player Modal
-  const [enrollModalVisible, setEnrollModalVisible] = useState(false);
-  const [newPlayerEmail, setNewPlayerEmail] = useState('');
-  const [newPlayerNumber, setNewPlayerNumber] = useState('');
-  const [newPlayerStatus, setNewPlayerStatus] = useState<PlayerMembershipStatus>('active');
-  const [enrollError, setEnrollError] = useState<string | null>(null);
-
   // Edit Player Modal
   const [editPlayerModalVisible, setEditPlayerModalVisible] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<ClubPlayerMember | null>(null);
@@ -341,28 +332,6 @@ export default function ClubMembersScreen() {
   const [filterInfoVisible, setFilterInfoVisible] = useState(false);
 
   // ─── Handlers ────────────────────────────────────────────────────────────────
-
-  const handleEnrollPlayer = async () => {
-    setEnrollError(null);
-    if (!newPlayerEmail.trim()) {
-      setEnrollError('Please enter a player email address.');
-      return;
-    }
-    try {
-      await addPlayerMember({
-        email: newPlayerEmail.trim(),
-        status: newPlayerStatus,
-        membership_number: newPlayerNumber.trim() || null,
-      });
-      blurActiveElement();
-      setEnrollModalVisible(false);
-      setNewPlayerEmail('');
-      setNewPlayerNumber('');
-      setNewPlayerStatus('active');
-    } catch (err: unknown) {
-      setEnrollError(err instanceof Error ? err.message : 'Failed to enroll player');
-    }
-  };
 
   const handleOpenEditPlayer = (player: ClubPlayerMember) => {
     blurActiveElement();
@@ -542,7 +511,7 @@ export default function ClubMembersScreen() {
     return (
       <Screen style={styles.screenContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
-        <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
+        <AppHeader title="Members" subtitle="Manage staff roles and club members" borderless />
         <ErrorState
           title="Access Denied"
           message="You do not have permission to view or manage club members."
@@ -563,7 +532,7 @@ export default function ClubMembersScreen() {
     return (
       <Screen style={styles.screenContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#F2F8F5" />
-        <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
+        <AppHeader title="Members" subtitle="Manage staff roles and club members" borderless />
         <ErrorState
           title="Unable to Load Members"
           message={currentError.message || 'A network error occurred.'}
@@ -577,7 +546,7 @@ export default function ClubMembersScreen() {
 
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* 1. Main Action Buttons: [ Players ] [ Staff ] [ + Enroll / + Staff ] */}
+      {/* 1. Main Action Buttons: [ Players ] [ Staff ] */}
       <View style={styles.mainActionsRow}>
         <TouchableOpacity
           style={[styles.mainActionBtn, activeTab === 'players' && styles.mainActionBtnActive]}
@@ -618,22 +587,6 @@ export default function ClubMembersScreen() {
             Staff
           </AppText>
         </TouchableOpacity>
-
-        {activeTab === 'players' && (
-          <TouchableOpacity
-            style={styles.enrollActionBtn}
-            onPress={() => {
-              blurActiveElement();
-              setEnrollModalVisible(true);
-            }}
-            activeOpacity={0.8}
-            accessibilityLabel="Enroll Player"
-            accessibilityRole="button"
-          >
-            <Plus size={17} color="#FFFFFF" strokeWidth={2.4} />
-            <AppText style={styles.enrollActionBtnText}>Enroll</AppText>
-          </TouchableOpacity>
-        )}
       </View>
 
       {/* 3. Section Controls (Players vs Staff) */}
@@ -1031,7 +984,7 @@ export default function ClubMembersScreen() {
   return (
     <Screen style={styles.screenContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F8F5" />
-      <AppHeader title="Members" subtitle="Manage staff roles and enrolled players" borderless />
+      <AppHeader title="Members" subtitle="Manage staff roles and club members" borderless />
 
       {/* Main List */}
       <View style={styles.screenInner}>
@@ -1058,13 +1011,8 @@ export default function ClubMembersScreen() {
                     ? 'No players currently have active subscriptions.'
                     : playerFilter === 'normal'
                     ? 'No normal users currently registered.'
-                    : 'Enroll your first club player to begin managing participation.'
+                    : 'No players have joined this club yet. Players appear here when they join or subscribe.'
                 }
-                actionLabel="+ Enroll Player"
-                onAction={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(true);
-                }}
               />
             }
             refreshControl={
@@ -1111,120 +1059,6 @@ export default function ClubMembersScreen() {
           />
         )}
       </View>
-
-      {/* ─── Enroll Player Modal ──────────────────────────────────────────────── */}
-      <Modal
-        visible={enrollModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => {
-          blurActiveElement();
-          setEnrollModalVisible(false);
-        }}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => {
-            blurActiveElement();
-            setEnrollModalVisible(false);
-          }}
-        >
-          <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <AppText style={styles.modalTitle}>Enroll Player</AppText>
-                <AppText style={styles.modalSubtitle}>Add an enrolled player to this club</AppText>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(false);
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={20} color="#647570" />
-              </TouchableOpacity>
-            </View>
-
-            {enrollError && (
-              <View style={styles.modalErrorBox}>
-                <AppText style={styles.modalErrorText}>{enrollError}</AppText>
-              </View>
-            )}
-
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Player Email Address *</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="player@example.com"
-                placeholderTextColor="#8C9BA5"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={newPlayerEmail}
-                onChangeText={setNewPlayerEmail}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Membership / Player Number (Optional)</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="#AUG-P-016"
-                placeholderTextColor="#8C9BA5"
-                value={newPlayerNumber}
-                onChangeText={setNewPlayerNumber}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Initial Status</AppText>
-              <View style={styles.statusOptionsRow}>
-                {VALID_STATUSES.map((s) => (
-                  <TouchableOpacity
-                    key={s.status}
-                    style={[
-                      styles.statusSelectOption,
-                      newPlayerStatus === s.status && styles.statusSelectOptionActive,
-                    ]}
-                    onPress={() => setNewPlayerStatus(s.status)}
-                  >
-                    <AppText
-                      style={[
-                        styles.statusSelectOptionText,
-                        newPlayerStatus === s.status && styles.statusSelectOptionTextActive,
-                      ]}
-                    >
-                      {s.label}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.modalActionButtons}>
-              <TouchableOpacity
-                style={styles.cancelModalBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setEnrollModalVisible(false);
-                }}
-              >
-                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.submitModalBtn}
-                onPress={handleEnrollPlayer}
-                disabled={isAddingPlayerMember}
-              >
-                <AppText style={styles.submitModalBtnText}>
-                  {isAddingPlayerMember ? 'Enrolling...' : 'Enroll Player'}
-                </AppText>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* ─── Edit Player Status Modal ────────────────────────────────────────── */}
       <Modal
@@ -1569,13 +1403,13 @@ export default function ClubMembersScreen() {
               </TouchableOpacity>
             </View>
             <AppText style={styles.filterExplanation}>
-              • <AppText style={{ fontWeight: '700' }}>All Players</AppText>: Displays all enrolled facility players. Staff members are strictly excluded.
+              • <AppText style={{ fontWeight: '700' }}>All Players</AppText>: Displays all joined facility players. Staff members are strictly excluded.
             </AppText>
             <AppText style={styles.filterExplanation}>
               • <AppText style={{ fontWeight: '700' }}>Subscribers</AppText>: Players who currently have an active membership subscription plan.
             </AppText>
             <AppText style={styles.filterExplanation}>
-              • <AppText style={{ fontWeight: '700' }}>Normal Users</AppText>: Enrolled facility players without an active subscription plan.
+              • <AppText style={{ fontWeight: '700' }}>Normal Users</AppText>: Joined facility players without an active subscription plan.
             </AppText>
             <TouchableOpacity
               style={[styles.submitModalBtn, { marginTop: 16 }]}
@@ -1675,21 +1509,6 @@ const styles = StyleSheet.create({
   },
   mainActionBtnTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  enrollActionBtn: {
-    flex: 1,
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#176B57',
-    borderRadius: 12,
-  },
-  enrollActionBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
     fontWeight: '700',
   },
 

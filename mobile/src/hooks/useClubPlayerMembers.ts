@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clubsApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type {
-  AddClubPlayerMemberPayload,
   ClubPlayerMember,
   UpdateClubPlayerMemberPayload,
 } from '@/types';
@@ -22,18 +21,6 @@ export function useClubPlayerMembers(clubId: string | null) {
     },
     enabled: Boolean(clubId),
     staleTime: 60 * 1000,
-  });
-
-  const addPlayerMemberMutation = useMutation({
-    mutationFn: (payload: AddClubPlayerMemberPayload) => {
-      if (!clubId) throw new Error('Club ID required');
-      return clubsApi.addClubPlayerMember(clubId, payload);
-    },
-    onSuccess: () => {
-      if (clubId) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PLAYER_MEMBERS(clubId) });
-      }
-    },
   });
 
   const updatePlayerMemberMutation = useMutation({
@@ -57,9 +44,6 @@ export function useClubPlayerMembers(clubId: string | null) {
   return {
     ...playerMembersQuery,
     playerMembers: playerMembersQuery.data ?? [],
-    addPlayerMember: addPlayerMemberMutation.mutateAsync,
-    isAddingPlayerMember: addPlayerMemberMutation.isPending,
-    addPlayerMemberError: addPlayerMemberMutation.error,
     updatePlayerMember: updatePlayerMemberMutation.mutateAsync,
     isUpdatingPlayerMember: updatePlayerMemberMutation.isPending,
     updatePlayerMemberError: updatePlayerMemberMutation.error,

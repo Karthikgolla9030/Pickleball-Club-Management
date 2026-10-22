@@ -265,6 +265,8 @@ class PaymentService:
                     pm = await self.player_membership_repo.get_by_id(sub.player_membership_id)
                     if pm and pm.status != PlayerMembershipStatus.ACTIVE:
                         pm.status = PlayerMembershipStatus.ACTIVE
+                        if not pm.joined_at:
+                            pm.joined_at = now
                         pm.updated_at = now
                 await self.db.flush()
                 try:
