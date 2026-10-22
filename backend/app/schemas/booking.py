@@ -77,6 +77,7 @@ class BookingCourtInfo(BaseModel):
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
     price_per_hour: Decimal | None = None
+    photo_url: str | None = None
 
 
 class BookingPlayerInfo(BaseModel):

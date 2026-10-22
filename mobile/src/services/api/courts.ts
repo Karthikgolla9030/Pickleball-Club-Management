@@ -61,7 +61,7 @@ export const courtApi = {
   // ─── Player Active Courts ──────────────────────────────────────────────────
 
   getPlayerCourts(clubId: string): Promise<PlayerCourt[]> {
-    return apiClient.get<PlayerCourt[]>(`${clubCourtBase(clubId)}/active`);
+    return apiClient.get<PlayerCourt[]>(API_ENDPOINTS.PLAYER_COURTS(clubId));
   },
 
   // ─── Phase 7: Court Operating Hours & Affected Bookings ───────────────────

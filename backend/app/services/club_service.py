@@ -454,6 +454,7 @@ class ClubService:
 
         from app.services.media_storage_service import MediaStorageService
 
+        old_logo_url = club.logo_url
         storage = MediaStorageService(self.db)
         public_url, _ = await storage.store_image(
             raw_bytes=image_bytes,
@@ -465,6 +466,13 @@ class ClubService:
         )
         updated = await self.club_repo.update(club, logo_url=public_url)
         await self.db.commit()
+
+        if old_logo_url and old_logo_url != public_url:
+            try:
+                await storage.cleanup_unreferenced_by_url(old_logo_url, club.id)
+            except Exception:
+                pass
+
         return ClubResponse.model_validate(updated)
 
     async def get_public_club(self, club_id: UUID) -> PublicClubResponse:

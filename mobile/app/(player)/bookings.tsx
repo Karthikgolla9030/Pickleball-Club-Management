@@ -59,6 +59,7 @@ export default function PlayerBookingsScreen() {
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
   // Fetch all player bookings across this club (or all clubs if not specified)
   const {
@@ -171,7 +172,7 @@ export default function PlayerBookingsScreen() {
 
   const getCourtImage = (booking: Booking, index: number) => {
     // 1. Entity-level custom image
-    if (booking.court?.photo_url) {
+    if (booking.court?.photo_url && !courtImageErrors[booking.id]) {
       return { uri: resolveMediaUrl(booking.court.photo_url) };
     }
     // 2. Platform neutral court fallback (never club banner or logo)
@@ -268,7 +269,15 @@ export default function PlayerBookingsScreen() {
         activeOpacity={0.88}
       >
         {/* Left Image Thumbnail */}
-        <Image source={courtImage} style={styles.courtThumbnail} />
+        <Image
+          source={courtImage}
+          style={styles.courtThumbnail}
+          onError={() => {
+            if (booking.id && !courtImageErrors[booking.id]) {
+              setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
+            }
+          }}
+        />
 
         {/* Details */}
         <View style={styles.pastCardDetails}>
@@ -332,7 +341,15 @@ export default function PlayerBookingsScreen() {
         onPress={() => handleCardPress(booking)}
         activeOpacity={0.88}
       >
-        <Image source={courtImage} style={styles.courtThumbnail} />
+        <Image
+          source={courtImage}
+          style={styles.courtThumbnail}
+          onError={() => {
+            if (booking.id && !courtImageErrors[booking.id]) {
+              setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
+            }
+          }}
+        />
 
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>

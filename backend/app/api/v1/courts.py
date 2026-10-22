@@ -41,6 +41,11 @@ player_courts_router = APIRouter(prefix="/clubs/{club_id}/courts", tags=["player
     summary="List active courts in club (Player-facing)",
     description="Returns active courts with informational metadata. Inactive courts are never returned.",
 )
+@player_courts_router.get(
+    "/player-courts",
+    response_model=list[PlayerCourtResponse],
+    include_in_schema=False,
+)
 async def list_player_active_courts(
     club_id: UUID,
     current_user: User | None = Depends(get_optional_current_user),

@@ -62,11 +62,26 @@ from app.schemas.club_player_membership import (
     CreateClubPlayerMembershipRequest,
     UpdateClubPlayerMembershipRequest,
 )
+from app.schemas.court import PlayerCourtResponse
 from app.services.club_membership_request_service import ClubMembershipRequestService
 from app.services.club_service import ClubService
 from app.services.player_service import PlayerService
 
 router = APIRouter(prefix="/clubs", tags=["Clubs & Memberships"])
+
+
+@router.get(
+    "/{club_id}/player-courts",
+    response_model=list[PlayerCourtResponse],
+    summary="List active courts in club (Player-facing alias)",
+    include_in_schema=False,
+)
+async def list_player_courts_in_club(
+    club_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> list[PlayerCourtResponse]:
+    from app.services.court_service import CourtService
+    return await CourtService(db).list_active_courts(club_id)
 
 
 @router.get(

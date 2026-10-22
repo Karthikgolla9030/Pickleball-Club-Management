@@ -94,9 +94,9 @@ const COURT_IMAGES = [
   require('../../assets/courts/court_5.jpg'),
 ];
 
-function getCourtThumbnail(court: Court, index: number) {
+function getCourtThumbnail(court: Court, index: number, hasError: boolean = false) {
   // 1. Entity-level custom image
-  if (court.photo_url) {
+  if (court.photo_url && !hasError) {
     return { uri: resolveMediaUrl(court.photo_url) };
   }
   // 2. Platform neutral court fallback (never club banner or logo)
@@ -259,6 +259,7 @@ export default function ClubCourtsScreen() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
   // Schedule modal state
   const [bookingModalVisible, setBookingModalVisible] = useState(false);
@@ -389,6 +390,11 @@ export default function ClubCourtsScreen() {
     setFormDescription(court.description || '');
     setFormPrice(court.price_per_hour !== null && court.price_per_hour !== undefined ? String(court.price_per_hour) : '');
     setFormPhotoUrl(court.photo_url || null);
+    setCourtImageErrors((prev) => {
+      const next = { ...prev };
+      delete next[court.id];
+      return next;
+    });
     setFormError(null);
   };
 
@@ -425,6 +431,9 @@ export default function ClubCourtsScreen() {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
         queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+        queryClient.invalidateQueries({ queryKey: ['bookings'] });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_BOOKINGS(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });
       }
       setIsCreateModalOpen(false);
       refetchAll();
@@ -470,6 +479,14 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
       queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_BOOKINGS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });
+      setCourtImageErrors((prev) => {
+        const next = { ...prev };
+        delete next[editingCourt.id];
+        return next;
+      });
       setEditingCourt(null);
       refetchAll();
     } catch (err: unknown) {
@@ -487,6 +504,8 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
       queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
       setDeactivatingCourt(null);
       refetchAll();
     } catch (err: unknown) {
@@ -502,6 +521,8 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
       queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
       refetchAll();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to reactivate court';
@@ -786,7 +807,8 @@ export default function ClubCourtsScreen() {
                   />
                 }
                 renderItem={({ item, index }) => {
-                  const thumbnailSource = getCourtThumbnail(item, index);
+                  const hasPhotoError = Boolean(courtImageErrors[item.id]);
+                  const thumbnailSource = getCourtThumbnail(item, index, hasPhotoError);
                   const locationText = getCourtLocation(item, index);
                   const surfaceText = getSurfaceLabel(item.surface_type);
                   const courtNumberText =
@@ -796,7 +818,15 @@ export default function ClubCourtsScreen() {
                     <View style={styles.courtCard}>
                       {/* Left: Thumbnail with overlaid badge */}
                       <View style={styles.thumbnailContainer}>
-                        <Image source={thumbnailSource} style={styles.thumbnail} />
+                        <Image
+                          source={thumbnailSource}
+                          style={styles.thumbnail}
+                          onError={() => {
+                            if (item.id && !hasPhotoError) {
+                              setCourtImageErrors((prev) => ({ ...prev, [item.id]: true }));
+                            }
+                          }}
+                        />
                         <View style={styles.courtBadgeOverlay}>
                           <AppText style={styles.courtBadgeText}>{courtNumberText}</AppText>
                         </View>

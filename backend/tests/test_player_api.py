@@ -740,7 +740,11 @@ async def test_29_upload_and_delete_player_profile_photo(
     assert create_resp.status_code == 201
 
     # 2. Upload photo (base64 dummy png)
-    dummy_b64 = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82").decode()
+    import io
+    from PIL import Image as PILImage
+    buf = io.BytesIO()
+    PILImage.new("RGB", (1, 1), color="red").save(buf, format="PNG")
+    dummy_b64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
     upload_resp = await async_client.post(
         "/api/v1/player/profile/photo",
         json={"image_data": dummy_b64},

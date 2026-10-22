@@ -160,15 +160,15 @@ class MediaStorageService:
         self,
         raw_bytes: bytes,
         category: str,
-        club_id: UUID,
+        club_id: UUID | None = None,
         uploaded_by_user_id: UUID | None = None,
         asset_type: str = "general",
         entity_type: str | None = None,
         entity_id: UUID | None = None,
         original_filename: str | None = None,
-    ) -> tuple[str, ClubMediaAsset]:
+    ) -> tuple[str, ClubMediaAsset | None]:
         """
-        Processes image, persists it to storage, and records in database.
+        Processes image, persists it to storage, and records in database if club-scoped.
 
         Returns:
             (public_url, media_asset_record)
@@ -192,7 +192,8 @@ class MediaStorageService:
                     s3_kwargs["aws_secret_access_key"] = self.settings.S3_SECRET_ACCESS_KEY
 
                 s3_client = boto3.client("s3", **s3_kwargs)
-                s3_key = f"{category}/{club_id}/{safe_filename}"
+                user_or_club_part = str(club_id) if club_id else (str(uploaded_by_user_id) if uploaded_by_user_id else "users")
+                s3_key = f"{category}/{user_or_club_part}/{safe_filename}"
                 s3_client.put_object(
                     Bucket=self.settings.S3_BUCKET,
                     Key=s3_key,
@@ -227,26 +228,73 @@ class MediaStorageService:
             public_url = f"{base_url}/{category}/{safe_filename}"
 
         # ── Register Media Asset in DB ─────────────────────────────
-        media_asset = ClubMediaAsset(
-            club_id=club_id,
-            uploaded_by_user_id=uploaded_by_user_id,
-            asset_type=asset_type,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            file_path=file_path,
-            public_url=public_url,
-            original_filename=original_filename,
-            mime_type=mime,
-            file_size_bytes=len(clean_bytes),
-            width=width,
-            height=height,
-        )
-
-        if self.db:
+        media_asset: ClubMediaAsset | None = None
+        if club_id and self.db:
+            media_asset = ClubMediaAsset(
+                club_id=club_id,
+                uploaded_by_user_id=uploaded_by_user_id,
+                asset_type=asset_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                file_path=file_path,
+                public_url=public_url,
+                original_filename=original_filename,
+                mime_type=mime,
+                file_size_bytes=len(clean_bytes),
+                width=width,
+                height=height,
+            )
             self.db.add(media_asset)
             await self.db.flush()
 
         return public_url, media_asset
+
+    async def delete_file_by_url(self, public_url: str | None) -> bool:
+        """
+        Removes the underlying physical file on disk or object in S3 given a public URL.
+        """
+        if not public_url or not isinstance(public_url, str):
+            return False
+
+        # S3 storage deletion
+        if self.settings.STORAGE_BACKEND.lower() == "s3" and self.settings.S3_BUCKET:
+            try:
+                import boto3
+
+                s3_kwargs: dict[str, Any] = {}
+                if self.settings.S3_REGION:
+                    s3_kwargs["region_name"] = self.settings.S3_REGION
+                if self.settings.S3_ENDPOINT_URL:
+                    s3_kwargs["endpoint_url"] = self.settings.S3_ENDPOINT_URL
+                if self.settings.S3_ACCESS_KEY_ID and self.settings.S3_SECRET_ACCESS_KEY:
+                    s3_kwargs["aws_access_key_id"] = self.settings.S3_ACCESS_KEY_ID
+                    s3_kwargs["aws_secret_access_key"] = self.settings.S3_SECRET_ACCESS_KEY
+
+                s3_client = boto3.client("s3", **s3_kwargs)
+                prefix = self.settings.S3_PUBLIC_URL_PREFIX.rstrip("/") if self.settings.S3_PUBLIC_URL_PREFIX else f"https://{self.settings.S3_BUCKET}.s3.amazonaws.com"
+                if public_url.startswith(prefix):
+                    s3_key = public_url[len(prefix):].lstrip("/")
+                    s3_client.delete_object(Bucket=self.settings.S3_BUCKET, Key=s3_key)
+                    return True
+            except Exception as e:
+                logger.warning("Failed to delete S3 object for url %s: %s", public_url, e)
+                return False
+
+        # Local storage deletion
+        base_url = self.settings.UPLOAD_BASE_URL.rstrip("/")
+        if public_url.startswith(base_url):
+            rel_path = public_url[len(base_url):].lstrip("/\\")
+            root = self._get_uploads_root()
+            target_file = root / rel_path
+            try:
+                if target_file.exists():
+                    target_file.unlink()
+                    return True
+            except Exception as e:
+                logger.warning("Failed to delete local file %s: %s", target_file, e)
+                return False
+
+        return False
 
     async def delete_asset(self, media_asset_id: UUID, club_id: UUID) -> bool:
         """
@@ -291,7 +339,7 @@ class MediaStorageService:
         res = await self.db.execute(stmt)
         asset = res.scalar_one_or_none()
         if not asset:
-            return False
+            return await self.delete_file_by_url(public_url)
 
         # Verify court references
         from app.models.court import Court

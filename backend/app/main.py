@@ -199,11 +199,21 @@ def create_app() -> FastAPI:
     from fastapi.staticfiles import StaticFiles
 
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    uploads_dir = os.path.join(backend_dir, "uploads")
-    os.makedirs(os.path.join(uploads_dir, "avatars"), exist_ok=True)
-    os.makedirs(os.path.join(uploads_dir, "logos"), exist_ok=True)
-    os.makedirs(os.path.join(uploads_dir, "cover"), exist_ok=True)
-    os.makedirs(os.path.join(uploads_dir, "courts"), exist_ok=True)
+    uploads_dir = os.path.abspath(settings.UPLOAD_DIR) if settings.UPLOAD_DIR else os.path.join(backend_dir, "uploads")
+    for category_dir in (
+        "avatars",
+        "logos",
+        "cover",
+        "courts",
+        "court-photo",
+        "tournament-banner",
+        "league-banner",
+        "event-cover",
+        "slides",
+        "lesson-image",
+        "general",
+    ):
+        os.makedirs(os.path.join(uploads_dir, category_dir), exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
     # ─── Routers ──────────────────────────────────────────────────────────────

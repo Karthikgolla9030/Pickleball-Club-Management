@@ -131,6 +131,7 @@ class BookingService:
                 surface_type=b.court.surface_type,
                 indoor_outdoor=b.court.indoor_outdoor,
                 price_per_hour=getattr(b.court, "price_per_hour", None),
+                photo_url=getattr(b.court, "photo_url", None),
             )
 
         player_info = None

@@ -619,27 +619,21 @@ export default function ClubMembersScreen() {
           </AppText>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.enrollActionBtn}
-          onPress={() => {
-            blurActiveElement();
-            if (activeTab === 'staff') {
-              if (canManageRoles) {
-                setAddStaffModalVisible(true);
-              } else {
-                Alert.alert('Permission Denied', 'Only club owners can add new staff members.');
-              }
-            } else {
+        {activeTab === 'players' && (
+          <TouchableOpacity
+            style={styles.enrollActionBtn}
+            onPress={() => {
+              blurActiveElement();
               setEnrollModalVisible(true);
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <Plus size={17} color="#FFFFFF" strokeWidth={2.4} />
-          <AppText style={styles.enrollActionBtnText}>
-            {activeTab === 'staff' ? 'Staff' : 'Enroll'}
-          </AppText>
-        </TouchableOpacity>
+            }}
+            activeOpacity={0.8}
+            accessibilityLabel="Enroll Player"
+            accessibilityRole="button"
+          >
+            <Plus size={17} color="#FFFFFF" strokeWidth={2.4} />
+            <AppText style={styles.enrollActionBtnText}>Enroll</AppText>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* 3. Section Controls (Players vs Staff) */}
@@ -771,6 +765,8 @@ export default function ClubMembersScreen() {
                   setAddStaffModalVisible(true);
                 }}
                 activeOpacity={0.8}
+                accessibilityLabel="Add Staff"
+                accessibilityRole="button"
               >
                 <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
                 <AppText style={styles.addStaffBtnText}>Staff</AppText>
@@ -1788,6 +1784,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     justifyContent: 'center',
+    flexShrink: 0,
   },
   addStaffBtnText: {
     color: '#FFFFFF',

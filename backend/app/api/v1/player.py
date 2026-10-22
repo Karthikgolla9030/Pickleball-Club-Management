@@ -145,9 +145,8 @@ async def upload_profile_photo(
     db: AsyncSession = Depends(get_db),
 ) -> PlayerProfileResponse:
     import base64
-    import os
-    import time
     from fastapi import HTTPException
+    from app.services.media_storage_service import MediaStorageService
 
     data_str = payload.image_data.strip()
     if not data_str:
@@ -190,31 +189,34 @@ async def upload_profile_photo(
             detail="Invalid base64 image data",
         )
 
-    # 5MB size limit
-    if len(image_bytes) > 5 * 1024 * 1024:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Image exceeds 5MB limit",
-        )
+    # Check existing profile photo for clean replacement
+    player_service = PlayerService(db)
+    current_profile = await player_service.get_profile(current_user.id)
+    old_photo_url = current_profile.profile_image_url if current_profile else None
 
-    backend_dir = os.path.dirname(
-        os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
+    storage = MediaStorageService(db)
+    public_url, _ = await storage.store_image(
+        raw_bytes=image_bytes,
+        category="avatars",
+        club_id=None,
+        uploaded_by_user_id=current_user.id,
+        asset_type="avatar",
+        original_filename=f"{current_user.id}.{ext}",
     )
-    uploads_dir = os.path.join(backend_dir, "uploads", "avatars")
-    os.makedirs(uploads_dir, exist_ok=True)
 
-    filename = f"{current_user.id}_{int(time.time())}.{ext}"
-    filepath = os.path.join(uploads_dir, filename)
-    with open(filepath, "wb") as f:
-        f.write(image_bytes)
-
-    relative_url = f"/uploads/avatars/{filename}"
-    return await PlayerService(db).update_profile(
+    updated_profile = await player_service.update_profile(
         user_id=current_user.id,
-        payload=PlayerProfileUpdate(profile_image_url=relative_url),
+        payload=PlayerProfileUpdate(profile_image_url=public_url),
     )
+
+    # Clean up previous avatar file if replaced
+    if old_photo_url and old_photo_url != public_url:
+        try:
+            await storage.delete_file_by_url(old_photo_url)
+        except Exception:
+            pass
+
+    return updated_profile
 
 
 @router.delete(
@@ -231,7 +233,18 @@ async def delete_profile_photo(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlayerProfileResponse:
-    return await PlayerService(db).update_profile(
+    player_service = PlayerService(db)
+    current_profile = await player_service.get_profile(current_user.id)
+    old_photo_url = current_profile.profile_image_url if current_profile else None
+
+    if old_photo_url:
+        try:
+            from app.services.media_storage_service import MediaStorageService
+            await MediaStorageService(db).delete_file_by_url(old_photo_url)
+        except Exception:
+            pass
+
+    return await player_service.update_profile(
         user_id=current_user.id,
         payload=PlayerProfileUpdate(profile_image_url=""),
     )
