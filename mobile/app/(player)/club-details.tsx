@@ -520,6 +520,7 @@ export default function PublicClubDetailScreen() {
                       {/* Court Thumbnail */}
                       <View style={styles.courtThumbWrapper}>
                         <Image
+                          key={`${court.id}-${court.photo_url || 'default'}-${hasPhoto ? 'ok' : 'fallback'}`}
                           source={courtImageUri ? { uri: courtImageUri } : courtFallback}
                           style={styles.courtThumbImage}
                           resizeMode="cover"

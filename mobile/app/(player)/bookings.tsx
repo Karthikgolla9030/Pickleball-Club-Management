@@ -270,6 +270,7 @@ export default function PlayerBookingsScreen() {
       >
         {/* Left Image Thumbnail */}
         <Image
+          key={`${booking.id}-${booking.court?.photo_url || 'default'}`}
           source={courtImage}
           style={styles.courtThumbnail}
           onError={() => {
@@ -342,6 +343,7 @@ export default function PlayerBookingsScreen() {
         activeOpacity={0.88}
       >
         <Image
+          key={`${booking.id}-${booking.court?.photo_url || 'default'}`}
           source={courtImage}
           style={styles.courtThumbnail}
           onError={() => {

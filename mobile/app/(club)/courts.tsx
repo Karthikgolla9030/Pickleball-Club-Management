@@ -353,6 +353,13 @@ export default function ClubCourtsScreen() {
           editingCourt ? editingCourt.id : undefined
         );
         setFormPhotoUrl(uploadRes.public_url);
+        if (editingCourt?.id) {
+          setCourtImageErrors((prev) => {
+            const next = { ...prev };
+            delete next[editingCourt.id];
+            return next;
+          });
+        }
       } catch (err: unknown) {
         // Keep previous image reference on failure
         const msg = err instanceof Error ? err.message : 'Photo upload failed';
@@ -425,8 +432,27 @@ export default function ClubCourtsScreen() {
         price_per_hour: parsedPrice,
         photo_url: formPhotoUrl,
       };
-      await createCourt(payload);
-      if (clubId) {
+      const created = await createCourt(payload);
+      if (clubId && created) {
+        queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
+          if (!old) return [created];
+          if (old.some((c) => c.id === created.id)) {
+            return old.map((c) => (c.id === created.id ? created : c));
+          }
+          return [...old, created];
+        });
+        queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
+          if (!old) return [created];
+          if (old.some((c) => c.id === created.id)) {
+            return old.map((c) => (c.id === created.id ? created : c));
+          }
+          return [...old, created];
+        });
+        setCourtImageErrors((prev) => {
+          const next = { ...prev };
+          delete next[created.id];
+          return next;
+        });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
         queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
@@ -436,7 +462,7 @@ export default function ClubCourtsScreen() {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });
       }
       setIsCreateModalOpen(false);
-      refetchAll();
+      await refetchAll();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create court';
       setFormError(msg);
@@ -473,7 +499,21 @@ export default function ClubCourtsScreen() {
         price_per_hour: parsedPrice,
         photo_url: formPhotoUrl,
       };
-      await courtApi.updateCourt(clubId, editingCourt.id, payload);
+      const updated = await courtApi.updateCourt(clubId, editingCourt.id, payload);
+      queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
+        if (!old) return old;
+        return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+      });
+      queryClient.setQueryData(QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id), updated);
+      queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
+        if (!old) return old;
+        return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+      });
+      setCourtImageErrors((prev) => {
+        const next = { ...prev };
+        delete next[editingCourt.id];
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
@@ -482,13 +522,8 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_BOOKINGS(clubId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });
-      setCourtImageErrors((prev) => {
-        const next = { ...prev };
-        delete next[editingCourt.id];
-        return next;
-      });
       setEditingCourt(null);
-      refetchAll();
+      await refetchAll();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to update court';
       setFormError(msg);
@@ -694,6 +729,7 @@ export default function ClubCourtsScreen() {
               <FlatList
                 data={displayedCourts}
                 keyExtractor={(item) => item.id}
+                extraData={{ courts: allCourts, courtImageErrors }}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.listContent}
                 refreshControl={
@@ -819,6 +855,7 @@ export default function ClubCourtsScreen() {
                       {/* Left: Thumbnail with overlaid badge */}
                       <View style={styles.thumbnailContainer}>
                         <Image
+                          key={`${item.id}-${item.photo_url || 'none'}-${hasPhotoError ? 'err' : 'ok'}`}
                           source={thumbnailSource}
                           style={styles.thumbnail}
                           onError={() => {
@@ -1224,6 +1261,7 @@ export default function ClubCourtsScreen() {
             {formPhotoUrl ? (
               <View style={styles.photoPreviewWrapper}>
                 <Image
+                  key={formPhotoUrl || 'preview'}
                   source={{ uri: resolveMediaUrl(formPhotoUrl) }}
                   style={styles.photoPreviewImage}
                   resizeMode="cover"
