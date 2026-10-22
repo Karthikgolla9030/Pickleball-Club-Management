@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Aught2 Pickleball — Club Help & Support Screen
  *
  * Standalone screen reachable from:
@@ -56,15 +56,12 @@ const FAQS = [
     id: '5',
     question: 'How do I export booking or payment reports?',
     answer:
-      'Contact support at support@aught2.com to request data exports. In-app report export is on the product roadmap.',
+      'Contact platform support to request custom data exports. In-app report export is on the product roadmap.',
   },
 ];
 
-const CONTACT = {
-  email: 'support@aught2.com',
-  phone: '+1 (800) 555-0199',
-  chat: 'Live chat available Mon–Fri, 9 AM – 6 PM IST',
-};
+const supportEmail = process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || null;
+const supportPhone = process.env.EXPO_PUBLIC_SUPPORT_PHONE?.trim() || null;
 
 export default function ClubHelpSupportScreen() {
   const router = useRouter();
@@ -124,47 +121,71 @@ export default function ClubHelpSupportScreen() {
         ))}
 
         {/* Contact */}
-        <AppText style={styles.sectionLabel}>Contact Us</AppText>
+        <AppText style={styles.sectionLabel}>Contact Support</AppText>
 
-        <TouchableOpacity
-          style={styles.contactRow}
-          onPress={() => Linking.openURL(`mailto:${CONTACT.email}`)}
-          activeOpacity={0.75}
-          accessibilityLabel={`Email support at ${CONTACT.email}`}
-          accessibilityRole="button"
-        >
-          <View style={styles.contactIcon}>
-            <Mail size={18} color="#176B57" strokeWidth={2} />
+        {supportEmail ? (
+          <TouchableOpacity
+            style={styles.contactRow}
+            onPress={() => Linking.openURL(`mailto:${supportEmail}`)}
+            activeOpacity={0.75}
+            accessibilityLabel={`Email support at ${supportEmail}`}
+            accessibilityRole="button"
+          >
+            <View style={styles.contactIcon}>
+              <Mail size={18} color="#176B57" strokeWidth={2} />
+            </View>
+            <View style={styles.contactText}>
+              <AppText style={styles.contactLabel}>Email</AppText>
+              <AppText style={styles.contactValue}>{supportEmail}</AppText>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.contactRow}>
+            <View style={styles.contactIcon}>
+              <Mail size={18} color="#176B57" strokeWidth={2} />
+            </View>
+            <View style={styles.contactText}>
+              <AppText style={styles.contactLabel}>Email Support</AppText>
+              <AppText style={styles.contactValue}>Contact platform support via your administration portal</AppText>
+            </View>
           </View>
-          <View style={styles.contactText}>
-            <AppText style={styles.contactLabel}>Email</AppText>
-            <AppText style={styles.contactValue}>{CONTACT.email}</AppText>
-          </View>
-        </TouchableOpacity>
+        )}
 
-        <TouchableOpacity
-          style={styles.contactRow}
-          onPress={() => Linking.openURL(`tel:${CONTACT.phone.replace(/[^+\d]/g, '')}`)}
-          activeOpacity={0.75}
-          accessibilityLabel={`Call support at ${CONTACT.phone}`}
-          accessibilityRole="button"
-        >
-          <View style={styles.contactIcon}>
-            <Phone size={18} color="#176B57" strokeWidth={2} />
+        {supportPhone ? (
+          <TouchableOpacity
+            style={styles.contactRow}
+            onPress={() => Linking.openURL(`tel:${supportPhone.replace(/[^+\d]/g, '')}`)}
+            activeOpacity={0.75}
+            accessibilityLabel={`Call support at ${supportPhone}`}
+            accessibilityRole="button"
+          >
+            <View style={styles.contactIcon}>
+              <Phone size={18} color="#176B57" strokeWidth={2} />
+            </View>
+            <View style={styles.contactText}>
+              <AppText style={styles.contactLabel}>Phone</AppText>
+              <AppText style={styles.contactValue}>{supportPhone}</AppText>
+            </View>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.contactRow}>
+            <View style={styles.contactIcon}>
+              <Phone size={18} color="#176B57" strokeWidth={2} />
+            </View>
+            <View style={styles.contactText}>
+              <AppText style={styles.contactLabel}>Platform Support</AppText>
+              <AppText style={styles.contactValue}>Support hours: Mon–Fri, 9 AM – 6 PM</AppText>
+            </View>
           </View>
-          <View style={styles.contactText}>
-            <AppText style={styles.contactLabel}>Phone</AppText>
-            <AppText style={styles.contactValue}>{CONTACT.phone}</AppText>
-          </View>
-        </TouchableOpacity>
+        )}
 
         <View style={styles.contactRow}>
           <View style={styles.contactIcon}>
             <MessageCircle size={18} color="#176B57" strokeWidth={2} />
           </View>
           <View style={styles.contactText}>
-            <AppText style={styles.contactLabel}>Live Chat</AppText>
-            <AppText style={styles.contactValue}>{CONTACT.chat}</AppText>
+            <AppText style={styles.contactLabel}>Club Operations</AppText>
+            <AppText style={styles.contactValue}>Facility management support</AppText>
           </View>
         </View>
       </ScrollView>

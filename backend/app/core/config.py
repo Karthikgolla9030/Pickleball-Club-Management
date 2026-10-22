@@ -177,6 +177,23 @@ class Settings(BaseSettings):
                     raise ValueError(
                         "Production configuration error: CORS_ORIGINS must not contain wildcard '*' in production."
                     )
+
+            # 6. Durable Storage Validation
+            if self.STORAGE_BACKEND.lower() == "s3":
+                if not self.S3_BUCKET:
+                    raise ValueError(
+                        "Production configuration error: S3_BUCKET is required when STORAGE_BACKEND is 's3'."
+                    )
+            elif self.STORAGE_BACKEND.lower() == "local":
+                if not self.UPLOAD_DIR:
+                    import warnings
+                    warnings.warn(
+                        "Production warning: STORAGE_BACKEND is 'local' with default ephemeral path. "
+                        "Uploaded media will not survive container restarts unless UPLOAD_DIR is mounted to persistent storage "
+                        "or STORAGE_BACKEND is set to 's3' with configured credentials.",
+                        UserWarning,
+                        stacklevel=2,
+                    )
         return self
 
     @property

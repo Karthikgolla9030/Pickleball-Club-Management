@@ -418,8 +418,15 @@ class ClubService:
             or data_str.startswith("https://")
             or data_str.startswith("/uploads/")
         ):
+            old_logo_url = club.logo_url
             updated = await self.club_repo.update(club, logo_url=data_str)
             await self.db.commit()
+            if old_logo_url and old_logo_url != data_str:
+                try:
+                    from app.services.media_storage_service import MediaStorageService
+                    await MediaStorageService(self.db).cleanup_unreferenced_by_url(old_logo_url, club.id)
+                except Exception:
+                    pass
             return ClubResponse.model_validate(updated)
 
         ext = "png"

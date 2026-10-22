@@ -349,4 +349,15 @@ class MediaStorageService:
         if court_check.scalars().first():
             return False
 
+        # Verify club branding references
+        from app.models.club import Club
+        club_check = await self.db.execute(
+            select(Club.id).where(
+                ((Club.logo_url == public_url) | (Club.cover_image_url == public_url)),
+                Club.id == club_id,
+            )
+        )
+        if club_check.scalars().first():
+            return False
+
         return await self.delete_asset(asset.id, club_id)

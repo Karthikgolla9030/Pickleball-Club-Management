@@ -444,7 +444,10 @@ export default function PlayerBookingsScreen() {
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}
-            onRefresh={refetchBookings}
+            onRefresh={() => {
+              setCourtImageErrors({});
+              refetchBookings();
+            }}
             colors={['#114D3F']}
             tintColor="#114D3F"
           />

@@ -101,6 +101,7 @@ export default function PublicClubDetailScreen() {
 
   const clubId = Array.isArray(id) ? id[0] : id;
   const [logoError, setLogoError] = useState(false);
+  const [bannerError, setBannerError] = useState(false);
   const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
   // 1. Fetch public club data
@@ -119,6 +120,10 @@ export default function PublicClubDetailScreen() {
   useEffect(() => {
     setLogoError(false);
   }, [club?.logo_url]);
+
+  useEffect(() => {
+    setBannerError(false);
+  }, [club?.cover_image_url]);
 
   // 2. Fetch active courts for this club (canonical PLAYER_COURTS query key)
   const {
@@ -285,7 +290,7 @@ export default function PublicClubDetailScreen() {
   const isPending = existingRequest?.status === 'pending';
   const logoUri = club.logo_url ? resolveMediaUrl(club.logo_url) : null;
   const bannerUri = club.cover_image_url ? resolveMediaUrl(club.cover_image_url) : null;
-  const bannerSource = bannerUri ? { uri: bannerUri } : DEFAULT_BANNER;
+  const bannerSource = bannerUri && !bannerError ? { uri: bannerUri } : DEFAULT_BANNER;
 
   const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Tirupati, AP';
   const hoursText = formatOperatingHours(club.opening_time, club.closing_time);
@@ -340,6 +345,9 @@ export default function PublicClubDetailScreen() {
           <RefreshControl
             refreshing={isRefetchingClub}
             onRefresh={() => {
+              setLogoError(false);
+              setBannerError(false);
+              setCourtImageErrors({});
               refetchClub();
               refetchCourts();
               refetchPlans();
@@ -357,6 +365,7 @@ export default function PublicClubDetailScreen() {
               source={bannerSource}
               style={styles.heroBackgroundImage}
               resizeMode="cover"
+              onError={() => setBannerError(true)}
             />
             {/* Dark-Green Gradient Overlay: photo clearly visible above, dark green below */}
             <View style={styles.heroOverlay} />

@@ -214,7 +214,7 @@ class ClubApplicationService:
         message: str
         if app.status == ClubApplicationStatus.PENDING:
             message = (
-                "Your application is awaiting review by the Aught2 Pickleball platform team. "
+                "Your application is awaiting review by the Platform Administration Team. "
                 "You will be able to manage your club after your application is approved."
             )
         elif app.status == ClubApplicationStatus.APPROVED:

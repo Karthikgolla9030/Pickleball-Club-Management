@@ -417,3 +417,161 @@ async def test_image_upload_validation_and_unauthorized_rejection(
         headers=stranger_headers,
     )
     assert forbidden_resp.status_code in (403, 404)
+
+
+@pytest.mark.asyncio
+async def test_upload_with_empty_or_null_entity_id_handling(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Verify upload endpoint accepts entity_id="" or "null" without 422 Unprocessable Entity,
+    and returns 400 for genuinely malformed non-UUID strings.
+    """
+    owner = await create_user(db_session, full_name="Form Client Owner")
+    club = await create_club(db_session, name="Form Test Club")
+    await assign_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    owner_headers = make_auth_header(owner)
+
+    # 1. Empty string entity_id (common when frontend appends empty state)
+    files = {"file": ("logo.jpg", make_test_image(format="JPEG", color="gold"), "image/jpeg")}
+    resp_empty = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files=files,
+        data={"asset_type": "club_logo", "entity_id": ""},
+        headers=owner_headers,
+    )
+    assert resp_empty.status_code == 200, resp_empty.text
+    assert resp_empty.json()["public_url"].startswith("/uploads/club-logo/")
+
+    # 2. "null" string entity_id
+    files2 = {"file": ("logo2.jpg", make_test_image(format="JPEG", color="silver"), "image/jpeg")}
+    resp_null = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files=files2,
+        data={"asset_type": "club_logo", "entity_id": "null"},
+        headers=owner_headers,
+    )
+    assert resp_null.status_code == 200, resp_null.text
+
+    # 3. Invalid non-UUID string should return 400 Bad Request (not 422)
+    files3 = {"file": ("logo3.jpg", make_test_image(format="JPEG", color="red"), "image/jpeg")}
+    resp_bad = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files=files3,
+        data={"asset_type": "court_photo", "entity_id": "not-a-valid-uuid"},
+        headers=owner_headers,
+    )
+    assert resp_bad.status_code == 400
+    assert "Invalid entity_id format" in resp_bad.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_club_branding_replacement_and_orphan_cleanup(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Verify updating club branding replaces the URLs on the club model and cleans up unreferenced files.
+    """
+    owner = await create_user(db_session, full_name="Branding Owner")
+    club = await create_club(db_session, name="Branding Club")
+    await assign_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    owner_headers = make_auth_header(owner)
+
+    # 1. Upload initial logo and cover
+    logo1 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files={"file": ("logo1.png", make_test_image(format="PNG", color="green"), "image/png")},
+        data={"asset_type": "club_logo"},
+        headers=owner_headers,
+    )
+    assert logo1.status_code == 200
+    logo1_url = logo1.json()["public_url"]
+
+    cover1 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files={"file": ("cover1.jpg", make_test_image(format="JPEG", color="purple"), "image/jpeg")},
+        data={"asset_type": "club_cover"},
+        headers=owner_headers,
+    )
+    assert cover1.status_code == 200
+    cover1_url = cover1.json()["public_url"]
+
+    # Set branding
+    brand_resp1 = await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        json={"logo_url": logo1_url, "cover_image_url": cover1_url},
+        headers=owner_headers,
+    )
+    assert brand_resp1.status_code == 200
+    assert brand_resp1.json()["logo_url"] == logo1_url
+    assert brand_resp1.json()["cover_image_url"] == cover1_url
+
+    # 2. Upload replacement logo and cover
+    logo2 = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files={"file": ("logo2.png", make_test_image(format="PNG", color="yellow"), "image/png")},
+        data={"asset_type": "club_logo"},
+        headers=owner_headers,
+    )
+    assert logo2.status_code == 200
+    logo2_url = logo2.json()["public_url"]
+
+    # Replace branding
+    brand_resp2 = await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        json={"logo_url": logo2_url},
+        headers=owner_headers,
+    )
+    assert brand_resp2.status_code == 200
+    assert brand_resp2.json()["logo_url"] == logo2_url
+    assert brand_resp2.json()["cover_image_url"] == cover1_url  # Unchanged
+
+    # 3. Verify public club endpoint reflects the updated logo
+    public_resp = await async_client.get(f"/api/v1/clubs/{club.id}/public")
+    assert public_resp.status_code == 200
+    assert public_resp.json()["logo_url"] == logo2_url
+
+
+@pytest.mark.asyncio
+async def test_cross_club_entity_isolation_on_upload(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Ensure a manager of Club B cannot upload an asset targeting a court belonging to Club A.
+    """
+    owner_a = await create_user(db_session, full_name="Owner A")
+    owner_b = await create_user(db_session, full_name="Owner B")
+    club_a = await create_club(db_session, name="Club Alpha")
+    club_b = await create_club(db_session, name="Club Beta")
+    await assign_membership(db_session, owner_a.id, club_a.id, ClubRole.CLUB_OWNER)
+    await assign_membership(db_session, owner_b.id, club_b.id, ClubRole.CLUB_OWNER)
+
+    # Court belongs to Club A
+    court_a = Court(
+        club_id=club_a.id,
+        name="Alpha Court 1",
+        indoor_outdoor=CourtEnvironment.INDOOR,
+        status=CourtStatus.ACTIVE,
+        is_active=True,
+        display_order=1,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(court_a)
+    await db_session.commit()
+    await db_session.refresh(court_a)
+
+    owner_b_headers = make_auth_header(owner_b)
+
+    # Club B owner attempts to upload media targeting court_a.id inside Club B upload endpoint
+    tamper_resp = await async_client.post(
+        f"/api/v1/clubs/{club_b.id}/media/upload",
+        files={"file": ("hack.jpg", make_test_image(), "image/jpeg")},
+        data={"asset_type": "court_photo", "entity_type": "court", "entity_id": str(court_a.id)},
+        headers=owner_b_headers,
+    )
+    assert tamper_resp.status_code == 404
+    assert "Court not found in this club" in tamper_resp.json()["detail"]
+

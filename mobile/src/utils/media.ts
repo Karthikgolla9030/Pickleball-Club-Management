@@ -27,7 +27,11 @@ export function resolveMediaUrl(url: string | null | undefined, fallback: string
   }
 
   // Relative upload path, e.g. "/uploads/logos/xyz.png"
-  const base = API_ENDPOINTS.BASE?.replace(/\/+$/, '') || '';
+  let base = API_ENDPOINTS.BASE?.replace(/\/+$/, '') || '';
+  if (!base && typeof window === 'undefined') {
+    // Native mobile fallback when base is unset in environment
+    base = 'https://pickleball-club-management.onrender.com';
+  }
   if (trimmed.startsWith('/')) {
     return `${base}${trimmed}`;
   }
@@ -51,7 +55,11 @@ export async function prepareImageBlobForUpload(
 
   return new Promise((resolve, reject) => {
     const img = new (window as any).Image();
-    img.crossOrigin = 'anonymous';
+    // Only set crossOrigin on remote HTTP/HTTPS URLs. Setting crossOrigin on blob: or data: URLs
+    // triggers browser CORS/taint errors in Chromium and WebKit.
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       let width = img.naturalWidth || img.width;
       let height = img.naturalHeight || img.height;
@@ -77,8 +85,12 @@ export async function prepareImageBlobForUpload(
       }
 
       const isPng = mimeType.toLowerCase().includes('png');
-      const outputMime = isPng ? 'image/png' : 'image/jpeg';
-      if (!isPng) {
+      const isWebp = mimeType.toLowerCase().includes('webp');
+      let outputMime = 'image/jpeg';
+      if (isPng) outputMime = 'image/png';
+      else if (isWebp) outputMime = 'image/webp';
+
+      if (!isPng && !isWebp) {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
       }

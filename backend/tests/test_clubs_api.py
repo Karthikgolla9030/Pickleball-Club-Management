@@ -854,8 +854,9 @@ async def test_34_club_owner_can_upload_logo(
 async def test_35_authenticated_user_can_create_club(
     async_client: AsyncClient, db_session: AsyncSession
 ):
-    """35. Authenticated user can create a club and receives club_owner role."""
-    user = await create_user(db_session, email="club_creator@test.local")
+    """35. Platform owner can create a club; unauthorized user is blocked with 403."""
+    unauthorized_user = await create_user(db_session, email="unauthorized_creator@test.local")
+    admin_user = await create_user(db_session, email="platform.owner@pickleball.com")
     await db_session.commit()
 
     payload = {
@@ -866,10 +867,20 @@ async def test_35_authenticated_user_can_create_club(
         "state": "FL",
         "country": "United States",
     }
+    # 1. Non-platform owner receives 403 Forbidden
+    resp_unauthorized = await async_client.post(
+        "/api/v1/clubs",
+        json=payload,
+        headers=make_auth_header(unauthorized_user.id),
+    )
+    assert resp_unauthorized.status_code == 403
+    assert "platform owner" in resp_unauthorized.json()["detail"].lower()
+
+    # 2. Authorized platform administrator successfully creates club and receives 201 Created
     resp = await async_client.post(
         "/api/v1/clubs",
         json=payload,
-        headers=make_auth_header(user.id),
+        headers=make_auth_header(admin_user.id),
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -884,7 +895,7 @@ async def test_35_authenticated_user_can_create_club(
     # Verify club appears in user's clubs list
     list_resp = await async_client.get(
         "/api/v1/clubs",
-        headers=make_auth_header(user.id),
+        headers=make_auth_header(admin_user.id),
     )
     assert list_resp.status_code == 200
     clubs = list_resp.json()
@@ -924,15 +935,14 @@ async def test_38_duplicate_club_slug_is_rejected(
     async_client: AsyncClient, db_session: AsyncSession
 ):
     """38. Club creation with an already taken slug returns 400 Bad Request."""
-    user1 = await create_user(db_session, email="owner1_slug@test.local")
-    user2 = await create_user(db_session, email="owner2_slug@test.local")
+    admin_user = await create_user(db_session, email="admin@pickleball.com")
     await create_club(db_session, name="Existing Club", slug="existing-slug")
     await db_session.commit()
 
     resp = await async_client.post(
         "/api/v1/clubs",
         json={"name": "Another Club", "slug": "existing-slug"},
-        headers=make_auth_header(user2.id),
+        headers=make_auth_header(admin_user.id),
     )
     assert resp.status_code == 400
     assert "already exists" in resp.json()["detail"].lower()
@@ -943,13 +953,13 @@ async def test_39_club_creation_auto_generates_slug_when_omitted(
     async_client: AsyncClient, db_session: AsyncSession
 ):
     """39. Omitting slug auto-generates a clean URL slug from club name."""
-    user = await create_user(db_session, email="autoslug_user@test.local")
+    admin = await create_user(db_session, email="platform@pickleball.com")
     await db_session.commit()
 
     resp = await async_client.post(
         "/api/v1/clubs",
         json={"name": "Lone Star Pickleball & Recreation"},
-        headers=make_auth_header(user.id),
+        headers=make_auth_header(admin.id),
     )
     assert resp.status_code == 201
     data = resp.json()
@@ -961,38 +971,38 @@ async def test_40_created_club_owner_cannot_access_unowned_club(
     async_client: AsyncClient, db_session: AsyncSession
 ):
     """40. Creator of Club A receives owner permissions for Club A ONLY; Club B is isolated."""
-    user_a = await create_user(db_session, email="creator_a@test.local")
-    user_b = await create_user(db_session, email="creator_b@test.local")
+    admin_a = await create_user(db_session, email="platform.owner@pickleball.com")
+    admin_b = await create_user(db_session, email="admin@pickleball.com")
     await db_session.commit()
 
-    # User A creates Club A
+    # Admin A creates Club A
     resp_a = await async_client.post(
         "/api/v1/clubs",
         json={"name": "Alpha Club", "slug": "alpha-club"},
-        headers=make_auth_header(user_a.id),
+        headers=make_auth_header(admin_a.id),
     )
     assert resp_a.status_code == 201
     club_a_id = resp_a.json()["id"]
 
-    # User B creates Club B
+    # Admin B creates Club B
     resp_b = await async_client.post(
         "/api/v1/clubs",
         json={"name": "Beta Club", "slug": "beta-club"},
-        headers=make_auth_header(user_b.id),
+        headers=make_auth_header(admin_b.id),
     )
     assert resp_b.status_code == 201
     club_b_id = resp_b.json()["id"]
 
-    # User A cannot access Club B private endpoints (returns 403)
+    # Admin A cannot access Club B private endpoints (returns 403)
     resp_cross_details = await async_client.get(
         f"/api/v1/clubs/{club_b_id}",
-        headers=make_auth_header(user_a.id),
+        headers=make_auth_header(admin_a.id),
     )
     assert resp_cross_details.status_code == 403
 
     resp_cross_members = await async_client.get(
         f"/api/v1/clubs/{club_b_id}/members",
-        headers=make_auth_header(user_a.id),
+        headers=make_auth_header(admin_a.id),
     )
     assert resp_cross_members.status_code == 403
 

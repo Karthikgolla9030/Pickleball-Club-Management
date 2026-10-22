@@ -280,6 +280,11 @@ export default function ClubCourtsScreen() {
     reorderCourts,
   } = useClubCourts(clubId);
 
+  const handleRefresh = async () => {
+    setCourtImageErrors({});
+    await refetchAll();
+  };
+
   // Computed live statistics
   const totalCount = allCourts.length;
   const activeCount = useMemo(() => allCourts.filter((c) => c.is_active).length, [allCourts]);
@@ -735,7 +740,7 @@ export default function ClubCourtsScreen() {
                 refreshControl={
                   <RefreshControl
                     refreshing={isRefetching}
-                    onRefresh={refetchAll}
+                    onRefresh={handleRefresh}
                     tintColor={Colors.brand.primary}
                   />
                 }

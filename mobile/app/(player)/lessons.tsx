@@ -640,7 +640,7 @@ export default function PlayerLessonsScreen() {
                 <AppText style={styles.emptyTitle}>No Lessons Available</AppText>
                 <AppText style={styles.emptyDescription}>
                   There are no published coaching sessions scheduled right now at{' '}
-                  {clubName || 'Aught2 Downtown'}. Check back soon or pull to refresh.
+                  {clubName || 'this club'}. Check back soon or pull to refresh.
                 </AppText>
                 <TouchableOpacity
                   style={styles.refreshButton}

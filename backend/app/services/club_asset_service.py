@@ -78,6 +78,8 @@ class ClubAssetService:
                 detail="Club not found",
             )
 
+        old_logo = club.logo_url
+        old_cover = club.cover_image_url
         update_dict = payload.model_dump(exclude_unset=True)
         if "logo_url" in update_dict:
             club.logo_url = update_dict["logo_url"]
@@ -86,6 +88,18 @@ class ClubAssetService:
 
         await self.db.commit()
         await self.db.refresh(club)
+
+        # Safely clean up orphaned media files on replacement
+        if old_logo and "logo_url" in update_dict and old_logo != club.logo_url:
+            try:
+                await self.storage.cleanup_unreferenced_by_url(old_logo, club.id)
+            except Exception:
+                pass
+        if old_cover and "cover_image_url" in update_dict and old_cover != club.cover_image_url:
+            try:
+                await self.storage.cleanup_unreferenced_by_url(old_cover, club.id)
+            except Exception:
+                pass
 
         return ClubBrandingResponse(
             club_id=club.id,
@@ -232,8 +246,9 @@ class ClubAssetService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found")
 
         # Verify entity belongs to this club if specified
-        if entity_id and entity_type:
-            await self._verify_entity_ownership(club_id, entity_type, entity_id)
+        effective_entity_type = entity_type or asset_type
+        if entity_id:
+            await self._verify_entity_ownership(club_id, effective_entity_type, entity_id)
 
         raw_bytes = await file.read()
         category = asset_type.replace("_", "-")
@@ -319,6 +334,12 @@ class ClubAssetService:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Lesson type not found in this club",
+                )
+        elif clean_type in ("club", "club_logo", "club_cover", "logo", "cover", "branding"):
+            if entity_id != club_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Club entity ID mismatch",
                 )
 
     # ─── Entity Image Management ──────────────────────────────────────────────

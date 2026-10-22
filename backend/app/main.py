@@ -115,7 +115,7 @@ async def _ensure_platform_admin_exists() -> None:
                 admin = User(
                     email=primary_email,
                     hashed_password=hash_password(one_time_password),
-                    full_name="Aught2 Platform Administrator",
+                    full_name="Platform Administrator",
                     is_active=True,
                     is_verified=True,
                 )
@@ -167,7 +167,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
-        description="Aught2 Pickleball Club & Facility Management Platform API",
+        description="Pickleball Club & Facility Management Platform API",
         lifespan=lifespan,
         # Disable docs in production
         docs_url="/docs" if not settings.is_production else None,

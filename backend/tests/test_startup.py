@@ -24,7 +24,7 @@ def client():
 def test_app_starts_successfully():
     """Test 1: The FastAPI application can be created without errors."""
     assert app is not None
-    assert app.title == "Aught2 Pickleball API"
+    assert app.title == "Pickleball API"
 
 
 def test_health_endpoint(client: TestClient):

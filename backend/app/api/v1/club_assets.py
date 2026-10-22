@@ -110,7 +110,7 @@ async def upload_club_media(
     file: UploadFile = File(...),
     asset_type: str = Form(..., description="club_logo, club_cover, carousel_slide, tournament_banner, league_banner, event_cover, court_photo, lesson_image"),
     entity_type: str | None = Form(None),
-    entity_id: UUID | None = Form(None),
+    entity_id: str | None = Form(None),
     current_user: User = Depends(get_current_active_user),
     membership: ClubMembership = Depends(get_club_membership),
     db: AsyncSession = Depends(get_db),
@@ -118,6 +118,19 @@ async def upload_club_media(
     """
     Validate permissions based on asset type, then store and register image.
     """
+    # Parse entity_id safely from multipart form-data (handling empty string or 'null')
+    parsed_entity_id: UUID | None = None
+    if entity_id is not None:
+        clean_eid = entity_id.strip()
+        if clean_eid and clean_eid.lower() not in ("null", "undefined", "none", ""):
+            try:
+                parsed_entity_id = UUID(clean_eid)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid entity_id format: '{entity_id}' is not a valid UUID",
+                )
+
     # Enforce role-appropriate permissions for each asset type
     clean_asset_type = asset_type.lower().strip()
     required_permission = Permission.MANAGE_CLUB
@@ -148,7 +161,7 @@ async def upload_club_media(
         file=file,
         asset_type=clean_asset_type,
         entity_type=entity_type,
-        entity_id=entity_id,
+        entity_id=parsed_entity_id,
     )
 
 
