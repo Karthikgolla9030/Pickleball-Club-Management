@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { Colors, Dimensions, Radius, Shadows, Spacing, Typography } from '@/theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'platformPrimary';
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 export interface ButtonProps {
@@ -86,7 +86,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           color={
-            variant === 'primary'
+            variant === 'primary' || variant === 'platformPrimary'
               ? Colors.text.inverse
               : variant === 'danger'
               ? Colors.status.error
@@ -189,6 +189,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand.primary,
     ...Shadows.brand,
   },
+  platformPrimary: {
+    backgroundColor: Colors.platform.primary,
+    borderRadius: Radius.md,
+  },
   secondary: {
     backgroundColor: Colors.surface.default,  // white
     borderWidth: 1,
@@ -221,6 +225,7 @@ const styles = StyleSheet.create({
   // ─── Label Colors ─────────────────────────────────────────────────────────
   label: { fontWeight: Typography.weight.semibold },
   label_primary: { color: Colors.text.inverse },
+  label_platformPrimary: { color: Colors.platform.text },
   label_secondary: { color: Colors.text.primary },
   label_ghost: { color: Colors.brand.primary },
   label_outline: { color: Colors.text.primary },

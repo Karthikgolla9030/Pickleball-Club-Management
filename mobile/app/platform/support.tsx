@@ -1,15 +1,17 @@
 /**
  * Pickleball Multi-Club Platform — Platform Admin Support Tickets
  *
- * Dedicated support-ticket queue and conversation management for authorized platform owners:
- * - Real support ticket workflow with reference number, priority, category, status, requester, and club
- * - Filter by status (All, Open, In Progress, Waiting for Requester, Resolved, Closed) with live counts
- * - Filter by category and priority
- * - Debounced search across ticket references, subjects, descriptions, and requester identities
- * - Interactive ticket inspection drawer/modal with full chronological conversation thread
- * - Administrative reply posting that atomically transitions status and writes to the Platform Audit Log
- * - Status and priority transitions with audit logging
- * - Clean light/neutral design adhering to PlatformShell conventions
+ * Compact mobile-first design matching visual reference screenshot:
+ * - Top header with official Pickleball product logo, "Platform Admin" label, notification bell & avatar
+ * - Page heading "Support Tickets" and subtitle "Monitor and manage all support requests"
+ * - Compact 4-column summary metrics tile (Total, Open, Awaiting, Resolved) in a single card
+ * - Neatly aligned horizontal status filter pills with counts (All Tickets, Open, In Progress, Awaiting User, Resolved, Closed)
+ * - Concise search bar with placeholder "Search by ticket #, subject, requester, or keywords..."
+ * - Collapsible "Filters" accordion toggle and "Clear All" action
+ * - Compact ticket card rows with reference number, priority, status, subject, requester, and "Inspect & Reply" action
+ * - Pixel-matched empty state card with mint circular ticket icon
+ * - Full chronological conversation thread, status/priority transition toolbar, and administrative reply posting
+ * - Fixed bottom navigation with "More" active and proper clearance
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -23,6 +25,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -32,20 +35,19 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Eye,
-  FileText,
   LifeBuoy,
-  Mail,
   MessageCircle,
   MessageSquare,
-  RefreshCw,
   Search,
   Send,
-  Shield,
-  Tag,
+  SlidersHorizontal,
+  Ticket,
   User,
   X,
 } from 'lucide-react-native';
@@ -53,11 +55,10 @@ import {
 import {
   AppText,
   Badge,
-  Button,
   Card,
-  EmptyState,
   ErrorState,
   LoadingState,
+  PlatformButton,
   PlatformShell,
 } from '@/components';
 import {
@@ -65,13 +66,53 @@ import {
   PlatformSupportTicketDetailResponse,
   PlatformSupportTicketItem,
 } from '@/services/api/clubApplications';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Radius, Spacing } from '@/theme';
 
 type StatusFilter = 'all' | 'open' | 'in_progress' | 'waiting_for_requester' | 'resolved' | 'closed';
+
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+}
+
+function getStatusBadgeVariant(status: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
+  switch (status) {
+    case 'open':
+      return 'warning';
+    case 'in_progress':
+      return 'info';
+    case 'waiting_for_requester':
+      return 'default';
+    case 'resolved':
+      return 'success';
+    case 'closed':
+      return 'default';
+    default:
+      return 'default';
+  }
+}
+
+function getPriorityBadgeVariant(priority: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
+  switch (priority) {
+    case 'urgent':
+      return 'error';
+    case 'high':
+      return 'warning';
+    case 'medium':
+      return 'info';
+    case 'low':
+      return 'default';
+    default:
+      return 'default';
+  }
+}
 
 export default function PlatformSupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const [tickets, setTickets] = useState<PlatformSupportTicketItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -85,6 +126,7 @@ export default function PlatformSupportScreen() {
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -158,123 +200,80 @@ export default function PlatformSupportScreen() {
       const detail = await platformApplicationsApi.getSupportTicket(ticketId);
       setSelectedTicket(detail);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to fetch ticket conversation.';
-      alert(msg);
+      alert(err.response?.data?.detail || err.message || 'Could not load ticket details.');
     } finally {
       setIsLoadingDetail(false);
     }
   };
 
   const handleSendReply = async () => {
-    if (!selectedTicket || !replyMessage.trim() || isSubmittingReply) return;
-
+    if (!selectedTicket || !replyMessage.trim()) return;
     setIsSubmittingReply(true);
     setReplyError(null);
     try {
-      const updated = await platformApplicationsApi.replySupportTicket(selectedTicket.id, replyMessage.trim());
+      const updated = await platformApplicationsApi.replySupportTicket(
+        selectedTicket.id,
+        replyMessage.trim()
+      );
       setSelectedTicket(updated);
       setReplyMessage('');
-      setActionSuccessMessage('Reply posted successfully and ticket set to Waiting for Requester.');
-      // Refresh list in background
-      fetchTickets(true, page);
+      setActionSuccessMessage('Reply sent successfully.');
+      fetchTickets(true);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to send reply.';
-      setReplyError(msg);
+      setReplyError(err.response?.data?.detail || err.message || 'Failed to submit administrative reply.');
     } finally {
       setIsSubmittingReply(false);
     }
   };
 
   const handleUpdateStatus = async (newStatus: string) => {
-    if (!selectedTicket || isUpdatingTicket || selectedTicket.status === newStatus) return;
-
+    if (!selectedTicket) return;
     setIsUpdatingTicket(true);
     setActionSuccessMessage(null);
     try {
       const updated = await platformApplicationsApi.updateSupportTicket(selectedTicket.id, {
-        status: newStatus,
-        reason: `Admin updated status to ${newStatus}`,
+        status: newStatus as any,
       });
       setSelectedTicket(updated);
       setActionSuccessMessage(`Ticket status updated to ${updated.status_label}.`);
-      fetchTickets(true, page);
+      fetchTickets(true);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to update ticket status.';
-      alert(msg);
+      alert(err.response?.data?.detail || err.message || 'Failed to update ticket status.');
     } finally {
       setIsUpdatingTicket(false);
     }
   };
 
   const handleUpdatePriority = async (newPriority: string) => {
-    if (!selectedTicket || isUpdatingTicket || selectedTicket.priority === newPriority) return;
-
+    if (!selectedTicket) return;
     setIsUpdatingTicket(true);
     setActionSuccessMessage(null);
     try {
       const updated = await platformApplicationsApi.updateSupportTicket(selectedTicket.id, {
-        priority: newPriority,
-        reason: `Admin updated priority to ${newPriority}`,
+        priority: newPriority as any,
       });
       setSelectedTicket(updated);
-      setActionSuccessMessage(`Ticket priority updated to ${updated.priority_label}.`);
-      fetchTickets(true, page);
+      setActionSuccessMessage(`Priority updated to ${updated.priority_label}.`);
+      fetchTickets(true);
     } catch (err: any) {
-      const msg = err.response?.data?.detail || err.message || 'Failed to update ticket priority.';
-      alert(msg);
+      alert(err.response?.data?.detail || err.message || 'Failed to update ticket priority.');
     } finally {
       setIsUpdatingTicket(false);
     }
   };
 
-  const totalPages = Math.ceil(total / pageSize) || 1;
-
-  const getStatusBadgeVariant = (status: string): 'success' | 'warning' | 'info' | 'error' | 'default' => {
-    switch (status) {
-      case 'open':
-        return 'info';
-      case 'in_progress':
-        return 'warning';
-      case 'waiting_for_requester':
-        return 'warning';
-      case 'resolved':
-        return 'success';
-      case 'closed':
-        return 'default';
-      default:
-        return 'default';
-    }
+  const handleClearAllFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setCategoryFilter('all');
+    setPriorityFilter('all');
+    setPage(1);
   };
 
-  const getPriorityBadgeVariant = (priority: string): 'error' | 'warning' | 'info' | 'default' => {
-    switch (priority) {
-      case 'urgent':
-        return 'error';
-      case 'high':
-        return 'warning';
-      case 'medium':
-        return 'info';
-      case 'low':
-      default:
-        return 'default';
-    }
-  };
-
-  const formatDate = (isoString?: string | null) => {
-    if (!isoString) return '—';
-    try {
-      const d = new Date(isoString);
-      return d.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return isoString;
-    }
-  };
+  // Metrics numbers
+  const openCount = (statusCounts['open'] || 0) + (statusCounts['in_progress'] || 0);
+  const awaitingCount = statusCounts['waiting_for_requester'] || 0;
+  const resolvedCount = statusCounts['resolved'] || 0;
 
   const statusTabItems: { key: StatusFilter; label: string }[] = [
     { key: 'all', label: 'All Tickets' },
@@ -285,788 +284,921 @@ export default function PlatformSupportScreen() {
     { key: 'closed', label: 'Closed' },
   ];
 
+  const totalPages = Math.ceil(total / pageSize);
+
   return (
     <PlatformShell
       activeTab="support"
-      title="Platform Support"
-      subtitle="Track, triage, and reply to user inquiries, club facility issues, and platform support requests."
       onRefresh={() => fetchTickets(true, 1)}
       isRefreshing={isRefreshing}
+      scrollable={false}
     >
-      <View style={styles.container}>
-        {/* Metric Cards Banner */}
-        <View style={styles.metricsRow}>
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <LifeBuoy size={18} color="#18794E" />
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                TOTAL TICKETS
+      <FlatList
+        data={tickets}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => fetchTickets(true, 1)}
+            tintColor="#15803D"
+          />
+        }
+        ListHeaderComponent={
+          <View>
+            {/* 1. Page Heading */}
+            <View style={styles.headerSection}>
+              <AppText style={styles.screenTitle}>Support Tickets</AppText>
+              <AppText style={styles.screenSubtitle}>
+                Monitor and manage all support requests
               </AppText>
             </View>
-            <AppText variant="heading2" style={styles.metricValue}>
-              {total}
-            </AppText>
-          </Card>
 
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <Clock size={18} color="#0284C7" />
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                OPEN / ACTIVE
-              </AppText>
-            </View>
-            <AppText variant="heading2" style={[styles.metricValue, { color: '#0284C7' }]}>
-              {(statusCounts['open'] || 0) + (statusCounts['in_progress'] || 0)}
-            </AppText>
-          </Card>
-
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <MessageSquare size={18} color="#D97706" />
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                AWAITING USER
-              </AppText>
-            </View>
-            <AppText variant="heading2" style={[styles.metricValue, { color: '#D97706' }]}>
-              {statusCounts['waiting_for_requester'] || 0}
-            </AppText>
-          </Card>
-
-          <Card style={styles.metricCard}>
-            <View style={styles.metricHeader}>
-              <CheckCircle2 size={18} color="#18794E" />
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                RESOLVED
-              </AppText>
-            </View>
-            <AppText variant="heading2" style={[styles.metricValue, { color: '#18794E' }]}>
-              {statusCounts['resolved'] || 0}
-            </AppText>
-          </Card>
-        </View>
-
-        {/* Status Filter Tabs */}
-        <View style={styles.tabsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent}>
-            {statusTabItems.map((tab) => {
-              const isActive = statusFilter === tab.key;
-              const count =
-                tab.key === 'all'
-                  ? total
-                  : statusCounts[tab.key] || 0;
-
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                  onPress={() => {
-                    setStatusFilter(tab.key);
-                    setPage(1);
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                    {tab.label}
-                  </AppText>
-                  <View style={[styles.tabBadge, isActive && styles.tabBadgeActive]}>
-                    <AppText style={[styles.tabBadgeText, isActive && styles.tabBadgeTextActive]}>
-                      {count}
-                    </AppText>
+            {/* 2. Compact 4-Column Ticket Metrics Card */}
+            <View style={styles.metricsContainer}>
+              <View style={styles.metricsCard}>
+                {/* Column 1: Total */}
+                <View style={styles.metricCol}>
+                  <View style={[styles.metricIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                    <LifeBuoy size={14} color="#15803D" />
                   </View>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
+                  <View style={styles.metricTextGroup}>
+                    <AppText style={styles.metricLabel}>Total</AppText>
+                    <AppText style={styles.metricValue}>{total}</AppText>
+                  </View>
+                </View>
 
-        {/* Search & Secondary Filter Bar */}
-        <Card style={styles.filterCard}>
-          <View style={styles.filterBarRow}>
-            {/* Search Input */}
-            <View style={styles.searchInputWrapper}>
-              <Search size={16} color="#64748B" style={styles.searchIcon} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search by ticket #, subject, requester, or keywords..."
-                placeholderTextColor="#94A3B8"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                clearButtonMode="while-editing"
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearSearchBtn}>
-                  <X size={14} color="#64748B" />
-                </TouchableOpacity>
-              )}
+                <View style={styles.metricDivider} />
+
+                {/* Column 2: Open */}
+                <View style={styles.metricCol}>
+                  <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                    <Clock size={14} color="#0284C7" />
+                  </View>
+                  <View style={styles.metricTextGroup}>
+                    <AppText style={styles.metricLabel}>Open</AppText>
+                    <AppText style={styles.metricValue}>{openCount}</AppText>
+                  </View>
+                </View>
+
+                <View style={styles.metricDivider} />
+
+                {/* Column 3: Awaiting */}
+                <View style={styles.metricCol}>
+                  <View style={[styles.metricIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                    <MessageSquare size={14} color="#D97706" />
+                  </View>
+                  <View style={styles.metricTextGroup}>
+                    <AppText style={styles.metricLabel}>Awaiting</AppText>
+                    <AppText style={styles.metricValue}>{awaitingCount}</AppText>
+                  </View>
+                </View>
+
+                <View style={styles.metricDivider} />
+
+                {/* Column 4: Resolved */}
+                <View style={styles.metricCol}>
+                  <View style={[styles.metricIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                    <CheckCircle2 size={14} color="#15803D" />
+                  </View>
+                  <View style={styles.metricTextGroup}>
+                    <AppText style={styles.metricLabel}>Resolved</AppText>
+                    <AppText style={styles.metricValue}>{resolvedCount}</AppText>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            {/* Category Selector */}
-            <View style={styles.secondaryFilterGroup}>
-              <AppText variant="caption" color="secondary" style={styles.filterGroupLabel}>
-                Category:
-              </AppText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.inlinePillsScroll}>
-                {[
-                  { key: 'all', label: 'All' },
-                  { key: 'general', label: 'General' },
-                  { key: 'billing', label: 'Billing' },
-                  { key: 'account', label: 'Account' },
-                  { key: 'technical', label: 'Technical' },
-                  { key: 'club_operations', label: 'Club Ops' },
-                  { key: 'tournament', label: 'Tournament' },
-                ].map((cat) => (
+            {/* 3. Status Filter Pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
+            >
+              {statusTabItems.map((tab) => {
+                const isActive = statusFilter === tab.key;
+                const count =
+                  tab.key === 'all'
+                    ? total
+                    : statusCounts[tab.key] || 0;
+
+                return (
                   <TouchableOpacity
-                    key={cat.key}
-                    style={[
-                      styles.inlinePill,
-                      categoryFilter === cat.key && styles.inlinePillActive,
-                    ]}
+                    key={tab.key}
+                    style={[styles.pill, isActive && styles.pillActive]}
                     onPress={() => {
-                      setCategoryFilter(cat.key);
+                      setStatusFilter(tab.key);
                       setPage(1);
                     }}
+                    activeOpacity={0.7}
                   >
-                    <AppText
+                    <AppText style={[styles.pillText, isActive && styles.pillTextActive]}>
+                      {tab.label}
+                    </AppText>
+                    <View
                       style={[
-                        styles.inlinePillText,
-                        categoryFilter === cat.key && styles.inlinePillTextActive,
+                        styles.pillBadge,
+                        isActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
                       ]}
                     >
-                      {cat.label}
-                    </AppText>
+                      <AppText
+                        style={[
+                          styles.pillBadgeText,
+                          isActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                        ]}
+                      >
+                        {count}
+                      </AppText>
+                    </View>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                );
+              })}
+            </ScrollView>
+
+            {/* 4. Search Bar */}
+            <View style={styles.searchRow}>
+              <View style={styles.searchBar}>
+                <Search size={16} color="#94A3B8" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by ticket #, subject, requester, or keywords..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={15} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
-            {/* Priority Selector */}
-            <View style={styles.secondaryFilterGroup}>
-              <AppText variant="caption" color="secondary" style={styles.filterGroupLabel}>
-                Priority:
-              </AppText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.inlinePillsScroll}>
-                {[
-                  { key: 'all', label: 'All' },
-                  { key: 'urgent', label: 'Urgent' },
-                  { key: 'high', label: 'High' },
-                  { key: 'medium', label: 'Medium' },
-                  { key: 'low', label: 'Low' },
-                ].map((pri) => (
-                  <TouchableOpacity
-                    key={pri.key}
-                    style={[
-                      styles.inlinePill,
-                      priorityFilter === pri.key && styles.inlinePillActive,
-                    ]}
-                    onPress={() => {
-                      setPriorityFilter(pri.key);
-                      setPage(1);
-                    }}
-                  >
-                    <AppText
-                      style={[
-                        styles.inlinePillText,
-                        priorityFilter === pri.key && styles.inlinePillTextActive,
-                      ]}
-                    >
-                      {pri.label}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+            {/* 5. Filter Accordion Toggle & Clear All */}
+            <View style={styles.filterControlsRow}>
+              <TouchableOpacity
+                style={styles.filterToggleBtn}
+                onPress={() => setIsFilterExpanded((prev) => !prev)}
+                activeOpacity={0.7}
+              >
+                <SlidersHorizontal size={15} color="#0F172A" />
+                <AppText style={styles.filterToggleText}>Filters</AppText>
+                {isFilterExpanded ? (
+                  <ChevronUp size={15} color="#0F172A" />
+                ) : (
+                  <ChevronDown size={15} color="#0F172A" />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.clearAllBtn}
+                onPress={handleClearAllFilters}
+                activeOpacity={0.7}
+              >
+                <AppText style={styles.clearAllBtnText}>Clear All</AppText>
+              </TouchableOpacity>
             </View>
-          </View>
-        </Card>
 
-        {/* Content Area */}
-        {isLoading && !isRefreshing ? (
-          <LoadingState message="Loading support tickets queue..." />
-        ) : error ? (
-          <ErrorState
-            title="Failed to Load Tickets"
-            message={error}
-            onRetry={() => fetchTickets(false, 1)}
-          />
-        ) : tickets.length === 0 ? (
-          <EmptyState
-            icon="🎫"
-            title="No Support Tickets Found"
-            description={
-              debouncedSearch || statusFilter !== 'all' || categoryFilter !== 'all' || priorityFilter !== 'all'
-                ? 'No tickets match the selected criteria or search term. Try adjusting your filters.'
-                : 'There are currently no support tickets submitted on the platform.'
-            }
-            actionLabel={
-              debouncedSearch || statusFilter !== 'all' || categoryFilter !== 'all' || priorityFilter !== 'all'
-                ? 'Clear Filters'
-                : undefined
-            }
-            onAction={() => {
-              setSearchQuery('');
-              setStatusFilter('all');
-              setCategoryFilter('all');
-              setPriorityFilter('all');
-            }}
-          />
-        ) : (
-          <View style={styles.listContainer}>
-            {/* Ticket Cards List */}
-            <FlatList
-              data={tickets}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContent}
-              renderItem={({ item }) => (
-                <Card style={styles.ticketCard}>
-                  <View style={styles.ticketCardHeader}>
-                    <View style={styles.ticketRefRow}>
-                      <View style={styles.refBadge}>
-                        <AppText style={styles.refText}>{item.reference_number}</AppText>
-                      </View>
-                      <Badge
-                        label={item.status_label}
-                        variant={getStatusBadgeVariant(item.status)}
-                        size="sm"
-                      />
-                      <Badge
-                        label={item.priority_label}
-                        variant={getPriorityBadgeVariant(item.priority)}
-                        size="sm"
-                      />
-                      <View style={styles.categoryPill}>
-                        <AppText style={styles.categoryPillText}>{item.category_label}</AppText>
-                      </View>
-                    </View>
+            {/* Collapsible Category & Priority Filters Panel */}
+            {isFilterExpanded && (
+              <View style={styles.expandedFilterPanel}>
+                {/* Category Chips */}
+                <View style={styles.filterSubGroup}>
+                  <AppText style={styles.filterSubGroupLabel}>Category:</AppText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                    {[
+                      { key: 'all', label: 'All' },
+                      { key: 'general', label: 'General' },
+                      { key: 'billing', label: 'Billing' },
+                      { key: 'account', label: 'Account' },
+                      { key: 'technical', label: 'Technical' },
+                      { key: 'club_operations', label: 'Club Ops' },
+                      { key: 'tournament', label: 'Tournament' },
+                    ].map((cat) => {
+                      const isCatActive = categoryFilter === cat.key;
+                      return (
+                        <TouchableOpacity
+                          key={cat.key}
+                          style={[styles.chip, isCatActive && styles.chipActive]}
+                          onPress={() => {
+                            setCategoryFilter(cat.key);
+                            setPage(1);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={[styles.chipText, isCatActive && styles.chipTextActive]}>
+                            {cat.label}
+                          </AppText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
 
-                    <AppText style={styles.ticketDateText}>{formatDate(item.updated_at)}</AppText>
-                  </View>
-
-                  <AppText variant="heading3" style={styles.ticketSubject}>
-                    {item.subject}
-                  </AppText>
-
-                  <AppText
-                    numberOfLines={2}
-                    variant="bodySmall"
-                    color="secondary"
-                    style={styles.ticketDescriptionSnippet}
-                  >
-                    {item.description}
-                  </AppText>
-
-                  <View style={styles.ticketCardFooter}>
-                    <View style={styles.ticketMetaGroup}>
-                      <View style={styles.metaItem}>
-                        <User size={13} color="#64748B" />
-                        <AppText style={styles.metaText}>
-                          {item.requester_name || 'User'} ({item.requester_email})
-                        </AppText>
-                      </View>
-
-                      {item.club_name && (
-                        <View style={styles.metaItem}>
-                          <Building2 size={13} color="#64748B" />
-                          <AppText style={styles.metaText}>{item.club_name}</AppText>
-                        </View>
-                      )}
-
-                      <View style={styles.metaItem}>
-                        <MessageSquare size={13} color="#64748B" />
-                        <AppText style={styles.metaText}>
-                          {item.messages_count} {item.messages_count === 1 ? 'message' : 'messages'}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    <Button
-                      label="Inspect & Reply"
-                      variant="primary"
-                      size="sm"
-                      leftIcon={<Eye size={14} color="#FFFFFF" />}
-                      onPress={() => handleOpenTicket(item.id)}
-                    />
-                  </View>
-                </Card>
-              )}
-            />
-
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <View style={styles.paginationRow}>
-                <AppText variant="caption" color="secondary">
-                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total} tickets
-                </AppText>
-
-                <View style={styles.paginationButtons}>
-                  <TouchableOpacity
-                    style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}
-                    disabled={page <= 1}
-                    onPress={() => fetchTickets(false, page - 1)}
-                  >
-                    <ChevronLeft size={16} color={page <= 1 ? '#CBD5E1' : '#0F172A'} />
-                    <AppText style={[styles.pageBtnText, page <= 1 && styles.pageBtnTextDisabled]}>
-                      Previous
-                    </AppText>
-                  </TouchableOpacity>
-
-                  <View style={styles.pageIndicator}>
-                    <AppText style={styles.pageIndicatorText}>
-                      Page {page} of {totalPages}
-                    </AppText>
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.pageBtn, page >= totalPages && styles.pageBtnDisabled]}
-                    disabled={page >= totalPages}
-                    onPress={() => fetchTickets(false, page + 1)}
-                  >
-                    <AppText style={[styles.pageBtnText, page >= totalPages && styles.pageBtnTextDisabled]}>
-                      Next
-                    </AppText>
-                    <ChevronRight size={16} color={page >= totalPages ? '#CBD5E1' : '#0F172A'} />
-                  </TouchableOpacity>
+                {/* Priority Chips */}
+                <View style={styles.filterSubGroup}>
+                  <AppText style={styles.filterSubGroupLabel}>Priority:</AppText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
+                    {[
+                      { key: 'all', label: 'All' },
+                      { key: 'urgent', label: 'Urgent' },
+                      { key: 'high', label: 'High' },
+                      { key: 'medium', label: 'Medium' },
+                      { key: 'low', label: 'Low' },
+                    ].map((pri) => {
+                      const isPriActive = priorityFilter === pri.key;
+                      return (
+                        <TouchableOpacity
+                          key={pri.key}
+                          style={[styles.chip, isPriActive && styles.chipActive]}
+                          onPress={() => {
+                            setPriorityFilter(pri.key);
+                            setPage(1);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={[styles.chipText, isPriActive && styles.chipTextActive]}>
+                            {pri.label}
+                          </AppText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                 </View>
               </View>
             )}
           </View>
-        )}
+        }
+        ListEmptyComponent={
+          isLoading && !isRefreshing ? (
+            <LoadingState message="Loading support tickets queue..." />
+          ) : error ? (
+            <ErrorState
+              title="Failed to Load Tickets"
+              message={error}
+              onRetry={() => fetchTickets(false, 1)}
+            />
+          ) : (
+            /* Pixel-accurate Empty State matching visual reference */
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconCircle}>
+                <Ticket size={28} color="#15803D" />
+              </View>
+              <AppText style={styles.emptyTitle}>No Support Tickets Found</AppText>
+              <AppText style={styles.emptySubtitle}>
+                There are no support tickets matching your filters.
+              </AppText>
+            </View>
+          )
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.ticketCard}
+            onPress={() => handleOpenTicket(item.id)}
+            activeOpacity={0.85}
+          >
+            {/* Header row: Reference # and badges */}
+            <View style={styles.ticketCardHeader}>
+              <View style={styles.ticketRefRow}>
+                <View style={styles.refBadge}>
+                  <AppText style={styles.refText}>{item.reference_number}</AppText>
+                </View>
+                <Badge
+                  label={item.status_label}
+                  variant={getStatusBadgeVariant(item.status)}
+                  size="sm"
+                />
+                <Badge
+                  label={item.priority_label}
+                  variant={getPriorityBadgeVariant(item.priority)}
+                  size="sm"
+                />
+                <View style={styles.categoryPill}>
+                  <AppText style={styles.categoryPillText}>{item.category_label}</AppText>
+                </View>
+              </View>
+            </View>
 
-        {/* Ticket Inspection & Conversation Modal */}
-        <Modal
-          visible={!!selectedTicket}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setSelectedTicket(null)}
-        >
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalContainer}>
-              {selectedTicket && (
-                <>
-                  {/* Modal Header */}
-                  <View style={styles.modalHeader}>
-                    <View style={styles.modalHeaderInfo}>
-                      <View style={styles.modalRefRow}>
-                        <View style={styles.refBadge}>
-                          <AppText style={styles.refText}>{selectedTicket.reference_number}</AppText>
-                        </View>
-                        <Badge
-                          label={selectedTicket.status_label}
-                          variant={getStatusBadgeVariant(selectedTicket.status)}
-                          size="sm"
-                        />
-                        <Badge
-                          label={selectedTicket.priority_label}
-                          variant={getPriorityBadgeVariant(selectedTicket.priority)}
-                          size="sm"
-                        />
-                        <View style={styles.categoryPill}>
-                          <AppText style={styles.categoryPillText}>{selectedTicket.category_label}</AppText>
-                        </View>
+            {/* Subject */}
+            <AppText style={styles.ticketSubject} numberOfLines={1}>
+              {item.subject}
+            </AppText>
+
+            {/* Snippet */}
+            <AppText numberOfLines={2} style={styles.ticketDescriptionSnippet}>
+              {item.description}
+            </AppText>
+
+            {/* Subtle Divider */}
+            <View style={styles.cardDivider} />
+
+            {/* Footer row: Requester info, date & inspect button */}
+            <View style={styles.ticketCardFooter}>
+              <View style={styles.ticketMetaGroup}>
+                <View style={styles.metaItem}>
+                  <User size={12} color="#64748B" />
+                  <AppText style={styles.metaText} numberOfLines={1}>
+                    {item.requester_name || item.requester_email}
+                  </AppText>
+                </View>
+                <View style={styles.metaItem}>
+                  <Calendar size={12} color="#64748B" />
+                  <AppText style={styles.metaText}>{formatDate(item.updated_at)}</AppText>
+                </View>
+                <View style={styles.metaItem}>
+                  <MessageSquare size={12} color="#64748B" />
+                  <AppText style={styles.metaText}>{item.messages_count}</AppText>
+                </View>
+              </View>
+
+              <PlatformButton
+                size="sm"
+                label="Inspect & Reply"
+                leftIcon={<Eye size={13} color="#FFFFFF" />}
+                onPress={() => handleOpenTicket(item.id)}
+              />
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+
+      {/* ─── Ticket Inspection and Reply Modal ───────────────────────────────── */}
+      <Modal
+        visible={!!selectedTicket}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedTicket(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContainer}>
+            {selectedTicket && (
+              <>
+                {/* Modal Header */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderInfo}>
+                    <View style={styles.modalRefRow}>
+                      <View style={styles.refBadge}>
+                        <AppText style={styles.refText}>{selectedTicket.reference_number}</AppText>
                       </View>
-                      <AppText variant="heading2" style={styles.modalSubject}>
-                        {selectedTicket.subject}
+                      <Badge
+                        label={selectedTicket.status_label}
+                        variant={getStatusBadgeVariant(selectedTicket.status)}
+                        size="sm"
+                      />
+                      <Badge
+                        label={selectedTicket.priority_label}
+                        variant={getPriorityBadgeVariant(selectedTicket.priority)}
+                        size="sm"
+                      />
+                      <View style={styles.categoryPill}>
+                        <AppText style={styles.categoryPillText}>{selectedTicket.category_label}</AppText>
+                      </View>
+                    </View>
+                    <AppText variant="heading2" style={styles.modalSubject}>
+                      {selectedTicket.subject}
+                    </AppText>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setSelectedTicket(null)}
+                    style={styles.modalCloseBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={20} color="#64748B" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Alert Notification in Modal */}
+                {actionSuccessMessage && (
+                  <View style={styles.modalAlertSuccess}>
+                    <CheckCircle2 size={16} color="#15803D" />
+                    <AppText style={styles.modalAlertText}>{actionSuccessMessage}</AppText>
+                  </View>
+                )}
+
+                <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                  {/* Meta Bar */}
+                  <View style={styles.modalMetaGrid}>
+                    <View style={styles.modalMetaCol}>
+                      <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
+                        REQUESTER
+                      </AppText>
+                      <AppText style={styles.modalMetaValue}>
+                        {selectedTicket.requester_name || 'User'}
+                      </AppText>
+                      <AppText style={styles.modalMetaSub}>{selectedTicket.requester_email}</AppText>
+                    </View>
+
+                    <View style={styles.modalMetaCol}>
+                      <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
+                        RELATED FACILITY
+                      </AppText>
+                      <AppText style={styles.modalMetaValue}>
+                        {selectedTicket.club_name || 'None (General Platform)'}
                       </AppText>
                     </View>
 
-                    <TouchableOpacity
-                      onPress={() => setSelectedTicket(null)}
-                      style={styles.modalCloseBtn}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <X size={20} color="#64748B" />
-                    </TouchableOpacity>
+                    <View style={styles.modalMetaCol}>
+                      <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
+                        CREATED
+                      </AppText>
+                      <AppText style={styles.modalMetaValue}>
+                        {formatDate(selectedTicket.created_at)}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.modalMetaCol}>
+                      <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
+                        LAST UPDATED
+                      </AppText>
+                      <AppText style={styles.modalMetaValue}>
+                        {formatDate(selectedTicket.updated_at)}
+                      </AppText>
+                    </View>
                   </View>
 
-                  {/* Notification/Success alert in modal */}
-                  {actionSuccessMessage && (
-                    <View style={styles.modalAlertSuccess}>
-                      <CheckCircle2 size={16} color="#18794E" />
-                      <AppText style={styles.modalAlertText}>{actionSuccessMessage}</AppText>
-                    </View>
-                  )}
-
-                  <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                    {/* Meta Bar */}
-                    <View style={styles.modalMetaGrid}>
-                      <View style={styles.modalMetaCol}>
-                        <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
-                          REQUESTER
-                        </AppText>
-                        <AppText style={styles.modalMetaValue}>
-                          {selectedTicket.requester_name || 'User'}
-                        </AppText>
-                        <AppText style={styles.modalMetaSub}>{selectedTicket.requester_email}</AppText>
-                      </View>
-
-                      <View style={styles.modalMetaCol}>
-                        <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
-                          RELATED FACILITY
-                        </AppText>
-                        <AppText style={styles.modalMetaValue}>
-                          {selectedTicket.club_name || 'None (General Platform)'}
-                        </AppText>
-                      </View>
-
-                      <View style={styles.modalMetaCol}>
-                        <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
-                          CREATED
-                        </AppText>
-                        <AppText style={styles.modalMetaValue}>
-                          {formatDate(selectedTicket.created_at)}
-                        </AppText>
-                      </View>
-
-                      <View style={styles.modalMetaCol}>
-                        <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
-                          LAST UPDATED
-                        </AppText>
-                        <AppText style={styles.modalMetaValue}>
-                          {formatDate(selectedTicket.updated_at)}
-                        </AppText>
+                  {/* Status & Priority Transition Toolbar */}
+                  <View style={styles.toolbarCard}>
+                    <View style={styles.toolbarSection}>
+                      <AppText variant="caption" style={styles.toolbarLabel}>
+                        TRANSITION STATUS:
+                      </AppText>
+                      <View style={styles.toolbarPills}>
+                        {[
+                          { key: 'open', label: 'Open' },
+                          { key: 'in_progress', label: 'In Progress' },
+                          { key: 'waiting_for_requester', label: 'Waiting for User' },
+                          { key: 'resolved', label: 'Resolved' },
+                          { key: 'closed', label: 'Closed' },
+                        ].map((st) => (
+                          <TouchableOpacity
+                            key={st.key}
+                            disabled={isUpdatingTicket}
+                            style={[
+                              styles.toolbarPill,
+                              selectedTicket.status === st.key && styles.toolbarPillActive,
+                            ]}
+                            onPress={() => handleUpdateStatus(st.key)}
+                          >
+                            <AppText
+                              style={[
+                                styles.toolbarPillText,
+                                selectedTicket.status === st.key && styles.toolbarPillTextActive,
+                              ]}
+                            >
+                              {st.label}
+                            </AppText>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
 
-                    {/* Quick Status / Priority Transition Toolbar */}
-                    <View style={styles.toolbarCard}>
-                      <View style={styles.toolbarSection}>
-                        <AppText variant="caption" style={styles.toolbarLabel}>
-                          TRANSITION STATUS:
-                        </AppText>
-                        <View style={styles.toolbarPills}>
-                          {[
-                            { key: 'open', label: 'Open' },
-                            { key: 'in_progress', label: 'In Progress' },
-                            { key: 'waiting_for_requester', label: 'Waiting for User' },
-                            { key: 'resolved', label: 'Resolved' },
-                            { key: 'closed', label: 'Closed' },
-                          ].map((st) => (
-                            <TouchableOpacity
-                              key={st.key}
-                              disabled={isUpdatingTicket}
+                    <View style={[styles.toolbarSection, { marginTop: 10 }]}>
+                      <AppText variant="caption" style={styles.toolbarLabel}>
+                        SET PRIORITY:
+                      </AppText>
+                      <View style={styles.toolbarPills}>
+                        {[
+                          { key: 'low', label: 'Low' },
+                          { key: 'medium', label: 'Medium' },
+                          { key: 'high', label: 'High' },
+                          { key: 'urgent', label: 'Urgent' },
+                        ].map((pr) => (
+                          <TouchableOpacity
+                            key={pr.key}
+                            disabled={isUpdatingTicket}
+                            style={[
+                              styles.toolbarPill,
+                              selectedTicket.priority === pr.key && styles.toolbarPillActive,
+                            ]}
+                            onPress={() => handleUpdatePriority(pr.key)}
+                          >
+                            <AppText
                               style={[
-                                styles.toolbarPill,
-                                selectedTicket.status === st.key && styles.toolbarPillActive,
+                                styles.toolbarPillText,
+                                selectedTicket.priority === pr.key && styles.toolbarPillTextActive,
                               ]}
-                              onPress={() => handleUpdateStatus(st.key)}
                             >
-                              <AppText
-                                style={[
-                                  styles.toolbarPillText,
-                                  selectedTicket.status === st.key && styles.toolbarPillTextActive,
-                                ]}
-                              >
-                                {st.label}
-                              </AppText>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-
-                      <View style={[styles.toolbarSection, { marginTop: 10 }]}>
-                        <AppText variant="caption" style={styles.toolbarLabel}>
-                          SET PRIORITY:
-                        </AppText>
-                        <View style={styles.toolbarPills}>
-                          {[
-                            { key: 'low', label: 'Low' },
-                            { key: 'medium', label: 'Medium' },
-                            { key: 'high', label: 'High' },
-                            { key: 'urgent', label: 'Urgent' },
-                          ].map((pr) => (
-                            <TouchableOpacity
-                              key={pr.key}
-                              disabled={isUpdatingTicket}
-                              style={[
-                                styles.toolbarPill,
-                                selectedTicket.priority === pr.key && styles.toolbarPillActive,
-                              ]}
-                              onPress={() => handleUpdatePriority(pr.key)}
-                            >
-                              <AppText
-                                style={[
-                                  styles.toolbarPillText,
-                                  selectedTicket.priority === pr.key && styles.toolbarPillTextActive,
-                                ]}
-                              >
-                                {pr.label}
-                              </AppText>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
+                              {pr.label}
+                            </AppText>
+                          </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
+                  </View>
 
-                    {/* Conversation History */}
-                    <View style={styles.threadSection}>
-                      <View style={styles.threadSectionHeader}>
-                        <MessageCircle size={16} color="#18794E" />
-                        <AppText style={styles.threadTitle}>
-                          Conversation History ({selectedTicket.messages?.length || 0})
-                        </AppText>
-                      </View>
+                  {/* Conversation History */}
+                  <View style={styles.threadSection}>
+                    <View style={styles.threadSectionHeader}>
+                      <MessageCircle size={16} color="#15803D" />
+                      <AppText style={styles.threadTitle}>
+                        Conversation History ({selectedTicket.messages?.length || 0})
+                      </AppText>
+                    </View>
 
-                      <View style={styles.messagesTimeline}>
-                        {selectedTicket.messages?.map((msg, index) => {
-                          const isAdmin = msg.sender_role === 'platform_admin';
-                          return (
-                            <View
-                              key={msg.id || index}
-                              style={[
-                                styles.messageBubble,
-                                isAdmin ? styles.messageBubbleAdmin : styles.messageBubbleRequester,
-                              ]}
-                            >
-                              <View style={styles.messageBubbleHeader}>
-                                <View style={styles.senderInfo}>
-                                  <View
+                    <View style={styles.messagesTimeline}>
+                      {selectedTicket.messages?.map((msg, index) => {
+                        const isAdmin = msg.sender_role === 'platform_admin';
+                        return (
+                          <View
+                            key={msg.id || index}
+                            style={[
+                              styles.messageBubble,
+                              isAdmin ? styles.messageBubbleAdmin : styles.messageBubbleRequester,
+                            ]}
+                          >
+                            <View style={styles.messageBubbleHeader}>
+                              <View style={styles.senderInfo}>
+                                <View
+                                  style={[
+                                    styles.roleTag,
+                                    isAdmin ? styles.roleTagAdmin : styles.roleTagRequester,
+                                  ]}
+                                >
+                                  <AppText
                                     style={[
-                                      styles.roleTag,
-                                      isAdmin ? styles.roleTagAdmin : styles.roleTagRequester,
+                                      styles.roleTagText,
+                                      isAdmin ? styles.roleTagTextAdmin : styles.roleTagTextRequester,
                                     ]}
                                   >
-                                    <AppText
-                                      style={[
-                                        styles.roleTagText,
-                                        isAdmin ? styles.roleTagTextAdmin : styles.roleTagTextRequester,
-                                      ]}
-                                    >
-                                      {isAdmin ? 'Platform Admin' : 'Requester'}
-                                    </AppText>
-                                  </View>
-                                  <AppText style={styles.senderNameText}>
-                                    {msg.sender_name || msg.sender_email}
+                                    {isAdmin ? 'Platform Admin' : 'Requester'}
                                   </AppText>
                                 </View>
-                                <AppText style={styles.messageTimestamp}>
-                                  {formatDate(msg.created_at)}
+                                <AppText style={styles.senderNameText}>
+                                  {msg.sender_name || msg.sender_email}
                                 </AppText>
                               </View>
-
-                              <AppText style={styles.messageBodyText}>{msg.message}</AppText>
+                              <AppText style={styles.messageTimestamp}>
+                                {formatDate(msg.created_at)}
+                              </AppText>
                             </View>
-                          );
-                        })}
+
+                            <AppText style={styles.messageBodyText}>{msg.message}</AppText>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Admin Reply Composer */}
+                  {selectedTicket.status !== 'closed' ? (
+                    <View style={styles.replyComposerCard}>
+                      <AppText style={styles.replyComposerTitle}>Post Administrative Reply</AppText>
+                      <AppText variant="caption" color="secondary" style={styles.replyComposerSubtitle}>
+                        Posting a reply will be sent to the requester and transition ticket status to "Waiting for Requester".
+                      </AppText>
+
+                      {replyError && (
+                        <View style={styles.modalAlertError}>
+                          <AlertCircle size={16} color="#DC2626" />
+                          <AppText style={styles.modalAlertErrorText}>{replyError}</AppText>
+                        </View>
+                      )}
+
+                      <TextInput
+                        style={styles.replyTextInput}
+                        placeholder="Type your official administrative reply..."
+                        placeholderTextColor="#94A3B8"
+                        multiline
+                        numberOfLines={4}
+                        value={replyMessage}
+                        onChangeText={setReplyMessage}
+                        editable={!isSubmittingReply}
+                      />
+
+                      <View style={styles.replyActionsRow}>
+                        <PlatformButton
+                          size="md"
+                          label={isSubmittingReply ? 'Posting Reply...' : 'Send Admin Reply'}
+                          leftIcon={<Send size={15} color="#FFFFFF" />}
+                          loading={isSubmittingReply}
+                          disabled={!replyMessage.trim() || isSubmittingReply}
+                          onPress={handleSendReply}
+                        />
                       </View>
                     </View>
-
-                    {/* Admin Reply Composer */}
-                    {selectedTicket.status !== 'closed' ? (
-                      <View style={styles.replyComposerCard}>
-                        <AppText style={styles.replyComposerTitle}>Post Administrative Reply</AppText>
-                        <AppText variant="caption" color="secondary" style={styles.replyComposerSubtitle}>
-                          Posting a reply will be sent to the requester and transition ticket status to "Waiting for Requester".
-                        </AppText>
-
-                        {replyError && (
-                          <View style={styles.modalAlertError}>
-                            <AlertCircle size={16} color="#DC2626" />
-                            <AppText style={styles.modalAlertErrorText}>{replyError}</AppText>
-                          </View>
-                        )}
-
-                        <TextInput
-                          style={styles.replyTextInput}
-                          placeholder="Type your official administrative reply..."
-                          placeholderTextColor="#94A3B8"
-                          multiline
-                          numberOfLines={4}
-                          value={replyMessage}
-                          onChangeText={setReplyMessage}
-                          editable={!isSubmittingReply}
-                        />
-
-                        <View style={styles.replyActionsRow}>
-                          <Button
-                            label={isSubmittingReply ? 'Posting Reply...' : 'Send Admin Reply'}
-                            variant="primary"
-                            leftIcon={<Send size={16} color="#FFFFFF" />}
-                            loading={isSubmittingReply}
-                            disabled={!replyMessage.trim() || isSubmittingReply}
-                            onPress={handleSendReply}
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <View style={styles.closedNoticeCard}>
-                        <CheckCircle2 size={18} color="#64748B" />
-                        <AppText style={styles.closedNoticeText}>
-                          This support ticket is closed. Re-open or change status to "Open" to post further replies.
-                        </AppText>
-                      </View>
-                    )}
-                  </ScrollView>
-                </>
-              )}
-            </View>
+                  ) : (
+                    <View style={styles.closedNoticeCard}>
+                      <CheckCircle2 size={18} color="#64748B" />
+                      <AppText style={styles.closedNoticeText}>
+                        This support ticket is closed. Re-open or change status to "Open" to post further replies.
+                      </AppText>
+                    </View>
+                  )}
+                </ScrollView>
+              </>
+            )}
           </View>
-        </Modal>
-      </View>
+        </View>
+      </Modal>
     </PlatformShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 40,
+  listContent: {
+    paddingBottom: 36,
   },
-  metricsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 16,
+
+  // ─── Header Section ────────────────────────────────────────────────────────
+  headerSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
   },
-  metricCard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 140,
-    padding: 14,
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    borderRadius: Radius.lg,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  metricLabel: {
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  metricValue: {
+  screenTitle: {
+    fontSize: 26,
     fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.4,
   },
-  tabsContainer: {
-    marginBottom: 12,
+  screenSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    marginTop: 4,
   },
-  tabsContent: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
+
+  // ─── Compact 4-Column Ticket Metrics Card ──────────────────────────────────
+  metricsContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
-  tabButton: {
+  metricsCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
     backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#F1F5F9',
+    paddingVertical: 12,
+    paddingHorizontal: 6,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  metricCol: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 2,
+  },
+  metricIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricTextGroup: {
+    justifyContent: 'center',
+  },
+  metricLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 1,
+  },
+  metricDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#F1F5F9',
+  },
+
+  // ─── Status Filter Pills ───────────────────────────────────────────────────
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
     gap: 8,
+    paddingBottom: 14,
   },
-  tabButtonActive: {
-    backgroundColor: '#18794E',
-    borderColor: '#18794E',
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
   },
-  tabLabel: {
-    fontSize: 13,
+  pillActive: {
+    backgroundColor: '#15803D',
+  },
+  pillText: {
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#475569',
   },
-  tabLabelActive: {
+  pillTextActive: {
     color: '#FFFFFF',
   },
-  tabBadge: {
+  pillBadge: {
+    borderRadius: Radius.full,
     paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  pillBadgeActive: {
+    backgroundColor: '#166534',
   },
-  tabBadgeText: {
+  pillBadgeInactive: {
+    backgroundColor: '#E2E8F0',
+  },
+  pillBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
   },
-  tabBadgeTextActive: {
+  pillBadgeTextActive: {
     color: '#FFFFFF',
   },
-  filterCard: {
-    padding: 12,
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
-    borderWidth: 1,
-    marginBottom: 16,
+  pillBadgeTextInactive: {
+    color: '#475569',
   },
-  filterBarRow: {
-    gap: 10,
+
+  // ─── Search Bar ────────────────────────────────────────────────────────────
+  searchRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
   },
-  searchInputWrapper: {
+  searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    height: 40,
+    height: 42,
+    paddingHorizontal: 12,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#0F172A',
-    paddingVertical: 0,
+    height: '100%',
   },
-  clearSearchBtn: {
-    padding: 4,
-  },
-  secondaryFilterGroup: {
+
+  // ─── Filter Accordion Toggle & Clear All ───────────────────────────────────
+  filterControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  filterGroupLabel: {
-    fontWeight: '600',
-    minWidth: 60,
-  },
-  inlinePillsScroll: {
+  filterToggleBtn: {
     flexDirection: 'row',
-  },
-  inlinePill: {
+    alignItems: 'center',
+    gap: 6,
     paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: Radius.sm,
-    backgroundColor: '#F1F5F9',
-    marginRight: 6,
   },
-  inlinePillActive: {
-    backgroundColor: '#18794E',
+  filterToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
   },
-  inlinePillText: {
+  clearAllBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  clearAllBtnText: {
     fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+
+  // ─── Collapsible Filter Panel ──────────────────────────────────────────────
+  expandedFilterPanel: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 12,
+    gap: 10,
+  },
+  filterSubGroup: {
+    gap: 6,
+  },
+  filterSubGroupLabel: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  chipsScroll: {
+    gap: 6,
+  },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  chipActive: {
+    backgroundColor: '#15803D',
+  },
+  chipText: {
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#475569',
   },
-  inlinePillTextActive: {
+  chipTextActive: {
     color: '#FFFFFF',
   },
-  listContainer: {
-    gap: 12,
-  },
-  listContent: {
-    gap: 10,
-  },
-  ticketCard: {
-    padding: 16,
+
+  // ─── Pixel-accurate Empty State ────────────────────────────────────────────
+  emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
+    borderRadius: 16,
     borderWidth: 1,
-    gap: 10,
+    borderColor: '#F1F5F9',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 16,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+
+  // ─── Ticket Cards ──────────────────────────────────────────────────────────
+  ticketCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
   },
   ticketCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
+    marginBottom: 6,
   },
   ticketRefRow: {
     flexDirection: 'row',
@@ -1075,57 +1207,55 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   refBadge: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   refText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  categoryPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  categoryPillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  ticketDateText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  ticketSubject: {
-    fontSize: 16,
+    fontSize: 11.5,
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
     fontWeight: '700',
     color: '#0F172A',
   },
-  ticketDescriptionSnippet: {
+  categoryPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  categoryPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
     color: '#475569',
-    lineHeight: 18,
+  },
+  ticketSubject: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  ticketDescriptionSnippet: {
+    fontSize: 12.5,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
   },
   ticketCardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 10,
-    marginTop: 4,
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
   },
   ticketMetaGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    flexWrap: 'wrap',
+    gap: 12,
+    flex: 1,
+    marginRight: 8,
   },
   metaItem: {
     flexDirection: 'row',
@@ -1136,48 +1266,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
   },
-  paginationRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-    paddingHorizontal: 4,
-  },
-  paginationButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  pageBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.sm,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  pageBtnDisabled: {
-    opacity: 0.5,
-  },
-  pageBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  pageBtnTextDisabled: {
-    color: '#94A3B8',
-  },
-  pageIndicator: {
-    paddingHorizontal: 8,
-  },
-  pageIndicatorText: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-  },
+
+  // ─── Modal Styles ──────────────────────────────────────────────────────────
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
@@ -1187,114 +1277,106 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     width: '100%',
-    maxWidth: 850,
-    maxHeight: '92%',
+    maxWidth: 720,
+    maxHeight: '90%',
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 20,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#F1F5F9',
     backgroundColor: '#F8FAF9',
   },
   modalHeaderInfo: {
     flex: 1,
-    gap: 6,
-    marginRight: 16,
+    marginRight: 12,
   },
   modalRefRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginBottom: 6,
     flexWrap: 'wrap',
   },
   modalSubject: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#0F172A',
   },
   modalCloseBtn: {
-    padding: 6,
+    padding: 4,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#E2E8F0',
   },
   modalAlertSuccess: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#E6F4EA',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#C8E6C9',
   },
   modalAlertText: {
-    fontSize: 13,
-    color: '#18794E',
+    color: '#15803D',
+    fontSize: 12.5,
     fontWeight: '600',
   },
   modalScroll: {
-    padding: 20,
+    padding: 16,
   },
   modalMetaGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-    padding: 16,
+    gap: 12,
     backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    padding: 12,
+    borderRadius: 10,
     marginBottom: 16,
   },
   modalMetaCol: {
-    minWidth: 160,
-    flex: 1,
-    gap: 2,
+    flexBasis: '47%',
+    flexGrow: 1,
   },
   modalMetaHeader: {
+    fontSize: 10.5,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    color: '#64748B',
+    marginBottom: 2,
   },
   modalMetaValue: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0F172A',
   },
   modalMetaSub: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
   },
   toolbarCard: {
-    padding: 14,
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 12,
     marginBottom: 16,
   },
   toolbarSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 6,
   },
   toolbarLabel: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
-    minWidth: 120,
+    color: '#64748B',
   },
   toolbarPills: {
     flexDirection: 'row',
@@ -1302,19 +1384,16 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   toolbarPill: {
-    paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: Radius.sm,
+    paddingVertical: 5,
+    borderRadius: 6,
     backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
   toolbarPillActive: {
-    backgroundColor: '#18794E',
-    borderColor: '#18794E',
+    backgroundColor: '#15803D',
   },
   toolbarPillText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#475569',
   },
@@ -1322,91 +1401,92 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   threadSection: {
-    marginBottom: 20,
-    gap: 12,
+    marginBottom: 16,
   },
   threadSectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    marginBottom: 10,
   },
   threadTitle: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
   },
   messagesTimeline: {
-    gap: 12,
+    gap: 10,
   },
   messageBubble: {
-    padding: 14,
-    borderRadius: Radius.md,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    gap: 8,
-  },
-  messageBubbleRequester: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E2E8F0',
   },
   messageBubbleAdmin: {
     backgroundColor: '#F0FDF4',
     borderColor: '#BBF7D0',
+    alignSelf: 'flex-end',
+    width: '92%',
+  },
+  messageBubbleRequester: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    alignSelf: 'flex-start',
+    width: '92%',
   },
   messageBubbleHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
+    marginBottom: 6,
   },
   senderInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   roleTag: {
-    paddingVertical: 2,
     paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 4,
+  },
+  roleTagAdmin: {
+    backgroundColor: '#DCFCE7',
   },
   roleTagRequester: {
     backgroundColor: '#E0F2FE',
   },
-  roleTagAdmin: {
-    backgroundColor: '#18794E',
-  },
   roleTagText: {
     fontSize: 10,
-    fontWeight: '800',
-  },
-  roleTagTextRequester: {
-    color: '#0369A1',
+    fontWeight: '700',
   },
   roleTagTextAdmin: {
-    color: '#FFFFFF',
+    color: '#15803D',
+  },
+  roleTagTextRequester: {
+    color: '#0284C7',
   },
   senderNameText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0F172A',
   },
   messageTimestamp: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#94A3B8',
   },
   messageBodyText: {
     fontSize: 13,
     color: '#1E293B',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   replyComposerCard: {
-    padding: 16,
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 10,
-    marginBottom: 20,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
   },
   replyComposerTitle: {
     fontSize: 14,
@@ -1414,51 +1494,52 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   replyComposerSubtitle: {
-    lineHeight: 16,
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 10,
   },
   modalAlertError: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: '#FEF2F2',
-    padding: 10,
-    borderRadius: Radius.sm,
-    borderColor: '#FECACA',
-    borderWidth: 1,
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 8,
   },
   modalAlertErrorText: {
     fontSize: 12,
     color: '#DC2626',
-    fontWeight: '600',
   },
   replyTextInput: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.sm,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    padding: 12,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 10,
     fontSize: 13,
     color: '#0F172A',
-    minHeight: 90,
+    minHeight: 80,
     textAlignVertical: 'top',
   },
   replyActionsRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    marginTop: 10,
   },
   closedNoticeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 14,
     backgroundColor: '#F1F5F9',
-    borderRadius: Radius.md,
-    marginBottom: 20,
+    padding: 14,
+    borderRadius: 10,
+    marginBottom: 16,
   },
   closedNoticeText: {
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '500',
+    fontSize: 12.5,
+    color: '#64748B',
     flex: 1,
   },
 });

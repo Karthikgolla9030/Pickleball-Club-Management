@@ -23,7 +23,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock, Mail, ShieldAlert, ShieldCheck } from 'lucide-react-native';
 
-import { AppText, Button, Card, Input, Screen } from '@/components';
+import { AppText, Button, Card, Input, PlatformButton, Screen } from '@/components';
 import { useAuth } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
 
@@ -152,12 +152,13 @@ export default function PlatformLoginScreen() {
                 </View>
               )}
 
-              <Button
+              <PlatformButton
+                size="md"
                 label={isLoading ? 'Verifying Authorization...' : 'Sign In as Platform Owner'}
-                variant="primary"
                 onPress={handleLogin}
                 loading={isLoading}
                 disabled={isLoading}
+                fullWidth
                 style={styles.submitBtn}
               />
             </View>

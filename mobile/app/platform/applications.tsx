@@ -50,6 +50,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  PlatformButton,
   PlatformShell,
 } from '@/components';
 import {
@@ -423,15 +424,14 @@ export default function PlatformApplicationsScreen() {
                       <AppText style={styles.rejectMiniText}>Reject</AppText>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.approveMiniBtn}
+                    <PlatformButton
+                      size="sm"
+                      label="Approve Club"
+                      leftIcon={<CheckCircle2 size={14} color="#FFFFFF" />}
                       onPress={() => handleApprove(item)}
                       disabled={isRejecting || isApproving}
                       accessibilityLabel="Approve application"
-                    >
-                      <CheckCircle2 size={14} color="#FFFFFF" />
-                      <AppText style={styles.approveMiniText}>Approve Club</AppText>
-                    </TouchableOpacity>
+                    />
                   </View>
                 )}
               </View>
@@ -641,9 +641,10 @@ export default function PlatformApplicationsScreen() {
                   disabled={isApproving || isRejecting}
                   style={styles.modalRejectBtn}
                 />
-                <Button
+                <PlatformButton
+                  size="md"
                   label={isApproving ? 'Approving...' : 'Approve & Activate Club'}
-                  variant="primary"
+                  leftIcon={<CheckCircle2 size={15} color="#FFFFFF" />}
                   onPress={() => handleApprove(selectedApp)}
                   loading={isApproving}
                   disabled={isApproving || isRejecting}

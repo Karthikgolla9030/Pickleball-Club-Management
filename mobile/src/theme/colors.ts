@@ -89,6 +89,15 @@ export const Colors = {
     separator: '#E5E7EB',
   },
 
+  // ─── Platform Admin ────────────────────────────────────────────────────────
+  platform: {
+    primary: '#15803D',       // Standardized Platform Admin action green (Tailwind green-700)
+    primaryHover: '#166534',  // Darker green for hover / pressed state
+    primaryLight: '#E6F4EA',  // Soft pale green background tint
+    primaryBorder: '#15803D',
+    text: '#FFFFFF',
+  },
+
   // ─── Transparent ───────────────────────────────────────────────────────────
   transparent: 'transparent',
   black: '#000000',

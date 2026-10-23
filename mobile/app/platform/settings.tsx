@@ -70,6 +70,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  PlatformButton,
   PlatformShell,
 } from '@/components';
 import {
@@ -454,14 +455,13 @@ export default function PlatformSettingsScreen() {
               disabled={!hasChanges || isSaving}
               style={styles.discardBtn}
             />
-            <Button
-              label={isSaving ? 'Saving...' : 'Save Settings'}
-              variant="primary"
+            <PlatformButton
               size="md"
+              label={isSaving ? 'Saving...' : 'Save Settings'}
+              leftIcon={<Save size={15} color="#FFFFFF" />}
               onPress={handlePreSave}
               disabled={!hasChanges || isSaving}
               loading={isSaving}
-              leftIcon={<Save size={16} color="#FFFFFF" />}
               style={styles.saveBtn}
             />
           </View>
@@ -624,10 +624,9 @@ export default function PlatformSettingsScreen() {
                 onPress={() => setConfirmModalVisible(false)}
                 style={styles.confirmCancelBtn}
               />
-              <Button
-                label="Confirm & Apply"
-                variant="primary"
+              <PlatformButton
                 size="md"
+                label="Confirm & Apply"
                 onPress={() => executeSave(confirmReason)}
                 loading={isSaving}
                 style={styles.confirmApplyBtn}

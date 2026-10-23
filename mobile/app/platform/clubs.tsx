@@ -67,6 +67,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
+  PlatformButton,
   PlatformShell,
 } from '@/components';
 import {
@@ -625,7 +626,7 @@ export default function PlatformClubsScreen() {
                         onPress={() => openStatusModal(selectedClub, true)}
                         activeOpacity={0.8}
                       >
-                        <CheckCircle2 size={15} color="#18794E" />
+                        <CheckCircle2 size={15} color="#15803D" />
                         <AppText style={styles.reactivateBtnText}>Reactivate Facility</AppText>
                       </TouchableOpacity>
                     )}
@@ -711,22 +712,24 @@ export default function PlatformClubsScreen() {
                 <AppText style={styles.cancelBtnText}>Cancel</AppText>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.submitBtn,
-                  statusTarget?.targetActive ? styles.submitBtnReactivate : styles.submitBtnSuspend,
-                ]}
-                onPress={handleStatusSubmit}
-                disabled={isUpdatingStatus}
-              >
-                <AppText style={styles.submitBtnText}>
-                  {isUpdatingStatus
-                    ? 'Updating...'
-                    : statusTarget?.targetActive
-                    ? 'Confirm Reactivation'
-                    : 'Confirm Suspension'}
-                </AppText>
-              </TouchableOpacity>
+              {statusTarget?.targetActive ? (
+                <PlatformButton
+                  size="sm"
+                  label={isUpdatingStatus ? 'Updating...' : 'Confirm Reactivation'}
+                  onPress={handleStatusSubmit}
+                  loading={isUpdatingStatus}
+                />
+              ) : (
+                <TouchableOpacity
+                  style={[styles.submitBtn, styles.submitBtnSuspend]}
+                  onPress={handleStatusSubmit}
+                  disabled={isUpdatingStatus}
+                >
+                  <AppText style={styles.submitBtnText}>
+                    {isUpdatingStatus ? 'Updating...' : 'Confirm Suspension'}
+                  </AppText>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -838,18 +841,15 @@ function ClubItemCard({
         </View>
       </View>
 
-      {/* Bottom Action: Inspect Facility Profile Button (Solid Green, slightly lower, right aligned) */}
+      {/* Bottom Action: Inspect Facility Profile Button (Standardized Platform Green) */}
       <View style={styles.inspectBtnRow}>
-        <TouchableOpacity
-          style={styles.inspectFacilityBtn}
+        <PlatformButton
+          size="sm"
+          label="Inspect Facility Profile"
+          leftIcon={<Eye size={14} color="#FFFFFF" strokeWidth={2.2} />}
           onPress={() => onInspect(item)}
-          activeOpacity={0.8}
           accessibilityLabel={`Inspect profile for ${item.name}`}
-          accessibilityRole="button"
-        >
-          <Eye size={14} color="#FFFFFF" strokeWidth={2.2} />
-          <AppText style={styles.inspectFacilityBtnText}>Inspect Facility Profile</AppText>
-        </TouchableOpacity>
+        />
       </View>
     </Card>
   );
@@ -1323,7 +1323,7 @@ const styles = StyleSheet.create({
   reactivateBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#18794E',
+    color: '#15803D',
   },
   confirmModalCard: {
     backgroundColor: '#FFFFFF',

@@ -1,14 +1,19 @@
 /**
  * Pickleball Multi-Club Platform — Platform Admin Users Directory
  *
- * Dedicated administrative overview of registered platform users:
- * - Search by name, email, or user UUID
- * - Filter by account status (All, Active, Inactive) and role (All, Staff, Players)
- * - User detail inspection modal showing cross-club staff roles and player memberships
- * - Standardized PlatformShell with consistent navigation, light theme, and error/empty/loading states
+ * Pixel-accurate visual implementation matching mobile reference design:
+ * - Top header with official Pickleball product logo, "Platform Admin" label, notification bell & avatar
+ * - Page heading "Users" and subtitle "Manage all platform accounts and their access"
+ * - 3 Summary KPI cards: Total Accounts (green), Active Accounts (blue), Club Staff Members (purple)
+ * - Pill-style filters: All Accounts (with badge), Active (with badge), Inactive (with badge), All Roles, Club Staff, Players
+ * - Search bar with right-aligned filter button
+ * - User account cards with avatar initials, name, email, italic club memberships, status & verified badges,
+ *   joined date, and solid green "Inspect Account" action button
+ * - Comprehensive cross-club staff roles & player memberships inspection modal
+ * - Zero content overlap behind fixed bottom navigation
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -18,53 +23,84 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
-  Award,
   Building2,
   Calendar,
   CheckCircle2,
   Eye,
-  Mail,
-  RefreshCw,
   Search,
   Shield,
   ShieldAlert,
-  ShieldCheck,
+  SlidersHorizontal,
   User,
-  UserCheck,
   Users,
   X,
-  XCircle,
 } from 'lucide-react-native';
 
 import {
   AppText,
   Badge,
-  Button,
   Card,
   EmptyState,
   ErrorState,
   LoadingState,
+  PlatformButton,
   PlatformShell,
 } from '@/components';
 import {
   PlatformUserItem,
   platformApplicationsApi,
 } from '@/services/api/clubApplications';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Radius, Spacing } from '@/theme';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 type RoleFilter = 'all' | 'staff' | 'player';
 
+function formatJoinedDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+}
+
+function getAvatarInitial(name?: string | null, email?: string): string {
+  if (name && name.trim()) {
+    return name.trim().charAt(0).toUpperCase();
+  }
+  if (email && email.trim()) {
+    return email.trim().charAt(0).toUpperCase();
+  }
+  return 'U';
+}
+
+function getAvatarTheme(seed: string): { bg: string; text: string } {
+  const themes = [
+    { bg: '#E6F4EA', text: '#15803D' }, // Green
+    { bg: '#E0F2FE', text: '#0284C7' }, // Blue
+    { bg: '#F3E8FF', text: '#9333EA' }, // Purple
+    { bg: '#FEF3C7', text: '#D97706' }, // Amber
+    { bg: '#FEE2E2', text: '#DC2626' }, // Rose
+    { bg: '#EDE9FE', text: '#7C3AED' }, // Violet
+  ];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % themes.length;
+  return themes[index];
+}
+
 export default function PlatformUsersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
-  const [users, setUsers] = useState<PlatformUserItem[]>([]);
+  const [allUsers, setAllUsers] = useState<PlatformUserItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
@@ -73,7 +109,15 @@ export default function PlatformUsersScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Detail Modal
+  // Overall platform counts for telemetry cards
+  const [platformMetrics, setPlatformMetrics] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+    staff: 0,
+  });
+
+  // User detail inspection modal
   const [selectedUser, setSelectedUser] = useState<PlatformUserItem | null>(null);
 
   const fetchUsers = useCallback(async (isRefresh = false) => {
@@ -85,32 +129,26 @@ export default function PlatformUsersScreen() {
     setError(null);
 
     try {
-      const isActiveParam =
-        statusFilter === 'all' ? undefined : statusFilter === 'active';
-      const roleParam =
-        roleFilter === 'all'
-          ? undefined
-          : roleFilter === 'player'
-          ? 'player'
-          : undefined;
-
+      // Fetch platform users
       const res = await platformApplicationsApi.listUsers({
         page: 1,
         pageSize: 100,
-        search: searchQuery.trim() || undefined,
-        isActive: isActiveParam,
-        role: roleParam,
       });
 
-      let items = res.items || [];
-
-      // If filtering for staff (any non-player role), filter on client if not exact role
-      if (roleFilter === 'staff') {
-        items = items.filter((u) => u.club_memberships && u.club_memberships.length > 0);
-      }
-
-      setUsers(items);
+      const items = res.items || [];
+      setAllUsers(items);
       setTotalCount(res.total || items.length);
+
+      const active = items.filter((u) => u.is_active).length;
+      const inactive = items.filter((u) => !u.is_active).length;
+      const staff = items.filter((u) => u.club_memberships && u.club_memberships.length > 0).length;
+
+      setPlatformMetrics({
+        total: res.total || items.length,
+        active,
+        inactive,
+        staff,
+      });
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to fetch platform users';
       setError(msg);
@@ -118,163 +156,292 @@ export default function PlatformUsersScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [statusFilter, roleFilter, searchQuery]);
+  }, []);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const activeUsersCount = users.filter((u) => u.is_active).length;
-  const staffUsersCount = users.filter((u) => u.club_memberships && u.club_memberships.length > 0).length;
+  // Client-side filtering for fast instant responsiveness matching pills and search
+  const filteredUsers = useMemo(() => {
+    let result = [...allUsers];
+
+    // Status filter
+    if (statusFilter === 'active') {
+      result = result.filter((u) => u.is_active);
+    } else if (statusFilter === 'inactive') {
+      result = result.filter((u) => !u.is_active);
+    }
+
+    // Role filter
+    if (roleFilter === 'staff') {
+      result = result.filter((u) => u.club_memberships && u.club_memberships.length > 0);
+    } else if (roleFilter === 'player') {
+      result = result.filter(
+        (u) =>
+          u.club_player_memberships &&
+          u.club_player_memberships.length > 0 &&
+          (!u.club_memberships || u.club_memberships.length === 0)
+      );
+    }
+
+    // Search query
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      result = result.filter(
+        (u) =>
+          (u.full_name && u.full_name.toLowerCase().includes(q)) ||
+          (u.email && u.email.toLowerCase().includes(q)) ||
+          (u.id && u.id.toLowerCase().includes(q))
+      );
+    }
+
+    return result;
+  }, [allUsers, statusFilter, roleFilter, searchQuery]);
+
+  const isAllAccountsActive = statusFilter === 'all' && roleFilter === 'all';
+  const isActiveFilterActive = statusFilter === 'active';
+  const isInactiveFilterActive = statusFilter === 'inactive';
 
   return (
     <PlatformShell
       activeTab="users"
-      title="Platform Users Directory"
-      subtitle="Platform-wide registered user directory, multi-club staff roles, and player memberships"
       onRefresh={() => fetchUsers(true)}
       isRefreshing={isRefreshing}
+      scrollable={false}
     >
-      {/* Top Telemetry KPI Cards */}
-      <View style={styles.kpiContainer}>
-        <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Total Accounts</AppText>
-          <AppText variant="heading2" color="primary" style={styles.kpiValue}>
-            {totalCount}
-          </AppText>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Active Accounts</AppText>
-          <AppText variant="heading2" color="brand" style={styles.kpiValue}>
-            {activeUsersCount}
-          </AppText>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Club Staff Members</AppText>
-          <AppText variant="heading2" color="primary" style={styles.kpiValue}>
-            {staffUsersCount}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Filter and Search Controls */}
-      <View style={styles.controlsCard}>
-        {/* Account Status and Role Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-          style={styles.filterScroll}
-        >
-          <View style={styles.filterGroup}>
-            <TouchableOpacity
-              style={[styles.filterPill, statusFilter === 'all' && styles.filterPillActive]}
-              onPress={() => setStatusFilter('all')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.filterPillText, statusFilter === 'all' && styles.filterPillTextActive]}>
-                All Accounts
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.filterPill, statusFilter === 'active' && styles.filterPillActive]}
-              onPress={() => setStatusFilter('active')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.filterPillText, statusFilter === 'active' && styles.filterPillTextActive]}>
-                Active
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.filterPill, statusFilter === 'inactive' && styles.filterPillActive]}
-              onPress={() => setStatusFilter('inactive')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.filterPillText, statusFilter === 'inactive' && styles.filterPillTextActive]}>
-                Inactive
-              </AppText>
-            </TouchableOpacity>
-          </View>
-
-          {/* Role Filter Pills */}
-          <View style={styles.filterGroup}>
-            <TouchableOpacity
-              style={[styles.rolePill, roleFilter === 'all' && styles.rolePillActive]}
-              onPress={() => setRoleFilter('all')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.rolePillText, roleFilter === 'all' && styles.rolePillTextActive]}>
-                All Roles
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.rolePill, roleFilter === 'staff' && styles.rolePillActive]}
-              onPress={() => setRoleFilter('staff')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.rolePillText, roleFilter === 'staff' && styles.rolePillTextActive]}>
-                Club Staff
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.rolePill, roleFilter === 'player' && styles.rolePillActive]}
-              onPress={() => setRoleFilter('player')}
-              activeOpacity={0.7}
-            >
-              <AppText style={[styles.rolePillText, roleFilter === 'player' && styles.rolePillTextActive]}>
-                Players
-              </AppText>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-
-        {/* Search Bar */}
-        <View style={styles.searchWrapper}>
-          <Search size={16} color="#667776" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by full name, email, or user UUID..."
-            placeholderTextColor="#8FA39E"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
+      <FlatList
+        data={filteredUsers}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => fetchUsers(true)}
+            tintColor="#15803D"
           />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <X size={16} color="#667776" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+        }
+        ListHeaderComponent={
+          <View>
+            {/* 1. Page Heading */}
+            <View style={styles.headerSection}>
+              <AppText style={styles.screenTitle}>Users</AppText>
+              <AppText style={styles.screenSubtitle}>
+                Manage all platform accounts and their access
+              </AppText>
+            </View>
 
-      {/* Main Users List */}
-      {isLoading ? (
-        <LoadingState message="Loading platform users directory..." />
-      ) : error ? (
-        <ErrorState message={error} onRetry={() => fetchUsers(true)} />
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => fetchUsers(true)}
-              tintColor="#18794E"
-            />
-          }
-          ListEmptyComponent={
+            {/* 2. Account Summary Cards */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.summaryCardsRow}
+            >
+              {/* Total Accounts */}
+              <View style={styles.summaryCard}>
+                <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
+                  <Users size={20} color="#16A34A" />
+                </View>
+                <View style={styles.summaryTextBox}>
+                  <AppText style={styles.summaryLabel}>Total Accounts</AppText>
+                  <AppText style={styles.summaryValue}>{platformMetrics.total}</AppText>
+                </View>
+              </View>
+
+              {/* Active Accounts */}
+              <View style={styles.summaryCard}>
+                <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
+                  <User size={20} color="#0284C7" />
+                </View>
+                <View style={styles.summaryTextBox}>
+                  <AppText style={styles.summaryLabel}>Active Accounts</AppText>
+                  <AppText style={styles.summaryValue}>{platformMetrics.active}</AppText>
+                </View>
+              </View>
+
+              {/* Club Staff Members */}
+              <View style={styles.summaryCard}>
+                <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
+                  <Users size={20} color="#9333EA" />
+                </View>
+                <View style={styles.summaryTextBox}>
+                  <AppText style={styles.summaryLabel}>Club Staff Members</AppText>
+                  <AppText style={styles.summaryValue}>{platformMetrics.staff}</AppText>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* 3. Filter Pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterPillsRow}
+            >
+              {/* All Accounts */}
+              <TouchableOpacity
+                style={[styles.pill, isAllAccountsActive && styles.pillActive]}
+                onPress={() => {
+                  setStatusFilter('all');
+                  setRoleFilter('all');
+                }}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, isAllAccountsActive && styles.pillTextActive]}>
+                  All Accounts
+                </AppText>
+                <View
+                  style={[
+                    styles.pillBadge,
+                    isAllAccountsActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                  ]}
+                >
+                  <AppText
+                    style={[
+                      styles.pillBadgeText,
+                      isAllAccountsActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                    ]}
+                  >
+                    {platformMetrics.total}
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+
+              {/* Active */}
+              <TouchableOpacity
+                style={[styles.pill, isActiveFilterActive && styles.pillActive]}
+                onPress={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, isActiveFilterActive && styles.pillTextActive]}>
+                  Active
+                </AppText>
+                <View
+                  style={[
+                    styles.pillBadge,
+                    isActiveFilterActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                  ]}
+                >
+                  <AppText
+                    style={[
+                      styles.pillBadgeText,
+                      isActiveFilterActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                    ]}
+                  >
+                    {platformMetrics.active}
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+
+              {/* Inactive */}
+              <TouchableOpacity
+                style={[styles.pill, isInactiveFilterActive && styles.pillActive]}
+                onPress={() => setStatusFilter(statusFilter === 'inactive' ? 'all' : 'inactive')}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, isInactiveFilterActive && styles.pillTextActive]}>
+                  Inactive
+                </AppText>
+                <View
+                  style={[
+                    styles.pillBadge,
+                    isInactiveFilterActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                  ]}
+                >
+                  <AppText
+                    style={[
+                      styles.pillBadgeText,
+                      isInactiveFilterActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                    ]}
+                  >
+                    {platformMetrics.inactive}
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+
+              {/* All Roles */}
+              <TouchableOpacity
+                style={[styles.pill, roleFilter === 'all' && statusFilter !== 'all' && styles.pillActive]}
+                onPress={() => setRoleFilter('all')}
+                activeOpacity={0.7}
+              >
+                <AppText
+                  style={[
+                    styles.pillText,
+                    roleFilter === 'all' && statusFilter !== 'all' && styles.pillTextActive,
+                  ]}
+                >
+                  All Roles
+                </AppText>
+              </TouchableOpacity>
+
+              {/* Club Staff */}
+              <TouchableOpacity
+                style={[styles.pill, roleFilter === 'staff' && styles.pillActive]}
+                onPress={() => setRoleFilter(roleFilter === 'staff' ? 'all' : 'staff')}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, roleFilter === 'staff' && styles.pillTextActive]}>
+                  Club Staff
+                </AppText>
+              </TouchableOpacity>
+
+              {/* Players */}
+              <TouchableOpacity
+                style={[styles.pill, roleFilter === 'player' && styles.pillActive]}
+                onPress={() => setRoleFilter(roleFilter === 'player' ? 'all' : 'player')}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, roleFilter === 'player' && styles.pillTextActive]}>
+                  Players
+                </AppText>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* 4. Search Field & Filter Button */}
+            <View style={styles.searchRow}>
+              <View style={styles.searchBar}>
+                <Search size={16} color="#94A3B8" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search by full name, email, or user UUID..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.filterIconButton}
+                onPress={() => {
+                  setStatusFilter('all');
+                  setRoleFilter('all');
+                  setSearchQuery('');
+                }}
+                activeOpacity={0.7}
+                accessibilityLabel="Reset filters"
+              >
+                <SlidersHorizontal size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <LoadingState message="Loading platform users directory..." />
+          ) : error ? (
+            <ErrorState message={error} onRetry={() => fetchUsers(true)} />
+          ) : (
             <Card style={styles.emptyCard}>
               <EmptyState
                 icon="👥"
@@ -286,100 +453,104 @@ export default function PlatformUsersScreen() {
                 }
               />
             </Card>
-          }
-          renderItem={({ item }) => {
-            const hasStaffRoles = item.club_memberships && item.club_memberships.length > 0;
-            const hasPlayerMemberships = item.club_player_memberships && item.club_player_memberships.length > 0;
+          )
+        }
+        renderItem={({ item }) => {
+          const displayName = item.full_name || 'Unnamed User';
+          const initial = getAvatarInitial(displayName, item.email);
+          const avatarTheme = getAvatarTheme(displayName + item.email);
 
-            return (
-              <Card style={styles.userCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.userTitleGroup}>
-                    <View style={styles.userTitleRow}>
-                      <View style={styles.userAvatarWrap}>
-                        <User size={16} color="#18794E" />
-                      </View>
-                      <View style={styles.nameAndEmail}>
-                        <AppText variant="title" color="primary" numberOfLines={1} style={styles.userName}>
-                          {item.full_name || 'Unnamed User'}
-                        </AppText>
-                        <AppText variant="caption" color="secondary" style={styles.userEmail}>
-                          {item.email}
-                        </AppText>
-                      </View>
-                    </View>
-                  </View>
+          const totalMemberships =
+            item.total_memberships_count !== undefined
+              ? item.total_memberships_count
+              : (item.club_memberships?.length || 0) + (item.club_player_memberships?.length || 0);
 
-                  <View style={styles.badgesGroup}>
-                    <Badge
-                      label={item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                      variant={item.is_active ? 'success' : 'error'}
-                      size="sm"
-                    />
-                    {item.is_verified && (
-                      <Badge
-                        label="VERIFIED"
-                        variant="default"
-                        size="sm"
-                      />
-                    )}
+          const membershipsSummary =
+            totalMemberships === 0
+              ? 'No active club memberships'
+              : totalMemberships === 1
+              ? '1 club membership'
+              : `${totalMemberships} club memberships`;
+
+          return (
+            <Card style={styles.userCard}>
+              {/* Top Section */}
+              <View style={styles.cardTopRow}>
+                {/* Left: Avatar Circle */}
+                <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
+                  <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
+                    {initial}
+                  </AppText>
+                </View>
+
+                {/* Middle: User Info */}
+                <View style={styles.userInfoCol}>
+                  <AppText style={styles.userName} numberOfLines={1}>
+                    {displayName}
+                  </AppText>
+                  <AppText style={styles.userEmail} numberOfLines={1}>
+                    {item.email}
+                  </AppText>
+                  <View style={styles.metaRow}>
+                    <Users size={13} color="#64748B" />
+                    <AppText style={styles.metaTextItalic} numberOfLines={1}>
+                      {membershipsSummary}
+                    </AppText>
                   </View>
                 </View>
 
-                {/* Cross-Club Role Summary Tags */}
-                <View style={styles.membershipsRow}>
-                  {hasStaffRoles &&
-                    item.club_memberships.map((m) => (
-                      <View key={m.id} style={styles.staffRolePill}>
-                        <Shield size={12} color="#18794E" />
-                        <AppText style={styles.staffRolePillText}>
-                          {m.club_name}: {m.role_label}
-                        </AppText>
-                      </View>
-                    ))}
-
-                  {hasPlayerMemberships &&
-                    item.club_player_memberships.map((pm) => (
-                      <View key={pm.id} style={styles.playerRolePill}>
-                        <Users size={12} color="#2563EB" />
-                        <AppText style={styles.playerRolePillText}>
-                          {pm.club_name}: Player
-                        </AppText>
-                      </View>
-                    ))}
-
-                  {!hasStaffRoles && !hasPlayerMemberships && (
-                    <AppText variant="caption" color="tertiary" style={styles.noMembershipsText}>
-                      No active club memberships
+                {/* Right: Badges */}
+                <View style={styles.badgesGroup}>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
+                    ]}
+                  >
+                    <AppText
+                      style={[
+                        styles.statusBadgeText,
+                        { color: item.is_active ? '#15803D' : '#DC2626' },
+                      ]}
+                    >
+                      {item.is_active ? 'ACTIVE' : 'INACTIVE'}
                     </AppText>
+                  </View>
+
+                  {item.is_verified && (
+                    <View style={styles.verifiedBadge}>
+                      <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
+                    </View>
                   )}
                 </View>
+              </View>
 
-                {/* Footer and Inspection Action */}
-                <View style={styles.cardFooter}>
-                  <View style={styles.footerItem}>
-                    <Calendar size={13} color="#667776" />
-                    <AppText variant="caption" color="secondary">
-                      Joined {new Date(item.created_at).toLocaleDateString()}
-                    </AppText>
-                  </View>
+              {/* Subtle Horizontal Divider */}
+              <View style={styles.cardDivider} />
 
-                  <Button
-                    label="Inspect Account"
-                    variant="outline"
-                    size="sm"
-                    onPress={() => setSelectedUser(item)}
-                    leftIcon={<Eye size={14} color="#18794E" />}
-                    style={styles.inspectBtn}
-                  />
+              {/* Bottom Action Row */}
+              <View style={styles.cardBottomRow}>
+                <View style={styles.joinedDateRow}>
+                  <Calendar size={13} color="#64748B" />
+                  <AppText style={styles.joinedDateText}>
+                    Joined {formatJoinedDate(item.created_at)}
+                  </AppText>
                 </View>
-              </Card>
-            );
-          }}
-        />
-      )}
 
-      {/* User Detail Inspection Modal */}
+                <PlatformButton
+                  size="sm"
+                  label="Inspect Account"
+                  leftIcon={<Eye size={14} color="#FFFFFF" strokeWidth={2.2} />}
+                  onPress={() => setSelectedUser(item)}
+                  accessibilityLabel={`Inspect account for ${displayName}`}
+                />
+              </View>
+            </Card>
+          );
+        }}
+      />
+
+      {/* ─── User Detail Inspection Modal ────────────────────────────────────── */}
       <Modal
         visible={!!selectedUser}
         animationType="slide"
@@ -401,6 +572,7 @@ export default function PlatformUsersScreen() {
                 onPress={() => setSelectedUser(null)}
                 style={styles.modalCloseBtn}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Close dialog"
               >
                 <X size={20} color="#2A4540" />
               </TouchableOpacity>
@@ -416,15 +588,25 @@ export default function PlatformUsersScreen() {
                     </AppText>
                     <View style={styles.detailGrid}>
                       <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Email Address:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>{selectedUser.email}</AppText>
+                        <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                          Email Address:
+                        </AppText>
+                        <AppText variant="body" color="primary" style={styles.gridVal}>
+                          {selectedUser.email}
+                        </AppText>
                       </View>
                       <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Full Name:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>{selectedUser.full_name || 'Not provided'}</AppText>
+                        <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                          Full Name:
+                        </AppText>
+                        <AppText variant="body" color="primary" style={styles.gridVal}>
+                          {selectedUser.full_name || 'Not provided'}
+                        </AppText>
                       </View>
                       <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Account Status:</AppText>
+                        <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                          Account Status:
+                        </AppText>
                         <Badge
                           label={selectedUser.is_active ? 'ACTIVE' : 'INACTIVE'}
                           variant={selectedUser.is_active ? 'success' : 'error'}
@@ -432,7 +614,9 @@ export default function PlatformUsersScreen() {
                         />
                       </View>
                       <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Email Verified:</AppText>
+                        <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                          Email Verified:
+                        </AppText>
                         <Badge
                           label={selectedUser.is_verified ? 'VERIFIED' : 'UNVERIFIED'}
                           variant={selectedUser.is_verified ? 'success' : 'default'}
@@ -440,7 +624,9 @@ export default function PlatformUsersScreen() {
                         />
                       </View>
                       <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Registration Date:</AppText>
+                        <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                          Registration Date:
+                        </AppText>
                         <AppText variant="body" color="primary" style={styles.gridVal}>
                           {new Date(selectedUser.created_at).toLocaleString()}
                         </AppText>
@@ -456,13 +642,17 @@ export default function PlatformUsersScreen() {
                     {selectedUser.player_profile ? (
                       <View style={styles.detailGrid}>
                         <View style={styles.gridRow}>
-                          <AppText variant="caption" color="secondary" style={styles.gridKey}>Display Name:</AppText>
+                          <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                            Display Name:
+                          </AppText>
                           <AppText variant="body" color="primary" style={styles.gridVal}>
                             {selectedUser.player_profile.display_name || 'None'}
                           </AppText>
                         </View>
                         <View style={styles.gridRow}>
-                          <AppText variant="caption" color="secondary" style={styles.gridKey}>Skill Rating:</AppText>
+                          <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                            Skill Rating:
+                          </AppText>
                           <AppText variant="body" color="primary" style={styles.gridVal}>
                             {selectedUser.player_profile.skill_rating != null
                               ? selectedUser.player_profile.skill_rating.toFixed(2)
@@ -492,8 +682,12 @@ export default function PlatformUsersScreen() {
                           <View key={m.id} style={styles.membershipDetailCard}>
                             <View style={styles.membershipCardHeader}>
                               <View>
-                                <AppText variant="title" color="primary">{m.club_name}</AppText>
-                                <AppText variant="caption" color="secondary">slug: /{m.club_slug}</AppText>
+                                <AppText variant="title" color="primary">
+                                  {m.club_name}
+                                </AppText>
+                                <AppText variant="caption" color="secondary">
+                                  slug: /{m.club_slug}
+                                </AppText>
                               </View>
                               <Badge
                                 label={m.role_label.toUpperCase()}
@@ -532,7 +726,9 @@ export default function PlatformUsersScreen() {
                           <View key={pm.id} style={styles.membershipDetailCard}>
                             <View style={styles.membershipCardHeader}>
                               <View>
-                                <AppText variant="title" color="primary">{pm.club_name}</AppText>
+                                <AppText variant="title" color="primary">
+                                  {pm.club_name}
+                                </AppText>
                                 <AppText variant="caption" color="secondary">
                                   {pm.membership_number ? `Number: ${pm.membership_number} · ` : ''}slug: /{pm.club_slug}
                                 </AppText>
@@ -556,7 +752,7 @@ export default function PlatformUsersScreen() {
 
                   {/* Platform Boundary Notice */}
                   <View style={styles.boundaryCard}>
-                    <ShieldAlert size={16} color="#18794E" />
+                    <ShieldAlert size={16} color="#15803D" />
                     <AppText variant="caption" color="secondary" style={styles.boundaryText}>
                       Club staff roles and player membership statuses are managed within each respective Club Portal by the club owner.
                     </AppText>
@@ -566,9 +762,10 @@ export default function PlatformUsersScreen() {
             </ScrollView>
 
             <View style={styles.modalBottomActions}>
-              <Button
-                label="Close"
+              <PlatformButton
+                size="md"
                 variant="outline"
+                label="Close"
                 onPress={() => setSelectedUser(null)}
                 style={styles.modalCloseButton}
               />
@@ -581,95 +778,149 @@ export default function PlatformUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  kpiContainer: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: Spacing.md,
-    flexWrap: 'wrap',
+  listContent: {
+    paddingBottom: 36,
   },
-  kpiCard: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 140,
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E2EBE6',
+
+  // ─── Header Section ────────────────────────────────────────────────────────
+  headerSection: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
   },
-  kpiValue: {
+  screenTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.4,
+  },
+  screenSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
     marginTop: 4,
   },
-  controlsCard: {
+
+  // ─── Account Summary Cards ─────────────────────────────────────────────────
+  summaryCardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingBottom: 16,
+  },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2EBE6',
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    gap: 8,
+    borderColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minWidth: 144,
+    gap: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
   },
-  filterScroll: {
-    flexGrow: 0,
-    marginBottom: 4,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 2,
-  },
-  filterGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#F0F5F2',
-  },
-  filterPillActive: {
-    backgroundColor: '#18794E',
-  },
-  filterPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4B635D',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-  },
-  rolePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    backgroundColor: '#EEF3F0',
-    borderWidth: 1,
-    borderColor: '#D7E5DE',
-  },
-  rolePillActive: {
-    backgroundColor: '#18794E',
-    borderColor: '#18794E',
-  },
-  rolePillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4B635D',
-  },
-  rolePillTextActive: {
-    color: '#FFFFFF',
-  },
-  searchWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAF9',
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#D7E5DE',
+  summaryIconBox: {
+    width: 40,
     height: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryTextBox: {
+    justifyContent: 'center',
+  },
+  summaryLabel: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  summaryValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+
+  // ─── Filter Pills ──────────────────────────────────────────────────────────
+  filterPillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingBottom: 14,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+  },
+  pillActive: {
+    backgroundColor: '#15803D',
+  },
+  pillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  pillTextActive: {
+    color: '#FFFFFF',
+  },
+  pillBadge: {
+    borderRadius: Radius.full,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    minWidth: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillBadgeActive: {
+    backgroundColor: '#166534',
+  },
+  pillBadgeInactive: {
+    backgroundColor: '#E2E8F0',
+  },
+  pillBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pillBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  pillBadgeTextInactive: {
+    color: '#475569',
+  },
+
+  // ─── Search Field & Filter Button ──────────────────────────────────────────
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    height: 44,
+    paddingHorizontal: 12,
   },
   searchIcon: {
     marginRight: 8,
@@ -677,126 +928,137 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#122521',
+    color: '#0F172A',
+    height: '100%',
   },
-  listContent: {
+  filterIconButton: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ─── User Account Cards ────────────────────────────────────────────────────
+  userCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 16,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
-    paddingBottom: 36,
   },
+  avatarCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  userInfoCol: {
+    flex: 1,
+    gap: 3,
+  },
+  userName: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  userEmail: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  metaTextItalic: {
+    fontSize: 12.5,
+    color: '#64748B',
+    fontStyle: 'italic',
+  },
+  badgesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  statusBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  verifiedBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  verifiedBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#475569',
+    letterSpacing: 0.3,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  cardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  joinedDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  joinedDateText: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+
   emptyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: '#E2EBE6',
     padding: Spacing.lg,
+    marginHorizontal: 16,
   },
-  userCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2EBE6',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  userTitleGroup: {
-    flex: 1,
-    marginRight: 10,
-  },
-  userTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  userAvatarWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#C3E5D4',
-  },
-  nameAndEmail: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  userEmail: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  badgesGroup: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
-  },
-  membershipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginVertical: 8,
-  },
-  staffRolePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
-    borderWidth: 1,
-    borderColor: '#C3E5D4',
-  },
-  staffRolePillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#18794E',
-  },
-  playerRolePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.md,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  playerRolePillText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1D4ED8',
-  },
-  noMembershipsText: {
-    fontSize: 12,
-    fontStyle: 'italic',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderColor: '#F0F5F2',
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  inspectBtn: {
-    borderColor: '#C3E5D4',
-  },
+
+  // ─── Modal Styles ──────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
@@ -806,7 +1068,7 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 640,
+    maxWidth: 600,
     maxHeight: '85%',
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.xl,
@@ -821,9 +1083,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2EBE6',
+    borderBottomColor: '#EAF6F0',
     backgroundColor: '#FAFDFB',
   },
   modalHeaderTitleGroup: {
@@ -839,87 +1102,83 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   modalBody: {
-    gap: Spacing.md,
-    paddingBottom: 20,
+    gap: Spacing.lg,
+    paddingBottom: Spacing.xl,
   },
   modalSection: {
-    gap: 6,
+    gap: 8,
   },
   sectionHeaderLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#18794E',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAF6F0',
-    paddingBottom: 4,
-    marginBottom: 4,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   detailGrid: {
     gap: 8,
+    backgroundColor: '#F8FAF9',
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#EAF6F0',
   },
   gridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    paddingVertical: 2,
   },
   gridKey: {
     fontSize: 12,
     fontWeight: '600',
-    minWidth: 140,
   },
   gridVal: {
-    flex: 1,
-    textAlign: 'right',
     fontSize: 13,
   },
   membershipsList: {
     gap: 8,
   },
   membershipDetailCard: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    padding: 10,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2EBE6',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
     gap: 6,
   },
   membershipCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   membershipCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#EFF4F1',
+    borderTopColor: '#F0F7F3',
+    paddingTop: 4,
   },
   boundaryCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#F0F7F3',
-    borderWidth: 1,
-    borderColor: '#D4E8DC',
+    backgroundColor: '#FAFDFB',
+    padding: Spacing.md,
     borderRadius: Radius.md,
-    padding: Spacing.sm,
-    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#EAF6F0',
   },
   boundaryText: {
     flex: 1,
-    fontSize: 12,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   modalBottomActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
     padding: Spacing.md,
     borderTopWidth: 1,
     borderTopColor: '#E2EBE6',
     backgroundColor: '#FAFDFB',
+    alignItems: 'flex-end',
   },
   modalCloseButton: {
     minWidth: 100,
