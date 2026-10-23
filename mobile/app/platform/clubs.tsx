@@ -877,7 +877,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     gap: 12,
-    paddingBottom: 24,
+    paddingBottom: 36,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

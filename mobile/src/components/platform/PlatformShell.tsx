@@ -148,35 +148,41 @@ export function PlatformShell({
       />
 
       {/* Main Content Area */}
-      {scrollable ? (
-        <ScrollView
-          style={styles.contentScrollView}
-          contentContainerStyle={[
-            styles.scrollContentContainer,
-            {
-              paddingBottom: isDesktop
-                ? Math.max(insets.bottom, 24) + 32
-                : 24,
-            },
-          ]}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.contentInnerMaxWidth}>{children}</View>
-        </ScrollView>
-      ) : (
-        <View
-          style={[
-            styles.staticContentContainer,
-            {
-              paddingBottom: isDesktop
-                ? Math.max(insets.bottom, 24) + 16
-                : 8,
-            },
-          ]}
-        >
-          <View style={styles.contentInnerMaxWidthFlex}>{children}</View>
-        </View>
-      )}
+      {(() => {
+        const mobileBottomNavHeight = 56 + Math.max(insets.bottom, 12);
+        if (scrollable) {
+          return (
+            <ScrollView
+              style={styles.contentScrollView}
+              contentContainerStyle={[
+                styles.scrollContentContainer,
+                {
+                  paddingBottom: isDesktop
+                    ? Math.max(insets.bottom, 24) + 32
+                    : mobileBottomNavHeight + 36,
+                },
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.contentInnerMaxWidth}>{children}</View>
+            </ScrollView>
+          );
+        }
+        return (
+          <View
+            style={[
+              styles.staticContentContainer,
+              {
+                paddingBottom: isDesktop
+                  ? Math.max(insets.bottom, 24) + 16
+                  : mobileBottomNavHeight + 12,
+              },
+            ]}
+          >
+            <View style={styles.contentInnerMaxWidthFlex}>{children}</View>
+          </View>
+        );
+      })()}
 
       {/* Bottom Navigation Bar on Mobile / Tablet */}
       <PlatformBottomNav

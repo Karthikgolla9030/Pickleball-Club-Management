@@ -31,7 +31,6 @@ import {
   LayoutDashboard,
   LifeBuoy,
   LogOut,
-  Menu,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -94,15 +93,15 @@ export function PlatformHeader({
             style={styles.desktopBrandRow}
             onPress={() => router.push('/platform' as any)}
             activeOpacity={0.8}
+            accessibilityLabel="Pickleball Platform Admin Home"
           >
             <Image
-              source={require('@/../assets/pickleball_ball_icon.png')}
+              source={require('@/../assets/pickleball_logo_primary.png')}
               style={styles.desktopLogoImage}
               resizeMode="contain"
             />
-            <View>
-              <AppText style={styles.desktopBrandTitle}>Pickleball</AppText>
-              <AppText style={styles.desktopBrandSub}>Platform Admin</AppText>
+            <View style={styles.desktopBrandBadge}>
+              <AppText style={styles.desktopBrandBadgeText}>Platform Admin</AppText>
             </View>
           </TouchableOpacity>
 
@@ -173,7 +172,7 @@ export function PlatformHeader({
     );
   }
 
-  // ─── MOBILE HEADER (< 800px) MATCHING REFERENCE ────────────────────────────
+  // ─── MOBILE HEADER (< 800px) ───────────────────────────────────────────────
   const userInitial = adminUser?.full_name?.trim()
     ? adminUser.full_name.trim().charAt(0).toUpperCase()
     : 'P';
@@ -181,29 +180,23 @@ export function PlatformHeader({
   return (
     <View style={[styles.mobileContainer, { paddingTop: insets.top + 6 }]}>
       <View style={styles.mobileInner}>
-        {/* Left: Rounded Menu Button [ ☰ ] */}
+        {/* Brand & Actual Provided Logo (No menu button) */}
         <TouchableOpacity
-          onPress={openDrawer}
-          style={styles.mobileMenuBtn}
-          accessibilityLabel="Open navigation menu"
+          style={styles.mobileBrandBlock}
+          onPress={() => router.push('/platform' as any)}
+          activeOpacity={0.8}
+          accessibilityLabel="Pickleball Platform Admin Home"
           accessibilityRole="button"
-          activeOpacity={0.7}
         >
-          <Menu size={20} color="#111827" strokeWidth={2.2} />
-        </TouchableOpacity>
-
-        {/* Center-Left: Logo & Brand Name */}
-        <View style={styles.mobileBrandBlock}>
           <Image
-            source={require('@/../assets/pickleball_ball_icon.png')}
+            source={require('@/../assets/pickleball_logo_primary.png')}
             style={styles.mobileLogoImage}
             resizeMode="contain"
           />
-          <View style={styles.mobileBrandTextCol}>
-            <AppText style={styles.mobileBrandTitle}>Pickleball</AppText>
-            <AppText style={styles.mobileBrandSubtitle}>Platform Admin</AppText>
+          <View style={styles.brandBadgeWrap}>
+            <AppText style={styles.brandBadgeText}>Platform Admin</AppText>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Right: Notification Bell & User Avatar Circle */}
         <View style={styles.mobileRightSlot}>
@@ -254,21 +247,24 @@ const styles = StyleSheet.create({
   desktopBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   desktopLogoImage: {
-    width: 34,
-    height: 34,
+    width: 96,
+    height: 42,
   },
-  desktopBrandTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.3,
+  desktopBrandBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  desktopBrandSub: {
-    fontSize: 11,
-    color: '#6B7280',
+  desktopBrandBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#4B5563',
   },
   desktopNavGroup: {
     flexDirection: 'row',
@@ -371,48 +367,29 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     justifyContent: 'space-between',
   },
-  mobileMenuBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
   mobileBrandBlock: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 12,
-    gap: 10,
+    gap: 8,
   },
   mobileLogoImage: {
-    width: 36,
-    height: 36,
+    width: 92,
+    height: 40,
   },
-  mobileBrandTextCol: {
-    justifyContent: 'center',
+  brandBadgeWrap: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  mobileBrandTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#111827',
-    letterSpacing: -0.3,
-    lineHeight: 20,
-  },
-  mobileBrandSubtitle: {
-    fontSize: 11.5,
-    fontWeight: '400',
-    color: '#6B7280',
-    lineHeight: 14,
-    marginTop: 1,
+  brandBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#475569',
+    letterSpacing: -0.2,
   },
   mobileRightSlot: {
     flexDirection: 'row',
