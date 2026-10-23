@@ -73,6 +73,7 @@ from app.models.tournament_registration import (
 )
 from app.models.notification import Notification, NotificationPreference
 from app.models.platform_audit_log import PlatformAuditLog
+from app.models.platform_setting import PlatformSetting
 from app.models.support_ticket import (
     SupportTicket,
     SupportTicketMessage,
@@ -92,6 +93,7 @@ __all__ = [
     "ClubCarouselSlide",
     "ClubMediaAsset",
     "PlatformAuditLog",
+    "PlatformSetting",
     "SupportTicket",
     "SupportTicketMessage",
     "TicketCategory",

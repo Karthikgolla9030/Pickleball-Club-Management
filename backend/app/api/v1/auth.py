@@ -76,6 +76,14 @@ async def player_register(
     Self-register a player account.
     Creates User and PlayerProfile. Grants no club staff permissions.
     """
+    from app.services.platform_settings_service import PlatformSettingsService
+    if not await PlatformSettingsService.is_user_registration_allowed(db):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Public player registrations are temporarily paused by platform administration.",
+        )
+
     service = AuthService(db)
     return await service.register_player(
         email=request.email,

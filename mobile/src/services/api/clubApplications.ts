@@ -256,6 +256,52 @@ export interface PlatformTicketUpdateRequest {
   reason?: string;
 }
 
+export interface PlatformRuntimeSettings {
+  id: string;
+  platform_name: string;
+  platform_support_email: string;
+  allow_new_club_registrations: boolean;
+  allow_user_registrations: boolean;
+  maintenance_mode: boolean;
+  max_upload_size_mb: number;
+  created_at: string;
+  updated_at: string;
+  updated_by_id?: string | null;
+  updated_by_email?: string | null;
+}
+
+export interface PlatformReadOnlyConfig {
+  app_name: string;
+  app_version: string;
+  app_env: string;
+  log_level: string;
+  storage_backend: string;
+  upload_base_url: string;
+  max_upload_size_bytes_default: number;
+  s3_bucket?: string | null;
+  s3_region?: string | null;
+  jwt_algorithm: string;
+  access_token_expire_minutes: number;
+  refresh_token_expire_days: number;
+  platform_owner_emails: string[];
+  cors_origins: string[];
+}
+
+export interface PlatformSettingsResponse {
+  runtime_settings: PlatformRuntimeSettings;
+  read_only_config: PlatformReadOnlyConfig;
+}
+
+export interface PlatformSettingsUpdateRequest {
+  platform_name?: string;
+  platform_support_email?: string;
+  allow_new_club_registrations?: boolean;
+  allow_user_registrations?: boolean;
+  maintenance_mode?: boolean;
+  max_upload_size_mb?: number;
+  reason?: string;
+}
+
 export const clubApplicationsApi = {
   /** Submit a new club application without requiring an active club-owner session */
   submit: (payload: SubmitClubApplicationPayload): Promise<ClubApplicationResponse> => {
@@ -468,6 +514,21 @@ export const platformApplicationsApi = {
     return apiClient.post<PlatformSupportTicketDetailResponse>(
       `/api/v1/platform/support/tickets/${ticketId}/replies`,
       { message: message.trim() }
+    );
+  },
+
+  /** Retrieve global platform settings and sanitized read-only config */
+  getSettings: (): Promise<PlatformSettingsResponse> => {
+    return apiClient.get<PlatformSettingsResponse>('/api/v1/platform/settings');
+  },
+
+  /** Update runtime platform settings with audit log */
+  updateSettings: (
+    payload: PlatformSettingsUpdateRequest
+  ): Promise<PlatformSettingsResponse> => {
+    return apiClient.patch<PlatformSettingsResponse>(
+      '/api/v1/platform/settings',
+      payload
     );
   },
 };

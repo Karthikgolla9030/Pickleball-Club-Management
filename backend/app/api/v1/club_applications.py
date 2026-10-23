@@ -41,6 +41,14 @@ async def submit_club_application(
     db: AsyncSession = Depends(get_db),
 ) -> ClubApplicationResponse:
     """Submit a club registration application for platform owner review."""
+    from app.services.platform_settings_service import PlatformSettingsService
+    if not await PlatformSettingsService.is_club_registration_allowed(db):
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Club registration applications are temporarily paused by platform administration.",
+        )
+
     user_id = current_user.id if current_user else None
     return await ClubApplicationService(db).submit_application(
         payload=payload,

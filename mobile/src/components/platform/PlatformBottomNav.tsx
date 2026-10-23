@@ -59,7 +59,8 @@ export function PlatformBottomNav({
   const isSupportActive = normalizedPath.startsWith('/platform/support');
   const isMoreActive =
     normalizedPath.startsWith('/platform/users') ||
-    normalizedPath.startsWith('/platform/audit');
+    normalizedPath.startsWith('/platform/audit') ||
+    normalizedPath.startsWith('/platform/settings');
 
   const handleNavigate = (route: string) => {
     router.replace(route as any);

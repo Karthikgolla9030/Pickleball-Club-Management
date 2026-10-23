@@ -32,6 +32,11 @@ from app.schemas.platform import (
     PlatformAuditLogsListResponse,
     PlatformClubStatusUpdateRequest,
     PlatformClubStatusUpdateResponse,
+    PlatformOverviewApplications,
+    PlatformOverviewClubs,
+    PlatformOverviewResponse,
+    PlatformOverviewTickets,
+    PlatformOverviewUsers,
     PlatformPlayerProfile,
     PlatformUserItem,
     PlatformUserPlayerMembership,
@@ -50,6 +55,11 @@ from app.schemas.support_ticket import (
     SupportTicketUpdateRequest,
     SupportTicketsListResponse,
 )
+from app.schemas.platform_setting import (
+    PlatformSettingsResponse,
+    PlatformSettingsUpdateRequest,
+)
+from app.services.platform_settings_service import PlatformSettingsService
 from app.services.support_ticket_service import SupportTicketService
 
 router = APIRouter(prefix="/platform", tags=["Platform Administration"])
@@ -191,6 +201,96 @@ async def get_platform_me(
         "full_name": current_platform_owner.full_name,
         "is_platform_owner": True,
     }
+
+
+@router.get(
+    "/overview",
+    response_model=PlatformOverviewResponse,
+    summary="Consolidated platform overview metrics",
+    description="Returns real-time aggregate counts for applications, clubs, users, and support tickets.",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def get_platform_overview(
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformOverviewResponse:
+    from sqlalchemy import func, select
+    from app.models.club import Club
+    from app.models.club_application import ClubApplication
+    from app.models.support_ticket import SupportTicket, TicketStatus
+    from app.models.user import User
+
+    # Applications
+    app_res = await db.execute(
+        select(ClubApplication.status, func.count(ClubApplication.id)).group_by(ClubApplication.status)
+    )
+    app_counts = dict(app_res.all())
+    pending_apps = app_counts.get(ClubApplicationStatus.PENDING, app_counts.get("pending", 0))
+    approved_apps = app_counts.get(ClubApplicationStatus.APPROVED, app_counts.get("approved", 0))
+    rejected_apps = app_counts.get(ClubApplicationStatus.REJECTED, app_counts.get("rejected", 0))
+    total_apps = sum(app_counts.values())
+
+    # Clubs
+    club_res = await db.execute(
+        select(Club.is_active, func.count(Club.id)).group_by(Club.is_active)
+    )
+    club_counts = dict(club_res.all())
+    active_clubs = club_counts.get(True, 0)
+    suspended_clubs = club_counts.get(False, 0)
+    total_clubs = active_clubs + suspended_clubs
+
+    # Users
+    user_res = await db.execute(
+        select(User.is_active, func.count(User.id)).group_by(User.is_active)
+    )
+    user_counts = dict(user_res.all())
+    active_users = user_counts.get(True, 0)
+    total_users = sum(user_counts.values())
+
+    # Tickets
+    ticket_res = await db.execute(
+        select(SupportTicket.status, func.count(SupportTicket.id)).group_by(SupportTicket.status)
+    )
+    ticket_counts = dict(ticket_res.all())
+    t_open = ticket_counts.get(TicketStatus.OPEN.value, 0)
+    t_in_prog = ticket_counts.get(TicketStatus.IN_PROGRESS.value, 0)
+    t_wait = ticket_counts.get(TicketStatus.WAITING_FOR_REQUESTER.value, 0)
+    t_res = ticket_counts.get(TicketStatus.RESOLVED.value, 0)
+    t_closed = ticket_counts.get(TicketStatus.CLOSED.value, 0)
+    total_tickets = sum(ticket_counts.values())
+
+    from app.services.platform_settings_service import PlatformSettingsService
+    runtime_settings = await PlatformSettingsService(db).get_or_create_settings()
+    system_status = "maintenance" if runtime_settings.maintenance_mode else "operational"
+
+    return PlatformOverviewResponse(
+        applications=PlatformOverviewApplications(
+            pending=pending_apps,
+            approved=approved_apps,
+            rejected=rejected_apps,
+            total=total_apps,
+        ),
+        clubs=PlatformOverviewClubs(
+            total=total_clubs,
+            active=active_clubs,
+            suspended=suspended_clubs,
+        ),
+        users=PlatformOverviewUsers(
+            total=total_users,
+            active=active_users,
+        ),
+        tickets=PlatformOverviewTickets(
+            open=t_open,
+            in_progress=t_in_prog,
+            waiting_for_requester=t_wait,
+            resolved=t_res,
+            closed=t_closed,
+            total=total_tickets,
+        ),
+        system_status=system_status,
+    )
 
 
 @router.get(
@@ -676,6 +776,12 @@ async def get_platform_audit_log(
         403: {"description": "Platform owner authorization required"},
     },
 )
+@router.get(
+    "/tickets",
+    response_model=SupportTicketsListResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 async def platform_list_support_tickets(
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=50, ge=1, le=100, description="Items per page"),
@@ -710,6 +816,12 @@ async def platform_list_support_tickets(
         404: {"description": "Ticket not found"},
     },
 )
+@router.get(
+    "/tickets/{ticket_id}",
+    response_model=SupportTicketDetailResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 async def platform_get_support_ticket(
     ticket_id: UUID,
     current_platform_owner: User = Depends(get_current_platform_owner),
@@ -730,6 +842,12 @@ async def platform_get_support_ticket(
         403: {"description": "Platform owner authorization required"},
         404: {"description": "Ticket not found"},
     },
+)
+@router.patch(
+    "/tickets/{ticket_id}",
+    response_model=SupportTicketDetailResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
 )
 async def platform_update_support_ticket(
     ticket_id: UUID,
@@ -756,6 +874,12 @@ async def platform_update_support_ticket(
         404: {"description": "Ticket not found"},
     },
 )
+@router.post(
+    "/tickets/{ticket_id}/replies",
+    response_model=SupportTicketDetailResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
 async def platform_reply_to_support_ticket(
     ticket_id: UUID,
     payload: SupportTicketMessageCreateRequest,
@@ -768,6 +892,51 @@ async def platform_reply_to_support_ticket(
         admin_actor=current_platform_owner,
         payload=payload,
     )
+
+
+# ─── Global Platform Settings Management ────────────────────────────────────
+
+@router.get(
+    "/settings",
+    response_model=PlatformSettingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retrieve global platform settings and system configuration",
+    description="Returns runtime-editable settings and sanitized read-only environment parameters. Prohibits secrets.",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def get_platform_settings(
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformSettingsResponse:
+    """Retrieve global platform configuration."""
+    return await PlatformSettingsService(db).get_platform_settings()
+
+
+@router.patch(
+    "/settings",
+    response_model=PlatformSettingsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update global platform settings",
+    description="Updates validated runtime platform settings with concurrency row lock and Platform Audit Log recording.",
+    responses={
+        400: {"description": "Invalid settings payload"},
+        403: {"description": "Platform owner authorization required"},
+        422: {"description": "Validation error or forbidden key"},
+    },
+)
+async def update_platform_settings(
+    payload: PlatformSettingsUpdateRequest,
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformSettingsResponse:
+    """Update global platform settings."""
+    return await PlatformSettingsService(db).update_platform_settings(
+        admin_actor=current_platform_owner,
+        payload=payload,
+    )
+
 
 
 

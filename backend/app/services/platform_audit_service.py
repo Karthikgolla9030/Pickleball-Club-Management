@@ -24,6 +24,7 @@ ACTION_LABELS = {
     "support_ticket.status_updated": "Ticket Status Updated",
     "support_ticket.replied": "Ticket Replied",
     "support_ticket.assigned": "Ticket Assigned",
+    "platform_settings.updated": "Platform Settings Updated",
 }
 
 

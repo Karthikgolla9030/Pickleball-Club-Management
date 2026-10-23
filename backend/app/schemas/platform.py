@@ -124,3 +124,40 @@ class PlatformAuditLogsListResponse(BaseModel):
     page_size: int
     action_counts: dict[str, int] = Field(default_factory=dict)
 
+
+class PlatformOverviewApplications(BaseModel):
+    pending: int = 0
+    approved: int = 0
+    rejected: int = 0
+    total: int = 0
+
+
+class PlatformOverviewClubs(BaseModel):
+    total: int = 0
+    active: int = 0
+    suspended: int = 0
+
+
+class PlatformOverviewUsers(BaseModel):
+    total: int = 0
+    active: int = 0
+
+
+class PlatformOverviewTickets(BaseModel):
+    open: int = 0
+    in_progress: int = 0
+    waiting_for_requester: int = 0
+    resolved: int = 0
+    closed: int = 0
+    total: int = 0
+
+
+class PlatformOverviewResponse(BaseModel):
+    """Consolidated real-time platform overview dashboard metrics."""
+    applications: PlatformOverviewApplications
+    clubs: PlatformOverviewClubs
+    users: PlatformOverviewUsers
+    tickets: PlatformOverviewTickets
+    system_status: str = "operational"
+
+

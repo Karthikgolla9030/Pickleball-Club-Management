@@ -30,6 +30,7 @@ import {
   LogOut,
   Menu,
   RefreshCw,
+  Settings,
   ShieldCheck,
   UserCheck,
   Users,
@@ -40,7 +41,7 @@ import { useDrawerStore } from '@/navigation';
 import { PlatformOwnerProfile } from '@/services/api/clubApplications';
 import { Radius, Spacing } from '@/theme';
 
-export type PlatformTabKey = 'overview' | 'applications' | 'clubs' | 'users' | 'audit' | 'support';
+export type PlatformTabKey = 'overview' | 'applications' | 'clubs' | 'users' | 'audit' | 'support' | 'settings';
 
 interface PlatformHeaderProps {
   activeTab: PlatformTabKey;
@@ -77,6 +78,7 @@ export function PlatformHeader({
     { key: 'users', label: 'Users', route: '/platform/users', icon: Users },
     { key: 'audit', label: 'Audit Log', route: '/platform/audit', icon: History },
     { key: 'support', label: 'Support', route: '/platform/support', icon: LifeBuoy },
+    { key: 'settings', label: 'Settings', route: '/platform/settings', icon: Settings },
   ];
 
   // ─── DESKTOP HEADER (>= 800px) ─────────────────────────────────────────────
@@ -189,7 +191,9 @@ export function PlatformHeader({
       ? 'Users'
       : activeTab === 'audit'
       ? 'Audit Log'
-      : 'Support'
+      : activeTab === 'support'
+      ? 'Support'
+      : 'Settings'
   );
 
   return (

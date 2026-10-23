@@ -32,6 +32,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   LogOut,
+  Settings,
   ShieldCheck,
   UserCheck,
   Users,
@@ -151,6 +152,13 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
       icon: LifeBuoy,
       badge: counts?.openTickets && counts.openTickets > 0 ? `${counts.openTickets}` : undefined,
       badgeVariant: 'info' as const,
+    },
+    {
+      key: 'settings',
+      label: 'Platform Settings',
+      subtitle: 'Global parameters & config',
+      route: '/platform/settings',
+      icon: Settings,
     },
   ];
 
