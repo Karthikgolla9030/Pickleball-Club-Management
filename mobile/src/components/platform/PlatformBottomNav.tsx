@@ -1,11 +1,11 @@
 /**
- * Aught2 Pickleball — PlatformBottomNav
+ * Pickleball — PlatformBottomNav
  *
- * Fixed bottom navigation bar for the mobile platform administration experience:
- *   - 5 actions: Overview | Applications | Clubs | Support | More (Drawer)
- *   - Live pending counts and open ticket badges
- *   - Safe-area bottom inset aware
- *   - Hidden on desktop (>= 800px) where full horizontal header is used
+ * Fixed bottom navigation bar matched directly to reference:
+ * - 5 actions: Overview | Applications | Clubs | Users | More
+ * - Active tab features green pill icon container & bold green label (#16A34A / #EBF5ED)
+ * - Safe-area inset aware
+ * - Hidden on desktop (>= 800px)
  */
 
 import React from 'react';
@@ -21,14 +21,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Building2,
   FileText,
-  LayoutDashboard,
-  LifeBuoy,
-  Menu,
+  Home,
+  MoreHorizontal,
+  Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { useDrawerStore } from '@/navigation';
-import { Colors, Radius } from '@/theme';
+import { Radius } from '@/theme';
 
 interface PlatformBottomNavProps {
   pendingApplicationsCount?: number;
@@ -37,7 +37,6 @@ interface PlatformBottomNavProps {
 
 export function PlatformBottomNav({
   pendingApplicationsCount = 0,
-  openTicketsCount = 0,
 }: PlatformBottomNavProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -45,7 +44,7 @@ export function PlatformBottomNav({
   const { width } = useWindowDimensions();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
-  // Hidden on desktop / wide tablet viewports
+  // Hidden on desktop
   if (width >= 800) {
     return null;
   }
@@ -56,10 +55,10 @@ export function PlatformBottomNav({
     normalizedPath === '/platform' || normalizedPath === '/platform/index';
   const isApplicationsActive = normalizedPath.startsWith('/platform/applications');
   const isClubsActive = normalizedPath.startsWith('/platform/clubs');
-  const isSupportActive = normalizedPath.startsWith('/platform/support');
+  const isUsersActive = normalizedPath.startsWith('/platform/users');
   const isMoreActive =
-    normalizedPath.startsWith('/platform/users') ||
     normalizedPath.startsWith('/platform/audit') ||
+    normalizedPath.startsWith('/platform/support') ||
     normalizedPath.startsWith('/platform/settings');
 
   const handleNavigate = (route: string) => {
@@ -81,15 +80,15 @@ export function PlatformBottomNav({
         <Pressable
           onPress={() => handleNavigate('/platform')}
           style={styles.navItem}
-          hitSlop={8}
+          hitSlop={6}
           accessibilityLabel="Overview"
           accessibilityRole="tab"
         >
           <View style={[styles.iconContainer, isOverviewActive && styles.iconContainerActive]}>
-            <LayoutDashboard
+            <Home
               size={20}
-              color={isOverviewActive ? '#18794E' : '#7A8C87'}
-              strokeWidth={isOverviewActive ? 2.3 : 1.8}
+              color={isOverviewActive ? '#15803D' : '#6B7280'}
+              strokeWidth={isOverviewActive ? 2.4 : 1.8}
             />
           </View>
           <AppText
@@ -104,15 +103,15 @@ export function PlatformBottomNav({
         <Pressable
           onPress={() => handleNavigate('/platform/applications')}
           style={styles.navItem}
-          hitSlop={8}
+          hitSlop={6}
           accessibilityLabel="Applications"
           accessibilityRole="tab"
         >
           <View style={[styles.iconContainer, isApplicationsActive && styles.iconContainerActive]}>
             <FileText
               size={20}
-              color={isApplicationsActive ? '#18794E' : '#7A8C87'}
-              strokeWidth={isApplicationsActive ? 2.3 : 1.8}
+              color={isApplicationsActive ? '#15803D' : '#6B7280'}
+              strokeWidth={isApplicationsActive ? 2.4 : 1.8}
             />
             {pendingApplicationsCount > 0 && (
               <View style={styles.badgePillWarning}>
@@ -134,15 +133,15 @@ export function PlatformBottomNav({
         <Pressable
           onPress={() => handleNavigate('/platform/clubs')}
           style={styles.navItem}
-          hitSlop={8}
+          hitSlop={6}
           accessibilityLabel="Clubs"
           accessibilityRole="tab"
         >
           <View style={[styles.iconContainer, isClubsActive && styles.iconContainerActive]}>
             <Building2
               size={20}
-              color={isClubsActive ? '#18794E' : '#7A8C87'}
-              strokeWidth={isClubsActive ? 2.3 : 1.8}
+              color={isClubsActive ? '#15803D' : '#6B7280'}
+              strokeWidth={isClubsActive ? 2.4 : 1.8}
             />
           </View>
           <AppText
@@ -153,33 +152,26 @@ export function PlatformBottomNav({
           </AppText>
         </Pressable>
 
-        {/* 4. Support */}
+        {/* 4. Users */}
         <Pressable
-          onPress={() => handleNavigate('/platform/support')}
+          onPress={() => handleNavigate('/platform/users')}
           style={styles.navItem}
-          hitSlop={8}
-          accessibilityLabel="Support"
+          hitSlop={6}
+          accessibilityLabel="Users"
           accessibilityRole="tab"
         >
-          <View style={[styles.iconContainer, isSupportActive && styles.iconContainerActive]}>
-            <LifeBuoy
+          <View style={[styles.iconContainer, isUsersActive && styles.iconContainerActive]}>
+            <Users
               size={20}
-              color={isSupportActive ? '#18794E' : '#7A8C87'}
-              strokeWidth={isSupportActive ? 2.3 : 1.8}
+              color={isUsersActive ? '#15803D' : '#6B7280'}
+              strokeWidth={isUsersActive ? 2.4 : 1.8}
             />
-            {openTicketsCount > 0 && (
-              <View style={styles.badgePillInfo}>
-                <AppText style={styles.badgePillText}>
-                  {openTicketsCount > 99 ? '99+' : openTicketsCount}
-                </AppText>
-              </View>
-            )}
           </View>
           <AppText
-            style={[styles.navLabel, isSupportActive && styles.navLabelActive]}
+            style={[styles.navLabel, isUsersActive && styles.navLabelActive]}
             numberOfLines={1}
           >
-            Support
+            Users
           </AppText>
         </Pressable>
 
@@ -187,15 +179,15 @@ export function PlatformBottomNav({
         <TouchableOpacity
           onPress={openDrawer}
           style={styles.navItem}
-          hitSlop={8}
+          hitSlop={6}
           accessibilityLabel="More options"
           accessibilityRole="button"
         >
           <View style={[styles.iconContainer, isMoreActive && styles.iconContainerActive]}>
-            <Menu
+            <MoreHorizontal
               size={20}
-              color={isMoreActive ? '#18794E' : '#7A8C87'}
-              strokeWidth={isMoreActive ? 2.3 : 1.8}
+              color={isMoreActive ? '#15803D' : '#6B7280'}
+              strokeWidth={isMoreActive ? 2.4 : 1.8}
             />
           </View>
           <AppText
@@ -214,82 +206,69 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#E6EFEA',
-    zIndex: 90,
-    shadowColor: '#102B2A',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 10,
+    borderTopColor: '#F3F4F6',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 100,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
   },
   navRow: {
-    flex: 1,
     flexDirection: 'row',
+    height: 56,
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingHorizontal: 8,
-    paddingTop: 6,
+    paddingHorizontal: 4,
   },
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
+    paddingVertical: 4,
   },
   iconContainer: {
-    position: 'relative',
-    height: 30,
-    minWidth: 32,
+    width: 44,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
-    borderRadius: Radius.sm,
+    position: 'relative',
+    borderRadius: Radius.full,
   },
   iconContainerActive: {
-    backgroundColor: '#E8F5EE',
+    backgroundColor: '#EBF5ED',
+    width: 48,
+    height: 28,
+  },
+  navLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  navLabelActive: {
+    color: '#15803D',
+    fontWeight: '700',
   },
   badgePillWarning: {
     position: 'absolute',
-    top: -3,
-    right: -4,
+    top: -2,
+    right: 4,
     backgroundColor: '#D97706',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    paddingHorizontal: 3,
+    borderRadius: Radius.full,
+    minWidth: 14,
+    height: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-  },
-  badgePillInfo: {
-    position: 'absolute',
-    top: -3,
-    right: -4,
-    backgroundColor: '#2563EB',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
     paddingHorizontal: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
   badgePillText: {
-    color: '#FFFFFF',
     fontSize: 9,
-    fontWeight: '800',
-    lineHeight: 11,
-  },
-  navLabel: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#7A8C87',
-    letterSpacing: 0.1,
-  },
-  navLabelActive: {
-    color: '#18794E',
     fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

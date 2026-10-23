@@ -1,5 +1,5 @@
 /**
- * Aught2 Pickleball — Platform Admin Shell
+ * Pickleball — Platform Admin Shell
  *
  * Mobile-first administrative shell for authorized platform owners:
  * - App-like layout with top header, fixed thumb-reachable bottom nav, and slide-out drawer

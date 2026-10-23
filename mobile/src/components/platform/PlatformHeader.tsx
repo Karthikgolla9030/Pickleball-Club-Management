@@ -1,18 +1,19 @@
 /**
- * Aught2 Pickleball — PlatformHeader
+ * Pickleball — PlatformHeader
  *
- * Mobile-first administrative header:
+ * Visual Header matched directly to mobile platform reference:
  * - On Mobile (< 800px):
- *   - Compact mobile header with hamburger menu button (triggers slide-out drawer)
- *   - Screen title and live operational status indicator
- *   - Compact right-side refresh action button
+ *   - [ ☰ ] Rounded menu button triggering slide-out drawer
+ *   - Pickleball logo icon + product name "Pickleball" + "Platform Admin"
+ *   - Notification bell with unread dot + Avatar circle [ P ]
  * - On Desktop (>= 800px):
- *   - Professional desktop bar with brand badge, centered pill navigation,
+ *   - Professional desktop bar with brand logo, centered pill navigation,
  *     administrator identity chip, and sign-out action
  */
 
 import React from 'react';
 import {
+  Image,
   Platform,
   StyleSheet,
   TouchableOpacity,
@@ -22,9 +23,11 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  Bell,
   Building2,
   FileText,
   History,
+  Home,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -72,7 +75,7 @@ export function PlatformHeader({
   const isDesktop = width >= 800;
 
   const navItems: { key: PlatformTabKey; label: string; route: string; icon: any }[] = [
-    { key: 'overview', label: 'Overview', route: '/platform', icon: LayoutDashboard },
+    { key: 'overview', label: 'Overview', route: '/platform', icon: Home },
     { key: 'applications', label: 'Applications', route: '/platform/applications', icon: FileText },
     { key: 'clubs', label: 'Clubs', route: '/platform/clubs', icon: Building2 },
     { key: 'users', label: 'Users', route: '/platform/users', icon: Users },
@@ -86,31 +89,22 @@ export function PlatformHeader({
     return (
       <View style={[styles.desktopContainer, { paddingTop: insets.top + 8 }]}>
         <View style={styles.desktopInner}>
-          {/* Brand & Badge */}
-          <View style={styles.brandContainer}>
-            <TouchableOpacity
-              style={styles.brandRow}
-              onPress={() => router.push('/platform' as any)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.shieldIconWrap}>
-                <ShieldCheck size={20} color="#18794E" />
-              </View>
-              <View>
-                <AppText variant="heading3" color="primary" style={styles.brandTitle}>
-                  Platform Admin
-                </AppText>
-                <AppText variant="caption" color="secondary" style={styles.brandSub}>
-                  Multi-Club Operations
-                </AppText>
-              </View>
-            </TouchableOpacity>
-
-            <View style={styles.statusLiveBadge}>
-              <View style={styles.liveDot} />
-              <AppText style={styles.statusLiveText}>PLATFORM</AppText>
+          {/* Brand & Logo */}
+          <TouchableOpacity
+            style={styles.desktopBrandRow}
+            onPress={() => router.push('/platform' as any)}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={require('@/../assets/pickleball_ball_icon.png')}
+              style={styles.desktopLogoImage}
+              resizeMode="contain"
+            />
+            <View>
+              <AppText style={styles.desktopBrandTitle}>Pickleball</AppText>
+              <AppText style={styles.desktopBrandSub}>Platform Admin</AppText>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Desktop Navigation Links */}
           <View style={styles.desktopNavGroup}>
@@ -128,7 +122,7 @@ export function PlatformHeader({
                 >
                   <IconComponent
                     size={15}
-                    color={isActive ? '#18794E' : '#4B635D'}
+                    color={isActive ? '#16A34A' : '#4B5563'}
                     style={styles.navIcon}
                   />
                   <AppText
@@ -150,7 +144,7 @@ export function PlatformHeader({
                 disabled={isRefreshing}
                 accessibilityLabel="Refresh current view"
               >
-                <RefreshCw size={15} color="#18794E" />
+                <RefreshCw size={15} color="#16A34A" />
               </TouchableOpacity>
             )}
 
@@ -158,7 +152,7 @@ export function PlatformHeader({
 
             {adminUser && (
               <View style={styles.adminUserBadge}>
-                <UserCheck size={14} color="#18794E" />
+                <UserCheck size={14} color="#16A34A" />
                 <AppText variant="caption" color="primary" numberOfLines={1} style={styles.adminUserEmail}>
                   {adminUser.email}
                 </AppText>
@@ -179,71 +173,60 @@ export function PlatformHeader({
     );
   }
 
-  // ─── MOBILE HEADER (< 800px) ───────────────────────────────────────────────
-  const pageTitle = title || (
-    activeTab === 'overview'
-      ? 'Overview'
-      : activeTab === 'applications'
-      ? 'Applications'
-      : activeTab === 'clubs'
-      ? 'Clubs'
-      : activeTab === 'users'
-      ? 'Users'
-      : activeTab === 'audit'
-      ? 'Audit Log'
-      : activeTab === 'support'
-      ? 'Support'
-      : 'Settings'
-  );
+  // ─── MOBILE HEADER (< 800px) MATCHING REFERENCE ────────────────────────────
+  const userInitial = adminUser?.full_name?.trim()
+    ? adminUser.full_name.trim().charAt(0).toUpperCase()
+    : 'P';
 
   return (
     <View style={[styles.mobileContainer, { paddingTop: insets.top + 6 }]}>
       <View style={styles.mobileInner}>
-        {/* Left: Drawer Menu Button */}
+        {/* Left: Rounded Menu Button [ ☰ ] */}
         <TouchableOpacity
           onPress={openDrawer}
           style={styles.mobileMenuBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Open platform administration menu"
+          accessibilityLabel="Open navigation menu"
           accessibilityRole="button"
+          activeOpacity={0.7}
         >
-          <Menu size={22} color="#102B2A" strokeWidth={2.2} />
+          <Menu size={20} color="#111827" strokeWidth={2.2} />
         </TouchableOpacity>
 
-        {/* Center: Title & Subtitle */}
-        <View style={styles.mobileTitleBlock}>
-          <View style={styles.mobileTitleRow}>
-            <AppText variant="title" numberOfLines={1} style={styles.mobileTitleText}>
-              {pageTitle}
-            </AppText>
-            <View style={styles.mobileLiveDotWrap}>
-              <View style={styles.liveDot} />
-            </View>
+        {/* Center-Left: Logo & Brand Name */}
+        <View style={styles.mobileBrandBlock}>
+          <Image
+            source={require('@/../assets/pickleball_ball_icon.png')}
+            style={styles.mobileLogoImage}
+            resizeMode="contain"
+          />
+          <View style={styles.mobileBrandTextCol}>
+            <AppText style={styles.mobileBrandTitle}>Pickleball</AppText>
+            <AppText style={styles.mobileBrandSubtitle}>Platform Admin</AppText>
           </View>
-          <AppText variant="caption" color="secondary" numberOfLines={1} style={styles.mobileSubtitleText}>
-            {subtitle || 'Platform Administration'}
-          </AppText>
         </View>
 
-        {/* Right: Actions */}
+        {/* Right: Notification Bell & User Avatar Circle */}
         <View style={styles.mobileRightSlot}>
-          {onRefresh && (
-            <TouchableOpacity
-              onPress={onRefresh}
-              style={styles.mobileActionBtn}
-              disabled={isRefreshing}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              accessibilityLabel="Refresh current view"
-              accessibilityRole="button"
-            >
-              <RefreshCw
-                size={16}
-                color="#18794E"
-                style={isRefreshing ? { transform: [{ rotate: '45deg' }] } : undefined}
-              />
-            </TouchableOpacity>
-          )}
-          {rightElement}
+          <TouchableOpacity
+            style={styles.mobileBellBtn}
+            onPress={onRefresh}
+            accessibilityLabel="Notifications"
+            accessibilityRole="button"
+            activeOpacity={0.7}
+          >
+            <Bell size={20} color="#111827" strokeWidth={1.9} />
+            <View style={styles.mobileBellDot} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.mobileAvatarCircle}
+            onPress={openDrawer}
+            accessibilityLabel="Platform admin profile and menu"
+            accessibilityRole="button"
+            activeOpacity={0.7}
+          >
+            <AppText style={styles.mobileAvatarText}>{userInitial}</AppText>
+          </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -255,7 +238,7 @@ const styles = StyleSheet.create({
   desktopContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2EBE6',
+    borderBottomColor: '#E5E7EB',
     zIndex: 10,
   },
   desktopInner: {
@@ -268,69 +251,34 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  brandContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  brandRow: {
+  desktopBrandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  shieldIconWrap: {
+  desktopLogoImage: {
     width: 34,
     height: 34,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#C3E5D4',
   },
-  brandTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    lineHeight: 18,
-    color: '#122521',
+  desktopBrandTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.3,
   },
-  brandSub: {
+  desktopBrandSub: {
     fontSize: 11,
-    color: '#657B75',
-    lineHeight: 14,
-  },
-  statusLiveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    backgroundColor: '#F0F7F3',
-    borderWidth: 1,
-    borderColor: '#D4E8DC',
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#18794E',
-  },
-  statusLiveText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#18794E',
-    letterSpacing: 0.5,
+    color: '#6B7280',
   },
   desktopNavGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F3F7F5',
+    backgroundColor: '#F3F4F6',
     padding: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: '#E2EBE6',
+    borderColor: '#E5E7EB',
   },
   desktopNavLink: {
     flexDirection: 'row',
@@ -354,10 +302,10 @@ const styles = StyleSheet.create({
   desktopNavText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#4B635D',
+    color: '#4B5563',
   },
   desktopNavTextActive: {
-    color: '#18794E',
+    color: '#16A34A',
     fontWeight: '700',
   },
   rightActionsRow: {
@@ -369,11 +317,11 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: Radius.md,
-    backgroundColor: '#F0F6F3',
+    backgroundColor: '#F3F4F6',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#D7E5DE',
+    borderColor: '#E5E7EB',
   },
   adminUserBadge: {
     flexDirection: 'row',
@@ -382,9 +330,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: Radius.md,
-    backgroundColor: '#F5F9F7',
+    backgroundColor: '#F9FAFB',
     borderWidth: 1,
-    borderColor: '#E0ECE5',
+    borderColor: '#E5E7EB',
     maxWidth: 200,
   },
   adminUserEmail: {
@@ -408,76 +356,97 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
 
-  // Mobile
+  // Mobile (< 800px) Matching Reference
   mobileContainer: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2EBE6',
+    borderBottomColor: '#F3F4F6',
     zIndex: 10,
   },
   mobileInner: {
-    minHeight: 52,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingBottom: 8,
-    gap: 12,
+    justifyContent: 'space-between',
   },
   mobileMenuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2ECE7',
+    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  mobileTitleBlock: {
+  mobileBrandBlock: {
     flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-  },
-  mobileTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    marginLeft: 12,
+    gap: 10,
   },
-  mobileTitleText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#102B2A',
-    letterSpacing: -0.3,
+  mobileLogoImage: {
+    width: 36,
+    height: 36,
   },
-  mobileLiveDotWrap: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#E8F5EE',
-    alignItems: 'center',
+  mobileBrandTextCol: {
     justifyContent: 'center',
   },
-  mobileSubtitleText: {
-    fontSize: 11,
+  mobileBrandTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.3,
+    lineHeight: 20,
+  },
+  mobileBrandSubtitle: {
+    fontSize: 11.5,
+    fontWeight: '400',
+    color: '#6B7280',
     lineHeight: 14,
-    color: '#657B75',
     marginTop: 1,
   },
   mobileRightSlot: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flexShrink: 0,
+    gap: 10,
   },
-  mobileActionBtn: {
+  mobileBellBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  mobileBellDot: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#EF4444',
+  },
+  mobileAvatarCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F0F6F3',
+    backgroundColor: '#E6F4EA',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#D7E5DE',
+  },
+  mobileAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#137333',
   },
 });

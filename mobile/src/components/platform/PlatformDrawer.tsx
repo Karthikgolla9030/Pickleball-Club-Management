@@ -1,5 +1,5 @@
 /**
- * Aught2 Pickleball — Platform Admin Drawer
+ * Pickleball — Platform Admin Drawer
  *
  * Slide-out navigation drawer designed specifically for mobile:
  * - Displays Platform Owner identity, shield badge, and system status
