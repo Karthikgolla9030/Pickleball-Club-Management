@@ -53,6 +53,9 @@ async function extractErrorDetail(response: Response): Promise<string> {
       if (response.status === 502 || response.status === 503 || response.status === 504) {
         return 'The backend service was waking up from idle sleep (HTTP 502 Bad Gateway). The server is active now — please try again.';
       }
+      if (response.status === 429) {
+        return 'The backend service is currently receiving too many requests (HTTP 429 Too Many Requests). Please wait a moment and try again.';
+      }
       return `Backend server returned an HTML page (HTTP ${response.status}) instead of API data. Please ensure the backend is running.`;
     }
     const json = (await response.json()) as ApiError;
@@ -241,6 +244,16 @@ async function request<T>(
     if ((response.status === 502 || response.status === 503 || response.status === 504) && !isRetry) {
       console.log(`[API GATEWAY ${response.status}] Backend cold-start detected on ${url}. Retrying in 2.5s...`);
       await new Promise((resolve) => setTimeout(resolve, 2500));
+      return await request<T>(url, options, requireAuth, true);
+    }
+
+    // Rate-limiting backoff retry for HTTP 429 Too Many Requests
+    if (response.status === 429 && !isRetry) {
+      const retryAfter = response.headers.get('retry-after');
+      const waitSec = retryAfter ? parseFloat(retryAfter) : 2.5;
+      const waitMs = Math.min(Math.max((isNaN(waitSec) ? 2.5 : waitSec) * 1000, 1500), 5000);
+      console.log(`[API RATE LIMIT 429] Rate-limiting detected on ${url}. Retrying in ${waitMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
       return await request<T>(url, options, requireAuth, true);
     }
 

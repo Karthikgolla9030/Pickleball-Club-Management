@@ -97,6 +97,11 @@ export function PlatformShell({
       } catch (err: any) {
         if (isMounted) {
           setIsVerifying(false);
+          // If transient error (429 rate limit or 502/503 gateway), do not wipe user credentials and logout
+          if (err?.status === 429 || err?.status === 502 || err?.status === 503 || err?.status === 504) {
+            console.warn('[PlatformShell] Transient network/rate-limit error during auth verification:', err);
+            return;
+          }
           await logout();
           router.replace('/platform/login' as any);
         }
