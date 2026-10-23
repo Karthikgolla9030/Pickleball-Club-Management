@@ -161,8 +161,13 @@ export default function PlatformUsersScreen() {
 
       {/* Filter and Search Controls */}
       <View style={styles.controlsCard}>
-        {/* Account Status Filter Pills */}
-        <View style={styles.filterRow}>
+        {/* Account Status and Role Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+          style={styles.filterScroll}
+        >
           <View style={styles.filterGroup}>
             <TouchableOpacity
               style={[styles.filterPill, statusFilter === 'all' && styles.filterPillActive]}
@@ -227,7 +232,7 @@ export default function PlatformUsersScreen() {
               </AppText>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Search Bar */}
         <View style={styles.searchWrapper}>
@@ -583,8 +588,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   kpiCard: {
-    flex: 1,
-    minWidth: 150,
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: Radius.lg,
@@ -603,17 +609,20 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     gap: 8,
   },
+  filterScroll: {
+    flexGrow: 0,
+    marginBottom: 4,
+  },
   filterRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 8,
-    flexWrap: 'wrap',
+    paddingVertical: 2,
   },
   filterGroup: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    flexWrap: 'wrap',
   },
   filterPill: {
     paddingHorizontal: 12,

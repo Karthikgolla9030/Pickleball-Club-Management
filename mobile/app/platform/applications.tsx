@@ -243,7 +243,12 @@ export default function PlatformApplicationsScreen() {
       {/* Top Filter and Search Bar */}
       <View style={styles.controlsCard}>
         {/* Filter Pills */}
-        <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContainer}
+          style={styles.tabsScroll}
+        >
           {(['pending', 'approved', 'rejected', 'all'] as FilterTab[]).map((tab) => {
             const isActive = filter === tab;
             const count = tabCounts[tab];
@@ -277,7 +282,7 @@ export default function PlatformApplicationsScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* Search Input */}
         <View style={styles.searchWrapper}>
@@ -713,10 +718,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     gap: 8,
   },
+  tabsScroll: {
+    flexGrow: 0,
+    marginBottom: 4,
+  },
   tabsContainer: {
     flexDirection: 'row',
     gap: 6,
-    flexWrap: 'wrap',
+    paddingVertical: 2,
   },
   filterTab: {
     flexDirection: 'row',

@@ -1,13 +1,12 @@
 /**
- * Pickleball Multi-Club Platform — Platform Admin Overview
+ * Aught2 Pickleball — Platform Admin Overview (Mobile-First)
  *
  * Platform-wide summary dashboard powered exclusively by real backend data:
- * - Applications breakdown: Pending review, Approved, Rejected
- * - Club facilities breakdown: Total registered, Active vs Inactive
- * - Platform member count: Real sum of active club memberships
- * - Real-time system health: API status, Neon DB connectivity, and latency
- * - Recent admin review decisions: Real audit history from processed applications
- * - Shortcuts to detail sections (no duplicate full tables)
+ * - Action-first layout: pending application alert banner prioritized right at the top
+ * - Mobile-first quick shortcuts row for instant 1-tap navigation
+ * - Responsive 2-column metric cards with full-card tap targets
+ * - Streamlined infrastructure health rows (FastAPI, Neon DB, latency)
+ * - Audited recent administrative decisions feed
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -17,6 +16,7 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -29,7 +29,9 @@ import {
   Clock,
   Database,
   FileText,
+  History,
   Layers,
+  LifeBuoy,
   Server,
   ShieldCheck,
   TrendingUp,
@@ -67,6 +69,7 @@ interface OverviewMetrics {
 
 export default function PlatformOverviewScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
 
   const [metrics, setMetrics] = useState<OverviewMetrics | null>(null);
   const [recentDecisions, setRecentDecisions] = useState<ClubApplicationResponse[]>([]);
@@ -75,6 +78,9 @@ export default function PlatformOverviewScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isSmallPhone = width < 380;
+  const isMobile = width < 768;
 
   const fetchOverviewData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -102,7 +108,7 @@ export default function PlatformOverviewScreen() {
       const apps = appsRes.items || [];
       const clubs = clubsRes.items || [];
 
-      // Authoritative database-wide counts from counts payload (prevent single-page undercounting)
+      // Authoritative database-wide counts from counts payload
       const pendingCount = appsRes.counts?.pending ?? apps.filter((a) => a.status === 'pending').length;
       const approvedCount = appsRes.counts?.approved ?? apps.filter((a) => a.status === 'approved').length;
       const rejectedCount = appsRes.counts?.rejected ?? apps.filter((a) => a.status === 'rejected').length;
@@ -146,8 +152,8 @@ export default function PlatformOverviewScreen() {
   return (
     <PlatformShell
       activeTab="overview"
-      title="Platform Operations Overview"
-      subtitle="Executive telemetry and multi-club operational health"
+      title="Platform Operations"
+      subtitle="Executive telemetry & multi-club operations"
       onRefresh={() => fetchOverviewData(true)}
       isRefreshing={isRefreshing}
       scrollable
@@ -158,51 +164,110 @@ export default function PlatformOverviewScreen() {
         <ErrorState message={error} onRetry={() => fetchOverviewData(true)} />
       ) : metrics ? (
         <View style={styles.container}>
-          {/* Action Callout if Pending Applications Exist */}
+          {/* Action Callout Priority 1: Pending Applications */}
           {metrics.pendingApplications > 0 && (
             <TouchableOpacity
               style={styles.pendingAlertCard}
               onPress={() => router.push('/platform/applications' as any)}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
+              accessibilityLabel={`Review ${metrics.pendingApplications} pending club applications`}
+              accessibilityRole="button"
             >
-              <View style={styles.alertLeft}>
+              <View style={styles.alertTopRow}>
                 <View style={styles.alertIconBadge}>
                   <Clock size={18} color="#D97706" />
                 </View>
                 <View style={styles.alertTextWrap}>
-                  <AppText variant="title" style={styles.alertTitle}>
-                    {metrics.pendingApplications} Club Registration {metrics.pendingApplications === 1 ? 'Application' : 'Applications'} Pending Review
-                  </AppText>
-                  <AppText variant="caption" color="secondary" style={styles.alertDesc}>
-                    Prospective facilities are awaiting platform administrative approval and onboarding.
+                  <View style={styles.alertTitleBadgeRow}>
+                    <AppText style={styles.alertTitle}>
+                      {metrics.pendingApplications} {metrics.pendingApplications === 1 ? 'Club Application' : 'Club Applications'} Pending
+                    </AppText>
+                    <View style={styles.actionRequiredPill}>
+                      <AppText style={styles.actionRequiredText}>ACTION REQUIRED</AppText>
+                    </View>
+                  </View>
+                  <AppText variant="caption" style={styles.alertDesc}>
+                    Prospective facilities are awaiting review and onboarding approval.
                   </AppText>
                 </View>
               </View>
-              <View style={styles.alertActionBtn}>
-                <AppText style={styles.alertActionText}>Review Now</AppText>
-                <ArrowRight size={14} color="#B45309" />
+
+              <View style={styles.alertBottomBar}>
+                <AppText style={styles.alertActionText}>Review and Onboard Facilities</AppText>
+                <ArrowRight size={14} color="#92400E" />
               </View>
             </TouchableOpacity>
           )}
 
-          {/* Section: Platform Vital Metrics */}
-          <View style={styles.sectionHeaderRow}>
-            <View>
-              <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                Platform Metrics
-              </AppText>
-              <AppText variant="caption" color="secondary">
-                Live aggregations derived from registered facilities and active sessions
-              </AppText>
-            </View>
+          {/* Mobile Quick Action Shortcuts */}
+          <View style={styles.quickShortcutsWrap}>
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => router.push('/platform/applications' as any)}
+              activeOpacity={0.75}
+            >
+              <FileText size={14} color="#18794E" />
+              <AppText style={styles.shortcutChipText}>Applications</AppText>
+              {metrics.pendingApplications > 0 && (
+                <View style={styles.shortcutBadge}>
+                  <AppText style={styles.shortcutBadgeText}>{metrics.pendingApplications}</AppText>
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => router.push('/platform/clubs' as any)}
+              activeOpacity={0.75}
+            >
+              <Building2 size={14} color="#18794E" />
+              <AppText style={styles.shortcutChipText}>Clubs ({metrics.totalClubs})</AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => router.push('/platform/users' as any)}
+              activeOpacity={0.75}
+            >
+              <Users size={14} color="#18794E" />
+              <AppText style={styles.shortcutChipText}>Users</AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.shortcutChip}
+              onPress={() => router.push('/platform/support' as any)}
+              activeOpacity={0.75}
+            >
+              <LifeBuoy size={14} color="#18794E" />
+              <AppText style={styles.shortcutChipText}>Support</AppText>
+            </TouchableOpacity>
           </View>
 
+          {/* Section: Platform Vital Metrics */}
+          <View style={styles.sectionHeaderRow}>
+            <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
+              Platform Vital Metrics
+            </AppText>
+            <AppText variant="caption" color="secondary">
+              Authoritative live platform aggregations
+            </AppText>
+          </View>
+
+          {/* Responsive 2-Column (Mobile) / 4-Column (Desktop) Grid */}
           <View style={styles.metricGrid}>
             {/* Metric 1: Pending Applications */}
-            <Card style={styles.metricCard}>
+            <TouchableOpacity
+              style={[
+                styles.metricCard,
+                isMobile ? (isSmallPhone ? styles.metricCardFull : styles.metricCardHalf) : styles.metricCardQuarter,
+                metrics.pendingApplications > 0 && styles.metricCardPendingHighlight,
+              ]}
+              onPress={() => router.push('/platform/applications' as any)}
+              activeOpacity={0.8}
+            >
               <View style={styles.metricCardHeader}>
                 <View style={[styles.metricIconWrap, { backgroundColor: '#FEF3C7' }]}>
-                  <FileText size={18} color="#B45309" />
+                  <FileText size={17} color="#B45309" />
                 </View>
                 <Badge
                   label={metrics.pendingApplications > 0 ? 'NEEDS ACTION' : 'UP TO DATE'}
@@ -213,23 +278,27 @@ export default function PlatformOverviewScreen() {
               <AppText variant="heading1" style={styles.metricValue}>
                 {metrics.pendingApplications}
               </AppText>
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
+              <AppText variant="caption" color="secondary" style={styles.metricLabel} numberOfLines={1}>
                 Pending Applications
               </AppText>
-              <TouchableOpacity
-                style={styles.cardFooterLink}
-                onPress={() => router.push('/platform/applications' as any)}
-              >
-                <AppText style={styles.footerLinkText}>View Applications</AppText>
+              <View style={styles.cardFooterAction}>
+                <AppText style={styles.footerLinkText}>Review Now</AppText>
                 <ArrowRight size={12} color="#18794E" />
-              </TouchableOpacity>
-            </Card>
+              </View>
+            </TouchableOpacity>
 
             {/* Metric 2: Registered Facilities */}
-            <Card style={styles.metricCard}>
+            <TouchableOpacity
+              style={[
+                styles.metricCard,
+                isMobile ? (isSmallPhone ? styles.metricCardFull : styles.metricCardHalf) : styles.metricCardQuarter,
+              ]}
+              onPress={() => router.push('/platform/clubs' as any)}
+              activeOpacity={0.8}
+            >
               <View style={styles.metricCardHeader}>
                 <View style={[styles.metricIconWrap, { backgroundColor: '#EAF6F0' }]}>
-                  <Building2 size={18} color="#18794E" />
+                  <Building2 size={17} color="#18794E" />
                 </View>
                 <Badge
                   label={`${metrics.activeClubs} ACTIVE`}
@@ -240,23 +309,25 @@ export default function PlatformOverviewScreen() {
               <AppText variant="heading1" style={styles.metricValue}>
                 {metrics.totalClubs}
               </AppText>
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                Registered Club Facilities
+              <AppText variant="caption" color="secondary" style={styles.metricLabel} numberOfLines={1}>
+                Registered Clubs
               </AppText>
-              <TouchableOpacity
-                style={styles.cardFooterLink}
-                onPress={() => router.push('/platform/clubs' as any)}
-              >
-                <AppText style={styles.footerLinkText}>View Clubs Directory</AppText>
+              <View style={styles.cardFooterAction}>
+                <AppText style={styles.footerLinkText}>Directory</AppText>
                 <ArrowRight size={12} color="#18794E" />
-              </TouchableOpacity>
-            </Card>
+              </View>
+            </TouchableOpacity>
 
             {/* Metric 3: Total Platform Members */}
-            <Card style={styles.metricCard}>
+            <View
+              style={[
+                styles.metricCard,
+                isMobile ? (isSmallPhone ? styles.metricCardFull : styles.metricCardHalf) : styles.metricCardQuarter,
+              ]}
+            >
               <View style={styles.metricCardHeader}>
                 <View style={[styles.metricIconWrap, { backgroundColor: '#EFF6FF' }]}>
-                  <Users size={18} color="#2563EB" />
+                  <Users size={17} color="#2563EB" />
                 </View>
                 <Badge
                   label="ACROSS CLUBS"
@@ -267,21 +338,28 @@ export default function PlatformOverviewScreen() {
               <AppText variant="heading1" style={styles.metricValue}>
                 {metrics.totalPlatformMembers}
               </AppText>
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                Active Club Memberships
+              <AppText variant="caption" color="secondary" style={styles.metricLabel} numberOfLines={1}>
+                Active Memberships
               </AppText>
               <View style={styles.cardFooterStatic}>
-                <AppText variant="caption" color="tertiary">
-                  Aggregated from {metrics.activeClubs} active clubs
+                <AppText variant="caption" color="tertiary" numberOfLines={1}>
+                  Sum of active club members
                 </AppText>
               </View>
-            </Card>
+            </View>
 
-            {/* Metric 4: Application Processing Ratio */}
-            <Card style={styles.metricCard}>
+            {/* Metric 4: Lifetime Applications */}
+            <TouchableOpacity
+              style={[
+                styles.metricCard,
+                isMobile ? (isSmallPhone ? styles.metricCardFull : styles.metricCardHalf) : styles.metricCardQuarter,
+              ]}
+              onPress={() => router.push('/platform/applications?tab=all' as any)}
+              activeOpacity={0.8}
+            >
               <View style={styles.metricCardHeader}>
                 <View style={[styles.metricIconWrap, { backgroundColor: '#F3E8FF' }]}>
-                  <TrendingUp size={18} color="#7E22CE" />
+                  <TrendingUp size={17} color="#7E22CE" />
                 </View>
                 <Badge
                   label={`${metrics.approvedApplications} APPROVED`}
@@ -292,111 +370,117 @@ export default function PlatformOverviewScreen() {
               <AppText variant="heading1" style={styles.metricValue}>
                 {metrics.totalApplications}
               </AppText>
-              <AppText variant="caption" color="secondary" style={styles.metricLabel}>
-                Lifetime Registration Requests
+              <AppText variant="caption" color="secondary" style={styles.metricLabel} numberOfLines={1}>
+                Lifetime Applications
               </AppText>
               <View style={styles.cardFooterStatic}>
-                <AppText variant="caption" color="tertiary">
+                <AppText variant="caption" color="tertiary" numberOfLines={1}>
                   {metrics.approvedApplications} approved · {metrics.rejectedApplications} rejected
                 </AppText>
               </View>
-            </Card>
+            </TouchableOpacity>
           </View>
 
           {/* Section: System Health & Infrastructure */}
-          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.lg }]}>
-            <View>
-              <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                Platform Infrastructure & Health
-              </AppText>
-              <AppText variant="caption" color="secondary">
-                Live backend service availability, database connectivity, and API response speed
-              </AppText>
-            </View>
+          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.md }]}>
+            <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
+              Infrastructure & Health
+            </AppText>
+            <AppText variant="caption" color="secondary">
+              Real-time service telemetry
+            </AppText>
           </View>
 
           <Card style={styles.healthCard}>
-            <View style={styles.healthRow}>
+            <View style={styles.healthList}>
               {/* API Service Status */}
-              <View style={styles.healthItem}>
-                <View style={styles.healthItemIcon}>
-                  <Server size={18} color="#18794E" />
-                </View>
-                <View>
-                  <AppText variant="caption" color="secondary">
-                    FastAPI Backend (Render)
-                  </AppText>
-                  <View style={styles.statusIndicatorRow}>
-                    <View
-                      style={[
-                        styles.indicatorDot,
-                        { backgroundColor: health?.status === 'ok' ? '#18794E' : '#DC2626' },
-                      ]}
-                    />
-                    <AppText style={styles.statusValueText}>
-                      {health?.status === 'ok' ? 'Operational' : 'Degraded'} (v{health?.version || '1.0'})
-                    </AppText>
+              <View style={styles.healthRowItem}>
+                <View style={styles.healthRowLeft}>
+                  <View style={styles.healthItemIcon}>
+                    <Server size={16} color="#18794E" />
                   </View>
+                  <View style={styles.healthTextCol}>
+                    <AppText style={styles.healthServiceName}>FastAPI Backend (Render)</AppText>
+                    <AppText variant="caption" color="secondary">v{health?.version || '1.0'} · REST Engine</AppText>
+                  </View>
+                </View>
+                <View style={styles.healthStatusPill}>
+                  <View
+                    style={[
+                      styles.indicatorDot,
+                      { backgroundColor: health?.status === 'ok' ? '#18794E' : '#DC2626' },
+                    ]}
+                  />
+                  <AppText style={styles.healthStatusLabel}>
+                    {health?.status === 'ok' ? 'Operational' : 'Degraded'}
+                  </AppText>
                 </View>
               </View>
 
-              {/* Neon Database Status */}
-              <View style={styles.healthItem}>
-                <View style={styles.healthItemIcon}>
-                  <Database size={18} color="#18794E" />
-                </View>
-                <View>
-                  <AppText variant="caption" color="secondary">
-                    PostgreSQL Database (Neon)
-                  </AppText>
-                  <View style={styles.statusIndicatorRow}>
-                    <View
-                      style={[
-                        styles.indicatorDot,
-                        { backgroundColor: health?.database === 'ok' ? '#18794E' : '#DC2626' },
-                      ]}
-                    />
-                    <AppText style={styles.statusValueText}>
-                      {health?.database === 'ok' ? 'Connected & Healthy' : 'Degraded'}
-                    </AppText>
+              <View style={styles.healthDivider} />
+
+              {/* PostgreSQL Neon DB */}
+              <View style={styles.healthRowItem}>
+                <View style={styles.healthRowLeft}>
+                  <View style={styles.healthItemIcon}>
+                    <Database size={16} color="#18794E" />
+                  </View>
+                  <View style={styles.healthTextCol}>
+                    <AppText style={styles.healthServiceName}>PostgreSQL DB (Neon Serverless)</AppText>
+                    <AppText variant="caption" color="secondary">Connection pool & pooling</AppText>
                   </View>
                 </View>
+                <View style={styles.healthStatusPill}>
+                  <View
+                    style={[
+                      styles.indicatorDot,
+                      { backgroundColor: health?.database === 'ok' ? '#18794E' : '#DC2626' },
+                    ]}
+                  />
+                  <AppText style={styles.healthStatusLabel}>
+                    {health?.database === 'ok' ? 'Connected' : 'Degraded'}
+                  </AppText>
+                </View>
               </View>
+
+              <View style={styles.healthDivider} />
 
               {/* Latency */}
-              <View style={styles.healthItem}>
-                <View style={styles.healthItemIcon}>
-                  <Activity size={18} color="#18794E" />
-                </View>
-                <View>
-                  <AppText variant="caption" color="secondary">
-                    API Telemetry Latency
-                  </AppText>
-                  <View style={styles.statusIndicatorRow}>
-                    <AppText style={styles.statusValueText}>
-                      {healthLatencyMs !== null ? `${healthLatencyMs} ms` : 'Measuring...'}
-                    </AppText>
+              <View style={styles.healthRowItem}>
+                <View style={styles.healthRowLeft}>
+                  <View style={styles.healthItemIcon}>
+                    <Activity size={16} color="#18794E" />
                   </View>
+                  <View style={styles.healthTextCol}>
+                    <AppText style={styles.healthServiceName}>Round-Trip Response Latency</AppText>
+                    <AppText variant="caption" color="secondary">Real-time ping duration</AppText>
+                  </View>
+                </View>
+                <View style={styles.latencyPill}>
+                  <AppText style={styles.latencyValue}>
+                    {healthLatencyMs !== null ? `${healthLatencyMs} ms` : 'Measuring...'}
+                  </AppText>
                 </View>
               </View>
             </View>
           </Card>
 
           {/* Section: Recent Platform Decisions */}
-          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.lg }]}>
+          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.md }]}>
             <View>
               <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                Recent Administrative Decisions
+                Recent Decisions
               </AppText>
               <AppText variant="caption" color="secondary">
-                Audited review decisions logged on club registration applications
+                Audit trail from club applications
               </AppText>
             </View>
             <TouchableOpacity
               onPress={() => router.push('/platform/applications' as any)}
               style={styles.headerSectionLink}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <AppText style={styles.headerSectionLinkText}>View All History</AppText>
+              <AppText style={styles.headerSectionLinkText}>View All</AppText>
               <ArrowRight size={13} color="#18794E" />
             </TouchableOpacity>
           </View>
@@ -414,12 +498,14 @@ export default function PlatformOverviewScreen() {
               {recentDecisions.map((decision, index) => {
                 const isApproved = decision.status === 'approved';
                 return (
-                  <View
+                  <TouchableOpacity
                     key={decision.id}
                     style={[
                       styles.decisionItemRow,
                       index < recentDecisions.length - 1 && styles.decisionItemBorder,
                     ]}
+                    onPress={() => router.push('/platform/applications' as any)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.decisionIconCol}>
                       {isApproved ? (
@@ -435,7 +521,7 @@ export default function PlatformOverviewScreen() {
 
                     <View style={styles.decisionContentCol}>
                       <View style={styles.decisionTitleRow}>
-                        <AppText variant="title" color="primary" numberOfLines={1}>
+                        <AppText variant="title" color="primary" numberOfLines={1} style={styles.decisionClubName}>
                           {decision.club_name}
                         </AppText>
                         <Badge
@@ -445,24 +531,21 @@ export default function PlatformOverviewScreen() {
                         />
                       </View>
 
-                      <AppText variant="caption" color="secondary" style={styles.decisionSub}>
-                        Applicant: {decision.applicant_name} ({decision.applicant_email})
-                        {decision.city ? ` · ${decision.city}, ${decision.state || decision.country}` : ''}
+                      <AppText variant="caption" color="secondary" style={styles.decisionSub} numberOfLines={1}>
+                        {decision.applicant_name} · {decision.city ? `${decision.city}, ${decision.state || decision.country}` : decision.applicant_email}
                       </AppText>
 
                       {decision.rejection_reason && (
                         <View style={styles.decisionReasonBox}>
-                          <AppText variant="caption" color="secondary">
+                          <AppText variant="caption" color="secondary" numberOfLines={2}>
                             Reason: {decision.rejection_reason}
                           </AppText>
                         </View>
                       )}
 
                       <AppText variant="caption" color="tertiary" style={styles.decisionTimestamp}>
-                        Reviewed on{' '}
                         {decision.reviewed_at
                           ? new Date(decision.reviewed_at).toLocaleDateString(undefined, {
-                              year: 'numeric',
                               month: 'short',
                               day: 'numeric',
                               hour: '2-digit',
@@ -471,7 +554,7 @@ export default function PlatformOverviewScreen() {
                           : 'Recorded'}
                       </AppText>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </Card>
@@ -486,24 +569,19 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.md,
   },
+  // Pending Alert Card
   pendingAlertCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: '#FEF3C7',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#FDE68A',
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    gap: Spacing.md,
-    flexWrap: 'wrap',
-  },
-  alertLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
-    flex: 1,
-    minWidth: 260,
+  },
+  alertTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
   },
   alertIconBadge: {
     width: 36,
@@ -512,42 +590,105 @@ const styles = StyleSheet.create({
     backgroundColor: '#FDE68A',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   alertTextWrap: {
     flex: 1,
+    gap: 3,
+  },
+  alertTitleBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   alertTitle: {
+    fontSize: 14.5,
     color: '#92400E',
     fontWeight: '700',
   },
+  actionRequiredPill: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  actionRequiredText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
+  },
   alertDesc: {
     color: '#B45309',
-    marginTop: 2,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  alertActionBtn: {
+  alertBottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  alertActionText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+
+  // Quick Shortcuts Row
+  quickShortcutsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  shortcutChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: '#E2EBE6',
   },
-  alertActionText: {
+  shortcutChipText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#B45309',
+    fontWeight: '600',
+    color: '#2A4A41',
   },
+  shortcutBadge: {
+    backgroundColor: '#D97706',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shortcutBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  // Section Headers
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    marginTop: 4,
+    marginTop: 2,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#122521',
   },
@@ -562,19 +703,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#18794E',
   },
+
+  // Metrics Grid
   metricGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.md,
+    gap: 10,
   },
   metricCard: {
-    flex: 1,
-    minWidth: 240,
     backgroundColor: '#FFFFFF',
     padding: Spacing.md,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: '#E2EBE6',
+    justifyContent: 'space-between',
+  },
+  metricCardFull: {
+    width: '100%',
+  },
+  metricCardHalf: {
+    width: '48.5%',
+    flexGrow: 1,
+  },
+  metricCardQuarter: {
+    flex: 1,
+    minWidth: 200,
+  },
+  metricCardPendingHighlight: {
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFDF5',
   },
   metricCardHeader: {
     flexDirection: 'row',
@@ -583,43 +740,45 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   metricIconWrap: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   metricValue: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#122521',
-    lineHeight: 34,
+    lineHeight: 32,
   },
   metricLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#5C746E',
     marginTop: 2,
   },
-  cardFooterLink: {
+  cardFooterAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F0F5F2',
   },
   footerLinkText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#18794E',
   },
   cardFooterStatic: {
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F0F5F2',
   },
+
+  // Health Card
   healthCard: {
     backgroundColor: '#FFFFFF',
     padding: Spacing.md,
@@ -627,21 +786,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2EBE6',
   },
-  healthRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.lg,
+  healthList: {
+    gap: 10,
   },
-  healthItem: {
-    flex: 1,
-    minWidth: 200,
+  healthRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  healthRowLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
   },
   healthItemIcon: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: Radius.md,
     backgroundColor: '#EAF6F0',
     alignItems: 'center',
@@ -649,22 +811,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C3E5D4',
   },
-  statusIndicatorRow: {
+  healthTextCol: {
+    flex: 1,
+    gap: 1,
+  },
+  healthServiceName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#122521',
+  },
+  healthStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 2,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
   },
   indicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  statusValueText: {
-    fontSize: 13,
+  healthStatusLabel: {
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#122521',
+    color: '#15803D',
   },
+  latencyPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  latencyValue: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  healthDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+
+  // Decisions Card
   emptyDecisionsCard: {
     backgroundColor: '#FFFFFF',
     padding: Spacing.lg,
@@ -701,15 +894,21 @@ const styles = StyleSheet.create({
   },
   decisionContentCol: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   decisionTitleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
+  },
+  decisionClubName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    flex: 1,
   },
   decisionSub: {
-    fontSize: 12,
+    fontSize: 11.5,
   },
   decisionReasonBox: {
     backgroundColor: '#FEF2F2',
@@ -721,7 +920,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   decisionTimestamp: {
-    fontSize: 11,
+    fontSize: 10.5,
     marginTop: 2,
   },
 });

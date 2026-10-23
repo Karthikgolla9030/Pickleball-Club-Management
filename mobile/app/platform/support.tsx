@@ -915,12 +915,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   metricCard: {
-    flex: 1,
-    minWidth: 150,
-    padding: 16,
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 140,
+    padding: 14,
     backgroundColor: '#FFFFFF',
     borderColor: '#E2E8F0',
     borderWidth: 1,
+    borderRadius: Radius.lg,
   },
   metricHeader: {
     flexDirection: 'row',

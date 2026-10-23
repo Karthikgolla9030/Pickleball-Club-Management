@@ -215,7 +215,12 @@ export default function PlatformAuditLogScreen() {
       {/* Filter Tabs and Search Bar */}
       <View style={styles.controlsCard}>
         {/* Action Category Filter Pills */}
-        <View style={styles.tabsContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsContainer}
+          style={styles.tabsScroll}
+        >
           <TouchableOpacity
             style={[styles.filterTab, filter === 'all' && styles.filterTabActive]}
             onPress={() => {
@@ -305,7 +310,7 @@ export default function PlatformAuditLogScreen() {
               </AppText>
             </View>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* Search Input */}
         <View style={styles.searchWrapper}>
@@ -649,8 +654,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   kpiCard: {
-    flex: 1,
-    minWidth: 150,
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: Radius.lg,
@@ -669,10 +675,14 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     gap: 8,
   },
+  tabsScroll: {
+    flexGrow: 0,
+    marginBottom: 4,
+  },
   tabsContainer: {
     flexDirection: 'row',
     gap: 6,
-    flexWrap: 'wrap',
+    paddingVertical: 2,
   },
   filterTab: {
     flexDirection: 'row',
