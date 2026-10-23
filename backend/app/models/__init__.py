@@ -72,6 +72,14 @@ from app.models.tournament_registration import (
     TournamentRegistration,
 )
 from app.models.notification import Notification, NotificationPreference
+from app.models.platform_audit_log import PlatformAuditLog
+from app.models.support_ticket import (
+    SupportTicket,
+    SupportTicketMessage,
+    TicketCategory,
+    TicketPriority,
+    TicketStatus,
+)
 from app.models.user import User
 
 __all__ = [
@@ -83,6 +91,12 @@ __all__ = [
     "ClubApplicationStatus",
     "ClubCarouselSlide",
     "ClubMediaAsset",
+    "PlatformAuditLog",
+    "SupportTicket",
+    "SupportTicketMessage",
+    "TicketCategory",
+    "TicketPriority",
+    "TicketStatus",
     "ClubMembership",
     "ClubMembershipRequest",
     "ClubPlayerMembership",

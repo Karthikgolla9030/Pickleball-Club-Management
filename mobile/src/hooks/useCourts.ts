@@ -28,6 +28,7 @@ export function useClubCourts(clubId: string | null, status?: CourtStatus) {
     },
     enabled: Boolean(clubId),
     staleTime: 30 * 1000,
+    refetchOnMount: 'always',
   });
 
   const createCourtMutation = useMutation({

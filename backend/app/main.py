@@ -202,8 +202,11 @@ def create_app() -> FastAPI:
     uploads_dir = os.path.abspath(settings.UPLOAD_DIR) if settings.UPLOAD_DIR else os.path.join(backend_dir, "uploads")
     for category_dir in (
         "avatars",
+        "logo",
         "logos",
+        "club-logo",
         "cover",
+        "club-cover",
         "courts",
         "court-photo",
         "tournament-banner",
@@ -261,6 +264,7 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/health", tags=["Health"], include_in_schema=False)
+    @app.get("/api/v1/health", tags=["Health"], include_in_schema=True)
     async def health_check():
         db_status = "ok"
         try:
@@ -269,7 +273,8 @@ def create_app() -> FastAPI:
             async with AsyncSessionLocal() as session:
                 await session.execute(text("SELECT 1"))
         except Exception as e:
-            db_status = f"error: {str(e)}"
+            logging.getLogger(__name__).error("Database health check failed: %s", e)
+            db_status = "unavailable"
         return {
             "status": "ok" if db_status == "ok" else "degraded",
             "version": settings.APP_VERSION,

@@ -19,4 +19,5 @@ export { schedulingApi } from './scheduling';
 export { notificationsApi, type NotificationItem, type NotificationListResponse, type NotificationPreference } from './notifications';
 export { analyticsApi } from './analytics';
 export { clubAssetsApi } from './clubAssets';
-export { clubApplicationsApi, platformApplicationsApi, type SubmitClubApplicationPayload, type ClubApplicationResponse, type ClubApplicationStatusLookupResponse } from './clubApplications';
+export { clubApplicationsApi, platformApplicationsApi, type SubmitClubApplicationPayload, type ClubApplicationResponse, type ClubApplicationStatusLookupResponse, type PlatformSupportTicketItem, type PlatformSupportTicketDetailResponse, type PlatformSupportTicketMessageItem, type PlatformSupportTicketsListResponse } from './clubApplications';
+export { supportApi, type CreateSupportTicketPayload } from './support';

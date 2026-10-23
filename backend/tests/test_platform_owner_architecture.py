@@ -210,3 +210,50 @@ async def test_dual_role_user_player_and_staff(async_client: AsyncClient, db_ses
     assert player_login.status_code == 200
     player_data = player_login.json()
     assert player_data["user"]["email"] == user.email.lower()
+
+
+@pytest.mark.asyncio
+async def test_health_alias_and_sanitization(async_client: AsyncClient):
+    """Verify /api/v1/health works and does not leak database credentials."""
+    resp = await async_client.get("/api/v1/health")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] in ("ok", "degraded")
+    assert "version" in data
+    assert "database" in data
+    assert data["database"] in ("ok", "unavailable")
+    # Verify no raw connection strings or secrets exposed
+    assert "postgresql://" not in resp.text
+    assert "password" not in resp.text.lower()
+
+
+@pytest.mark.asyncio
+async def test_platform_applications_database_wide_counts(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Verify platform applications endpoint returns authoritative counts across all records."""
+    settings = get_settings()
+    platform_email = settings.PLATFORM_OWNER_EMAILS[0] if settings.PLATFORM_OWNER_EMAILS else "platform@aught2.com"
+    await create_user(db_session, email=platform_email, password="PlatformPass123!")
+
+    token_resp = await async_client.post(
+        "/api/v1/auth/platform/login",
+        json={"email": platform_email, "password": "PlatformPass123!"},
+    )
+    token = token_resp.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await async_client.get("/api/v1/platform/club-applications", headers=headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert "total" in data
+    assert "counts" in data
+    counts = data["counts"]
+    assert "pending" in counts
+    assert "approved" in counts
+    assert "rejected" in counts
+    assert "all" in counts
+    assert counts["all"] == counts["pending"] + counts["approved"] + counts["rejected"]
+

@@ -7,7 +7,7 @@
  *
  * Back navigation returns to whichever screen opened it.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Linking,
   ScrollView,
@@ -22,10 +22,12 @@ import {
   HelpCircle,
   Mail,
   MessageCircle,
+  MessageSquare,
   Phone,
 } from 'lucide-react-native';
 
-import { AppText } from '@/components';
+import { AppText, RequesterSupportSection } from '@/components';
+import { useAuthStore } from '@/store';
 
 const FAQS = [
   {
@@ -66,6 +68,8 @@ const supportPhone = process.env.EXPO_PUBLIC_SUPPORT_PHONE?.trim() || null;
 export default function ClubHelpSupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const activeMembership = useAuthStore((s) => s.activeMembership);
+  const [mainTab, setMainTab] = useState<'tickets' | 'faqs'>('tickets');
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -106,22 +110,51 @@ export default function ClubHelpSupportScreen() {
           <View style={styles.heroText}>
             <AppText style={styles.heroTitle}>Club Operations Support</AppText>
             <AppText style={styles.heroSubtitle}>
-              Need help with courts, memberships, tournaments, or club settings? We are here to help.
+              Need help with courts, memberships, tournaments, or club facility operations? Submit an inquiry below.
             </AppText>
           </View>
         </View>
 
-        {/* FAQs */}
-        <AppText style={styles.sectionLabel}>Frequently Asked Questions</AppText>
-        {FAQS.map((faq) => (
-          <View key={faq.id} style={styles.faqCard}>
-            <AppText style={styles.faqQuestion}>{faq.question}</AppText>
-            <AppText style={styles.faqAnswer}>{faq.answer}</AppText>
-          </View>
-        ))}
+        {/* Main Tab Switcher: Support Tickets vs FAQs */}
+        <View style={styles.mainNavTabs}>
+          <TouchableOpacity
+            style={[styles.mainNavTab, mainTab === 'tickets' && styles.mainNavTabActive]}
+            onPress={() => setMainTab('tickets')}
+            activeOpacity={0.8}
+          >
+            <MessageSquare size={16} color={mainTab === 'tickets' ? '#176B57' : '#64748B'} />
+            <AppText style={[styles.mainNavTabText, mainTab === 'tickets' && styles.mainNavTabTextActive]}>
+              Support Tickets
+            </AppText>
+          </TouchableOpacity>
 
-        {/* Contact */}
-        <AppText style={styles.sectionLabel}>Contact Support</AppText>
+          <TouchableOpacity
+            style={[styles.mainNavTab, mainTab === 'faqs' && styles.mainNavTabActive]}
+            onPress={() => setMainTab('faqs')}
+            activeOpacity={0.8}
+          >
+            <HelpCircle size={16} color={mainTab === 'faqs' ? '#176B57' : '#64748B'} />
+            <AppText style={[styles.mainNavTabText, mainTab === 'faqs' && styles.mainNavTabTextActive]}>
+              Club FAQs & Help Desk
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {mainTab === 'tickets' ? (
+          <RequesterSupportSection mode="club" defaultClubId={activeMembership?.club_id} />
+        ) : (
+          <>
+            {/* FAQs */}
+            <AppText style={styles.sectionLabel}>Frequently Asked Questions</AppText>
+            {FAQS.map((faq) => (
+              <View key={faq.id} style={styles.faqCard}>
+                <AppText style={styles.faqQuestion}>{faq.question}</AppText>
+                <AppText style={styles.faqAnswer}>{faq.answer}</AppText>
+              </View>
+            ))}
+
+            {/* Contact */}
+            <AppText style={styles.sectionLabel}>Contact Support</AppText>
 
         {supportEmail ? (
           <TouchableOpacity
@@ -179,15 +212,17 @@ export default function ClubHelpSupportScreen() {
           </View>
         )}
 
-        <View style={styles.contactRow}>
-          <View style={styles.contactIcon}>
-            <MessageCircle size={18} color="#176B57" strokeWidth={2} />
-          </View>
-          <View style={styles.contactText}>
-            <AppText style={styles.contactLabel}>Club Operations</AppText>
-            <AppText style={styles.contactValue}>Facility management support</AppText>
-          </View>
-        </View>
+            <View style={styles.contactRow}>
+              <View style={styles.contactIcon}>
+                <MessageCircle size={18} color="#176B57" strokeWidth={2} />
+              </View>
+              <View style={styles.contactText}>
+                <AppText style={styles.contactLabel}>Club Operations</AppText>
+                <AppText style={styles.contactValue}>Facility management support</AppText>
+              </View>
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -195,6 +230,42 @@ export default function ClubHelpSupportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F3F8F5' },
+
+  mainNavTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#E8EDEA',
+    borderRadius: 14,
+    padding: 4,
+    gap: 6,
+    marginBottom: 20,
+  },
+  mainNavTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  mainNavTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  mainNavTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mainNavTabTextActive: {
+    color: '#176B57',
+    fontWeight: '700',
+  },
+
 
   header: {
     flexDirection: 'row',

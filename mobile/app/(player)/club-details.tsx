@@ -134,6 +134,7 @@ export default function PublicClubDetailScreen() {
     queryKey: clubId ? QUERY_KEYS.PLAYER_COURTS(clubId) : ['clubs', 'none', 'player-courts'],
     queryFn: () => courtApi.getPlayerCourts(clubId!),
     enabled: Boolean(clubId),
+    refetchOnMount: 'always',
   });
 
   // 3. Fetch public membership plans (for subscription capability)

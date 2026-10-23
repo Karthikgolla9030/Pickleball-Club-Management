@@ -50,7 +50,10 @@ async function extractErrorDetail(response: Response): Promise<string> {
   try {
     const contentType = response.headers.get('content-type') || '';
     if (contentType.includes('text/html')) {
-      return `Backend server returned an HTML page (HTTP ${response.status}) instead of API data. Please ensure the backend is running and tunnel is active.`;
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        return 'The backend service was waking up from idle sleep (HTTP 502 Bad Gateway). The server is active now — please try again.';
+      }
+      return `Backend server returned an HTML page (HTTP ${response.status}) instead of API data. Please ensure the backend is running.`;
     }
     const json = (await response.json()) as ApiError;
     if (typeof json.detail === 'string') return json.detail;
@@ -232,6 +235,13 @@ async function request<T>(
       } catch (refreshErr) {
         console.warn(`[AUTH] Token refresh failed for ${url}:`, refreshErr);
       }
+    }
+
+    // Cold-start retry for 502/503/504 Bad Gateway (Render container spinning up)
+    if ((response.status === 502 || response.status === 503 || response.status === 504) && !isRetry) {
+      console.log(`[API GATEWAY ${response.status}] Backend cold-start detected on ${url}. Retrying in 2.5s...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return await request<T>(url, options, requireAuth, true);
     }
 
     if (!response.ok) {

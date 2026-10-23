@@ -24,6 +24,9 @@ export default function PlatformLayout() {
         <Stack.Screen name="index" />
         <Stack.Screen name="applications" />
         <Stack.Screen name="clubs" />
+        <Stack.Screen name="users" />
+        <Stack.Screen name="audit" />
+        <Stack.Screen name="support" />
       </Stack>
     </View>
   );

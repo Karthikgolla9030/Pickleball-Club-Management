@@ -7,7 +7,7 @@
  *
  * Back navigation returns to whichever screen opened it.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Linking,
   ScrollView,
@@ -22,10 +22,11 @@ import {
   HelpCircle,
   Mail,
   MessageCircle,
+  MessageSquare,
   Phone,
 } from 'lucide-react-native';
 
-import { AppText } from '@/components';
+import { AppText, RequesterSupportSection } from '@/components';
 
 // FAQ data — single source of truth, same content previously in the Profile modal
 const FAQS = [
@@ -67,6 +68,7 @@ const supportPhone = process.env.EXPO_PUBLIC_SUPPORT_PHONE?.trim() || null;
 export default function PlayerHelpSupportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [mainTab, setMainTab] = useState<'tickets' | 'faqs'>('tickets');
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -108,22 +110,51 @@ export default function PlayerHelpSupportScreen() {
           <View style={styles.heroText}>
             <AppText style={styles.heroTitle}>Pickleball Support</AppText>
             <AppText style={styles.heroSubtitle}>
-              Need help with court bookings, tournament registrations, or membership plans?
+              Need help with bookings, memberships, or platform assistance? Track your inquiries below.
             </AppText>
           </View>
         </View>
 
-        {/* FAQs */}
-        <AppText style={styles.sectionLabel}>Frequently Asked Questions</AppText>
-        {FAQS.map((faq) => (
-          <View key={faq.id} style={styles.faqCard}>
-            <AppText style={styles.faqQuestion}>{faq.question}</AppText>
-            <AppText style={styles.faqAnswer}>{faq.answer}</AppText>
-          </View>
-        ))}
+        {/* Main Tab Toggle: Support Tickets vs FAQs & Contact */}
+        <View style={styles.mainNavTabs}>
+          <TouchableOpacity
+            style={[styles.mainNavTab, mainTab === 'tickets' && styles.mainNavTabActive]}
+            onPress={() => setMainTab('tickets')}
+            activeOpacity={0.8}
+          >
+            <MessageSquare size={16} color={mainTab === 'tickets' ? '#114D3F' : '#64748B'} />
+            <AppText style={[styles.mainNavTabText, mainTab === 'tickets' && styles.mainNavTabTextActive]}>
+              Support Tickets
+            </AppText>
+          </TouchableOpacity>
 
-        {/* Contact */}
-        <AppText style={styles.sectionLabel}>Contact Support</AppText>
+          <TouchableOpacity
+            style={[styles.mainNavTab, mainTab === 'faqs' && styles.mainNavTabActive]}
+            onPress={() => setMainTab('faqs')}
+            activeOpacity={0.8}
+          >
+            <HelpCircle size={16} color={mainTab === 'faqs' ? '#114D3F' : '#64748B'} />
+            <AppText style={[styles.mainNavTabText, mainTab === 'faqs' && styles.mainNavTabTextActive]}>
+              FAQs & Contact Desk
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {mainTab === 'tickets' ? (
+          <RequesterSupportSection mode="player" />
+        ) : (
+          <>
+            {/* FAQs */}
+            <AppText style={styles.sectionLabel}>Frequently Asked Questions</AppText>
+            {FAQS.map((faq) => (
+              <View key={faq.id} style={styles.faqCard}>
+                <AppText style={styles.faqQuestion}>{faq.question}</AppText>
+                <AppText style={styles.faqAnswer}>{faq.answer}</AppText>
+              </View>
+            ))}
+
+            {/* Contact */}
+            <AppText style={styles.sectionLabel}>Contact Support</AppText>
 
         {supportEmail ? (
           <TouchableOpacity
@@ -181,15 +212,17 @@ export default function PlayerHelpSupportScreen() {
           </View>
         )}
 
-        <View style={styles.contactRow}>
-          <View style={styles.contactIcon}>
-            <MessageCircle size={18} color="#114D3F" strokeWidth={2} />
-          </View>
-          <View style={styles.contactText}>
-            <AppText style={styles.contactLabel}>Club Assistance</AppText>
-            <AppText style={styles.contactValue}>Staff available during facility operating hours</AppText>
-          </View>
-        </View>
+            <View style={styles.contactRow}>
+              <View style={styles.contactIcon}>
+                <MessageCircle size={18} color="#114D3F" strokeWidth={2} />
+              </View>
+              <View style={styles.contactText}>
+                <AppText style={styles.contactLabel}>Club Assistance</AppText>
+                <AppText style={styles.contactValue}>Staff available during facility operating hours</AppText>
+              </View>
+            </View>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -197,6 +230,42 @@ export default function PlayerHelpSupportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAF9' },
+
+  mainNavTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#E8EDEA',
+    borderRadius: 14,
+    padding: 4,
+    gap: 6,
+    marginBottom: 20,
+  },
+  mainNavTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  mainNavTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  mainNavTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mainNavTabTextActive: {
+    color: '#114D3F',
+    fontWeight: '700',
+  },
+
 
   /* Header */
   header: {

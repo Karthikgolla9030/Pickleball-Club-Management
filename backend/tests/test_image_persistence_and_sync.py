@@ -575,3 +575,117 @@ async def test_cross_club_entity_isolation_on_upload(
     assert tamper_resp.status_code == 404
     assert "Court not found in this club" in tamper_resp.json()["detail"]
 
+
+@pytest.mark.asyncio
+async def test_court_photo_upload_relogin_fetch_and_media_retrieval(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Regression test covering:
+    1. Upload image asset through media endpoint.
+    2. Save photo_url on Court record.
+    3. Simulate session close / re-login with fresh auth context.
+    4. Fetch court from API (staff and player endpoints) and verify exact URL is returned.
+    5. Directly fetch media via HTTP GET on the returned photo_url to ensure the file is served.
+    6. Verify behavior when file is removed (simulating Render container restart):
+       confirm DB record remains intact and the static file returns 404.
+    """
+    from pathlib import Path
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    owner = await create_user(db_session, full_name="Lifecycle Owner")
+    player = await create_user(db_session, full_name="Lifecycle Player")
+    club = await create_club(db_session, name="Lifecycle Pickleball")
+    await assign_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+
+    # 1. Create Court
+    court = Court(
+        club_id=club.id,
+        name="Stadium Court",
+        display_name="Center Stadium",
+        court_number=1,
+        indoor_outdoor=CourtEnvironment.OUTDOOR,
+        surface_type="Acrylic",
+        status=CourtStatus.ACTIVE,
+        is_active=True,
+        display_order=1,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(court)
+    await db_session.commit()
+    await db_session.refresh(court)
+
+    owner_headers = make_auth_header(owner)
+
+    # 2. Upload court photo
+    original_bytes = make_test_image(format="JPEG", size=(200, 200), color="blue")
+    upload_resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/media/upload",
+        files={"file": ("stadium.jpg", original_bytes, "image/jpeg")},
+        data={"asset_type": "court_photo", "entity_type": "court", "entity_id": str(court.id)},
+        headers=owner_headers,
+    )
+    assert upload_resp.status_code == 200, upload_resp.text
+    photo_url = upload_resp.json()["public_url"]
+    assert photo_url.startswith("/uploads/court-photo/")
+
+    # 3. Save photo_url on Court record
+    update_resp = await async_client.put(
+        f"/api/v1/clubs/{club.id}/courts/{court.id}",
+        json={"photo_url": photo_url},
+        headers=owner_headers,
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["photo_url"] == photo_url
+
+    # 4. Simulate close/reopen or re-login as player
+    player_headers = make_auth_header(player)
+
+    # Fetch court list from staff view
+    staff_courts_resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/courts",
+        headers=owner_headers,
+    )
+    assert staff_courts_resp.status_code == 200
+    staff_court = next(c for c in staff_courts_resp.json() if c["id"] == str(court.id))
+    assert staff_court["photo_url"] == photo_url
+
+    # Fetch court list from player view
+    player_courts_resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-courts",
+        headers=player_headers,
+    )
+    assert player_courts_resp.status_code == 200
+    player_court = next(c for c in player_courts_resp.json() if c["id"] == str(court.id))
+    assert player_court["photo_url"] == photo_url
+
+    # 5. Retrieve actual media file via HTTP GET on photo_url
+    media_resp = await async_client.get(photo_url)
+    assert media_resp.status_code == 200
+    assert media_resp.headers["content-type"] in ("image/jpeg", "image/jpg")
+    assert len(media_resp.content) > 0
+
+    # 6. Simulate container restart (ephemeral file deletion)
+    rel_path = photo_url.lstrip("/")
+    # Resolve target file on disk
+    backend_dir = Path(__file__).resolve().parent.parent
+    disk_file = backend_dir / rel_path
+    if disk_file.exists():
+        disk_file.unlink()
+
+    # Re-fetch from API: Neon DB still returns the exact photo_url faithfully
+    fresh_resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/player-courts",
+        headers=player_headers,
+    )
+    assert fresh_resp.status_code == 200
+    fresh_court = next(c for c in fresh_resp.json() if c["id"] == str(court.id))
+    assert fresh_court["photo_url"] == photo_url
+
+    # Media endpoint now returns 404 (demonstrating why container restarts cause 404s until durable storage is added)
+    missing_media_resp = await async_client.get(photo_url)
+    assert missing_media_resp.status_code == 404
+
+

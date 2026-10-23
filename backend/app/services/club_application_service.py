@@ -21,6 +21,7 @@ from app.repositories.club_application_repository import ClubApplicationReposito
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_repository import ClubRepository
 from app.repositories.user_repository import UserRepository
+from app.services.platform_audit_service import record_platform_audit_event
 from app.schemas.club_application import (
     ClubApplicationResponse,
     ClubApplicationStatusLookupResponse,
@@ -358,6 +359,26 @@ class ClubApplicationService:
             app.reviewed_at = datetime.now(timezone.utc)
             app.club_id = club.id
 
+            # 4. Record audit event atomically in the same transaction
+            actor_user = await self.user_repo.get_by_id(platform_owner_id)
+            if actor_user:
+                await record_platform_audit_event(
+                    self.db,
+                    actor=actor_user,
+                    action="club_application.approved",
+                    entity_type="club_application",
+                    entity_id=app.id,
+                    entity_name=app.club_name,
+                    outcome="success",
+                    reason="Application approved and facility provisioned",
+                    details={
+                        "reference_number": app.reference_number,
+                        "club_id": str(club.id),
+                        "club_slug": club.slug,
+                        "applicant_email": app.applicant_email,
+                    },
+                )
+
             await self.db.commit()
             await self.db.refresh(app)
             return _build_application_response(app)
@@ -402,6 +423,25 @@ class ClubApplicationService:
             app.rejection_reason = rejection_reason.strip() if rejection_reason else None
             app.reviewed_by_id = platform_owner_id
             app.reviewed_at = datetime.now(timezone.utc)
+
+            # Record audit event atomically in the same transaction
+            actor_user = await self.user_repo.get_by_id(platform_owner_id)
+            if actor_user:
+                await record_platform_audit_event(
+                    self.db,
+                    actor=actor_user,
+                    action="club_application.rejected",
+                    entity_type="club_application",
+                    entity_id=app.id,
+                    entity_name=app.club_name,
+                    outcome="success",
+                    reason=app.rejection_reason or "Application rejected by platform administration",
+                    details={
+                        "reference_number": app.reference_number,
+                        "club_slug": app.slug,
+                        "applicant_email": app.applicant_email,
+                    },
+                )
 
             await self.db.commit()
             await self.db.refresh(app)

@@ -41,3 +41,7 @@ export { ClubHeroCarousel } from './ClubHeroCarousel';
 export { ClubBrandingSection } from './ClubBrandingSection';
 export { PlayerHeroBanner } from './PlayerHeroBanner';
 export type { BannerSlide } from './PlayerHeroBanner';
+export { PlatformShell } from './platform/PlatformShell';
+export type { PlatformTabKey } from './platform/PlatformShell';
+export { RequesterSupportSection } from './support/RequesterSupportSection';
+
