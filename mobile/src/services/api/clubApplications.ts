@@ -91,6 +91,8 @@ export interface PlatformClubItem {
   id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
+  cover_image_url?: string | null;
   is_active: boolean;
   short_description?: string;
   description?: string;

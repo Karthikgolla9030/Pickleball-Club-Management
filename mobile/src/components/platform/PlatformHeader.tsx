@@ -193,9 +193,7 @@ export function PlatformHeader({
             style={styles.mobileLogoImage}
             resizeMode="contain"
           />
-          <View style={styles.brandBadgeWrap}>
-            <AppText style={styles.brandBadgeText}>Platform Admin</AppText>
-          </View>
+          <AppText style={styles.mobileBrandSubtitle}>Platform Admin</AppText>
         </TouchableOpacity>
 
         {/* Right: Notification Bell & User Avatar Circle */}
@@ -368,27 +366,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   mobileBrandBlock: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
   mobileLogoImage: {
-    width: 92,
-    height: 40,
+    width: 96,
+    height: 35,
   },
-  brandBadgeWrap: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  brandBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#475569',
+  mobileBrandSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+    marginLeft: 32,
     letterSpacing: -0.2,
   },
   mobileRightSlot: {

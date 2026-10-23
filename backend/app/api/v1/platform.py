@@ -326,6 +326,8 @@ async def list_platform_clubs(
             "id": str(c.id),
             "name": c.name,
             "slug": c.slug,
+            "logo_url": c.logo_url,
+            "cover_image_url": c.cover_image_url,
             "is_active": c.is_active,
             "short_description": c.short_description,
             "description": c.description,
