@@ -3,11 +3,12 @@
  *
  * Dedicated administrative audit trail for authorized platform owners:
  * - Immutable, chronological log of platform-level administrative actions
- * - Inspect actor, action type, affected record, timestamp, outcome, and reason
- * - Filter by action category (Application Approvals, Rejections, Facility Suspensions, Reactivations)
- * - Search by affected facility/applicant name, actor email, reason, or reference ID
- * - Detailed event inspection modal showing structured non-sensitive metadata
- * - Light neutral theme (#F8FAF9) with pickleball-green accents (#18794E)
+ * - Plain-language event summaries and readable action badges
+ * - Accurate KPI metrics reflecting recorded audit trail entries
+ * - Entity-type filter tabs (All Activity, Applications, Club Status, Settings, Support)
+ * - Server-side search across entity name, admin email/name, reason, and action
+ * - Comprehensive event detail inspection modal with before/after state diffs
+ * - Light neutral theme (#F8FAF9) with standardized pickleball-green accents (#18794E)
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -27,21 +28,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
   Building2,
-  Calendar,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
   Eye,
+  FileCheck,
   FileText,
-  History,
+  LifeBuoy,
   Lock,
   Mail,
-  RefreshCw,
+  MessageSquare,
   Search,
-  ShieldAlert,
   ShieldCheck,
+  Sliders,
   User,
+  UserCheck,
   X,
   XCircle,
 } from 'lucide-react-native';
@@ -62,12 +64,226 @@ import {
 } from '@/services/api/clubApplications';
 import { Colors, Radius, Spacing } from '@/theme';
 
-type ActionFilter =
+type EntityFilter =
   | 'all'
-  | 'club_application.approved'
-  | 'club_application.rejected'
-  | 'club.suspended'
-  | 'club.reactivated';
+  | 'club_application'
+  | 'club'
+  | 'platform_settings'
+  | 'support_ticket';
+
+/** Human-friendly mapping for runtime platform setting keys */
+const SETTING_FIELD_LABELS: Record<string, string> = {
+  platform_name: 'Platform Name',
+  support_email: 'Support Email',
+  maintenance_mode: 'Maintenance Mode',
+  allow_registrations: 'User Registration',
+  platform_fee_percent: 'Platform Fee %',
+  max_upload_size_mb: 'Max File Upload Size',
+};
+
+/**
+ * Format ISO timestamp into clean local date and relative time
+ */
+function formatAuditDate(isoString: string): { full: string; relative: string } {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return { full: isoString, relative: '' };
+
+    const full = d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    const now = Date.now();
+    const diffMs = now - d.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    let relative = '';
+    if (diffMins < 1) relative = 'Just now';
+    else if (diffMins < 60) relative = `${diffMins}m ago`;
+    else if (diffHours < 24) relative = `${diffHours}h ago`;
+    else if (diffDays === 1) relative = 'Yesterday';
+    else if (diffDays < 30) relative = `${diffDays}d ago`;
+
+    return { full, relative };
+  } catch {
+    return { full: isoString, relative: '' };
+  }
+}
+
+/**
+ * Translate raw technical audit record into clear, human-understandable presentation
+ */
+interface EventPresentation {
+  actionTitle: string;
+  badgeLabel: string;
+  badgeVariant: 'success' | 'error' | 'warning' | 'default' | 'info';
+  entityCategory: string;
+  targetName: string;
+  narrative: string;
+  icon: React.ReactNode;
+}
+
+function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
+  const action = (item.action || '').toLowerCase();
+  const entityType = (item.entity_type || '').toLowerCase();
+  const entityName = item.entity_name || 'Record';
+  const details = item.details || {};
+
+  switch (action) {
+    case 'club_application.approved':
+      return {
+        actionTitle: 'Club application approved',
+        badgeLabel: 'Approved',
+        badgeVariant: 'success',
+        entityCategory: 'Club Application',
+        targetName: entityName,
+        narrative: `Approved onboarding application for "${entityName}" and provisioned the new club facility.`,
+        icon: <FileCheck size={16} color="#18794E" />,
+      };
+
+    case 'club_application.rejected':
+      return {
+        actionTitle: 'Club application rejected',
+        badgeLabel: 'Rejected',
+        badgeVariant: 'default',
+        entityCategory: 'Club Application',
+        targetName: entityName,
+        narrative: `Rejected onboarding application for "${entityName}".`,
+        icon: <XCircle size={16} color="#64748B" />,
+      };
+
+    case 'club.suspended':
+      return {
+        actionTitle: 'Club suspended',
+        badgeLabel: 'Suspended',
+        badgeVariant: 'error',
+        entityCategory: 'Club Facility',
+        targetName: entityName,
+        narrative: `Suspended operational access for "${entityName}". Public bookings and member activities paused.`,
+        icon: <AlertTriangle size={16} color="#DC2626" />,
+      };
+
+    case 'club.reactivated':
+      return {
+        actionTitle: 'Club reactivated',
+        badgeLabel: 'Reactivated',
+        badgeVariant: 'success',
+        entityCategory: 'Club Facility',
+        targetName: entityName,
+        narrative: `Restored active operational access for "${entityName}". Facility bookings and member access resumed.`,
+        icon: <CheckCircle2 size={16} color="#18794E" />,
+      };
+
+    case 'platform_settings.updated': {
+      const changedKeys = Array.isArray(details.changed_keys) ? details.changed_keys : [];
+      const friendlyKeys = changedKeys.map((k: string) => SETTING_FIELD_LABELS[k] || k.replace(/_/g, ' '));
+      const keySummary = friendlyKeys.length > 0 ? friendlyKeys.join(', ') : 'Platform Configuration';
+
+      return {
+        actionTitle: 'Platform settings changed',
+        badgeLabel: 'Settings Changed',
+        badgeVariant: 'warning',
+        entityCategory: 'Platform Settings',
+        targetName: 'Global Platform Settings',
+        narrative: `Modified global platform settings (${keySummary}).`,
+        icon: <Sliders size={16} color="#B45309" />,
+      };
+    }
+
+    case 'support_ticket.status_updated':
+      return {
+        actionTitle: 'Support ticket updated',
+        badgeLabel: 'Ticket Updated',
+        badgeVariant: 'info',
+        entityCategory: 'Support Ticket',
+        targetName: entityName,
+        narrative: details.changes && Array.isArray(details.changes)
+          ? `Updated ticket: ${details.changes.join('; ')}`
+          : `Updated status or priority for ticket "${entityName}".`,
+        icon: <LifeBuoy size={16} color="#18794E" />,
+      };
+
+    case 'support_ticket.replied':
+      return {
+        actionTitle: 'Support reply sent',
+        badgeLabel: 'Reply Sent',
+        badgeVariant: 'info',
+        entityCategory: 'Support Ticket',
+        targetName: entityName,
+        narrative: `Sent an official platform administrative reply on ticket "${entityName}".`,
+        icon: <MessageSquare size={16} color="#18794E" />,
+      };
+
+    case 'support_ticket.assigned':
+      return {
+        actionTitle: 'Support ticket assigned',
+        badgeLabel: 'Assigned',
+        badgeVariant: 'info',
+        entityCategory: 'Support Ticket',
+        targetName: entityName,
+        narrative: `Assigned support ticket "${entityName}" to an administrator.`,
+        icon: <UserCheck size={16} color="#18794E" />,
+      };
+
+    default: {
+      // Fallback formatting for unknown/future events
+      const fallbackTitle = action.replace(/\./g, ' ').replace(/_/g, ' ');
+      const cleanTitle = fallbackTitle.charAt(0).toUpperCase() + fallbackTitle.slice(1);
+      let category = 'System Record';
+      let iconNode = <Clock size={16} color="#18794E" />;
+
+      if (entityType === 'club') {
+        category = 'Club Facility';
+        iconNode = <Building2 size={16} color="#18794E" />;
+      } else if (entityType === 'club_application') {
+        category = 'Club Application';
+        iconNode = <FileText size={16} color="#18794E" />;
+      } else if (entityType === 'platform_settings') {
+        category = 'Platform Settings';
+        iconNode = <Sliders size={16} color="#18794E" />;
+      } else if (entityType === 'support_ticket') {
+        category = 'Support Ticket';
+        iconNode = <LifeBuoy size={16} color="#18794E" />;
+      }
+
+      return {
+        actionTitle: cleanTitle,
+        badgeLabel: cleanTitle,
+        badgeVariant: 'default',
+        entityCategory: category,
+        targetName: entityName,
+        narrative: `Administrative action executed on ${category.toLowerCase()} "${entityName}".`,
+        icon: iconNode,
+      };
+    }
+  }
+}
+
+/**
+ * Format decision or reason note into plain language
+ */
+function cleanReasonText(reason: string | null | undefined): string | null {
+  if (!reason || !reason.trim()) return null;
+  const raw = reason.trim();
+
+  // If backend generated technical settings reason like "Updated platform settings: platform_name"
+  if (raw.startsWith('Updated platform settings:')) {
+    const keysPart = raw.replace('Updated platform settings:', '').trim();
+    const friendly = keysPart
+      .split(',')
+      .map((k) => SETTING_FIELD_LABELS[k.trim()] || k.trim().replace(/_/g, ' '))
+      .join(', ');
+    return `Changed platform settings: ${friendly}`;
+  }
+
+  return raw;
+}
 
 export default function PlatformAuditLogScreen() {
   const router = useRouter();
@@ -78,7 +294,7 @@ export default function PlatformAuditLogScreen() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const [actionCounts, setActionCounts] = useState<Record<string, number>>({});
-  const [filter, setFilter] = useState<ActionFilter>('all');
+  const [filter, setFilter] = useState<EntityFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -111,7 +327,7 @@ export default function PlatformAuditLogScreen() {
         const res = await platformApplicationsApi.listAuditLogs({
           page: targetPage,
           pageSize,
-          action: filter !== 'all' ? filter : undefined,
+          entityType: filter !== 'all' ? filter : undefined,
           search: debouncedSearch || undefined,
         });
 
@@ -136,42 +352,18 @@ export default function PlatformAuditLogScreen() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Compute breakdown KPI numbers
+  // Compute breakdown KPI numbers from actual recorded audit entries
   const appApprovedCount = actionCounts['club_application.approved'] || 0;
   const appRejectedCount = actionCounts['club_application.rejected'] || 0;
   const clubSuspendedCount = actionCounts['club.suspended'] || 0;
   const clubReactivatedCount = actionCounts['club.reactivated'] || 0;
+  const settingsCount = actionCounts['platform_settings.updated'] || 0;
+  const supportCount =
+    (actionCounts['support_ticket.status_updated'] || 0) +
+    (actionCounts['support_ticket.replied'] || 0) +
+    (actionCounts['support_ticket.assigned'] || 0);
+
   const totalRecorded = Object.values(actionCounts).reduce((a, b) => a + b, 0) || total;
-
-  const getActionBadgeVariant = (action: string): 'success' | 'error' | 'warning' | 'default' => {
-    switch (action) {
-      case 'club_application.approved':
-        return 'success';
-      case 'club.reactivated':
-        return 'success';
-      case 'club.suspended':
-        return 'error';
-      case 'club_application.rejected':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
-  const getActionIcon = (action: string) => {
-    switch (action) {
-      case 'club_application.approved':
-        return <CheckCircle2 size={15} color="#18794E" />;
-      case 'club.reactivated':
-        return <CheckCircle2 size={15} color="#18794E" />;
-      case 'club.suspended':
-        return <AlertTriangle size={15} color="#DC2626" />;
-      case 'club_application.rejected':
-        return <XCircle size={15} color="#64748B" />;
-      default:
-        return <History size={15} color="#18794E" />;
-    }
-  };
 
   return (
     <PlatformShell
@@ -184,37 +376,57 @@ export default function PlatformAuditLogScreen() {
       {/* Platform Audit Summary KPIs */}
       <View style={styles.kpiContainer}>
         <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Total Logged Actions</AppText>
+          <AppText variant="caption" color="secondary">Total Recorded Events</AppText>
           <AppText variant="heading2" color="primary" style={styles.kpiValue}>
             {totalRecorded}
           </AppText>
+          <AppText variant="caption" color="tertiary" style={styles.kpiSub}>
+            Logged audit entries
+          </AppText>
         </View>
 
         <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Applications Approved</AppText>
+          <AppText variant="caption" color="secondary">Applications Decided</AppText>
           <AppText variant="heading2" color="brand" style={styles.kpiValue}>
-            {appApprovedCount}
+            {appApprovedCount + appRejectedCount}
+          </AppText>
+          <AppText variant="caption" color="tertiary" style={styles.kpiSub}>
+            {appApprovedCount} approved · {appRejectedCount} rejected
           </AppText>
         </View>
 
         <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Applications Rejected</AppText>
-          <AppText variant="heading2" color="secondary" style={styles.kpiValue}>
-            {appRejectedCount}
-          </AppText>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <AppText variant="caption" color="secondary">Facility Status Changes</AppText>
+          <AppText variant="caption" color="secondary">Club Status Changes</AppText>
           <AppText variant="heading2" color="primary" style={styles.kpiValue}>
             {clubSuspendedCount + clubReactivatedCount}
+          </AppText>
+          <AppText variant="caption" color="tertiary" style={styles.kpiSub}>
+            {clubSuspendedCount} suspended · {clubReactivatedCount} reactivated
+          </AppText>
+        </View>
+
+        <View style={styles.kpiCard}>
+          <AppText variant="caption" color="secondary">Settings & Support</AppText>
+          <AppText variant="heading2" color="primary" style={styles.kpiValue}>
+            {settingsCount + supportCount}
+          </AppText>
+          <AppText variant="caption" color="tertiary" style={styles.kpiSub}>
+            {settingsCount} settings · {supportCount} support actions
           </AppText>
         </View>
       </View>
 
+      {/* KPI Ledger Notice */}
+      <View style={styles.kpiNoticeRow}>
+        <ShieldCheck size={14} color="#18794E" />
+        <AppText variant="caption" color="secondary" style={styles.kpiNoticeText}>
+          Summary reflects administrative actions recorded in the platform audit trail.
+        </AppText>
+      </View>
+
       {/* Filter Tabs and Search Bar */}
       <View style={styles.controlsCard}>
-        {/* Action Category Filter Pills */}
+        {/* Entity Category Filter Pills */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -230,7 +442,7 @@ export default function PlatformAuditLogScreen() {
             activeOpacity={0.7}
           >
             <AppText style={[styles.filterTabText, filter === 'all' && styles.filterTabTextActive]}>
-              All Events
+              All Activity
             </AppText>
             <View style={[styles.countPill, filter === 'all' ? styles.countPillActive : styles.countPillInactive]}>
               <AppText style={[styles.countPillText, filter === 'all' ? styles.countPillTextActive : styles.countPillTextInactive]}>
@@ -240,73 +452,73 @@ export default function PlatformAuditLogScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTab, filter === 'club_application.approved' && styles.filterTabActive]}
+            style={[styles.filterTab, filter === 'club_application' && styles.filterTabActive]}
             onPress={() => {
-              setFilter('club_application.approved');
+              setFilter('club_application');
               setPage(1);
             }}
             activeOpacity={0.7}
           >
-            <AppText style={[styles.filterTabText, filter === 'club_application.approved' && styles.filterTabTextActive]}>
-              Approvals
+            <AppText style={[styles.filterTabText, filter === 'club_application' && styles.filterTabTextActive]}>
+              Applications
             </AppText>
-            <View style={[styles.countPill, filter === 'club_application.approved' ? styles.countPillActive : styles.countPillInactive]}>
-              <AppText style={[styles.countPillText, filter === 'club_application.approved' ? styles.countPillTextActive : styles.countPillTextInactive]}>
-                {appApprovedCount}
+            <View style={[styles.countPill, filter === 'club_application' ? styles.countPillActive : styles.countPillInactive]}>
+              <AppText style={[styles.countPillText, filter === 'club_application' ? styles.countPillTextActive : styles.countPillTextInactive]}>
+                {appApprovedCount + appRejectedCount}
               </AppText>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTab, filter === 'club_application.rejected' && styles.filterTabActive]}
+            style={[styles.filterTab, filter === 'club' && styles.filterTabActive]}
             onPress={() => {
-              setFilter('club_application.rejected');
+              setFilter('club');
               setPage(1);
             }}
             activeOpacity={0.7}
           >
-            <AppText style={[styles.filterTabText, filter === 'club_application.rejected' && styles.filterTabTextActive]}>
-              Rejections
+            <AppText style={[styles.filterTabText, filter === 'club' && styles.filterTabTextActive]}>
+              Club Status
             </AppText>
-            <View style={[styles.countPill, filter === 'club_application.rejected' ? styles.countPillActive : styles.countPillInactive]}>
-              <AppText style={[styles.countPillText, filter === 'club_application.rejected' ? styles.countPillTextActive : styles.countPillTextInactive]}>
-                {appRejectedCount}
+            <View style={[styles.countPill, filter === 'club' ? styles.countPillActive : styles.countPillInactive]}>
+              <AppText style={[styles.countPillText, filter === 'club' ? styles.countPillTextActive : styles.countPillTextInactive]}>
+                {clubSuspendedCount + clubReactivatedCount}
               </AppText>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTab, filter === 'club.suspended' && styles.filterTabActive]}
+            style={[styles.filterTab, filter === 'platform_settings' && styles.filterTabActive]}
             onPress={() => {
-              setFilter('club.suspended');
+              setFilter('platform_settings');
               setPage(1);
             }}
             activeOpacity={0.7}
           >
-            <AppText style={[styles.filterTabText, filter === 'club.suspended' && styles.filterTabTextActive]}>
-              Suspensions
+            <AppText style={[styles.filterTabText, filter === 'platform_settings' && styles.filterTabTextActive]}>
+              Platform Settings
             </AppText>
-            <View style={[styles.countPill, filter === 'club.suspended' ? styles.countPillActive : styles.countPillInactive]}>
-              <AppText style={[styles.countPillText, filter === 'club.suspended' ? styles.countPillTextActive : styles.countPillTextInactive]}>
-                {clubSuspendedCount}
+            <View style={[styles.countPill, filter === 'platform_settings' ? styles.countPillActive : styles.countPillInactive]}>
+              <AppText style={[styles.countPillText, filter === 'platform_settings' ? styles.countPillTextActive : styles.countPillTextInactive]}>
+                {settingsCount}
               </AppText>
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTab, filter === 'club.reactivated' && styles.filterTabActive]}
+            style={[styles.filterTab, filter === 'support_ticket' && styles.filterTabActive]}
             onPress={() => {
-              setFilter('club.reactivated');
+              setFilter('support_ticket');
               setPage(1);
             }}
             activeOpacity={0.7}
           >
-            <AppText style={[styles.filterTabText, filter === 'club.reactivated' && styles.filterTabTextActive]}>
-              Reactivations
+            <AppText style={[styles.filterTabText, filter === 'support_ticket' && styles.filterTabTextActive]}>
+              Support Actions
             </AppText>
-            <View style={[styles.countPill, filter === 'club.reactivated' ? styles.countPillActive : styles.countPillInactive]}>
-              <AppText style={[styles.countPillText, filter === 'club.reactivated' ? styles.countPillTextActive : styles.countPillTextInactive]}>
-                {clubReactivatedCount}
+            <View style={[styles.countPill, filter === 'support_ticket' ? styles.countPillActive : styles.countPillInactive]}>
+              <AppText style={[styles.countPillText, filter === 'support_ticket' ? styles.countPillTextActive : styles.countPillTextInactive]}>
+                {supportCount}
               </AppText>
             </View>
           </TouchableOpacity>
@@ -317,7 +529,7 @@ export default function PlatformAuditLogScreen() {
           <Search size={16} color="#667776" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by facility name, admin email, reason, or entity ID"
+            placeholder="Search by club name, admin, reason, or action..."
             placeholderTextColor="#8FA39E"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -359,286 +571,437 @@ export default function PlatformAuditLogScreen() {
                 title="No Audit Records Found"
                 description={
                   debouncedSearch
-                    ? `No administrative actions match the query "${debouncedSearch}".`
+                    ? `No administrative actions match the search "${debouncedSearch}".`
                     : filter !== 'all'
-                    ? 'No events match the selected action filter.'
+                    ? 'No events match the selected activity filter.'
                     : 'No administrative actions have been recorded yet.'
                 }
               />
             </Card>
           }
-          renderItem={({ item }) => (
-            <Card style={styles.logCard}>
-              {/* Header: Action badge & Timestamp */}
-              <View style={styles.logHeader}>
-                <View style={styles.actionBadgeGroup}>
-                  {getActionIcon(item.action)}
-                  <Badge
-                    label={item.action_label.toUpperCase()}
-                    variant={getActionBadgeVariant(item.action)}
-                    size="sm"
-                  />
-                  <View style={styles.entityTypePill}>
-                    <AppText style={styles.entityTypeText}>
-                      {item.entity_type === 'club_application' ? 'APPLICATION' : 'FACILITY'}
-                    </AppText>
-                  </View>
-                </View>
+          renderItem={({ item }) => {
+            const pres = getEventPresentation(item);
+            const dateInfo = formatAuditDate(item.created_at);
+            const cleanReason = cleanReasonText(item.reason);
 
-                <View style={styles.timestampRow}>
-                  <Clock size={13} color="#667776" />
-                  <AppText variant="caption" color="secondary">
-                    {new Date(item.created_at).toLocaleString()}
-                  </AppText>
-                </View>
-              </View>
-
-              {/* Target Entity Title */}
-              <View style={styles.entityRow}>
-                {item.entity_type === 'club_application' ? (
-                  <FileText size={16} color="#18794E" style={styles.entityIcon} />
-                ) : (
-                  <Building2 size={16} color="#18794E" style={styles.entityIcon} />
-                )}
-                <AppText variant="title" color="primary" numberOfLines={1} style={styles.entityName}>
-                  {item.entity_name || `Entity ID: ${item.entity_id}`}
-                </AppText>
-              </View>
-
-              {/* Actor & Reason Row */}
-              <View style={styles.detailsRow}>
-                <View style={styles.actorCol}>
-                  <View style={styles.inlineItem}>
-                    <ShieldCheck size={13} color="#18794E" />
-                    <AppText variant="caption" color="secondary" numberOfLines={1}>
-                      Actor: {item.actor_name || 'Platform Admin'} ({item.actor_email})
-                    </AppText>
-                  </View>
-                  {item.ip_address && (
-                    <View style={styles.inlineItem}>
-                      <AppText variant="caption" color="tertiary">
-                        IP: {item.ip_address}
+            return (
+              <Card style={styles.logCard}>
+                {/* Header: Semantic Badge, Entity Category, Timestamp */}
+                <View style={styles.logHeader}>
+                  <View style={styles.actionBadgeGroup}>
+                    {pres.icon}
+                    <Badge
+                      label={pres.badgeLabel}
+                      variant={pres.badgeVariant}
+                      size="sm"
+                    />
+                    <View style={styles.entityTypePill}>
+                      <AppText style={styles.entityTypeText}>
+                        {pres.entityCategory.toUpperCase()}
                       </AppText>
                     </View>
-                  )}
+                  </View>
+
+                  <View style={styles.timestampRow}>
+                    <Clock size={12} color="#667776" />
+                    <AppText variant="caption" color="secondary">
+                      {dateInfo.full}
+                      {dateInfo.relative ? ` · ${dateInfo.relative}` : ''}
+                    </AppText>
+                  </View>
                 </View>
 
-                {item.reason && (
+                {/* Target Entity Title */}
+                <View style={styles.entityRow}>
+                  <AppText variant="title" color="primary" numberOfLines={1} style={styles.entityName}>
+                    {pres.targetName}
+                  </AppText>
+                </View>
+
+                {/* Plain-Language Narrative Description */}
+                <View style={styles.narrativeRow}>
+                  <AppText variant="body" color="primary" style={styles.narrativeText}>
+                    {pres.narrative}
+                  </AppText>
+                </View>
+
+                {/* Reason Note (if present) */}
+                {cleanReason && (
                   <View style={styles.reasonCard}>
-                    <AppText variant="caption" color="secondary" numberOfLines={2} style={styles.reasonText}>
-                      &quot;{item.reason}&quot;
+                    <AppText variant="caption" color="secondary" style={styles.reasonLabel}>
+                      Reason / Note:
+                    </AppText>
+                    <AppText variant="caption" color="primary" style={styles.reasonText}>
+                      &quot;{cleanReason}&quot;
                     </AppText>
                   </View>
                 )}
-              </View>
 
-              {/* Action Button: Inspect Record */}
-              <View style={styles.cardActionsRow}>
-                <Button
-                  label="Inspect Event Details"
-                  variant="outline"
-                  size="sm"
-                  onPress={() => setSelectedLog(item)}
-                  leftIcon={<Eye size={14} color="#18794E" />}
-                  style={styles.inspectBtn}
-                />
-              </View>
-            </Card>
-          )}
+                {/* Actor Col & Action Button Row */}
+                <View style={styles.cardFooterRow}>
+                  <View style={styles.actorCol}>
+                    <View style={styles.inlineItem}>
+                      <ShieldCheck size={13} color="#18794E" />
+                      <AppText variant="caption" color="secondary" numberOfLines={1}>
+                        By {item.actor_name || 'Platform Administrator'}
+                      </AppText>
+                    </View>
+                    {item.actor_email && (
+                      <AppText variant="caption" color="tertiary" numberOfLines={1} style={styles.actorEmailText}>
+                        {item.actor_email}
+                      </AppText>
+                    )}
+                  </View>
+
+                  <Button
+                    label="Inspect Event Details"
+                    variant="outline"
+                    size="sm"
+                    onPress={() => setSelectedLog(item)}
+                    leftIcon={<Eye size={14} color="#18794E" />}
+                    style={styles.inspectBtn}
+                  />
+                </View>
+              </Card>
+            );
+          }}
           ListFooterComponent={
             total > pageSize ? (
               <View style={styles.paginationCard}>
-                <Button
-                  label="Previous"
-                  variant="outline"
-                  size="sm"
-                  onPress={() => setPage((p) => Math.max(1, p - 1))}
+                <TouchableOpacity
+                  style={[styles.pageButton, page <= 1 && styles.pageButtonDisabled]}
                   disabled={page <= 1}
-                  leftIcon={<ChevronLeft size={16} color={page <= 1 ? '#A0B2AC' : '#18794E'} />}
-                />
-                <AppText variant="caption" color="secondary" style={styles.paginationText}>
+                  onPress={() => setPage((p) => Math.max(1, p - 1))}
+                  activeOpacity={0.7}
+                >
+                  <ChevronLeft size={16} color={page <= 1 ? '#8FA39E' : '#18794E'} />
+                  <AppText style={[styles.pageButtonText, page <= 1 && styles.pageButtonTextDisabled]}>
+                    Previous
+                  </AppText>
+                </TouchableOpacity>
+
+                <AppText style={styles.paginationText} color="secondary">
                   Page {page} of {totalPages} ({total} events)
                 </AppText>
-                <Button
-                  label="Next"
-                  variant="outline"
-                  size="sm"
-                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+
+                <TouchableOpacity
+                  style={[styles.pageButton, page >= totalPages && styles.pageButtonDisabled]}
                   disabled={page >= totalPages}
-                  rightIcon={<ChevronRight size={16} color={page >= totalPages ? '#A0B2AC' : '#18794E'} />}
-                />
+                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  activeOpacity={0.7}
+                >
+                  <AppText style={[styles.pageButtonText, page >= totalPages && styles.pageButtonTextDisabled]}>
+                    Next
+                  </AppText>
+                  <ChevronRight size={16} color={page >= totalPages ? '#8FA39E' : '#18794E'} />
+                </TouchableOpacity>
               </View>
             ) : null
           }
         />
       )}
 
-      {/* Audit Detail Modal */}
+      {/* Detailed Inspection Modal */}
       <Modal
-        visible={!!selectedLog}
-        animationType="slide"
+        visible={selectedLog !== null}
+        animationType="fade"
         transparent
         onRequestClose={() => setSelectedLog(null)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderTitleGroup}>
-                <View style={styles.modalTitleRow}>
-                  {selectedLog && getActionIcon(selectedLog.action)}
-                  <AppText variant="heading3" color="primary">
-                    {selectedLog?.action_label}
-                  </AppText>
-                </View>
-                <AppText variant="caption" color="secondary">
-                  Event ID: {selectedLog?.id}
-                </AppText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedLog(null)}
-                style={styles.modalCloseBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={20} color="#2A4540" />
-              </TouchableOpacity>
-            </View>
+            {selectedLog && (() => {
+              const pres = getEventPresentation(selectedLog);
+              const dateInfo = formatAuditDate(selectedLog.created_at);
+              const cleanReason = cleanReasonText(selectedLog.reason);
+              const details = selectedLog.details || {};
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              {selectedLog && (
-                <View style={styles.modalBody}>
-                  {/* Status Banner */}
-                  <View style={styles.statusBannerRow}>
-                    <AppText variant="label" color="secondary">
-                      Outcome:
-                    </AppText>
-                    <Badge
-                      label={selectedLog.outcome.toUpperCase()}
-                      variant={selectedLog.outcome === 'success' ? 'success' : 'error'}
-                      size="md"
-                    />
-                    <AppText variant="caption" color="secondary" style={{ marginLeft: 8 }}>
-                      Recorded {new Date(selectedLog.created_at).toLocaleString()}
-                    </AppText>
-                  </View>
-
-                  {/* Administrative Reason */}
-                  {selectedLog.reason && (
-                    <View style={styles.modalSection}>
-                      <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
-                        Administrative Reason
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <View style={styles.modalHeaderTitleGroup}>
+                      <View style={styles.modalTitleRow}>
+                        {pres.icon}
+                        <AppText variant="heading3" color="primary">
+                          {pres.actionTitle}
+                        </AppText>
+                      </View>
+                      <AppText variant="caption" color="secondary" style={styles.modalEventId}>
+                        Record: {pres.entityCategory} · {dateInfo.full}
                       </AppText>
-                      <View style={styles.reasonCallout}>
-                        <AppText variant="body" color="primary">
-                          {selectedLog.reason}
-                        </AppText>
-                      </View>
                     </View>
-                  )}
-
-                  {/* Affected Entity Details */}
-                  <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
-                      Affected Record
-                    </AppText>
-                    <View style={styles.detailGrid}>
-                      <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Entity Name:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>
-                          {selectedLog.entity_name || 'N/A'}
-                        </AppText>
-                      </View>
-                      <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Entity Type:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>
-                          {selectedLog.entity_type}
-                        </AppText>
-                      </View>
-                      <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Entity ID:</AppText>
-                        <AppText variant="caption" color="secondary" style={[styles.gridVal, styles.monoText]}>
-                          {selectedLog.entity_id}
-                        </AppText>
-                      </View>
-                    </View>
+                    <TouchableOpacity
+                      onPress={() => setSelectedLog(null)}
+                      style={styles.modalCloseBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <X size={20} color="#2A4540" />
+                    </TouchableOpacity>
                   </View>
 
-                  {/* Administrative Actor Details */}
-                  <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
-                      Authorized Actor
-                    </AppText>
-                    <View style={styles.detailGrid}>
-                      <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Administrator:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>
-                          {selectedLog.actor_name || 'Platform Admin'}
+                  <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                    <View style={styles.modalBody}>
+                      {/* Executive Summary Banner */}
+                      <View style={styles.summaryBanner}>
+                        <AppText variant="caption" color="brand" style={styles.summaryBannerLabel}>
+                          Action Summary
+                        </AppText>
+                        <AppText variant="body" color="primary" style={styles.summaryBannerText}>
+                          {pres.narrative}
                         </AppText>
                       </View>
-                      <View style={styles.gridRow}>
-                        <AppText variant="caption" color="secondary" style={styles.gridKey}>Admin Email:</AppText>
-                        <AppText variant="body" color="primary" style={styles.gridVal}>
-                          {selectedLog.actor_email || 'N/A'}
-                        </AppText>
-                      </View>
-                      {selectedLog.actor_id && (
-                        <View style={styles.gridRow}>
-                          <AppText variant="caption" color="secondary" style={styles.gridKey}>Actor ID:</AppText>
-                          <AppText variant="caption" color="secondary" style={[styles.gridVal, styles.monoText]}>
-                            {selectedLog.actor_id}
-                          </AppText>
-                        </View>
-                      )}
-                      {selectedLog.ip_address && (
-                        <View style={styles.gridRow}>
-                          <AppText variant="caption" color="secondary" style={styles.gridKey}>IP Address:</AppText>
-                          <AppText variant="body" color="primary" style={styles.gridVal}>
-                            {selectedLog.ip_address}
-                          </AppText>
-                        </View>
-                      )}
-                    </View>
-                  </View>
 
-                  {/* Structured Event Metadata */}
-                  {selectedLog.details && Object.keys(selectedLog.details).length > 0 && (
-                    <View style={styles.modalSection}>
-                      <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
-                        Event Execution Metadata
-                      </AppText>
-                      <View style={styles.detailGrid}>
-                        {Object.entries(selectedLog.details).map(([key, val]) => (
-                          <View key={key} style={styles.gridRow}>
-                            <AppText variant="caption" color="secondary" style={styles.gridKey}>
-                              {key.replace(/_/g, ' ')}:
-                            </AppText>
-                            <AppText variant="body" color="primary" style={styles.gridVal}>
-                              {typeof val === 'boolean' ? (val ? 'true' : 'false') : String(val)}
+                      {/* Status Banner */}
+                      <View style={styles.statusBannerRow}>
+                        <AppText variant="label" color="secondary">
+                          Execution Outcome:
+                        </AppText>
+                        <Badge
+                          label={selectedLog.outcome === 'success' ? 'SUCCESS' : selectedLog.outcome.toUpperCase()}
+                          variant={selectedLog.outcome === 'success' ? 'success' : 'error'}
+                          size="md"
+                        />
+                        <AppText variant="caption" color="secondary" style={{ marginLeft: 8 }}>
+                          {dateInfo.full} {dateInfo.relative ? `(${dateInfo.relative})` : ''}
+                        </AppText>
+                      </View>
+
+                      {/* Administrative Reason / Notes */}
+                      <View style={styles.modalSection}>
+                        <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                          Administrative Reason / Decision Notes
+                        </AppText>
+                        {cleanReason ? (
+                          <View style={styles.reasonCallout}>
+                            <AppText variant="body" color="primary">
+                              {cleanReason}
                             </AppText>
                           </View>
-                        ))}
+                        ) : (
+                          <AppText variant="caption" color="tertiary" style={styles.notRecordedText}>
+                            Not recorded
+                          </AppText>
+                        )}
+                      </View>
+
+                      {/* Recorded State Changes (Before & After) */}
+                      <View style={styles.modalSection}>
+                        <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                          Recorded State Changes
+                        </AppText>
+                        {selectedLog.action === 'platform_settings.updated' && details.before && details.after ? (
+                          <View style={styles.diffTable}>
+                            {Object.keys(details.after).map((key) => {
+                              const label = SETTING_FIELD_LABELS[key] || key.replace(/_/g, ' ');
+                              const beforeVal = typeof details.before[key] === 'boolean'
+                                ? (details.before[key] ? 'Enabled' : 'Disabled')
+                                : String(details.before[key] ?? 'None');
+                              const afterVal = typeof details.after[key] === 'boolean'
+                                ? (details.after[key] ? 'Enabled' : 'Disabled')
+                                : String(details.after[key] ?? 'None');
+
+                              return (
+                                <View key={key} style={styles.diffRow}>
+                                  <AppText variant="caption" color="secondary" style={styles.diffKey}>
+                                    {label}:
+                                  </AppText>
+                                  <View style={styles.diffValuesCol}>
+                                    <View style={styles.diffValRow}>
+                                      <AppText variant="caption" color="tertiary" style={styles.diffValLabel}>Before:</AppText>
+                                      <AppText variant="caption" color="secondary" style={styles.diffValText}>{beforeVal}</AppText>
+                                    </View>
+                                    <View style={styles.diffValRow}>
+                                      <AppText variant="caption" color="brand" style={styles.diffValLabel}>After:</AppText>
+                                      <AppText variant="body" color="primary" style={[styles.diffValText, styles.diffValTextAfter]}>{afterVal}</AppText>
+                                    </View>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        ) : selectedLog.action === 'club.suspended' || selectedLog.action === 'club.reactivated' ? (
+                          <View style={styles.detailGrid}>
+                            <View style={styles.gridRow}>
+                              <AppText variant="caption" color="secondary" style={styles.gridKey}>Status Transition:</AppText>
+                              <AppText variant="body" color="primary" style={styles.gridVal}>
+                                {details.is_active_before ? 'Active' : 'Suspended'} → {details.is_active_after ? 'Active' : 'Suspended'}
+                              </AppText>
+                            </View>
+                            {details.slug && (
+                              <View style={styles.gridRow}>
+                                <AppText variant="caption" color="secondary" style={styles.gridKey}>Club URL Slug:</AppText>
+                                <AppText variant="body" color="primary" style={styles.gridVal}>
+                                  {details.slug}
+                                </AppText>
+                              </View>
+                            )}
+                          </View>
+                        ) : selectedLog.action?.startsWith('club_application.') ? (
+                          <View style={styles.detailGrid}>
+                            <View style={styles.gridRow}>
+                              <AppText variant="caption" color="secondary" style={styles.gridKey}>Application Ref:</AppText>
+                              <AppText variant="body" color="primary" style={[styles.gridVal, styles.monoText]}>
+                                {details.reference_number || 'Not recorded'}
+                              </AppText>
+                            </View>
+                            <View style={styles.gridRow}>
+                              <AppText variant="caption" color="secondary" style={styles.gridKey}>Applicant Email:</AppText>
+                              <AppText variant="body" color="primary" style={styles.gridVal}>
+                                {details.applicant_email || 'Not recorded'}
+                              </AppText>
+                            </View>
+                            {details.club_slug && (
+                              <View style={styles.gridRow}>
+                                <AppText variant="caption" color="secondary" style={styles.gridKey}>Club Slug:</AppText>
+                                <AppText variant="body" color="primary" style={styles.gridVal}>
+                                  {details.club_slug}
+                                </AppText>
+                              </View>
+                            )}
+                          </View>
+                        ) : selectedLog.action?.startsWith('support_ticket.') ? (
+                          <View style={styles.detailGrid}>
+                            <View style={styles.gridRow}>
+                              <AppText variant="caption" color="secondary" style={styles.gridKey}>Ticket Ref:</AppText>
+                              <AppText variant="body" color="primary" style={[styles.gridVal, styles.monoText]}>
+                                {details.reference_number || 'Not recorded'}
+                              </AppText>
+                            </View>
+                            {details.changes && Array.isArray(details.changes) && (
+                              <View style={styles.gridRow}>
+                                <AppText variant="caption" color="secondary" style={styles.gridKey}>Changes Applied:</AppText>
+                                <AppText variant="body" color="primary" style={styles.gridVal}>
+                                  {details.changes.join(', ')}
+                                </AppText>
+                              </View>
+                            )}
+                            {details.current_status && (
+                              <View style={styles.gridRow}>
+                                <AppText variant="caption" color="secondary" style={styles.gridKey}>Current Status:</AppText>
+                                <AppText variant="body" color="primary" style={styles.gridVal}>
+                                  {details.current_status}
+                                </AppText>
+                              </View>
+                            )}
+                          </View>
+                        ) : Object.keys(details).length > 0 ? (
+                          <View style={styles.detailGrid}>
+                            {Object.entries(details).map(([k, v]) => (
+                              <View key={k} style={styles.gridRow}>
+                                <AppText variant="caption" color="secondary" style={styles.gridKey}>
+                                  {k.replace(/_/g, ' ')}:
+                                </AppText>
+                                <AppText variant="body" color="primary" style={styles.gridVal}>
+                                  {typeof v === 'boolean' ? (v ? 'True' : 'False') : String(v)}
+                                </AppText>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <AppText variant="caption" color="tertiary" style={styles.notRecordedText}>
+                            No additional state change details recorded.
+                          </AppText>
+                        )}
+                      </View>
+
+                      {/* Affected Entity Details */}
+                      <View style={styles.modalSection}>
+                        <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                          Affected Record
+                        </AppText>
+                        <View style={styles.detailGrid}>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Item Name:</AppText>
+                            <AppText variant="body" color="primary" style={styles.gridVal}>
+                              {selectedLog.entity_name || 'Not recorded'}
+                            </AppText>
+                          </View>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Item Category:</AppText>
+                            <AppText variant="body" color="primary" style={styles.gridVal}>
+                              {pres.entityCategory}
+                            </AppText>
+                          </View>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Record ID:</AppText>
+                            <AppText variant="caption" color="secondary" style={[styles.gridVal, styles.monoText]}>
+                              {selectedLog.entity_id}
+                            </AppText>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Administrative Actor Details */}
+                      <View style={styles.modalSection}>
+                        <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                          Authorized Administrator
+                        </AppText>
+                        <View style={styles.detailGrid}>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Admin Name:</AppText>
+                            <AppText variant="body" color="primary" style={styles.gridVal}>
+                              {selectedLog.actor_name || 'Platform Administrator'}
+                            </AppText>
+                          </View>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Admin Email:</AppText>
+                            <AppText variant="body" color="primary" style={styles.gridVal}>
+                              {selectedLog.actor_email || 'Not recorded'}
+                            </AppText>
+                          </View>
+                          {selectedLog.actor_id && (
+                            <View style={styles.gridRow}>
+                              <AppText variant="caption" color="secondary" style={styles.gridKey}>Admin ID:</AppText>
+                              <AppText variant="caption" color="secondary" style={[styles.gridVal, styles.monoText]}>
+                                {selectedLog.actor_id}
+                              </AppText>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Network & Security Context */}
+                      <View style={styles.modalSection}>
+                        <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                          Network & Audit Context
+                        </AppText>
+                        <View style={styles.detailGrid}>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Client IP Address:</AppText>
+                            <AppText variant="body" color="primary" style={styles.gridVal}>
+                              {selectedLog.ip_address || 'Not recorded'}
+                            </AppText>
+                          </View>
+                          <View style={styles.gridRow}>
+                            <AppText variant="caption" color="secondary" style={styles.gridKey}>Event Log UUID:</AppText>
+                            <AppText variant="caption" color="secondary" style={[styles.gridVal, styles.monoText]}>
+                              {selectedLog.id}
+                            </AppText>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Immutability Notice */}
+                      <View style={styles.boundaryCard}>
+                        <Lock size={15} color="#18794E" />
+                        <AppText variant="caption" color="secondary" style={styles.boundaryText}>
+                          Platform audit records are append-only and cryptographically immutable. Entries cannot be edited, modified, or deleted by any administrative role.
+                        </AppText>
                       </View>
                     </View>
-                  )}
+                  </ScrollView>
 
-                  {/* Immutability & Security Notice */}
-                  <View style={styles.boundaryCard}>
-                    <Lock size={15} color="#18794E" />
-                    <AppText variant="caption" color="secondary" style={styles.boundaryText}>
-                      Platform audit records are append-only and cryptographically immutable. Entries cannot be edited, modified, or deleted by any administrative role.
-                    </AppText>
+                  <View style={styles.modalBottomActions}>
+                    <Button
+                      label="Close"
+                      variant="primary"
+                      onPress={() => setSelectedLog(null)}
+                      style={styles.modalCloseButton}
+                    />
                   </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalBottomActions}>
-              <Button
-                label="Close"
-                variant="outline"
-                onPress={() => setSelectedLog(null)}
-                style={styles.modalCloseButton}
-              />
-            </View>
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -650,7 +1013,7 @@ const styles = StyleSheet.create({
   kpiContainer: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: Spacing.md,
+    marginBottom: 8,
     flexWrap: 'wrap',
   },
   kpiCard: {
@@ -665,6 +1028,21 @@ const styles = StyleSheet.create({
   },
   kpiValue: {
     marginTop: 4,
+  },
+  kpiSub: {
+    marginTop: 2,
+    fontSize: 11,
+  },
+  kpiNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: Spacing.md,
+    paddingHorizontal: 4,
+  },
+  kpiNoticeText: {
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   controlsCard: {
     backgroundColor: '#FFFFFF',
@@ -760,19 +1138,19 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: '#E2EBE6',
+    gap: 8,
   },
   logHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
     flexWrap: 'wrap',
     gap: 8,
   },
   actionBadgeGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   entityTypePill: {
     backgroundColor: '#F0F5F2',
@@ -789,61 +1167,69 @@ const styles = StyleSheet.create({
   timestampRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   entityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  entityIcon: {
-    marginTop: 1,
   },
   entityName: {
     fontSize: 15,
     fontWeight: '700',
-    flex: 1,
+    color: '#122521',
   },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderColor: '#F0F5F2',
-    gap: 12,
-    flexWrap: 'wrap',
+  narrativeRow: {
+    backgroundColor: '#F8FAF9',
+    padding: 10,
+    borderRadius: Radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: '#18794E',
   },
-  actorCol: {
-    flex: 1,
-    minWidth: 220,
-    gap: 4,
-  },
-  inlineItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  narrativeText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#2A4540',
   },
   reasonCard: {
-    flex: 1.2,
-    minWidth: 220,
     backgroundColor: '#FAFDFB',
     borderWidth: 1,
     borderColor: '#E2EBE6',
     borderRadius: Radius.sm,
     padding: 8,
+    gap: 2,
+  },
+  reasonLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4B635D',
   },
   reasonText: {
     fontStyle: 'italic',
     lineHeight: 16,
   },
-  cardActionsRow: {
-    marginTop: 12,
+  cardFooterRow: {
+    marginTop: 4,
     paddingTop: 10,
     borderTopWidth: 1,
     borderColor: '#F0F5F2',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  actorCol: {
+    flex: 1,
+    minWidth: 180,
+  },
+  actorEmailText: {
+    marginLeft: 19,
+    fontSize: 11,
+  },
+  inlineItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   inspectBtn: {
     borderColor: '#C3E5D4',
@@ -858,6 +1244,27 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderWidth: 1,
     borderColor: '#E2EBE6',
+  },
+  pageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    backgroundColor: '#F0F5F2',
+  },
+  pageButtonDisabled: {
+    backgroundColor: '#F8FAF9',
+    opacity: 0.6,
+  },
+  pageButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#18794E',
+  },
+  pageButtonTextDisabled: {
+    color: '#8FA39E',
   },
   paginationText: {
     fontSize: 12,
@@ -901,6 +1308,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  modalEventId: {
+    marginTop: 2,
+  },
   modalCloseBtn: {
     padding: 6,
     borderRadius: Radius.full,
@@ -912,6 +1322,25 @@ const styles = StyleSheet.create({
   modalBody: {
     gap: Spacing.md,
     paddingBottom: 20,
+  },
+  summaryBanner: {
+    backgroundColor: '#F0F7F3',
+    borderWidth: 1,
+    borderColor: '#D4E8DC',
+    borderRadius: Radius.md,
+    padding: 12,
+    gap: 4,
+  },
+  summaryBannerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  summaryBannerText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '500',
   },
   statusBannerRow: {
     flexDirection: 'row',
@@ -940,6 +1369,52 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: Radius.sm,
   },
+  notRecordedText: {
+    fontStyle: 'italic',
+  },
+  diffTable: {
+    backgroundColor: '#FAFDFB',
+    borderWidth: 1,
+    borderColor: '#E2EBE6',
+    borderRadius: Radius.md,
+    padding: 10,
+    gap: 8,
+  },
+  diffRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F5F2',
+    paddingBottom: 6,
+  },
+  diffKey: {
+    fontSize: 12,
+    fontWeight: '600',
+    minWidth: 120,
+  },
+  diffValuesCol: {
+    flex: 1,
+    gap: 2,
+    alignItems: 'flex-end',
+  },
+  diffValRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  diffValLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  diffValText: {
+    fontSize: 12,
+  },
+  diffValTextAfter: {
+    fontWeight: '600',
+    color: '#18794E',
+  },
   detailGrid: {
     gap: 8,
   },
@@ -953,7 +1428,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     minWidth: 130,
-    textTransform: 'capitalize',
   },
   gridVal: {
     flex: 1,
@@ -989,6 +1463,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFDFB',
   },
   modalCloseButton: {
-    minWidth: 100,
+    minWidth: 110,
+    backgroundColor: '#18794E',
   },
 });
