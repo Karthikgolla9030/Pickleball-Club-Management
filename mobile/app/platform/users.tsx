@@ -1236,15 +1236,15 @@ const styles = StyleSheet.create({
   filterTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 24,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
   },
   filterTabActive: {
     backgroundColor: '#15803D',
@@ -1253,7 +1253,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   filterTabText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   filterTabTextActive: {
@@ -1263,10 +1263,10 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   filterTabBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    minWidth: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1277,7 +1277,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
   },
   filterTabBadgeText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
   },
   filterTabBadgeTextActive: {

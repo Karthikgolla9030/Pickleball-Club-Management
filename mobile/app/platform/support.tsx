@@ -1114,16 +1114,16 @@ const styles = StyleSheet.create({
   filterPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
   },
   pillActive: {
     backgroundColor: '#15803D',

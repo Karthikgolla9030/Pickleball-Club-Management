@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 7,
     paddingVertical: 2,
   },
   filterTab: {
@@ -733,38 +733,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Radius.full,
-    backgroundColor: '#F0F5F2',
+    paddingVertical: 6,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
   },
   filterTabActive: {
-    backgroundColor: '#18794E',
+    backgroundColor: '#15803D',
   },
   filterTabText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#4B635D',
+    color: '#334155',
   },
   filterTabTextActive: {
     color: '#FFFFFF',
   },
   countPill: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: Radius.full,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   countPillInactive: {
-    backgroundColor: '#E2EBE6',
+    backgroundColor: '#E2E8F0',
   },
   countPillActive: {
-    backgroundColor: '#14603E',
+    backgroundColor: '#166534',
   },
   countPillText: {
     fontSize: 11,
     fontWeight: '700',
   },
   countPillTextInactive: {
-    color: '#4B635D',
+    color: '#475569',
   },
   countPillTextActive: {
     color: '#FFFFFF',
