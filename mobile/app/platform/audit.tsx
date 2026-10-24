@@ -452,12 +452,12 @@ export default function PlatformAuditLogScreen() {
               </AppText>
             </View>
 
-            {/* 2. Four Audit Summary Cards (Responsive 2-column grid, Natural Wrapping) */}
+            {/* 2. Four Audit Summary Cards (Responsive 2-column grid, Left-aligned text column) */}
             <View style={styles.summaryGrid}>
               {/* Card 1: Total Recorded Events */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <FileText size={18} color="#16A34A" strokeWidth={2.2} />
+                  <FileText size={16} color="#16A34A" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>
@@ -473,7 +473,7 @@ export default function PlatformAuditLogScreen() {
               {/* Card 2: Applications Decided */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <FileCheck size={18} color="#0284C7" strokeWidth={2.2} />
+                  <FileCheck size={16} color="#0284C7" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>
@@ -491,7 +491,7 @@ export default function PlatformAuditLogScreen() {
               {/* Card 3: Club Status Changes */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Users size={18} color="#D97706" strokeWidth={2.2} />
+                  <Users size={16} color="#D97706" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>
@@ -509,7 +509,7 @@ export default function PlatformAuditLogScreen() {
               {/* Card 4: Settings & Support */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
-                  <Settings size={18} color="#9333EA" strokeWidth={2.2} />
+                  <Settings size={16} color="#9333EA" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>
@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
     }),
   },
 
-  // ─── 4 Summary Cards (Responsive 2-column grid, Natural Text Wrapping) ─────
+  // ─── 4 Summary Cards (Responsive 2-column grid, Left-Aligned Text Column) ──
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1432,16 +1432,16 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexBasis: '48%',
     flexGrow: 1,
-    minWidth: 140,
+    minWidth: 135,
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingHorizontal: 11,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    gap: 9,
+    gap: 8,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -1452,9 +1452,9 @@ const styles = StyleSheet.create({
     }),
   },
   summaryIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1463,18 +1463,31 @@ const styles = StyleSheet.create({
   summaryTextBox: {
     flex: 1,
     minWidth: 0,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    ...Platform.select({
+      web: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-start',
+        width: '100%',
+      },
+    }),
   },
   summaryLabel: {
     fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
+    color: '#475569',
+    fontWeight: '600',
     lineHeight: 17,
-    flexWrap: 'wrap',
+    textAlign: 'left',
+    width: '100%',
     ...Platform.select({
       web: {
-        overflowWrap: 'anywhere',
-        wordBreak: 'break-word',
-      },
+        display: 'block',
+        whiteSpace: 'normal',
+        wordBreak: 'normal',
+        overflowWrap: 'break-word',
+      } as any,
     }),
   },
   summaryValue: {
@@ -1483,18 +1496,23 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     lineHeight: 28,
     marginTop: 2,
+    textAlign: 'left',
+    width: '100%',
   },
   summarySub: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#64748B',
     lineHeight: 16,
     marginTop: 2,
-    flexWrap: 'wrap',
+    textAlign: 'left',
+    width: '100%',
     ...Platform.select({
       web: {
-        overflowWrap: 'anywhere',
-        wordBreak: 'break-word',
-      },
+        display: 'block',
+        whiteSpace: 'normal',
+        wordBreak: 'normal',
+        overflowWrap: 'break-word',
+      } as any,
     }),
   },
 
