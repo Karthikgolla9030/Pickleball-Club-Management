@@ -547,139 +547,73 @@ export default function PlatformUsersScreen() {
 
           return (
             <Card style={styles.userCard}>
-              {/* ─── CARD LAYOUT: NARROW PHONES (< 380px) ─────────────────── */}
-              {isNarrowPhone ? (
-                <View style={styles.narrowCardWrapper}>
-                  {/* Top row: Avatar, Name, and 3-dots Menu */}
-                  <View style={styles.narrowTopRow}>
-                    <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
-                      <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
-                        {initial}
-                      </AppText>
-                    </View>
+              {/* Top Row: Avatar on left, Name & Email in middle, 3-dots on right */}
+              <View style={styles.cardTopRow}>
+                {/* Left: Circular pastel avatar */}
+                <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
+                  <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
+                    {initial}
+                  </AppText>
+                </View>
 
-                    <View style={styles.narrowNameCol}>
-                      <AppText style={styles.userName}>
-                        {displayName}
-                      </AppText>
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.moreButton}
-                      onPress={() => setMenuUser(item)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={`Account options for ${displayName}`}
-                    >
-                      <MoreVertical size={18} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Full-width Email below Avatar/Name */}
-                  <AppText style={styles.userEmailNarrow}>
+                {/* Middle: Name & Email with natural wrapping */}
+                <View style={styles.userInfoCol}>
+                  <AppText style={styles.userName}>
+                    {displayName}
+                  </AppText>
+                  <AppText style={styles.userEmail}>
                     {item.email}
                   </AppText>
-
-                  {/* Club info */}
-                  <View style={styles.metaRow}>
-                    <Users size={14} color="#64748B" style={styles.metaIcon} />
-                    <AppText style={styles.metaTextItalic}>
-                      {clubAssociation}
-                    </AppText>
-                  </View>
-
-                  {/* Badges on their own row */}
-                  <View style={styles.narrowBadgesRow}>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
-                      ]}
-                    >
-                      <AppText
-                        style={[
-                          styles.statusBadgeText,
-                          { color: item.is_active ? '#15803D' : '#DC2626' },
-                        ]}
-                      >
-                        {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                      </AppText>
-                    </View>
-
-                    {item.is_verified && (
-                      <View style={styles.verifiedBadge}>
-                        <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
-                      </View>
-                    )}
-                  </View>
                 </View>
-              ) : (
-                /* ─── CARD LAYOUT: WIDER PHONES & DESKTOP (>= 380px) ────────── */
-                <View style={styles.cardTopRow}>
-                  {/* Left: Avatar Circle */}
-                  <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
-                    <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
-                      {initial}
-                    </AppText>
-                  </View>
 
-                  {/* Middle: User Info (Zero truncation, natural wrapping) */}
-                  <View style={styles.userInfoCol}>
-                    <AppText style={styles.userName}>
-                      {displayName}
-                    </AppText>
-                    <AppText style={styles.userEmail}>
-                      {item.email}
-                    </AppText>
-                    <View style={styles.metaRow}>
-                      <Users size={14} color="#64748B" style={styles.metaIcon} />
-                      <AppText style={styles.metaTextItalic}>
-                        {clubAssociation}
-                      </AppText>
-                    </View>
-                  </View>
+                {/* Top-Right: 3-dots Menu Button */}
+                <TouchableOpacity
+                  style={styles.moreButton}
+                  onPress={() => setMenuUser(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={`Account options for ${displayName}`}
+                >
+                  <MoreVertical size={18} color="#64748B" />
+                </TouchableOpacity>
+              </View>
 
-                  {/* Right: Badges & 3-Dots Menu */}
-                  <View style={styles.rightActionGroup}>
-                    <View style={styles.badgesStack}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.statusBadgeText,
-                            { color: item.is_active ? '#15803D' : '#DC2626' },
-                          ]}
-                        >
-                          {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                        </AppText>
-                      </View>
-
-                      {item.is_verified && (
-                        <View style={styles.verifiedBadge}>
-                          <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
-                        </View>
-                      )}
-                    </View>
-
-                    <TouchableOpacity
-                      style={styles.moreButton}
-                      onPress={() => setMenuUser(item)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityLabel={`Account options for ${displayName}`}
-                    >
-                      <MoreVertical size={18} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
+              {/* Lower Info Row: Club info on left, plain status with dot on right (directly above Inspect button) */}
+              <View
+                style={[
+                  styles.cardMetaStatusRow,
+                  isSuperNarrow && styles.cardMetaStatusRowNarrow,
+                ]}
+              >
+                <View style={styles.metaRow}>
+                  <Users size={14} color="#64748B" style={styles.metaIcon} />
+                  <AppText style={styles.metaTextItalic}>
+                    {clubAssociation}
+                  </AppText>
                 </View>
-              )}
+
+                {/* Right: Plain status text with small colored dot (NO box/pill/border) */}
+                <View style={styles.statusIndicatorRow}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: item.is_active ? '#15803D' : '#DC2626' },
+                    ]}
+                  />
+                  <AppText
+                    style={[
+                      styles.statusText,
+                      { color: item.is_active ? '#15803D' : '#DC2626' },
+                    ]}
+                  >
+                    {item.is_active ? 'Active' : 'Inactive'}
+                  </AppText>
+                </View>
+              </View>
 
               {/* Subtle Horizontal Divider */}
               <View style={styles.cardDivider} />
 
-              {/* Bottom Action Row */}
+              {/* Bottom Action Row: Joined date on left, Inspect Account button on right */}
               <View
                 style={[
                   styles.cardBottomRow,
@@ -1456,11 +1390,11 @@ const styles = StyleSheet.create({
     }),
   },
 
-  // Layout for Wider Phones & Desktop (>= 380px)
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+    width: '100%',
   },
   avatarCircle: {
     width: 44,
@@ -1477,7 +1411,7 @@ const styles = StyleSheet.create({
   userInfoCol: {
     flex: 1,
     minWidth: 0,
-    flexShrink: 1,
+    paddingRight: 4,
   },
   userName: {
     fontSize: 16,
@@ -1511,12 +1445,35 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  moreButton: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: -2,
+    marginRight: -4,
+  },
+
+  // Lower info row: Club info on left, plain status with dot on right
+  cardMetaStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 56, // aligns directly with text under 44px avatar (44 + 12 gap)
+    marginTop: 6,
+    gap: 8,
+    width: '100%',
+  },
+  cardMetaStatusRowNarrow: {
+    paddingLeft: 0,
+  },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
-    flexWrap: 'wrap',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   metaIcon: {
     flexShrink: 0,
@@ -1534,81 +1491,23 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  rightActionGroup: {
+
+  // Status Indicator (Plain text with colored dot, NO box/pill/border)
+  statusIndicatorRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 4,
+    alignItems: 'center',
+    gap: 6,
     flexShrink: 0,
   },
-  badgesStack: {
-    alignItems: 'flex-end',
-    gap: 4,
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  verifiedBadge: {
-    backgroundColor: '#EEF2FF',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  verifiedBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#4338CA',
-    letterSpacing: 0.3,
-  },
-  moreButton: {
-    padding: 4,
-    marginLeft: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Layout for Narrow Phones (< 380px): Natural vertical reflow
-  narrowCardWrapper: {
-    width: '100%',
-  },
-  narrowTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    width: '100%',
-  },
-  narrowNameCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  userEmailNarrow: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#475569',
-    lineHeight: 20,
-    marginTop: 4,
-    width: '100%',
-    flexWrap: 'wrap',
-    ...Platform.select({
-      web: {
-        fontSize: 'clamp(13px, 3.7vw, 15px)' as any,
-        lineHeight: '1.45' as any,
-        wordBreak: 'break-all',
-        overflowWrap: 'anywhere',
-      },
-    }),
-  },
-  narrowBadgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
 
   // Divider
