@@ -1,23 +1,15 @@
 /**
  * Pickleball Multi-Club Platform — Platform Admin Audit Log
  *
- * Responsive, spacious mobile-first implementation matching visual reference:
- * - Page Heading "Audit Log" and subtitle "Review administrative actions and platform changes"
- * - 4 Summary KPI cards in a responsive 2x2 grid:
- *     1. Total Recorded Events (green pastel icon, count, "Logged audit entries")
- *     2. Applications Decided (blue pastel icon, count, "X approved · Y rejected")
- *     3. Club Status Changes (amber pastel icon, count, "X suspended · Y reactivated")
- *     4. Settings & Support (purple pastel icon, count, "X settings · Y support actions")
- * - Summary explanation note with ShieldCheck icon
- * - Horizontally scrollable category filter tabs: All Activity, Applications, Club Status, Settings, Support
- * - Full-width search bar with placeholder "Search by club name, admin, reason, or action..." + filter button
- * - Clean audit event cards:
- *     - Category pastel icon + Semantic action badge + Category badge + 3-dots overflow menu
- *     - Timestamp with clock icon and relative time (e.g. "Oct 23, 2026, 2:36 PM · Yesterday")
- *     - Prominent event title in bold dark navy
- *     - Narrative action callout box with green left border accent
- *     - Reason / Note section
- * - Fully scrollable content (no sticky headers/filters, page scrolls naturally)
+ * Premium, responsive, mobile-first administrative audit trail:
+ * - Moderate, refined heading (26px) with compact line height
+ * - 4 Summary KPI cards in a responsive 2-column grid with natural text wrapping
+ *   (Zero ellipses or truncated labels/descriptions)
+ * - Compact, horizontally scrollable filter chips (All Activity, Applications, Club Status, Settings, Support)
+ * - Balanced search and filter row with placeholder "Search by club, admin, reason, or action"
+ * - Compact, readable audit event cards with restrained padding, moderate titles (17px),
+ *   narrative box with green left border accent, and reason/note box
+ * - Full page scrolling with fixed bottom navigation (no sticky/fixed content containers)
  * - Detailed event inspection modal with before/after state diffs, actor info, and network context
  */
 
@@ -42,8 +34,6 @@ import {
   Calendar,
   Check,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Eye,
@@ -51,16 +41,12 @@ import {
   FileText,
   LifeBuoy,
   Lock,
-  MessageSquare,
   MoreVertical,
   Search,
   Settings,
-  Shield,
-  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   User,
-  UserCheck,
   Users,
   X,
   XCircle,
@@ -68,7 +54,6 @@ import {
 
 import {
   AppText,
-  Badge,
   Card,
   EmptyState,
   ErrorState,
@@ -180,7 +165,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'PLATFORM SETTINGS',
         targetName: 'Global Platform Settings',
         narrative: `Modified global platform settings (${keySummary}).`,
-        icon: <SlidersHorizontal size={15} color="#D97706" />,
+        icon: <SlidersHorizontal size={14} color="#D97706" />,
         iconBg: '#FEF3C7',
       };
     }
@@ -197,7 +182,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'USER MANAGEMENT',
         targetName: 'New User Account Created',
         narrative: `Created new user account for ${email}.`,
-        icon: <Users size={15} color="#0284C7" />,
+        icon: <Users size={14} color="#0284C7" />,
         iconBg: '#E0F2FE',
       };
     }
@@ -211,7 +196,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'CLUB APPLICATION',
         targetName: entityName,
         narrative: `Approved onboarding application for "${entityName}" and provisioned the new club facility.`,
-        icon: <FileCheck size={15} color="#15803D" />,
+        icon: <FileCheck size={14} color="#15803D" />,
         iconBg: '#E6F4EA',
       };
 
@@ -224,7 +209,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'CLUB APPLICATION',
         targetName: entityName,
         narrative: `Rejected onboarding application for "${entityName}".`,
-        icon: <XCircle size={15} color="#64748B" />,
+        icon: <XCircle size={14} color="#64748B" />,
         iconBg: '#F1F5F9',
       };
 
@@ -237,7 +222,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'CLUB FACILITY',
         targetName: entityName,
         narrative: `Suspended operational access for "${entityName}". Public bookings and member activities paused.`,
-        icon: <AlertTriangle size={15} color="#DC2626" />,
+        icon: <AlertTriangle size={14} color="#DC2626" />,
         iconBg: '#FEE2E2',
       };
 
@@ -250,7 +235,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         categoryLabel: 'CLUB FACILITY',
         targetName: entityName,
         narrative: `Restored active operational access for "${entityName}". Facility bookings and member access resumed.`,
-        icon: <CheckCircle2 size={15} color="#15803D" />,
+        icon: <CheckCircle2 size={14} color="#15803D" />,
         iconBg: '#E6F4EA',
       };
 
@@ -267,7 +252,7 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
         narrative: details.changes && Array.isArray(details.changes)
           ? `Updated ticket: ${details.changes.join('; ')}`
           : `Processed administrative update for ticket "${entityName}".`,
-        icon: <LifeBuoy size={15} color="#7C3AED" />,
+        icon: <LifeBuoy size={14} color="#7C3AED" />,
         iconBg: '#F3E8FF',
       };
 
@@ -277,28 +262,28 @@ function getEventPresentation(item: PlatformAuditLogItem): EventPresentation {
       let cat = 'SYSTEM RECORD';
       let iconColor = '#15803D';
       let iconBg = '#E6F4EA';
-      let iconNode = <Clock size={15} color={iconColor} />;
+      let iconNode = <Clock size={14} color={iconColor} />;
 
       if (entityType === 'club') {
         cat = 'CLUB FACILITY';
         iconColor = '#D97706';
         iconBg = '#FEF3C7';
-        iconNode = <Building2 size={15} color={iconColor} />;
+        iconNode = <Building2 size={14} color={iconColor} />;
       } else if (entityType === 'club_application') {
         cat = 'CLUB APPLICATION';
         iconColor = '#0284C7';
         iconBg = '#E0F2FE';
-        iconNode = <FileText size={15} color={iconColor} />;
+        iconNode = <FileText size={14} color={iconColor} />;
       } else if (entityType === 'platform_settings') {
         cat = 'PLATFORM SETTINGS';
         iconColor = '#D97706';
         iconBg = '#FEF3C7';
-        iconNode = <SlidersHorizontal size={15} color={iconColor} />;
+        iconNode = <SlidersHorizontal size={14} color={iconColor} />;
       } else if (entityType === 'support_ticket') {
         cat = 'SUPPORT TICKET';
         iconColor = '#7C3AED';
         iconBg = '#F3E8FF';
-        iconNode = <LifeBuoy size={15} color={iconColor} />;
+        iconNode = <LifeBuoy size={14} color={iconColor} />;
       }
 
       return {
@@ -459,7 +444,7 @@ export default function PlatformAuditLogScreen() {
         }
         ListHeaderComponent={
           <View style={styles.headerContainer}>
-            {/* 1. Page Heading */}
+            {/* 1. Page Heading — Moderate Size, Balanced & Refined */}
             <View style={styles.headerSection}>
               <AppText style={styles.screenTitle}>Audit Log</AppText>
               <AppText style={styles.screenSubtitle}>
@@ -467,19 +452,19 @@ export default function PlatformAuditLogScreen() {
               </AppText>
             </View>
 
-            {/* 2. Four Audit Summary Cards (2-column responsive grid) */}
+            {/* 2. Four Audit Summary Cards (Responsive 2-column grid, Natural Wrapping) */}
             <View style={styles.summaryGrid}>
               {/* Card 1: Total Recorded Events */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <FileText size={20} color="#16A34A" strokeWidth={2.2} />
+                  <FileText size={18} color="#16A34A" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                  <AppText style={styles.summaryLabel}>
                     Total Recorded Events
                   </AppText>
                   <AppText style={styles.summaryValue}>{totalRecorded}</AppText>
-                  <AppText style={styles.summarySub} numberOfLines={1}>
+                  <AppText style={styles.summarySub}>
                     Logged audit entries
                   </AppText>
                 </View>
@@ -488,16 +473,16 @@ export default function PlatformAuditLogScreen() {
               {/* Card 2: Applications Decided */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <FileCheck size={20} color="#0284C7" strokeWidth={2.2} />
+                  <FileCheck size={18} color="#0284C7" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                  <AppText style={styles.summaryLabel}>
                     Applications Decided
                   </AppText>
                   <AppText style={styles.summaryValue}>
                     {appApprovedCount + appRejectedCount}
                   </AppText>
-                  <AppText style={styles.summarySub} numberOfLines={1}>
+                  <AppText style={styles.summarySub}>
                     {appApprovedCount} approved · {appRejectedCount} rejected
                   </AppText>
                 </View>
@@ -506,16 +491,16 @@ export default function PlatformAuditLogScreen() {
               {/* Card 3: Club Status Changes */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Users size={20} color="#D97706" strokeWidth={2.2} />
+                  <Users size={18} color="#D97706" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                  <AppText style={styles.summaryLabel}>
                     Club Status Changes
                   </AppText>
                   <AppText style={styles.summaryValue}>
                     {clubSuspendedCount + clubReactivatedCount}
                   </AppText>
-                  <AppText style={styles.summarySub} numberOfLines={1}>
+                  <AppText style={styles.summarySub}>
                     {clubSuspendedCount} suspended · {clubReactivatedCount} reactivated
                   </AppText>
                 </View>
@@ -524,16 +509,16 @@ export default function PlatformAuditLogScreen() {
               {/* Card 4: Settings & Support */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
-                  <Settings size={20} color="#9333EA" strokeWidth={2.2} />
+                  <Settings size={18} color="#9333EA" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                  <AppText style={styles.summaryLabel}>
                     Settings & Support
                   </AppText>
                   <AppText style={styles.summaryValue}>
                     {settingsCount + supportCount}
                   </AppText>
-                  <AppText style={styles.summarySub} numberOfLines={1}>
+                  <AppText style={styles.summarySub}>
                     {settingsCount} settings · {supportCount} support actions
                   </AppText>
                 </View>
@@ -542,24 +527,24 @@ export default function PlatformAuditLogScreen() {
 
             {/* 3. Audit Summary Explanation Note */}
             <View style={styles.explanationNoteCard}>
-              <ShieldCheck size={18} color="#16A34A" style={styles.explanationIcon} />
+              <ShieldCheck size={16} color="#16A34A" style={styles.explanationIcon} />
               <AppText style={styles.explanationNoteText}>
                 Summary reflects administrative actions recorded in the platform audit trail.
               </AppText>
             </View>
 
-            {/* 4. Category Filter Tabs */}
+            {/* 4. Compact Category Filter Chips (Horizontally Scrollable) */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              style={styles.tabsScroll}
-              contentContainerStyle={styles.filterTabsRow}
+              style={styles.chipsScroll}
+              contentContainerStyle={styles.chipsRow}
             >
               {/* All Activity */}
               <TouchableOpacity
                 style={[
-                  styles.filterTab,
-                  filter === 'all' ? styles.filterTabActive : styles.filterTabInactive,
+                  styles.filterChip,
+                  filter === 'all' ? styles.filterChipActive : styles.filterChipInactive,
                 ]}
                 onPress={() => {
                   setFilter('all');
@@ -571,28 +556,28 @@ export default function PlatformAuditLogScreen() {
               >
                 <AppText
                   style={[
-                    styles.filterTabText,
+                    styles.filterChipText,
                     filter === 'all'
-                      ? styles.filterTabTextActive
-                      : styles.filterTabTextInactive,
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
                   ]}
                 >
                   All Activity
                 </AppText>
                 <View
                   style={[
-                    styles.filterTabBadge,
+                    styles.filterChipBadge,
                     filter === 'all'
-                      ? styles.filterTabBadgeActive
-                      : styles.filterTabBadgeInactive,
+                      ? styles.filterChipBadgeActive
+                      : styles.filterChipBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.filterTabBadgeText,
+                      styles.filterChipBadgeText,
                       filter === 'all'
-                        ? styles.filterTabBadgeTextActive
-                        : styles.filterTabBadgeTextInactive,
+                        ? styles.filterChipBadgeTextActive
+                        : styles.filterChipBadgeTextInactive,
                     ]}
                   >
                     {totalRecorded}
@@ -603,10 +588,10 @@ export default function PlatformAuditLogScreen() {
               {/* Applications */}
               <TouchableOpacity
                 style={[
-                  styles.filterTab,
+                  styles.filterChip,
                   filter === 'club_application'
-                    ? styles.filterTabActive
-                    : styles.filterTabInactive,
+                    ? styles.filterChipActive
+                    : styles.filterChipInactive,
                 ]}
                 onPress={() => {
                   setFilter('club_application');
@@ -618,28 +603,28 @@ export default function PlatformAuditLogScreen() {
               >
                 <AppText
                   style={[
-                    styles.filterTabText,
+                    styles.filterChipText,
                     filter === 'club_application'
-                      ? styles.filterTabTextActive
-                      : styles.filterTabTextInactive,
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
                   ]}
                 >
                   Applications
                 </AppText>
                 <View
                   style={[
-                    styles.filterTabBadge,
+                    styles.filterChipBadge,
                     filter === 'club_application'
-                      ? styles.filterTabBadgeActive
-                      : styles.filterTabBadgeInactive,
+                      ? styles.filterChipBadgeActive
+                      : styles.filterChipBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.filterTabBadgeText,
+                      styles.filterChipBadgeText,
                       filter === 'club_application'
-                        ? styles.filterTabBadgeTextActive
-                        : styles.filterTabBadgeTextInactive,
+                        ? styles.filterChipBadgeTextActive
+                        : styles.filterChipBadgeTextInactive,
                     ]}
                   >
                     {appApprovedCount + appRejectedCount}
@@ -650,8 +635,8 @@ export default function PlatformAuditLogScreen() {
               {/* Club Status */}
               <TouchableOpacity
                 style={[
-                  styles.filterTab,
-                  filter === 'club' ? styles.filterTabActive : styles.filterTabInactive,
+                  styles.filterChip,
+                  filter === 'club' ? styles.filterChipActive : styles.filterChipInactive,
                 ]}
                 onPress={() => {
                   setFilter('club');
@@ -663,28 +648,28 @@ export default function PlatformAuditLogScreen() {
               >
                 <AppText
                   style={[
-                    styles.filterTabText,
+                    styles.filterChipText,
                     filter === 'club'
-                      ? styles.filterTabTextActive
-                      : styles.filterTabTextInactive,
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
                   ]}
                 >
                   Club Status
                 </AppText>
                 <View
                   style={[
-                    styles.filterTabBadge,
+                    styles.filterChipBadge,
                     filter === 'club'
-                      ? styles.filterTabBadgeActive
-                      : styles.filterTabBadgeInactive,
+                      ? styles.filterChipBadgeActive
+                      : styles.filterChipBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.filterTabBadgeText,
+                      styles.filterChipBadgeText,
                       filter === 'club'
-                        ? styles.filterTabBadgeTextActive
-                        : styles.filterTabBadgeTextInactive,
+                        ? styles.filterChipBadgeTextActive
+                        : styles.filterChipBadgeTextInactive,
                     ]}
                   >
                     {clubSuspendedCount + clubReactivatedCount}
@@ -692,13 +677,13 @@ export default function PlatformAuditLogScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* Platform Settings */}
+              {/* Settings */}
               <TouchableOpacity
                 style={[
-                  styles.filterTab,
+                  styles.filterChip,
                   filter === 'platform_settings'
-                    ? styles.filterTabActive
-                    : styles.filterTabInactive,
+                    ? styles.filterChipActive
+                    : styles.filterChipInactive,
                 ]}
                 onPress={() => {
                   setFilter('platform_settings');
@@ -710,28 +695,28 @@ export default function PlatformAuditLogScreen() {
               >
                 <AppText
                   style={[
-                    styles.filterTabText,
+                    styles.filterChipText,
                     filter === 'platform_settings'
-                      ? styles.filterTabTextActive
-                      : styles.filterTabTextInactive,
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
                   ]}
                 >
                   Settings
                 </AppText>
                 <View
                   style={[
-                    styles.filterTabBadge,
+                    styles.filterChipBadge,
                     filter === 'platform_settings'
-                      ? styles.filterTabBadgeActive
-                      : styles.filterTabBadgeInactive,
+                      ? styles.filterChipBadgeActive
+                      : styles.filterChipBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.filterTabBadgeText,
+                      styles.filterChipBadgeText,
                       filter === 'platform_settings'
-                        ? styles.filterTabBadgeTextActive
-                        : styles.filterTabBadgeTextInactive,
+                        ? styles.filterChipBadgeTextActive
+                        : styles.filterChipBadgeTextInactive,
                     ]}
                   >
                     {settingsCount}
@@ -742,10 +727,10 @@ export default function PlatformAuditLogScreen() {
               {/* Support */}
               <TouchableOpacity
                 style={[
-                  styles.filterTab,
+                  styles.filterChip,
                   filter === 'support_ticket'
-                    ? styles.filterTabActive
-                    : styles.filterTabInactive,
+                    ? styles.filterChipActive
+                    : styles.filterChipInactive,
                 ]}
                 onPress={() => {
                   setFilter('support_ticket');
@@ -757,28 +742,28 @@ export default function PlatformAuditLogScreen() {
               >
                 <AppText
                   style={[
-                    styles.filterTabText,
+                    styles.filterChipText,
                     filter === 'support_ticket'
-                      ? styles.filterTabTextActive
-                      : styles.filterTabTextInactive,
+                      ? styles.filterChipTextActive
+                      : styles.filterChipTextInactive,
                   ]}
                 >
                   Support
                 </AppText>
                 <View
                   style={[
-                    styles.filterTabBadge,
+                    styles.filterChipBadge,
                     filter === 'support_ticket'
-                      ? styles.filterTabBadgeActive
-                      : styles.filterTabBadgeInactive,
+                      ? styles.filterChipBadgeActive
+                      : styles.filterChipBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.filterTabBadgeText,
+                      styles.filterChipBadgeText,
                       filter === 'support_ticket'
-                        ? styles.filterTabBadgeTextActive
-                        : styles.filterTabBadgeTextInactive,
+                        ? styles.filterChipBadgeTextActive
+                        : styles.filterChipBadgeTextInactive,
                     ]}
                   >
                     {supportCount}
@@ -787,13 +772,13 @@ export default function PlatformAuditLogScreen() {
               </TouchableOpacity>
             </ScrollView>
 
-            {/* 5. Search Field & Filter Button */}
+            {/* 5. Search Field & Filter Button — Balanced Dimensions */}
             <View style={styles.searchRow}>
               <View style={styles.searchBar}>
-                <Search size={18} color="#94A3B8" style={styles.searchIcon} />
+                <Search size={16} color="#94A3B8" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by club name, admin, reason, or action..."
+                  placeholder="Search by club, admin, reason, or action"
                   placeholderTextColor="#94A3B8"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -806,7 +791,7 @@ export default function PlatformAuditLogScreen() {
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     accessibilityLabel="Clear search input"
                   >
-                    <X size={16} color="#94A3B8" />
+                    <X size={15} color="#94A3B8" />
                   </TouchableOpacity>
                 )}
               </View>
@@ -821,7 +806,7 @@ export default function PlatformAuditLogScreen() {
                 accessibilityLabel="Filter audit records by outcome"
               >
                 <SlidersHorizontal
-                  size={18}
+                  size={16}
                   color={hasActiveAdvancedFilters ? '#15803D' : '#475569'}
                 />
                 {hasActiveAdvancedFilters && <View style={styles.filterActiveDot} />}
@@ -902,19 +887,19 @@ export default function PlatformAuditLogScreen() {
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityLabel={`Audit record actions for ${pres.actionTitle}`}
                 >
-                  <MoreVertical size={18} color="#64748B" />
+                  <MoreVertical size={17} color="#64748B" />
                 </TouchableOpacity>
               </View>
 
               {/* Timestamp Row with Clock icon */}
               <View style={styles.timestampRow}>
-                <Clock size={13} color="#64748B" style={styles.clockIcon} />
+                <Clock size={12.5} color="#64748B" style={styles.clockIcon} />
                 <AppText style={styles.timestampText}>
                   {dateInfo.combined}
                 </AppText>
               </View>
 
-              {/* Event Title */}
+              {/* Event Title — Moderate size (17px semibold), wraps naturally */}
               <AppText style={styles.eventTitle}>
                 {pres.actionTitle}
               </AppText>
@@ -1402,47 +1387,61 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
 
-  // ─── Header Section ────────────────────────────────────────────────────────
+  // ─── Header Section — Moderate Size & Compact Line Height ──────────────────
   headerContainer: {
     width: '100%',
   },
   headerSection: {
     paddingTop: 2,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 26,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.4,
+    lineHeight: 32,
+    letterSpacing: -0.3,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(24px, 6.2vw, 28px)' as any,
+      },
+    }),
   },
   screenSubtitle: {
     fontSize: 14,
     color: '#64748B',
-    marginTop: 4,
+    lineHeight: 19,
+    marginTop: 2,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+      },
+    }),
   },
 
-  // ─── 4 Summary Cards (2x2 Grid) ───────────────────────────────────────────
+  // ─── 4 Summary Cards (Responsive 2-column grid, Natural Text Wrapping) ─────
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
     marginBottom: 10,
     width: '100%',
   },
   summaryCard: {
     flexBasis: '48%',
     flexGrow: 1,
-    minWidth: 150,
+    minWidth: 140,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    gap: 9,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -1453,33 +1452,50 @@ const styles = StyleSheet.create({
     }),
   },
   summaryIconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+    marginTop: 1,
   },
   summaryTextBox: {
     flex: 1,
     minWidth: 0,
-    justifyContent: 'center',
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#64748B',
     fontWeight: '500',
+    lineHeight: 17,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+      },
+    }),
   },
   summaryValue: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#0F172A',
-    marginTop: 1,
+    lineHeight: 28,
+    marginTop: 2,
   },
   summarySub: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#94A3B8',
-    marginTop: 1,
+    lineHeight: 16,
+    marginTop: 2,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+      },
+    }),
   },
 
   // ─── Summary Explanation Note ──────────────────────────────────────────────
@@ -1489,11 +1505,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#DCFCE7',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
-    marginBottom: 14,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+    marginBottom: 12,
     width: '100%',
   },
   explanationIcon: {
@@ -1501,76 +1517,83 @@ const styles = StyleSheet.create({
   },
   explanationNoteText: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 17,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere',
+        wordBreak: 'break-word',
+      },
+    }),
   },
 
-  // ─── Filter Tabs (Horizontally scrollable) ──────────────────────────────────
-  tabsScroll: {
-    marginBottom: 14,
+  // ─── Compact Filter Chips (Horizontally Scrollable) ────────────────────────
+  chipsScroll: {
+    marginBottom: 12,
     width: '100%',
   },
-  filterTabsRow: {
+  chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
-  filterTab: {
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 24,
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 6,
+    borderRadius: 18,
   },
-  filterTabActive: {
+  filterChipActive: {
     backgroundColor: '#15803D',
   },
-  filterTabInactive: {
+  filterChipInactive: {
     backgroundColor: '#F1F5F9',
   },
-  filterTabText: {
+  filterChipText: {
     fontSize: 13,
     fontWeight: '600',
   },
-  filterTabTextActive: {
+  filterChipTextActive: {
     color: '#FFFFFF',
   },
-  filterTabTextInactive: {
+  filterChipTextInactive: {
     color: '#334155',
   },
-  filterTabBadge: {
-    borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    minWidth: 20,
+  filterChipBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  filterTabBadgeActive: {
+  filterChipBadgeActive: {
     backgroundColor: '#166534',
   },
-  filterTabBadgeInactive: {
+  filterChipBadgeInactive: {
     backgroundColor: '#E2E8F0',
   },
-  filterTabBadgeText: {
-    fontSize: 11.5,
+  filterChipBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  filterTabBadgeTextActive: {
+  filterChipBadgeTextActive: {
     color: '#FFFFFF',
   },
-  filterTabBadgeTextInactive: {
+  filterChipBadgeTextInactive: {
     color: '#475569',
   },
 
-  // ─── Search Field & Filter Button ──────────────────────────────────────────
+  // ─── Search Field & Filter Button — Balanced Dimensions ────────────────────
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 12,
     width: '100%',
   },
   searchBar: {
@@ -1579,14 +1602,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 46,
-    paddingHorizontal: 12,
+    height: 42,
+    paddingHorizontal: 11,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 7,
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,
@@ -1602,10 +1626,10 @@ const styles = StyleSheet.create({
     }),
   },
   filterIconButton: {
-    width: 46,
-    height: 46,
+    width: 42,
+    height: 42,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
@@ -1619,11 +1643,11 @@ const styles = StyleSheet.create({
   },
   filterActiveDot: {
     position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    top: 8,
+    right: 8,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#15803D',
   },
   activeFilterNotice: {
@@ -1631,10 +1655,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#E6F4EA',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
     width: '100%',
   },
   activeFilterNoticeText: {
@@ -1649,14 +1673,14 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // ─── Audit Event Cards ─────────────────────────────────────────────────────
+  // ─── Audit Event Cards — Compact & Readable ────────────────────────────────
   logCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: 16,
-    marginBottom: 12,
+    padding: 14,
+    marginBottom: 10,
     width: '100%',
     ...Platform.select({
       web: {
@@ -1669,44 +1693,44 @@ const styles = StyleSheet.create({
   },
   cardTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     width: '100%',
   },
   cardHeaderLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
+    marginRight: 6,
   },
   cardIconBox: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   actionBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
   categoryBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1717,20 +1741,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   moreButton: {
-    padding: 4,
+    padding: 3,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: -2,
-    marginRight: -4,
+    marginRight: -3,
   },
 
   // Timestamp Row
   timestampRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
+    gap: 5,
+    marginTop: 6,
   },
   clockIcon: {
     flexShrink: 0,
@@ -1738,12 +1762,13 @@ const styles = StyleSheet.create({
   timestampText: {
     fontSize: 12.5,
     color: '#64748B',
+    lineHeight: 17,
   },
 
-  // Event Title
+  // Event Title — Moderate size (17px semibold), naturally wraps
   eventTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: '#0F172A',
     lineHeight: 22,
     marginTop: 6,
@@ -1762,12 +1787,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: '#15803D',
     borderRadius: 6,
-    padding: 12,
+    padding: 10,
     marginTop: 8,
     width: '100%',
   },
   narrativeText: {
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#334155',
     lineHeight: 20,
     flexWrap: 'wrap',
@@ -1784,8 +1809,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 6,
+    padding: 9,
     marginTop: 8,
     width: '100%',
   },
@@ -1795,9 +1820,9 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   reasonText: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#334155',
-    marginTop: 4,
+    marginTop: 2,
     lineHeight: 18,
     flexWrap: 'wrap',
     ...Platform.select({
