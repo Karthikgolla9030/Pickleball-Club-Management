@@ -117,7 +117,7 @@ export const CLUB_NAV_SECTIONS: NavSection[] = [
   {
     label: 'SUPPORT',
     items: [
-      { key: 'help', label: 'Help & Support', icon: 'HelpCircle', route: '/(club)/settings' },
+      { key: 'help', label: 'Help & Support', icon: 'HelpCircle', route: '/(club)/help-support' },
     ],
   },
 ];

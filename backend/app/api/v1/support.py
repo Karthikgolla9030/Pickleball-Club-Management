@@ -52,19 +52,23 @@ async def create_support_ticket(
     response_model=SupportTicketsListResponse,
     status_code=status.HTTP_200_OK,
     summary="List requester's own support tickets",
-    description="Returns tickets submitted by the authenticated user with optional status filter.",
+    description="Returns tickets submitted by the authenticated user (or facility tickets if club_id provided by authorized staff).",
 )
 async def list_my_support_tickets(
     status: str | None = Query(default=None, description="Filter by status (open, in_progress, waiting_for_requester, resolved, closed)"),
+    status_filter: str | None = Query(default=None, description="Alternative alias for status filter"),
+    club_id: UUID | None = Query(default=None, description="Optional club scope for club staff"),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=20, ge=1, le=50, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> SupportTicketsListResponse:
-    """List tickets belonging to current authenticated user."""
+    """List tickets belonging to current authenticated user or their club facility."""
+    effective_status = status or status_filter
     return await SupportTicketService(db).list_requester_tickets(
-        requester_id=current_user.id,
-        status_filter=status,
+        requester=current_user,
+        club_id=club_id,
+        status_filter=effective_status,
         page=page,
         page_size=page_size,
     )
@@ -75,7 +79,7 @@ async def list_my_support_tickets(
     response_model=SupportTicketDetailResponse,
     status_code=status.HTTP_200_OK,
     summary="Get single support ticket detail",
-    description="Retrieve full ticket thread if owned by the current authenticated user.",
+    description="Retrieve full ticket thread if owned by user or if user is authorized club staff.",
 )
 async def get_my_support_ticket(
     ticket_id: UUID,
@@ -85,7 +89,7 @@ async def get_my_support_ticket(
     """Get ticket detail for requester."""
     return await SupportTicketService(db).get_requester_ticket(
         ticket_id=ticket_id,
-        requester_id=current_user.id,
+        requester=current_user,
     )
 
 
@@ -94,7 +98,7 @@ async def get_my_support_ticket(
     response_model=SupportTicketDetailResponse,
     status_code=status.HTTP_200_OK,
     summary="Post reply to own support ticket",
-    description="Allows requester to reply to their support ticket thread.",
+    description="Allows requester or authorized club staff to reply to a support ticket thread.",
 )
 async def reply_to_my_support_ticket(
     ticket_id: UUID,
@@ -108,3 +112,4 @@ async def reply_to_my_support_ticket(
         requester=current_user,
         payload=payload,
     )
+

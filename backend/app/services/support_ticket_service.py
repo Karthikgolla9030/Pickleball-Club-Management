@@ -15,7 +15,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+import logging
 from app.models.club import Club
+from app.models.club_membership import ClubMembership, ClubRole
 from app.models.support_ticket import (
     SupportTicket,
     SupportTicketMessage,
@@ -33,7 +35,10 @@ from app.schemas.support_ticket import (
     SupportTicketUpdateRequest,
     SupportTicketsListResponse,
 )
+from app.services.notification_service import NotificationService
 from app.services.platform_audit_service import record_platform_audit_event
+
+logger = logging.getLogger(__name__)
 
 
 def _format_ticket_item(ticket: SupportTicket, messages_count: int | None = None) -> SupportTicketItem:
@@ -111,18 +116,36 @@ class SupportTicketService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
+    async def _is_club_staff(self, user_id: UUID, club_id: UUID) -> bool:
+        """Check if user has an active club staff role (owner, manager, or tournament director)."""
+        staff_roles = [
+            ClubRole.CLUB_OWNER,
+            ClubRole.CLUB_MANAGER,
+            ClubRole.TOURNAMENT_DIRECTOR,
+            "club_owner",
+            "club_manager",
+            "tournament_director",
+            "owner",
+            "manager",
+        ]
+        stmt = select(ClubMembership).where(
+            ClubMembership.user_id == user_id,
+            ClubMembership.club_id == club_id,
+            ClubMembership.is_active == True,
+            ClubMembership.role.in_(staff_roles),
+        )
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none() is not None
+
     async def _fetch_ticket_and_messages(
         self,
         ticket_id: UUID,
-        requester_id: UUID | None = None,
     ) -> SupportTicketDetailResponse:
         query = (
             select(SupportTicket)
             .options(selectinload(SupportTicket.club))
             .where(SupportTicket.id == ticket_id)
         )
-        if requester_id is not None:
-            query = query.where(SupportTicket.requester_id == requester_id)
         res = await self.db.execute(query)
         ticket = res.scalar_one_or_none()
         if not ticket:
@@ -205,16 +228,33 @@ class SupportTicketService:
 
     async def list_requester_tickets(
         self,
-        requester_id: UUID,
+        requester: User,
+        club_id: UUID | None = None,
         status_filter: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> SupportTicketsListResponse:
-        """List tickets created by the authenticated user with status filtering."""
+        """
+        List tickets accessible to the requester.
+        If club_id is provided, enforces that the user is authorized club staff,
+        and returns tickets for that club facility or submitted by the user.
+        If club_id is None, strictly returns tickets submitted by the authenticated user.
+        """
+        if club_id is not None:
+            is_staff = await self._is_club_staff(requester.id, club_id)
+            if not is_staff:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have staff permissions for this club facility.",
+                )
+            access_filter = or_(SupportTicket.club_id == club_id, SupportTicket.requester_id == requester.id)
+        else:
+            access_filter = (SupportTicket.requester_id == requester.id)
+
         base_query = (
             select(SupportTicket)
             .options(selectinload(SupportTicket.club), selectinload(SupportTicket.messages))
-            .where(SupportTicket.requester_id == requester_id)
+            .where(access_filter)
         )
 
         if status_filter and status_filter.strip().lower() != "all":
@@ -232,10 +272,10 @@ class SupportTicketService:
         result = await self.db.execute(paginated)
         tickets = result.scalars().all()
 
-        # Breakdown counts for requester tabs
+        # Breakdown counts for requester tabs matching same access filter
         counts_res = await self.db.execute(
             select(SupportTicket.status, func.count(SupportTicket.id))
-            .where(SupportTicket.requester_id == requester_id)
+            .where(access_filter)
             .group_by(SupportTicket.status)
         )
         status_counts = dict(counts_res.all())
@@ -252,10 +292,43 @@ class SupportTicketService:
     async def get_requester_ticket(
         self,
         ticket_id: UUID,
-        requester_id: UUID,
+        requester: User,
     ) -> SupportTicketDetailResponse:
-        """Retrieve single ticket detail owned by the requester."""
-        return await self._fetch_ticket_and_messages(ticket_id, requester_id=requester_id)
+        """
+        Retrieve single ticket detail.
+        Access is permitted if requester is ticket creator OR active staff of ticket's club.
+        """
+        query = (
+            select(SupportTicket)
+            .options(selectinload(SupportTicket.club))
+            .where(SupportTicket.id == ticket_id)
+        )
+        res = await self.db.execute(query)
+        ticket = res.scalar_one_or_none()
+        if not ticket:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ticket not found.",
+            )
+
+        has_access = (ticket.requester_id == requester.id)
+        if not has_access and ticket.club_id is not None:
+            has_access = await self._is_club_staff(requester.id, ticket.club_id)
+
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ticket not found.",
+            )
+
+        msg_query = (
+            select(SupportTicketMessage)
+            .where(SupportTicketMessage.ticket_id == ticket_id)
+            .order_by(SupportTicketMessage.created_at.asc())
+        )
+        msg_res = await self.db.execute(msg_query)
+        messages = list(msg_res.scalars().all())
+        return _format_ticket_detail(ticket, messages=messages)
 
     async def requester_reply(
         self,
@@ -263,14 +336,25 @@ class SupportTicketService:
         requester: User,
         payload: SupportTicketMessageCreateRequest,
     ) -> SupportTicketDetailResponse:
-        """Requester posts a reply to their open ticket."""
-        query = select(SupportTicket).where(
-            SupportTicket.id == ticket_id,
-            SupportTicket.requester_id == requester.id,
-        )
+        """
+        Requester or authorized club staff posts a reply to their ticket.
+        Automatically reopens waiting_for_requester or resolved tickets to in_progress.
+        """
+        query = select(SupportTicket).where(SupportTicket.id == ticket_id)
         res = await self.db.execute(query)
         ticket = res.scalar_one_or_none()
         if not ticket:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Ticket not found.",
+            )
+
+        is_owner = (ticket.requester_id == requester.id)
+        is_staff = False
+        if not is_owner and ticket.club_id is not None:
+            is_staff = await self._is_club_staff(requester.id, ticket.club_id)
+
+        if not (is_owner or is_staff):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Ticket not found.",
@@ -282,27 +366,48 @@ class SupportTicketService:
                 detail="Cannot reply to a closed ticket. Please open a new ticket.",
             )
 
+        role_str = "club_staff" if (is_staff and not is_owner) else "requester"
         msg = SupportTicketMessage(
             id=uuid.uuid4(),
             ticket_id=ticket.id,
             sender_id=requester.id,
             sender_email=requester.email,
             sender_name=requester.full_name,
-            sender_role="requester",
+            sender_role=role_str,
             message=payload.message.strip(),
             created_at=datetime.now(timezone.utc),
         )
         self.db.add(msg)
 
-        # Transition status to in_progress if it was waiting on requester
+        # Transition status to in_progress if it was waiting on requester or resolved
         if ticket.status in (TicketStatus.WAITING_FOR_REQUESTER.value, TicketStatus.RESOLVED.value):
             ticket.status = TicketStatus.IN_PROGRESS.value
+            ticket.updated_at = datetime.now(timezone.utc)
+            self.db.add(ticket)
+        else:
             ticket.updated_at = datetime.now(timezone.utc)
             self.db.add(ticket)
 
         await self.db.commit()
 
-        return await self._fetch_ticket_and_messages(ticket_id, requester_id=requester.id)
+        # In-app notification to assigned admin if assigned
+        if ticket.assigned_admin_id:
+            try:
+                notif_svc = NotificationService(self.db)
+                await notif_svc.create_notification(
+                    user_id=ticket.assigned_admin_id,
+                    title=f"New reply on ticket #{ticket.reference_number}",
+                    message=f"{requester.full_name or requester.email} replied to '{ticket.subject}'",
+                    category="administrative",
+                    club_id=ticket.club_id,
+                    data={"ticket_id": str(ticket.id), "reference_number": ticket.reference_number},
+                    mandatory=True,
+                )
+                await self.db.commit()
+            except Exception as exc:
+                logger.warning("Failed to deliver notification to assigned admin: %s", exc)
+
+        return await self._fetch_ticket_and_messages(ticket_id)
 
     # ─── Platform Admin Methods ─────────────────────────────────────────────
 
@@ -466,6 +571,32 @@ class SupportTicketService:
 
         await self.db.commit()
 
+        # Send in-app notification to requester
+        if changes:
+            try:
+                notif_svc = NotificationService(self.db)
+                stat_display = ticket.status.replace("_", " ").title()
+                try:
+                    stat_display = TicketStatus(ticket.status).display_label
+                except ValueError:
+                    pass
+                await notif_svc.create_notification(
+                    user_id=ticket.requester_id,
+                    title=f"Support Ticket #{ticket.reference_number} Updated",
+                    message=f"Status: {stat_display}. {'; '.join(changes)}",
+                    category="administrative",
+                    club_id=ticket.club_id,
+                    data={
+                        "ticket_id": str(ticket.id),
+                        "reference_number": ticket.reference_number,
+                        "status": ticket.status,
+                    },
+                    mandatory=True,
+                )
+                await self.db.commit()
+            except Exception as exc:
+                logger.warning("Failed to notify requester of ticket update: %s", exc)
+
         return await self._fetch_ticket_and_messages(ticket_id)
 
     async def platform_reply(
@@ -522,4 +653,25 @@ class SupportTicketService:
 
         await self.db.commit()
 
+        # Send in-app notification to requester
+        try:
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=ticket.requester_id,
+                title=f"Support replied to #{ticket.reference_number}",
+                message=f"Platform Support has responded to your ticket: '{ticket.subject}'",
+                category="administrative",
+                club_id=ticket.club_id,
+                data={
+                    "ticket_id": str(ticket.id),
+                    "reference_number": ticket.reference_number,
+                    "status": ticket.status,
+                },
+                mandatory=True,
+            )
+            await self.db.commit()
+        except Exception as exc:
+            logger.warning("Failed to notify requester of support reply: %s", exc)
+
         return await self._fetch_ticket_and_messages(ticket_id)
+

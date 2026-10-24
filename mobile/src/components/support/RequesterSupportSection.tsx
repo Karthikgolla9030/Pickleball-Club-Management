@@ -45,6 +45,7 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { EmptyState } from '@/components/StateViews';
 import {
+  clubsApi,
   PlatformSupportTicketDetailResponse,
   PlatformSupportTicketItem,
   supportApi,
@@ -67,9 +68,13 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
+  // Clubs List for Player Related-Club Selector
+  const [clubsList, setClubsList] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedClubId, setSelectedClubId] = useState<string | null>(defaultClubId || null);
+
   // Form State
   const [subject, setSubject] = useState('');
-  const [category, setCategory] = useState('general');
+  const [category, setCategory] = useState(mode === 'club' ? 'facility' : 'booking');
   const [priority, setPriority] = useState('medium');
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,6 +88,20 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
   const [isSendingReply, setIsSendingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
+  // Load public clubs for player related club picker
+  useEffect(() => {
+    if (mode === 'player') {
+      clubsApi
+        .discoverPublicClubs({ page_size: 30 })
+        .then((res) => {
+          if (res?.items) {
+            setClubsList(res.items.map((c: any) => ({ id: c.id, name: c.name })));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [mode]);
+
   const fetchMyTickets = useCallback(
     async (isRefresh = false) => {
       if (isRefresh) {
@@ -95,6 +114,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
       try {
         const res = await supportApi.listMyTickets({
           status: statusFilter !== 'all' ? statusFilter : undefined,
+          club_id: mode === 'club' ? defaultClubId || undefined : undefined,
           page: 1,
           pageSize: 50,
         });
@@ -108,20 +128,23 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
         setIsRefreshingTickets(false);
       }
     },
-    [statusFilter]
+    [statusFilter, mode, defaultClubId]
   );
 
   useEffect(() => {
     fetchMyTickets(false);
-  }, [statusFilter]);
+  }, [fetchMyTickets]);
 
   const handleSubmitTicket = async () => {
-    if (!subject.trim()) {
-      setFormError('Please enter a ticket subject.');
+    const trimmedSubject = subject.trim();
+    const trimmedDescription = description.trim();
+
+    if (trimmedSubject.length < 3) {
+      setFormError('Please enter a ticket subject (at least 3 characters).');
       return;
     }
-    if (!description.trim()) {
-      setFormError('Please enter a detailed description of your issue.');
+    if (trimmedDescription.length < 5) {
+      setFormError('Please enter a detailed description (at least 5 characters).');
       return;
     }
 
@@ -129,20 +152,23 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
     setFormError(null);
     setFormSuccess(null);
 
+    const targetClubId = mode === 'club' ? (defaultClubId || null) : (selectedClubId || null);
+
     try {
       const created = await supportApi.createTicket({
-        subject: subject.trim(),
-        description: description.trim(),
+        subject: trimmedSubject,
+        description: trimmedDescription,
         category,
         priority,
-        club_id: defaultClubId || null,
+        club_id: targetClubId,
       });
 
       setSubject('');
       setDescription('');
-      setCategory('general');
+      setCategory(mode === 'club' ? 'facility' : 'booking');
       setPriority('medium');
-      setFormSuccess(`Ticket ${created.reference_number} submitted successfully!`);
+      if (mode === 'player') setSelectedClubId(null);
+      setFormSuccess(`Ticket #${created.reference_number} submitted successfully! Support has been notified.`);
 
       // Switch to tickets list and reload
       await fetchMyTickets(true);
@@ -223,12 +249,15 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
   };
 
   const categories = [
-    { key: 'general', label: 'General Inquiry' },
+    { key: 'booking', label: 'Court Booking' },
+    { key: 'membership', label: 'Membership & Plans' },
     { key: 'billing', label: 'Billing & Payments' },
-    { key: 'account', label: 'Account & Login' },
-    { key: 'technical', label: 'Technical Bug / App' },
-    { key: 'club_operations', label: 'Club Facility Ops' },
     { key: 'tournament', label: 'Tournaments & Leagues' },
+    { key: 'account', label: 'Account & Login' },
+    { key: 'facility', label: 'Club Facility & Ops' },
+    { key: 'technical', label: 'Technical Bug / App' },
+    { key: 'general', label: 'General Inquiry' },
+    { key: 'other', label: 'Other' },
   ];
 
   const priorities = [
@@ -350,6 +379,44 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
               ))}
             </View>
           </View>
+
+          {/* Related Club Field */}
+          {mode === 'club' ? (
+            <View style={styles.fieldGroup}>
+              <AppText style={styles.fieldLabel}>Club Facility Scope</AppText>
+              <View style={styles.clubContextBadge}>
+                <Building2 size={14} color="#114D3F" />
+                <AppText style={styles.clubContextBadgeText}>
+                  {defaultClubId ? 'Linked to your active club facility' : 'Club Operations'}
+                </AppText>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.fieldGroup}>
+              <AppText style={styles.fieldLabel}>Related Club (Optional)</AppText>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                <TouchableOpacity
+                  style={[styles.chip, selectedClubId === null && styles.chipActive]}
+                  onPress={() => setSelectedClubId(null)}
+                >
+                  <AppText style={[styles.chipText, selectedClubId === null && styles.chipTextActive]}>
+                    None / General
+                  </AppText>
+                </TouchableOpacity>
+                {clubsList.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.chip, selectedClubId === c.id && styles.chipActive]}
+                    onPress={() => setSelectedClubId(c.id)}
+                  >
+                    <AppText style={[styles.chipText, selectedClubId === c.id && styles.chipTextActive]}>
+                      {c.name}
+                    </AppText>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Description Field */}
           <View style={styles.fieldGroup}>
@@ -541,6 +608,8 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                   <View style={styles.threadContainer}>
                     {selectedTicket.messages?.map((msg, idx) => {
                       const isAdmin = msg.sender_role === 'platform_admin';
+                      const isStaff = msg.sender_role === 'club_staff';
+                      const senderLabel = isAdmin ? 'Platform Support' : isStaff ? (msg.sender_name || 'Club Staff') : 'You';
                       return (
                         <View
                           key={msg.id || idx}
@@ -553,16 +622,16 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                             <View
                               style={[
                                 styles.senderBadge,
-                                isAdmin ? styles.senderBadgeAdmin : styles.senderBadgeUser,
+                                isAdmin ? styles.senderBadgeAdmin : isStaff ? styles.senderBadgeStaff : styles.senderBadgeUser,
                               ]}
                             >
                               <AppText
                                 style={[
                                   styles.senderBadgeText,
-                                  isAdmin ? styles.senderBadgeTextAdmin : styles.senderBadgeTextUser,
+                                  isAdmin ? styles.senderBadgeTextAdmin : isStaff ? styles.senderBadgeTextStaff : styles.senderBadgeTextUser,
                                 ]}
                               >
-                                {isAdmin ? 'Platform Support' : 'You'}
+                                {senderLabel}
                               </AppText>
                             </View>
                             <AppText style={styles.chatTimestamp}>{formatDate(msg.created_at)}</AppText>
@@ -573,10 +642,22 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                     })}
                   </View>
 
+                  {/* Resolved Ticket Notice if ticket is resolved but can be reopened */}
+                  {selectedTicket.status === 'resolved' && (
+                    <View style={styles.resolvedNoticeCard}>
+                      <CheckCircle2 size={16} color="#15803D" />
+                      <AppText style={styles.resolvedNoticeText}>
+                        This ticket has been marked as resolved by support. If you have further questions or the issue is not fully addressed, send a reply below to automatically reopen this ticket.
+                      </AppText>
+                    </View>
+                  )}
+
                   {/* Reply Composer if not closed */}
                   {selectedTicket.status !== 'closed' ? (
                     <View style={styles.replyBox}>
-                      <AppText style={styles.replyBoxTitle}>Send a Reply</AppText>
+                      <AppText style={styles.replyBoxTitle}>
+                        {selectedTicket.status === 'resolved' ? 'Reopen with Reply' : 'Send a Reply'}
+                      </AppText>
                       {replyError && (
                         <View style={styles.alertError}>
                           <AlertCircle size={14} color="#DC2626" />
@@ -585,7 +666,11 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                       )}
                       <TextInput
                         style={styles.replyTextInput}
-                        placeholder="Write your reply or clarification..."
+                        placeholder={
+                          selectedTicket.status === 'resolved'
+                            ? 'Explain what still needs attention to reopen this ticket...'
+                            : 'Write your reply or clarification...'
+                        }
                         placeholderTextColor="#94A3B8"
                         multiline
                         numberOfLines={3}
@@ -595,7 +680,13 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                       />
                       <View style={styles.replyBtnRow}>
                         <Button
-                          label={isSendingReply ? 'Sending...' : 'Send Reply'}
+                          label={
+                            isSendingReply
+                              ? 'Sending...'
+                              : selectedTicket.status === 'resolved'
+                              ? 'Reply & Reopen Ticket'
+                              : 'Send Reply'
+                          }
                           variant="primary"
                           size="sm"
                           leftIcon={<Send size={14} color="#FFFFFF" />}
@@ -1066,4 +1157,45 @@ const styles = StyleSheet.create({
     color: '#64748B',
     flex: 1,
   },
+  clubContextBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#E8F5E9',
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  clubContextBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#114D3F',
+  },
+  senderBadgeStaff: {
+    backgroundColor: '#0284C7',
+  },
+  senderBadgeTextStaff: {
+    color: '#FFFFFF',
+  },
+  resolvedNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F0FDF4',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginBottom: 12,
+  },
+  resolvedNoticeText: {
+    fontSize: 12,
+    color: '#166534',
+    lineHeight: 16,
+    flex: 1,
+    fontWeight: '500',
+  },
 });
+

@@ -281,7 +281,9 @@ export default function PlatformSupportScreen() {
     { key: 'all', label: 'All Tickets', count: totalCount },
     { key: 'open', label: 'Open', count: openCount },
     { key: 'in_progress', label: 'In Progress', count: inProgressCount },
+    { key: 'waiting_for_requester', label: 'Awaiting User', count: awaitingCount },
     { key: 'resolved', label: 'Resolved', count: resolvedCount },
+    { key: 'closed', label: 'Closed', count: statusCounts['closed'] || 0 },
   ];
 
   const totalPages = Math.ceil(total / pageSize);
@@ -578,12 +580,15 @@ export default function PlatformSupportScreen() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsScroll}>
                     {[
                       { key: 'all', label: 'All' },
-                      { key: 'general', label: 'General' },
+                      { key: 'booking', label: 'Booking' },
+                      { key: 'membership', label: 'Membership' },
                       { key: 'billing', label: 'Billing' },
-                      { key: 'account', label: 'Account' },
-                      { key: 'technical', label: 'Technical' },
-                      { key: 'club_operations', label: 'Club Ops' },
                       { key: 'tournament', label: 'Tournament' },
+                      { key: 'account', label: 'Account' },
+                      { key: 'facility', label: 'Club Facility' },
+                      { key: 'technical', label: 'Technical' },
+                      { key: 'general', label: 'General' },
+                      { key: 'other', label: 'Other' },
                     ].map((cat) => {
                       const isCatActive = categoryFilter === cat.key;
                       return (

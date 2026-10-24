@@ -61,10 +61,23 @@ class TicketCategory(str, enum.Enum):
     TECHNICAL = "technical"
     ACCOUNT = "account"
     FACILITY = "facility"
+    TOURNAMENT = "tournament"
+    OTHER = "other"
 
     @property
     def display_label(self) -> str:
-        return self.value.replace("_", " ").title()
+        labels = {
+            TicketCategory.GENERAL: "General Inquiry",
+            TicketCategory.BILLING: "Billing & Payment",
+            TicketCategory.BOOKING: "Court Booking",
+            TicketCategory.MEMBERSHIP: "Membership & Plans",
+            TicketCategory.TECHNICAL: "Technical / App",
+            TicketCategory.ACCOUNT: "Account & Login",
+            TicketCategory.FACILITY: "Club Facility & Ops",
+            TicketCategory.TOURNAMENT: "Tournament & Competition",
+            TicketCategory.OTHER: "Other",
+        }
+        return labels.get(self, self.value.replace("_", " ").title())
 
 
 class SupportTicket(Base):
