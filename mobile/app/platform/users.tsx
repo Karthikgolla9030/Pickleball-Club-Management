@@ -1,20 +1,25 @@
 /**
  * Pickleball Multi-Club Platform — Platform Admin Users Directory
  *
- * Pixel-accurate visual implementation matching mobile reference design:
- * - Top header with official Pickleball product logo, "Platform Admin" label, notification bell & avatar
+ * Responsive, spacious mobile-first implementation matching visual reference and
+ * standard Platform Admin layout conventions (Clubs, Support Tickets, Overview):
+ * - Consistent content width: uses phone's full width with standard 16px gutters (no double margins)
  * - Page heading "Users" and subtitle "Manage all platform accounts and their access"
- * - 2 Summary KPI cards: Total Accounts (green), Active Accounts (blue) side-by-side
- * - 3 Status Filter Tabs: All Accounts [count], Active [count], Inactive [count]
- * - Search bar with placeholder "Search by full name, email, or user ID" + adjacent filter button
+ * - 2 Summary KPI cards: Total Accounts (green), Active Accounts (blue) in responsive 2-col row
+ * - Horizontally scrollable status filter tabs: All Accounts, Active, Inactive
+ * - Search bar with placeholder "Search by full name, email, or user ID" + filter button
  * - User account cards:
+ *   - Responsive layout: on narrow phones (< 380px), reflows into a vertical hierarchy
+ *     so names and emails use full card width with zero truncation or ellipses; on wider
+ *     screens (>= 380px), aligns badges and menu to the right
  *   - Avatar initials with soft pastel background
- *   - Full account name, email address, and club info with ZERO truncation across all screen sizes
- *   - Status badge (ACTIVE/INACTIVE) and VERIFIED badge with 3-dots action menu
+ *   - Complete email address with overflow-wrap: anywhere
+ *   - Club association with Users icon
+ *   - Status badge (ACTIVE/INACTIVE) and VERIFIED badge
+ *   - 3-dots overflow action menu
  *   - Subtle divider line
- *   - Footer with formatted "Joined DD/MM/YYYY" date and solid green "Inspect Account" button
- * - Comprehensive cross-club staff roles & player memberships inspection modal
- * - Responsive layout supporting ultra-narrow viewports (320px, 360px) up to desktop (1024px+)
+ *   - Footer with "Joined DD/MM/YYYY" date and solid green "Inspect Account" action
+ * - User detail inspection modal preserving all cross-club memberships and player profiles
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -91,10 +96,10 @@ function getAvatarInitial(name?: string | null, email?: string): string {
 
 function getAvatarTheme(seed: string): { bg: string; text: string } {
   const themes = [
-    { bg: '#EDE9FE', text: '#7C3AED' }, // Lavender / Violet (matches Aught2 Platform Owner)
-    { bg: '#FEF3C7', text: '#D97706' }, // Amber / Yellow (matches John Smith)
-    { bg: '#E0F2FE', text: '#0284C7' }, // Soft Sky Blue (matches Sarah Johnson)
-    { bg: '#FEE2E2', text: '#DC2626' }, // Rose / Pink (matches Michael Brown)
+    { bg: '#EDE9FE', text: '#7C3AED' }, // Lavender / Violet
+    { bg: '#FEF3C7', text: '#D97706' }, // Amber / Yellow
+    { bg: '#E0F2FE', text: '#0284C7' }, // Soft Sky Blue
+    { bg: '#FEE2E2', text: '#DC2626' }, // Rose / Pink
     { bg: '#E6F4EA', text: '#15803D' }, // Soft Green
     { bg: '#F3E8FF', text: '#9333EA' }, // Soft Purple
   ];
@@ -107,14 +112,12 @@ function getAvatarTheme(seed: string): { bg: string; text: string } {
 }
 
 function getClubAssociationText(user: PlatformUserItem): string {
-  // If user has staff club memberships, show first club name
   if (user.club_memberships && user.club_memberships.length > 0) {
     const primary = user.club_memberships[0].club_name;
     const totalExtra =
       user.club_memberships.length + (user.club_player_memberships?.length || 0) - 1;
     return totalExtra > 0 ? `${primary} (+${totalExtra})` : primary;
   }
-  // If user has player memberships, show primary player club
   if (user.club_player_memberships && user.club_player_memberships.length > 0) {
     const primary = user.club_player_memberships[0].club_name;
     const totalExtra = user.club_player_memberships.length - 1;
@@ -256,7 +259,9 @@ export default function PlatformUsersScreen() {
     setTimeout(() => setCopiedNotice(null), 2500);
   };
 
-  const isNarrowScreen = width < 370;
+  // Responsive breakpoints
+  // Narrow phones (< 380px): reflow card elements vertically so name & email have full card width
+  const isNarrowPhone = width < 380;
   const isSuperNarrow = width < 340;
   const hasActiveAdvancedFilters = roleFilter !== 'all' || verificationFilter !== 'all';
 
@@ -280,7 +285,7 @@ export default function PlatformUsersScreen() {
           />
         }
         ListHeaderComponent={
-          <View>
+          <View style={styles.headerContainer}>
             {/* 1. Page Heading */}
             <View style={styles.headerSection}>
               <AppText style={styles.screenTitle}>Users</AppText>
@@ -289,15 +294,17 @@ export default function PlatformUsersScreen() {
               </AppText>
             </View>
 
-            {/* 2. Account Summary Cards (Exactly 2 side-by-side cards) */}
+            {/* 2. Account Summary Cards (2-column responsive row) */}
             <View style={styles.summaryCardsRow}>
               {/* Total Accounts */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <Users size={22} color="#16A34A" strokeWidth={2.2} />
+                  <Users size={20} color="#16A34A" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>Total Accounts</AppText>
+                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                    Total Accounts
+                  </AppText>
                   <AppText style={styles.summaryValue}>{platformMetrics.total}</AppText>
                 </View>
               </View>
@@ -305,17 +312,24 @@ export default function PlatformUsersScreen() {
               {/* Active Accounts */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <User size={22} color="#0284C7" strokeWidth={2.2} />
+                  <User size={20} color="#0284C7" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>Active Accounts</AppText>
+                  <AppText style={styles.summaryLabel} numberOfLines={1}>
+                    Active Accounts
+                  </AppText>
                   <AppText style={styles.summaryValue}>{platformMetrics.active}</AppText>
                 </View>
               </View>
             </View>
 
-            {/* 3. Filter Tabs (All Accounts | Active | Inactive) */}
-            <View style={styles.filterTabsRow}>
+            {/* 3. Filter Tabs (Horizontally scrollable if screen is narrow) */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tabsScroll}
+              contentContainerStyle={styles.filterTabsRow}
+            >
               {/* All Accounts */}
               <TouchableOpacity
                 style={[
@@ -441,7 +455,7 @@ export default function PlatformUsersScreen() {
                   </AppText>
                 </View>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* 4. Search Field & Filter Button */}
             <View style={styles.searchRow}>
@@ -484,7 +498,7 @@ export default function PlatformUsersScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Active filters chip notice */}
+            {/* Active filters notice */}
             {hasActiveAdvancedFilters && (
               <View style={styles.activeFilterNotice}>
                 <AppText style={styles.activeFilterNoticeText}>
@@ -533,33 +547,98 @@ export default function PlatformUsersScreen() {
 
           return (
             <Card style={styles.userCard}>
-              {/* Top Section */}
-              <View style={styles.cardTopRow}>
-                {/* Left: Avatar Circle */}
-                <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
-                  <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
-                    {initial}
-                  </AppText>
-                </View>
+              {/* ─── CARD LAYOUT: NARROW PHONES (< 380px) ─────────────────── */}
+              {isNarrowPhone ? (
+                <View style={styles.narrowCardWrapper}>
+                  {/* Top row: Avatar, Name, and 3-dots Menu */}
+                  <View style={styles.narrowTopRow}>
+                    <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
+                      <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
+                        {initial}
+                      </AppText>
+                    </View>
 
-                {/* Middle: User Info (Zero truncation, full word break) */}
-                <View style={styles.userInfoCol}>
-                  <AppText style={styles.userName}>
-                    {displayName}
-                  </AppText>
-                  <AppText style={styles.userEmail}>
+                    <View style={styles.narrowNameCol}>
+                      <AppText style={styles.userName}>
+                        {displayName}
+                      </AppText>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.moreButton}
+                      onPress={() => setMenuUser(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={`Account options for ${displayName}`}
+                    >
+                      <MoreVertical size={18} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Full-width Email below Avatar/Name */}
+                  <AppText style={styles.userEmailNarrow}>
                     {item.email}
                   </AppText>
+
+                  {/* Club info */}
                   <View style={styles.metaRow}>
                     <Users size={14} color="#64748B" style={styles.metaIcon} />
                     <AppText style={styles.metaTextItalic}>
                       {clubAssociation}
                     </AppText>
                   </View>
-                </View>
 
-                {/* Right: Badges & 3-Dots Menu (On standard screens) */}
-                {!isNarrowScreen && (
+                  {/* Badges on their own row */}
+                  <View style={styles.narrowBadgesRow}>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.statusBadgeText,
+                          { color: item.is_active ? '#15803D' : '#DC2626' },
+                        ]}
+                      >
+                        {item.is_active ? 'ACTIVE' : 'INACTIVE'}
+                      </AppText>
+                    </View>
+
+                    {item.is_verified && (
+                      <View style={styles.verifiedBadge}>
+                        <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ) : (
+                /* ─── CARD LAYOUT: WIDER PHONES & DESKTOP (>= 380px) ────────── */
+                <View style={styles.cardTopRow}>
+                  {/* Left: Avatar Circle */}
+                  <View style={[styles.avatarCircle, { backgroundColor: avatarTheme.bg }]}>
+                    <AppText style={[styles.avatarInitial, { color: avatarTheme.text }]}>
+                      {initial}
+                    </AppText>
+                  </View>
+
+                  {/* Middle: User Info (Zero truncation, natural wrapping) */}
+                  <View style={styles.userInfoCol}>
+                    <AppText style={styles.userName}>
+                      {displayName}
+                    </AppText>
+                    <AppText style={styles.userEmail}>
+                      {item.email}
+                    </AppText>
+                    <View style={styles.metaRow}>
+                      <Users size={14} color="#64748B" style={styles.metaIcon} />
+                      <AppText style={styles.metaTextItalic}>
+                        {clubAssociation}
+                      </AppText>
+                    </View>
+                  </View>
+
+                  {/* Right: Badges & 3-Dots Menu */}
                   <View style={styles.rightActionGroup}>
                     <View style={styles.badgesStack}>
                       <View
@@ -585,7 +664,6 @@ export default function PlatformUsersScreen() {
                       )}
                     </View>
 
-                    {/* 3-dots action menu */}
                     <TouchableOpacity
                       style={styles.moreButton}
                       onPress={() => setMenuUser(item)}
@@ -595,45 +673,6 @@ export default function PlatformUsersScreen() {
                       <MoreVertical size={18} color="#64748B" />
                     </TouchableOpacity>
                   </View>
-                )}
-
-                {/* On narrow screens: 3-dots menu button at top right */}
-                {isNarrowScreen && (
-                  <TouchableOpacity
-                    style={styles.moreButtonNarrow}
-                    onPress={() => setMenuUser(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    accessibilityLabel={`Account options for ${displayName}`}
-                  >
-                    <MoreVertical size={18} color="#64748B" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* On narrow screens: Dedicated badges row beneath info to prevent any text clipping */}
-              {isNarrowScreen && (
-                <View style={styles.narrowBadgesRow}>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
-                    ]}
-                  >
-                    <AppText
-                      style={[
-                        styles.statusBadgeText,
-                        { color: item.is_active ? '#15803D' : '#DC2626' },
-                      ]}
-                    >
-                      {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </AppText>
-                  </View>
-
-                  {item.is_verified && (
-                    <View style={styles.verifiedBadge}>
-                      <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
-                    </View>
-                  )}
                 </View>
               )}
 
@@ -655,7 +694,10 @@ export default function PlatformUsersScreen() {
                 </View>
 
                 <TouchableOpacity
-                  style={styles.inspectBtn}
+                  style={[
+                    styles.inspectBtn,
+                    isSuperNarrow && styles.inspectBtnFullWidth,
+                  ]}
                   onPress={() => setSelectedUser(item)}
                   activeOpacity={0.8}
                   accessibilityLabel={`Inspect account for ${displayName}`}
@@ -1175,14 +1217,16 @@ export default function PlatformUsersScreen() {
 
 const styles = StyleSheet.create({
   listContent: {
-    paddingBottom: 40,
+    paddingBottom: 28,
   },
 
-  // ─── Header Section ────────────────────────────────────────────────────────
+  // ─── Header & Top Elements (No double horizontal padding) ──────────────────
+  headerContainer: {
+    width: '100%',
+  },
   headerSection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingTop: 2,
+    paddingBottom: 12,
   },
   screenTitle: {
     fontSize: 28,
@@ -1196,25 +1240,26 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  // ─── Account Summary Cards (Exactly 2 side-by-side cards) ──────────────────
+  // ─── Account Summary Cards (2-column responsive row) ───────────────────────
   summaryCardsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 14,
+    width: '100%',
   },
   summaryCard: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    gap: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -1225,36 +1270,39 @@ const styles = StyleSheet.create({
     }),
   },
   summaryIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   summaryTextBox: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
   },
   summaryLabel: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
   },
   summaryValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 2,
+    marginTop: 1,
   },
 
-  // ─── Filter Tabs (All Accounts | Active | Inactive) ─────────────────────────
+  // ─── Filter Tabs (Scrollable row) ──────────────────────────────────────────
+  tabsScroll: {
+    marginBottom: 14,
+    width: '100%',
+  },
   filterTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     gap: 8,
-    marginBottom: 14,
   },
   filterTab: {
     flexDirection: 'row',
@@ -1310,19 +1358,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 16,
     marginBottom: 14,
+    width: '100%',
   },
   searchBar: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 48,
-    paddingHorizontal: 14,
+    height: 46,
+    paddingHorizontal: 12,
   },
   searchIcon: {
     marginRight: 8,
@@ -1341,8 +1390,8 @@ const styles = StyleSheet.create({
     }),
   },
   filterIconButton: {
-    width: 48,
-    height: 48,
+    width: 46,
+    height: 46,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
@@ -1350,6 +1399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    flexShrink: 0,
   },
   filterIconButtonHighlighted: {
     borderColor: '#15803D',
@@ -1357,8 +1407,8 @@ const styles = StyleSheet.create({
   },
   filterActiveDot: {
     position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 9,
+    right: 9,
     width: 7,
     height: 7,
     borderRadius: 4,
@@ -1372,8 +1422,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
-    marginHorizontal: 16,
     marginBottom: 12,
+    width: '100%',
   },
   activeFilterNoticeText: {
     fontSize: 12,
@@ -1387,7 +1437,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
   },
 
-  // ─── User Account Cards (Zero Truncation) ──────────────────────────────────
+  // ─── User Account Cards (Full width with 16px outer shell gutter) ──────────
   userCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -1395,7 +1445,7 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     padding: 16,
     marginBottom: 12,
-    marginHorizontal: 16,
+    width: '100%',
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -1405,15 +1455,17 @@ const styles = StyleSheet.create({
       },
     }),
   },
+
+  // Layout for Wider Phones & Desktop (>= 380px)
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
   },
   avatarCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -1514,29 +1566,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  moreButtonNarrow: {
-    padding: 4,
+
+  // Layout for Narrow Phones (< 380px): Natural vertical reflow
+  narrowCardWrapper: {
+    width: '100%',
+  },
+  narrowTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+    gap: 10,
+    width: '100%',
+  },
+  narrowNameCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  userEmailNarrow: {
+    fontSize: 13.5,
+    color: '#64748B',
+    lineHeight: 19,
+    marginTop: 6,
+    width: '100%',
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        wordBreak: 'break-all',
+        overflowWrap: 'anywhere',
+      },
+    }),
   },
   narrowBadgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 10,
-    paddingLeft: 58, // aligns under info col past the avatar
+    marginTop: 8,
   },
+
+  // Divider
   cardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
     marginVertical: 12,
   },
+
+  // Bottom action row
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+    width: '100%',
   },
   cardBottomRowStacked: {
     flexDirection: 'column',
@@ -1567,6 +1646,10 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  inspectBtnFullWidth: {
+    width: '100%',
+    justifyContent: 'center',
+  },
   inspectBtnText: {
     fontSize: 13,
     fontWeight: '700',
@@ -1579,7 +1662,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2EBE6',
     padding: Spacing.lg,
-    marginHorizontal: 16,
+    width: '100%',
   },
 
   // ─── 3-Dots Quick Actions Bottom Sheet ────────────────────────────────────
