@@ -45,7 +45,16 @@ export function DrawerOverlay() {
 
 const styles = StyleSheet.create({
   overlay: {
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
     zIndex: 998,
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'fixed' as any,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        } as any)
+      : {}),
   },
 });

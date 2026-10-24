@@ -136,9 +136,9 @@ export function PlatformShell({
 
   return (
     <Screen style={styles.screen}>
-      {/* Slide-out Menu Drawer */}
-      <PlatformDrawer adminUser={adminUser} counts={badgeCounts} />
+      {/* Dim dismiss overlay & Slide-out Menu Drawer */}
       <DrawerOverlay />
+      <PlatformDrawer adminUser={adminUser} counts={badgeCounts} />
 
       {/* Top Header */}
       <PlatformHeader

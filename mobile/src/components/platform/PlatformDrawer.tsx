@@ -1,12 +1,17 @@
 /**
- * Pickleball — Platform Admin Drawer
+ * Pickleball Multi-Club Platform — Platform Admin Left-Side Navigation Drawer
  *
- * Slide-out navigation drawer designed specifically for mobile:
- * - Displays Platform Owner identity, shield badge, and system status
- * - Vertical list of all 6 platform administration sections with icons and badges
- * - Smooth slide-in animation from left using useDrawerStore
- * - Android back button handling and touch-dismiss backdrop
- * - Fixed Sign Out button anchored at bottom
+ * Pixel-matched to the official platform reference design:
+ * - Opens strictly from the left side of the screen
+ * - Width approximately 78vw (max-width: 380px), never extending to the right edge
+ * - Leaves a visible strip of the underlying page beneath a semi-transparent dark overlay
+ * - Clean white header with official Pickleball logo, "Platform Admin" label, and circular close button
+ * - Subtle pale-green Platform Owner account panel with Shield icon, badge, and non-truncated wrapping email
+ * - "PLATFORM ADMINISTRATION" section header
+ * - 7 compact navigation rows with green icon tiles, title, subtitle, and right chevron
+ * - Prominent active route indicator with pale-green card background, green border, and left accent bar
+ * - Pale-red rounded "Sign Out of Platform" button at the bottom
+ * - Smooth animated slide-in, dismiss on backdrop tap, close button, Android back, or Escape key
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -14,8 +19,8 @@ import {
   Animated,
   BackHandler,
   Easing,
+  Image,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -29,22 +34,20 @@ import {
   ChevronRight,
   FileText,
   History,
-  LayoutDashboard,
+  LayoutGrid,
   LifeBuoy,
   LogOut,
   Settings,
   ShieldCheck,
-  UserCheck,
   Users,
   X,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import { Badge } from '@/components/Badge';
 import { useDrawerStore } from '@/navigation';
 import { PlatformOwnerProfile } from '@/services/api/clubApplications';
 import { useAuthStore } from '@/store';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Radius } from '@/theme';
 
 interface PlatformDrawerProps {
   adminUser: PlatformOwnerProfile | null;
@@ -54,7 +57,7 @@ interface PlatformDrawerProps {
   };
 }
 
-export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
+export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
   const isOpen = useDrawerStore((s) => s.isOpen);
   const closeDrawer = useDrawerStore((s) => s.closeDrawer);
 
@@ -64,10 +67,10 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
   const { width: windowWidth } = useWindowDimensions();
   const logout = useAuthStore((s) => s.logout);
 
-  // Responsive drawer width: fits narrow mobile screens (320px) while leaving tap-to-dismiss margin
-  const drawerWidth = Math.min(Math.max(windowWidth * 0.82, 280), 340);
+  // Responsive drawer width: ~78vw, capped at 380px, suitable for all mobile viewports
+  const drawerWidth = Math.min(Math.round(windowWidth * 0.78), 380);
 
-  // Android back button handler
+  // Android hardware back button handler
   useEffect(() => {
     if (!isOpen || Platform.OS === 'web') return;
     const onBackPress = () => {
@@ -78,13 +81,25 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
     return () => sub.remove();
   }, [isOpen, closeDrawer]);
 
-  // Slide animation from LEFT
-  const translateX = useRef(new Animated.Value(-340)).current;
+  // Web Escape key listener
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== 'web') return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeDrawer();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, closeDrawer]);
+
+  // Smooth slide animation from LEFT
+  const translateX = useRef(new Animated.Value(-400)).current;
 
   useEffect(() => {
     Animated.timing(translateX, {
-      toValue: isOpen ? 0 : -drawerWidth,
-      duration: 250,
+      toValue: isOpen ? 0 : -drawerWidth - 30,
+      duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: Platform.OS !== 'web',
     }).start();
@@ -112,7 +127,7 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
       label: 'Overview',
       subtitle: 'System metrics & stats',
       route: '/platform',
-      icon: LayoutDashboard,
+      icon: LayoutGrid,
     },
     {
       key: 'applications',
@@ -120,8 +135,6 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
       subtitle: 'Review & approve clubs',
       route: '/platform/applications',
       icon: FileText,
-      badge: counts?.pendingApplications && counts.pendingApplications > 0 ? `${counts.pendingApplications}` : undefined,
-      badgeVariant: 'warning' as const,
     },
     {
       key: 'clubs',
@@ -150,8 +163,6 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
       subtitle: 'Inquiries & triage',
       route: '/platform/support',
       icon: LifeBuoy,
-      badge: counts?.openTickets && counts.openTickets > 0 ? `${counts.openTickets}` : undefined,
-      badgeVariant: 'info' as const,
     },
     {
       key: 'settings',
@@ -169,28 +180,23 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
         {
           width: drawerWidth,
           transform: [{ translateX }],
-          paddingTop: insets.top + 12,
-          paddingBottom: Math.max(insets.bottom, 16) + 8,
+          paddingTop: insets.top + 10,
+          paddingBottom: Math.max(insets.bottom, 12),
         },
       ]}
       pointerEvents={isOpen ? 'auto' : 'none'}
+      accessibilityRole="menu"
+      accessibilityLabel="Platform Administration Menu"
     >
-      {/* Drawer Header */}
+      {/* 1. Header & Branding */}
       <View style={styles.header}>
-        <View style={styles.adminInfoRow}>
-          <View style={styles.avatarWrap}>
-            <ShieldCheck size={22} color="#18794E" />
-          </View>
-          <View style={styles.headerTextGroup}>
-            <View style={styles.badgeRow}>
-              <View style={styles.roleBadge}>
-                <AppText style={styles.roleBadgeText}>PLATFORM OWNER</AppText>
-              </View>
-            </View>
-            <AppText variant="title" numberOfLines={1} style={styles.adminEmail}>
-              {adminUser?.email || 'Administrator'}
-            </AppText>
-          </View>
+        <View style={styles.brandRow}>
+          <Image
+            source={require('@/../assets/pickleball_logo_primary.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+          <AppText style={styles.brandSubtitle}>Platform Admin</AppText>
         </View>
 
         <TouchableOpacity
@@ -199,23 +205,41 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessibilityLabel="Close navigation drawer"
           accessibilityRole="button"
+          activeOpacity={0.7}
         >
-          <X size={20} color="#5C746E" />
+          <X size={18} color="#475569" strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.divider} />
+      {/* 2. Platform Owner Account Panel */}
+      <View style={styles.accountPanel}>
+        <View style={styles.shieldIconWrap}>
+          <ShieldCheck size={24} color="#16A34A" strokeWidth={2} />
+        </View>
 
-      {/* Navigation List */}
+        <View style={styles.accountTextCol}>
+          <View style={styles.roleBadge}>
+            <AppText style={styles.roleBadgeText}>PLATFORM OWNER</AppText>
+          </View>
+          <AppText style={styles.accountEmail}>
+            {adminUser?.email || 'platform.owner@pickleball.com'}
+          </AppText>
+        </View>
+      </View>
+
+      {/* 3. Section Heading */}
+      <View style={styles.sectionHeaderWrap}>
+        <AppText style={styles.sectionHeadingText}>
+          PLATFORM ADMINISTRATION
+        </AppText>
+      </View>
+
+      {/* 4. Navigation List */}
       <ScrollView
         style={styles.navList}
         contentContainerStyle={styles.navContent}
         showsVerticalScrollIndicator={false}
       >
-        <AppText variant="caption" color="secondary" style={styles.navSectionLabel}>
-          PLATFORM ADMINISTRATION
-        </AppText>
-
         {navItems.map((item) => {
           const isActive =
             item.route === '/platform'
@@ -230,50 +254,51 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
               style={[styles.navItem, isActive && styles.navItemActive]}
               onPress={() => handleNavigate(item.route)}
               activeOpacity={0.7}
+              accessibilityRole="menuitem"
+              accessibilityLabel={`${item.label}, ${item.subtitle}`}
             >
-              <View style={[styles.navIconWrap, isActive && styles.navIconWrapActive]}>
+              {/* Left active vertical accent bar */}
+              {isActive && <View style={styles.activeAccentBar} />}
+
+              <View style={[styles.navIconTile, isActive && styles.navIconTileActive]}>
                 <IconComp
-                  size={18}
-                  color={isActive ? '#FFFFFF' : '#18794E'}
+                  size={20}
+                  color={isActive ? '#FFFFFF' : '#16A34A'}
                   strokeWidth={2}
                 />
               </View>
 
               <View style={styles.navTextCol}>
-                <AppText style={[styles.navItemLabel, isActive && styles.navItemLabelActive]}>
+                <AppText style={[styles.navItemTitle, isActive && styles.navItemTitleActive]}>
                   {item.label}
                 </AppText>
-                <AppText variant="caption" color="secondary" style={styles.navItemSub}>
+                <AppText style={styles.navItemSubtitle}>
                   {item.subtitle}
                 </AppText>
               </View>
 
-              {item.badge ? (
-                <Badge label={item.badge} variant={item.badgeVariant} size="sm" />
-              ) : (
-                <ChevronRight
-                  size={16}
-                  color={isActive ? '#18794E' : '#94A3B8'}
-                  strokeWidth={2}
-                />
-              )}
+              <ChevronRight
+                size={18}
+                color={isActive ? '#16A34A' : '#94A3B8'}
+                strokeWidth={2}
+              />
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* Drawer Footer — Sign Out */}
+      {/* 5. Drawer Footer — Sign Out */}
       <View style={styles.footer}>
-        <View style={styles.divider} />
         <TouchableOpacity
           style={styles.signOutBtn}
           onPress={handleSignOut}
           activeOpacity={0.75}
+          accessibilityLabel="Sign out of platform"
+          accessibilityRole="button"
         >
-          <View style={styles.signOutIconWrap}>
-            <LogOut size={16} color="#DC2626" />
-          </View>
+          <LogOut size={18} color="#DC2626" strokeWidth={2} />
           <AppText style={styles.signOutText}>Sign Out of Platform</AppText>
+          <ChevronRight size={18} color="#DC2626" strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -287,154 +312,206 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: '#FFFFFF',
-    zIndex: 9999,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 20,
+    zIndex: 1000,
+    ...(Platform.OS === 'web'
+      ? ({
+          position: 'fixed' as any,
+          height: '100dvh' as any,
+          boxShadow: '8px 0 24px rgba(15, 23, 42, 0.12)' as any,
+        } as any)
+      : {
+          shadowColor: '#0F172A',
+          shadowOffset: { width: 8, height: 0 },
+          shadowOpacity: 0.12,
+          shadowRadius: 24,
+          elevation: 25,
+        }),
     borderRightWidth: 1,
     borderRightColor: '#E2E8F0',
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
-  adminInfoRow: {
-    flex: 1,
+  brandRow: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 106,
+    height: 34,
+  },
+  brandSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 1,
+    marginLeft: 26,
+    letterSpacing: -0.2,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountPanel: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 8,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginRight: 8,
   },
-  avatarWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
+  shieldIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#C3E5D4',
   },
-  headerTextGroup: {
+  accountTextCol: {
     flex: 1,
-    gap: 2,
-  },
-  badgeRow: {
-    flexDirection: 'row',
+    gap: 4,
+    minWidth: 0,
   },
   roleBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4,
   },
   roleBadgeText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: '800',
-    color: '#18794E',
-    letterSpacing: 0.5,
+    color: '#15803D',
+    letterSpacing: 0.6,
   },
-  adminEmail: {
-    fontSize: 13,
+  accountEmail: {
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+    lineHeight: 18,
+    letterSpacing: -0.2,
+    ...(Platform.OS === 'web'
+      ? ({
+          wordBreak: 'break-all' as any,
+          overflowWrap: 'anywhere' as any,
+        } as any)
+      : {}),
   },
-  closeBtn: {
-    padding: 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#F1F5F9',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#E2E8F0',
+  sectionHeaderWrap: {
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 12,
     marginHorizontal: 16,
-    marginVertical: 8,
+    marginBottom: 6,
+  },
+  sectionHeadingText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.7,
   },
   navList: {
     flex: 1,
+    minHeight: 0,
   },
   navContent: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    paddingHorizontal: 14,
+    paddingTop: 2,
+    paddingBottom: 10,
     gap: 6,
-  },
-  navSectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: Radius.md,
+    borderRadius: 14,
     gap: 12,
     backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    position: 'relative',
+    overflow: 'hidden',
   },
   navItemActive: {
     backgroundColor: '#F0FDF4',
-    borderWidth: 1,
     borderColor: '#BBF7D0',
   },
-  navIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.sm,
-    backgroundColor: '#F1F5F9',
+  activeAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 6,
+    bottom: 6,
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: '#16A34A',
+  },
+  navIconTile: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  navIconWrapActive: {
-    backgroundColor: '#18794E',
+  navIconTileActive: {
+    backgroundColor: '#16A34A',
   },
   navTextCol: {
     flex: 1,
+    gap: 2,
+    minWidth: 0,
   },
-  navItemLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  navItemLabelActive: {
-    color: '#18794E',
+  navItemTitle: {
+    fontSize: 14.5,
     fontWeight: '700',
+    color: '#0F172A',
   },
-  navItemSub: {
-    fontSize: 11,
-    marginTop: 1,
+  navItemTitleActive: {
+    color: '#0F2922',
+  },
+  navItemSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
   },
   footer: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: '#FEE2E2',
     gap: 10,
   },
-  signOutIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   signOutText: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 14,
     fontWeight: '700',
     color: '#DC2626',
+    marginLeft: 8,
   },
 });
