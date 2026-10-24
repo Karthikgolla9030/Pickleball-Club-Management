@@ -640,6 +640,7 @@ export default function PlatformClubsScreen() {
                       label="View Public Club"
                       variant="outline"
                       size="sm"
+                      style={{ flex: 1, height: 40 }}
                       onPress={() => router.push(`/club/${selectedClub.slug}` as any)}
                       leftIcon={<ExternalLink size={14} color="#18794E" />}
                     />
@@ -1326,11 +1327,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   suspendBtn: {
+    flex: 1,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: Radius.md,
     backgroundColor: '#FEE2E2',
     borderWidth: 1,
@@ -1342,11 +1345,13 @@ const styles = StyleSheet.create({
     color: '#DC2626',
   },
   reactivateBtn: {
+    flex: 1,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: Radius.md,
     backgroundColor: '#EAF6F0',
     borderWidth: 1,

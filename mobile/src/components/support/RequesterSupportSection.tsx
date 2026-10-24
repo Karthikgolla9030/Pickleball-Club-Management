@@ -385,7 +385,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
             <View style={styles.fieldGroup}>
               <AppText style={styles.fieldLabel}>Club Facility Scope</AppText>
               <View style={styles.clubContextBadge}>
-                <Building2 size={14} color="#114D3F" />
+                <Building2 size={14} color={Colors.brand.primary} />
                 <AppText style={styles.clubContextBadgeText}>
                   {defaultClubId ? 'Linked to your active club facility' : 'Club Operations'}
                 </AppText>
@@ -475,7 +475,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
 
           {isLoadingTickets && !isRefreshingTickets ? (
             <View style={styles.centerBox}>
-              <ActivityIndicator size="small" color="#114D3F" />
+              <ActivityIndicator size="small" color={Colors.brand.primary} />
               <AppText variant="caption" color="secondary" style={{ marginTop: 8 }}>
                 Loading your tickets...
               </AppText>
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabItemTextActive: {
-    color: '#114D3F',
+    color: Colors.brand.primary,
     fontWeight: '700',
   },
   formCard: {
@@ -836,17 +836,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.sm,
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
     backgroundColor: '#F1F5F9',
     marginRight: 6,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipActive: {
-    backgroundColor: '#114D3F',
-    borderColor: '#114D3F',
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
   },
   chipText: {
     fontSize: 12,
@@ -863,17 +865,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   statusPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    height: 34,
+    paddingHorizontal: 14,
     borderRadius: Radius.full,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusPillActive: {
-    backgroundColor: '#114D3F',
-    borderColor: '#114D3F',
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
   },
   statusPillText: {
     fontSize: 12,
@@ -1054,7 +1058,7 @@ const styles = StyleSheet.create({
   },
   modalClubNoticeText: {
     fontSize: 12,
-    color: '#114D3F',
+    color: Colors.brand.primary,
     fontWeight: '600',
   },
   threadContainer: {
@@ -1171,7 +1175,7 @@ const styles = StyleSheet.create({
   clubContextBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#114D3F',
+    color: Colors.brand.primary,
   },
   senderBadgeStaff: {
     backgroundColor: '#0284C7',

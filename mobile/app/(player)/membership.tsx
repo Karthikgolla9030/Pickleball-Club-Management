@@ -489,7 +489,7 @@ export default function PlayerMembershipScreen() {
                       onPress={() => setSelectedBenefit(info)}
                     >
                       <View style={styles.iconCircle}>
-                        <BenefitIcon size={20} color="#114D3F" strokeWidth={1.8} />
+                        <BenefitIcon size={20} color="#176B57" strokeWidth={1.8} />
                       </View>
 
                       <View style={styles.benefitTextCol}>
@@ -516,7 +516,7 @@ export default function PlayerMembershipScreen() {
                 {/* Metric 1: Max Active Bookings */}
                 <View style={styles.privilegeCol}>
                   <View style={styles.iconCircle}>
-                    <Calendar size={20} color="#114D3F" strokeWidth={1.8} />
+                    <Calendar size={20} color="#176B57" strokeWidth={1.8} />
                   </View>
                   <View style={styles.privilegeTextCol}>
                     <AppText style={styles.privilegeValue}>
@@ -534,7 +534,7 @@ export default function PlayerMembershipScreen() {
                 {/* Metric 2: Advance Booking */}
                 <View style={[styles.privilegeCol, styles.privilegeColRight]}>
                   <View style={styles.iconCircle}>
-                    <Clock size={20} color="#114D3F" strokeWidth={1.8} />
+                    <Clock size={20} color="#176B57" strokeWidth={1.8} />
                   </View>
                   <View style={styles.privilegeTextCol}>
                     <AppText style={styles.privilegeValue}>
@@ -608,7 +608,7 @@ export default function PlayerMembershipScreen() {
           </View>
 
           <View style={styles.modalNoticeBox}>
-            <Info size={16} color="#114D3F" strokeWidth={2} />
+            <Info size={16} color="#176B57" strokeWidth={2} />
             <AppText style={styles.modalNoticeText}>
               To upgrade, downgrade, or update payment preferences for your membership,
               please contact the club front desk or administrator.
@@ -635,7 +635,7 @@ export default function PlayerMembershipScreen() {
         <View style={styles.modalBody}>
           <View style={styles.benefitModalIconContainer}>
             <View style={styles.benefitModalIconCircle}>
-              <Sparkles size={28} color="#114D3F" strokeWidth={1.8} />
+              <Sparkles size={28} color="#176B57" strokeWidth={1.8} />
             </View>
             <AppText style={styles.benefitModalTitle}>{selectedBenefit?.title}</AppText>
             <AppText style={styles.benefitModalSubtitle}>
@@ -644,7 +644,7 @@ export default function PlayerMembershipScreen() {
           </View>
 
           <View style={styles.modalNoticeBox}>
-            <ShieldCheck size={16} color="#114D3F" strokeWidth={2} />
+            <ShieldCheck size={16} color="#176B57" strokeWidth={2} />
             <AppText style={styles.modalNoticeText}>
               This privilege is active and applied automatically to your account bookings,
               events, and club reservations.
@@ -806,9 +806,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#114D3F',
+    backgroundColor: '#176B57',
     borderRadius: 10,
-    paddingVertical: 10,
+    height: 44,
   },
   renewButtonText: {
     color: '#FFFFFF',
@@ -1041,10 +1041,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyButton: {
-    backgroundColor: '#114D3F',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: '#176B57',
+    borderRadius: 10,
+    height: 44,
     paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyButtonText: {
     color: '#FFFFFF',
@@ -1058,10 +1060,15 @@ const styles = StyleSheet.create({
   emptyOutlineButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#114D3F',
+    borderColor: '#176B57',
+    height: 44,
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyOutlineButtonText: {
-    color: '#114D3F',
+    color: '#176B57',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -1100,12 +1107,12 @@ const styles = StyleSheet.create({
   modalNoticeText: {
     flex: 1,
     fontSize: 12,
-    color: '#114D3F',
+    color: '#176B57',
     lineHeight: 17,
   },
   modalCloseButton: {
-    backgroundColor: '#114D3F',
-    borderRadius: 12,
+    backgroundColor: '#176B57',
+    borderRadius: 10,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1113,8 +1120,8 @@ const styles = StyleSheet.create({
   },
   modalCloseButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
   },
   benefitModalIconContainer: {
     alignItems: 'center',

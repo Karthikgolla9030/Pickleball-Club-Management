@@ -113,8 +113,8 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   chip: {
-    paddingHorizontal: Spacing[3],
-    height: 32,
+    paddingHorizontal: Spacing[3.5],
+    height: 34,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface.default, // white
     borderWidth: 1,

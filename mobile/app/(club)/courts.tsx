@@ -1670,9 +1670,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 5,
     backgroundColor: '#176B57',
-    height: 34,
-    paddingHorizontal: 13,
-    borderRadius: 17,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     shadowColor: '#176B57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
@@ -1681,7 +1681,7 @@ const styles = StyleSheet.create({
   },
   addCourtButtonText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
   },
 
@@ -1693,20 +1693,21 @@ const styles = StyleSheet.create({
   },
   switcher: {
     flexDirection: 'row',
+    height: 38,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     padding: 3,
     borderWidth: 1,
     borderColor: '#E2EAE6',
   },
   switcherTab: {
     flex: 1,
+    height: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
-    paddingVertical: 9,
-    borderRadius: 21,
+    gap: 6,
+    borderRadius: 18,
     backgroundColor: 'transparent',
   },
   switcherTabActive: {
@@ -1718,7 +1719,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   switcherTabText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#102B2A',
   },
@@ -2037,7 +2038,7 @@ const styles = StyleSheet.create({
   },
   editButton: {
     flex: 1,
-    height: 31,
+    height: 32,
     borderRadius: 8,
     backgroundColor: '#EBF6F1',
     flexDirection: 'row',
@@ -2052,7 +2053,7 @@ const styles = StyleSheet.create({
   },
   deactivateButton: {
     flex: 1.2,
-    height: 31,
+    height: 32,
     borderRadius: 8,
     backgroundColor: '#FEE2E2',
     flexDirection: 'row',
@@ -2067,7 +2068,7 @@ const styles = StyleSheet.create({
   },
   activateButton: {
     flex: 1.2,
-    height: 31,
+    height: 32,
     borderRadius: 8,
     backgroundColor: '#EBF6F1',
     flexDirection: 'row',

@@ -448,8 +448,8 @@ export default function PlayerBookingsScreen() {
               setCourtImageErrors({});
               refetchBookings();
             }}
-            colors={['#114D3F']}
-            tintColor="#114D3F"
+            colors={[Colors.brand.primary]}
+            tintColor={Colors.brand.primary}
           />
         }
       >
@@ -640,17 +640,17 @@ const styles = StyleSheet.create({
   // ─── Filter Tabs / Pills ───
   filterTabsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 18,
-    gap: 10,
+    paddingHorizontal: 16,
+    gap: 8,
     marginBottom: 16,
   },
   filterTabPill: {
     flex: 1,
-    height: 42,
-    borderRadius: 21,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E8EDEA',
+    borderColor: '#E2ECE7',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -660,18 +660,18 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   filterTabPillActive: {
-    backgroundColor: '#114D3F',
-    borderColor: '#114D3F',
-    shadowColor: '#114D3F',
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
+    shadowColor: Colors.brand.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 4,
     elevation: 2,
   },
   filterTabText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '500',
-    color: '#5E6E66',
+    color: '#63756E',
   },
   filterTabTextActive: {
     color: '#FFFFFF',
@@ -915,10 +915,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   retryButton: {
-    backgroundColor: '#114D3F',
+    backgroundColor: Colors.brand.primary,
     paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
+    height: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   retryButtonText: {
     color: '#FFFFFF',

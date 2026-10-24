@@ -49,6 +49,7 @@ import {
   useRegisterForEvent,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
+import { Colors } from '@/theme';
 import { formatCurrency, formatDateTime, resolveMediaUrl } from '@/utils';
 import type { ClubEvent, EventRegistration } from '@/types';
 
@@ -547,8 +548,8 @@ export default function PlayerEventsScreen() {
               refetchDiscover();
               refetchMyEvents();
             }}
-            colors={['#0D3E33']}
-            tintColor="#0D3E33"
+            colors={[Colors.brand.primary]}
+            tintColor={Colors.brand.primary}
           />
         }
       >
@@ -889,10 +890,10 @@ const styles = StyleSheet.create({
   segmentedContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#E2ECE7',
-    padding: 4,
+    padding: 3,
     marginBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -902,23 +903,23 @@ const styles = StyleSheet.create({
   },
   segmentButton: {
     flex: 1,
-    height: 42,
-    borderRadius: 20,
+    height: 34,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#0D3E33',
-    shadowColor: '#0D3E33',
+    backgroundColor: Colors.brand.primary,
+    shadowColor: Colors.brand.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 3,
     elevation: 2,
   },
   segmentText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '500',
-    color: '#475569',
+    color: '#63756E',
   },
   segmentTextActive: {
     color: '#FFFFFF',

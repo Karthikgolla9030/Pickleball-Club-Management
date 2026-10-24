@@ -629,13 +629,13 @@ export default function PlayerLessonsScreen() {
           <>
             {isLoadingDiscover && !isRefetchingDiscover ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0D3E33" />
+                <ActivityIndicator size="large" color="#176B57" />
                 <AppText style={styles.loadingText}>Loading coaching sessions...</AppText>
               </View>
             ) : sortedLessons.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconCircle}>
-                  <UserPlus size={28} color="#0D5C46" strokeWidth={1.8} />
+                  <UserPlus size={28} color="#176B57" strokeWidth={1.8} />
                 </View>
                 <AppText style={styles.emptyTitle}>No Lessons Available</AppText>
                 <AppText style={styles.emptyDescription}>
@@ -668,13 +668,13 @@ export default function PlayerLessonsScreen() {
           <>
             {isLoadingMyLessons && !isRefetchingMyLessons ? (
               <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#0D3E33" />
+                <ActivityIndicator size="large" color="#176B57" />
                 <AppText style={styles.loadingText}>Loading registrations...</AppText>
               </View>
             ) : sortedRegistrations.length === 0 ? (
               <View style={styles.emptyCard}>
                 <View style={styles.emptyIconCircle}>
-                  <Calendar size={28} color="#0D5C46" strokeWidth={1.8} />
+                  <Calendar size={28} color="#176B57" strokeWidth={1.8} />
                 </View>
                 <AppText style={styles.emptyTitle}>No Lesson Registrations</AppText>
                 <AppText style={styles.emptyDescription}>
@@ -929,10 +929,10 @@ const styles = StyleSheet.create({
   segmentedContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: '#E2ECE7',
-    padding: 4,
+    padding: 3,
     marginBottom: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -942,23 +942,23 @@ const styles = StyleSheet.create({
   },
   segmentButton: {
     flex: 1,
-    height: 42,
-    borderRadius: 20,
+    height: 34,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   segmentButtonActive: {
-    backgroundColor: '#0D3E33',
-    shadowColor: '#0D3E33',
+    backgroundColor: '#176B57',
+    shadowColor: '#176B57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 3,
     elevation: 2,
   },
   segmentText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '500',
-    color: '#475569',
+    color: '#63756E',
   },
   segmentTextActive: {
     color: '#FFFFFF',
@@ -1009,7 +1009,7 @@ const styles = StyleSheet.create({
   cardPrice: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#114D3F',
+    color: '#176B57',
     letterSpacing: -0.3,
   },
   badgesRow: {
@@ -1052,9 +1052,9 @@ const styles = StyleSheet.create({
 
   // ─── Action Buttons ────────────────────────────────────────────────────────
   registerButton: {
-    backgroundColor: '#114D3F',
-    borderRadius: 12,
-    height: 42,
+    backgroundColor: '#176B57',
+    borderRadius: 10,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1068,8 +1068,8 @@ const styles = StyleSheet.create({
   },
   registeredButton: {
     backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    height: 42,
+    borderRadius: 10,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1085,8 +1085,8 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    height: 42,
+    borderRadius: 10,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
@@ -1100,8 +1100,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    borderRadius: 12,
-    height: 38,
+    borderRadius: 10,
+    height: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1188,14 +1188,14 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   refreshButton: {
-    backgroundColor: '#0D3E33',
-    borderRadius: 12,
-    height: 38,
+    backgroundColor: '#176B57',
+    borderRadius: 10,
+    height: 44,
     paddingHorizontal: 22,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#0D3E33',
+    shadowColor: '#176B57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.18,
     shadowRadius: 3,
@@ -1258,7 +1258,7 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: '#F0F4F2',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1271,8 +1271,8 @@ const styles = StyleSheet.create({
   modalConfirmBtn: {
     flex: 2,
     height: 44,
-    borderRadius: 12,
-    backgroundColor: '#114D3F',
+    borderRadius: 10,
+    backgroundColor: '#176B57',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1299,8 +1299,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   modalCloseButton: {
-    backgroundColor: '#114D3F',
-    borderRadius: 12,
+    backgroundColor: '#176B57',
+    borderRadius: 10,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',

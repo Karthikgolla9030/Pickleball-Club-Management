@@ -946,15 +946,15 @@ const styles = StyleSheet.create({
   // Top Mobile Header Button
   headerCreateBtn: {
     backgroundColor: '#176B57',
-    height: 34,
-    paddingHorizontal: 13,
-    borderRadius: 17,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerCreateBtnText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
   },
 
@@ -982,9 +982,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    borderRadius: 12,
-    height: 38,
-    minHeight: 38,
+    borderRadius: 17,
+    height: 34,
+    minHeight: 34,
     paddingHorizontal: 14,
     flexShrink: 0,
   },
@@ -1019,7 +1019,7 @@ const styles = StyleSheet.create({
     borderColor: '#E1E8E4',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 42,
+    height: 44,
     gap: 8,
   },
   searchIcon: {
@@ -1044,7 +1044,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E1E8E4',
     borderRadius: 12,
-    height: 42,
+    height: 44,
     paddingHorizontal: 14,
   },
   filterBtnActive: {

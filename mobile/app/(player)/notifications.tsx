@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Aught2 Pickleball — Player Notifications Screen
  *
  * Uses the backend Notification table as the single authoritative source.
@@ -25,6 +25,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -233,23 +234,30 @@ export default function PlayerNotificationsScreen() {
         )}
       </View>
 
-      <View style={styles.chipsContainer}>
-        <View style={styles.chipsRow}>
-          {CHIPS.map(({ key, label }) => {
-            const isActive = selectedCategory === key;
-            const count = chipCounts[key] ?? 0;
-            return (
-              <Pressable key={key} style={[styles.chip, isActive && styles.chipActive]}
-                onPress={() => setSelectedCategory(key)} accessibilityRole="button"
-                accessibilityLabel={`${label}${count > 0 ? `, ${count} unread` : ''}`}>
-                <AppText style={[styles.chipText, isActive && styles.chipTextActive]}>
-                  {label}{count > 0 ? ` (${count})` : ''}
-                </AppText>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsScrollContent}
+        style={styles.chipsScrollView}
+      >
+        {CHIPS.map(({ key, label }) => {
+          const isActive = selectedCategory === key;
+          const count = chipCounts[key] ?? 0;
+          return (
+            <Pressable
+              key={key}
+              style={[styles.chip, isActive && styles.chipActive]}
+              onPress={() => setSelectedCategory(key)}
+              accessibilityRole="button"
+              accessibilityLabel={`${label}${count > 0 ? `, ${count} unread` : ''}`}
+            >
+              <AppText style={[styles.chipText, isActive && styles.chipTextActive]}>
+                {label}{count > 0 ? ` (${count})` : ''}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {isLoading && (
         <View style={styles.centerContainer}>
@@ -338,24 +346,25 @@ export default function PlayerNotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAF9' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingBottom: 12, backgroundColor: '#F8FAF9',
-    borderBottomWidth: 1, borderBottomColor: '#E8EDEA' },
+    paddingHorizontal: 16, paddingBottom: 10, backgroundColor: '#F8FAF9',
+    borderBottomWidth: 1, borderBottomColor: '#E2ECE7' },
   headerLeft: { flexDirection: 'row', alignItems: 'center' },
-  backButton: { padding: 6, marginRight: 10 },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#0F2922', letterSpacing: -0.3 },
+  backButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFFFFF',
+    borderWidth: 1, borderColor: '#E2ECE7', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#102B2A', letterSpacing: -0.3 },
   markAllBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9',
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
   markAllText: { fontSize: 12.5, fontWeight: '600', color: '#176B57' },
-  chipsContainer: { paddingHorizontal: 16, paddingVertical: 12 },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20,
-    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E8EDEA' },
-  chipActive: { backgroundColor: '#114D3F', borderColor: '#114D3F' },
-  chipText: { fontSize: 12.5, fontWeight: '600', color: '#647570' },
+  chipsScrollView: { maxHeight: 52, marginBottom: 4 },
+  chipsScrollContent: { paddingHorizontal: 16, paddingVertical: 8, gap: 8, flexDirection: 'row', alignItems: 'center' },
+  chip: { height: 34, paddingHorizontal: 14, borderRadius: 17,
+    backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2ECE7', alignItems: 'center', justifyContent: 'center' },
+  chipActive: { backgroundColor: '#176B57', borderColor: '#176B57' },
+  chipText: { fontSize: 13, fontWeight: '600', color: '#63756E' },
   chipTextActive: { color: '#FFFFFF' },
   centerContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  retryBtn: { marginTop: 16, backgroundColor: '#114D3F', paddingHorizontal: 24,
-    paddingVertical: 10, borderRadius: 20 },
+  retryBtn: { marginTop: 16, backgroundColor: '#176B57', paddingHorizontal: 24,
+    height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   retryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
   listContent: { paddingHorizontal: 16, paddingTop: 4, gap: 10 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#E8EDEA',

@@ -627,19 +627,15 @@ export default function PlatformUsersScreen() {
                   </AppText>
                 </View>
 
-                <TouchableOpacity
-                  style={[
-                    styles.inspectBtn,
-                    isSuperNarrow && styles.inspectBtnFullWidth,
-                  ]}
+                <PlatformButton
+                  size="sm"
+                  variant="primary"
+                  label="Inspect Account"
+                  leftIcon={<Eye size={14} color="#FFFFFF" strokeWidth={2.2} />}
                   onPress={() => setSelectedUser(item)}
-                  activeOpacity={0.8}
+                  style={isSuperNarrow ? styles.inspectBtnFullWidth : undefined}
                   accessibilityLabel={`Inspect account for ${displayName}`}
-                  accessibilityRole="button"
-                >
-                  <Eye size={15} color="#FFFFFF" strokeWidth={2.2} />
-                  <AppText style={styles.inspectBtnText}>Inspect Account</AppText>
-                </TouchableOpacity>
+                />
               </View>
             </Card>
           );
@@ -946,7 +942,7 @@ export default function PlatformUsersScreen() {
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 accessibilityLabel="Close dialog"
               >
-                <X size={20} color="#2A4540" />
+                <X size={18} color="#4B5563" strokeWidth={2.2} />
               </TouchableOpacity>
             </View>
 
@@ -955,7 +951,7 @@ export default function PlatformUsersScreen() {
                 <View style={styles.modalBody}>
                   {/* Account Information Section */}
                   <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                    <AppText style={styles.sectionHeaderLabel}>
                       Account Information
                     </AppText>
                     <View style={styles.detailGrid}>
@@ -1008,7 +1004,7 @@ export default function PlatformUsersScreen() {
 
                   {/* Player Profile Section */}
                   <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                    <AppText style={styles.sectionHeaderLabel}>
                       Player Profile
                     </AppText>
                     {selectedUser.player_profile ? (
@@ -1041,7 +1037,7 @@ export default function PlatformUsersScreen() {
 
                   {/* Club Staff Roles Section */}
                   <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                    <AppText style={styles.sectionHeaderLabel}>
                       Club Staff & Management Roles ({selectedUser.club_memberships.length})
                     </AppText>
                     {selectedUser.club_memberships.length === 0 ? (
@@ -1085,7 +1081,7 @@ export default function PlatformUsersScreen() {
 
                   {/* Club Player Memberships Section */}
                   <View style={styles.modalSection}>
-                    <AppText variant="label" color="brand" style={styles.sectionHeaderLabel}>
+                    <AppText style={styles.sectionHeaderLabel}>
                       Club Player Memberships ({selectedUser.club_player_memberships.length})
                     </AppText>
                     {selectedUser.club_player_memberships.length === 0 ? (
@@ -1138,8 +1134,8 @@ export default function PlatformUsersScreen() {
                 size="md"
                 variant="outline"
                 label="Close"
+                fullWidth
                 onPress={() => setSelectedUser(null)}
-                style={styles.modalCloseButton}
               />
             </View>
           </View>
@@ -1785,19 +1781,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#EAF6F0',
-    backgroundColor: '#FAFDFB',
+    borderBottomColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
   },
   modalHeaderTitleGroup: {
     flex: 1,
     marginRight: 12,
   },
   modalCloseBtn: {
-    padding: 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#EEF3F0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalScroll: {
     padding: Spacing.lg,
@@ -1810,18 +1809,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sectionHeaderLabel: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    color: '#111827',
   },
   detailGrid: {
-    gap: 8,
-    backgroundColor: '#F8FAF9',
+    gap: 10,
+    backgroundColor: '#F9FAFB',
     padding: Spacing.md,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#EAF6F0',
+    borderColor: '#E5E7EB',
   },
   gridRow: {
     flexDirection: 'row',
@@ -1832,11 +1830,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   gridKey: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
   },
   gridVal: {
     fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
     flexShrink: 1,
     textAlign: 'right',
   },
@@ -1846,7 +1847,7 @@ const styles = StyleSheet.create({
   membershipDetailCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2EBE6',
+    borderColor: '#E5E7EB',
     borderRadius: Radius.md,
     padding: Spacing.sm,
     gap: 6,
@@ -1861,31 +1862,30 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#F0F7F3',
+    borderTopColor: '#F3F4F6',
     paddingTop: 4,
   },
   boundaryCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#FAFDFB',
+    backgroundColor: '#F0FDF4',
     padding: Spacing.md,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#EAF6F0',
+    borderColor: '#BBF7D0',
   },
   boundaryText: {
     flex: 1,
     lineHeight: 18,
+    color: '#166534',
+    fontSize: 12,
   },
   modalBottomActions: {
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: '#E2EBE6',
-    backgroundColor: '#FAFDFB',
-    alignItems: 'flex-end',
-  },
-  modalCloseButton: {
-    minWidth: 100,
+    borderTopColor: '#E5E7EB',
+    backgroundColor: '#FFFFFF',
   },
 });

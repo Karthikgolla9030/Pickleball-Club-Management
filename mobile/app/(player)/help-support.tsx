@@ -105,7 +105,7 @@ export default function PlayerHelpSupportScreen() {
         {/* Hero */}
         <View style={styles.heroCard}>
           <View style={styles.heroIcon}>
-            <HelpCircle size={28} color="#114D3F" strokeWidth={2} />
+            <HelpCircle size={28} color="#176B57" strokeWidth={2} />
           </View>
           <View style={styles.heroText}>
             <AppText style={styles.heroTitle}>Pickleball Support</AppText>
@@ -122,7 +122,7 @@ export default function PlayerHelpSupportScreen() {
             onPress={() => setMainTab('tickets')}
             activeOpacity={0.8}
           >
-            <MessageSquare size={16} color={mainTab === 'tickets' ? '#114D3F' : '#64748B'} />
+            <MessageSquare size={16} color={mainTab === 'tickets' ? '#176B57' : '#64748B'} />
             <AppText style={[styles.mainNavTabText, mainTab === 'tickets' && styles.mainNavTabTextActive]}>
               Support Tickets
             </AppText>
@@ -133,7 +133,7 @@ export default function PlayerHelpSupportScreen() {
             onPress={() => setMainTab('faqs')}
             activeOpacity={0.8}
           >
-            <HelpCircle size={16} color={mainTab === 'faqs' ? '#114D3F' : '#64748B'} />
+            <HelpCircle size={16} color={mainTab === 'faqs' ? '#176B57' : '#64748B'} />
             <AppText style={[styles.mainNavTabText, mainTab === 'faqs' && styles.mainNavTabTextActive]}>
               FAQs & Contact Desk
             </AppText>
@@ -165,7 +165,7 @@ export default function PlayerHelpSupportScreen() {
             accessibilityRole="button"
           >
             <View style={styles.contactIcon}>
-              <Mail size={18} color="#114D3F" strokeWidth={2} />
+              <Mail size={18} color="#176B57" strokeWidth={2} />
             </View>
             <View style={styles.contactText}>
               <AppText style={styles.contactLabel}>Email</AppText>
@@ -262,31 +262,39 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   mainNavTabTextActive: {
-    color: '#114D3F',
+    color: '#176B57',
     fontWeight: '700',
   },
-
 
   /* Header */
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 10,
     backgroundColor: '#F8FAF9',
     borderBottomWidth: 1,
-    borderBottomColor: '#E8EDEA',
+    borderBottomColor: '#E2ECE7',
   },
-  backBtn: { padding: 6 },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerTitle: {
     flex: 1,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#0F2922',
+    color: '#102B2A',
     textAlign: 'center',
     letterSpacing: -0.3,
   },
-  headerSpacer: { width: 34 }, // mirrors backBtn width
+  headerSpacer: { width: 38 }, // mirrors backBtn width
 
   /* Scroll */
   scroll: { flex: 1 },

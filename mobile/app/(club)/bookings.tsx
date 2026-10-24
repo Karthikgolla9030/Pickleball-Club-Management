@@ -916,16 +916,16 @@ const styles = StyleSheet.create({
   newBookingBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     backgroundColor: '#176B57',
-    height: 34,
-    paddingHorizontal: 13,
-    borderRadius: 17,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     flexShrink: 0,
   },
   newBookingBtnText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
   },
 
@@ -937,8 +937,8 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
+    height: 38,
+    borderRadius: 10,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5ECE8',
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
     borderColor: '#176B57',
   },
   tabItemText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
     color: '#667773',
   },

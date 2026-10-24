@@ -1087,22 +1087,23 @@ const styles = StyleSheet.create({
   statusTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingHorizontal: 13,
+    height: 36,
+    borderRadius: 18,
     gap: 6,
   },
   statusTabActive: {
-    backgroundColor: '#064E3B',
+    backgroundColor: Colors.brand.primary,
   },
   statusTabInactive: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2ECE7',
   },
   statusTabText: {
-    fontSize: 12,
-    color: '#334155',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#63756E',
   },
   statusTabTextActive: {
     color: '#FFFFFF',

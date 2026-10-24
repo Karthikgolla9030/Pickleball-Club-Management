@@ -1124,9 +1124,10 @@ const styles = StyleSheet.create({
   newPlanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: '#176B57',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    height: 44,
+    paddingHorizontal: 18,
     borderRadius: 22,
     shadowColor: '#176B57',
     shadowOffset: { width: 0, height: 2 },
@@ -1136,33 +1137,34 @@ const styles = StyleSheet.create({
   },
   newPlanBtnText: {
     color: '#FFFFFF',
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
   },
 
   // Plans & Subscribers Switcher
   segmentedContainer: {
     flexDirection: 'row',
+    height: 38,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 4,
+    borderRadius: 22,
+    padding: 3,
     borderWidth: 1,
     borderColor: '#E2ECE6',
     marginBottom: 14,
   },
   segmentedTab: {
     flex: 1,
-    paddingVertical: 10,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: 'transparent',
   },
   segmentedTabActive: {
     backgroundColor: '#176B57',
   },
   segmentedTabText: {
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#123D38',
   },

@@ -664,26 +664,36 @@ export default function PlatformApplicationsScreen() {
             </ScrollView>
 
             {/* Modal Bottom Actions */}
-            {selectedApp?.status === 'pending' && (
-              <View style={styles.modalActionButtons}>
-                <Button
-                  label="Reject Application"
-                  variant="outline"
-                  onPress={() => openRejectModal(selectedApp)}
-                  disabled={isApproving || isRejecting}
-                  style={styles.modalRejectBtn}
-                />
+            <View style={styles.modalActionButtons}>
+              {selectedApp?.status === 'pending' ? (
+                <>
+                  <Button
+                    label="Reject"
+                    variant="outline"
+                    onPress={() => openRejectModal(selectedApp)}
+                    disabled={isApproving || isRejecting}
+                    style={styles.modalRejectBtn}
+                  />
+                  <PlatformButton
+                    size="md"
+                    label={isApproving ? 'Approving...' : 'Approve & Activate'}
+                    leftIcon={<CheckCircle2 size={15} color="#FFFFFF" />}
+                    onPress={() => handleApprove(selectedApp)}
+                    loading={isApproving}
+                    disabled={isApproving || isRejecting}
+                    style={styles.modalApproveBtn}
+                  />
+                </>
+              ) : (
                 <PlatformButton
                   size="md"
-                  label={isApproving ? 'Approving...' : 'Approve & Activate Club'}
-                  leftIcon={<CheckCircle2 size={15} color="#FFFFFF" />}
-                  onPress={() => handleApprove(selectedApp)}
-                  loading={isApproving}
-                  disabled={isApproving || isRejecting}
-                  style={styles.modalApproveBtn}
+                  variant="outline"
+                  label="Close"
+                  onPress={() => setSelectedApp(null)}
+                  fullWidth
                 />
-              </View>
-            )}
+              )}
+            </View>
           </View>
         </View>
       </Modal>
@@ -1139,10 +1149,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFDFB',
   },
   modalRejectBtn: {
+    flex: 1,
     borderColor: '#DC2626',
   },
   modalApproveBtn: {
-    minWidth: 180,
+    flex: 1.6,
   },
   rejectDialogCard: {
     width: '100%',
