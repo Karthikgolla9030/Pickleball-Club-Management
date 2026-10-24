@@ -37,6 +37,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowRight,
+  Building2,
   CheckCircle2,
   Clock,
   Database,
@@ -266,190 +267,194 @@ export default function PlatformSettingsScreen() {
 
           {/* SECTION 1: PUBLIC REGISTRATION GATES */}
           <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionIconTileGreen}>
+              <ShieldCheck size={20} color="#15803D" strokeWidth={2} />
+            </View>
             <View style={styles.sectionTitleBlock}>
-              <View style={styles.sectionIconPill}>
-                <ShieldCheck size={16} color="#18794E" />
-              </View>
-              <View>
-                <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                  Public Registration Gates
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Runtime controls to open or temporarily pause self-service onboarding
-                </AppText>
-              </View>
+              <AppText style={styles.sectionTitle}>
+                Public Registration Gates
+              </AppText>
+              <AppText style={styles.sectionSubtitle}>
+                Runtime controls to open or temporarily pause self-service onboarding
+              </AppText>
             </View>
           </View>
 
-          <Card style={styles.cardGroup}>
+          <View style={styles.card}>
             {/* Gate 1: Club Registrations */}
-            <View style={styles.settingRow}>
-              <View style={styles.settingTextCol}>
+            <View style={styles.settingRowWithTile}>
+              <View style={styles.itemIconTileGreen}>
+                <Building2 size={20} color="#15803D" strokeWidth={1.8} />
+              </View>
+              <View style={styles.settingContentCol}>
                 <View style={styles.settingLabelRow}>
                   <AppText style={styles.settingLabel}>Club Registration Applications</AppText>
-                  <Badge
-                    label={allowClubReg ? 'ACCEPTING' : 'PAUSED'}
-                    variant={allowClubReg ? 'success' : 'warning'}
-                    size="sm"
-                  />
+                  <View style={[styles.statusPill, allowClubReg ? styles.statusPillAccepting : styles.statusPillPaused]}>
+                    <AppText style={[styles.statusPillText, allowClubReg ? styles.statusPillTextAccepting : styles.statusPillTextPaused]}>
+                      {allowClubReg ? 'ACCEPTING' : 'PAUSED'}
+                    </AppText>
+                  </View>
                 </View>
-                <AppText variant="caption" color="secondary" style={styles.settingDescription}>
+                <AppText style={styles.settingDescription}>
                   When enabled, prospective facilities can submit onboarding requests via /club-applications. When paused, public submissions are rejected with a maintenance notice.
                 </AppText>
               </View>
               <Switch
                 value={allowClubReg}
                 onValueChange={setAllowClubReg}
-                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                thumbColor={allowClubReg ? '#18794E' : '#F1F5F9'}
+                trackColor={{ false: '#CBD5E1', true: '#22C55E' }}
+                thumbColor="#FFFFFF"
+                style={styles.switchControl}
               />
             </View>
 
-            <View style={styles.settingDivider} />
+            <View style={styles.divider} />
 
             {/* Gate 2: Player Registrations */}
-            <View style={styles.settingRow}>
-              <View style={styles.settingTextCol}>
+            <View style={styles.settingRowWithTile}>
+              <View style={styles.itemIconTileGreen}>
+                <Users size={20} color="#15803D" strokeWidth={1.8} />
+              </View>
+              <View style={styles.settingContentCol}>
                 <View style={styles.settingLabelRow}>
                   <AppText style={styles.settingLabel}>Player Account Registration</AppText>
-                  <Badge
-                    label={allowUserReg ? 'ACCEPTING' : 'PAUSED'}
-                    variant={allowUserReg ? 'success' : 'warning'}
-                    size="sm"
-                  />
+                  <View style={[styles.statusPill, allowUserReg ? styles.statusPillAccepting : styles.statusPillPaused]}>
+                    <AppText style={[styles.statusPillText, allowUserReg ? styles.statusPillTextAccepting : styles.statusPillTextPaused]}>
+                      {allowUserReg ? 'ACCEPTING' : 'PAUSED'}
+                    </AppText>
+                  </View>
                 </View>
-                <AppText variant="caption" color="secondary" style={styles.settingDescription}>
+                <AppText style={styles.settingDescription}>
                   Controls whether new players can self-register accounts on the mobile app. Existing player logins and club staff sessions remain unaffected.
                 </AppText>
               </View>
               <Switch
                 value={allowUserReg}
                 onValueChange={setAllowUserReg}
-                trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                thumbColor={allowUserReg ? '#18794E' : '#F1F5F9'}
+                trackColor={{ false: '#CBD5E1', true: '#22C55E' }}
+                thumbColor="#FFFFFF"
+                style={styles.switchControl}
               />
-            </View>
-          </Card>
-
-          {/* SECTION 2: OPERATIONAL PARAMETERS */}
-          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.md }]}>
-            <View style={styles.sectionTitleBlock}>
-              <View style={[styles.sectionIconPill, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                <Sliders size={16} color="#2563EB" />
-              </View>
-              <View>
-                <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                  Platform Operational Parameters
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Editable global parameters applied across mobile and server runtime
-                </AppText>
-              </View>
             </View>
           </View>
 
-          <Card style={styles.cardGroup}>
-            {/* Setting: Platform Name */}
-            <View style={styles.inputGroup}>
-              <View style={styles.inputLabelRow}>
-                <AppText style={styles.settingLabel}>Platform Display Name</AppText>
-                <AppText variant="caption" color="tertiary">Max 64 chars</AppText>
-              </View>
-              <View style={styles.inputWrapper}>
-                <Tag size={16} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={platformName}
-                  onChangeText={setPlatformName}
-                  placeholder="e.g. Aught2 Pickleball"
-                  placeholderTextColor="#94A3B8"
-                  maxLength={64}
-                />
-              </View>
-              <AppText variant="caption" color="secondary" style={styles.inputHelper}>
-                Global title displayed in client navigation headers, emails, and platform notices.
+          {/* SECTION 2: PLATFORM OPERATIONAL PARAMETERS */}
+          <View style={[styles.sectionHeaderRow, { marginTop: 6 }]}>
+            <View style={styles.sectionIconTileBlue}>
+              <Sliders size={20} color="#2563EB" strokeWidth={2} />
+            </View>
+            <View style={styles.sectionTitleBlock}>
+              <AppText style={styles.sectionTitle}>
+                Platform Operational Parameters
+              </AppText>
+              <AppText style={styles.sectionSubtitle}>
+                Editable global parameters applied across mobile and server runtime
               </AppText>
             </View>
+          </View>
 
-            <View style={styles.settingDivider} />
-
-            {/* Setting: Support Email */}
-            <View style={styles.inputGroup}>
-              <View style={styles.inputLabelRow}>
-                <AppText style={styles.settingLabel}>Global Support Contact Email</AppText>
-              </View>
-              <View style={styles.inputWrapper}>
-                <Mail size={16} color="#64748B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={supportEmail}
-                  onChangeText={setSupportEmail}
-                  placeholder="support@pickleball.com"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-              <AppText variant="caption" color="secondary" style={styles.inputHelper}>
-                Official contact address routed to the platform support queue and email footers.
-              </AppText>
+          {/* Card 1: Platform Display Name */}
+          <View style={styles.card}>
+            <View style={styles.fieldHeaderRow}>
+              <AppText style={styles.settingLabel}>Platform Display Name</AppText>
+              <AppText style={styles.fieldHelperTop}>Max 64 chars</AppText>
             </View>
-
-            <View style={styles.settingDivider} />
-
-            {/* Setting: Max Upload Size */}
-            <View style={styles.inputGroup}>
-              <View style={styles.inputLabelRow}>
-                <AppText style={styles.settingLabel}>Maximum Media Upload Limit</AppText>
-                <Badge label={`${maxUploadMb} MB`} variant="default" size="sm" />
-              </View>
-              <View style={styles.chipsRow}>
-                {uploadSizeOptions.map((mb) => {
-                  const isSelected = maxUploadMb === mb;
-                  return (
-                    <TouchableOpacity
-                      key={mb}
-                      style={[styles.uploadChip, isSelected && styles.uploadChipActive]}
-                      onPress={() => setMaxUploadMb(mb)}
-                      activeOpacity={0.7}
-                    >
-                      <AppText style={[styles.uploadChipText, isSelected && styles.uploadChipTextActive]}>
-                        {mb} MB
-                      </AppText>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <AppText variant="caption" color="secondary" style={styles.inputHelper}>
-                Enforced server-side during club logo, banner, and court photo uploads.
-              </AppText>
+            <View style={styles.inputWrapper}>
+              <Tag size={17} color="#64748B" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                value={platformName}
+                onChangeText={setPlatformName}
+                placeholder="e.g. Pickleball"
+                placeholderTextColor="#94A3B8"
+                maxLength={64}
+              />
             </View>
+            <AppText style={styles.fieldDescription}>
+              Global title displayed in client navigation headers, emails, and platform notices.
+            </AppText>
+          </View>
 
-            <View style={styles.settingDivider} />
+          {/* Card 2: Global Support Contact Email */}
+          <View style={styles.card}>
+            <View style={styles.fieldHeaderRow}>
+              <AppText style={styles.settingLabel}>Global Support Contact Email</AppText>
+            </View>
+            <View style={styles.inputWrapper}>
+              <Mail size={17} color="#64748B" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                value={supportEmail}
+                onChangeText={setSupportEmail}
+                placeholder="support@pickleball.com"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+            <AppText style={styles.fieldDescription}>
+              Official contact address routed to the platform support queue and email footers.
+            </AppText>
+          </View>
 
-            {/* Setting: Maintenance Notice Mode */}
-            <View style={styles.settingRow}>
-              <View style={styles.settingTextCol}>
+          {/* Card 3: Maximum Media Upload Limit */}
+          <View style={styles.card}>
+            <View style={styles.fieldHeaderRow}>
+              <AppText style={styles.settingLabel}>Maximum Media Upload Limit</AppText>
+              <View style={styles.neutralBadgePill}>
+                <AppText style={styles.neutralBadgePillText}>{maxUploadMb} MB</AppText>
+              </View>
+            </View>
+            <View style={styles.chipsRow}>
+              {uploadSizeOptions.map((mb) => {
+                const isSelected = maxUploadMb === mb;
+                return (
+                  <TouchableOpacity
+                    key={mb}
+                    style={[styles.uploadChip, isSelected && styles.uploadChipActive]}
+                    onPress={() => setMaxUploadMb(mb)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText style={[styles.uploadChipText, isSelected && styles.uploadChipTextActive]}>
+                      {mb} MB
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <AppText style={styles.fieldDescription}>
+              Enforced server-side during club logo, banner, and court photo uploads.
+            </AppText>
+          </View>
+
+          {/* Card 4: Platform Maintenance Notice */}
+          <View style={styles.card}>
+            <View style={styles.settingRowWithTile}>
+              <View style={styles.itemIconTileAmber}>
+                <AlertTriangle size={20} color="#D97706" strokeWidth={1.8} />
+              </View>
+              <View style={styles.settingContentCol}>
                 <View style={styles.settingLabelRow}>
                   <AppText style={styles.settingLabel}>Platform Maintenance Notice</AppText>
-                  <Badge
-                    label={maintenanceMode ? 'ACTIVE' : 'OFF'}
-                    variant={maintenanceMode ? 'warning' : 'default'}
-                    size="sm"
-                  />
+                  <View style={[styles.statusPill, maintenanceMode ? styles.statusPillAmber : styles.statusPillNeutral]}>
+                    <AppText style={[styles.statusPillText, maintenanceMode ? styles.statusPillTextAmber : styles.statusPillTextNeutral]}>
+                      {maintenanceMode ? 'ACTIVE' : 'OFF'}
+                    </AppText>
+                  </View>
                 </View>
-                <AppText variant="caption" color="secondary" style={styles.settingDescription}>
+                <AppText style={styles.settingDescription}>
                   Broadcasts a top-level maintenance banner to all connected players and club operators informing them of scheduled infrastructure operations.
                 </AppText>
               </View>
               <Switch
                 value={maintenanceMode}
                 onValueChange={setMaintenanceMode}
-                trackColor={{ false: '#CBD5E1', true: '#FDE68A' }}
-                thumbColor={maintenanceMode ? '#D97706' : '#F1F5F9'}
+                trackColor={{ false: '#CBD5E1', true: '#F59E0B' }}
+                thumbColor="#FFFFFF"
+                style={styles.switchControl}
               />
             </View>
-          </Card>
+          </View>
 
           {/* Save / Discard Actions Bar */}
           <View style={styles.saveActionBar}>
@@ -464,7 +469,7 @@ export default function PlatformSettingsScreen() {
             <PlatformButton
               size="md"
               label={isSaving ? 'Saving...' : 'Save Settings'}
-              leftIcon={<Save size={15} color="#FFFFFF" />}
+              leftIcon={<Save size={16} color="#FFFFFF" />}
               onPress={handlePreSave}
               disabled={!hasChanges || isSaving}
               loading={isSaving}
@@ -473,27 +478,25 @@ export default function PlatformSettingsScreen() {
           </View>
 
           {/* SECTION 3: SYSTEM ENVIRONMENT & SECURITY CONFIGURATION (READ-ONLY) */}
-          <View style={[styles.sectionHeaderRow, { marginTop: Spacing.lg }]}>
+          <View style={[styles.sectionHeaderRow, { marginTop: 10 }]}>
+            <View style={styles.sectionIconTilePurple}>
+              <Server size={20} color="#7E22CE" strokeWidth={2} />
+            </View>
             <View style={styles.sectionTitleBlock}>
-              <View style={[styles.sectionIconPill, { backgroundColor: '#F3E8FF', borderColor: '#E9D5FF' }]}>
-                <Server size={16} color="#7E22CE" />
-              </View>
-              <View>
-                <AppText variant="heading3" color="primary" style={styles.sectionTitle}>
-                  System Infrastructure & Security (Read-Only)
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  Active server environment parameters · Secrets are never exposed
-                </AppText>
-              </View>
+              <AppText style={styles.sectionTitle}>
+                System Infrastructure & Security (Read-Only)
+              </AppText>
+              <AppText style={styles.sectionSubtitle}>
+                Active server environment parameters · Secrets are never exposed
+              </AppText>
             </View>
           </View>
 
-          <Card style={styles.cardGroup}>
+          <View style={styles.card}>
             {/* Security Guard Callout */}
             <View style={styles.securityCallout}>
-              <Lock size={16} color="#18794E" />
-              <AppText variant="caption" style={styles.securityCalloutText}>
+              <Lock size={16} color="#15803D" />
+              <AppText style={styles.securityCalloutText}>
                 Database connection strings, JWT signing keys, and cloud storage credentials are securely managed via environment variables and deployment configurations. They are strictly prohibited from client exposure.
               </AppText>
             </View>
@@ -511,7 +514,7 @@ export default function PlatformSettingsScreen() {
                 <View style={styles.readonlyItem}>
                   <AppText variant="caption" color="secondary">Environment Mode</AppText>
                   <View style={styles.envPillRow}>
-                    <View style={[styles.envDot, { backgroundColor: readOnlyConfig.app_env === 'production' ? '#18794E' : '#D97706' }]} />
+                    <View style={[styles.envDot, { backgroundColor: readOnlyConfig.app_env === 'production' ? '#15803D' : '#D97706' }]} />
                     <AppText style={styles.readonlyValue}>{readOnlyConfig.app_env.toUpperCase()}</AppText>
                   </View>
                 </View>
@@ -539,7 +542,7 @@ export default function PlatformSettingsScreen() {
                   <View style={styles.pillsWrap}>
                     {readOnlyConfig.platform_owner_emails.map((email) => (
                       <View key={email} style={styles.emailChip}>
-                        <UserCheck size={12} color="#18794E" />
+                        <UserCheck size={12} color="#15803D" />
                         <AppText style={styles.emailChipText}>{email}</AppText>
                       </View>
                     ))}
@@ -562,7 +565,7 @@ export default function PlatformSettingsScreen() {
                 </View>
               </View>
             )}
-          </Card>
+          </View>
 
           {/* SECTION 4: AUDIT HISTORY SHORTCUT */}
           <TouchableOpacity
@@ -572,16 +575,16 @@ export default function PlatformSettingsScreen() {
           >
             <View style={styles.auditShortcutLeft}>
               <View style={styles.auditShortcutIconWrap}>
-                <History size={18} color="#18794E" />
+                <History size={18} color="#15803D" />
               </View>
               <View style={styles.auditShortcutTextWrap}>
                 <AppText style={styles.auditShortcutTitle}>Settings Audit Trail</AppText>
-                <AppText variant="caption" color="secondary">
+                <AppText style={styles.auditShortcutSubtitle}>
                   Inspect immutable historical timestamps, actors, and before/after values for all settings changes.
                 </AppText>
               </View>
             </View>
-            <ArrowRight size={16} color="#18794E" />
+            <ArrowRight size={18} color="#15803D" />
           </TouchableOpacity>
         </View>
       )}
@@ -647,31 +650,36 @@ export default function PlatformSettingsScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    gap: Spacing.md,
-    paddingBottom: 40,
+    gap: 12,
+    paddingBottom: 24,
   },
   headerSection: {
-    paddingTop: 2,
-    paddingBottom: 4,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
   screenTitle: {
-    fontSize: 27,
-    fontWeight: '700',
+    fontSize: 31,
+    fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.5,
-    lineHeight: 32,
+    letterSpacing: -0.6,
+    lineHeight: 36,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+        fontSize: 'clamp(27px, 6vw, 32px)' as any,
       },
     }),
   },
   screenSubtitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     color: '#64748B',
     lineHeight: 20,
-    marginTop: 4,
-    flexWrap: 'wrap',
+    marginTop: 3,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
   successBanner: {
     flexDirection: 'row',
@@ -680,7 +688,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    padding: Spacing.md,
+    padding: 10,
     borderRadius: Radius.lg,
   },
   successBannerText: {
@@ -696,7 +704,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    padding: Spacing.md,
+    padding: 10,
     borderRadius: Radius.lg,
   },
   errorBannerText: {
@@ -707,105 +715,268 @@ const styles = StyleSheet.create({
   },
   sectionHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  sectionTitleBlock: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
+    marginTop: 2,
   },
-  sectionIconPill: {
-    width: 34,
-    height: 34,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
-    borderWidth: 1,
-    borderColor: '#C3E5D4',
+  sectionTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  sectionIconTileGreen: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EAF8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  sectionIconTileBlue: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  sectionIconTilePurple: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 17.5,
     fontWeight: '700',
-    color: '#122521',
+    color: '#0F172A',
+    lineHeight: 23,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
-  cardGroup: {
+  sectionSubtitle: {
+    fontSize: 13.5,
+    color: '#64748B',
+    lineHeight: 19,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
+  },
+  card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2EBE6',
-    padding: Spacing.md,
-    gap: Spacing.md,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)' as any,
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1,
+      },
+    }),
   },
-  settingRow: {
+  settingRowWithTile: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
+    gap: 10,
+    width: '100%',
   },
-  settingTextCol: {
+  itemIconTileGreen: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EAF8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  itemIconTileAmber: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  settingContentCol: {
     flex: 1,
-    gap: 4,
+    minWidth: 0,
+    gap: 3,
   },
   settingLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+    paddingRight: 2,
   },
   settingLabel: {
-    fontSize: 13.5,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#122521',
+    color: '#0F172A',
+    lineHeight: 21,
+    minWidth: 0,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
-  settingDescription: {
-    fontSize: 12,
-    lineHeight: 16,
-    color: '#64748B',
+  statusPill: {
+    paddingHorizontal: 7.5,
+    paddingVertical: 2,
+    borderRadius: 9999,
+    alignSelf: 'center',
   },
-  settingDivider: {
-    height: 1,
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  statusPillAccepting: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillTextAccepting: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+    letterSpacing: 0.3,
+  },
+  statusPillPaused: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusPillTextPaused: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  statusPillAmber: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusPillTextAmber: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+    letterSpacing: 0.3,
+  },
+  statusPillNeutral: {
     backgroundColor: '#F1F5F9',
   },
-  inputGroup: {
-    gap: 6,
+  statusPillTextNeutral: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.3,
   },
-  inputLabelRow: {
+  settingDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#64748B',
+    marginTop: 2,
+    minWidth: 0,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
+  },
+  switchControl: {
+    marginTop: 2,
+    flexShrink: 0,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+  fieldHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  fieldHelperTop: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    paddingHorizontal: 10,
-    height: 42,
+    paddingHorizontal: 12,
+    height: 44,
+    marginTop: 8,
+    marginBottom: 6,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 10,
+    flexShrink: 0,
   },
   textInput: {
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 14.5,
     color: '#0F172A',
+    paddingVertical: 0,
+    outlineStyle: 'none' as any,
   },
-  inputHelper: {
-    fontSize: 11.5,
+  fieldDescription: {
+    fontSize: 13,
     color: '#64748B',
-    lineHeight: 15,
+    lineHeight: 18,
+    minWidth: 0,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
+  },
+  neutralBadgePill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 9999,
+  },
+  neutralBadgePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
   },
   chipsRow: {
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
-    marginTop: 2,
+    marginTop: 10,
+    marginBottom: 8,
   },
   uploadChip: {
     paddingHorizontal: 14,
@@ -816,11 +987,11 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   uploadChipActive: {
-    backgroundColor: '#18794E',
-    borderColor: '#18794E',
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
   },
   uploadChipText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#475569',
   },
@@ -845,16 +1016,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     backgroundColor: '#F0FDF4',
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#DCFCE7',
+    marginBottom: 14,
   },
   securityCalloutText: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#166534',
-    lineHeight: 16,
+    lineHeight: 17,
     flex: 1,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
   readonlyGrid: {
     flexDirection: 'row',
@@ -866,25 +1044,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     minWidth: 140,
     backgroundColor: '#F8FAF9',
-    padding: 10,
-    borderRadius: Radius.md,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 3,
+    gap: 4,
   },
   readonlyFullItem: {
     width: '100%',
     backgroundColor: '#F8FAF9',
-    padding: 10,
-    borderRadius: Radius.md,
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 6,
+    gap: 8,
   },
   readonlyValue: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
   envPillRow: {
     flexDirection: 'row',
@@ -892,12 +1076,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   envDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   subItemLabel: {
     fontWeight: '600',
+    fontSize: 12,
   },
   pillsWrap: {
     flexDirection: 'row',
@@ -941,34 +1126,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    padding: Spacing.md,
-    borderRadius: Radius.lg,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2EBE6',
+    borderColor: '#E2E8F0',
     gap: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)' as any,
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.04,
+        shadowRadius: 3,
+        elevation: 1,
+      },
+    }),
   },
   auditShortcutLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    minWidth: 0,
   },
   auditShortcutIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: '#EAF6F0',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#EAF8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   auditShortcutTextWrap: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
   auditShortcutTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '700',
-    color: '#122521',
+    color: '#0F172A',
+  },
+  auditShortcutSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+    ...Platform.select({
+      web: {
+        overflowWrap: 'anywhere' as any,
+        wordBreak: 'normal' as any,
+      },
+    }),
   },
   modalOverlay: {
     flex: 1,
