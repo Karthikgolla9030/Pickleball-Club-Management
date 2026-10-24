@@ -221,7 +221,7 @@ export default function LoginScreen() {
                         style={styles.demoChip}
                         onPress={() => {
                           setEmail('player@demo.local');
-                          setPassword('DemoPlayer2024!');
+                          setPassword('Password123!');
                           clearError();
                         }}
                         activeOpacity={0.7}
@@ -236,7 +236,7 @@ export default function LoginScreen() {
                           style={styles.demoChip}
                           onPress={() => {
                             setEmail('owner@demo.local');
-                            setPassword('DemoOwner2024!');
+                            setPassword('Password123!');
                             clearError();
                           }}
                           activeOpacity={0.7}
@@ -250,7 +250,7 @@ export default function LoginScreen() {
                           style={styles.demoChip}
                           onPress={() => {
                             setEmail('manager@demo.local');
-                            setPassword('DemoManager2024!');
+                            setPassword('Password123!');
                             clearError();
                           }}
                           activeOpacity={0.7}
@@ -264,7 +264,7 @@ export default function LoginScreen() {
                           style={styles.demoChip}
                           onPress={() => {
                             setEmail('director@demo.local');
-                            setPassword('DemoDirector2024!');
+                            setPassword('Password123!');
                             clearError();
                           }}
                           activeOpacity={0.7}
