@@ -37,6 +37,7 @@ import {
   Phone,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   User,
   X,
   XCircle,
@@ -47,6 +48,7 @@ import {
   Badge,
   Button,
   Card,
+  ClubEmptyIllustration,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -236,77 +238,10 @@ export default function PlatformApplicationsScreen() {
   return (
     <PlatformShell
       activeTab="applications"
-      title="Club Applications"
-      subtitle="Review prospective club submissions, inspect credentials, and process onboarding"
       onRefresh={() => fetchApplications(true)}
       isRefreshing={isRefreshing}
+      scrollable={false}
     >
-      {/* Top Filter and Search Bar */}
-      <View style={styles.controlsCard}>
-        {/* Filter Pills */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsContainer}
-          style={styles.tabsScroll}
-        >
-          {(['pending', 'approved', 'rejected', 'all'] as FilterTab[]).map((tab) => {
-            const isActive = filter === tab;
-            const count = tabCounts[tab];
-            return (
-              <TouchableOpacity
-                key={tab}
-                style={[styles.filterTab, isActive && styles.filterTabActive]}
-                onPress={() => setFilter(tab)}
-                activeOpacity={0.7}
-              >
-                <AppText
-                  style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
-                >
-                  {tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </AppText>
-                <View
-                  style={[
-                    styles.countPill,
-                    isActive ? styles.countPillActive : styles.countPillInactive,
-                  ]}
-                >
-                  <AppText
-                    style={[
-                      styles.countPillText,
-                      isActive ? styles.countPillTextActive : styles.countPillTextInactive,
-                    ]}
-                  >
-                    {count}
-                  </AppText>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* Search Input */}
-        <View style={styles.searchWrapper}>
-          <Search size={16} color="#667776" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by club name, applicant name, email, city, or ref #"
-            placeholderTextColor="#8FA39E"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <X size={16} color="#667776" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
       {/* Main List */}
       {isLoading ? (
         <LoadingState message="Loading club applications..." />
@@ -322,22 +257,120 @@ export default function PlatformApplicationsScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={() => fetchApplications(true)}
-              tintColor="#18794E"
+              tintColor="#15803D"
             />
+          }
+          ListHeaderComponent={
+            <View style={styles.headerContainer}>
+              {/* 1. Page Title & Subtitle */}
+              <View style={styles.headerSection}>
+                <AppText style={styles.screenTitle}>Club Applications</AppText>
+                <AppText style={styles.screenSubtitle}>
+                  Review and manage club registration applications
+                </AppText>
+              </View>
+
+              {/* 2. Status Filter Chips (Horizontally Scrollable) */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.tabsScroll}
+                contentContainerStyle={styles.tabsContainer}
+              >
+                {(['pending', 'approved', 'rejected', 'all'] as FilterTab[]).map((tab) => {
+                  const isActive = filter === tab;
+                  const count = tabCounts[tab];
+                  const label = tab === 'all' ? 'All' : tab.charAt(0).toUpperCase() + tab.slice(1);
+                  return (
+                    <TouchableOpacity
+                      key={tab}
+                      style={[styles.filterTab, isActive && styles.filterTabActive]}
+                      onPress={() => setFilter(tab)}
+                      activeOpacity={0.7}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: isActive }}
+                    >
+                      <AppText
+                        style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
+                      >
+                        {label}
+                      </AppText>
+                      <View
+                        style={[
+                          styles.countPill,
+                          isActive ? styles.countPillActive : styles.countPillInactive,
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.countPillText,
+                            isActive ? styles.countPillTextActive : styles.countPillTextInactive,
+                          ]}
+                        >
+                          {count}
+                        </AppText>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* 3. Search and Filter Row */}
+              <View style={styles.searchRow}>
+                <View style={styles.searchBar}>
+                  <Search size={18} color="#64748B" style={styles.searchIcon} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search by club name, applicant name, email, city..."
+                    placeholderTextColor="#94A3B8"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    autoCapitalize="none"
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <X size={16} color="#64748B" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.filterBtn}
+                  onPress={() => {
+                    if (filter === 'pending') setFilter('approved');
+                    else if (filter === 'approved') setFilter('rejected');
+                    else if (filter === 'rejected') setFilter('all');
+                    else setFilter('pending');
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Filter applications"
+                >
+                  <SlidersHorizontal size={18} color="#475569" />
+                </TouchableOpacity>
+              </View>
+            </View>
           }
           ListEmptyComponent={
             <Card style={styles.emptyCard}>
-              <EmptyState
-                icon="🏢"
-                title="No Applications Found"
-                description={
-                  searchQuery
+              <View style={styles.emptyContent}>
+                <ClubEmptyIllustration width={160} height={110} />
+                <AppText style={styles.emptyTitle}>No applications found</AppText>
+                <AppText style={styles.emptyDescription}>
+                  {searchQuery
                     ? `No applications match the search query "${searchQuery}".`
                     : filter === 'pending'
                     ? 'There are no pending club registration applications awaiting review.'
-                    : `No applications match the "${filter}" filter.`
-                }
-              />
+                    : filter === 'approved'
+                    ? 'There are no approved club registration applications found.'
+                    : filter === 'rejected'
+                    ? 'There are no rejected club registration applications found.'
+                    : 'There are currently no club registration applications in the system.'}
+                </AppText>
+              </View>
             </Card>
           }
           renderItem={({ item }) => (
@@ -710,23 +743,42 @@ export default function PlatformApplicationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  controlsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E2EBE6',
-    padding: Spacing.sm,
-    marginBottom: Spacing.md,
-    gap: 8,
+  // ─── Header Section ────────────────────────────────────────────────────────
+  headerContainer: {
+    width: '100%',
   },
+  headerSection: {
+    paddingTop: 2,
+    paddingBottom: 12,
+  },
+  screenTitle: {
+    fontSize: 27,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
+  },
+  screenSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+
+  // ─── Filter Tabs (Scrollable row) ──────────────────────────────────────────
   tabsScroll: {
-    flexGrow: 0,
-    marginBottom: 4,
+    marginBottom: 12,
+    width: '100%',
   },
   tabsContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 7,
-    paddingVertical: 2,
   },
   filterTab: {
     flexDirection: 'row',
@@ -749,9 +801,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   countPill: {
+    borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
-    borderRadius: 10,
     minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',
@@ -765,41 +817,112 @@ const styles = StyleSheet.create({
   countPillText: {
     fontSize: 11,
     fontWeight: '700',
-  },
-  countPillTextInactive: {
     color: '#475569',
   },
   countPillTextActive: {
     color: '#FFFFFF',
   },
-  searchWrapper: {
+  countPillTextInactive: {
+    color: '#475569',
+  },
+  listContent: {
+    paddingBottom: 40,
+    gap: 12,
+  },
+
+  // ─── Search and Filter Controls Row ────────────────────────────────────────
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAF9',
-    paddingHorizontal: 12,
-    borderRadius: Radius.md,
+    gap: 8,
+    marginBottom: 14,
+    width: '100%',
+  },
+  searchBar: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#D7E5DE',
-    height: 40,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+      },
+    }),
   },
   searchIcon: {
     marginRight: 8,
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
-    color: '#122521',
+    minWidth: 0,
+    fontSize: 13.5,
+    color: '#0F172A',
+    paddingVertical: 0,
   },
-  listContent: {
-    gap: 12,
-    paddingBottom: 36,
+  filterBtn: {
+    width: 44,
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+      },
+    }),
   },
+
+  // ─── Empty State Card ──────────────────────────────────────────────────────
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2EBE6',
-    padding: Spacing.lg,
+    borderColor: '#F1F5F9',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  emptyContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: 18,
+    textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+    marginTop: 8,
+    textAlign: 'center',
+    maxWidth: 320,
   },
   appCard: {
     backgroundColor: '#FFFFFF',
