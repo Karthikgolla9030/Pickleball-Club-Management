@@ -230,8 +230,6 @@ export default function PlatformSettingsScreen() {
   return (
     <PlatformShell
       activeTab="settings"
-      title="Platform Settings"
-      subtitle="Operational parameters & global configuration"
       onRefresh={() => fetchSettings(true)}
       isRefreshing={isRefreshing}
       scrollable
@@ -242,6 +240,14 @@ export default function PlatformSettingsScreen() {
         <ErrorState message={error} onRetry={() => fetchSettings(true)} />
       ) : (
         <View style={styles.container}>
+          {/* Page Heading & Subtitle */}
+          <View style={styles.headerSection}>
+            <AppText style={styles.screenTitle}>Settings</AppText>
+            <AppText style={styles.screenSubtitle}>
+              Operational parameters & global configuration
+            </AppText>
+          </View>
+
           {/* Success Banner */}
           {successMsg && (
             <View style={styles.successBanner}>
@@ -643,6 +649,29 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing.md,
     paddingBottom: 40,
+  },
+  headerSection: {
+    paddingTop: 2,
+    paddingBottom: 4,
+  },
+  screenTitle: {
+    fontSize: 27,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
+  },
+  screenSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
+    marginTop: 4,
+    flexWrap: 'wrap',
   },
   successBanner: {
     flexDirection: 'row',

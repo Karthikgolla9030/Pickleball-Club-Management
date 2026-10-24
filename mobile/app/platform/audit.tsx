@@ -1401,25 +1401,25 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     paddingTop: 2,
-    paddingBottom: 10,
+    paddingBottom: 12,
   },
   screenTitle: {
-    fontSize: 26,
+    fontSize: 27,
     fontWeight: '700',
     color: '#0F172A',
+    letterSpacing: -0.5,
     lineHeight: 32,
-    letterSpacing: -0.3,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(24px, 6.2vw, 28px)' as any,
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
       },
     }),
   },
   screenSubtitle: {
     fontSize: 14,
     color: '#64748B',
-    lineHeight: 19,
-    marginTop: 2,
+    lineHeight: 20,
+    marginTop: 4,
     flexWrap: 'wrap',
     ...Platform.select({
       web: {
@@ -1560,7 +1560,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 18,
   },
@@ -1571,7 +1571,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   filterChipTextActive: {
@@ -1583,7 +1583,7 @@ const styles = StyleSheet.create({
   filterChipBadge: {
     borderRadius: 10,
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 1.5,
     minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',

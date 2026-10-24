@@ -436,26 +436,25 @@ export default function PlatformApplicationsScreen() {
 
               {/* Action Buttons */}
               <View style={styles.actionsRow}>
-                <Button
+                <PlatformButton
                   label="Inspect Application"
                   variant="outline"
                   size="sm"
                   onPress={() => setSelectedApp(item)}
-                  leftIcon={<Eye size={14} color="#18794E" />}
-                  style={styles.detailsBtn}
+                  leftIcon={<Eye size={14} color="#15803D" />}
                 />
 
                 {item.status === 'pending' && (
                   <View style={styles.pendingActions}>
-                    <TouchableOpacity
-                      style={styles.rejectMiniBtn}
+                    <PlatformButton
+                      label="Reject"
+                      variant="danger"
+                      size="sm"
                       onPress={() => openRejectModal(item)}
                       disabled={isRejecting || isApproving}
+                      leftIcon={<X size={14} color="#FFFFFF" />}
                       accessibilityLabel="Reject application"
-                    >
-                      <X size={14} color="#DC2626" />
-                      <AppText style={styles.rejectMiniText}>Reject</AppText>
-                    </TouchableOpacity>
+                    />
 
                     <PlatformButton
                       size="sm"

@@ -1163,15 +1163,23 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   screenTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
   },
   screenSubtitle: {
     fontSize: 14,
     color: '#64748B',
+    lineHeight: 20,
     marginTop: 4,
+    flexWrap: 'wrap',
   },
 
   // ─── Account Summary Cards (2-column responsive row) ───────────────────────
@@ -1543,11 +1551,13 @@ const styles = StyleSheet.create({
   inspectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     backgroundColor: '#15803D',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    height: 36,
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -1560,7 +1570,7 @@ const styles = StyleSheet.create({
   },
   inspectBtnText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#FFFFFF',
   },
 

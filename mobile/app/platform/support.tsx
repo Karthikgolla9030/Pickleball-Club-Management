@@ -1028,19 +1028,27 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   headerSection: {
-    paddingTop: 6,
-    paddingBottom: 14,
+    paddingTop: 2,
+    paddingBottom: 12,
   },
   screenTitle: {
-    fontSize: 26,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
   },
   screenSubtitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#64748B',
-    marginTop: 3,
+    lineHeight: 20,
+    marginTop: 4,
+    flexWrap: 'wrap',
   },
 
   // ─── 2-Column × 2-Row Ticket Summary Cards ─────────────────────────────────
@@ -1137,7 +1145,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   pillBadge: {
-    borderRadius: Radius.full,
+    borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
     minWidth: 18,
@@ -1169,11 +1177,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     height: 44,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 2px rgba(0,0,0,0.02)',

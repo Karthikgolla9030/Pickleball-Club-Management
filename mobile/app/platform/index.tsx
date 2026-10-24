@@ -485,16 +485,24 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   greetingTitle: {
-    fontSize: 22,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    lineHeight: 32,
     marginBottom: 4,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
   },
   greetingSubtitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#64748B',
-    lineHeight: 19,
+    lineHeight: 20,
+    marginTop: 2,
+    flexWrap: 'wrap',
   },
 
   // ─── 2x2 Metric Grid ────────────────────────────────────────────────────────
@@ -551,7 +559,7 @@ const styles = StyleSheet.create({
   },
   metricValue: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#0F172A',
     marginBottom: 2,
     letterSpacing: -0.5,

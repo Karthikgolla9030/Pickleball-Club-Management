@@ -292,8 +292,13 @@ export default function PlatformClubsScreen() {
                 </View>
               </View>
 
-              {/* Status Filter Tabs */}
-              <View style={styles.filterRow}>
+              {/* Status Filter Tabs (Horizontally Scrollable) */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterScroll}
+                contentContainerStyle={styles.filterRow}
+              >
                 <TouchableOpacity
                   style={[styles.filterPill, filter === 'all' && styles.filterPillActive]}
                   onPress={() => setFilter('all')}
@@ -368,7 +373,7 @@ export default function PlatformClubsScreen() {
                     </AppText>
                   </View>
                 </TouchableOpacity>
-              </View>
+              </ScrollView>
 
               {/* Search Bar & Filter Button */}
               <View style={styles.searchRow}>
@@ -865,20 +870,27 @@ const styles = StyleSheet.create({
 
   // ─── Header Section ────────────────────────────────────────────────────────
   headerSection: {
-    paddingTop: 4,
-    paddingBottom: 14,
-    paddingHorizontal: 2,
+    paddingTop: 2,
+    paddingBottom: 12,
   },
   screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.4,
-    marginBottom: 4,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    ...Platform.select({
+      web: {
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
+      },
+    }),
   },
   screenSubtitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#64748B',
+    lineHeight: 20,
+    marginTop: 4,
+    flexWrap: 'wrap',
   },
 
   // ─── 2x2 KPI Grid ──────────────────────────────────────────────────────────
@@ -940,37 +952,40 @@ const styles = StyleSheet.create({
   },
 
   // ─── Filter Pills ──────────────────────────────────────────────────────────
+  filterScroll: {
+    marginBottom: 14,
+    width: '100%',
+  },
   filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: 7,
   },
   filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: Radius.full,
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 18,
   },
   filterPillActive: {
     backgroundColor: '#15803D',
   },
   filterPillText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#374151',
+    color: '#334155',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
   },
   filterBadge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    minWidth: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -978,7 +993,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#166534',
   },
   filterBadgeInactive: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#E2E8F0',
   },
   filterBadgeText: {
     fontSize: 11,
@@ -988,44 +1003,60 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   filterBadgeTextInactive: {
-    color: '#4B5563',
+    color: '#475569',
   },
 
   // ─── Search Bar Row ────────────────────────────────────────────────────────
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 14,
+    width: '100%',
   },
   searchBox: {
     flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     paddingHorizontal: 12,
     height: 44,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+      },
+    }),
   },
   searchIcon: {
     marginRight: 8,
+    flexShrink: 0,
   },
   searchInput: {
     flex: 1,
+    minWidth: 0,
     fontSize: 13.5,
     color: '#0F172A',
+    paddingVertical: 0,
   },
   filterBtn: {
     width: 44,
     height: 44,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+      },
+    }),
   },
 
   // ─── Facility Card ─────────────────────────────────────────────────────────
@@ -1135,8 +1166,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderRadius: 8,
+    height: 36,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 2px rgba(21,128,61,0.2)',
@@ -1147,7 +1179,7 @@ const styles = StyleSheet.create({
     }),
   },
   inspectFacilityBtnText: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
   },
