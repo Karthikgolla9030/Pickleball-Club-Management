@@ -1481,25 +1481,31 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0F172A',
     lineHeight: 22,
+    letterSpacing: -0.2,
     flexWrap: 'wrap',
     ...Platform.select({
       web: {
+        fontSize: 'clamp(15px, 4.2vw, 17px)' as any,
+        lineHeight: '1.4' as any,
         wordBreak: 'break-word',
         overflowWrap: 'anywhere',
       },
     }),
   },
   userEmail: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#475569',
+    lineHeight: 20,
     marginTop: 2,
     flexWrap: 'wrap',
     ...Platform.select({
       web: {
+        fontSize: 'clamp(13px, 3.7vw, 15px)' as any,
+        lineHeight: '1.45' as any,
         wordBreak: 'break-all',
         overflowWrap: 'anywhere',
       },
@@ -1582,14 +1588,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   userEmailNarrow: {
-    fontSize: 13.5,
-    color: '#64748B',
-    lineHeight: 19,
-    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#475569',
+    lineHeight: 20,
+    marginTop: 4,
     width: '100%',
     flexWrap: 'wrap',
     ...Platform.select({
       web: {
+        fontSize: 'clamp(13px, 3.7vw, 15px)' as any,
+        lineHeight: '1.45' as any,
         wordBreak: 'break-all',
         overflowWrap: 'anywhere',
       },
