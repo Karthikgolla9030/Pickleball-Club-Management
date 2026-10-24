@@ -271,20 +271,26 @@ export default function PlatformSupportScreen() {
   };
 
   // Metrics numbers
-  const openCount = (statusCounts['open'] || 0) + (statusCounts['in_progress'] || 0);
+  const totalCount = total;
+  const openCount = statusCounts['open'] || 0;
+  const inProgressCount = statusCounts['in_progress'] || 0;
   const awaitingCount = statusCounts['waiting_for_requester'] || 0;
   const resolvedCount = statusCounts['resolved'] || 0;
 
-  const statusTabItems: { key: StatusFilter; label: string }[] = [
-    { key: 'all', label: 'All Tickets' },
-    { key: 'open', label: 'Open' },
-    { key: 'in_progress', label: 'In Progress' },
-    { key: 'waiting_for_requester', label: 'Awaiting User' },
-    { key: 'resolved', label: 'Resolved' },
-    { key: 'closed', label: 'Closed' },
+  const statusTabItems: { key: StatusFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'All Tickets', count: totalCount },
+    { key: 'open', label: 'Open', count: openCount },
+    { key: 'in_progress', label: 'In Progress', count: inProgressCount },
+    { key: 'resolved', label: 'Resolved', count: resolvedCount },
   ];
 
   const totalPages = Math.ceil(total / pageSize);
+  const isDesktop = width >= 800;
+  const isFiltered =
+    statusFilter !== 'all' ||
+    categoryFilter !== 'all' ||
+    priorityFilter !== 'all' ||
+    debouncedSearch.length > 0;
 
   return (
     <PlatformShell
@@ -306,123 +312,220 @@ export default function PlatformSupportScreen() {
           />
         }
         ListHeaderComponent={
-          <View>
+          <View style={styles.headerContainer}>
             {/* 1. Page Heading */}
             <View style={styles.headerSection}>
               <AppText style={styles.screenTitle}>Support Tickets</AppText>
               <AppText style={styles.screenSubtitle}>
-                Monitor and manage all support requests
+                Manage support requests
               </AppText>
             </View>
 
-            {/* 2. Compact 4-Column Ticket Metrics Card */}
+            {/* 2. Ticket Summary Cards (2-column x 2-row grid on mobile, 4-column on desktop) */}
             <View style={styles.metricsContainer}>
-              <View style={styles.metricsCard}>
-                {/* Column 1: Total */}
-                <View style={styles.metricCol}>
-                  <View style={[styles.metricIconCircle, { backgroundColor: '#E6F4EA' }]}>
-                    <LifeBuoy size={14} color="#15803D" />
-                  </View>
-                  <View style={styles.metricTextGroup}>
-                    <AppText style={styles.metricLabel}>Total</AppText>
-                    <AppText style={styles.metricValue}>{total}</AppText>
-                  </View>
-                </View>
-
-                <View style={styles.metricDivider} />
-
-                {/* Column 2: Open */}
-                <View style={styles.metricCol}>
-                  <View style={[styles.metricIconCircle, { backgroundColor: '#E0F2FE' }]}>
-                    <Clock size={14} color="#0284C7" />
-                  </View>
-                  <View style={styles.metricTextGroup}>
-                    <AppText style={styles.metricLabel}>Open</AppText>
-                    <AppText style={styles.metricValue}>{openCount}</AppText>
-                  </View>
-                </View>
-
-                <View style={styles.metricDivider} />
-
-                {/* Column 3: Awaiting */}
-                <View style={styles.metricCol}>
-                  <View style={[styles.metricIconCircle, { backgroundColor: '#FEF3C7' }]}>
-                    <MessageSquare size={14} color="#D97706" />
-                  </View>
-                  <View style={styles.metricTextGroup}>
-                    <AppText style={styles.metricLabel}>Awaiting</AppText>
-                    <AppText style={styles.metricValue}>{awaitingCount}</AppText>
-                  </View>
-                </View>
-
-                <View style={styles.metricDivider} />
-
-                {/* Column 4: Resolved */}
-                <View style={styles.metricCol}>
-                  <View style={[styles.metricIconCircle, { backgroundColor: '#E6F4EA' }]}>
-                    <CheckCircle2 size={14} color="#15803D" />
-                  </View>
-                  <View style={styles.metricTextGroup}>
-                    <AppText style={styles.metricLabel}>Resolved</AppText>
-                    <AppText style={styles.metricValue}>{resolvedCount}</AppText>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* 3. Status Filter Pills */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterPillsRow}
-            >
-              {statusTabItems.map((tab) => {
-                const isActive = statusFilter === tab.key;
-                const count =
-                  tab.key === 'all'
-                    ? total
-                    : statusCounts[tab.key] || 0;
-
-                return (
+              {isDesktop ? (
+                <View style={styles.metricsRowDesktop}>
+                  {/* Card 1: Total */}
                   <TouchableOpacity
-                    key={tab.key}
-                    style={[styles.pill, isActive && styles.pillActive]}
+                    style={styles.summaryCard}
                     onPress={() => {
-                      setStatusFilter(tab.key);
+                      setStatusFilter('all');
                       setPage(1);
                     }}
-                    activeOpacity={0.7}
+                    activeOpacity={0.8}
                   >
-                    <AppText style={[styles.pillText, isActive && styles.pillTextActive]}>
-                      {tab.label}
-                    </AppText>
-                    <View
-                      style={[
-                        styles.pillBadge,
-                        isActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
-                      ]}
-                    >
-                      <AppText
-                        style={[
-                          styles.pillBadgeText,
-                          isActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
-                        ]}
-                      >
-                        {count}
-                      </AppText>
+                    <View style={[styles.summaryIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                      <Ticket size={22} color="#15803D" strokeWidth={2} />
+                    </View>
+                    <View style={styles.summaryTextGroup}>
+                      <AppText style={styles.summaryLabel}>Total</AppText>
+                      <AppText style={styles.summaryValue}>{totalCount}</AppText>
                     </View>
                   </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
 
-            {/* 4. Search Bar */}
+                  {/* Card 2: Open */}
+                  <TouchableOpacity
+                    style={styles.summaryCard}
+                    onPress={() => {
+                      setStatusFilter('open');
+                      setPage(1);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.summaryIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                      <Clock size={22} color="#0284C7" strokeWidth={2} />
+                    </View>
+                    <View style={styles.summaryTextGroup}>
+                      <AppText style={styles.summaryLabel}>Open</AppText>
+                      <AppText style={styles.summaryValue}>{openCount}</AppText>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Card 3: Awaiting */}
+                  <TouchableOpacity
+                    style={styles.summaryCard}
+                    onPress={() => {
+                      setStatusFilter('waiting_for_requester');
+                      setPage(1);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.summaryIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                      <MessageSquare size={20} color="#D97706" strokeWidth={2} />
+                    </View>
+                    <View style={styles.summaryTextGroup}>
+                      <AppText style={styles.summaryLabel}>Awaiting</AppText>
+                      <AppText style={styles.summaryValue}>{awaitingCount}</AppText>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Card 4: Resolved */}
+                  <TouchableOpacity
+                    style={styles.summaryCard}
+                    onPress={() => {
+                      setStatusFilter('resolved');
+                      setPage(1);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.summaryIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                      <CheckCircle2 size={22} color="#15803D" strokeWidth={2} />
+                    </View>
+                    <View style={styles.summaryTextGroup}>
+                      <AppText style={styles.summaryLabel}>Resolved</AppText>
+                      <AppText style={styles.summaryValue}>{resolvedCount}</AppText>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.metricsGridMobile}>
+                  {/* Row 1: Total & Open */}
+                  <View style={styles.metricsGridRow}>
+                    <TouchableOpacity
+                      style={styles.summaryCard}
+                      onPress={() => {
+                        setStatusFilter('all');
+                        setPage(1);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.summaryIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                        <Ticket size={22} color="#15803D" strokeWidth={2} />
+                      </View>
+                      <View style={styles.summaryTextGroup}>
+                        <AppText style={styles.summaryLabel}>Total</AppText>
+                        <AppText style={styles.summaryValue}>{totalCount}</AppText>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.summaryCard}
+                      onPress={() => {
+                        setStatusFilter('open');
+                        setPage(1);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.summaryIconCircle, { backgroundColor: '#E0F2FE' }]}>
+                        <Clock size={22} color="#0284C7" strokeWidth={2} />
+                      </View>
+                      <View style={styles.summaryTextGroup}>
+                        <AppText style={styles.summaryLabel}>Open</AppText>
+                        <AppText style={styles.summaryValue}>{openCount}</AppText>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Row 2: Awaiting & Resolved */}
+                  <View style={styles.metricsGridRow}>
+                    <TouchableOpacity
+                      style={styles.summaryCard}
+                      onPress={() => {
+                        setStatusFilter('waiting_for_requester');
+                        setPage(1);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.summaryIconCircle, { backgroundColor: '#FEF3C7' }]}>
+                        <MessageSquare size={20} color="#D97706" strokeWidth={2} />
+                      </View>
+                      <View style={styles.summaryTextGroup}>
+                        <AppText style={styles.summaryLabel}>Awaiting</AppText>
+                        <AppText style={styles.summaryValue}>{awaitingCount}</AppText>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.summaryCard}
+                      onPress={() => {
+                        setStatusFilter('resolved');
+                        setPage(1);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.summaryIconCircle, { backgroundColor: '#E6F4EA' }]}>
+                        <CheckCircle2 size={22} color="#15803D" strokeWidth={2} />
+                      </View>
+                      <View style={styles.summaryTextGroup}>
+                        <AppText style={styles.summaryLabel}>Resolved</AppText>
+                        <AppText style={styles.summaryValue}>{resolvedCount}</AppText>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* 3. Ticket Status Tabs (All Tickets | Open | In Progress | Resolved) */}
+            <View style={styles.tabsContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterPillsRow}
+              >
+                {statusTabItems.map((tab) => {
+                  const isActive = statusFilter === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[styles.pill, isActive && styles.pillActive]}
+                      onPress={() => {
+                        setStatusFilter(tab.key);
+                        setPage(1);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <AppText style={[styles.pillText, isActive && styles.pillTextActive]}>
+                        {tab.label}
+                      </AppText>
+                      <View
+                        style={[
+                          styles.pillBadge,
+                          isActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.pillBadgeText,
+                            isActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                          ]}
+                        >
+                          {tab.count}
+                        </AppText>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* 4. Full-width Rounded Search Bar */}
             <View style={styles.searchRow}>
               <View style={styles.searchBar}>
-                <Search size={16} color="#94A3B8" style={styles.searchIcon} />
+                <Search size={18} color="#94A3B8" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by ticket #, subject, requester, or keywords..."
+                  placeholder="Search by ticket #, subject, requester, or keyword"
                   placeholderTextColor="#94A3B8"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -433,26 +536,27 @@ export default function PlatformSupportScreen() {
                   <TouchableOpacity
                     onPress={() => setSearchQuery('')}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.searchClearBtn}
                   >
-                    <X size={15} color="#94A3B8" />
+                    <X size={16} color="#94A3B8" />
                   </TouchableOpacity>
                 )}
               </View>
             </View>
 
-            {/* 5. Filter Accordion Toggle & Clear All */}
+            {/* 5. Filters Toggle & Clear All Controls */}
             <View style={styles.filterControlsRow}>
               <TouchableOpacity
                 style={styles.filterToggleBtn}
                 onPress={() => setIsFilterExpanded((prev) => !prev)}
                 activeOpacity={0.7}
               >
-                <SlidersHorizontal size={15} color="#0F172A" />
+                <SlidersHorizontal size={18} color="#0F172A" />
                 <AppText style={styles.filterToggleText}>Filters</AppText>
                 {isFilterExpanded ? (
-                  <ChevronUp size={15} color="#0F172A" />
+                  <ChevronUp size={16} color="#0F172A" />
                 ) : (
-                  <ChevronDown size={15} color="#0F172A" />
+                  <ChevronDown size={16} color="#0F172A" />
                 )}
               </TouchableOpacity>
 
@@ -465,7 +569,7 @@ export default function PlatformSupportScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Collapsible Category & Priority Filters Panel */}
+            {/* Collapsible Filter Panel */}
             {isFilterExpanded && (
               <View style={styles.expandedFilterPanel}>
                 {/* Category Chips */}
@@ -545,15 +649,28 @@ export default function PlatformSupportScreen() {
               onRetry={() => fetchTickets(false, 1)}
             />
           ) : (
-            /* Pixel-accurate Empty State matching visual reference */
+            /* Pixel-accurate Empty State matching reference image */
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
-                <Ticket size={28} color="#15803D" />
+                <Ticket size={38} color="#15803D" strokeWidth={1.9} />
               </View>
-              <AppText style={styles.emptyTitle}>No Support Tickets Found</AppText>
-              <AppText style={styles.emptySubtitle}>
-                There are no support tickets matching your filters.
+              <AppText style={styles.emptyTitle}>
+                {isFiltered ? 'No support tickets found' : 'No support tickets yet'}
               </AppText>
+              <AppText style={styles.emptySubtitle}>
+                {isFiltered
+                  ? 'No support requests match your search or active filters.'
+                  : 'New support requests will appear here.'}
+              </AppText>
+              {isFiltered && (
+                <TouchableOpacity
+                  style={styles.emptyResetBtn}
+                  onPress={handleClearAllFilters}
+                  activeOpacity={0.7}
+                >
+                  <AppText style={styles.emptyResetBtnText}>Reset Filters</AppText>
+                </TouchableOpacity>
+              )}
             </View>
           )
         }
@@ -903,13 +1020,15 @@ export default function PlatformSupportScreen() {
 
 const styles = StyleSheet.create({
   listContent: {
-    paddingBottom: 36,
+    paddingBottom: 28,
   },
 
   // ─── Header Section ────────────────────────────────────────────────────────
+  headerContainer: {
+    marginBottom: 0,
+  },
   headerSection: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 6,
     paddingBottom: 14,
   },
   screenTitle: {
@@ -921,81 +1040,88 @@ const styles = StyleSheet.create({
   screenSubtitle: {
     fontSize: 13.5,
     color: '#64748B',
-    marginTop: 4,
+    marginTop: 3,
   },
 
-  // ─── Compact 4-Column Ticket Metrics Card ──────────────────────────────────
+  // ─── 2-Column × 2-Row Ticket Summary Cards ─────────────────────────────────
   metricsContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 14,
+    marginBottom: 14,
   },
-  metricsCard: {
+  metricsGridMobile: {
+    gap: 12,
+  },
+  metricsGridRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metricsRowDesktop: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  summaryCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
+    paddingHorizontal: 14,
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    gap: 12,
+    minHeight: 68,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
       },
       default: {
         elevation: 1,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
       },
     }),
   },
-  metricCol: {
+  summaryIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryTextGroup: {
+    justifyContent: 'center',
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 2,
   },
-  metricIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricTextGroup: {
-    justifyContent: 'center',
-  },
-  metricLabel: {
-    fontSize: 11,
+  summaryLabel: {
+    fontSize: 12.5,
     color: '#64748B',
     fontWeight: '500',
+    marginBottom: 2,
   },
-  metricValue: {
-    fontSize: 16,
+  summaryValue: {
+    fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
-    marginTop: 1,
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#F1F5F9',
+    letterSpacing: -0.4,
   },
 
-  // ─── Status Filter Pills ───────────────────────────────────────────────────
+  // ─── Ticket Status Tabs ───────────────────────────────────────────────────
+  tabsContainer: {
+    marginBottom: 12,
+  },
   filterPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
     gap: 8,
-    paddingBottom: 14,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: Radius.full,
   },
@@ -1005,16 +1131,16 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 12.5,
     fontWeight: '600',
-    color: '#475569',
+    color: '#334155',
   },
   pillTextActive: {
     color: '#FFFFFF',
   },
   pillBadge: {
     borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    minWidth: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1035,38 +1161,47 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
 
-  // ─── Search Bar ────────────────────────────────────────────────────────────
+  // ─── Full-width Rounded Search Bar ─────────────────────────────────────────
   searchRow: {
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    marginBottom: 12,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 42,
-    paddingHorizontal: 12,
+    height: 44,
+    paddingHorizontal: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#0F172A',
     height: '100%',
   },
+  searchClearBtn: {
+    padding: 4,
+  },
 
-  // ─── Filter Accordion Toggle & Clear All ───────────────────────────────────
+  // ─── Filters Row ──────────────────────────────────────────────────────────
   filterControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    marginBottom: 12,
   },
   filterToggleBtn: {
     flexDirection: 'row',
@@ -1075,8 +1210,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   filterToggleText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#0F172A',
   },
   clearAllBtn: {
@@ -1088,19 +1223,18 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   clearAllBtnText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
+    fontSize: 12.5,
+    color: '#475569',
+    fontWeight: '600',
   },
 
   // ─── Collapsible Filter Panel ──────────────────────────────────────────────
   expandedFilterPanel: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginHorizontal: 16,
-    marginBottom: 14,
+    marginBottom: 12,
     padding: 12,
     gap: 10,
   },
@@ -1108,7 +1242,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   filterSubGroupLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -1133,37 +1267,40 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // ─── Pixel-accurate Empty State ────────────────────────────────────────────
+  // ─── Empty State ───────────────────────────────────────────────────────────
   emptyCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingVertical: 36,
+    paddingVertical: 34,
     paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 16,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
       },
       default: {
         elevation: 1,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 4,
       },
     }),
   },
   emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: '#E6F4EA',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontSize: 17.5,
+    fontWeight: '800',
     color: '#0F172A',
     marginTop: 14,
     textAlign: 'center',
@@ -1175,22 +1312,37 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+  emptyResetBtn: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: '#E6F4EA',
+  },
+  emptyResetBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#15803D',
+  },
 
   // ─── Ticket Cards ──────────────────────────────────────────────────────────
   ticketCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginHorizontal: 16,
-    marginBottom: 10,
+    borderColor: '#F1F5F9',
+    padding: 16,
+    marginBottom: 12,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
       },
       default: {
         elevation: 1,
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
       },
     }),
   },
@@ -1198,7 +1350,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   ticketRefRow: {
     flexDirection: 'row',
@@ -1208,9 +1360,9 @@ const styles = StyleSheet.create({
   },
   refBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   refText: {
     fontSize: 11.5,
@@ -1219,10 +1371,12 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   categoryPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   categoryPillText: {
     fontSize: 10.5,
@@ -1230,20 +1384,20 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   ticketSubject: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
     marginBottom: 4,
   },
   ticketDescriptionSnippet: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#64748B',
-    lineHeight: 17,
+    lineHeight: 18,
   },
   cardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 10,
+    marginVertical: 12,
   },
   ticketCardFooter: {
     flexDirection: 'row',

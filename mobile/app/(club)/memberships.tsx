@@ -1086,8 +1086,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(240, 248, 244, 0.70)',
     ...Platform.select({
       web: {
-        background: 'linear-gradient(90deg, rgba(240, 248, 244, 0.92) 0%, rgba(240, 248, 244, 0.75) 55%, rgba(240, 248, 244, 0) 100%)',
-      },
+        backgroundImage: 'linear-gradient(90deg, rgba(240, 248, 244, 0.92) 0%, rgba(240, 248, 244, 0.75) 55%, rgba(240, 248, 244, 0) 100%)',
+      } as any,
     }),
   },
   heroContentLeft: {

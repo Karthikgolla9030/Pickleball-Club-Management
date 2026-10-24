@@ -4,13 +4,17 @@
  * Pixel-accurate visual implementation matching mobile reference design:
  * - Top header with official Pickleball product logo, "Platform Admin" label, notification bell & avatar
  * - Page heading "Users" and subtitle "Manage all platform accounts and their access"
- * - 3 Summary KPI cards: Total Accounts (green), Active Accounts (blue), Club Staff Members (purple)
- * - Pill-style filters: All Accounts (with badge), Active (with badge), Inactive (with badge), All Roles, Club Staff, Players
- * - Search bar with right-aligned filter button
- * - User account cards with avatar initials, name, email, italic club memberships, status & verified badges,
- *   joined date, and solid green "Inspect Account" action button
+ * - 2 Summary KPI cards: Total Accounts (green), Active Accounts (blue) side-by-side
+ * - 3 Status Filter Tabs: All Accounts [count], Active [count], Inactive [count]
+ * - Search bar with placeholder "Search by full name, email, or user ID" + adjacent filter button
+ * - User account cards:
+ *   - Avatar initials with soft pastel background
+ *   - Full account name, email address, and club info with ZERO truncation across all screen sizes
+ *   - Status badge (ACTIVE/INACTIVE) and VERIFIED badge with 3-dots action menu
+ *   - Subtle divider line
+ *   - Footer with formatted "Joined DD/MM/YYYY" date and solid green "Inspect Account" button
  * - Comprehensive cross-club staff roles & player memberships inspection modal
- * - Zero content overlap behind fixed bottom navigation
+ * - Responsive layout supporting ultra-narrow viewports (320px, 360px) up to desktop (1024px+)
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -31,8 +35,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
+  Copy,
   Eye,
+  MoreVertical,
   Search,
   Shield,
   ShieldAlert,
@@ -60,12 +67,16 @@ import { Radius, Spacing } from '@/theme';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
 type RoleFilter = 'all' | 'staff' | 'player';
+type VerificationFilter = 'all' | 'verified' | 'unverified';
 
 function formatJoinedDate(dateStr?: string | null): string {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return '';
-  return `${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 function getAvatarInitial(name?: string | null, email?: string): string {
@@ -80,12 +91,12 @@ function getAvatarInitial(name?: string | null, email?: string): string {
 
 function getAvatarTheme(seed: string): { bg: string; text: string } {
   const themes = [
-    { bg: '#E6F4EA', text: '#15803D' }, // Green
-    { bg: '#E0F2FE', text: '#0284C7' }, // Blue
-    { bg: '#F3E8FF', text: '#9333EA' }, // Purple
-    { bg: '#FEF3C7', text: '#D97706' }, // Amber
-    { bg: '#FEE2E2', text: '#DC2626' }, // Rose
-    { bg: '#EDE9FE', text: '#7C3AED' }, // Violet
+    { bg: '#EDE9FE', text: '#7C3AED' }, // Lavender / Violet (matches Aught2 Platform Owner)
+    { bg: '#FEF3C7', text: '#D97706' }, // Amber / Yellow (matches John Smith)
+    { bg: '#E0F2FE', text: '#0284C7' }, // Soft Sky Blue (matches Sarah Johnson)
+    { bg: '#FEE2E2', text: '#DC2626' }, // Rose / Pink (matches Michael Brown)
+    { bg: '#E6F4EA', text: '#15803D' }, // Soft Green
+    { bg: '#F3E8FF', text: '#9333EA' }, // Soft Purple
   ];
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
@@ -93,6 +104,23 @@ function getAvatarTheme(seed: string): { bg: string; text: string } {
   }
   const index = Math.abs(hash) % themes.length;
   return themes[index];
+}
+
+function getClubAssociationText(user: PlatformUserItem): string {
+  // If user has staff club memberships, show first club name
+  if (user.club_memberships && user.club_memberships.length > 0) {
+    const primary = user.club_memberships[0].club_name;
+    const totalExtra =
+      user.club_memberships.length + (user.club_player_memberships?.length || 0) - 1;
+    return totalExtra > 0 ? `${primary} (+${totalExtra})` : primary;
+  }
+  // If user has player memberships, show primary player club
+  if (user.club_player_memberships && user.club_player_memberships.length > 0) {
+    const primary = user.club_player_memberships[0].club_name;
+    const totalExtra = user.club_player_memberships.length - 1;
+    return totalExtra > 0 ? `${primary} (+${totalExtra})` : primary;
+  }
+  return 'No active clubs';
 }
 
 export default function PlatformUsersScreen() {
@@ -104,6 +132,7 @@ export default function PlatformUsersScreen() {
   const [totalCount, setTotalCount] = useState(0);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -120,6 +149,13 @@ export default function PlatformUsersScreen() {
   // User detail inspection modal
   const [selectedUser, setSelectedUser] = useState<PlatformUserItem | null>(null);
 
+  // 3-dots action menu modal
+  const [menuUser, setMenuUser] = useState<PlatformUserItem | null>(null);
+  const [copiedNotice, setCopiedNotice] = useState<string | null>(null);
+
+  // Advanced filter bottom modal
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
   const fetchUsers = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setIsRefreshing(true);
@@ -129,22 +165,28 @@ export default function PlatformUsersScreen() {
     setError(null);
 
     try {
-      // Fetch platform users
-      const res = await platformApplicationsApi.listUsers({
-        page: 1,
-        pageSize: 100,
-      });
+      const [res, resActive] = await Promise.all([
+        platformApplicationsApi.listUsers({
+          page: 1,
+          pageSize: 100,
+        }),
+        platformApplicationsApi.listUsers({
+          page: 1,
+          pageSize: 1,
+          isActive: true,
+        }).catch(() => null),
+      ]);
 
       const items = res.items || [];
-      setAllUsers(items);
-      setTotalCount(res.total || items.length);
-
-      const active = items.filter((u) => u.is_active).length;
-      const inactive = items.filter((u) => !u.is_active).length;
+      const total = res.total ?? items.length;
+      const active = resActive?.total ?? items.filter((u) => u.is_active).length;
+      const inactive = Math.max(0, total - active);
       const staff = items.filter((u) => u.club_memberships && u.club_memberships.length > 0).length;
 
+      setAllUsers(items);
+      setTotalCount(total);
       setPlatformMetrics({
-        total: res.total || items.length,
+        total,
         active,
         inactive,
         staff,
@@ -162,7 +204,7 @@ export default function PlatformUsersScreen() {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Client-side filtering for fast instant responsiveness matching pills and search
+  // Client-side filtering matching status tabs, search, and filter options
   const filteredUsers = useMemo(() => {
     let result = [...allUsers];
 
@@ -185,6 +227,13 @@ export default function PlatformUsersScreen() {
       );
     }
 
+    // Verification filter
+    if (verificationFilter === 'verified') {
+      result = result.filter((u) => u.is_verified);
+    } else if (verificationFilter === 'unverified') {
+      result = result.filter((u) => !u.is_verified);
+    }
+
     // Search query
     const q = searchQuery.trim().toLowerCase();
     if (q) {
@@ -197,11 +246,19 @@ export default function PlatformUsersScreen() {
     }
 
     return result;
-  }, [allUsers, statusFilter, roleFilter, searchQuery]);
+  }, [allUsers, statusFilter, roleFilter, verificationFilter, searchQuery]);
 
-  const isAllAccountsActive = statusFilter === 'all' && roleFilter === 'all';
-  const isActiveFilterActive = statusFilter === 'active';
-  const isInactiveFilterActive = statusFilter === 'inactive';
+  const copyToClipboard = (text: string, label: string) => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+    }
+    setCopiedNotice(`Copied ${label}`);
+    setTimeout(() => setCopiedNotice(null), 2500);
+  };
+
+  const isNarrowScreen = width < 370;
+  const isSuperNarrow = width < 340;
+  const hasActiveAdvancedFilters = roleFilter !== 'all' || verificationFilter !== 'all';
 
   return (
     <PlatformShell
@@ -232,16 +289,12 @@ export default function PlatformUsersScreen() {
               </AppText>
             </View>
 
-            {/* 2. Account Summary Cards */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.summaryCardsRow}
-            >
+            {/* 2. Account Summary Cards (Exactly 2 side-by-side cards) */}
+            <View style={styles.summaryCardsRow}>
               {/* Total Accounts */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <Users size={20} color="#16A34A" />
+                  <Users size={22} color="#16A34A" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>Total Accounts</AppText>
@@ -252,54 +305,52 @@ export default function PlatformUsersScreen() {
               {/* Active Accounts */}
               <View style={styles.summaryCard}>
                 <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <User size={20} color="#0284C7" />
+                  <User size={22} color="#0284C7" strokeWidth={2.2} />
                 </View>
                 <View style={styles.summaryTextBox}>
                   <AppText style={styles.summaryLabel}>Active Accounts</AppText>
                   <AppText style={styles.summaryValue}>{platformMetrics.active}</AppText>
                 </View>
               </View>
+            </View>
 
-              {/* Club Staff Members */}
-              <View style={styles.summaryCard}>
-                <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
-                  <Users size={20} color="#9333EA" />
-                </View>
-                <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>Club Staff Members</AppText>
-                  <AppText style={styles.summaryValue}>{platformMetrics.staff}</AppText>
-                </View>
-              </View>
-            </ScrollView>
-
-            {/* 3. Filter Pills */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterPillsRow}
-            >
+            {/* 3. Filter Tabs (All Accounts | Active | Inactive) */}
+            <View style={styles.filterTabsRow}>
               {/* All Accounts */}
               <TouchableOpacity
-                style={[styles.pill, isAllAccountsActive && styles.pillActive]}
-                onPress={() => {
-                  setStatusFilter('all');
-                  setRoleFilter('all');
-                }}
+                style={[
+                  styles.filterTab,
+                  statusFilter === 'all' ? styles.filterTabActive : styles.filterTabInactive,
+                ]}
+                onPress={() => setStatusFilter('all')}
                 activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: statusFilter === 'all' }}
               >
-                <AppText style={[styles.pillText, isAllAccountsActive && styles.pillTextActive]}>
+                <AppText
+                  style={[
+                    styles.filterTabText,
+                    statusFilter === 'all'
+                      ? styles.filterTabTextActive
+                      : styles.filterTabTextInactive,
+                  ]}
+                >
                   All Accounts
                 </AppText>
                 <View
                   style={[
-                    styles.pillBadge,
-                    isAllAccountsActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                    styles.filterTabBadge,
+                    statusFilter === 'all'
+                      ? styles.filterTabBadgeActive
+                      : styles.filterTabBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.pillBadgeText,
-                      isAllAccountsActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                      styles.filterTabBadgeText,
+                      statusFilter === 'all'
+                        ? styles.filterTabBadgeTextActive
+                        : styles.filterTabBadgeTextInactive,
                     ]}
                   >
                     {platformMetrics.total}
@@ -309,23 +360,39 @@ export default function PlatformUsersScreen() {
 
               {/* Active */}
               <TouchableOpacity
-                style={[styles.pill, isActiveFilterActive && styles.pillActive]}
-                onPress={() => setStatusFilter(statusFilter === 'active' ? 'all' : 'active')}
+                style={[
+                  styles.filterTab,
+                  statusFilter === 'active' ? styles.filterTabActive : styles.filterTabInactive,
+                ]}
+                onPress={() => setStatusFilter('active')}
                 activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: statusFilter === 'active' }}
               >
-                <AppText style={[styles.pillText, isActiveFilterActive && styles.pillTextActive]}>
+                <AppText
+                  style={[
+                    styles.filterTabText,
+                    statusFilter === 'active'
+                      ? styles.filterTabTextActive
+                      : styles.filterTabTextInactive,
+                  ]}
+                >
                   Active
                 </AppText>
                 <View
                   style={[
-                    styles.pillBadge,
-                    isActiveFilterActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                    styles.filterTabBadge,
+                    statusFilter === 'active'
+                      ? styles.filterTabBadgeActive
+                      : styles.filterTabBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.pillBadgeText,
-                      isActiveFilterActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                      styles.filterTabBadgeText,
+                      statusFilter === 'active'
+                        ? styles.filterTabBadgeTextActive
+                        : styles.filterTabBadgeTextInactive,
                     ]}
                   >
                     {platformMetrics.active}
@@ -335,76 +402,54 @@ export default function PlatformUsersScreen() {
 
               {/* Inactive */}
               <TouchableOpacity
-                style={[styles.pill, isInactiveFilterActive && styles.pillActive]}
-                onPress={() => setStatusFilter(statusFilter === 'inactive' ? 'all' : 'inactive')}
+                style={[
+                  styles.filterTab,
+                  statusFilter === 'inactive' ? styles.filterTabActive : styles.filterTabInactive,
+                ]}
+                onPress={() => setStatusFilter('inactive')}
                 activeOpacity={0.7}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: statusFilter === 'inactive' }}
               >
-                <AppText style={[styles.pillText, isInactiveFilterActive && styles.pillTextActive]}>
+                <AppText
+                  style={[
+                    styles.filterTabText,
+                    statusFilter === 'inactive'
+                      ? styles.filterTabTextActive
+                      : styles.filterTabTextInactive,
+                  ]}
+                >
                   Inactive
                 </AppText>
                 <View
                   style={[
-                    styles.pillBadge,
-                    isInactiveFilterActive ? styles.pillBadgeActive : styles.pillBadgeInactive,
+                    styles.filterTabBadge,
+                    statusFilter === 'inactive'
+                      ? styles.filterTabBadgeActive
+                      : styles.filterTabBadgeInactive,
                   ]}
                 >
                   <AppText
                     style={[
-                      styles.pillBadgeText,
-                      isInactiveFilterActive ? styles.pillBadgeTextActive : styles.pillBadgeTextInactive,
+                      styles.filterTabBadgeText,
+                      statusFilter === 'inactive'
+                        ? styles.filterTabBadgeTextActive
+                        : styles.filterTabBadgeTextInactive,
                     ]}
                   >
                     {platformMetrics.inactive}
                   </AppText>
                 </View>
               </TouchableOpacity>
-
-              {/* All Roles */}
-              <TouchableOpacity
-                style={[styles.pill, roleFilter === 'all' && statusFilter !== 'all' && styles.pillActive]}
-                onPress={() => setRoleFilter('all')}
-                activeOpacity={0.7}
-              >
-                <AppText
-                  style={[
-                    styles.pillText,
-                    roleFilter === 'all' && statusFilter !== 'all' && styles.pillTextActive,
-                  ]}
-                >
-                  All Roles
-                </AppText>
-              </TouchableOpacity>
-
-              {/* Club Staff */}
-              <TouchableOpacity
-                style={[styles.pill, roleFilter === 'staff' && styles.pillActive]}
-                onPress={() => setRoleFilter(roleFilter === 'staff' ? 'all' : 'staff')}
-                activeOpacity={0.7}
-              >
-                <AppText style={[styles.pillText, roleFilter === 'staff' && styles.pillTextActive]}>
-                  Club Staff
-                </AppText>
-              </TouchableOpacity>
-
-              {/* Players */}
-              <TouchableOpacity
-                style={[styles.pill, roleFilter === 'player' && styles.pillActive]}
-                onPress={() => setRoleFilter(roleFilter === 'player' ? 'all' : 'player')}
-                activeOpacity={0.7}
-              >
-                <AppText style={[styles.pillText, roleFilter === 'player' && styles.pillTextActive]}>
-                  Players
-                </AppText>
-              </TouchableOpacity>
-            </ScrollView>
+            </View>
 
             {/* 4. Search Field & Filter Button */}
             <View style={styles.searchRow}>
               <View style={styles.searchBar}>
-                <Search size={16} color="#94A3B8" style={styles.searchIcon} />
+                <Search size={18} color="#94A3B8" style={styles.searchIcon} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search by full name, email, or user UUID..."
+                  placeholder="Search by full name, email, or user ID"
                   placeholderTextColor="#94A3B8"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
@@ -415,6 +460,7 @@ export default function PlatformUsersScreen() {
                   <TouchableOpacity
                     onPress={() => setSearchQuery('')}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Clear search input"
                   >
                     <X size={16} color="#94A3B8" />
                   </TouchableOpacity>
@@ -422,18 +468,42 @@ export default function PlatformUsersScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.filterIconButton}
-                onPress={() => {
-                  setStatusFilter('all');
-                  setRoleFilter('all');
-                  setSearchQuery('');
-                }}
+                style={[
+                  styles.filterIconButton,
+                  hasActiveAdvancedFilters && styles.filterIconButtonHighlighted,
+                ]}
+                onPress={() => setIsFilterModalOpen(true)}
                 activeOpacity={0.7}
-                accessibilityLabel="Reset filters"
+                accessibilityLabel="Filter accounts by role and verification status"
               >
-                <SlidersHorizontal size={18} color="#475569" />
+                <SlidersHorizontal
+                  size={18}
+                  color={hasActiveAdvancedFilters ? '#15803D' : '#475569'}
+                />
+                {hasActiveAdvancedFilters && <View style={styles.filterActiveDot} />}
               </TouchableOpacity>
             </View>
+
+            {/* Active filters chip notice */}
+            {hasActiveAdvancedFilters && (
+              <View style={styles.activeFilterNotice}>
+                <AppText style={styles.activeFilterNoticeText}>
+                  Filters active:{' '}
+                  {roleFilter !== 'all' ? `Role: ${roleFilter}` : ''}
+                  {roleFilter !== 'all' && verificationFilter !== 'all' ? ' · ' : ''}
+                  {verificationFilter !== 'all' ? `Status: ${verificationFilter}` : ''}
+                </AppText>
+                <TouchableOpacity
+                  onPress={() => {
+                    setRoleFilter('all');
+                    setVerificationFilter('all');
+                  }}
+                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                >
+                  <AppText style={styles.clearFilterText}>Reset</AppText>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         }
         ListEmptyComponent={
@@ -459,18 +529,7 @@ export default function PlatformUsersScreen() {
           const displayName = item.full_name || 'Unnamed User';
           const initial = getAvatarInitial(displayName, item.email);
           const avatarTheme = getAvatarTheme(displayName + item.email);
-
-          const totalMemberships =
-            item.total_memberships_count !== undefined
-              ? item.total_memberships_count
-              : (item.club_memberships?.length || 0) + (item.club_player_memberships?.length || 0);
-
-          const membershipsSummary =
-            totalMemberships === 0
-              ? 'No active club memberships'
-              : totalMemberships === 1
-              ? '1 club membership'
-              : `${totalMemberships} club memberships`;
+          const clubAssociation = getClubAssociationText(item);
 
           return (
             <Card style={styles.userCard}>
@@ -483,24 +542,77 @@ export default function PlatformUsersScreen() {
                   </AppText>
                 </View>
 
-                {/* Middle: User Info */}
+                {/* Middle: User Info (Zero truncation, full word break) */}
                 <View style={styles.userInfoCol}>
-                  <AppText style={styles.userName} numberOfLines={1}>
+                  <AppText style={styles.userName}>
                     {displayName}
                   </AppText>
-                  <AppText style={styles.userEmail} numberOfLines={1}>
+                  <AppText style={styles.userEmail}>
                     {item.email}
                   </AppText>
                   <View style={styles.metaRow}>
-                    <Users size={13} color="#64748B" />
-                    <AppText style={styles.metaTextItalic} numberOfLines={1}>
-                      {membershipsSummary}
+                    <Users size={14} color="#64748B" style={styles.metaIcon} />
+                    <AppText style={styles.metaTextItalic}>
+                      {clubAssociation}
                     </AppText>
                   </View>
                 </View>
 
-                {/* Right: Badges */}
-                <View style={styles.badgesGroup}>
+                {/* Right: Badges & 3-Dots Menu (On standard screens) */}
+                {!isNarrowScreen && (
+                  <View style={styles.rightActionGroup}>
+                    <View style={styles.badgesStack}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          { backgroundColor: item.is_active ? '#E6F4EA' : '#FEE2E2' },
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.statusBadgeText,
+                            { color: item.is_active ? '#15803D' : '#DC2626' },
+                          ]}
+                        >
+                          {item.is_active ? 'ACTIVE' : 'INACTIVE'}
+                        </AppText>
+                      </View>
+
+                      {item.is_verified && (
+                        <View style={styles.verifiedBadge}>
+                          <AppText style={styles.verifiedBadgeText}>VERIFIED</AppText>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* 3-dots action menu */}
+                    <TouchableOpacity
+                      style={styles.moreButton}
+                      onPress={() => setMenuUser(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel={`Account options for ${displayName}`}
+                    >
+                      <MoreVertical size={18} color="#64748B" />
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* On narrow screens: 3-dots menu button at top right */}
+                {isNarrowScreen && (
+                  <TouchableOpacity
+                    style={styles.moreButtonNarrow}
+                    onPress={() => setMenuUser(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel={`Account options for ${displayName}`}
+                  >
+                    <MoreVertical size={18} color="#64748B" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* On narrow screens: Dedicated badges row beneath info to prevent any text clipping */}
+              {isNarrowScreen && (
+                <View style={styles.narrowBadgesRow}>
                   <View
                     style={[
                       styles.statusBadge,
@@ -523,32 +635,316 @@ export default function PlatformUsersScreen() {
                     </View>
                   )}
                 </View>
-              </View>
+              )}
 
               {/* Subtle Horizontal Divider */}
               <View style={styles.cardDivider} />
 
               {/* Bottom Action Row */}
-              <View style={styles.cardBottomRow}>
+              <View
+                style={[
+                  styles.cardBottomRow,
+                  isSuperNarrow && styles.cardBottomRowStacked,
+                ]}
+              >
                 <View style={styles.joinedDateRow}>
-                  <Calendar size={13} color="#64748B" />
+                  <Calendar size={14} color="#64748B" />
                   <AppText style={styles.joinedDateText}>
                     Joined {formatJoinedDate(item.created_at)}
                   </AppText>
                 </View>
 
-                <PlatformButton
-                  size="sm"
-                  label="Inspect Account"
-                  leftIcon={<Eye size={14} color="#FFFFFF" strokeWidth={2.2} />}
+                <TouchableOpacity
+                  style={styles.inspectBtn}
                   onPress={() => setSelectedUser(item)}
+                  activeOpacity={0.8}
                   accessibilityLabel={`Inspect account for ${displayName}`}
-                />
+                  accessibilityRole="button"
+                >
+                  <Eye size={15} color="#FFFFFF" strokeWidth={2.2} />
+                  <AppText style={styles.inspectBtnText}>Inspect Account</AppText>
+                </TouchableOpacity>
               </View>
             </Card>
           );
         }}
       />
+
+      {/* ─── 3-Dots Quick Actions Bottom Sheet ──────────────────────────────── */}
+      <Modal
+        visible={!!menuUser}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setMenuUser(null)}
+      >
+        <TouchableOpacity
+          style={styles.sheetOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuUser(null)}
+        >
+          <View style={styles.sheetContainer} onStartShouldSetResponder={() => true}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderTitleGroup}>
+                <AppText style={styles.sheetTitle} numberOfLines={1}>
+                  {menuUser?.full_name || 'Account Actions'}
+                </AppText>
+                <AppText style={styles.sheetSubtitle} numberOfLines={1}>
+                  {menuUser?.email}
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => setMenuUser(null)}
+                style={styles.sheetCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetBody}>
+              {/* Option 1: Inspect Details */}
+              <TouchableOpacity
+                style={styles.sheetActionItem}
+                onPress={() => {
+                  const target = menuUser;
+                  setMenuUser(null);
+                  if (target) setSelectedUser(target);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#E6F4EA' }]}>
+                  <Eye size={18} color="#15803D" />
+                </View>
+                <View style={styles.sheetActionTextCol}>
+                  <AppText style={styles.sheetActionLabel}>Inspect Full Account</AppText>
+                  <AppText style={styles.sheetActionDesc}>
+                    View profile, club roles, ratings, and telemetry
+                  </AppText>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 2: Copy Email */}
+              <TouchableOpacity
+                style={styles.sheetActionItem}
+                onPress={() => {
+                  if (menuUser) {
+                    copyToClipboard(menuUser.email, 'email address');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#E0F2FE' }]}>
+                  <Copy size={18} color="#0284C7" />
+                </View>
+                <View style={styles.sheetActionTextCol}>
+                  <AppText style={styles.sheetActionLabel}>Copy Email Address</AppText>
+                  <AppText style={styles.sheetActionDesc}>{menuUser?.email}</AppText>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 3: Copy User ID */}
+              <TouchableOpacity
+                style={styles.sheetActionItem}
+                onPress={() => {
+                  if (menuUser) {
+                    copyToClipboard(menuUser.id, 'User UUID');
+                  }
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.sheetActionIcon, { backgroundColor: '#F1F5F9' }]}>
+                  <Shield size={18} color="#475569" />
+                </View>
+                <View style={styles.sheetActionTextCol}>
+                  <AppText style={styles.sheetActionLabel}>Copy User UUID</AppText>
+                  <AppText style={styles.sheetActionDesc}>{menuUser?.id}</AppText>
+                </View>
+              </TouchableOpacity>
+
+              {copiedNotice && (
+                <View style={styles.copiedToast}>
+                  <Check size={14} color="#15803D" />
+                  <AppText style={styles.copiedToastText}>{copiedNotice}</AppText>
+                </View>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.sheetCancelBtn}
+              onPress={() => setMenuUser(null)}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.sheetCancelText}>Cancel</AppText>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ─── Advanced Filter Modal ───────────────────────────────────────────── */}
+      <Modal
+        visible={isFilterModalOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setIsFilterModalOpen(false)}
+      >
+        <TouchableOpacity
+          style={styles.sheetOverlay}
+          activeOpacity={1}
+          onPress={() => setIsFilterModalOpen(false)}
+        >
+          <View style={styles.sheetContainer} onStartShouldSetResponder={() => true}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHeaderTitleGroup}>
+                <AppText style={styles.sheetTitle}>Filter Accounts</AppText>
+                <AppText style={styles.sheetSubtitle}>
+                  Refine platform user list by role & verification
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsFilterModalOpen(false)}
+                style={styles.sheetCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalFilterBody}>
+              {/* Role Filter */}
+              <AppText style={styles.filterGroupTitle}>Account Role</AppText>
+              <View style={styles.filterPillGroup}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    roleFilter === 'all' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setRoleFilter('all')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      roleFilter === 'all' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    All Roles
+                  </AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    roleFilter === 'staff' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setRoleFilter('staff')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      roleFilter === 'staff' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    Club Staff ({platformMetrics.staff})
+                  </AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    roleFilter === 'player' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setRoleFilter('player')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      roleFilter === 'player' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    Players
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+
+              {/* Verification Filter */}
+              <AppText style={[styles.filterGroupTitle, { marginTop: 14 }]}>
+                Email Verification
+              </AppText>
+              <View style={styles.filterPillGroup}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    verificationFilter === 'all' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setVerificationFilter('all')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      verificationFilter === 'all' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    All Accounts
+                  </AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    verificationFilter === 'verified' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setVerificationFilter('verified')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      verificationFilter === 'verified' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    Verified Only
+                  </AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalFilterPill,
+                    verificationFilter === 'unverified' && styles.modalFilterPillActive,
+                  ]}
+                  onPress={() => setVerificationFilter('unverified')}
+                >
+                  <AppText
+                    style={[
+                      styles.modalFilterPillText,
+                      verificationFilter === 'unverified' && styles.modalFilterPillTextActive,
+                    ]}
+                  >
+                    Unverified Only
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.filterActionButtons}>
+              <TouchableOpacity
+                style={styles.filterResetBtn}
+                onPress={() => {
+                  setRoleFilter('all');
+                  setVerificationFilter('all');
+                  setIsFilterModalOpen(false);
+                }}
+              >
+                <AppText style={styles.filterResetText}>Reset All</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.filterApplyBtn}
+                onPress={() => setIsFilterModalOpen(false)}
+              >
+                <AppText style={styles.filterApplyText}>Apply Filters</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ─── User Detail Inspection Modal ────────────────────────────────────── */}
       <Modal
@@ -779,7 +1175,7 @@ export default function PlatformUsersScreen() {
 
 const styles = StyleSheet.create({
   listContent: {
-    paddingBottom: 36,
+    paddingBottom: 40,
   },
 
   // ─── Header Section ────────────────────────────────────────────────────────
@@ -789,39 +1185,39 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
   },
   screenTitle: {
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.4,
   },
   screenSubtitle: {
-    fontSize: 13.5,
+    fontSize: 14,
     color: '#64748B',
     marginTop: 4,
   },
 
-  // ─── Account Summary Cards ─────────────────────────────────────────────────
+  // ─── Account Summary Cards (Exactly 2 side-by-side cards) ──────────────────
   summaryCardsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 10,
-    paddingBottom: 16,
+    gap: 12,
+    marginBottom: 16,
   },
   summaryCard: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#F1F5F9',
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    minWidth: 144,
+    paddingVertical: 14,
     gap: 12,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
       },
       default: {
         elevation: 1,
@@ -829,77 +1225,83 @@ const styles = StyleSheet.create({
     }),
   },
   summaryIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   summaryTextBox: {
+    flex: 1,
     justifyContent: 'center',
   },
   summaryLabel: {
-    fontSize: 11.5,
-    color: '#475569',
+    fontSize: 12.5,
+    color: '#64748B',
     fontWeight: '500',
   },
   summaryValue: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
     color: '#0F172A',
     marginTop: 2,
   },
 
-  // ─── Filter Pills ──────────────────────────────────────────────────────────
-  filterPillsRow: {
+  // ─── Filter Tabs (All Accounts | Active | Inactive) ─────────────────────────
+  filterTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     gap: 8,
-    paddingBottom: 14,
+    marginBottom: 14,
   },
-  pill: {
+  filterTab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: Radius.full,
+    borderRadius: 24,
   },
-  pillActive: {
+  filterTabActive: {
     backgroundColor: '#15803D',
   },
-  pillText: {
+  filterTabInactive: {
+    backgroundColor: '#F1F5F9',
+  },
+  filterTabText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
   },
-  pillTextActive: {
+  filterTabTextActive: {
     color: '#FFFFFF',
   },
-  pillBadge: {
-    borderRadius: Radius.full,
-    paddingHorizontal: 7,
-    paddingVertical: 1,
+  filterTabTextInactive: {
+    color: '#334155',
+  },
+  filterTabBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     minWidth: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pillBadgeActive: {
+  filterTabBadgeActive: {
     backgroundColor: '#166534',
   },
-  pillBadgeInactive: {
+  filterTabBadgeInactive: {
     backgroundColor: '#E2E8F0',
   },
-  pillBadgeText: {
-    fontSize: 11,
+  filterTabBadgeText: {
+    fontSize: 11.5,
     fontWeight: '700',
   },
-  pillBadgeTextActive: {
+  filterTabBadgeTextActive: {
     color: '#FFFFFF',
   },
-  pillBadgeTextInactive: {
+  filterTabBadgeTextInactive: {
     color: '#475569',
   },
 
@@ -909,43 +1311,86 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    marginBottom: 14,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    height: 44,
-    paddingHorizontal: 12,
+    height: 48,
+    paddingHorizontal: 14,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#0F172A',
     height: '100%',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   filterIconButton: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  filterIconButtonHighlighted: {
+    borderColor: '#15803D',
+    backgroundColor: '#E6F4EA',
+  },
+  filterActiveDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#15803D',
+  },
+  activeFilterNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  activeFilterNoticeText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '600',
+  },
+  clearFilterText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
 
-  // ─── User Account Cards ────────────────────────────────────────────────────
+  // ─── User Account Cards (Zero Truncation) ──────────────────────────────────
   userCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     padding: 16,
@@ -966,9 +1411,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatarCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -979,33 +1424,67 @@ const styles = StyleSheet.create({
   },
   userInfoCol: {
     flex: 1,
-    gap: 3,
+    minWidth: 0,
+    flexShrink: 1,
   },
   userName: {
-    fontSize: 15.5,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
+    lineHeight: 22,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        wordBreak: 'break-word',
+        overflowWrap: 'anywhere',
+      },
+    }),
   },
   userEmail: {
     fontSize: 13,
     color: '#64748B',
+    lineHeight: 18,
+    marginTop: 2,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        wordBreak: 'break-all',
+        overflowWrap: 'anywhere',
+      },
+    }),
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 2,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  metaIcon: {
+    flexShrink: 0,
   },
   metaTextItalic: {
     fontSize: 12.5,
     color: '#64748B',
     fontStyle: 'italic',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    ...Platform.select({
+      web: {
+        wordBreak: 'break-word',
+        overflowWrap: 'anywhere',
+      },
+    }),
   },
-  badgesGroup: {
+  rightActionGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 4,
     flexShrink: 0,
+  },
+  badgesStack: {
+    alignItems: 'flex-end',
+    gap: 4,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -1018,16 +1497,35 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   verifiedBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#EEF2FF',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
   },
   verifiedBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#475569',
+    color: '#4338CA',
     letterSpacing: 0.3,
+  },
+  moreButton: {
+    padding: 4,
+    marginLeft: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreButtonNarrow: {
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  narrowBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingLeft: 58, // aligns under info col past the avatar
   },
   cardDivider: {
     height: 1,
@@ -1038,6 +1536,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardBottomRowStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
   },
   joinedDateRow: {
     flexDirection: 'row',
@@ -1045,8 +1549,28 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   joinedDateText: {
-    fontSize: 12.5,
+    fontSize: 13,
     color: '#64748B',
+    fontWeight: '500',
+  },
+  inspectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#15803D',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
+  },
+  inspectBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   emptyCard: {
@@ -1058,7 +1582,183 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
 
-  // ─── Modal Styles ──────────────────────────────────────────────────────────
+  // ─── 3-Dots Quick Actions Bottom Sheet ────────────────────────────────────
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+    ...Platform.select({
+      web: {
+        alignItems: 'center',
+      },
+    }),
+  },
+  sheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 28,
+    width: '100%',
+    maxWidth: 500,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  sheetHeaderTitleGroup: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  sheetSubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  sheetCloseBtn: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+  },
+  sheetBody: {
+    paddingVertical: 12,
+    gap: 4,
+  },
+  sheetActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  sheetActionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetActionTextCol: {
+    flex: 1,
+  },
+  sheetActionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  sheetActionDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  copiedToast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'center',
+    marginTop: 8,
+  },
+  copiedToastText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#15803D',
+  },
+  sheetCancelBtn: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  sheetCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+
+  // ─── Filter Modal ──────────────────────────────────────────────────────────
+  modalFilterBody: {
+    paddingVertical: 16,
+  },
+  filterGroupTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  filterPillGroup: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  modalFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalFilterPillActive: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  modalFilterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalFilterPillTextActive: {
+    color: '#FFFFFF',
+  },
+  filterActionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 8,
+  },
+  filterResetBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  filterResetText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  filterApplyBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#15803D',
+    alignItems: 'center',
+  },
+  filterApplyText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // ─── User Inspection Modal Styles ──────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
@@ -1127,6 +1827,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 2,
+    flexWrap: 'wrap',
+    gap: 4,
   },
   gridKey: {
     fontSize: 12,
@@ -1134,6 +1836,8 @@ const styles = StyleSheet.create({
   },
   gridVal: {
     fontSize: 13,
+    flexShrink: 1,
+    textAlign: 'right',
   },
   membershipsList: {
     gap: 8,

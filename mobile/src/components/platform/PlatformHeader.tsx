@@ -175,7 +175,7 @@ export function PlatformHeader({
   // ─── MOBILE HEADER (< 800px) ───────────────────────────────────────────────
   const userInitial = adminUser?.full_name?.trim()
     ? adminUser.full_name.trim().charAt(0).toUpperCase()
-    : 'P';
+    : 'A';
 
   return (
     <View style={[styles.mobileContainer, { paddingTop: insets.top + 6 }]}>

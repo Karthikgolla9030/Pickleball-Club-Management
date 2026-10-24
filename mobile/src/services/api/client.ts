@@ -12,7 +12,7 @@
  *   - Never exposes stack traces to users
  */
 
-import { APP_CONFIG } from '@/constants';
+import { API_ENDPOINTS, APP_CONFIG } from '@/constants';
 import type { ApiError, ApiErrorType } from '@/types';
 
 // ─── Typed API Error ──────────────────────────────────────────────────────────
@@ -206,17 +206,22 @@ async function request<T>(
       }
     }
 
-    console.log(`[API REQUEST] ${options.method || 'GET'} ${url}`);
-    const response = await fetch(url, {
+    const fullUrl =
+      url.startsWith('http://') || url.startsWith('https://')
+        ? url
+        : `${API_ENDPOINTS.BASE}${url.startsWith('/') ? '' : '/'}${url}`;
+
+    console.log(`[API REQUEST] ${options.method || 'GET'} ${fullUrl}`);
+    const response = await fetch(fullUrl, {
       ...options,
       headers,
       signal: controller.signal,
     });
-    console.log(`[API RESPONSE] ${response.status} ${url}`);
+    console.log(`[API RESPONSE] ${response.status} ${fullUrl}`);
 
     // If 401 Unauthorized and auth was required, attempt token refresh once
     if (response.status === 401 && requireAuth && !isRetry && _refreshTokenHandler) {
-      console.log(`[AUTH] 401 received for ${url}. Attempting token refresh...`);
+      console.log(`[AUTH] 401 received for ${fullUrl}. Attempting token refresh...`);
       try {
         if (!_refreshPromise) {
           _refreshPromise = _refreshTokenHandler().finally(() => {
