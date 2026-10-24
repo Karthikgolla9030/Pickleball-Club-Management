@@ -452,76 +452,84 @@ export default function PlatformAuditLogScreen() {
               </AppText>
             </View>
 
-            {/* 2. Four Audit Summary Cards (Responsive 2-column grid, Left-aligned text column) */}
+            {/* 2. Four Audit Summary Cards (Responsive 2-column grid, Supporting text on one line below icon) */}
             <View style={styles.summaryGrid}>
               {/* Card 1: Total Recorded Events */}
               <View style={styles.summaryCard}>
-                <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
-                  <FileText size={16} color="#16A34A" strokeWidth={2.2} />
+                <View style={styles.summaryTopRow}>
+                  <View style={[styles.summaryIconBox, { backgroundColor: '#E6F4EA' }]}>
+                    <FileText size={18} color="#16A34A" strokeWidth={2.2} />
+                  </View>
+                  <View style={styles.summaryHeaderTextBox}>
+                    <AppText style={styles.summaryLabel}>
+                      Total Recorded Events
+                    </AppText>
+                    <AppText style={styles.summaryValue}>{totalRecorded}</AppText>
+                  </View>
                 </View>
-                <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>
-                    Total Recorded Events
-                  </AppText>
-                  <AppText style={styles.summaryValue}>{totalRecorded}</AppText>
-                  <AppText style={styles.summarySub}>
-                    Logged audit entries
-                  </AppText>
-                </View>
+                <AppText style={styles.summarySub}>
+                  Logged audit entries
+                </AppText>
               </View>
 
               {/* Card 2: Applications Decided */}
               <View style={styles.summaryCard}>
-                <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
-                  <FileCheck size={16} color="#0284C7" strokeWidth={2.2} />
+                <View style={styles.summaryTopRow}>
+                  <View style={[styles.summaryIconBox, { backgroundColor: '#E0F2FE' }]}>
+                    <FileCheck size={18} color="#0284C7" strokeWidth={2.2} />
+                  </View>
+                  <View style={styles.summaryHeaderTextBox}>
+                    <AppText style={styles.summaryLabel}>
+                      Applications Decided
+                    </AppText>
+                    <AppText style={styles.summaryValue}>
+                      {appApprovedCount + appRejectedCount}
+                    </AppText>
+                  </View>
                 </View>
-                <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>
-                    Applications Decided
-                  </AppText>
-                  <AppText style={styles.summaryValue}>
-                    {appApprovedCount + appRejectedCount}
-                  </AppText>
-                  <AppText style={styles.summarySub}>
-                    {appApprovedCount} approved · {appRejectedCount} rejected
-                  </AppText>
-                </View>
+                <AppText style={styles.summarySub}>
+                  {appApprovedCount} approved · {appRejectedCount} rejected
+                </AppText>
               </View>
 
               {/* Card 3: Club Status Changes */}
               <View style={styles.summaryCard}>
-                <View style={[styles.summaryIconBox, { backgroundColor: '#FEF3C7' }]}>
-                  <Users size={16} color="#D97706" strokeWidth={2.2} />
+                <View style={styles.summaryTopRow}>
+                  <View style={[styles.summaryIconBox, { backgroundColor: '#FEF3C7' }]}>
+                    <Users size={18} color="#D97706" strokeWidth={2.2} />
+                  </View>
+                  <View style={styles.summaryHeaderTextBox}>
+                    <AppText style={styles.summaryLabel}>
+                      Club Status Changes
+                    </AppText>
+                    <AppText style={styles.summaryValue}>
+                      {clubSuspendedCount + clubReactivatedCount}
+                    </AppText>
+                  </View>
                 </View>
-                <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>
-                    Club Status Changes
-                  </AppText>
-                  <AppText style={styles.summaryValue}>
-                    {clubSuspendedCount + clubReactivatedCount}
-                  </AppText>
-                  <AppText style={styles.summarySub}>
-                    {clubSuspendedCount} suspended · {clubReactivatedCount} reactivated
-                  </AppText>
-                </View>
+                <AppText style={styles.summarySub}>
+                  {clubSuspendedCount} suspended · {clubReactivatedCount} reactivated
+                </AppText>
               </View>
 
               {/* Card 4: Settings & Support */}
               <View style={styles.summaryCard}>
-                <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
-                  <Settings size={16} color="#9333EA" strokeWidth={2.2} />
+                <View style={styles.summaryTopRow}>
+                  <View style={[styles.summaryIconBox, { backgroundColor: '#F3E8FF' }]}>
+                    <Settings size={18} color="#9333EA" strokeWidth={2.2} />
+                  </View>
+                  <View style={styles.summaryHeaderTextBox}>
+                    <AppText style={styles.summaryLabel}>
+                      Settings & Support
+                    </AppText>
+                    <AppText style={styles.summaryValue}>
+                      {settingsCount + supportCount}
+                    </AppText>
+                  </View>
                 </View>
-                <View style={styles.summaryTextBox}>
-                  <AppText style={styles.summaryLabel}>
-                    Settings & Support
-                  </AppText>
-                  <AppText style={styles.summaryValue}>
-                    {settingsCount + supportCount}
-                  </AppText>
-                  <AppText style={styles.summarySub}>
-                    {settingsCount} settings · {supportCount} support actions
-                  </AppText>
-                </View>
+                <AppText style={styles.summarySub}>
+                  {settingsCount} settings · {supportCount} support actions
+                </AppText>
               </View>
             </View>
 
@@ -1421,7 +1429,7 @@ const styles = StyleSheet.create({
     }),
   },
 
-  // ─── 4 Summary Cards (Responsive 2-column grid, Left-Aligned Text Column) ──
+  // ─── 4 Summary Cards (Responsive 2-column grid, Supporting Text Below Icon) ──
   summaryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1433,15 +1441,15 @@ const styles = StyleSheet.create({
     flexBasis: '48%',
     flexGrow: 1,
     minWidth: 135,
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    gap: 8,
+    paddingHorizontal: 11,
+    paddingTop: 11,
+    paddingBottom: 11,
     ...Platform.select({
       web: {
         boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
@@ -1451,28 +1459,26 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    gap: 9,
+  },
   summaryIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 1,
   },
-  summaryTextBox: {
+  summaryHeaderTextBox: {
     flex: 1,
     minWidth: 0,
     alignItems: 'flex-start',
     justifyContent: 'flex-start',
-    ...Platform.select({
-      web: {
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        width: '100%',
-      },
-    }),
   },
   summaryLabel: {
     fontSize: 13,
@@ -1481,14 +1487,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     textAlign: 'left',
     width: '100%',
-    ...Platform.select({
-      web: {
-        display: 'block',
-        whiteSpace: 'normal',
-        wordBreak: 'normal',
-        overflowWrap: 'break-word',
-      } as any,
-    }),
   },
   summaryValue: {
     fontSize: 24,
@@ -1503,15 +1501,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     lineHeight: 16,
-    marginTop: 2,
+    marginTop: 8,
     textAlign: 'left',
     width: '100%',
+    letterSpacing: -0.1,
     ...Platform.select({
       web: {
         display: 'block',
-        whiteSpace: 'normal',
-        wordBreak: 'normal',
-        overflowWrap: 'break-word',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'clip',
       } as any,
     }),
   },
