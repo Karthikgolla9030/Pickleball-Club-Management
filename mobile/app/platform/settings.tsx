@@ -654,26 +654,27 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   headerSection: {
-    paddingTop: 0,
-    paddingBottom: 0,
+    paddingTop: 2,
+    paddingBottom: 12,
   },
   screenTitle: {
-    fontSize: 31,
-    fontWeight: '800',
+    fontSize: 27,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.6,
-    lineHeight: 36,
+    letterSpacing: -0.5,
+    lineHeight: 32,
     ...Platform.select({
       web: {
-        fontSize: 'clamp(27px, 6vw, 32px)' as any,
+        fontSize: 'clamp(25px, 6vw, 29px)' as any,
       },
     }),
   },
   screenSubtitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     color: '#64748B',
     lineHeight: 20,
-    marginTop: 3,
+    marginTop: 4,
+    flexWrap: 'wrap',
     ...Platform.select({
       web: {
         overflowWrap: 'anywhere' as any,
@@ -752,10 +753,10 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   sectionTitle: {
-    fontSize: 17.5,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-    lineHeight: 23,
+    lineHeight: 22,
     ...Platform.select({
       web: {
         overflowWrap: 'anywhere' as any,
@@ -764,9 +765,9 @@ const styles = StyleSheet.create({
     }),
   },
   sectionSubtitle: {
-    fontSize: 13.5,
+    fontSize: 13,
     color: '#64748B',
-    lineHeight: 19,
+    lineHeight: 18,
     ...Platform.select({
       web: {
         overflowWrap: 'anywhere' as any,
