@@ -65,6 +65,7 @@ import {
   usePlayerTournamentRegistrations,
 } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getCourtDisplayLabel } from '@/utils';
 import type {
   Match,
   StandingRow,
@@ -853,7 +854,7 @@ export function LiveTournamentView({
                   const teamBName = m.team_b?.name || m.side_b_participants?.map((p) => p.display_name).join(' & ') || 'Team B';
                   const roundNum = m.round_number || m.round || 1;
                   const matchNum = m.match_number || idx + 1;
-                  const courtNum = m.court_id ? `Court ${String(m.court_id).slice(-1)}` : 'Court TBD';
+                  const courtNum = getCourtDisplayLabel(m, { unassignedLabel: 'Court TBD', unresolvedLabel: 'Court TBD' });
 
                   return (
                     <View key={m.id || idx} style={styles.matchCard}>
@@ -957,7 +958,7 @@ export function LiveTournamentView({
                   const teamBName = m.team_b?.name || m.side_b_participants?.map((p) => p.display_name).join(' & ') || 'Awaiting winner';
                   const roundNum = m.round_number || m.round || 1;
                   const matchNum = m.match_number || idx + 1;
-                  const courtNum = m.court_id ? `Court ${String(m.court_id).slice(-1)}` : 'Court TBD';
+                  const courtNum = getCourtDisplayLabel(m, { unassignedLabel: 'Court TBD', unresolvedLabel: 'Court TBD' });
                   const timeStr = m.scheduled_start_at
                     ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                     : 'Scheduled';

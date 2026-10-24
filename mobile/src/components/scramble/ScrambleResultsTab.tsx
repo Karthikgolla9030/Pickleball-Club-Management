@@ -33,6 +33,7 @@ import { Radius, Spacing } from '@/theme';
 import type { Match } from '@/types';
 import type { ScrambleStandingRow, ScrambleState, ScrambleSubTab } from '@/types/scramble';
 import { formatPartnerNames } from '@/utils/scrambleLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface ScrambleResultsTabProps {
   state: ScrambleState | null;
@@ -450,7 +451,7 @@ export function ScrambleResultsTab({
             const scoreA = match.score_a ?? 0;
             const scoreB = match.score_b ?? 0;
             const roundNum = match.round_number ?? match.round ?? 1;
-            const courtNum = match.match_number ?? 1;
+            const courtLabel = getCourtDisplayLabel(match, { unassignedLabel: 'Court 1' });
             const sideANames = formatPartnerNames(match.side_a_participants);
             const sideBNames = formatPartnerNames(match.side_b_participants);
             const teamAWon = scoreA > scoreB;
@@ -460,7 +461,7 @@ export function ScrambleResultsTab({
               <View key={match.id} style={styles.resultCard}>
                 <View style={styles.resultHeader}>
                   <AppText style={styles.resultHeaderMeta}>
-                    Round {roundNum} • Court {courtNum}
+                    Round {roundNum} • {courtLabel}
                   </AppText>
                   <View style={styles.finalBadge}>
                     <CheckCircle2 size={12} color="#08785E" />

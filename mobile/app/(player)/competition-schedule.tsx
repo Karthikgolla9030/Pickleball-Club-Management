@@ -28,6 +28,7 @@ import {
 } from '@/components';
 import { usePlayerCompetitionSchedule } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
+import { getCourtDisplayLabel } from '@/utils';
 import type { PlayerMatchScheduleResponse } from '@/types';
 
 type TabKey = 'upcoming' | 'today' | 'past';
@@ -170,11 +171,11 @@ export default function PlayerCompetitionScheduleScreen() {
                     label={compLabel}
                     variant={item.competition_type === 'tournament' ? 'default' : 'info'}
                   />
-                  {item.court_name ? (
-                    <Badge label={item.court_name} variant="info" />
-                  ) : (
-                    <Badge label="Court Unassigned" variant="warning" />
-                  )}
+                  {(() => {
+                    const courtLabel = getCourtDisplayLabel(item, { unassignedLabel: 'Court Unassigned' });
+                    const isAssigned = courtLabel !== 'Court Unassigned';
+                    return <Badge label={courtLabel} variant={isAssigned ? 'info' : 'warning'} />;
+                  })()}
                 </View>
 
                 {/* Competition Name */}

@@ -914,7 +914,12 @@ class LeagueService:
             completed_at=m.completed_at,
             is_bye=is_bye,
             court_id=m.court_id,
-            court_name=m.court.name if m.court else None,
+            court_number=m.court.court_number if m.court else None,
+            court_name=(
+                (m.court.display_name or m.court.name or (f"Court {m.court.court_number}" if m.court.court_number else None))
+                if m.court
+                else None
+            ),
             scheduled_start_at=m.scheduled_start_at,
             scheduled_end_at=m.scheduled_end_at,
         )

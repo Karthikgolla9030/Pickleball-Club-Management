@@ -45,6 +45,7 @@ import {
   groupMatchesByCourt,
   validateCourtPartition,
 } from '@/utils/scrambleLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface ScrambleRoundsTabProps {
   state: ScrambleState | null;
@@ -304,11 +305,16 @@ export function ScrambleRoundsTab({
             const courtNum = courtInfo?.court_number ?? cIdx + 1;
             const playerCount = courtInfo?.player_count ?? 4;
 
+            const courtBadgeLabel = getCourtDisplayLabel(courtInfo, {
+              unassignedLabel: `Court ${cIdx + 1}`,
+              unresolvedLabel: `Court ${cIdx + 1}`,
+            }).toUpperCase();
+
             return (
               <View key={courtInfo?.court_id ?? `court-${cIdx}`} style={styles.courtCard}>
                 <View style={styles.courtHeader}>
                   <View style={styles.courtBadge}>
-                    <AppText style={styles.courtBadgeText}>COURT {courtNum}</AppText>
+                    <AppText style={styles.courtBadgeText}>{courtBadgeLabel}</AppText>
                   </View>
                   <AppText style={styles.courtMetaText}>
                     {playerCount}-Player Court • {courtGroup.matches.length} Games

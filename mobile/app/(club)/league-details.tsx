@@ -80,6 +80,7 @@ import {
   type LeagueWeek,
 } from '@/types';
 import { formatDate, formatDateTime } from '@/utils/formatters';
+import { getCourtDisplayLabel } from '@/utils';
 
 type TabKey = 'teams' | 'schedule' | 'matches' | 'standings' | 'playoffs' | 'results';
 
@@ -1007,7 +1008,7 @@ export default function ClubLeagueDetailsScreen() {
               >
                 <AppText style={styles.courtFilterPillText}>
                   {courtFilterId
-                    ? clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
+                    ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
                     : 'All Courts'}{' '}
                   ▾
                 </AppText>
@@ -1248,7 +1249,10 @@ export default function ClubLeagueDetailsScreen() {
                     const timeStr = m.scheduled_start_at
                       ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                       : '6:00 PM';
-                    const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : 'Court 1');
+                    const courtStr = getCourtDisplayLabel(
+                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                      { unassignedLabel: 'Court not assigned' }
+                    );
                     const dateStr = m.scheduled_start_at
                       ? formatDateTime(m.scheduled_start_at)
                       : activeWeek?.start_date
@@ -1367,7 +1371,10 @@ export default function ClubLeagueDetailsScreen() {
                     const timeStr = m.scheduled_start_at
                       ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                       : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
-                    const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : idx === 2 ? 'Court 2' : 'Court 1');
+                    const courtStr = getCourtDisplayLabel(
+                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                      { unassignedLabel: 'Court not assigned' }
+                    );
                     const dateStr = m.scheduled_start_at
                       ? formatDateTime(m.scheduled_start_at)
                       : `May 6, 2026 • ${timeStr}`;
@@ -1840,7 +1847,10 @@ export default function ClubLeagueDetailsScreen() {
                   const timeStr = m.scheduled_start_at
                     ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
                     : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
-                  const courtStr = m.court_name || (m.court_id ? `Court ${m.court_id.slice(0, 4)}` : idx === 2 ? 'Court 2' : 'Court 1');
+                  const courtStr = getCourtDisplayLabel(
+                    m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                    { unassignedLabel: 'Court not assigned' }
+                  );
                   const dateLine = `Match ${m.match_number} • May 6, 2026 • ${timeStr} • ${courtStr}`;
 
                   return (

@@ -57,7 +57,7 @@ import {
 import { AppText } from '../AppText';
 import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/theme';
-import { formatDate } from '@/utils';
+import { formatDate, getCourtDisplayLabel } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import {
   usePlayerBracket,
@@ -840,7 +840,7 @@ export function CompletedBracketView({
             {displayedMatches.map((match, idx) => {
               const isFinal = (match.bracket_round ?? 1) >= 2 || idx === 0;
               const roundTitle = isFinal ? 'Final' : 'Semi Final';
-              const courtLabel = match.court_id ? `Court ${match.court_id}` : (idx === 2 ? 'Court 2' : 'Championship Court');
+              const courtLabel = getCourtDisplayLabel(match, { unassignedLabel: 'Court not assigned' });
               const timeLabel = match.scheduled_start_at
                 ? formatDate(match.scheduled_start_at)
                 : formatDate(tournament.start_date);

@@ -36,6 +36,7 @@ import { AlertCircle, Info, Trophy, UserX } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { ModalSheet } from '@/components/ModalSheet';
 import { Colors, Radius, Spacing } from '@/theme';
+import { getCourtDisplayLabel } from '@/utils';
 
 export interface StandardMatchScoreModalProps {
   visible: boolean;
@@ -233,12 +234,9 @@ function extractMatchSubtitle(match: any): string {
   }
 
   // Court Info
-  if (match.court) {
-    parts.push(match.court);
-  } else if (match.court_name) {
-    parts.push(match.court_name);
-  } else if (match.court_id) {
-    parts.push(`Court ${match.court_id}`);
+  const courtLabel = getCourtDisplayLabel(match, { unassignedLabel: '' });
+  if (courtLabel) {
+    parts.push(courtLabel);
   }
 
   return parts.join(' • ');

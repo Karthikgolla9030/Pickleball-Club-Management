@@ -181,6 +181,31 @@ def _build_match_response(
     if match.status == MatchStatus.COMPLETED and match.score_a is not None and match.score_b is not None:
         winner_side = "side_a" if match.score_a > match.score_b else "side_b"
 
+    court_obj = None
+    if hasattr(match, "court") and match.court:
+        court_obj = match.court
+    elif hasattr(match, "__dict__") and match.__dict__.get("court"):
+        court_obj = match.__dict__.get("court")
+
+    resolved_court_number = court_number
+    if resolved_court_number is None and court_obj is not None:
+        resolved_court_number = getattr(court_obj, "court_number", None)
+
+    resolved_court_name = court_name
+    if resolved_court_name is None and court_obj is not None:
+        resolved_court_name = (
+            getattr(court_obj, "display_name", None)
+            or getattr(court_obj, "name", None)
+        )
+    if resolved_court_name is None and resolved_court_number is not None:
+        resolved_court_name = f"Court {resolved_court_number}"
+
+    # Ensure technical UUID strings are never returned as court_name
+    if resolved_court_name and ("-" in resolved_court_name and len(resolved_court_name) >= 36):
+        import re
+        if re.search(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", resolved_court_name, re.I):
+            resolved_court_name = f"Court {resolved_court_number}" if resolved_court_number is not None else None
+
     return MatchResponse(
         id=match.id,
         tournament_id=match.tournament_id,
@@ -230,27 +255,8 @@ def _build_match_response(
         winner_side=winner_side,
         completed_at=match.completed_at,
         court_id=match.court_id,
-        court_number=(
-            court_number
-            if court_number is not None
-            else (
-                getattr(match.__dict__.get("court"), "court_number", None)
-                if hasattr(match, "__dict__") and match.__dict__.get("court")
-                else None
-            )
-        ),
-        court_name=(
-            court_name
-            if court_name is not None
-            else (
-                (
-                    getattr(match.__dict__.get("court"), "name", None)
-                    or getattr(match.__dict__.get("court"), "display_name", None)
-                )
-                if hasattr(match, "__dict__") and match.__dict__.get("court")
-                else None
-            )
-        ),
+        court_number=resolved_court_number,
+        court_name=resolved_court_name,
         scheduled_start_at=match.scheduled_start_at,
         scheduled_end_at=match.scheduled_end_at,
         created_at=match.created_at,

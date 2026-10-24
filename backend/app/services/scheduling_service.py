@@ -139,7 +139,11 @@ class SchedulingService:
             side_a_participants=side_a_parts if side_a_parts else None,
             side_b_participants=side_b_parts if side_b_parts else None,
             court_id=match.court_id,
-            court_name=match.court.name if match.court else None,
+            court_name=(
+                (match.court.display_name or match.court.name or (f"Court {match.court.court_number}" if match.court.court_number else None))
+                if match.court
+                else None
+            ),
             court_number=match.court.court_number if match.court else None,
             scheduled_start_at=match.scheduled_start_at,
             scheduled_end_at=match.scheduled_end_at,

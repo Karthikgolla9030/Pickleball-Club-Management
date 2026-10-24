@@ -64,7 +64,7 @@ import { AppText } from '../AppText';
 import { Badge } from '../Badge';
 import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/theme';
-import { formatDate } from '@/utils';
+import { formatDate, getCourtDisplayLabel } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import {
   usePlayerPools,
@@ -232,7 +232,7 @@ export function CompletedPoolPlayView({
         id: m.id,
         stageLabel: isFinal ? 'Final' : 'Semi',
         stageType: isFinal ? 'final' : 'semis',
-        court: (m as any).court?.name || (m.court_id ? `Court ${m.court_id}` : 'Court 1'),
+        court: getCourtDisplayLabel(m),
         teamA: { name: m.team_a?.name || 'Team A', score: m.score_a != null ? String(m.score_a) : '-' },
         teamB: { name: m.team_b?.name || 'Team B', score: m.score_b != null ? String(m.score_b) : '-' },
         originalMatch: m,
@@ -246,7 +246,7 @@ export function CompletedPoolPlayView({
         id: m.id,
         stageLabel: poolName,
         stageType,
-        court: (m as any).court?.name || (m.court_id ? `Court ${m.court_id}` : 'Court 1'),
+        court: getCourtDisplayLabel(m),
         teamA: { name: m.team_a?.name || 'Team A', score: m.score_a != null ? String(m.score_a) : '-' },
         teamB: { name: m.team_b?.name || 'Team B', score: m.score_b != null ? String(m.score_b) : '-' },
         originalMatch: m,

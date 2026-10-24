@@ -38,6 +38,7 @@ import {
   useAuth,
 } from '@/hooks';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
+import { getCourtDisplayLabel } from '@/utils';
 import type { StandingRow, TournamentDiscoveryItem } from '@/types';
 
 interface PlayerCompetitionModalProps {
@@ -474,7 +475,7 @@ export function PlayerCompetitionModal({
                       : null;
                     const myOpponents = isMyMatchA ? sideBPlayers : isMyMatchB ? sideAPlayers : null;
                     const isMeSittingOut = Boolean(user && m.sit_out_participant?.user_id === user.id);
-                    const courtLabel = m.court_name || (m.court_number ? `Court ${m.court_number}` : null);
+                    const courtLabel = getCourtDisplayLabel(m, { unassignedLabel: '' });
 
                     return (
                       <Card key={m.id} style={styles.matchCard}>

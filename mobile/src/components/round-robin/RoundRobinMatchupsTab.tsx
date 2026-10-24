@@ -37,6 +37,7 @@ import {
   calculateExpectedRoundRobinSchedule,
   groupMatchesByRound,
 } from '@/utils/roundRobinLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface RoundRobinMatchupsTabProps {
   tournament?: Tournament | null;
@@ -113,15 +114,24 @@ export function RoundRobinMatchupsTab({
     [matches.length, roundGroups]
   );
 
-  const getCourtName = (courtId?: string | null, matchIdx?: number) => {
-    if (courtId) {
-      const found = courts.find((c) => c.id === courtId);
-      if (found) return found.display_name || found.name;
+  const getCourtName = (match: Match, matchIdx?: number) => {
+    const label = getCourtDisplayLabel(match, { unassignedLabel: '', unresolvedLabel: '' });
+    if (label) return label;
+
+    if (match.court_id) {
+      const found = courts.find((c) => c.id === match.court_id);
+      if (found) {
+        const foundLabel = getCourtDisplayLabel(found, { unassignedLabel: '', unresolvedLabel: '' });
+        if (foundLabel) return foundLabel;
+      }
     }
+
     if (courts.length > 0 && typeof matchIdx === 'number') {
       const c = courts[matchIdx % courts.length];
-      return c.display_name || c.name;
+      const fallbackLabel = getCourtDisplayLabel(c, { unassignedLabel: '', unresolvedLabel: '' });
+      if (fallbackLabel) return fallbackLabel;
     }
+
     return `Court ${(matchIdx ?? 0) + 1}`;
   };
 
@@ -309,7 +319,7 @@ export function RoundRobinMatchupsTab({
 
                   const aWon = isCompleted && match.winner_team_id === match.team_a_id;
                   const bWon = isCompleted && match.winner_team_id === match.team_b_id;
-                  const courtLabel = getCourtName(match.court_id, mIdx);
+                  const courtLabel = getCourtName(match, mIdx);
 
                   const statusLabel =
                     isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Scheduled';

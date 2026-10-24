@@ -19,6 +19,7 @@ import { Colors, Radius, Spacing } from '@/theme';
 import type { Court, Match, Team } from '@/types';
 import type { BracketProgress } from '@/types/bracket';
 import { getBracketRoundName, isMatchBye } from '@/utils/bracketLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface BracketResultsTabProps {
   matches: Match[];
@@ -129,10 +130,17 @@ export function BracketResultsTab({
     );
   }, [finalMatch, teams]);
 
-  const getCourtName = (courtId?: string | null) => {
-    if (!courtId) return null;
-    const found = courts.find((c) => c.id === courtId);
-    return found ? found.display_name || found.name : 'Court';
+  const getCourtName = (match: Match) => {
+    const label = getCourtDisplayLabel(match, { unassignedLabel: '', unresolvedLabel: '' });
+    if (label) return label;
+    if (match.court_id) {
+      const found = courts.find((c) => c.id === match.court_id);
+      if (found) {
+        const foundLabel = getCourtDisplayLabel(found, { unassignedLabel: '', unresolvedLabel: '' });
+        if (foundLabel) return foundLabel;
+      }
+    }
+    return null;
   };
 
   const isFinished = progress.isFinished || (isTournamentCompleted && championTeam !== null);
@@ -278,7 +286,7 @@ export function BracketResultsTab({
               const teamBName = match.team_b?.name ?? 'Team B';
               const winnerIsA = match.winner_team_id === match.team_a_id;
               const winnerName = winnerIsA ? teamAName : teamBName;
-              const courtLabel = getCourtName(match.court_id);
+              const courtLabel = getCourtName(match);
 
               return (
                 <Card key={match.id} style={styles.historyCard}>

@@ -181,6 +181,7 @@ class LeagueMatchResponse(BaseModel):
     team_a_members: list[str] = []
     team_b_members: list[str] = []
     court_id: uuid.UUID | None = None
+    court_number: int | None = None
     court_name: str | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None

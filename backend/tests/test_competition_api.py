@@ -1126,3 +1126,64 @@ class TestStandings:
         )
         total_wins = sum(r["wins"] for r in resp.json()["standings"])
         assert total_wins == 6
+
+    @pytest.mark.asyncio
+    async def test_court_label_resolution_no_uuid(self, rr_setup, async_client, db_session):
+        """Verify that when a court is assigned to a match, court_name and court_number are resolved and never raw UUIDs."""
+        import re
+        from app.models.court import Court
+        from app.models.competition import Match
+        from sqlalchemy import select
+
+        d = rr_setup
+        court = Court(
+            club_id=d["club"].id,
+            court_number=2,
+            name="Court 2",
+            display_name="Center Court",
+            is_active=True,
+        )
+        db_session.add(court)
+        await db_session.flush()
+
+        d, matches = await self._setup_with_results(rr_setup, async_client)
+        assert len(matches) > 0
+        first_match_id = matches[0]["id"]
+
+        m_stmt = select(Match).where(Match.id == uuid.UUID(first_match_id))
+        res = await db_session.execute(m_stmt)
+        match_obj = res.scalar_one()
+        match_obj.court_id = court.id
+        await db_session.commit()
+
+        # Check club endpoint
+        refreshed_resp = await async_client.get(
+            f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/matches",
+            headers=d["td_header"],
+        )
+        assert refreshed_resp.status_code == 200
+        refreshed_matches = refreshed_resp.json()
+        if isinstance(refreshed_matches, dict) and "matches" in refreshed_matches:
+            refreshed_matches = refreshed_matches["matches"]
+        assigned_match = next(m for m in refreshed_matches if m["id"] == first_match_id)
+        assert assigned_match["court_id"] == str(court.id)
+        assert assigned_match["court_number"] == 2
+        assert assigned_match["court_name"] == "Center Court"
+        uuid_pattern = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+        assert not re.search(uuid_pattern, assigned_match["court_name"], re.I)
+
+        # Also verify public matches endpoint (player app)
+        pub_resp = await async_client.get(
+            f"/api/v1/tournaments/{d['tournament'].id}/matches",
+            headers=d["td_header"],
+        )
+        assert pub_resp.status_code == 200
+        pub_matches = pub_resp.json()
+        if isinstance(pub_matches, dict) and "matches" in pub_matches:
+            pub_matches = pub_matches["matches"]
+        pub_match = next(m for m in pub_matches if m["id"] == first_match_id)
+        assert pub_match["court_id"] == str(court.id)
+        assert pub_match["court_number"] == 2
+        assert pub_match["court_name"] == "Center Court"
+        assert not re.search(uuid_pattern, pub_match["court_name"], re.I)
+

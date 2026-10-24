@@ -33,6 +33,7 @@ import {
   isMatchReady,
   isMatchWaiting,
 } from '@/utils/bracketLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface BracketViewTabProps {
   matches: Match[];
@@ -147,10 +148,17 @@ export function BracketViewTab({
     return Math.min(selectedRoundIndex, displayedGroups.length - 1);
   }, [displayedGroups.length, selectedRoundIndex]);
 
-  const getCourtName = (courtId?: string | null) => {
-    if (!courtId) return null;
-    const found = courts.find((c) => c.id === courtId);
-    return found ? found.display_name || found.name : 'Court';
+  const getCourtName = (match: Match) => {
+    const label = getCourtDisplayLabel(match, { unassignedLabel: '', unresolvedLabel: '' });
+    if (label) return label;
+    if (match.court_id) {
+      const found = courts.find((c) => c.id === match.court_id);
+      if (found) {
+        const foundLabel = getCourtDisplayLabel(found, { unassignedLabel: '', unresolvedLabel: '' });
+        if (foundLabel) return foundLabel;
+      }
+    }
+    return null;
   };
 
   // ─── Pre-Generation Empty State ───────────────────────────────────────────
@@ -272,7 +280,7 @@ export function BracketViewTab({
     const winnerIsA = isCompleted && match.winner_team_id === match.team_a_id;
     const winnerIsB = isCompleted && match.winner_team_id === match.team_b_id;
 
-    const courtLabel = getCourtName(match.court_id);
+    const courtLabel = getCourtName(match);
     const resetInfo = getResetFinalStatus(match);
     const isGrandFinal = match.bracket_section === 'grand_final';
     const advancement = getAdvancementRoute(match);

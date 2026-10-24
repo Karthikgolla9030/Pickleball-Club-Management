@@ -27,6 +27,7 @@ import {
   isMatchReady,
   isMatchWaiting,
 } from '@/utils/bracketLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface BracketMatchesTabProps {
   matches: Match[];
@@ -100,10 +101,17 @@ export function BracketMatchesTab({
     });
   }, [matches, isDoubleElimination, sectionFilter, statusFilter]);
 
-  const getCourtName = (courtId?: string | null) => {
-    if (!courtId) return null;
-    const found = courts.find((c) => c.id === courtId);
-    return found ? found.display_name || found.name : 'Court';
+  const getCourtName = (match: Match) => {
+    const label = getCourtDisplayLabel(match, { unassignedLabel: '', unresolvedLabel: '' });
+    if (label) return label;
+    if (match.court_id) {
+      const found = courts.find((c) => c.id === match.court_id);
+      if (found) {
+        const foundLabel = getCourtDisplayLabel(found, { unassignedLabel: '', unresolvedLabel: '' });
+        if (foundLabel) return foundLabel;
+      }
+    }
+    return null;
   };
 
   const statusChips: { key: MatchStatusFilter; label: string }[] = [
@@ -258,7 +266,7 @@ export function BracketMatchesTab({
               const winnerIsA = isCompleted && match.winner_team_id === match.team_a_id;
               const winnerIsB = isCompleted && match.winner_team_id === match.team_b_id;
 
-              const courtLabel = getCourtName(match.court_id);
+              const courtLabel = getCourtName(match);
 
               const canEnterScore =
                 isReady &&

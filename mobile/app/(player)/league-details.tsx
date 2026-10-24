@@ -60,6 +60,7 @@ import {
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { LeagueMatch, LeagueSummary, LeagueWeek } from '@/types';
 import { formatDate } from '@/utils/formatters';
+import { getCourtDisplayLabel } from '@/utils';
 
 type TabKey = 'standings' | 'schedule' | 'playoffs' | 'results';
 
@@ -688,7 +689,7 @@ export default function PlayerLeagueDetailsScreen() {
                     <View key={m.id} style={styles.matchCard}>
                       <View style={styles.matchCardHeader}>
                         <AppText style={styles.matchCourtText}>
-                          {m.court_name ? m.court_name : `Court ${m.court_number || 1}`}
+                          {getCourtDisplayLabel(m, { unassignedLabel: 'Court TBD' })}
                         </AppText>
                         <View
                           style={[

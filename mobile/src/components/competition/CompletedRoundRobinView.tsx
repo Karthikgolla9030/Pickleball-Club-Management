@@ -51,7 +51,7 @@ import {
 import { AppText } from '../AppText';
 import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/theme';
-import { formatDate } from '@/utils';
+import { formatDate, getCourtDisplayLabel } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import {
   usePlayerMatches,
@@ -180,17 +180,19 @@ export function CompletedRoundRobinView({
   // Available courts from matches
   const availableCourts = useMemo(() => {
     const set = new Set<string>();
-    resolvedMatches.forEach((m, idx) => {
-      const courtLabel = (m as any).court?.name || (m.court_id ? `Court ${m.court_id}` : (idx % 2 === 0 ? 'Court 1' : 'Court 2'));
-      set.add(courtLabel);
+    resolvedMatches.forEach((m) => {
+      const courtLabel = getCourtDisplayLabel(m);
+      if (courtLabel && courtLabel !== 'Court not assigned') {
+        set.add(courtLabel);
+      }
     });
-    return Array.from(set);
+    return Array.from(set).sort();
   }, [resolvedMatches]);
 
   // Filtered matches for Tab 2
   const displayedMatches = useMemo(() => {
-    return resolvedMatches.filter((m, idx) => {
-      const courtLabel = (m as any).court?.name || (m.court_id ? `Court ${m.court_id}` : (idx % 2 === 0 ? 'Court 1' : 'Court 2'));
+    return resolvedMatches.filter((m) => {
+      const courtLabel = getCourtDisplayLabel(m);
 
       if (matchFilter === 'my') {
         if (!user) return false;
@@ -719,7 +721,7 @@ export function CompletedRoundRobinView({
             {/* Match Cards List */}
             {displayedMatches.map((match, idx) => {
               const matchNum = match.match_number ?? idx + 1;
-              const courtLabel = (match as any).court?.name || (match.court_id ? `Court ${match.court_id}` : (idx % 2 === 0 ? 'Court 1' : 'Court 2'));
+              const courtLabel = getCourtDisplayLabel(match);
               const teamAName = match.team_a?.name || 'Team A';
               const teamBName = match.team_b?.name || 'Team B';
 

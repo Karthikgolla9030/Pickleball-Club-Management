@@ -520,7 +520,7 @@ export default function CompetitionScheduleScreen() {
             Assign Court
           </AppText>
           <FilterChips
-            chips={(courts ?? []).map((c) => ({ key: c.id, label: c.name }))}
+            chips={(courts ?? []).map((c) => ({ key: c.id, label: c.display_name || c.name }))}
             activeChip={selectedCourtId}
             onChipPress={(id) => setSelectedCourtId(id)}
           />

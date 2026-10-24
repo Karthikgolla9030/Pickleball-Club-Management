@@ -17,6 +17,7 @@ import { Card } from '@/components/Card';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Court, Match, StandingRow, Team, Tournament } from '@/types';
 import { groupMatchesByRound } from '@/utils/roundRobinLogic';
+import { getCourtDisplayLabel } from '@/utils';
 
 interface RoundRobinResultsTabProps {
   tournament?: Tournament | null;
@@ -65,10 +66,17 @@ export function RoundRobinResultsTab({
     return `${n1} & ${n2}`;
   };
 
-  const getCourtName = (courtId?: string | null) => {
-    if (!courtId) return 'Court 1';
-    const found = courts.find((c) => c.id === courtId);
-    return found ? found.display_name || found.name : 'Court';
+  const getCourtName = (match: Match) => {
+    const label = getCourtDisplayLabel(match, { unassignedLabel: '', unresolvedLabel: '' });
+    if (label) return label;
+    if (match.court_id) {
+      const found = courts.find((c) => c.id === match.court_id);
+      if (found) {
+        const foundLabel = getCourtDisplayLabel(found, { unassignedLabel: '', unresolvedLabel: '' });
+        if (foundLabel) return foundLabel;
+      }
+    }
+    return 'Court';
   };
 
   return (
@@ -148,7 +156,7 @@ export function RoundRobinResultsTab({
                   const teamAName = match.team_a?.name ?? 'Player A';
                   const teamBName = match.team_b?.name ?? 'Player B';
                   const aWon = match.winner_team_id === match.team_a_id;
-                  const courtLabel = getCourtName(match.court_id);
+                  const courtLabel = getCourtName(match);
                   const teamAMembers = getTeamMembersText(match.team_a_id);
                   const teamBMembers = getTeamMembersText(match.team_b_id);
 
