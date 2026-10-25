@@ -93,6 +93,9 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+*.sql
+backups/
+backend/backups/
 uploads/
 backend/uploads/
 

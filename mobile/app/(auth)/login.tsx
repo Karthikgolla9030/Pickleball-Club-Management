@@ -25,8 +25,6 @@ import { Screen, AppText, Input, Button, Card } from '@/components';
 import { useAuth } from '@/hooks';
 import { Colors, Spacing } from '@/theme';
 
-const SHOW_DEMO_CREDENTIALS = Boolean(__DEV__ || process.env.EXPO_PUBLIC_SHOW_DEMO_CREDENTIALS === 'true');
-
 type AuthPortal = 'club' | 'player';
 
 export default function LoginScreen() {
@@ -204,81 +202,6 @@ export default function LoginScreen() {
                 </View>
               )}
 
-              {/* Demo Account Quick-Fill Chips (Dev Environment Only) */}
-              {SHOW_DEMO_CREDENTIALS && (
-                <View style={styles.demoSection}>
-                  <View style={styles.demoSectionHeader}>
-                    <AppText variant="caption" color="secondary" style={styles.demoSectionTitle}>
-                      Quick Fill Demo Account:
-                    </AppText>
-                    <View style={styles.devTag}>
-                      <AppText style={styles.devTagText}>DEV ONLY</AppText>
-                    </View>
-                  </View>
-                  <View style={styles.demoChipsRow}>
-                    {portal === 'player' ? (
-                      <TouchableOpacity
-                        style={styles.demoChip}
-                        onPress={() => {
-                          setEmail('player@demo.local');
-                          setPassword('Password123!');
-                          clearError();
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <AppText variant="caption" style={styles.demoChipText}>
-                          🎾 Player (Pete)
-                        </AppText>
-                      </TouchableOpacity>
-                    ) : (
-                      <>
-                        <TouchableOpacity
-                          style={styles.demoChip}
-                          onPress={() => {
-                            setEmail('owner@demo.local');
-                            setPassword('Password123!');
-                            clearError();
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <AppText variant="caption" style={styles.demoChipText}>
-                            👑 Owner
-                          </AppText>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.demoChip}
-                          onPress={() => {
-                            setEmail('manager@demo.local');
-                            setPassword('Password123!');
-                            clearError();
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <AppText variant="caption" style={styles.demoChipText}>
-                            🛡️ Manager
-                          </AppText>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.demoChip}
-                          onPress={() => {
-                            setEmail('director@demo.local');
-                            setPassword('Password123!');
-                            clearError();
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <AppText variant="caption" style={styles.demoChipText}>
-                            🏆 Director
-                          </AppText>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                  </View>
-                </View>
-              )}
-
               <Button
                 testID="login-submit"
                 label={isLoading ? 'Signing In...' : 'Sign In'}
@@ -429,37 +352,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.status.error,
   },
-  demoSection: {
-    backgroundColor: '#F3F8F5',
-    borderRadius: 10,
-    padding: Spacing[2],
-    borderWidth: 1,
-    borderColor: '#D7EBE1',
-    gap: 6,
-  },
-  demoSectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#4B6B63',
-  },
-  demoChipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  demoChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#C2E0D1',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-  },
-  demoChipText: {
-    color: '#135847',
-    fontWeight: '600',
-    fontSize: 12,
-  },
   registerLink: {
     paddingVertical: Spacing[2],
     alignItems: 'center',
@@ -491,25 +383,6 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: Spacing[4],
-  },
-  demoSectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  devTag: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  devTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#B45309',
   },
   footerContainer: {
     alignItems: 'center',
