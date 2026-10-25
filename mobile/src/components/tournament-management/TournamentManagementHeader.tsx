@@ -3,10 +3,16 @@
  *
  * Standardized tournament header and dynamic format/category-aware navigation tab bar:
  * - Premium, clean light-theme design
- * - Displays Tournament Name, Format Badge, Category Badge, Status Badge
- * - Schedule, Location, and Participant progress
- * - Contextual lifecycle primary CTA and secondary actions menu button
- * - Horizontal, touch-friendly tab bar with Lucide icons and count badges
+ * - Modular architecture:
+ *   1. TournamentManagementTopBar: Compact fixed top bar (Back button, Tournament Name, Overflow menu)
+ *   2. TournamentManagementInfo: Natural-scrolling tournament info section (Badges, Date/Location/Teams, Compact Action)
+ *   3. TournamentManagementTabs: Horizontal touch-friendly tab bar with Lucide icons and count badges
+ *   4. TournamentManagementHeader: Composite component
+ *
+ * Rules:
+ * - Large info section scrolls naturally with the page, preserving >85% of mobile viewport for tab content
+ * - Compact primary CTA instead of oversized full-width button
+ * - Smart action visibility: omits redundant actions (e.g. "View Results" when on Results tab)
  */
 
 import React from 'react';
@@ -43,23 +49,41 @@ import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
-interface TournamentManagementHeaderProps {
+export interface TournamentPrimaryAction {
+  label: string;
+  onPress: () => void;
+  isLoading?: boolean;
+  variant?: 'primary' | 'secondary' | 'danger';
+}
+
+export interface TournamentManagementTopBarProps {
   tournament: Tournament | null;
+  onBack: () => void;
+  onOptionsPress: () => void;
+}
+
+export interface TournamentManagementInfoProps {
+  tournament: Tournament | null;
+  primaryAction?: TournamentPrimaryAction | null;
+  activeTab?: TournamentTabKey;
+}
+
+export interface TournamentManagementTabsProps {
   tabs: TournamentNavTabItem[];
   activeTab: TournamentTabKey;
   onTabChange: (tab: TournamentTabKey) => void;
-  onBack: () => void;
-  onOptionsPress: () => void;
-  canManage?: boolean;
-  primaryAction?: {
-    label: string;
-    onPress: () => void;
-    isLoading?: boolean;
-    variant?: 'primary' | 'secondary' | 'danger';
-  } | null;
 }
 
-function renderTabIcon(iconName: string, color: string, size = 18) {
+export interface TournamentManagementHeaderProps
+  extends TournamentManagementTopBarProps,
+    Omit<TournamentManagementInfoProps, 'activeTab'>,
+    TournamentManagementTabsProps {
+  activeTab: TournamentTabKey;
+  hideTopBar?: boolean;
+  hideInfoSection?: boolean;
+}
+
+function renderTabIcon(iconName: string, color: string, size = 16) {
   switch (iconName) {
     case 'LayoutDashboard':
       return <LayoutDashboard size={size} color={color} />;
@@ -105,15 +129,53 @@ function getStatusBadgeConfig(status?: string) {
   }
 }
 
-export function TournamentManagementHeader({
+/**
+ * 1. Compact Top Bar: Stays fixed at the top of the screen (height ~50px).
+ */
+export function TournamentManagementTopBar({
   tournament,
-  tabs,
-  activeTab,
-  onTabChange,
   onBack,
   onOptionsPress,
+}: TournamentManagementTopBarProps) {
+  return (
+    <View style={styles.topBar}>
+      <TouchableOpacity
+        onPress={onBack}
+        style={styles.iconButton}
+        hitSlop={8}
+        accessibilityLabel="Go back"
+        accessibilityRole="button"
+      >
+        <ArrowLeft size={20} color="#1E293B" strokeWidth={2.4} />
+      </TouchableOpacity>
+
+      <View style={styles.titleContainer}>
+        <AppText style={styles.headerTitle} numberOfLines={1}>
+          {tournament?.name ?? 'Tournament Management'}
+        </AppText>
+      </View>
+
+      <TouchableOpacity
+        onPress={onOptionsPress}
+        style={styles.iconButton}
+        hitSlop={8}
+        accessibilityLabel="More options"
+        accessibilityRole="button"
+      >
+        <MoreVertical size={20} color="#1E293B" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+/**
+ * 2. Natural-Scrolling Tournament Info Section: Badges, Meta details & Compact CTA.
+ */
+export function TournamentManagementInfo({
+  tournament,
   primaryAction,
-}: TournamentManagementHeaderProps) {
+  activeTab,
+}: TournamentManagementInfoProps) {
   const parsedConfig = parseTournamentConfig(tournament);
   const statusConfig = getStatusBadgeConfig(tournament?.status);
   const formatLabel = tournament?.format_label || getFormatDisplayLabel(tournament?.format);
@@ -133,58 +195,39 @@ export function TournamentManagementHeader({
     }
   }, [tournament?.start_date]);
 
-  return (
-    <View style={styles.headerWrapper}>
-      {/* ─── Top Bar: Back & Options ────────────────────────────────────────── */}
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.iconButton}
-          hitSlop={8}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={22} color="#1E293B" strokeWidth={2.4} />
-        </TouchableOpacity>
+  // Redundant action filter: Do not show action if user is already on that tab
+  const isRedundant = React.useMemo(() => {
+    if (!primaryAction) return true;
+    const label = primaryAction.label.toLowerCase();
+    if (activeTab === 'results' && label.includes('result')) return true;
+    if ((activeTab === 'matches' || activeTab === 'matchups') && (label.includes('score') || label.includes('match'))) return true;
+    if (activeTab === 'bracket' && label.includes('bracket')) return true;
+    if (activeTab === 'standings' && label.includes('standing')) return true;
+    return false;
+  }, [primaryAction, activeTab]);
 
-        <View style={styles.titleContainer}>
-          <AppText style={styles.headerTitle} numberOfLines={2}>
-            {tournament?.name ?? 'Tournament Management'}
+  return (
+    <View style={styles.infoSection}>
+      {/* Badges Row */}
+      <View style={styles.badgeRow}>
+        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
+          <View style={[styles.statusDot, { backgroundColor: statusConfig.text }]} />
+          <AppText style={[styles.statusBadgeText, { color: statusConfig.text }]}>
+            {statusConfig.label}
           </AppText>
         </View>
 
-        <TouchableOpacity
-          onPress={onOptionsPress}
-          style={styles.iconButton}
-          hitSlop={8}
-          accessibilityLabel="More options"
-          accessibilityRole="button"
-        >
-          <MoreVertical size={20} color="#1E293B" />
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── Information & Badges Section ──────────────────────────────────── */}
-      <View style={styles.infoSection}>
-        {/* Badges Row */}
-        <View style={styles.badgeRow}>
-          <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusConfig.text }]} />
-            <AppText style={[styles.statusBadgeText, { color: statusConfig.text }]}>
-              {statusConfig.label}
-            </AppText>
-          </View>
-
-          <View style={styles.formatBadge}>
-            <AppText style={styles.formatBadgeText}>{formatLabel}</AppText>
-          </View>
-
-          <View style={styles.categoryBadge}>
-            <AppText style={styles.categoryBadgeText}>{categoryLabel}</AppText>
-          </View>
+        <View style={styles.formatBadge}>
+          <AppText style={styles.formatBadgeText}>{formatLabel}</AppText>
         </View>
 
-        {/* Meta Details Row */}
+        <View style={styles.categoryBadge}>
+          <AppText style={styles.categoryBadgeText}>{categoryLabel}</AppText>
+        </View>
+      </View>
+
+      {/* Meta Details & Compact Action Row */}
+      <View style={styles.metaAndActionRow}>
         <View style={styles.metaRow}>
           {formattedDate && (
             <View style={styles.metaItem}>
@@ -212,92 +255,143 @@ export function TournamentManagementHeader({
           </View>
         </View>
 
-        {/* Primary Action Button (if applicable) */}
-        {primaryAction && (
-          <View style={styles.primaryActionContainer}>
-            <TouchableOpacity
+        {/* Compact, appropriately positioned action button */}
+        {!isRedundant && primaryAction && (
+          <TouchableOpacity
+            style={[
+              styles.compactBtn,
+              primaryAction.variant === 'danger' && styles.compactBtnDanger,
+              primaryAction.variant === 'secondary' && styles.compactBtnSecondary,
+            ]}
+            onPress={primaryAction.onPress}
+            disabled={primaryAction.isLoading}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={primaryAction.label}
+          >
+            <AppText
               style={[
-                styles.primaryBtn,
-                primaryAction.variant === 'danger' && styles.primaryBtnDanger,
-                primaryAction.variant === 'secondary' && styles.primaryBtnSecondary,
+                styles.compactBtnText,
+                primaryAction.variant === 'secondary' && styles.compactBtnSecondaryText,
               ]}
-              onPress={primaryAction.onPress}
-              disabled={primaryAction.isLoading}
-              activeOpacity={0.85}
             >
-              <AppText
-                style={[
-                  styles.primaryBtnText,
-                  primaryAction.variant === 'secondary' && styles.primaryBtnSecondaryText,
-                ]}
-              >
-                {primaryAction.isLoading ? 'Processing...' : primaryAction.label}
-              </AppText>
-            </TouchableOpacity>
-          </View>
+              {primaryAction.isLoading ? 'Processing...' : primaryAction.label}
+            </AppText>
+          </TouchableOpacity>
         )}
       </View>
+    </View>
+  );
+}
 
-      {/* ─── Standardized Dynamic Navigation Tabs ───────────────────────────── */}
-      <View style={styles.tabBarContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabScrollContent}
-        >
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[
-                  styles.tabItem,
-                  isActive && styles.tabItemActive,
-                  tab.isCompetitionTab && !isActive && styles.tabItemCompetition,
-                ]}
-                onPress={() => onTabChange(tab.id)}
-                activeOpacity={0.75}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-              >
-                <View style={styles.tabItemInner}>
-                  {renderTabIcon(
-                    tab.iconName,
-                    isActive ? '#0F766E' : '#64748B',
-                    16
-                  )}
-                  <AppText
+/**
+ * 3. Standardized Horizontal Tab Bar.
+ */
+export function TournamentManagementTabs({
+  tabs,
+  activeTab,
+  onTabChange,
+}: TournamentManagementTabsProps) {
+  return (
+    <View style={styles.tabBarContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabScrollContent}
+      >
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <TouchableOpacity
+              key={tab.id}
+              style={[
+                styles.tabItem,
+                isActive && styles.tabItemActive,
+                tab.isCompetitionTab && !isActive && styles.tabItemCompetition,
+              ]}
+              onPress={() => onTabChange(tab.id)}
+              activeOpacity={0.75}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+            >
+              <View style={styles.tabItemInner}>
+                {renderTabIcon(
+                  tab.iconName,
+                  isActive ? '#0F766E' : '#64748B',
+                  15
+                )}
+                <AppText
+                  style={[
+                    styles.tabLabel,
+                    isActive && styles.tabLabelActive,
+                  ]}
+                >
+                  {tab.label}
+                </AppText>
+                {tab.badge !== undefined && (
+                  <View
                     style={[
-                      styles.tabLabel,
-                      isActive && styles.tabLabelActive,
+                      styles.badgePill,
+                      isActive && styles.badgePillActive,
                     ]}
                   >
-                    {tab.label}
-                  </AppText>
-                  {tab.badge !== undefined && (
-                    <View
+                    <AppText
                       style={[
-                        styles.badgePill,
-                        isActive && styles.badgePillActive,
+                        styles.badgePillText,
+                        isActive && styles.badgePillTextActive,
                       ]}
                     >
-                      <AppText
-                        style={[
-                          styles.badgePillText,
-                          isActive && styles.badgePillTextActive,
-                        ]}
-                      >
-                        {tab.badge}
-                      </AppText>
-                    </View>
-                  )}
-                </View>
-                {isActive && <View style={styles.activeUnderline} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+                      {tab.badge}
+                    </AppText>
+                  </View>
+                )}
+              </View>
+              {isActive && <View style={styles.activeUnderline} />}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * 4. Composite TournamentManagementHeader (Backwards compatible).
+ */
+export function TournamentManagementHeader({
+  tournament,
+  tabs,
+  activeTab,
+  onTabChange,
+  onBack,
+  onOptionsPress,
+  primaryAction,
+  hideTopBar = false,
+  hideInfoSection = false,
+}: TournamentManagementHeaderProps) {
+  return (
+    <View style={styles.headerWrapper}>
+      {!hideTopBar && (
+        <TournamentManagementTopBar
+          tournament={tournament}
+          onBack={onBack}
+          onOptionsPress={onOptionsPress}
+        />
+      )}
+
+      {!hideInfoSection && (
+        <TournamentManagementInfo
+          tournament={tournament}
+          primaryAction={primaryAction}
+          activeTab={activeTab}
+        />
+      )}
+
+      <TournamentManagementTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        onTabChange={onTabChange}
+      />
     </View>
   );
 }
@@ -308,10 +402,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowRadius: 4,
+    elevation: 2,
     zIndex: 20,
   },
   topBar: {
@@ -319,14 +413,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[3],
-    paddingBottom: Spacing[2],
-    gap: Spacing[3],
+    paddingTop: Spacing[2.5],
+    paddingBottom: Spacing[2.5],
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F1F5F9',
+    gap: Spacing[2],
+    zIndex: 30,
   },
   iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
@@ -337,20 +435,24 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
   },
   headerTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
     letterSpacing: -0.2,
     textAlign: 'center',
-    lineHeight: 21,
+    lineHeight: 20,
   },
   infoSection: {
     paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[3],
+    paddingTop: Spacing[2.5],
+    paddingBottom: Spacing[2.5],
+    backgroundColor: '#FFFFFF',
     gap: Spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
   },
   badgeRow: {
     flexDirection: 'row',
@@ -362,7 +464,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingVertical: 3,
     borderRadius: Radius.full,
     gap: 5,
   },
@@ -372,41 +474,50 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     letterSpacing: 0.2,
   },
   formatBadge: {
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   formatBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#334155',
   },
   categoryBadge: {
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingVertical: 3,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: '#A7F3D0',
   },
   categoryBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#065F46',
+  },
+  metaAndActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
+    minWidth: 200,
   },
   metaItem: {
     flexDirection: 'row',
@@ -414,55 +525,60 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     fontWeight: '500',
   },
-  primaryActionContainer: {
-    marginTop: Spacing[1],
-  },
-  primaryBtn: {
+  compactBtn: {
     backgroundColor: '#0F766E',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    borderRadius: Radius.full,
+    paddingVertical: 6,
+    paddingHorizontal: 13,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0F766E',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
     elevation: 2,
+    alignSelf: 'flex-start',
   },
-  primaryBtnDanger: {
+  compactBtnDanger: {
     backgroundColor: '#DC2626',
+    shadowColor: '#DC2626',
   },
-  primaryBtnSecondary: {
-    backgroundColor: '#F1F5F9',
+  compactBtnSecondary: {
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  primaryBtnText: {
+  compactBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 11.5,
     fontWeight: '700',
   },
-  primaryBtnSecondaryText: {
+  compactBtnSecondaryText: {
     color: '#334155',
   },
   tabBarContainer: {
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    zIndex: 10,
   },
   tabScrollContent: {
     paddingHorizontal: Spacing[3],
-    paddingRight: Spacing[5],  // trailing space so last tab scrolls fully into view
+    paddingRight: Spacing[5],
     gap: 2,
   },
   tabItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 40,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+    minHeight: 38,
     flexShrink: 0,
     position: 'relative',
     alignItems: 'center',
@@ -477,10 +593,10 @@ const styles = StyleSheet.create({
   tabItemInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   tabLabel: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -490,15 +606,15 @@ const styles = StyleSheet.create({
   },
   badgePill: {
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
   },
   badgePillActive: {
     backgroundColor: '#CCFBF1',
   },
   badgePillText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#475569',
   },

@@ -164,6 +164,8 @@ export function BracketMatchesTab({
               chips={sectionChips}
               activeChip={sectionFilter}
               onChipPress={(key) => setSectionFilter(key)}
+              style={styles.filterChipsRow}
+              contentContainerStyle={styles.filterChipsContent}
             />
           )}
 
@@ -172,6 +174,8 @@ export function BracketMatchesTab({
             chips={statusChips}
             activeChip={statusFilter}
             onChipPress={(key) => setStatusFilter(key)}
+            style={styles.filterChipsRow}
+            contentContainerStyle={styles.filterChipsContent}
           />
 
           {/* Ready to Play Now Queue (Fast Organizer Action) */}
@@ -376,7 +380,6 @@ export function BracketMatchesTab({
                           <View style={{ flex: 1 }}>
                             <AppText
                               variant="bodySmall"
-                              numberOfLines={1}
                               style={[
                                 styles.teamName,
                                 winnerIsA && styles.winnerTeamName,
@@ -429,7 +432,6 @@ export function BracketMatchesTab({
                           <View style={{ flex: 1 }}>
                             <AppText
                               variant="bodySmall"
-                              numberOfLines={1}
                               style={[
                                 styles.teamName,
                                 winnerIsB && styles.winnerTeamName,
@@ -540,6 +542,12 @@ export function BracketMatchesTab({
 }
 
 const styles = StyleSheet.create({
+  filterChipsRow: {
+    marginHorizontal: -Spacing[4],
+  },
+  filterChipsContent: {
+    paddingHorizontal: Spacing[4],
+  },
   container: {
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[4],
@@ -650,11 +658,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   matchHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing[2],
+    flexShrink: 1,
   },
   courtPill: {
     paddingHorizontal: Spacing[1.5],

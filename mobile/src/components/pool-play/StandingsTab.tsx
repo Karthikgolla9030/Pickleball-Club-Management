@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { BarChart2 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
@@ -166,9 +166,10 @@ export function StandingsTab({
                   </AppText>
                 </View>
               ) : (
-                <>
-                  {/* Header Row */}
-                  <View style={styles.tableHeaderRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={styles.tableInnerContainer}>
+                    {/* Header Row */}
+                    <View style={styles.tableHeaderRow}>
                     <AppText variant="caption" bold style={styles.colRank}>
                       #
                     </AppText>
@@ -206,7 +207,7 @@ export function StandingsTab({
                       </AppText>
 
                       <View style={styles.colTeam}>
-                        <AppText variant="bodySmall" bold style={styles.teamNameText} numberOfLines={1}>
+                        <AppText variant="bodySmall" bold style={styles.teamNameText}>
                           {row.team.name}
                         </AppText>
                         <AppText variant="caption" color="tertiary" numberOfLines={1}>
@@ -249,7 +250,8 @@ export function StandingsTab({
                       </View>
                     </View>
                   ))}
-                </>
+                  </View>
+                </ScrollView>
               )}
             </Card>
           </View>
@@ -357,6 +359,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  tableInnerContainer: {
+    minWidth: 450,
+  },
   tableCard: {
     backgroundColor: Colors.surface.elevated,
     borderRadius: Radius.lg,
@@ -390,14 +395,14 @@ const styles = StyleSheet.create({
     color: Colors.text.tertiary,
   },
   colTeam: {
-    flex: 1,
+    width: 145,
     paddingRight: Spacing[1],
   },
   teamNameText: {
     color: Colors.text.primary,
   },
   colStat: {
-    width: 32,
+    width: 36,
     textAlign: 'center',
     color: Colors.text.secondary,
   },
@@ -414,7 +419,7 @@ const styles = StyleSheet.create({
     color: Colors.text.tertiary,
   },
   colBadge: {
-    width: 76,
+    width: 85,
     alignItems: 'flex-end',
   },
   legendCard: {

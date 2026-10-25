@@ -29,7 +29,9 @@ import {
   RoundRobinScoreModal,
   RoundRobinStandingsTab,
   RoundRobinTeamsTab,
-  TournamentManagementHeader,
+  TournamentManagementTopBar,
+  TournamentManagementInfo,
+  TournamentManagementTabs,
   TournamentSettingsTab,
   Screen,
   LoadingState,
@@ -527,12 +529,9 @@ export default function RoundRobinWorkspaceScreen() {
   return (
     <Screen safeArea={false} style={styles.screen}>
       <View style={styles.responsiveContainer}>
-        {/* Standardized Format & Category-Aware Header */}
-        <TournamentManagementHeader
+        {/* 1. Compact Fixed Navigation Bar */}
+        <TournamentManagementTopBar
           tournament={tournament ?? null}
-          tabs={navTabs}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           onBack={() => {
             if (router.canGoBack()) {
               router.back();
@@ -541,34 +540,14 @@ export default function RoundRobinWorkspaceScreen() {
             }
           }}
           onOptionsPress={handleOpenOptionsMenu}
-          canManage={canManage}
-          primaryAction={primaryAction}
         />
 
-        {/* Draft Mode Notice Banner */}
-        {tournament?.status === 'draft' && (
-          <DraftTournamentBanner
-            tournamentName={tournament?.name}
-            onPublish={handlePublishTournament}
-            isPublishing={isOpenRegistrationPending}
-          />
-        )}
-
-        {/* Registration Open Action Banner */}
-        {tournament?.status === 'registration_open' && (
-          <RegistrationOpenBanner
-            tournamentName={tournament?.name}
-            participantCount={totalRegisteredPlayers}
-            maxParticipants={tournament?.max_participants}
-            onCloseRegistration={handleCloseRegistration}
-            isClosing={isCloseRegistrationPending}
-          />
-        )}
-
-        {/* Tab Content ScrollView */}
+        {/* 2. Scrollable View: Info section scrolls naturally, Tabs stay sticky */}
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -577,6 +556,42 @@ export default function RoundRobinWorkspaceScreen() {
             />
           }
         >
+          {/* Child 0: Natural-Scrolling Info & Banners */}
+          <View style={styles.headerInfoWrapper}>
+            <TournamentManagementInfo
+              tournament={tournament ?? null}
+              primaryAction={primaryAction}
+              activeTab={activeTab}
+            />
+
+            {tournament?.status === 'draft' && (
+              <DraftTournamentBanner
+                tournamentName={tournament?.name}
+                onPublish={handlePublishTournament}
+                isPublishing={isOpenRegistrationPending}
+              />
+            )}
+
+            {tournament?.status === 'registration_open' && (
+              <RegistrationOpenBanner
+                tournamentName={tournament?.name}
+                participantCount={totalRegisteredPlayers}
+                maxParticipants={tournament?.max_participants}
+                onCloseRegistration={handleCloseRegistration}
+                isClosing={isCloseRegistrationPending}
+              />
+            )}
+          </View>
+
+          {/* Child 1: Sticky Tab Bar */}
+          <TournamentManagementTabs
+            tabs={navTabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+
+          {/* Child 2: Tab Body Content */}
+          <View style={styles.tabBodyWrapper}>
           {activeTab === 'overview' && (
             <RoundRobinOverviewTab
               tournament={tournament!}
@@ -648,6 +663,7 @@ export default function RoundRobinWorkspaceScreen() {
               tournament={tournament ?? null}
             />
           )}
+          </View>
         </ScrollView>
 
         {/* Modals */}
@@ -678,6 +694,12 @@ export default function RoundRobinWorkspaceScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerInfoWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBodyWrapper: {
+    flex: 1,
+  },
   screen: {
     backgroundColor: '#F1F8F3',
   },

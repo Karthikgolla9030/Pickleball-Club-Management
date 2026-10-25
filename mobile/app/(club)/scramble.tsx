@@ -27,7 +27,9 @@ import {
   LoadingState,
   RegistrationOpenBanner,
   Screen,
-  TournamentManagementHeader,
+  TournamentManagementTopBar,
+  TournamentManagementInfo,
+  TournamentManagementTabs,
   TournamentSettingsTab,
 } from '@/components';
 import {
@@ -530,43 +532,7 @@ export default function ScrambleWorkspaceScreen() {
 
   return (
     <Screen style={styles.screen}>
-      {/* Standardized Header */}
-      <TournamentManagementHeader
-        tournament={tournament ?? null}
-        tabs={navTabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        canManage={canManage}
-        onBack={() => {
-          if (router.canGoBack()) {
-            router.back();
-          } else {
-            router.replace('/(club)/tournaments');
-          }
-        }}
-        onOptionsPress={handleOpenOptionsMenu}
-        primaryAction={primaryAction}
-      />
 
-      {/* Draft Mode Notice Banner */}
-      {tournament?.status === 'draft' && (
-        <DraftTournamentBanner
-          tournamentName={tournament?.name}
-          onPublish={handlePublishTournament}
-          isPublishing={isOpenRegistrationPending}
-        />
-      )}
-
-      {/* Registration Open Action Banner */}
-      {tournament?.status === 'registration_open' && (
-        <RegistrationOpenBanner
-          tournamentName={tournament?.name}
-          participantCount={registrations.length}
-          maxParticipants={tournament?.max_participants}
-          onCloseRegistration={handleCloseRegistration}
-          isClosing={isCloseRegistrationPending}
-        />
-      )}
 
       {/* Tab Content with Pull to Refresh */}
       <ScrollView
@@ -699,6 +665,12 @@ export default function ScrambleWorkspaceScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerInfoWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBodyWrapper: {
+    flex: 1,
+  },
   screen: {
     flex: 1,
     backgroundColor: '#F3FAF5',

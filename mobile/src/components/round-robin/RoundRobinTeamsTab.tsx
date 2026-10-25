@@ -24,6 +24,7 @@ import { UserPlus, Trash2, CheckCircle2, Shield } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
+import { TournamentTeamCard } from '@/components/tournament-management/TournamentTeamCard';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Team, TeamMember, Tournament } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
@@ -234,87 +235,21 @@ export function RoundRobinTeamsTab({
         /* Populated Team / Player List Ranked by Average Skill Rating */
         <View style={styles.playersList}>
           {sortedTeams.map((team, idx) => {
-            const member1 = team.members[0];
-            const member2 = team.members[1];
-            const m1Rating = getPlayerRating(member1);
-            const m2Rating = getPlayerRating(member2);
             const avgRating = getTeamAverage(team);
             const displaySeed = team.seed ?? idx + 1;
 
             return (
-              <Card key={team.id} style={styles.playerCard}>
-                {/* Header: Seed #, Team Name, Registration Status */}
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.seedBadge}>
-                    <AppText style={styles.seedBadgeText}>#{displaySeed}</AppText>
-                  </View>
-
-                  <View style={styles.teamTitleCol}>
-                    <AppText style={styles.teamNameText} numberOfLines={1}>
-                      {team.name}
-                    </AppText>
-                  </View>
-
-                  <View style={styles.confirmedBadge}>
-                    <CheckCircle2 size={12} color="#065F46" />
-                    <AppText style={styles.confirmedBadgeText}>Confirmed</AppText>
-                  </View>
-                </View>
-
-                {/* Body: Player Details & Ratings */}
-                <View style={styles.membersContainer}>
-                  {teamSize === 1 ? (
-                    <View style={styles.memberLine}>
-                      <AppText style={styles.memberName}>
-                        {member1?.display_name || member1?.user_email || 'Player 1'}
-                      </AppText>
-                      <AppText style={styles.memberRating}>
-                        — {m1Rating.toFixed(1)}
-                      </AppText>
-                    </View>
-                  ) : (
-                    <>
-                      <View style={styles.memberLine}>
-                        <AppText style={styles.memberName}>
-                          {member1?.display_name || member1?.user_email || 'Player 1'}
-                        </AppText>
-                        <AppText style={styles.memberRating}>
-                          — {m1Rating.toFixed(1)}
-                        </AppText>
-                      </View>
-                      <View style={styles.memberLine}>
-                        <AppText style={styles.memberName}>
-                          {member2?.display_name || member2?.user_email || 'Player 2'}
-                        </AppText>
-                        <AppText style={styles.memberRating}>
-                          — {m2Rating.toFixed(1)}
-                        </AppText>
-                      </View>
-                    </>
-                  )}
-                </View>
-
-                {/* Footer: Team Average & Actions */}
-                <View style={styles.cardFooterRow}>
-                  <View style={styles.avgBadge}>
-                    <AppText style={styles.avgBadgeText}>
-                      {teamSize === 1
-                        ? `Skill Rating — ${avgRating.toFixed(1)}`
-                        : `Team Average — ${avgRating.toFixed(2)}`}
-                    </AppText>
-                  </View>
-
-                  {canModifyTeams && !matchesExist && (
-                    <TouchableOpacity
-                      onPress={() => handleDeleteConfirm(team.id, team.name)}
-                      style={styles.deleteBtn}
-                      hitSlop={8}
-                    >
-                      <Trash2 size={16} color={Colors.status.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </Card>
+              <TournamentTeamCard
+                key={team.id}
+                name={team.name}
+                seed={displaySeed}
+                avgRating={avgRating}
+                members={team.members}
+                teamSize={teamSize}
+                statusLabel="Confirmed"
+                canDelete={canModifyTeams && !matchesExist}
+                onDelete={() => handleDeleteConfirm(team.id, team.name)}
+              />
             );
           })}
         </View>

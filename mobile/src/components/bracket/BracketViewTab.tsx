@@ -320,7 +320,7 @@ export function BracketViewTab({
             <AppText variant="caption" color="secondary" style={styles.matchNumText}>
               MATCH #{match.match_number ?? match.bracket_position}
             </AppText>
-            {fullWidth && match.label && (
+            {!fullWidth && match.label && (
               <Badge label={match.label} variant="default" />
             )}
             {courtLabel && (
@@ -414,7 +414,6 @@ export function BracketViewTab({
               <View style={{ flex: 1 }}>
                 <AppText
                   variant="bodySmall"
-                  numberOfLines={1}
                   style={[
                     styles.teamNameLabel,
                     winnerIsA && styles.winnerTeamName,
@@ -472,7 +471,6 @@ export function BracketViewTab({
               <View style={{ flex: 1 }}>
                 <AppText
                   variant="bodySmall"
-                  numberOfLines={1}
                   style={[
                     styles.teamNameLabel,
                     winnerIsB && styles.winnerTeamName,
@@ -723,10 +721,7 @@ export function BracketViewTab({
 
       {/* ─── Mode 1: Round View (Vertical, Full-Width, Mobile-Friendly) ────── */}
       {viewMode === 'round' && (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.roundMatchesContainer}
-        >
+        <View style={styles.roundMatchesContainer}>
           {displayedGroups[safeRoundIndex] ? (
             <>
               <View style={styles.roundHeaderRow}>
@@ -746,7 +741,7 @@ export function BracketViewTab({
               No matches in this round.
             </AppText>
           )}
-        </ScrollView>
+        </View>
       )}
 
       {/* ─── Mode 2: Tree View (Horizontally Scrollable Columns) ─────────── */}
@@ -971,11 +966,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   matchMetaLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
+    flexWrap: 'wrap',
+    flexShrink: 1,
   },
   matchNumText: {
     fontWeight: '700',
@@ -1103,11 +1102,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   roundStepperWrapper: {
+    marginHorizontal: -Spacing[4],
     paddingTop: 2,
     paddingBottom: 4,
   },
   roundStepperContent: {
     flexDirection: 'row',
+    paddingHorizontal: Spacing[4],
+    paddingRight: Spacing[6],
     gap: Spacing[2],
   },
   roundStepPill: {

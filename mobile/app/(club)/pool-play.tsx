@@ -28,7 +28,9 @@ import {
   SetupCourtsModal,
   StandingsTab,
   TeamsPoolsTab,
-  TournamentManagementHeader,
+  TournamentManagementTopBar,
+  TournamentManagementInfo,
+  TournamentManagementTabs,
   TournamentSettingsTab,
   DraftTournamentBanner,
   RegistrationOpenBanner,
@@ -961,12 +963,9 @@ export default function PoolPlayManagementScreen() {
   return (
     <Screen safeArea={false} style={styles.screen}>
       <View style={styles.responsiveContainer}>
-        {/* ─── Top Standardized Management Header ─────────────────────────────── */}
-        <TournamentManagementHeader
+        {/* 1. Compact Fixed Navigation Bar */}
+        <TournamentManagementTopBar
           tournament={effectiveTournament}
-          tabs={navTabs}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
           onBack={() => {
             if (router.canGoBack()) {
               router.back();
@@ -975,42 +974,58 @@ export default function PoolPlayManagementScreen() {
             }
           }}
           onOptionsPress={handleOpenOptionsMenu}
-          canManage={canManage}
-          primaryAction={primaryAction}
         />
 
-        {/* Draft Mode Notice Banner */}
-        {effectiveTournament?.status === 'draft' && (
-          <DraftTournamentBanner
-            tournamentName={effectiveTournament?.name}
-            onPublish={handlePublishTournament}
-            isPublishing={isOpenRegistrationPending}
-          />
-        )}
-
-        {/* Registration Open Action Banner */}
-        {effectiveTournament?.status === 'registration_open' && (
-          <RegistrationOpenBanner
-            tournamentName={effectiveTournament?.name}
-            participantCount={registrations.length}
-            maxParticipants={effectiveTournament?.max_participants}
-            onCloseRegistration={handleCloseRegistration}
-            isClosing={isCloseRegistrationPending}
-          />
-        )}
-
+        {/* 2. Scrollable View: Info section scrolls naturally, Tabs stay sticky */}
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
+          stickyHeaderIndices={[1]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isLoadingTournament}
               onRefresh={handleRefresh}
             />
           }
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
+          {/* Child 0: Natural-Scrolling Info & Banners */}
+          <View style={styles.headerInfoWrapper}>
+            <TournamentManagementInfo
+              tournament={effectiveTournament}
+              primaryAction={primaryAction}
+              activeTab={activeTab}
+            />
+
+            {effectiveTournament?.status === 'draft' && (
+              <DraftTournamentBanner
+                tournamentName={effectiveTournament?.name}
+                onPublish={handlePublishTournament}
+                isPublishing={isOpenRegistrationPending}
+              />
+            )}
+
+            {effectiveTournament?.status === 'registration_open' && (
+              <RegistrationOpenBanner
+                tournamentName={effectiveTournament?.name}
+                participantCount={registrations.length}
+                maxParticipants={effectiveTournament?.max_participants}
+                onCloseRegistration={handleCloseRegistration}
+                isClosing={isCloseRegistrationPending}
+              />
+            )}
+          </View>
+
+          {/* Child 1: Sticky Tab Bar */}
+          <TournamentManagementTabs
+            tabs={navTabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+
+          {/* Child 2: Tab Body Content */}
+          <View style={styles.tabBodyWrapper}>
           {/* ─── Tab 1: Overview ───────────────────────────────────────── */}
           {activeTab === 'overview' && (
             <PoolPlayOverviewTab
@@ -1127,6 +1142,7 @@ export default function PoolPlayManagementScreen() {
               tournament={effectiveTournament ?? tournament ?? null}
             />
           )}
+          </View>
         </ScrollView>
 
         {/* ─── Setup & Courts Modal ──────────────────────────────────── */}
@@ -1144,6 +1160,12 @@ export default function PoolPlayManagementScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerInfoWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBodyWrapper: {
+    flex: 1,
+  },
   screen: {
     backgroundColor: '#F1F8F3',
   },

@@ -4,3 +4,4 @@
 
 export * from './TournamentManagementHeader';
 export * from './TournamentSettingsTab';
+export * from './TournamentTeamCard';

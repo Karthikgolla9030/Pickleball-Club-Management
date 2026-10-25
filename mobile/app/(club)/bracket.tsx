@@ -18,6 +18,7 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -27,7 +28,9 @@ import {
   LoadingState,
   RegistrationOpenBanner,
   Screen,
-  TournamentManagementHeader,
+  TournamentManagementTopBar,
+  TournamentManagementInfo,
+  TournamentManagementTabs,
   TournamentSettingsTab,
 } from '@/components';
 import {
@@ -550,46 +553,59 @@ export default function BracketWorkspaceScreen() {
 
   return (
     <Screen scrollable={false} style={styles.screen}>
-      {/* Standardized Header */}
-      <TournamentManagementHeader
+      {/* 1. Compact Fixed Navigation Bar */}
+      <TournamentManagementTopBar
         tournament={tournament}
-        tabs={navTabs}
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
         onBack={() => router.back()}
         onOptionsPress={handleOpenOptionsMenu}
-        canManage={canManage}
-        primaryAction={primaryAction}
       />
 
-      {/* Draft Mode Notice Banner */}
-      {tournament.status === 'draft' && (
-        <DraftTournamentBanner
-          tournamentName={tournament.name}
-          onPublish={handlePublishTournament}
-          isPublishing={isOpenRegistrationPending}
-        />
-      )}
-
-      {/* Registration Open Action Banner */}
-      {tournament.status === 'registration_open' && (
-        <RegistrationOpenBanner
-          tournamentName={tournament.name}
-          participantCount={tournament.participant_count ?? (teamSize > 1 ? teams.length * teamSize : teams.length)}
-          maxParticipants={tournament.max_participants}
-          onCloseRegistration={handleCloseRegistration}
-          isClosing={isCloseRegistrationPending}
-        />
-      )}
-
-      {/* Main Tab Content */}
+      {/* 2. Scrollable View: Info scrolls naturally, Tab Bar remains sticky */}
       <ScrollView
         style={styles.tabContent}
         contentContainerStyle={styles.tabContentContainer}
+        stickyHeaderIndices={[1]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={isRefreshing} onRefresh={handleRefreshAll} />
         }
       >
+        {/* Child 0: Natural-Scrolling Tournament Info & Banners */}
+        <View style={styles.headerInfoWrapper}>
+          <TournamentManagementInfo
+            tournament={tournament}
+            primaryAction={primaryAction}
+            activeTab={activeTab}
+          />
+
+          {tournament.status === 'draft' && (
+            <DraftTournamentBanner
+              tournamentName={tournament.name}
+              onPublish={handlePublishTournament}
+              isPublishing={isOpenRegistrationPending}
+            />
+          )}
+
+          {tournament.status === 'registration_open' && (
+            <RegistrationOpenBanner
+              tournamentName={tournament.name}
+              participantCount={tournament.participant_count ?? (teamSize > 1 ? teams.length * teamSize : teams.length)}
+              maxParticipants={tournament.max_participants}
+              onCloseRegistration={handleCloseRegistration}
+              isClosing={isCloseRegistrationPending}
+            />
+          )}
+        </View>
+
+        {/* Child 1: Sticky Tab Bar */}
+        <TournamentManagementTabs
+          tabs={navTabs}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+
+        {/* Child 2: Tab Body Content */}
+        <View style={styles.tabBodyWrapper}>
         {activeTab === 'overview' && (
           <BracketOverviewTab
             tournament={tournament}
@@ -673,6 +689,7 @@ export default function BracketWorkspaceScreen() {
             tournament={tournament}
           />
         )}
+        </View>
       </ScrollView>
 
       {/* Score Modal */}
@@ -703,6 +720,12 @@ export default function BracketWorkspaceScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerInfoWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBodyWrapper: {
+    flex: 1,
+  },
   screen: {
     flex: 1,
     backgroundColor: '#F1F8F3',

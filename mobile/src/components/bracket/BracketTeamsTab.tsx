@@ -15,10 +15,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Users, Lock, Trash2, Info, Plus } from 'lucide-react-native';
+import { Users, Lock, Info, Plus } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { TournamentTeamCard } from '@/components/tournament-management/TournamentTeamCard';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Team } from '@/types';
 
@@ -175,96 +176,20 @@ export function BracketTeamsTab({
         </Card>
       ) : (
         <View style={styles.listContent}>
-          {sortedTeams.map((item, index) => {
-            const member1 = item.members[0];
-            const member2 = item.members[1];
-            const p1Name = member1?.display_name || member1?.user_email || (teamSize === 1 ? 'Player' : 'Partner 1');
-            const p2Name = member2?.display_name || member2?.user_email || 'Partner 2';
-            const avgRating = getTeamAvgRating(item).toFixed(2);
-
-            return (
-              <Card key={item.id} style={styles.teamCard}>
-                {/* Header: Seed / Team #, Rating and Actions */}
-                <View style={styles.teamHeaderRow}>
-                  <View style={styles.teamTitleLeft}>
-                    {item.seed !== null ? (
-                      <View style={styles.seedBadge}>
-                        <AppText variant="caption" style={styles.seedBadgeText}>
-                          #{item.seed}
-                        </AppText>
-                      </View>
-                    ) : (
-                      <View style={[styles.seedBadge, styles.unseededBadge]}>
-                        <AppText variant="caption" color="secondary">
-                          #{index + 1}
-                        </AppText>
-                      </View>
-                    )}
-                    <AppText variant="heading3" numberOfLines={1} style={styles.teamNameText}>
-                      {item.name}
-                    </AppText>
-                    <View style={styles.ratingBadge}>
-                      <AppText style={styles.ratingText}>⭐ {avgRating} avg</AppText>
-                    </View>
-                  </View>
-
-                  {canManage && canModifyTeams && (
-                    <TouchableOpacity
-                      onPress={() => handleDeleteConfirm(item)}
-                      disabled={isDeletingTeam}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={styles.trashBtn}
-                    >
-                      <Trash2 size={16} color={Colors.status.error} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Partners List */}
-                <View style={styles.partnersBox}>
-                  <View style={styles.partnerRow}>
-                    <View style={styles.partnerDot} />
-                    <AppText variant="bodySmall" style={styles.partnerName}>
-                      {p1Name}
-                    </AppText>
-                    {member1?.skill_rating !== null && member1?.skill_rating !== undefined && (
-                      <View style={styles.playerRatingPill}>
-                        <AppText style={styles.playerRatingText}>
-                          {Number(member1.skill_rating).toFixed(1)}
-                        </AppText>
-                      </View>
-                    )}
-                    {member1?.membership_number && (
-                      <AppText variant="caption" color="tertiary">
-                        #{member1.membership_number}
-                      </AppText>
-                    )}
-                  </View>
-
-                  {teamSize > 1 && (
-                    <View style={styles.partnerRow}>
-                      <View style={styles.partnerDot} />
-                      <AppText variant="bodySmall" style={styles.partnerName}>
-                        {p2Name}
-                      </AppText>
-                      {member2?.skill_rating !== null && member2?.skill_rating !== undefined && (
-                        <View style={styles.playerRatingPill}>
-                          <AppText style={styles.playerRatingText}>
-                            {Number(member2.skill_rating).toFixed(1)}
-                          </AppText>
-                        </View>
-                      )}
-                      {member2?.membership_number && (
-                        <AppText variant="caption" color="tertiary">
-                          #{member2.membership_number}
-                        </AppText>
-                      )}
-                    </View>
-                  )}
-                </View>
-              </Card>
-            );
-          })}
+          {sortedTeams.map((item, index) => (
+            <TournamentTeamCard
+              key={item.id}
+              name={item.name}
+              seed={item.seed}
+              displayIndex={index + 1}
+              avgRating={getTeamAvgRating(item)}
+              members={item.members}
+              teamSize={teamSize}
+              canDelete={canManage && canModifyTeams}
+              onDelete={() => handleDeleteConfirm(item)}
+              isDeleting={isDeletingTeam}
+            />
+          ))}
         </View>
       )}
     </View>

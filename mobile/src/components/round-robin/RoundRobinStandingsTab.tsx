@@ -105,80 +105,84 @@ export function RoundRobinStandingsTab({
       ) : (
         /* Populated Standings Table */
         <Card style={styles.tableCard}>
-          {/* Header Row */}
-          <View style={styles.tableHeader}>
-            <AppText style={[styles.colHeader, styles.colRank]}>#</AppText>
-            <AppText style={[styles.colHeader, styles.colTeam]}>
-              {teamSize > 1 ? 'Team / Players' : 'Player'}
-            </AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>P</AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>W</AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>L</AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>Diff</AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>PF</AppText>
-            <AppText style={[styles.colHeader, styles.colStat]}>PA</AppText>
-          </View>
-
-          {/* Rows */}
-          {standings.map((row) => {
-            const isDiffPositive = row.points_differential > 0;
-            const membersText = getTeamMembersText(row.team_id);
-
-            return (
-              <View key={row.team_id} style={styles.tableRow}>
-                <AppText style={[styles.cellText, styles.colRank, styles.rankNum]}>
-                  {row.rank}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tableScrollContent}>
+            <View style={styles.tableInnerContainer}>
+              {/* Header Row */}
+              <View style={styles.tableHeader}>
+                <AppText style={[styles.colHeader, styles.colRank]}>#</AppText>
+                <AppText style={[styles.colHeader, styles.colTeam]}>
+                  {teamSize > 1 ? 'Team / Players' : 'Player'}
                 </AppText>
-
-                <View style={styles.colTeam}>
-                  <AppText style={styles.teamNameText} numberOfLines={1}>
-                    {row.team_name}
-                  </AppText>
-                  {teamSize > 1 && membersText && (
-                    <AppText style={styles.teamMembersSub} numberOfLines={1}>
-                      {membersText}
-                    </AppText>
-                  )}
-                </View>
-
-                {/* Matches Played */}
-                <AppText style={[styles.cellText, styles.colStat]}>
-                  {row.matches_played}
-                </AppText>
-
-                {/* Wins */}
-                <AppText style={[styles.cellText, styles.colStat, styles.boldStat]}>
-                  {row.wins}
-                </AppText>
-
-                {/* Losses */}
-                <AppText style={[styles.cellText, styles.colStat]}>
-                  {row.losses}
-                </AppText>
-
-                {/* Points Differential */}
-                <AppText
-                  style={[
-                    styles.cellText,
-                    styles.colStat,
-                    isDiffPositive && styles.positiveDiff,
-                  ]}
-                >
-                  {isDiffPositive ? `+${row.points_differential}` : row.points_differential}
-                </AppText>
-
-                {/* Points For */}
-                <AppText style={[styles.cellText, styles.colStat]}>
-                  {row.points_scored}
-                </AppText>
-
-                {/* Points Allowed */}
-                <AppText style={[styles.cellText, styles.colStat]}>
-                  {row.points_allowed}
-                </AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>P</AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>W</AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>L</AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>Diff</AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>PF</AppText>
+                <AppText style={[styles.colHeader, styles.colStat]}>PA</AppText>
               </View>
-            );
-          })}
+
+              {/* Rows */}
+              {standings.map((row) => {
+                const isDiffPositive = row.points_differential > 0;
+                const membersText = getTeamMembersText(row.team_id);
+
+                return (
+                  <View key={row.team_id} style={styles.tableRow}>
+                    <AppText style={[styles.cellText, styles.colRank, styles.rankNum]}>
+                      {row.rank}
+                    </AppText>
+
+                    <View style={styles.colTeam}>
+                      <AppText style={styles.teamNameText}>
+                        {row.team_name}
+                      </AppText>
+                      {teamSize > 1 && membersText && (
+                        <AppText style={styles.teamMembersSub}>
+                          {membersText}
+                        </AppText>
+                      )}
+                    </View>
+
+                    {/* Matches Played */}
+                    <AppText style={[styles.cellText, styles.colStat]}>
+                      {row.matches_played}
+                    </AppText>
+
+                    {/* Wins */}
+                    <AppText style={[styles.cellText, styles.colStat, styles.boldStat]}>
+                      {row.wins}
+                    </AppText>
+
+                    {/* Losses */}
+                    <AppText style={[styles.cellText, styles.colStat]}>
+                      {row.losses}
+                    </AppText>
+
+                    {/* Points Differential */}
+                    <AppText
+                      style={[
+                        styles.cellText,
+                        styles.colStat,
+                        isDiffPositive && styles.positiveDiff,
+                      ]}
+                    >
+                      {isDiffPositive ? `+${row.points_differential}` : row.points_differential}
+                    </AppText>
+
+                    {/* Points For */}
+                    <AppText style={[styles.cellText, styles.colStat]}>
+                      {row.points_scored}
+                    </AppText>
+
+                    {/* Points Allowed */}
+                    <AppText style={[styles.cellText, styles.colStat]}>
+                      {row.points_allowed}
+                    </AppText>
+                  </View>
+                );
+              })}
+            </View>
+          </ScrollView>
         </Card>
       )}
 
@@ -295,6 +299,12 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     lineHeight: 18,
   },
+  tableScrollContent: {
+    paddingHorizontal: 0,
+  },
+  tableInnerContainer: {
+    minWidth: 460,
+  },
   tableCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -348,7 +358,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   colStat: {
-    width: 28,
+    width: 38,
     textAlign: 'center',
   },
   boldStat: {

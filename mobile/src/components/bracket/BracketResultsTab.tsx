@@ -315,7 +315,6 @@ export function BracketResultsTab({
                     <View style={styles.scoreRow}>
                       <AppText
                         variant="body"
-                        numberOfLines={1}
                         style={[styles.teamLabel, winnerIsA && styles.winnerTeamLabel]}
                       >
                         {teamAName}
@@ -334,7 +333,6 @@ export function BracketResultsTab({
                     <View style={styles.scoreRow}>
                       <AppText
                         variant="body"
-                        numberOfLines={1}
                         style={[styles.teamLabel, !winnerIsA && styles.winnerTeamLabel]}
                       >
                         {teamBName}
@@ -558,11 +556,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   headerMetaLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: Spacing[2],
+    flexShrink: 1,
   },
   courtPill: {
     paddingHorizontal: Spacing[1.5],
@@ -611,6 +613,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
     marginTop: Spacing[1],
   },
   winnerTag: {
