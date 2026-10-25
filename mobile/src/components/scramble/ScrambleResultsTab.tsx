@@ -114,10 +114,7 @@ export function ScrambleResultsTab({
   }, [isTournamentCompleted, standings]);
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* ── Champion Banner when tournament is completed or all games are played ── */}
       {isTournamentCompleted && championName && (
         <View style={styles.championBanner}>
@@ -527,7 +524,7 @@ export function ScrambleResultsTab({
           Results are updated in real time after scores are entered in the Rounds tab.
         </AppText>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 

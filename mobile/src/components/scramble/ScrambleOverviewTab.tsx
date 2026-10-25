@@ -171,10 +171,7 @@ export function ScrambleOverviewTab({
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* Champion Banner ONLY if Tournament is Truly Completed */}
       {isCompleted && state.champion_player_name && (
         <View style={styles.championBanner}>
@@ -235,9 +232,9 @@ export function ScrambleOverviewTab({
         {/* 2-Row Metric Grid */}
         <View style={styles.metricsContainer}>
           {/* Row 1: Registered, Available, Courts, Planned Rounds */}
-          <View style={styles.metricRow}>
+          <View style={styles.metricGridWrap}>
             {/* Registered */}
-            <View style={styles.metricCard}>
+            <View style={styles.metricCardGrid}>
               <AppText style={styles.metricHeader}>REGISTERED</AppText>
               <View style={styles.metricIconWrap}>
                 <Users size={15} color="#08785E" />
@@ -247,7 +244,7 @@ export function ScrambleOverviewTab({
             </View>
 
             {/* Available */}
-            <View style={styles.metricCard}>
+            <View style={styles.metricCardGrid}>
               <AppText style={styles.metricHeader}>AVAILABLE</AppText>
               <View style={styles.metricIconWrap}>
                 <UserCheck size={15} color="#08785E" />
@@ -257,7 +254,7 @@ export function ScrambleOverviewTab({
             </View>
 
             {/* Courts */}
-            <View style={styles.metricCard}>
+            <View style={styles.metricCardGrid}>
               <AppText style={styles.metricHeader}>COURTS</AppText>
               <View style={styles.metricIconWrap}>
                 <LayoutGrid size={15} color="#08785E" />
@@ -267,7 +264,7 @@ export function ScrambleOverviewTab({
             </View>
 
             {/* Planned Rounds */}
-            <View style={styles.metricCard}>
+            <View style={styles.metricCardGrid}>
               <AppText style={styles.metricHeader}>PLANNED</AppText>
               <View style={styles.metricIconWrap}>
                 <Award size={15} color="#08785E" />
@@ -756,7 +753,7 @@ export function ScrambleOverviewTab({
           </View>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -792,6 +789,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: Spacing[2],
   },
   headerTitleWithIcon: {
@@ -799,17 +798,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing[2],
     flex: 1,
+    minWidth: 160,
   },
   cardTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: '#102E2A',
+    flexShrink: 1,
   },
   roundProgressBadge: {
     backgroundColor: '#E5F4EC',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
+    alignSelf: 'flex-start',
   },
   roundProgressBadgeText: {
     fontSize: 12,
@@ -820,17 +822,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
     marginTop: 2,
     marginBottom: Spacing[2],
   },
   progressGamesText: {
     fontSize: 13,
     color: '#71817E',
+    flex: 1,
+    flexShrink: 1,
   },
   progressPercentText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#08785E',
+    flexShrink: 0,
+  },
+  metricGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  metricCardGrid: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 120,
+    backgroundColor: '#F8FAF9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5EDE9',
+    paddingVertical: Spacing[2] + 2,
+    paddingHorizontal: Spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   progressBarTrack: {
     height: 7,

@@ -894,6 +894,8 @@ const styles = StyleSheet.create({
   heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    rowGap: 4,
   },
   metaItem: {
     flexDirection: 'row',

@@ -994,7 +994,7 @@ export default function TournamentDetailsScreen() {
               <Card style={styles.overviewCard}>
                 <View style={styles.cardHeaderRow}>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing[2] }}>
                       <AppText variant="heading3">Bracket Tournament Mode</AppText>
                       <Badge label="TOURNAMENT MODE" variant="info" />
                     </View>
@@ -1023,7 +1023,7 @@ export default function TournamentDetailsScreen() {
               <Card style={styles.overviewCard}>
                 <View style={styles.cardHeaderRow}>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing[2] }}>
                       <AppText variant="heading3">Round Robin Tournament Mode</AppText>
                       <Badge label="TOURNAMENT MODE" variant="info" />
                     </View>
@@ -1078,7 +1078,7 @@ export default function TournamentDetailsScreen() {
               <Card style={styles.overviewCard}>
                 <View style={styles.cardHeaderRow}>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing[2] }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing[2] }}>
                       <AppText variant="heading3">Scramble Tournament Mode</AppText>
                       <Badge label="TOURNAMENT MODE" variant="info" />
                     </View>
@@ -2287,6 +2287,7 @@ const styles = StyleSheet.create({
   },
   lifecycleButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: Spacing[2],
     marginTop: Spacing[1],
   },
@@ -2294,6 +2295,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
   },
   playerRow: {
     flexDirection: 'row',

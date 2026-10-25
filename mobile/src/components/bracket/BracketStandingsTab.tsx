@@ -83,18 +83,7 @@ export function BracketStandingsTab({
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={
-        onRefresh ? (
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={() => void onRefresh()}
-            colors={['#064E3B']}
-          />
-        ) : undefined
-      }
-    >
+    <View style={styles.container}>
       {/* ─── Champion / Podium Card (if resolved) ─────────────────────────── */}
       {champion && (
         <Card style={styles.podiumCard}>
@@ -210,7 +199,7 @@ export function BracketStandingsTab({
           );
         })}
       </Card>
-    </ScrollView>
+    </View>
   );
 }
 

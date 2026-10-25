@@ -247,6 +247,8 @@ export function TournamentSettingsTab({ tournament }: TournamentSettingsTabProps
 
 const styles = StyleSheet.create({
   container: {
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
     gap: Spacing[4],
     paddingBottom: Spacing[8],
   },
@@ -282,14 +284,16 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
+    alignItems: 'flex-start',
+    paddingVertical: 5,
     gap: 12,
   },
   labelCol: {
     fontSize: 13,
     color: '#64748B',
     fontWeight: '500',
+    flexShrink: 0,
+    maxWidth: '48%',
   },
   valCol: {
     fontSize: 13,
@@ -297,6 +301,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textAlign: 'right',
     flex: 1,
+    flexShrink: 1,
+    lineHeight: 18,
   },
   divider: {
     height: 1,
@@ -336,6 +342,6 @@ const styles = StyleSheet.create({
   tiebreakerDesc: {
     fontSize: 12,
     color: '#64748B',
-    lineHeight: 16,
+    lineHeight: 18,
   },
 });

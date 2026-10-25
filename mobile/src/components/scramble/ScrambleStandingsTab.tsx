@@ -50,10 +50,7 @@ export function ScrambleStandingsTab({
     standings.some((s) => s.matches_played > 0 || s.wins > 0 || s.losses > 0);
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* ── 1. Heading & Description ── */}
       <View style={styles.headingSection}>
         <AppText style={styles.headingTitle}>
@@ -293,7 +290,7 @@ export function ScrambleStandingsTab({
           </View>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
