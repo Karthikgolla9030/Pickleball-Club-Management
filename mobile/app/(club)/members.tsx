@@ -24,6 +24,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StatusBar,
   StyleSheet,
   TextInput,
@@ -593,7 +594,11 @@ export default function ClubMembersScreen() {
       {activeTab === 'players' ? (
         <>
           {/* Sub-Filters: All Players, Subscribers, Normal Users + Settings Button */}
-          <View style={styles.filterPillsRow}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterPillsScrollContent}
+          >
             <TouchableOpacity
               style={[
                 styles.filterPill,
@@ -659,7 +664,7 @@ export default function ClubMembersScreen() {
             >
               <SlidersHorizontal size={17} color="#102F2A" strokeWidth={2} />
             </TouchableOpacity>
-          </View>
+          </ScrollView>
 
           {/* Search Bar */}
           <View style={styles.searchContainer}>
@@ -1513,11 +1518,13 @@ const styles = StyleSheet.create({
   },
 
   // ─── Filter Pills ────────────────────────────────────────────────────────────
-  filterPillsRow: {
+  filterPillsScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingRight: 24,  // trailing space so last pill scrolls into view
   },
   filterPill: {
     height: 34,
@@ -1528,6 +1535,7 @@ const styles = StyleSheet.create({
     borderColor: '#DFE7E3',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,  // never compress pill
   },
   filterPillActive: {
     backgroundColor: '#176B57',

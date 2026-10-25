@@ -388,8 +388,8 @@ export function CompletedPoolPlayView({
 
             {/* Bottom Content: Title, Subtitle, Meta */}
             <View style={styles.heroInfoBlock}>
-              {/* Tournament Title */}
-              <AppText variant="heading1" style={styles.heroTitle} numberOfLines={1}>
+              {/* Tournament Title — allow 3 lines for long names on small screens */}
+              <AppText variant="heading1" style={styles.heroTitle} numberOfLines={3}>
                 {tournament.name}
               </AppText>
 
@@ -1036,11 +1036,11 @@ export function CompletedPoolPlayView({
                 Match Results
               </AppText>
 
-              {/* Filter Chips */}
+              {/* Filter Chips — horizontal scroll with proper content padding */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.matchFilterChipsRow}
+                contentContainerStyle={styles.matchFilterChipsScrollContent}
               >
                 {[
                   { key: 'all', label: 'All Matches' },
@@ -2031,16 +2031,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#0F172A',
   },
-  matchFilterChipsRow: {
+  matchFilterChipsScrollContent: {
     flexDirection: 'row',
     gap: 8,
-    paddingBottom: 4,
+    paddingVertical: 4,
+    paddingRight: 16,  // trailing space so last chip scrolls into view
   },
   matchFilterChip: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: Radius.full,
     backgroundColor: '#F1F5F9',
+    flexShrink: 0,  // never compress chip width
   },
   matchFilterChipActive: {
     backgroundColor: '#0D5C3A',

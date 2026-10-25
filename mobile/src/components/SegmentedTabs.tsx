@@ -62,8 +62,6 @@ export function SegmentedTabs<T extends string>({
             isActive ? styles.labelActive : styles.labelInactive,
           ]}
           numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}
         >
           {tab.label}
         </AppText>
@@ -107,6 +105,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+    paddingRight: 8,  // trailing padding so last tab scrolls fully into view
   },
   tab: {
     height: 36,
@@ -114,6 +113,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 20,
     paddingHorizontal: Spacing[3],
+    flexShrink: 0,  // never compress tab width
   },
   tabFlex: {
     flex: 1,

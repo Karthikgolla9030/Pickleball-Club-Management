@@ -172,6 +172,7 @@ const styles = StyleSheet.create({
   tabsScroll: {
     gap: Spacing[2],
     paddingVertical: Spacing[1],
+    paddingRight: Spacing[4],  // trailing space so last tab scrolls fully into view
   },
   tabChip: {
     paddingVertical: Spacing[2],
@@ -180,6 +181,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface.elevated,
     borderWidth: 1,
     borderColor: Colors.surface.border,
+    flexShrink: 0,  // never compress chip width
   },
   tabChipActive: {
     borderColor: '#2563EB',

@@ -740,8 +740,12 @@ export function CompletedBracketView({
         {/* ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'matches' && (
           <View style={styles.tabContent}>
-            {/* Filter Buttons */}
-            <View style={styles.matchFiltersRow}>
+            {/* Filter Buttons — horizontal scroll so chips never overflow narrow screens */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.matchFiltersScrollContent}
+            >
               <TouchableOpacity
                 style={[styles.filterChip, matchFilter === 'all' && styles.filterChipActive]}
                 onPress={() => {
@@ -794,7 +798,7 @@ export function CompletedBracketView({
                 </AppText>
                 <ChevronDown size={14} color={matchFilter === 'round' ? '#FFFFFF' : '#475569'} style={{ marginLeft: 4 }} />
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* Round Dropdown Selector */}
             {showRoundDropdown && (
@@ -1734,10 +1738,11 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Matches Tab ─── */
-  matchFiltersRow: {
+  matchFiltersScrollContent: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 6,
+    paddingRight: 16,  // trailing space so last chip scrolls into view
   },
   filterChip: {
     flexDirection: 'row',
@@ -1748,6 +1753,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexShrink: 0,  // never compress chip
   },
   filterChipActive: {
     backgroundColor: '#064E3B',

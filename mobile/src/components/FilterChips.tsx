@@ -67,8 +67,6 @@ export function FilterChips<T extends string>({
             isActive ? styles.chipLabelActive : styles.chipLabelInactive,
           ]}
           numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.85}
         >
           {chip.label}
         </AppText>
@@ -101,26 +99,29 @@ export function FilterChips<T extends string>({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingHorizontal: Spacing[4],
-    paddingVertical: Spacing[1],
+    paddingLeft: Spacing[4],
+    paddingRight: Spacing[4],  // trailing padding so last chip fully scrolls into view
+    paddingVertical: Spacing[1.5],
     gap: Spacing[2],
     alignItems: 'center',
   },
   inlineRow: {
     flexDirection: 'row',
     paddingHorizontal: Spacing[4],
-    paddingVertical: Spacing[1],
+    paddingVertical: Spacing[1.5],
     gap: Spacing[2],
+    flexWrap: 'wrap',
   },
   chip: {
     paddingHorizontal: Spacing[3.5],
-    height: 34,
+    minHeight: 36,
     borderRadius: Radius.full,
     backgroundColor: Colors.surface.default, // white
     borderWidth: 1,
     borderColor: Colors.surface.border,      // #E5E7EB
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,           // never compress chip width
   },
   chipActive: {
     backgroundColor: Colors.brand.primary,   // #1B6B45

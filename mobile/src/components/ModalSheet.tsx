@@ -185,8 +185,6 @@ export function ModalSheet({
                       >
                         <AppText
                           numberOfLines={1}
-                          adjustsFontSizeToFit
-                          minimumFontScale={0.82}
                           style={[styles.footerButtonLabel, { color: textColor }]}
                         >
                           {action.loading ? 'Loading...' : action.label}

@@ -98,8 +98,6 @@ export function PlatformButton({
               labelStyle,
             ]}
             numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.88}
           >
             {label}
           </Text>

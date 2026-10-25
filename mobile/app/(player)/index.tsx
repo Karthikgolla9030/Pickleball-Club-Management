@@ -326,8 +326,6 @@ export default function PlayerHomeScreen() {
               <AppText
                 style={styles.heroGreeting}
                 numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.82}
               >
                 Hello,{'\n'}{displayName}
               </AppText>

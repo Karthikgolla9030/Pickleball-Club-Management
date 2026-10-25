@@ -51,12 +51,12 @@ export function AppHeader({
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { width: windowWidth } = useWindowDimensions();
 
-  // Dynamically adapt header font size based on title length and presence of right action
+  // Adapt header font size based on title length and presence of right action
+  // (not screen width — ensures identical rendering on all mobile devices)
   const hasRightAction = !!rightElement;
-  const isCompactScreen = windowWidth < 380;
   const isLongTitle = title.length > 14;
 
-  const titleFontSize = isCompactScreen || (isLongTitle && hasRightAction) ? 19 : isLongTitle ? 20.5 : 22;
+  const titleFontSize = isLongTitle && hasRightAction ? 17 : isLongTitle ? 19 : 21;
   const titleLineHeight = titleFontSize + 4;
 
   return (

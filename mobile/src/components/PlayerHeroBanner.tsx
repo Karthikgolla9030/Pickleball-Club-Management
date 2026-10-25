@@ -20,7 +20,6 @@ import {
   Platform,
   StyleSheet,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { ArrowRight } from 'lucide-react-native';
@@ -49,7 +48,6 @@ export function PlayerHeroBanner({
   style,
 }: PlayerHeroBannerProps) {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
-  const { width: windowWidth } = useWindowDimensions();
 
   if (!slides || slides.length === 0) return null;
 
@@ -66,9 +64,6 @@ export function PlayerHeroBanner({
   const handleNextSlide = () => {
     setActiveSlideIndex((prev) => (prev + 1) % slides.length);
   };
-
-  const isNarrowScreen = windowWidth < 380;
-  const isTabletOrDesktop = windowWidth >= 768;
 
   return (
     <View style={[styles.container, style]}>
@@ -91,29 +86,19 @@ export function PlayerHeroBanner({
                 width: '100%',
                 backgroundColor: 'transparent',
               } as any)
-            : { width: isNarrowScreen ? '85%' : '70%' },
+            : { width: '75%' },  // fixed overlay width — consistent on all mobile screens
         ]}
       />
 
       {/* ─── Content Layer ─── */}
-      <View
-        style={[
-          styles.contentLayer,
-          {
-            paddingRight: isTabletOrDesktop ? 220 : isNarrowScreen ? 100 : 125,
-          },
-        ]}
-      >
+      <View style={styles.contentLayer}>
         <View style={styles.topTextBlock}>
           {/* Eyebrow Label */}
           <AppText style={styles.eyebrowText}>{currentSlide.tag}</AppText>
 
           {/* Main Heading (Max 2 lines, compact) */}
           <AppText
-            style={[
-              styles.headingText,
-              isNarrowScreen && { fontSize: 19, lineHeight: 24 },
-            ]}
+            style={styles.headingText}
             numberOfLines={2}
           >
             {currentSlide.title}
@@ -121,10 +106,7 @@ export function PlayerHeroBanner({
 
           {/* Supporting Text */}
           <AppText
-            style={[
-              styles.descriptionText,
-              isNarrowScreen && { fontSize: 12, lineHeight: 16 },
-            ]}
+            style={styles.descriptionText}
             numberOfLines={2}
           >
             {currentSlide.description}
@@ -215,6 +197,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 14,
     paddingLeft: 18,
+    paddingRight: 108,  // fixed right padding — consistent on all mobile screens (320px–430px)
     justifyContent: 'space-between',
     zIndex: 2,
   },

@@ -102,8 +102,6 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="heading3"
               style={[styles.value, { color: valueColor }]}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
             >
               {String(metric.value)}
             </AppText>
@@ -111,8 +109,6 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="caption"
               style={[styles.label, { color: variantLabelColor[variant] }]}
               numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.88}
             >
               {metric.label}
             </AppText>
@@ -123,8 +119,6 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="caption"
               style={[styles.label, { color: variantLabelColor[variant] }]}
               numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.88}
             >
               {metric.label}
             </AppText>
@@ -132,8 +126,6 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
               variant="heading3"
               style={[styles.value, { color: valueColor }]}
               numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.8}
             >
               {String(metric.value)}
             </AppText>
@@ -144,8 +136,6 @@ export function MetricGrid({ metrics, columns = 2, horizontal = false, valueFirs
             variant="caption"
             color="secondary"
             numberOfLines={2}
-            adjustsFontSizeToFit
-            minimumFontScale={0.9}
           >
             {metric.sublabel}
           </AppText>

@@ -580,7 +580,7 @@ export default function PublicClubDetailScreen() {
           </View>
 
           {/* ─── E & F. Shortcut Cards: Side by Side ───────────────────────── */}
-          <View style={[styles.shortcutsRow, isNarrowScreen && styles.shortcutsRowWrapped]}>
+          <View style={styles.shortcutsRow}>
             {/* Upcoming Events */}
             <TouchableOpacity
               style={styles.shortcutCard}
@@ -1286,13 +1286,12 @@ const styles = StyleSheet.create({
   // E & F. Shortcuts
   shortcutsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',  // auto-stacks on narrow screens without needing device-width detection
     gap: 12,
-  },
-  shortcutsRowWrapped: {
-    flexDirection: 'column',
   },
   shortcutCard: {
     flex: 1,
+    minWidth: 140,  // cards stack when container is narrower than 2 * 140 + gap
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,

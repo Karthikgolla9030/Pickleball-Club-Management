@@ -271,8 +271,6 @@ export function ClubHeroCarousel({
                   <AppText
                     style={styles.heroHeading}
                     numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.88}
                   >
                     {slide.title}
                   </AppText>

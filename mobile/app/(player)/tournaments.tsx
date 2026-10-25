@@ -1082,6 +1082,7 @@ const styles = StyleSheet.create({
   },
   tabsScrollContent: {
     paddingHorizontal: 16,
+    paddingRight: 24,  // trailing space so last tab scrolls fully into view
     gap: 8,
   },
   statusTab: {
@@ -1091,6 +1092,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     gap: 6,
+    flexShrink: 0,  // never compress tab on small screens
   },
   statusTabActive: {
     backgroundColor: Colors.brand.primary,

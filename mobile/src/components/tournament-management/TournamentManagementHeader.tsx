@@ -456,6 +456,7 @@ const styles = StyleSheet.create({
   },
   tabScrollContent: {
     paddingHorizontal: Spacing[3],
+    paddingRight: Spacing[5],  // trailing space so last tab scrolls fully into view
     gap: 2,
   },
   tabItem: {

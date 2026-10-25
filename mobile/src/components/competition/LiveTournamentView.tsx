@@ -487,8 +487,8 @@ export function LiveTournamentView({
 
             {/* Bottom info block */}
             <View style={styles.heroBottomBlock}>
-              {/* Tournament Title */}
-              <AppText variant="heading1" style={styles.heroTitle} numberOfLines={2}>
+              {/* Tournament Title — allow 3 lines on smaller screens */}
+              <AppText variant="heading1" style={styles.heroTitle} numberOfLines={3}>
                 {tournament.name}
               </AppText>
 
@@ -524,7 +524,13 @@ export function LiveTournamentView({
         </View>
 
         {/* ─── Shared Tab Navigation Bar ─── */}
-        <View style={styles.tabsRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabsRowScroll}
+          contentContainerStyle={styles.tabsRowContent}
+          bounces={false}
+        >
           {/* Tab 1: Overview & Rules */}
           <TouchableOpacity
             style={styles.tabBtn}
@@ -588,7 +594,7 @@ export function LiveTournamentView({
             </AppText>
             {activeTab === 'standings' && <View style={styles.activeIndicator} />}
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
         {/* ─── TAB 1: OVERVIEW & RULES ─── */}
         {activeTab === 'overview' && (
@@ -776,7 +782,12 @@ export function LiveTournamentView({
         {activeTab === 'matches' && (
           <View style={styles.tabContentArea}>
             {/* Horizontal Filter Chips */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterChipScroll}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.filterChipScrollOuter}
+              contentContainerStyle={styles.filterChipScrollContent}
+            >
               <TouchableOpacity
                 style={[styles.filterChip, matchFilter === 'all' && styles.filterChipActive]}
                 onPress={() => setMatchFilter('all')}
@@ -1222,7 +1233,12 @@ export function LiveTournamentView({
 
             {/* Pool Filter Chips (If Pool Play) */}
             {format === 'pool_play' && pools.length > 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.poolChipScroll}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.filterChipScrollOuter}
+                contentContainerStyle={styles.filterChipScrollContent}
+              >
                 <TouchableOpacity
                   style={[styles.filterChip, selectedPoolId === 'all' && styles.filterChipActive]}
                   onPress={() => setSelectedPoolId('all')}
@@ -1530,18 +1546,22 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Tabs ─── */
-  tabsRow: {
-    marginHorizontal: 16,
+  tabsRowScroll: {
     marginTop: 18,
-    flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+  },
+  tabsRowContent: {
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    paddingRight: 24, // trailing space so last tab fully reachable
   },
   tabBtn: {
     paddingVertical: 10,
     paddingHorizontal: 4,
     marginRight: 20,
     position: 'relative',
+    flexShrink: 0,
   },
   tabText: {
     fontSize: 14,
@@ -1700,9 +1720,15 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Match Filter Chips ─── */
-  filterChipScroll: {
-    paddingHorizontal: 16,
+  filterChipScrollOuter: {
     marginBottom: 8,
+  },
+  filterChipScrollContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 2,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -1711,7 +1737,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginRight: 8,
+    flexShrink: 0,  // never compress chip
   },
   filterChipActive: {
     backgroundColor: '#064E3B',

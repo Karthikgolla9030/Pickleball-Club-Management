@@ -624,8 +624,12 @@ export function CompletedRoundRobinView({
         {/* ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'matches' && (
           <View style={styles.tabContent}>
-            {/* Filter Buttons */}
-            <View style={styles.matchFiltersRow}>
+            {/* Filter Buttons — horizontal scroll so chips never overflow narrow screens */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.matchFiltersScrollContent}
+            >
               <TouchableOpacity
                 style={[styles.filterChip, matchFilter === 'all' && styles.filterChipActive]}
                 onPress={() => setMatchFilter('all')}
@@ -667,11 +671,15 @@ export function CompletedRoundRobinView({
                   By Court
                 </AppText>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* Court Selection Sub-chips if 'By Court' is active */}
             {matchFilter === 'court' && (
-              <View style={styles.courtSelectorRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.courtSelectorScrollContent}
+              >
                 <TouchableOpacity
                   style={[styles.courtChip, selectedCourt === 'all' && styles.courtChipActive]}
                   onPress={() => setSelectedCourt('all')}
@@ -700,7 +708,7 @@ export function CompletedRoundRobinView({
                     </AppText>
                   </TouchableOpacity>
                 ))}
-              </View>
+              </ScrollView>
             )}
 
             {/* Empty State for My Matches */}
@@ -1540,10 +1548,11 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Matches Tab ─── */
-  matchFiltersRow: {
+  matchFiltersScrollContent: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 6,
+    paddingVertical: 4,
+    paddingRight: 16,  // trailing space so last chip scrolls into view
   },
   filterChip: {
     paddingHorizontal: 14,
@@ -1552,6 +1561,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexShrink: 0,  // never compress chip width
   },
   filterChipActive: {
     backgroundColor: '#064E3B',
@@ -1564,10 +1574,11 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
   },
-  courtSelectorRow: {
+  courtSelectorScrollContent: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 6,
+    paddingRight: 16,
   },
   courtChip: {
     paddingHorizontal: 12,
@@ -1576,6 +1587,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
+    flexShrink: 0,
   },
   courtChipActive: {
     backgroundColor: '#065F46',
