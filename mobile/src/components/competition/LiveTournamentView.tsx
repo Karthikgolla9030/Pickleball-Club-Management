@@ -1725,6 +1725,7 @@ const styles = StyleSheet.create({
   },
   filterChipScrollContent: {
     paddingHorizontal: 16,
+    paddingRight: 24,
     paddingVertical: 2,
     gap: 8,
     flexDirection: 'row',

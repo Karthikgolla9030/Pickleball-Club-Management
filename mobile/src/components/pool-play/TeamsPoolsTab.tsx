@@ -18,6 +18,7 @@ import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import { FilterChips } from '@/components/FilterChips';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Player, PoolPlayConfig, PoolStat, Team } from '@/types/poolPlay';
 import { TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
@@ -215,34 +216,14 @@ export function TeamsPoolsTab({
           </View>
 
           {/* ─── Pool Filter Chips ─────────────────────────────────────── */}
-          <View style={styles.poolFilterRow}>
-            <TouchableOpacity
-              onPress={() => setSelectedPoolKey('all')}
-              style={[styles.filterChip, selectedPoolKey === 'all' && styles.filterChipActive]}
-            >
-              <AppText
-                variant="caption"
-                style={[styles.filterChipText, selectedPoolKey === 'all' && styles.filterChipTextActive]}
-              >
-                All Pools ({pools.length})
-              </AppText>
-            </TouchableOpacity>
-
-            {pools.map((p) => (
-              <TouchableOpacity
-                key={p.key}
-                onPress={() => setSelectedPoolKey(p.key)}
-                style={[styles.filterChip, selectedPoolKey === p.key && styles.filterChipActive]}
-              >
-                <AppText
-                  variant="caption"
-                  style={[styles.filterChipText, selectedPoolKey === p.key && styles.filterChipTextActive]}
-                >
-                  Pool {p.key} ({p.teamsCount})
-                </AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <FilterChips<string>
+            chips={[
+              { key: 'all', label: `All Pools (${pools.length})` },
+              ...pools.map((p) => ({ key: p.key, label: `Pool ${p.key} (${p.teamsCount})` })),
+            ]}
+            activeChip={selectedPoolKey}
+            onChipPress={(k) => setSelectedPoolKey(k)}
+          />
 
       {/* ─── Pools & Teams Layout ──────────────────────────────────── */}
       {displayedPools.map((pool) => (
@@ -495,30 +476,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 2,
   },
-  poolFilterRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  filterChip: {
-    paddingVertical: Spacing[1],
-    paddingHorizontal: Spacing[3],
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surface.elevated,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-  },
-  filterChipActive: {
-    borderColor: '#2563EB',
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-  },
-  filterChipTextActive: {
-    color: '#60A5FA',
-    fontWeight: '700',
-  },
+
   poolSection: {
     gap: Spacing[2],
   },

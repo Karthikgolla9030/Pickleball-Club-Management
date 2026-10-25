@@ -99,15 +99,13 @@ export function FilterChips<T extends string>({
 
 const styles = StyleSheet.create({
   scrollContent: {
-    paddingLeft: Spacing[4],
-    paddingRight: Spacing[4],  // trailing padding so last chip fully scrolls into view
+    paddingRight: Spacing[4],  // trailing space so last chip always scrolls fully into view
     paddingVertical: Spacing[1.5],
     gap: Spacing[2],
     alignItems: 'center',
   },
   inlineRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing[4],
     paddingVertical: Spacing[1.5],
     gap: Spacing[2],
     flexWrap: 'wrap',

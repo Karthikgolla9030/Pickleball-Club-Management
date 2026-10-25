@@ -871,6 +871,7 @@ export default function TournamentDetailsScreen() {
         }
         activeChip={activeTab}
         onChipPress={(chip) => setActiveTab(chip as ActiveTab)}
+        contentContainerStyle={{ paddingHorizontal: Spacing[4] }}
       />
 
       <ScrollView
@@ -1903,49 +1904,17 @@ export default function TournamentDetailsScreen() {
 
             {/* Pool Selector Chips */}
             {pools.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.roundScroll}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.roundChip,
-                    selectedPoolId === 'all' && styles.roundChipActive,
-                  ]}
-                  onPress={() => setSelectedPoolId('all')}
-                >
-                  <AppText
-                    variant="caption"
-                    style={[
-                      styles.roundChipText,
-                      selectedPoolId === 'all' && styles.roundChipTextActive,
-                    ]}
-                  >
-                    All Pools ({pools.length})
-                  </AppText>
-                </TouchableOpacity>
-                {pools.map((p) => (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[
-                      styles.roundChip,
-                      selectedPoolId === p.id && styles.roundChipActive,
-                    ]}
-                    onPress={() => setSelectedPoolId(p.id)}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.roundChipText,
-                        selectedPoolId === p.id && styles.roundChipTextActive,
-                      ]}
-                    >
-                      {p.name} ({p.pool_teams?.length ?? 0} teams)
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <FilterChips<string>
+                chips={[
+                  { key: 'all', label: `All Pools (${pools.length})` },
+                  ...pools.map((p) => ({
+                    key: p.id,
+                    label: `${p.name} (${p.pool_teams?.length ?? 0} teams)`,
+                  })),
+                ]}
+                activeChip={selectedPoolId}
+                onChipPress={(id) => setSelectedPoolId(id)}
+              />
             )}
 
             {/* Standings Section */}

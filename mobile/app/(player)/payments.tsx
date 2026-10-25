@@ -141,6 +141,7 @@ export default function PlayerPaymentsScreen() {
           ]}
           activeChip={statusFilter}
           onChipPress={(st) => setStatusFilter(st as any)}
+          contentContainerStyle={{ paddingHorizontal: Spacing[4] }}
         />
       </View>
 

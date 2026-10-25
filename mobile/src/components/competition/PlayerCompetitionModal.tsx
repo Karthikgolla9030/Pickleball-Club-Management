@@ -22,6 +22,7 @@ import {
 import { AppText } from '../AppText';
 import { Badge } from '../Badge';
 import { Card } from '../Card';
+import { FilterChips } from '../FilterChips';
 import { EmptyState } from '../StateViews';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
 import { PoolStandingsTable } from './PoolStandingsTable';
@@ -289,49 +290,17 @@ export function PlayerCompetitionModal({
             {isPoolPlay && activeTab === 'pools' && (
               <View style={styles.tabContent}>
                 {pools.length > 0 && (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.chipScroll}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.chip,
-                        selectedPoolId === 'all' && styles.chipActive,
-                      ]}
-                      onPress={() => setSelectedPoolId('all')}
-                    >
-                      <AppText
-                        variant="caption"
-                        style={[
-                          styles.chipText,
-                          selectedPoolId === 'all' && styles.chipTextActive,
-                        ]}
-                      >
-                        All Pools ({pools.length})
-                      </AppText>
-                    </TouchableOpacity>
-                    {pools.map((p) => (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={[
-                          styles.chip,
-                          selectedPoolId === p.id && styles.chipActive,
-                        ]}
-                        onPress={() => setSelectedPoolId(p.id)}
-                      >
-                        <AppText
-                          variant="caption"
-                          style={[
-                            styles.chipText,
-                            selectedPoolId === p.id && styles.chipTextActive,
-                          ]}
-                        >
-                          {p.name}
-                        </AppText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                  <FilterChips<string>
+                    chips={[
+                      { key: 'all', label: `All Pools (${pools.length})` },
+                      ...pools.map((p) => ({
+                        key: p.id,
+                        label: p.name,
+                      })),
+                    ]}
+                    activeChip={selectedPoolId}
+                    onChipPress={(id) => setSelectedPoolId(id)}
+                  />
                 )}
 
                 {/* Standings */}

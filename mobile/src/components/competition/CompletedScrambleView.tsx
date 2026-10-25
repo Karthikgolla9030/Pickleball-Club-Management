@@ -738,7 +738,11 @@ export function CompletedScrambleView({
         {activeTab === 'rounds' && (
           <View style={styles.tabContent}>
             {/* Filter Buttons Row */}
-            <View style={styles.filtersBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersBarScrollContent}
+            >
               <TouchableOpacity
                 style={[
                   styles.filterPill,
@@ -813,7 +817,7 @@ export function CompletedScrambleView({
                   />
                 </View>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
 
             {/* Rounds Cards List */}
             {filteredRoundGroups.length === 0 ? (
@@ -1849,9 +1853,11 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Tab 2: Rounds & Games ─── */
-  filtersBar: {
+  filtersBarScrollContent: {
     flexDirection: 'row',
     gap: 8,
+    paddingVertical: 2,
+    paddingRight: 16,
   },
   filterPill: {
     paddingHorizontal: 14,
@@ -1860,6 +1866,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexShrink: 0,
   },
   filterPillActive: {
     backgroundColor: '#064E3B',
