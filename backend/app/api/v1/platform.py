@@ -940,6 +940,122 @@ async def update_platform_settings(
     )
 
 
+@router.post(
+    "/reset-database",
+    status_code=status.HTTP_200_OK,
+    summary="Reset database to clean test state",
+    description="Purges all demo/business records (clubs, tournaments, leagues, bookings, events, lessons, non-admin users) while preserving platform admin accounts.",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def reset_database_endpoint(
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Purge all demo and business records, leaving only platform administrators."""
+    from sqlalchemy import select, text
+    from app.core.security import hash_password
+    from app.models.user import User
+
+    PRESERVED_ADMIN_EMAILS = [
+        "admin@pickleball.com",
+        "platform.owner@pickleball.com",
+        "platform.owner@aught2.com",
+    ]
+    default_admin_pw = "PlatformAdmin2024!"
+    hashed_pw = hash_password(default_admin_pw)
+
+    for admin_email in PRESERVED_ADMIN_EMAILS:
+        res = await db.execute(select(User).where(User.email == admin_email))
+        admin_user = res.scalar_one_or_none()
+        if admin_user:
+            admin_user.hashed_password = hashed_pw
+            admin_user.is_active = True
+            admin_user.is_verified = True
+        elif admin_email in ("admin@pickleball.com", "platform.owner@aught2.com"):
+            new_admin = User(
+                email=admin_email,
+                hashed_password=hashed_pw,
+                full_name="Platform Administrator",
+                is_active=True,
+                is_verified=True,
+            )
+            db.add(new_admin)
+    await db.commit()
+
+    tables_to_clear = [
+        "match_participants",
+        "matches",
+        "pool_teams",
+        "pools",
+        "team_members",
+        "teams",
+        "tournament_registrations",
+        "tournament_favorites",
+        "tournaments",
+        "league_weekly_standings",
+        "league_weeks",
+        "leagues",
+        "bookings",
+        "lesson_registrations",
+        "lessons",
+        "lesson_types",
+        "coaches",
+        "event_registrations",
+        "events",
+        "courts",
+        "member_subscriptions",
+        "membership_plans",
+        "club_player_memberships",
+        "club_membership_requests",
+        "club_memberships",
+        "club_carousel_slides",
+        "club_media_assets",
+        "payments",
+        "support_ticket_messages",
+        "support_tickets",
+        "notifications",
+        "notification_preferences",
+        "platform_audit_logs",
+        "club_applications",
+        "clubs",
+    ]
+
+    purged_counts: dict[str, int] = {}
+    for tbl in tables_to_clear:
+        try:
+            del_res = await db.execute(text(f"DELETE FROM {tbl}"))
+            purged_counts[tbl] = del_res.rowcount
+        except Exception:
+            await db.rollback()
+
+    await db.commit()
+
+    try:
+        await db.execute(text("""
+            DELETE FROM player_profiles 
+            WHERE user_id NOT IN (
+                SELECT id FROM users WHERE email IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+            )
+        """))
+        await db.execute(text("""
+            DELETE FROM users 
+            WHERE email NOT IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+        """))
+        await db.commit()
+    except Exception:
+        await db.rollback()
+
+    return {
+        "status": "success",
+        "message": "Database completely purged and reset to clean test state.",
+        "purged_tables": purged_counts,
+        "platform_admins_preserved": PRESERVED_ADMIN_EMAILS,
+    }
+
+
+
 
 
 

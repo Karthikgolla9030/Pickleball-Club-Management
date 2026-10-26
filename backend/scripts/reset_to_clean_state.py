@@ -40,7 +40,7 @@ async def clean_database():
 
         # Ensure platform admin account exists
         print("\n1. Verifying and configuring Platform Administrator accounts...")
-        default_admin_pw = "Password123!"
+        default_admin_pw = "PlatformAdmin2024!"
         hashed_pw = hash_password(default_admin_pw)
 
         for admin_email in PRESERVED_ADMIN_EMAILS:
@@ -51,7 +51,7 @@ async def clean_database():
                 admin_user.is_active = True
                 admin_user.is_verified = True
                 print(f"  [OK] Updated platform admin: {admin_email} (password: {default_admin_pw})")
-            elif admin_email == "admin@pickleball.com":
+            elif admin_email in ("admin@pickleball.com", "platform.owner@aught2.com"):
                 new_admin = User(
                     email=admin_email,
                     hashed_password=hashed_pw,

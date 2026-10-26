@@ -741,10 +741,9 @@ export default function ClubMembersScreen() {
   const renderPlayerItem = ({ item, index }: { item: ClubPlayerMember; index: number }) => {
     const playerName = formatPlayerName(item);
 
-    // Dynamic membership number matching reference `#AUG-P-xxx`
     const playerId = item.membership_number
       ? `#${item.membership_number.replace(/^#/, '')}`
-      : `#AUG-P-${(index + 16).toString().padStart(3, '0')}`;
+      : '—';
 
     return (
       <View style={styles.memberCard}>
@@ -1136,7 +1135,7 @@ export default function ClubMembersScreen() {
               <AppText style={styles.formLabel}>Membership / Player Number</AppText>
               <TextInput
                 style={styles.formInput}
-                placeholder="#AUG-P-016"
+                placeholder="e.g. #001"
                 placeholderTextColor="#8C9BA5"
                 value={editPlayerNumber}
                 onChangeText={setEditPlayerNumber}

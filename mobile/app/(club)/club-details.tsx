@@ -824,7 +824,7 @@ export default function ClubDetailsScreen() {
                   required
                   value={name}
                   onChangeText={setName}
-                  placeholder="e.g. Aught2 Pickleball"
+                  placeholder="e.g. Metro Pickleball Club"
                   error={validationErrors.name}
                   editable={isOwner}
                 />
@@ -882,7 +882,7 @@ export default function ClubDetailsScreen() {
                       label="Public Website"
                       value={website}
                       onChangeText={setWebsite}
-                      placeholder="https://aught2.com"
+                      placeholder="https://example.com"
                       keyboardType="url"
                       autoCapitalize="none"
                       error={validationErrors.website}
@@ -1209,7 +1209,7 @@ export default function ClubDetailsScreen() {
               {/* About Card */}
               {description ? (
                 <Card style={styles.previewSectionCard}>
-                  <AppText style={styles.previewCardTitle}>About Aught2 Pickleball</AppText>
+                  <AppText style={styles.previewCardTitle}>About {name || 'the Club'}</AppText>
                   <AppText style={styles.previewBodyText}>{description}</AppText>
                 </Card>
               ) : null}

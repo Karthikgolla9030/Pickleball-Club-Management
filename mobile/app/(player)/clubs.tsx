@@ -161,7 +161,7 @@ export default function MyClubsScreen() {
   const renderClubItem = ({ item }: { item: PlayerClub }) => {
     const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Facility Location';
     const memberSinceStr = formatMemberDate(item.joined_at);
-    const memberNumStr = item.membership_number || 'AUG-001';
+    const memberNumStr = item.membership_number || '—';
 
     return (
       <View style={styles.enrolledClubCard}>
