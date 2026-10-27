@@ -21,6 +21,7 @@ class ClubResponse(BaseModel):
     short_description: str | None = None
     description: str | None = None
     is_active: bool
+    allows_free_join: bool = True
 
     # Contact Info
     contact_email: str | None = None
@@ -78,6 +79,7 @@ class PublicClubResponse(BaseModel):
     holiday_closure_notes: str | None = None
     operating_hours: dict[str, Any] | None = None
     is_active: bool
+    allows_free_join: bool = True
     court_count: int | None = None
     member_count: int | None = None
 

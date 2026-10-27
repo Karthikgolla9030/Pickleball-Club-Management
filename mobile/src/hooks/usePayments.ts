@@ -143,6 +143,37 @@ export function useCancelPayment(clubId: string) {
   });
 }
 
+/**
+ * Refund payment.
+ */
+export function useRefundPayment(clubId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      paymentId,
+      amount,
+      refundReason,
+    }: {
+      paymentId: string;
+      amount?: number;
+      refundReason?: string;
+    }) =>
+      paymentApi.refundPayment(clubId, paymentId, {
+        amount,
+        refund_reason: refundReason,
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'payments'] });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.CLUB_PAYMENT_DETAIL(clubId, variables.paymentId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.CLUB_PAYMENT_SUMMARY(clubId),
+      });
+    },
+  });
+}
+
 // ─── Player Hooks ─────────────────────────────────────────────────────────────
 
 /**

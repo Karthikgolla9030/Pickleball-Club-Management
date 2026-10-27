@@ -57,11 +57,16 @@ class PaymentService:
             PaymentStatus.FAILED,
             PaymentStatus.CANCELLED,
         },
-        PaymentStatus.SUCCEEDED: set(),   # Terminal
+        PaymentStatus.SUCCEEDED: {
+            PaymentStatus.REFUNDED,
+            PaymentStatus.PARTIALLY_REFUNDED,
+        },
         PaymentStatus.FAILED: set(),      # Terminal
         PaymentStatus.CANCELLED: set(),   # Terminal
-        PaymentStatus.REFUNDED: set(),    # Terminal (future)
-        PaymentStatus.PARTIALLY_REFUNDED: set(),  # Terminal (future)
+        PaymentStatus.REFUNDED: set(),    # Terminal
+        PaymentStatus.PARTIALLY_REFUNDED: {
+            PaymentStatus.REFUNDED,
+        },
     }
 
     def __init__(self, db: AsyncSession) -> None:
@@ -417,6 +422,127 @@ class PaymentService:
 
         full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
         return PaymentResponse.from_orm_model(full)
+
+    async def refund_payment(
+        self,
+        club_id: UUID,
+        payment_id: UUID,
+        actor_id: UUID | None,
+        amount: Decimal | None = None,
+        refund_reason: str = "Refund requested",
+    ) -> PaymentResponse:
+        """
+        Refund a succeeded payment (in full or partially).
+        Updates refunded_amount, status, and audits timestamp and actor.
+        """
+        payment = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
+        if not payment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Payment not found in this club",
+            )
+
+        if payment.status not in (PaymentStatus.SUCCEEDED, PaymentStatus.PARTIALLY_REFUNDED):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot refund a payment in '{payment.status.value}' status",
+            )
+
+        refund_amt = amount if amount is not None else payment.amount
+        if refund_amt <= Decimal("0"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Refund amount must be greater than zero",
+            )
+
+        existing_refunded = payment.refunded_amount or Decimal("0.00")
+        new_total_refunded = existing_refunded + refund_amt
+        if new_total_refunded > payment.amount:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Total refunded ({new_total_refunded}) exceeds payment amount ({payment.amount})",
+            )
+
+        target_status = (
+            PaymentStatus.REFUNDED
+            if new_total_refunded == payment.amount
+            else PaymentStatus.PARTIALLY_REFUNDED
+        )
+
+        now = datetime.now(timezone.utc)
+        payment.status = target_status
+        payment.refunded_amount = new_total_refunded
+        payment.refund_reason = refund_reason
+        payment.refunded_at = now
+        payment.status_changed_by_user_id = actor_id
+        payment.updated_at = now
+        await self.db.flush()
+
+        try:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=payment.player_id,
+                club_id=club_id,
+                category="payment",
+                title="Payment Refunded",
+                message=f"Refund of {payment.currency} {refund_amt} processed for transaction {payment.reference}. Reason: {refund_reason}",
+                data={
+                    "payment_id": str(payment.id),
+                    "refund_amount": float(refund_amt),
+                    "reason": refund_reason,
+                },
+            )
+        except Exception:
+            pass
+
+        full = await self.payment_repo.get_by_id(payment_id, club_id=club_id)
+        return PaymentResponse.from_orm_model(full)
+
+    async def record_service_payment(
+        self,
+        club_id: UUID,
+        player_id: UUID,
+        amount: Decimal,
+        purpose: PaymentPurpose,
+        currency: str = "USD",
+        payment_method: PaymentMethod = PaymentMethod.ONLINE,
+        status: PaymentStatus = PaymentStatus.SUCCEEDED,
+        notes: str | None = None,
+        booking_id: UUID | None = None,
+        tournament_id: UUID | None = None,
+        event_id: UUID | None = None,
+        lesson_id: UUID | None = None,
+        league_id: UUID | None = None,
+        subscription_id: UUID | None = None,
+        created_by_user_id: UUID | None = None,
+    ) -> Payment:
+        """
+        Generic helper used by other service domains (court bookings, tournaments,
+        events, lessons, leagues) to persist real canonical transactions in the payments ledger.
+        """
+        reference = await self.payment_repo.generate_reference()
+        now = datetime.now(timezone.utc)
+        payment = Payment(
+            reference=reference,
+            club_id=club_id,
+            player_id=player_id,
+            subscription_id=subscription_id,
+            booking_id=booking_id,
+            tournament_id=tournament_id,
+            event_id=event_id,
+            lesson_id=lesson_id,
+            league_id=league_id,
+            amount=amount,
+            currency=currency,
+            status=status,
+            purpose=purpose,
+            payment_method=payment_method,
+            notes=notes,
+            created_by_user_id=created_by_user_id or player_id,
+            paid_at=now if status == PaymentStatus.SUCCEEDED else None,
+        )
+        return await self.payment_repo.create(payment)
 
     async def get_club_payment(
         self,

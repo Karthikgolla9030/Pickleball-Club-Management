@@ -45,7 +45,7 @@ import {
   LoadingState,
   Screen,
 } from '@/components';
-import { usePlayerClubs, usePlayerMembershipRequests } from '@/hooks';
+import { usePlayerClubs, usePlayerMembershipRequests, usePlayerMemberships } from '@/hooks';
 import { resolveMediaUrl } from '@/utils';
 import type { PlayerClub } from '@/types';
 
@@ -108,6 +108,8 @@ export default function MyClubsScreen() {
     isWithdrawing,
   } = usePlayerMembershipRequests();
 
+  const { data: playerMemberships = [] } = usePlayerMemberships();
+
   const pendingRequests = useMemo(() => {
     return requests.filter((r) => r.status === 'pending');
   }, [requests]);
@@ -163,6 +165,10 @@ export default function MyClubsScreen() {
     const memberSinceStr = formatMemberDate(item.joined_at);
     const memberNumStr = item.membership_number || '—';
 
+    const paidSub = playerMemberships.find(
+      (m) => m.club_id === item.club_id && (m.status === 'active' || m.effective_status === 'active')
+    );
+
     return (
       <View style={styles.enrolledClubCard}>
         {/* Top Section: Logo + Name & Location + Status Badge */}
@@ -181,8 +187,10 @@ export default function MyClubsScreen() {
             </View>
           </View>
 
-          <View style={styles.activeBadge}>
-            <AppText style={styles.activeBadgeText}>ACTIVE</AppText>
+          <View style={paidSub ? styles.paidBadge : styles.freeBadge}>
+            <AppText style={paidSub ? styles.paidBadgeText : styles.freeBadgeText}>
+              {paidSub ? 'PAID' : 'FREE'}
+            </AppText>
           </View>
         </View>
 
@@ -194,22 +202,36 @@ export default function MyClubsScreen() {
           </View>
 
           <View style={styles.infoCol}>
-            <AppText style={styles.infoLabel}>Member #</AppText>
-            <AppText style={styles.infoValue}>{memberNumStr}</AppText>
+            <AppText style={styles.infoLabel}>Membership Type</AppText>
+            <AppText style={styles.infoValue}>
+              {paidSub ? (paidSub.plan_name || 'Active Paid') : 'Free Member'}
+            </AppText>
           </View>
         </View>
 
-        {/* Bottom Section: Clear Outlined Button */}
-        <TouchableOpacity
-          activeOpacity={0.82}
-          onPress={() => handleOpenClub(item.club_id)}
-          style={styles.viewProfileBtn}
-          accessibilityRole="button"
-          accessibilityLabel={`View club profile for ${item.club_name}`}
-        >
-          <AppText style={styles.viewProfileBtnText}>View Club Profile</AppText>
-          <ChevronRight size={14} color="#176B57" strokeWidth={2.2} />
-        </TouchableOpacity>
+        {/* Bottom Section: Actions */}
+        <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+          <TouchableOpacity
+            activeOpacity={0.82}
+            onPress={() => handleOpenClub(item.club_id)}
+            style={[styles.viewProfileBtn, { flex: 1, marginTop: 0 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`View club profile for ${item.club_name}`}
+          >
+            <AppText style={styles.viewProfileBtnText}>View Club</AppText>
+            <ChevronRight size={14} color="#176B57" strokeWidth={2.2} />
+          </TouchableOpacity>
+
+          {!paidSub && (
+            <TouchableOpacity
+              activeOpacity={0.82}
+              onPress={() => handleOpenClub(item.club_id)}
+              style={styles.getMembershipBtn}
+            >
+              <AppText style={styles.getMembershipBtnText}>Get Membership</AppText>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   };
@@ -534,6 +556,45 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#166534',
     letterSpacing: 0.5,
+  },
+  paidBadge: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    alignSelf: 'flex-start',
+  },
+  paidBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.5,
+  },
+  freeBadge: {
+    backgroundColor: '#E0F2FE',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    alignSelf: 'flex-start',
+  },
+  freeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369A1',
+    letterSpacing: 0.5,
+  },
+  getMembershipBtn: {
+    backgroundColor: '#18794E',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  getMembershipBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
 
   // ─── Information Panel ─────────────────────────────────────────────────────

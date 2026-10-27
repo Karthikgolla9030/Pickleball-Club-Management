@@ -8,6 +8,7 @@ configuration locking rules, and player eligibility.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -1399,19 +1400,20 @@ class TournamentService:
                         )
 
             # Check partner registration status
-            partner_existing = await self.registration_repo.get_by_tournament_and_player(
-                tournament_id=tournament.id,
-                player_membership_id=partner_membership.id,
-            )
-            if partner_existing and partner_existing.status in (
-                RegistrationStatus.CONFIRMED,
-                RegistrationStatus.PENDING,
-                RegistrationStatus.WAITLISTED,
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected partner is already registered for this tournament",
+            if partner_membership:
+                partner_existing = await self.registration_repo.get_by_tournament_and_player(
+                    tournament_id=tournament.id,
+                    player_membership_id=partner_membership.id,
                 )
+                if partner_existing and partner_existing.status in (
+                    RegistrationStatus.CONFIRMED,
+                    RegistrationStatus.PENDING,
+                    RegistrationStatus.WAITLISTED,
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected partner is already registered for this tournament",
+                    )
 
         # 4. Skill Level Eligibility Validation
         skill_mode = format_config.get("skill_level_mode")
@@ -1666,7 +1668,7 @@ class TournamentService:
                 await self.db.rollback()
 
         # Calculate configured fee
-        fee_raw = format_config.get("entry_fee")
+        fee_raw = format_config.get("entry_fee") or format_config.get("registration_fee")
         if fee_raw is not None and str(fee_raw).strip():
             try:
                 calc_fee = float(fee_raw)
@@ -1721,6 +1723,43 @@ class TournamentService:
             player_email=user.email if user else None,
             skill_level=payload.skill_level if payload and payload.skill_level else "3.5",
         )
+
+        # Record canonical payment for paid tournament entry
+        if target_status == RegistrationStatus.CONFIRMED and calc_fee > 0:
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            try:
+                pay_repo = PaymentRepository(self.db)
+                reference = await pay_repo.generate_reference()
+                now_dt = datetime.now(timezone.utc)
+                p_method = PaymentMethod.ONLINE
+                if payload and payload.payment_method:
+                    m_str = payload.payment_method.lower().replace("-", "_")
+                    if "cash" in m_str:
+                        p_method = PaymentMethod.CASH
+                    elif "bank" in m_str:
+                        p_method = PaymentMethod.BANK_TRANSFER
+                    elif "upi" in m_str or "card" in m_str or "online" in m_str:
+                        p_method = PaymentMethod.ONLINE
+                payment = Payment(
+                    reference=reference,
+                    club_id=tournament.club_id,
+                    player_id=user_id,
+                    tournament_id=tournament.id,
+                    amount=Decimal(str(calc_fee)).quantize(Decimal("0.01")),
+                    currency="USD",
+                    status=PaymentStatus.SUCCEEDED,
+                    purpose=PaymentPurpose.TOURNAMENT,
+                    payment_method=p_method,
+                    paid_at=now_dt,
+                    notes=f"Tournament entry: {tournament.name}",
+                    created_by_user_id=user_id,
+                )
+                await pay_repo.create(payment)
+                await self.db.commit()
+            except Exception:
+                pass
+
         try:
             active_count = await self.registration_repo.count_active_participants(tournament.id)
             team_size = (tournament.format_configuration or {}).get("team_size", 1)

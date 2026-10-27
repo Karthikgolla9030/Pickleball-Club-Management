@@ -1,59 +1,122 @@
 /**
- * Aught2 Pickleball — Player Payment History Screen (Phase 13)
+ * Aught2 Pickleball — Player Payment History Screen (Phase 13 & Comprehensive Multi-Service)
  *
- * Player-facing read-only payment history screen:
- *   - Status filter tabs: All, Successful, Pending, Failed
- *   - Cards with Reference, Amount, Currency, Purpose, Status, Date, Payment Method
- *   - Detail modal for full read-only payment receipt view
- *   - Strictly displays only caller's own payments
+ * Player-facing multi-service payment history screen:
+ *   - Category filter pills: All Services, Memberships, Court Bookings, Tournaments, Leagues, Events, Lessons
+ *   - Status filter pills: All Status, Succeeded, Pending, Failed, Refunded
+ *   - Cards with Reference, Service Category Icon & Badge, Service Name, Amount, Status, Date, Payment Method
+ *   - Clear display of refund details (refunded amount, refund date, reason)
+ *   - Detailed modal for full read-only payment receipt view
+ *   - Strictly displays only caller's own payments across all enrolled clubs
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  Crown,
+  FileText,
+  LayoutGrid,
+  RotateCcw,
+  Trophy,
+  UserCheck,
+  Users,
+  X,
+  XCircle,
+} from 'lucide-react-native';
 
 import {
+  AppHeader,
   AppText,
   Badge,
   Button,
   Card,
   EmptyState,
-  FilterChips,
   LoadingState,
   Screen,
   ScreenHeader,
-  AppHeader,
 } from '@/components';
 import { usePlayerPayments } from '@/hooks';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
-import type { PaymentStatus, PlayerPayment } from '@/types';
+import type { PaymentPurpose, PaymentStatus, PlayerPayment } from '@/types';
 
-// ─── Status Badge Helper ──────────────────────────────────────────────────────
+// ─── Filter Types & Constants ────────────────────────────────────────────────
 
-function getStatusBadgeVariant(status: PaymentStatus): 'success' | 'warning' | 'error' | 'info' | 'default' {
-  switch (status) {
-    case 'succeeded':
-      return 'success';
-    case 'pending':
-      return 'warning';
-    case 'processing':
-      return 'info';
-    case 'failed':
-      return 'error';
-    case 'cancelled':
+type StatusFilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'refunded';
+
+const STATUS_TABS: { key: StatusFilterTab; label: string }[] = [
+  { key: 'all', label: 'All Status' },
+  { key: 'succeeded', label: 'Succeeded' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'failed', label: 'Failed' },
+  { key: 'refunded', label: 'Refunded' },
+];
+
+type CategoryFilterTab = 'all' | 'membership' | 'court_booking' | 'tournament' | 'league' | 'event' | 'lesson';
+
+const CATEGORY_TABS: { key: CategoryFilterTab; label: string }[] = [
+  { key: 'all', label: 'All Services' },
+  { key: 'membership', label: 'Memberships' },
+  { key: 'court_booking', label: 'Court Bookings' },
+  { key: 'tournament', label: 'Tournaments' },
+  { key: 'league', label: 'Leagues' },
+  { key: 'event', label: 'Events' },
+  { key: 'lesson', label: 'Lessons' },
+];
+
+// ─── Category Visual Details Helper ──────────────────────────────────────────
+
+function getCategoryConfig(purpose: PaymentPurpose | string) {
+  switch (purpose) {
+    case 'court_booking':
+      return { label: 'Court Booking', color: '#0369A1', bg: '#E0F2FE', Icon: LayoutGrid };
+    case 'tournament':
+      return { label: 'Tournament', color: '#7C3AED', bg: '#EDE9FE', Icon: Trophy };
+    case 'league':
+      return { label: 'League', color: '#0D9488', bg: '#CCFBF1', Icon: Users };
+    case 'event':
+      return { label: 'Event', color: '#BE185D', bg: '#FCE7F3', Icon: Calendar };
+    case 'lesson':
+      return { label: 'Lesson', color: '#D97706', bg: '#FEF3C7', Icon: UserCheck };
+    case 'membership':
     default:
-      return 'default';
+      return { label: 'Membership', color: '#B45309', bg: '#FEF3C7', Icon: Crown };
   }
 }
 
-// ─── Player Payment Card ──────────────────────────────────────────────────────
+// ─── Status Badge Variant Helper ─────────────────────────────────────────────
+
+function getStatusBadgeConfig(status: PaymentStatus) {
+  switch (status) {
+    case 'succeeded':
+      return { label: 'SUCCEEDED', color: '#15803D', bg: '#E8F5EE', Icon: CheckCircle2 };
+    case 'pending':
+    case 'processing':
+      return { label: 'PENDING', color: '#B45309', bg: '#FEF3C7', Icon: Clock };
+    case 'refunded':
+    case 'partially_refunded':
+      return { label: 'REFUNDED', color: '#6D28D9', bg: '#EDE9FE', Icon: RotateCcw };
+    case 'failed':
+      return { label: 'FAILED', color: '#B91C1C', bg: '#FEE2E2', Icon: XCircle };
+    case 'cancelled':
+    default:
+      return { label: 'CANCELLED', color: '#64748B', bg: '#F1F5F9', Icon: XCircle };
+  }
+}
+
+// ─── Player Payment Card Component ───────────────────────────────────────────
 
 function PlayerPaymentCard({
   payment,
@@ -62,37 +125,70 @@ function PlayerPaymentCard({
   payment: PlayerPayment;
   onPress: () => void;
 }) {
+  const cat = getCategoryConfig(payment.purpose);
+  const CategoryIcon = cat.Icon;
+  const statusCfg = getStatusBadgeConfig(payment.status);
+
+  const isRefunded = payment.status === 'refunded' || payment.status === 'partially_refunded';
+  const hasRefundAmount = payment.refunded_amount != null && Number(payment.refunded_amount) > 0;
+
   return (
-    <TouchableOpacity activeOpacity={0.8} onPress={onPress}>
+    <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
       <Card style={styles.card}>
+        {/* Top Row: Service Category & Status Badge */}
         <View style={styles.cardHeader}>
+          <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
+            <CategoryIcon size={13} color={cat.color} strokeWidth={2.2} />
+            <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
+              {cat.label}
+            </AppText>
+          </View>
+
+          <View style={[styles.statusBadge, { backgroundColor: statusCfg.bg }]}>
+            <AppText style={[styles.statusBadgeText, { color: statusCfg.color }]}>
+              {statusCfg.label}
+            </AppText>
+          </View>
+        </View>
+
+        {/* Service Title / Club */}
+        <View style={styles.serviceTitleRow}>
+          <AppText style={styles.serviceNameText} numberOfLines={1}>
+            {payment.service_name || payment.purpose_label || cat.label}
+          </AppText>
+          {payment.club_name ? (
+            <AppText style={styles.clubNameText} numberOfLines={1}>
+              {payment.club_name}
+            </AppText>
+          ) : null}
+        </View>
+
+        {/* Amount & Payment Method */}
+        <View style={styles.amountRow}>
           <View>
-            <AppText style={styles.referenceText}>{payment.reference}</AppText>
-            {payment.club_name && (
-              <AppText style={styles.clubName}>{payment.club_name}</AppText>
+            <AppText style={styles.amountText}>
+              {formatCurrency(payment.amount, payment.currency)}
+            </AppText>
+            {isRefunded && hasRefundAmount && (
+              <View style={styles.refundedAmountRow}>
+                <RotateCcw size={11} color="#6D28D9" />
+                <AppText style={styles.refundedAmountText}>
+                  Refunded: {formatCurrency(Number(payment.refunded_amount), payment.currency)}
+                </AppText>
+              </View>
             )}
           </View>
-          <Badge
-            label={payment.status_label || payment.status}
-            variant={getStatusBadgeVariant(payment.status)}
-          />
+          <View style={styles.methodBadge}>
+            <CreditCard size={11} color={Colors.text.secondary} />
+            <AppText style={styles.methodBadgeText}>
+              {payment.payment_method_label || payment.payment_method.toUpperCase()}
+            </AppText>
+          </View>
         </View>
 
-        <View style={styles.amountRow}>
-          <AppText style={styles.amountText}>
-            {formatCurrency(payment.amount, payment.currency)}
-          </AppText>
-          <Badge
-            label={payment.payment_method_label || payment.payment_method}
-            variant="default"
-            size="sm"
-          />
-        </View>
-
+        {/* Footer: Reference & Date */}
         <View style={styles.footerRow}>
-          <AppText style={styles.purposeText}>
-            Purpose: {payment.purpose_label || payment.purpose}
-          </AppText>
+          <AppText style={styles.referenceText}>{payment.reference}</AppText>
           <AppText style={styles.dateText}>
             {new Date(payment.paid_at || payment.created_at).toLocaleDateString('en-IN', {
               day: 'numeric',
@@ -109,57 +205,114 @@ function PlayerPaymentCard({
 // ─── Main Player Payments Screen ─────────────────────────────────────────────
 
 export default function PlayerPaymentsScreen() {
-  const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilterTab>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilterTab>('all');
   const [selectedPayment, setSelectedPayment] = useState<PlayerPayment | null>(null);
 
+  // Fetch all player payments
   const {
-    data: payments = [],
+    data: allPayments = [],
     isLoading,
     isRefetching,
     refetch,
-  } = usePlayerPayments(
-    statusFilter !== 'all' ? { status: statusFilter } : undefined
-  );
+  } = usePlayerPayments();
+
+  // Filter payments by Status and Category
+  const filteredPayments = useMemo(() => {
+    return allPayments.filter((p) => {
+      // 1. Status Filter
+      if (statusFilter === 'pending') {
+        if (p.status !== 'pending' && p.status !== 'processing') return false;
+      } else if (statusFilter === 'refunded') {
+        if (p.status !== 'refunded' && p.status !== 'partially_refunded') return false;
+      } else if (statusFilter !== 'all') {
+        if (p.status !== statusFilter) return false;
+      }
+
+      // 2. Category Filter
+      if (categoryFilter !== 'all') {
+        if (p.purpose !== categoryFilter) return false;
+      }
+
+      return true;
+    });
+  }, [allPayments, statusFilter, categoryFilter]);
 
   return (
     <Screen style={styles.container}>
       <AppHeader title="Payments" />
-      {/* ─── Header ────────────────────────────────────────── */}
+
+      {/* Screen Title & Subtitle */}
       <ScreenHeader
         title="My Payments"
-        subtitle="View your payment history and transaction receipts."
+        subtitle="View your financial transactions across memberships, bookings, tournaments, and events."
       />
 
-      {/* ─── Status Filter Chips ─────────────────────────────── */}
-      <View style={{ marginBottom: Spacing[2] }}>
-        <FilterChips
-          chips={[
-            { key: 'all', label: 'All' },
-            { key: 'succeeded', label: 'Succeeded' },
-            { key: 'pending', label: 'Pending' },
-            { key: 'failed', label: 'Failed' },
-          ]}
-          activeChip={statusFilter}
-          onChipPress={(st) => setStatusFilter(st as any)}
-          contentContainerStyle={{ paddingHorizontal: Spacing[4] }}
-        />
+      {/* ─── Category Filter Horizontal Scroll ──────────────── */}
+      <View style={styles.filterSection}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {CATEGORY_TABS.map((tab) => {
+            const isActive = categoryFilter === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setCategoryFilter(tab.key)}
+                style={[styles.pill, isActive && styles.pillActive]}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.pillText, isActive && styles.pillTextActive]}>
+                  {tab.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* ─── Status Filter Horizontal Scroll ────────────────── */}
+      <View style={[styles.filterSection, { paddingBottom: Spacing[2] }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScroll}
+        >
+          {STATUS_TABS.map((tab) => {
+            const isActive = statusFilter === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setStatusFilter(tab.key)}
+                style={[styles.statusPill, isActive && styles.statusPillActive]}
+                activeOpacity={0.7}
+              >
+                <AppText style={[styles.statusPillText, isActive && styles.statusPillTextActive]}>
+                  {tab.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ─── Payment List ───────────────────────────────────── */}
       {isLoading ? (
         <LoadingState message="Loading your payments..." />
-      ) : payments.length === 0 ? (
+      ) : filteredPayments.length === 0 ? (
         <EmptyState
-          title="No Payments"
+          title="No Payments Found"
           description={
-            statusFilter === 'all'
-              ? 'You have no payment records yet.'
-              : `No payments with status "${statusFilter}".`
+            allPayments.length === 0
+              ? 'You have not made any payments yet. Book a court, join a tournament, or subscribe to a membership to get started.'
+              : 'No payment records match the selected category and status filters.'
           }
         />
       ) : (
         <FlatList
-          data={payments}
+          data={filteredPayments}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <PlayerPaymentCard
@@ -178,75 +331,177 @@ export default function PlayerPaymentsScreen() {
       <Modal visible={!!selectedPayment} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <AppText variant="heading3" style={styles.modalTitle}>Payment Receipt</AppText>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderTitleBlock}>
+                <FileText size={18} color={Colors.brand.primary} />
+                <AppText variant="heading3" style={styles.modalTitle}>Payment Receipt</AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedPayment(null)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <X size={18} color={Colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
 
             {selectedPayment && (
-              <View style={styles.receiptBody}>
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Reference</AppText>
-                  <AppText style={styles.receiptValueMono}>{selectedPayment.reference}</AppText>
-                </View>
-
-                {selectedPayment.club_name && (
-                  <View style={styles.receiptRow}>
-                    <AppText style={styles.receiptLabel}>Club</AppText>
-                    <AppText style={styles.receiptValue}>{selectedPayment.club_name}</AppText>
-                  </View>
-                )}
-
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Amount</AppText>
-                  <AppText style={[styles.receiptValue, styles.amountHighlight]}>
+              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                {/* Highlight Amount Block */}
+                <View style={styles.amountBanner}>
+                  <AppText style={styles.amountBannerLabel}>AMOUNT CHARGED</AppText>
+                  <AppText style={styles.amountBannerValue}>
                     {formatCurrency(selectedPayment.amount, selectedPayment.currency)}
                   </AppText>
+                  {selectedPayment.status === 'refunded' && selectedPayment.refunded_amount != null && (
+                    <View style={styles.refundBannerTag}>
+                      <RotateCcw size={13} color="#6D28D9" />
+                      <AppText style={styles.refundBannerText}>
+                        Refunded: {formatCurrency(Number(selectedPayment.refunded_amount), selectedPayment.currency)}
+                      </AppText>
+                    </View>
+                  )}
                 </View>
 
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Status</AppText>
-                  <Badge
-                    label={selectedPayment.status_label || selectedPayment.status}
-                    variant={getStatusBadgeVariant(selectedPayment.status)}
-                  />
-                </View>
-
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Purpose</AppText>
-                  <AppText style={styles.receiptValue}>
-                    {selectedPayment.purpose_label || selectedPayment.purpose}
-                  </AppText>
-                </View>
-
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Payment Method</AppText>
-                  <AppText style={styles.receiptValue}>
-                    {selectedPayment.payment_method_label || selectedPayment.payment_method}
-                  </AppText>
-                </View>
-
-                <View style={styles.receiptRow}>
-                  <AppText style={styles.receiptLabel}>Date</AppText>
-                  <AppText style={styles.receiptValue}>
-                    {new Date(selectedPayment.created_at).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </AppText>
-                </View>
-
-                {selectedPayment.paid_at && (
+                <View style={styles.receiptBody}>
+                  {/* Reference */}
                   <View style={styles.receiptRow}>
-                    <AppText style={styles.receiptLabel}>Paid Date</AppText>
-                    <AppText style={[styles.receiptValue, { color: Colors.status.success }]}>
-                      {new Date(selectedPayment.paid_at).toLocaleDateString('en-IN', {
+                    <AppText style={styles.receiptLabel}>Reference ID</AppText>
+                    <AppText style={styles.receiptValueMono}>{selectedPayment.reference}</AppText>
+                  </View>
+
+                  {/* Club Name */}
+                  {selectedPayment.club_name && (
+                    <View style={styles.receiptRow}>
+                      <AppText style={styles.receiptLabel}>Club</AppText>
+                      <AppText style={styles.receiptValue}>{selectedPayment.club_name}</AppText>
+                    </View>
+                  )}
+
+                  {/* Status */}
+                  <View style={styles.receiptRow}>
+                    <AppText style={styles.receiptLabel}>Status</AppText>
+                    {(() => {
+                      const cfg = getStatusBadgeConfig(selectedPayment.status);
+                      return (
+                        <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+                          <AppText style={[styles.statusBadgeText, { color: cfg.color }]}>
+                            {cfg.label}
+                          </AppText>
+                        </View>
+                      );
+                    })()}
+                  </View>
+
+                  {/* Purpose / Category */}
+                  <View style={styles.receiptRow}>
+                    <AppText style={styles.receiptLabel}>Service Category</AppText>
+                    {(() => {
+                      const cat = getCategoryConfig(selectedPayment.purpose);
+                      const CatIcon = cat.Icon;
+                      return (
+                        <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
+                          <CatIcon size={12} color={cat.color} />
+                          <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
+                            {cat.label}
+                          </AppText>
+                        </View>
+                      );
+                    })()}
+                  </View>
+
+                  {/* Service Name */}
+                  {selectedPayment.service_name && (
+                    <View style={styles.receiptRow}>
+                      <AppText style={styles.receiptLabel}>Service / Item</AppText>
+                      <AppText style={styles.receiptValue}>{selectedPayment.service_name}</AppText>
+                    </View>
+                  )}
+
+                  {/* Payment Method */}
+                  <View style={styles.receiptRow}>
+                    <AppText style={styles.receiptLabel}>Payment Method</AppText>
+                    <AppText style={styles.receiptValue}>
+                      {selectedPayment.payment_method_label || selectedPayment.payment_method.toUpperCase()}
+                    </AppText>
+                  </View>
+
+                  {/* Date Created */}
+                  <View style={styles.receiptRow}>
+                    <AppText style={styles.receiptLabel}>Transaction Date</AppText>
+                    <AppText style={styles.receiptValue}>
+                      {new Date(selectedPayment.created_at).toLocaleDateString('en-IN', {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
                       })}
                     </AppText>
                   </View>
-                )}
-              </View>
+
+                  {/* Paid Date */}
+                  {selectedPayment.paid_at && (
+                    <View style={styles.receiptRow}>
+                      <AppText style={styles.receiptLabel}>Payment Settled</AppText>
+                      <AppText style={[styles.receiptValue, { color: '#15803D' }]}>
+                        {new Date(selectedPayment.paid_at).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </AppText>
+                    </View>
+                  )}
+
+                  {/* Refund Information */}
+                  {(selectedPayment.status === 'refunded' || selectedPayment.status === 'partially_refunded') && (
+                    <View style={styles.refundInfoSection}>
+                      <AppText style={styles.refundSectionTitle}>Refund Information</AppText>
+                      {selectedPayment.refunded_amount != null && (
+                        <View style={styles.receiptRow}>
+                          <AppText style={styles.receiptLabel}>Refunded Amount</AppText>
+                          <AppText style={[styles.receiptValue, { color: '#6D28D9', fontWeight: '700' }]}>
+                            {formatCurrency(Number(selectedPayment.refunded_amount), selectedPayment.currency)}
+                          </AppText>
+                        </View>
+                      )}
+                      {selectedPayment.refunded_at && (
+                        <View style={styles.receiptRow}>
+                          <AppText style={styles.receiptLabel}>Refund Date</AppText>
+                          <AppText style={styles.receiptValue}>
+                            {new Date(selectedPayment.refunded_at).toLocaleDateString('en-IN', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </AppText>
+                        </View>
+                      )}
+                      {selectedPayment.refund_reason && (
+                        <View style={styles.receiptRow}>
+                          <AppText style={styles.receiptLabel}>Refund Reason</AppText>
+                          <AppText style={styles.receiptValue}>{selectedPayment.refund_reason}</AppText>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Failure Reason */}
+                  {selectedPayment.failure_reason && (
+                    <View style={styles.receiptRow}>
+                      <AppText style={styles.receiptLabel}>Failure Reason</AppText>
+                      <AppText style={[styles.receiptValue, { color: '#B91C1C' }]}>
+                        {selectedPayment.failure_reason}
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+              </ScrollView>
             )}
 
             <Button
@@ -269,27 +524,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background.primary,
   },
-  header: {
-    paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[4],
-    paddingBottom: Spacing[2],
-  },
-  screenTitle: {
-    color: Colors.text.primary,
-  },
-  screenSubtitle: {
-    fontSize: 13,
-    color: Colors.text.secondary,
-    marginTop: Spacing[0.5],
-  },
-  filterRow: {
-    paddingVertical: Spacing[2],
+  filterSection: {
+    paddingVertical: Spacing[1],
   },
   filterScroll: {
     paddingHorizontal: Spacing[4],
     gap: Spacing[2],
   },
-  filterTab: {
+  pill: {
     paddingHorizontal: Spacing[3.5],
     paddingVertical: Spacing[1.5],
     borderRadius: Radius.full,
@@ -297,17 +539,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.surface.border,
   },
-  filterTabActive: {
+  pillActive: {
     backgroundColor: Colors.brand.primary,
     borderColor: Colors.brand.primary,
   },
-  filterTabText: {
-    fontSize: 13,
+  pillText: {
+    fontSize: 12,
+    fontWeight: '500',
     color: Colors.text.secondary,
   },
-  filterTabTextActive: {
+  pillTextActive: {
     color: '#ffffff',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  statusPill: {
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[1],
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surface.elevated,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  statusPillActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: Colors.text.tertiary,
+  },
+  statusPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   listContent: {
     paddingHorizontal: Spacing[4],
@@ -317,34 +581,89 @@ const styles = StyleSheet.create({
   card: {
     padding: Spacing[4],
     backgroundColor: Colors.surface.default,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
     gap: Spacing[2],
+    ...Shadows.sm,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  referenceText: {
-    fontSize: 13,
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing[2],
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: Colors.text.primary,
-    fontFamily: 'monospace',
   },
-  clubName: {
+  statusBadge: {
+    paddingHorizontal: Spacing[2],
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  serviceTitleRow: {
+    marginTop: 2,
+  },
+  serviceNameText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  clubNameText: {
     fontSize: 12,
     color: Colors.text.secondary,
-    marginTop: Spacing[0.5],
+    marginTop: 2,
   },
   amountRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     paddingVertical: Spacing[1],
   },
   amountText: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.text.primary,
+  },
+  refundedAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginTop: 2,
+  },
+  refundedAmountText: {
+    fontSize: 11,
+    color: '#6D28D9',
+    fontWeight: '600',
+  },
+  methodBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surface.elevated,
+    paddingHorizontal: Spacing[2],
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  methodBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.text.secondary,
   },
   footerRow: {
     flexDirection: 'row',
@@ -353,10 +672,12 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Colors.surface.border,
     paddingTop: Spacing[2],
+    marginTop: 2,
   },
-  purposeText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
+  referenceText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: Colors.text.tertiary,
   },
   dateText: {
     fontSize: 11,
@@ -374,40 +695,105 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing[5],
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
+    maxHeight: '85%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing[3],
+  },
+  modalHeaderTitleBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
   },
   modalTitle: {
     color: Colors.text.primary,
-    marginBottom: Spacing[4],
-    textAlign: 'center',
+  },
+  modalCloseBtn: {
+    padding: Spacing[1],
+  },
+  modalScroll: {
+    marginVertical: Spacing[1],
+  },
+  amountBanner: {
+    backgroundColor: Colors.surface.elevated,
+    borderRadius: Radius.md,
+    padding: Spacing[3.5],
+    alignItems: 'center',
+    marginBottom: Spacing[3],
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  amountBannerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.text.tertiary,
+    letterSpacing: 0.8,
+  },
+  amountBannerValue: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.brand.primary,
+    marginTop: 4,
+  },
+  refundBannerTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    marginTop: 6,
+  },
+  refundBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6D28D9',
   },
   receiptBody: {
-    gap: Spacing[3],
-    marginBottom: Spacing[5],
+    gap: Spacing[2.5],
+    marginBottom: Spacing[3],
   },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: 2,
   },
   receiptLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.text.secondary,
   },
   receiptValue: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: Colors.text.primary,
+    maxWidth: '60%',
+    textAlign: 'right',
   },
   receiptValueMono: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: 'monospace',
     color: Colors.text.primary,
   },
-  amountHighlight: {
-    fontSize: 16,
+  refundInfoSection: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#E9D5FF',
+    padding: Spacing[3],
+    marginTop: Spacing[2],
+    gap: Spacing[2],
+  },
+  refundSectionTitle: {
+    fontSize: 12,
     fontWeight: '700',
-    color: Colors.brand.primary,
+    color: '#6D28D9',
+    marginBottom: 2,
   },
   closeBtn: {
     marginTop: Spacing[2],

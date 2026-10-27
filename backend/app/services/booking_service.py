@@ -487,6 +487,29 @@ class BookingService:
                 detail="Court is already booked for this time slot",
             )
 
+        # If booking has a price, record canonical payment
+        if total_price_snapshot and total_price_snapshot > Decimal("0"):
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            pay_repo = PaymentRepository(self.db)
+            reference = await pay_repo.generate_reference()
+            now_dt = datetime.now(timezone.utc)
+            payment = Payment(
+                reference=reference,
+                club_id=club_id,
+                player_id=user_id,
+                booking_id=booking.id,
+                amount=total_price_snapshot,
+                currency="USD",
+                status=PaymentStatus.SUCCEEDED,
+                purpose=PaymentPurpose.COURT_BOOKING,
+                payment_method=PaymentMethod.ONLINE,
+                paid_at=now_dt,
+                notes=f"Court reservation: {locked_court.name}",
+                created_by_user_id=user_id,
+            )
+            await pay_repo.create(payment)
+
         resp = self._serialize_booking(booking)
         await self.db.commit()
 
@@ -666,6 +689,29 @@ class BookingService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Court is already booked for this time slot",
             )
+
+        # If staff booking has a price and player, record canonical payment
+        if total_price_snapshot and total_price_snapshot > Decimal("0") and target_user_id:
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            pay_repo = PaymentRepository(self.db)
+            reference = await pay_repo.generate_reference()
+            now_dt = datetime.now(timezone.utc)
+            payment = Payment(
+                reference=reference,
+                club_id=club_id,
+                player_id=target_user_id,
+                booking_id=booking.id,
+                amount=total_price_snapshot,
+                currency="USD",
+                status=PaymentStatus.SUCCEEDED,
+                purpose=PaymentPurpose.COURT_BOOKING,
+                payment_method=PaymentMethod.CASH,
+                paid_at=now_dt,
+                notes=f"Staff court reservation: {locked_court.name}",
+                created_by_user_id=staff_user_id,
+            )
+            await pay_repo.create(payment)
 
         resp = self._serialize_booking(booking)
         await self.db.commit()
@@ -851,6 +897,20 @@ class BookingService:
             cancelled_by_user_id=user_id,
             cancellation_reason=payload.cancellation_reason,
         )
+        # If booking had a paid transaction, mark it refunded
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        stmt = select(Payment).where(Payment.booking_id == booking.id)
+        pmt = (await self.db.execute(stmt)).scalar_one_or_none()
+        if pmt and pmt.status == PaymentStatus.SUCCEEDED:
+            pmt.status = PaymentStatus.REFUNDED
+            pmt.refunded_amount = pmt.amount
+            pmt.refund_reason = payload.cancellation_reason or "Booking cancelled by player"
+            pmt.refunded_at = now
+            pmt.status_changed_by_user_id = user_id
+            pmt.updated_at = now
+            await self.db.flush()
+
         resp = self._serialize_booking(updated)
         await self.db.commit()
 
@@ -935,6 +995,20 @@ class BookingService:
             cancelled_by_user_id=staff_user_id,
             cancellation_reason=payload.cancellation_reason,
         )
+
+        # If booking had a paid transaction, mark it refunded
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        stmt = select(Payment).where(Payment.booking_id == booking.id)
+        pmt = (await self.db.execute(stmt)).scalar_one_or_none()
+        if pmt and pmt.status == PaymentStatus.SUCCEEDED:
+            pmt.status = PaymentStatus.REFUNDED
+            pmt.refunded_amount = pmt.amount
+            pmt.refund_reason = payload.cancellation_reason or "Booking cancelled by club staff"
+            pmt.refunded_at = now
+            pmt.status_changed_by_user_id = staff_user_id
+            pmt.updated_at = now
+            await self.db.flush()
 
         resp = self._serialize_booking(updated)
         await self.db.commit()

@@ -44,8 +44,13 @@ class PaymentSubscriptionEmbeddedInfo(BaseModel):
 # ─── Request Payloads ─────────────────────────────────────────────────────────
 
 class CreatePaymentRequest(BaseModel):
-    player_id: UUID = Field(..., description="ID of the user receiving the membership")
-    subscription_id: UUID = Field(..., description="ID of the member subscription")
+    player_id: UUID = Field(..., description="ID of the user receiving the service/membership")
+    subscription_id: UUID | None = Field(default=None, description="ID of member subscription (if membership)")
+    booking_id: UUID | None = Field(default=None, description="ID of court booking (if booking)")
+    tournament_id: UUID | None = Field(default=None, description="ID of tournament (if tournament)")
+    event_id: UUID | None = Field(default=None, description="ID of event (if event)")
+    lesson_id: UUID | None = Field(default=None, description="ID of lesson (if lesson)")
+    league_id: UUID | None = Field(default=None, description="ID of league (if league)")
     amount: Decimal = Field(..., gt=0, decimal_places=2, description="Payment amount (> 0)")
     currency: str = Field(default="USD", min_length=3, max_length=3, description="Currency code")
     payment_method: PaymentMethod = Field(..., description="Payment method: cash, bank_transfer, online, other")
@@ -66,6 +71,11 @@ class PaymentCancelRequest(BaseModel):
     cancellation_reason: str | None = Field(default=None, max_length=500, description="Optional cancellation reason")
 
 
+class PaymentRefundRequest(BaseModel):
+    amount: Decimal | None = Field(default=None, gt=0, description="Amount to refund (defaults to full payment amount)")
+    refund_reason: str = Field(..., min_length=1, max_length=500, description="Reason for refund")
+
+
 # ─── Response Payloads ────────────────────────────────────────────────────────
 
 class PaymentResponse(BaseModel):
@@ -77,7 +87,13 @@ class PaymentResponse(BaseModel):
     reference: str
     club_id: UUID
     player_id: UUID
-    subscription_id: UUID | None
+    subscription_id: UUID | None = None
+    booking_id: UUID | None = None
+    tournament_id: UUID | None = None
+    event_id: UUID | None = None
+    lesson_id: UUID | None = None
+    league_id: UUID | None = None
+    service_name: str | None = None
     amount: Decimal
     currency: str
     status: PaymentStatus
@@ -91,6 +107,9 @@ class PaymentResponse(BaseModel):
     provider_order_id: str | None = None
     notes: str | None = None
     failure_reason: str | None = None
+    refunded_amount: Decimal | None = None
+    refund_reason: str | None = None
+    refunded_at: datetime | None = None
     created_by_user_id: UUID | None = None
     status_changed_by_user_id: UUID | None = None
     created_at: datetime
@@ -117,6 +136,7 @@ class PaymentResponse(BaseModel):
                 player_info = None
 
         sub_info = None
+        service_title = None
         if payment.subscription:
             try:
                 plan = getattr(payment.subscription, "plan", None)
@@ -128,8 +148,27 @@ class PaymentResponse(BaseModel):
                     id=payment.subscription.id,
                     plan_name=plan_name,
                 )
+                service_title = plan_name
             except Exception:
                 sub_info = None
+
+        if not service_title:
+            try:
+                if payment.booking and getattr(payment.booking, "court", None):
+                    service_title = f"Court: {payment.booking.court.name}"
+                elif payment.tournament:
+                    service_title = f"Tournament: {payment.tournament.name}"
+                elif payment.event:
+                    service_title = f"Event: {payment.event.title}"
+                elif payment.lesson:
+                    service_title = f"Lesson: {payment.lesson.title}"
+                elif payment.league:
+                    service_title = f"League: {payment.league.name}"
+            except Exception:
+                pass
+
+        if not service_title and payment.notes:
+            service_title = payment.notes
 
         return cls(
             id=payment.id,
@@ -137,6 +176,12 @@ class PaymentResponse(BaseModel):
             club_id=payment.club_id,
             player_id=payment.player_id,
             subscription_id=payment.subscription_id,
+            booking_id=payment.booking_id,
+            tournament_id=payment.tournament_id,
+            event_id=payment.event_id,
+            lesson_id=payment.lesson_id,
+            league_id=payment.league_id,
+            service_name=service_title,
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,
@@ -150,6 +195,9 @@ class PaymentResponse(BaseModel):
             provider_order_id=payment.provider_order_id,
             notes=payment.notes,
             failure_reason=payment.failure_reason,
+            refunded_amount=payment.refunded_amount,
+            refund_reason=payment.refund_reason,
+            refunded_at=payment.refunded_at,
             created_by_user_id=payment.created_by_user_id,
             status_changed_by_user_id=payment.status_changed_by_user_id,
             created_at=payment.created_at,
@@ -171,6 +219,13 @@ class PlayerPaymentResponse(BaseModel):
     reference: str
     club_id: UUID
     club_name: str | None = None
+    subscription_id: UUID | None = None
+    booking_id: UUID | None = None
+    tournament_id: UUID | None = None
+    event_id: UUID | None = None
+    lesson_id: UUID | None = None
+    league_id: UUID | None = None
+    service_name: str | None = None
     amount: Decimal
     currency: str
     status: PaymentStatus
@@ -179,6 +234,9 @@ class PlayerPaymentResponse(BaseModel):
     purpose_label: str
     payment_method: PaymentMethod
     payment_method_label: str
+    refunded_amount: Decimal | None = None
+    refund_reason: str | None = None
+    refunded_at: datetime | None = None
     created_at: datetime
     paid_at: datetime | None = None
 
@@ -190,11 +248,39 @@ class PlayerPaymentResponse(BaseModel):
             club_name = payment.club.name if payment.club else None
         except Exception:
             club_name = None
+
+        service_title = None
+        try:
+            if payment.subscription and getattr(payment.subscription, "plan", None):
+                service_title = payment.subscription.plan.name
+            elif payment.booking and getattr(payment.booking, "court", None):
+                service_title = f"Court Booking: {payment.booking.court.name}"
+            elif payment.tournament:
+                service_title = f"Tournament: {payment.tournament.name}"
+            elif payment.event:
+                service_title = f"Event: {payment.event.title}"
+            elif payment.lesson:
+                service_title = f"Lesson: {payment.lesson.title}"
+            elif payment.league:
+                service_title = f"League: {payment.league.name}"
+        except Exception:
+            pass
+
+        if not service_title and payment.notes:
+            service_title = payment.notes
+
         return cls(
             id=payment.id,
             reference=payment.reference,
             club_id=payment.club_id,
             club_name=club_name,
+            subscription_id=payment.subscription_id,
+            booking_id=payment.booking_id,
+            tournament_id=payment.tournament_id,
+            event_id=payment.event_id,
+            lesson_id=payment.lesson_id,
+            league_id=payment.league_id,
+            service_name=service_title,
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,
@@ -203,6 +289,9 @@ class PlayerPaymentResponse(BaseModel):
             purpose_label=payment.purpose.display_label,
             payment_method=payment.payment_method,
             payment_method_label=payment.payment_method.display_label,
+            refunded_amount=payment.refunded_amount,
+            refund_reason=payment.refund_reason,
+            refunded_at=payment.refunded_at,
             created_at=payment.created_at,
             paid_at=payment.paid_at,
         )
@@ -213,5 +302,8 @@ class PaymentSummaryResponse(BaseModel):
     succeeded_count: int
     pending_count: int
     failed_count: int
+    refunded_count: int = 0
     total_amount_collected: Decimal
+    total_refunded_amount: Decimal = Decimal("0.00")
+    net_collected: Decimal = Decimal("0.00")
     currency: str = "USD"

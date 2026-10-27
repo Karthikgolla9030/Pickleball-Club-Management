@@ -61,6 +61,7 @@ export interface Club {
   operating_hours?: WeeklyOperatingHoursMap | null;
   court_count?: number | null;
   member_count?: number | null;
+  allows_free_join?: boolean;
 
   created_at: string;
   updated_at: string;
@@ -1735,6 +1736,7 @@ export interface PlayerMembershipView {
   subscription_id: string;
   club_id: string;
   club_name?: string | null;
+  plan_id?: string | null;
   plan_name: string;
   plan_description: string | null;
   status: SubscriptionStatus;
@@ -1764,7 +1766,13 @@ export type PaymentStatus =
   | 'refunded'
   | 'partially_refunded';
 
-export type PaymentPurpose = 'membership';
+export type PaymentPurpose =
+  | 'membership'
+  | 'court_booking'
+  | 'tournament'
+  | 'league'
+  | 'event'
+  | 'lesson';
 
 export type PaymentMethod = 'cash' | 'bank_transfer' | 'online' | 'other';
 
@@ -1785,6 +1793,12 @@ export interface Payment {
   club_id: string;
   player_id: string;
   subscription_id: string | null;
+  booking_id?: string | null;
+  tournament_id?: string | null;
+  event_id?: string | null;
+  lesson_id?: string | null;
+  league_id?: string | null;
+  service_name?: string | null;
   amount: number | string;
   currency: string;
   status: PaymentStatus;
@@ -1798,6 +1812,9 @@ export interface Payment {
   provider_order_id: string | null;
   notes: string | null;
   failure_reason: string | null;
+  refunded_amount?: number | string | null;
+  refund_reason?: string | null;
+  refunded_at?: string | null;
   created_by_user_id: string | null;
   status_changed_by_user_id: string | null;
   created_at: string;
@@ -1814,6 +1831,12 @@ export interface PlayerPayment {
   reference: string;
   club_id: string;
   club_name: string | null;
+  booking_id?: string | null;
+  tournament_id?: string | null;
+  event_id?: string | null;
+  lesson_id?: string | null;
+  league_id?: string | null;
+  service_name?: string | null;
   amount: number | string;
   currency: string;
   status: PaymentStatus;
@@ -1822,6 +1845,10 @@ export interface PlayerPayment {
   purpose_label: string;
   payment_method: PaymentMethod;
   payment_method_label: string;
+  failure_reason?: string | null;
+  refunded_amount?: number | string | null;
+  refund_reason?: string | null;
+  refunded_at?: string | null;
   created_at: string;
   paid_at: string | null;
 }
@@ -1831,7 +1858,10 @@ export interface PaymentSummary {
   succeeded_count: number;
   pending_count: number;
   failed_count: number;
+  refunded_count?: number;
   total_amount_collected: number | string;
+  total_refunded_amount?: number | string;
+  net_collected?: number | string;
   currency: string;
 }
 

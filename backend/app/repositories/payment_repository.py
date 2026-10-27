@@ -14,6 +14,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.booking import Booking
+from app.models.event import Event
+from app.models.league import League
+from app.models.lesson import Lesson
 from app.models.membership import MemberSubscription
 from app.models.payment import (
     Payment,
@@ -21,6 +25,7 @@ from app.models.payment import (
     PaymentPurpose,
     PaymentStatus,
 )
+from app.models.tournament import Tournament
 
 
 class PaymentRepository:
@@ -51,6 +56,11 @@ class PaymentRepository:
                 selectinload(Payment.club),
                 selectinload(Payment.player),
                 selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
+                selectinload(Payment.booking).selectinload(Booking.court),
+                selectinload(Payment.tournament),
+                selectinload(Payment.event),
+                selectinload(Payment.lesson),
+                selectinload(Payment.league),
                 selectinload(Payment.created_by),
                 selectinload(Payment.status_changed_by),
             )
@@ -74,6 +84,11 @@ class PaymentRepository:
                 selectinload(Payment.club),
                 selectinload(Payment.player),
                 selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
+                selectinload(Payment.booking).selectinload(Booking.court),
+                selectinload(Payment.tournament),
+                selectinload(Payment.event),
+                selectinload(Payment.lesson),
+                selectinload(Payment.league),
             )
             .where(Payment.reference == reference)
         )
@@ -102,8 +117,14 @@ class PaymentRepository:
         stmt = (
             select(Payment)
             .options(
+                selectinload(Payment.club),
                 selectinload(Payment.player),
                 selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
+                selectinload(Payment.booking).selectinload(Booking.court),
+                selectinload(Payment.tournament),
+                selectinload(Payment.event),
+                selectinload(Payment.lesson),
+                selectinload(Payment.league),
             )
             .where(Payment.club_id == club_id)
         )
@@ -155,6 +176,11 @@ class PaymentRepository:
             .options(
                 selectinload(Payment.club),
                 selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
+                selectinload(Payment.booking).selectinload(Booking.court),
+                selectinload(Payment.tournament),
+                selectinload(Payment.event),
+                selectinload(Payment.lesson),
+                selectinload(Payment.league),
             )
             .where(Payment.player_id == player_id)
         )
@@ -189,7 +215,10 @@ class PaymentRepository:
           - succeeded_count
           - pending_count
           - failed_count
+          - refunded_count
           - total_amount_collected (succeeded only)
+          - total_refunded_amount
+          - net_collected
         """
         # Count by status
         stmt = (
@@ -202,24 +231,43 @@ class PaymentRepository:
 
         total_count = sum(counts.values())
         succeeded_count = counts.get(PaymentStatus.SUCCEEDED, 0)
-        pending_count = counts.get(PaymentStatus.PENDING, 0)
+        pending_count = counts.get(PaymentStatus.PENDING, 0) + counts.get(PaymentStatus.PROCESSING, 0)
         failed_count = counts.get(PaymentStatus.FAILED, 0)
+        refunded_count = counts.get(PaymentStatus.REFUNDED, 0) + counts.get(PaymentStatus.PARTIALLY_REFUNDED, 0)
 
-        # Sum of succeeded amounts
+        # Sum of all settled amounts (gross collected before refunds)
         sum_stmt = (
             select(func.coalesce(func.sum(Payment.amount), 0))
             .where(Payment.club_id == club_id)
-            .where(Payment.status == PaymentStatus.SUCCEEDED)
+            .where(
+                Payment.status.in_([
+                    PaymentStatus.SUCCEEDED,
+                    PaymentStatus.REFUNDED,
+                    PaymentStatus.PARTIALLY_REFUNDED,
+                ])
+            )
         )
         sum_res = await self.db.execute(sum_stmt)
         total_amount = Decimal(str(sum_res.scalar() or 0))
+
+        # Sum of refunded amounts
+        ref_stmt = (
+            select(func.coalesce(func.sum(Payment.refunded_amount), 0))
+            .where(Payment.club_id == club_id)
+        )
+        ref_res = await self.db.execute(ref_stmt)
+        total_refunded = Decimal(str(ref_res.scalar() or 0))
+        net_collected = max(Decimal("0.00"), total_amount - total_refunded)
 
         return {
             "total_count": total_count,
             "succeeded_count": succeeded_count,
             "pending_count": pending_count,
             "failed_count": failed_count,
+            "refunded_count": refunded_count,
             "total_amount_collected": total_amount,
+            "total_refunded_amount": total_refunded,
+            "net_collected": net_collected,
             "currency": "USD",
         }
 

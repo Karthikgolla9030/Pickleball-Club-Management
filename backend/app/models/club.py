@@ -35,6 +35,7 @@ class Club(Base):
     short_description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    allows_free_join: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     # ─── Contact Information ─────────────────────────────────────
     contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)

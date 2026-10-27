@@ -45,14 +45,26 @@ from app.core.database import Base
 class PaymentPurpose(str, enum.Enum):
     """
     Controlled payment purpose.
-    Phase 13 supports only 'membership'.
-    Extensible for future phases (booking, tournament, lesson, event).
+    Supports membership, court bookings, tournaments, leagues, events, and lessons.
     """
     MEMBERSHIP = "membership"
+    COURT_BOOKING = "court_booking"
+    TOURNAMENT = "tournament"
+    LEAGUE = "league"
+    EVENT = "event"
+    LESSON = "lesson"
 
     @property
     def display_label(self) -> str:
-        return {"membership": "Membership"}[self.value]
+        labels = {
+            "membership": "Membership",
+            "court_booking": "Court Booking",
+            "tournament": "Tournament Registration",
+            "league": "League Registration",
+            "event": "Event Registration",
+            "lesson": "Lesson Booking",
+        }
+        return labels.get(self.value, self.value.replace("_", " ").title())
 
 
 class PaymentStatus(str, enum.Enum):
@@ -159,6 +171,36 @@ class Payment(Base):
         nullable=True,
         index=True,
     )
+    booking_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("bookings.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tournament_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("tournaments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("events.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    lesson_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("lessons.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    league_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("leagues.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Money storage: NUMERIC(10, 2) — NEVER FLOAT
     amount: Mapped[Decimal] = mapped_column(
@@ -197,6 +239,17 @@ class Payment(Base):
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Refund auditing
+    refunded_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=10, scale=2),
+        nullable=True,
+        default=Decimal("0.00"),
+    )
+    refund_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refunded_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Audit actors
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -247,6 +300,26 @@ class Payment(Base):
         "MemberSubscription",
         foreign_keys=[subscription_id],
         back_populates="payments",
+    )
+    booking: Mapped["Booking | None"] = relationship(  # noqa: F821
+        "Booking",
+        foreign_keys=[booking_id],
+    )
+    tournament: Mapped["Tournament | None"] = relationship(  # noqa: F821
+        "Tournament",
+        foreign_keys=[tournament_id],
+    )
+    event: Mapped["Event | None"] = relationship(  # noqa: F821
+        "Event",
+        foreign_keys=[event_id],
+    )
+    lesson: Mapped["Lesson | None"] = relationship(  # noqa: F821
+        "Lesson",
+        foreign_keys=[lesson_id],
+    )
+    league: Mapped["League | None"] = relationship(  # noqa: F821
+        "League",
+        foreign_keys=[league_id],
     )
     created_by: Mapped["User | None"] = relationship(  # noqa: F821
         "User",

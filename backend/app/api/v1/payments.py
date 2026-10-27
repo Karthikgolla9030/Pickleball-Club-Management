@@ -41,6 +41,7 @@ from app.schemas.payment import (
     CreatePaymentRequest,
     PaymentCancelRequest,
     PaymentFailRequest,
+    PaymentRefundRequest,
     PaymentResponse,
     PaymentSummaryResponse,
     PlayerPaymentResponse,
@@ -287,6 +288,36 @@ async def cancel_payment(
         payment_id=payment_id,
         actor_id=current_user.id,
         cancellation_reason=reason,
+    )
+
+
+@club_payments_router.post(
+    "/{payment_id}/refund",
+    response_model=PaymentResponse,
+    summary="Refund a payment",
+    description="Processes a full or partial refund for a succeeded payment.",
+    responses={
+        400: {"description": "Invalid status transition or excessive refund amount"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions"},
+        404: {"description": "Payment not found"},
+    },
+)
+async def refund_payment(
+    club_id: UUID,
+    payment_id: UUID,
+    payload: PaymentRefundRequest,
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_PAYMENTS)),
+    db: AsyncSession = Depends(get_db),
+) -> PaymentResponse:
+    """Refund a succeeded payment."""
+    return await PaymentService(db).refund_payment(
+        club_id=club_id,
+        payment_id=payment_id,
+        actor_id=current_user.id,
+        amount=payload.amount,
+        refund_reason=payload.refund_reason,
     )
 
 

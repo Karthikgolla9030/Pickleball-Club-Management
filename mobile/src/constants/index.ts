@@ -148,6 +148,7 @@ export const API_ENDPOINTS = {
   CLUB_PAYMENT_SUCCEED: (clubId: string, paymentId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments/${paymentId}/succeed`,
   CLUB_PAYMENT_FAIL: (clubId: string, paymentId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments/${paymentId}/fail`,
   CLUB_PAYMENT_CANCEL: (clubId: string, paymentId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments/${paymentId}/cancel`,
+  CLUB_PAYMENT_REFUND: (clubId: string, paymentId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments/${paymentId}/refund`,
   PLAYER_PAYMENTS: `${API_BASE}/api/v1/payments`,
   PLAYER_PAYMENT: (paymentId: string) => `${API_BASE}/api/v1/payments/${paymentId}`,
 

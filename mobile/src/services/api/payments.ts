@@ -94,6 +94,17 @@ export const paymentApi = {
     });
   },
 
+  /**
+   * Refund a succeeded payment.
+   */
+  refundPayment(
+    clubId: string,
+    paymentId: string,
+    payload?: { amount?: number; refund_reason?: string }
+  ): Promise<Payment> {
+    return apiClient.post<Payment>(API_ENDPOINTS.CLUB_PAYMENT_REFUND(clubId, paymentId), payload || {});
+  },
+
   // ─── Player Payment Endpoints ──────────────────────────────────────────────
 
   /**

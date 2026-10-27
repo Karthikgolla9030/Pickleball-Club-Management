@@ -6,6 +6,7 @@ team management, scheduling, scoring, standings, snapshots, and playoff executio
 """
 from __future__ import annotations
 
+from decimal import Decimal
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -475,6 +476,24 @@ class LeagueService:
                 detail=f"Cannot cancel a league that is already {league.status.value}.",
             )
         league = await self.league_repo.update_league(league, status=LeagueStatus.CANCELLED)
+
+        # Refund all canonical payments for this league
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        now_dt = datetime.now(timezone.utc)
+        stmt = select(Payment).where(
+            Payment.league_id == league_id,
+            Payment.status == PaymentStatus.SUCCEEDED,
+        )
+        league_pmts = (await self.db.execute(stmt)).scalars().all()
+        for pmt in league_pmts:
+            pmt.status = PaymentStatus.REFUNDED
+            pmt.refunded_amount = pmt.amount
+            pmt.refund_reason = "League cancelled by club"
+            pmt.refunded_at = now_dt
+            pmt.updated_at = now_dt
+        await self.db.flush()
+
         await self.db.commit()
         return await self.get_league(club_id, league_id)
 
@@ -1628,6 +1647,33 @@ class LeagueService:
         )
         if payload.skill_rating is not None and getattr(user, "player_profile", None):
             user.player_profile.skill_rating = payload.skill_rating
+
+        # Record canonical payment if league has registration fee
+        if league.registration_fee and league.registration_fee > Decimal("0"):
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            try:
+                pay_repo = PaymentRepository(self.db)
+                reference = await pay_repo.generate_reference()
+                now_dt = datetime.now(timezone.utc)
+                payment = Payment(
+                    reference=reference,
+                    club_id=league.club_id,
+                    player_id=user.id,
+                    league_id=league.id,
+                    amount=Decimal(str(league.registration_fee)),
+                    currency="USD",
+                    status=PaymentStatus.SUCCEEDED,
+                    purpose=PaymentPurpose.LEAGUE,
+                    payment_method=PaymentMethod.ONLINE,
+                    paid_at=now_dt,
+                    notes=f"League registration: {league.name} (Team: {clean_name})",
+                    created_by_user_id=user.id,
+                )
+                await pay_repo.create(payment)
+            except Exception:
+                pass
+
         await self.db.commit()
         try:
             from app.services.notification_service import NotificationService

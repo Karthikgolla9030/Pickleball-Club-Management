@@ -277,6 +277,22 @@ class EventService:
                     club_id=club_id,
                 )
             elif target_status == EventStatus.CANCELLED:
+                from sqlalchemy import select
+                from app.models.payment import Payment, PaymentStatus
+                now_dt = datetime.now(timezone.utc)
+                stmt = select(Payment).where(
+                    Payment.event_id == event_id,
+                    Payment.status == PaymentStatus.SUCCEEDED,
+                )
+                event_pmts = (await self.db.execute(stmt)).scalars().all()
+                for pmt in event_pmts:
+                    pmt.status = PaymentStatus.REFUNDED
+                    pmt.refunded_amount = pmt.amount
+                    pmt.refund_reason = "Event cancelled by club"
+                    pmt.refunded_at = now_dt
+                    pmt.updated_at = now_dt
+                await self.db.flush()
+
                 await dispatch_event(
                     event_type=WSEventType.EVENT_CANCELLED,
                     data={"event_id": str(event.id), "title": event.title},
@@ -409,6 +425,31 @@ class EventService:
         full_reg = await self.event_repo.get_registration(registration.id)
         resp = self._to_registration_response(full_reg or registration)
 
+        # Record payment if event has fee and player was registered
+        if initial_status == EventRegistrationStatus.REGISTERED and event.registration_fee and event.registration_fee > Decimal("0"):
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            try:
+                pay_repo = PaymentRepository(self.db)
+                reference = await pay_repo.generate_reference()
+                payment = Payment(
+                    reference=reference,
+                    club_id=event.club_id,
+                    player_id=user_id,
+                    event_id=event.id,
+                    amount=event.registration_fee,
+                    currency=event.currency or "USD",
+                    status=PaymentStatus.SUCCEEDED,
+                    purpose=PaymentPurpose.EVENT,
+                    payment_method=PaymentMethod.ONLINE,
+                    paid_at=now,
+                    notes=f"Event registration: {event.title}",
+                    created_by_user_id=user_id,
+                )
+                await pay_repo.create(payment)
+            except Exception:
+                pass
+
         try:
             event = await self.event_repo.get_by_id(event_id)
             if event:
@@ -500,6 +541,25 @@ class EventService:
                     next_waitlisted.status = EventRegistrationStatus.REGISTERED
                     await self.event_repo.update_registration(next_waitlisted)
                     promoted_user = next_waitlisted
+
+        # Refund canonical payment if paid
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        stmt = select(Payment).where(
+            Payment.event_id == event_id,
+            Payment.player_id == registration.user_id,
+            Payment.status == PaymentStatus.SUCCEEDED,
+        )
+        pmt = (await self.db.execute(stmt)).scalars().first()
+        if pmt:
+            now_dt = datetime.now(timezone.utc)
+            pmt.status = PaymentStatus.REFUNDED
+            pmt.refunded_amount = pmt.amount
+            pmt.refund_reason = "Event registration cancelled by player"
+            pmt.refunded_at = now_dt
+            pmt.status_changed_by_user_id = actor_user_id
+            pmt.updated_at = now_dt
+            await self.db.flush()
 
         resp = self._to_registration_response(registration)
 

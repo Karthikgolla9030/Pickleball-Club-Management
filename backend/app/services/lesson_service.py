@@ -620,7 +620,7 @@ class LessonService:
                         detail="Court is already reserved for another lesson at this time",
                     )
 
-        # On cancel: cancel active registrations
+        # On cancel: cancel active registrations and refund any payments
         active_regs = []
         if target_status == LessonStatus.CANCELLED:
             active_regs = await self.registration_repo.list_by_lesson(
@@ -628,10 +628,27 @@ class LessonService:
                 status=LessonRegistrationStatus.REGISTERED,
             )
             now = datetime.now(timezone.utc)
+            from sqlalchemy import select
+            from app.models.payment import Payment, PaymentStatus
             for reg in active_regs:
                 reg.status = LessonRegistrationStatus.CANCELLED
                 reg.cancelled_at = now
                 await self.registration_repo.update(reg)
+
+                # Refund payment if one exists
+                stmt = select(Payment).where(
+                    Payment.lesson_id == lesson.id,
+                    Payment.player_id == reg.user_id,
+                    Payment.status == PaymentStatus.SUCCEEDED,
+                )
+                pmt = (await self.db.execute(stmt)).scalars().first()
+                if pmt:
+                    pmt.status = PaymentStatus.REFUNDED
+                    pmt.refunded_amount = pmt.amount
+                    pmt.refund_reason = "Lesson cancelled by club"
+                    pmt.refunded_at = now
+                    pmt.updated_at = now
+                    await self.db.flush()
 
         lesson.status = target_status
         lesson = await self.lesson_repo.update(lesson)
@@ -753,6 +770,32 @@ class LessonService:
         )
         resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
 
+        # Record canonical payment if lesson has a price
+        if lesson.price and lesson.price > Decimal("0"):
+            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+            from app.repositories.payment_repository import PaymentRepository
+            try:
+                pay_repo = PaymentRepository(self.db)
+                reference = await pay_repo.generate_reference()
+                now_dt = datetime.now(timezone.utc)
+                payment = Payment(
+                    reference=reference,
+                    club_id=lesson.club_id,
+                    player_id=user_id,
+                    lesson_id=lesson.id,
+                    amount=Decimal(str(lesson.price)),
+                    currency=lesson.currency or "USD",
+                    status=PaymentStatus.SUCCEEDED,
+                    purpose=PaymentPurpose.LESSON,
+                    payment_method=PaymentMethod.ONLINE,
+                    paid_at=now_dt,
+                    notes=f"Lesson registration: {lesson.title}",
+                    created_by_user_id=user_id,
+                )
+                await pay_repo.create(payment)
+            except Exception:
+                pass
+
         try:
             active_count = await self.registration_repo.count_active_by_lesson(lesson_id)
             await dispatch_event(
@@ -833,6 +876,26 @@ class LessonService:
         registration.status = LessonRegistrationStatus.CANCELLED
         registration.cancelled_at = datetime.now(timezone.utc)
         registration = await self.registration_repo.update(registration)
+
+        # Refund canonical payment if paid
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        stmt = select(Payment).where(
+            Payment.lesson_id == lesson_id,
+            Payment.player_id == registration.user_id,
+            Payment.status == PaymentStatus.SUCCEEDED,
+        )
+        pmt = (await self.db.execute(stmt)).scalars().first()
+        if pmt:
+            now_dt = datetime.now(timezone.utc)
+            pmt.status = PaymentStatus.REFUNDED
+            pmt.refunded_amount = pmt.amount
+            pmt.refund_reason = "Lesson registration cancelled by player"
+            pmt.refunded_at = now_dt
+            pmt.status_changed_by_user_id = user_id
+            pmt.updated_at = now_dt
+            await self.db.flush()
+
         resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
 
         try:

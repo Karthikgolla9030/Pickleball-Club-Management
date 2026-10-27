@@ -317,6 +317,12 @@ class PlayerService:
                 detail="Club not found or inactive",
             )
 
+        if not getattr(club, "allows_free_join", True):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This club does not permit free joining. Please choose a membership plan.",
+            )
+
         now = datetime.now(timezone.utc)
         existing = await self.player_membership_repo.get_by_user_and_club(user_id, club_id)
         if existing:

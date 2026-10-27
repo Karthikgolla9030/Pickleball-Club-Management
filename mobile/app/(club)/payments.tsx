@@ -29,6 +29,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
@@ -37,14 +38,22 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
+  Calendar,
   Check,
   CheckCircle2,
   Clock,
   Copy,
   CreditCard,
+  Crown,
   FileText,
+  LayoutGrid,
   Menu,
+  RotateCcw,
+  Search,
   ShieldAlert,
+  Trophy,
+  UserCheck,
+  Users,
   X,
 } from 'lucide-react-native';
 
@@ -63,6 +72,7 @@ import {
   useClubPayments,
   usePaymentSummary,
   usePermission,
+  useRefundPayment,
   useSucceedPayment,
   useUnreadNotificationCount,
 } from '@/hooks';
@@ -70,16 +80,29 @@ import { useDrawerStore } from '@/navigation';
 import { useAuthStore } from '@/store';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
-import type { Payment, PaymentMethod, PaymentStatus } from '@/types';
+import type { Payment, PaymentMethod, PaymentPurpose, PaymentStatus } from '@/types';
 
-type FilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'cancelled';
+type FilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'cancelled' | 'refunded';
 
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'All' },
+  { key: 'all', label: 'All Status' },
   { key: 'succeeded', label: 'Succeeded' },
   { key: 'pending', label: 'Pending' },
   { key: 'failed', label: 'Failed' },
   { key: 'cancelled', label: 'Cancelled' },
+  { key: 'refunded', label: 'Refunded' },
+];
+
+type CategoryTab = 'all' | 'membership' | 'court_booking' | 'tournament' | 'league' | 'event' | 'lesson';
+
+const CATEGORY_TABS: { key: CategoryTab; label: string }[] = [
+  { key: 'all', label: 'All Services' },
+  { key: 'membership', label: 'Memberships' },
+  { key: 'court_booking', label: 'Court Bookings' },
+  { key: 'tournament', label: 'Tournaments' },
+  { key: 'league', label: 'Leagues' },
+  { key: 'event', label: 'Events' },
+  { key: 'lesson', label: 'Lessons' },
 ];
 
 function formatTransactionDate(dateStr: string): string {
@@ -130,8 +153,15 @@ export default function ClubPaymentsScreen() {
   const clubId = activeClubId ?? '';
 
   const [statusFilter, setStatusFilter] = useState<FilterTab>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryTab>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [copiedId, setCopiedId] = useState(false);
+
+  // Refund dialog state
+  const [refundDialogVisible, setRefundDialogVisible] = useState(false);
+  const [paymentToRefund, setPaymentToRefund] = useState<Payment | null>(null);
+  const [refundReasonInput, setRefundReasonInput] = useState('');
 
   // Queries: Auto-sync player transactions with 15-second background polling
   const {
@@ -163,47 +193,96 @@ export default function ClubPaymentsScreen() {
   // Mutations for staff reconciliation
   const succeedPaymentMutation = useSucceedPayment(clubId);
   const cancelPaymentMutation = useCancelPayment(clubId);
+  const refundPaymentMutation = useRefundPayment(clubId);
 
   // Filtered payments list
   const filteredPayments = useMemo(() => {
-    if (statusFilter === 'all') return allPayments;
-    if (statusFilter === 'pending') {
-      return allPayments.filter(
-        (p) => p.status === 'pending' || p.status === 'processing'
-      );
-    }
-    return allPayments.filter((p) => p.status === statusFilter);
-  }, [allPayments, statusFilter]);
+    return allPayments.filter((p) => {
+      // 1. Status Filter
+      if (statusFilter === 'pending') {
+        if (p.status !== 'pending' && p.status !== 'processing') return false;
+      } else if (statusFilter === 'refunded') {
+        if (p.status !== 'refunded' && p.status !== 'partially_refunded') return false;
+      } else if (statusFilter !== 'all') {
+        if (p.status !== statusFilter) return false;
+      }
+
+      // 2. Category Filter
+      if (categoryFilter !== 'all') {
+        if (p.purpose !== categoryFilter) return false;
+      }
+
+      // 3. Search Query Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const refMatch = p.reference?.toLowerCase().includes(q);
+        const nameMatch = p.player?.full_name?.toLowerCase().includes(q);
+        const emailMatch = p.player?.email?.toLowerCase().includes(q);
+        const serviceMatch = p.service_name?.toLowerCase().includes(q);
+        const notesMatch = p.notes?.toLowerCase().includes(q);
+        if (!refMatch && !nameMatch && !emailMatch && !serviceMatch && !notesMatch) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [allPayments, statusFilter, categoryFilter, searchQuery]);
 
   // Metric values calculated from actual payment records
-  const { totalCollectedAmount, totalPaymentsCount, successfulCount, pendingCount } =
-    useMemo(() => {
-      const succeededList = allPayments.filter((p) => p.status === 'succeeded');
-      const pendingList = allPayments.filter(
-        (p) => p.status === 'pending' || p.status === 'processing'
-      );
+  const {
+    totalCollectedAmount,
+    totalPaymentsCount,
+    successfulCount,
+    pendingCount,
+    failedCount,
+    refundedCount,
+    totalRefundedAmount,
+  } = useMemo(() => {
+    const succeededList = allPayments.filter((p) => p.status === 'succeeded');
+    const pendingList = allPayments.filter(
+      (p) => p.status === 'pending' || p.status === 'processing'
+    );
+    const failedList = allPayments.filter((p) => p.status === 'failed');
+    const refundedList = allPayments.filter(
+      (p) => p.status === 'refunded' || p.status === 'partially_refunded'
+    );
 
-      const calculatedCollected = succeededList.reduce(
-        (acc, p) => acc + Number(p.amount || 0),
-        0
-      );
+    const grossCollected = succeededList.reduce(
+      (acc, p) => acc + Number(p.amount || 0),
+      0
+    );
+    const refundedSum = refundedList.reduce(
+      (acc, p) => acc + Number(p.refunded_amount || p.amount || 0),
+      0
+    );
+    const netCollected = grossCollected - refundedSum;
 
-      const totalCollected =
-        summary?.total_amount_collected != null
-          ? Number(summary.total_amount_collected)
-          : calculatedCollected;
+    const totalCollected =
+      summary?.net_collected != null
+        ? Number(summary.net_collected)
+        : netCollected;
 
-      const totalPayments = summary?.total_count ?? allPayments.length;
-      const successful = summary?.succeeded_count ?? succeededList.length;
-      const pending = summary?.pending_count ?? pendingList.length;
+    const totalPayments = summary?.total_count ?? allPayments.length;
+    const successful = summary?.succeeded_count ?? succeededList.length;
+    const pending = summary?.pending_count ?? pendingList.length;
+    const failed = summary?.failed_count ?? failedList.length;
+    const refunded = summary?.refunded_count ?? refundedList.length;
+    const totalRefundedAmt =
+      summary?.total_refunded_amount != null
+        ? Number(summary.total_refunded_amount)
+        : refundedSum;
 
-      return {
-        totalCollectedAmount: totalCollected,
-        totalPaymentsCount: totalPayments,
-        successfulCount: successful,
-        pendingCount: pending,
-      };
-    }, [allPayments, summary]);
+    return {
+      totalCollectedAmount: Math.max(0, totalCollected),
+      totalPaymentsCount: totalPayments,
+      successfulCount: successful,
+      pendingCount: pending,
+      failedCount: failed,
+      refundedCount: refunded,
+      totalRefundedAmount: totalRefundedAmt,
+    };
+  }, [allPayments, summary]);
 
   const onRefresh = () => {
     refetchSummary();
@@ -303,12 +382,12 @@ export default function ClubPaymentsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.metricsScrollContent}
         >
-          {/* Card 1: TOTAL COLLECTED */}
+          {/* Card 1: TOTAL COLLECTED (NET) */}
           <View style={styles.metricCard}>
             <View style={[styles.metricIconBox, { backgroundColor: '#E8F5EE' }]}>
               <CreditCard size={15} color="#15803D" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.metricLabel}>TOTAL COLLECTED</AppText>
+            <AppText style={styles.metricLabel}>NET COLLECTED</AppText>
             <AppText style={[styles.metricValue, { color: '#15803D' }]} numberOfLines={1}>
               {formatCurrency(totalCollectedAmount)}
             </AppText>
@@ -346,11 +425,65 @@ export default function ClubPaymentsScreen() {
               {pendingCount}
             </AppText>
           </View>
+
+          {/* Card 5: REFUNDED */}
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIconBox, { backgroundColor: '#EDE9FE' }]}>
+              <RotateCcw size={15} color="#6D28D9" strokeWidth={2.2} />
+            </View>
+            <AppText style={styles.metricLabel}>REFUNDED ({refundedCount})</AppText>
+            <AppText style={[styles.metricValue, { color: '#6D28D9' }]} numberOfLines={1}>
+              {formatCurrency(totalRefundedAmount)}
+            </AppText>
+          </View>
         </ScrollView>
       </View>
 
-      {/* ─── 2. Status Filter Pills ───────────────────────────────────────── */}
+      {/* ─── 2. Search Bar ─────────────────────────────────────────────────── */}
+      <View style={styles.searchBarContainer}>
+        <Search size={16} color="#64748B" style={{ marginLeft: 12 }} />
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search by player, reference, or service..."
+          placeholderTextColor="#94A3B8"
+          style={styles.searchInput}
+          clearButtonMode="while-editing"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8} style={{ marginRight: 10 }}>
+            <X size={15} color="#94A3B8" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ─── 3. Category Filter Pills ──────────────────────────────────────── */}
       <View style={styles.filterWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
+        >
+          {CATEGORY_TABS.map((tab) => {
+            const isActive = categoryFilter === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[styles.filterPill, isActive && styles.filterPillActive]}
+                onPress={() => setCategoryFilter(tab.key)}
+                activeOpacity={0.8}
+              >
+                <AppText style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {tab.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* ─── 4. Status Filter Pills ───────────────────────────────────────── */}
+      <View style={[styles.filterWrapper, { marginTop: 4 }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -381,6 +514,7 @@ export default function ClubPaymentsScreen() {
     const playerName =
       item.player?.full_name || item.player?.email || 'Unknown Member';
     const planOrItemName =
+      item.service_name ||
       item.subscription?.plan_name ||
       (item as any).plan_name ||
       (item as any).booking_title ||
@@ -391,6 +525,29 @@ export default function ClubPaymentsScreen() {
     const isPending = item.status === 'pending' || item.status === 'processing';
     const isSucceeded = item.status === 'succeeded';
     const isCancelled = item.status === 'cancelled';
+    const isRefunded = item.status === 'refunded' || item.status === 'partially_refunded';
+
+    // Category Icon & Badge Config
+    const getCategoryDetails = (purpose: PaymentPurpose | string) => {
+      switch (purpose) {
+        case 'court_booking':
+          return { label: 'Court Booking', color: '#0369A1', bg: '#E0F2FE', Icon: LayoutGrid };
+        case 'tournament':
+          return { label: 'Tournament', color: '#7C3AED', bg: '#EDE9FE', Icon: Trophy };
+        case 'league':
+          return { label: 'League', color: '#0D9488', bg: '#CCFBF1', Icon: Users };
+        case 'event':
+          return { label: 'Event', color: '#BE185D', bg: '#FCE7F3', Icon: Calendar };
+        case 'lesson':
+          return { label: 'Lesson', color: '#D97706', bg: '#FEF3C7', Icon: UserCheck };
+        case 'membership':
+        default:
+          return { label: 'Membership', color: '#B45309', bg: '#FEF3C7', Icon: Crown };
+      }
+    };
+
+    const cat = getCategoryDetails(item.purpose);
+    const CategoryIcon = cat.Icon;
 
     return (
       <TouchableOpacity
@@ -411,6 +568,7 @@ export default function ClubPaymentsScreen() {
               isPending && styles.statusBadgePending,
               isSucceeded && styles.statusBadgeSucceeded,
               isCancelled && styles.statusBadgeCancelled,
+              isRefunded && styles.statusBadgeRefunded,
             ]}
           >
             <AppText
@@ -420,6 +578,7 @@ export default function ClubPaymentsScreen() {
                 isPending && styles.statusBadgeTextPending,
                 isSucceeded && styles.statusBadgeTextSucceeded,
                 isCancelled && styles.statusBadgeTextCancelled,
+                isRefunded && styles.statusBadgeTextRefunded,
               ]}
             >
               {item.status.toUpperCase()}
@@ -427,8 +586,16 @@ export default function ClubPaymentsScreen() {
           </View>
         </View>
 
-        {/* Row 2: Reference ID */}
-        <AppText style={styles.referenceText}>{item.reference}</AppText>
+        {/* Row 2: Reference ID & Category Badge */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+          <AppText style={styles.referenceText}>{item.reference}</AppText>
+          <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
+            <CategoryIcon size={11} color={cat.color} />
+            <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
+              {cat.label}
+            </AppText>
+          </View>
+        </View>
 
         {/* Row 3: Amount & Payment Method Pill */}
         <View style={styles.amountMethodRow}>
@@ -443,20 +610,26 @@ export default function ClubPaymentsScreen() {
           </View>
         </View>
 
-        {/* Row 4: Purpose & Associated Plan */}
-        <View style={styles.purposePlanRow}>
-          <AppText style={styles.purposeText} numberOfLines={1}>
-            <AppText style={styles.metaLabelText}>Purpose: </AppText>
-            {item.purpose_label || capitalize(item.purpose)}
-          </AppText>
-
-          {planOrItemName && (
+        {/* Row 4: Service Title / Plan */}
+        {planOrItemName && (
+          <View style={styles.purposePlanRow}>
             <AppText style={styles.planText} numberOfLines={1}>
-              <AppText style={styles.metaLabelText}>Plan: </AppText>
+              <AppText style={styles.metaLabelText}>Service: </AppText>
               {planOrItemName}
             </AppText>
-          )}
-        </View>
+          </View>
+        )}
+
+        {/* Refund Strip if Refunded */}
+        {isRefunded && (
+          <View style={styles.refundCardStrip}>
+            <RotateCcw size={13} color="#6D28D9" />
+            <AppText style={styles.refundCardStripText} numberOfLines={1}>
+              Refunded: {formatCurrency(item.refunded_amount || item.amount, item.currency)}
+              {item.refund_reason ? ` • ${item.refund_reason}` : ''}
+            </AppText>
+          </View>
+        )}
 
         {/* Thin Divider */}
         <View style={styles.cardDivider} />
@@ -467,7 +640,7 @@ export default function ClubPaymentsScreen() {
         </AppText>
 
         {/* Row 6: Note or Failure Reason (Italic) */}
-        {displayNote ? (
+        {displayNote && !isRefunded ? (
           <AppText style={styles.noteText} numberOfLines={3}>
             Note: {displayNote}
           </AppText>
@@ -679,18 +852,20 @@ export default function ClubPaymentsScreen() {
                     </View>
 
                     <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Payment Method</AppText>
-                      <AppText style={styles.modalGridVal}>
-                        {formatMethodLabel(selectedPayment.payment_method)}
-                      </AppText>
-                    </View>
-
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Purpose</AppText>
+                      <AppText style={styles.modalGridKey}>Service Category</AppText>
                       <AppText style={styles.modalGridVal}>
                         {selectedPayment.purpose_label || capitalize(selectedPayment.purpose)}
                       </AppText>
                     </View>
+
+                    {selectedPayment.service_name && (
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Service Reference</AppText>
+                        <AppText style={styles.modalGridVal}>
+                          {selectedPayment.service_name}
+                        </AppText>
+                      </View>
+                    )}
 
                     {selectedPayment.subscription?.plan_name && (
                       <View style={styles.modalGridRow}>
@@ -717,6 +892,33 @@ export default function ClubPaymentsScreen() {
                       </View>
                     )}
 
+                    {selectedPayment.refunded_at && (
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Refunded At</AppText>
+                        <AppText style={styles.modalGridVal}>
+                          {new Date(selectedPayment.refunded_at).toLocaleString()}
+                        </AppText>
+                      </View>
+                    )}
+
+                    {selectedPayment.refunded_amount != null && (
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Refunded Amount</AppText>
+                        <AppText style={[styles.modalGridVal, { color: '#6D28D9', fontWeight: '700' }]}>
+                          {formatCurrency(selectedPayment.refunded_amount, selectedPayment.currency)}
+                        </AppText>
+                      </View>
+                    )}
+
+                    {selectedPayment.refund_reason && (
+                      <View style={styles.modalNoteSection}>
+                        <AppText style={styles.modalNoteLabel}>Refund Reason</AppText>
+                        <AppText style={styles.modalNoteContent}>
+                          {selectedPayment.refund_reason}
+                        </AppText>
+                      </View>
+                    )}
+
                     {(selectedPayment.failure_reason || selectedPayment.notes) && (
                       <View style={styles.modalNoteSection}>
                         <AppText style={styles.modalNoteLabel}>
@@ -730,7 +932,7 @@ export default function ClubPaymentsScreen() {
                   </View>
                 </ScrollView>
 
-                {/* Modal Footer Actions: Staff reconciliation when pending */}
+                {/* Modal Footer Actions: Staff reconciliation and refunds */}
                 <View style={styles.modalFooter}>
                   {selectedPayment.status === 'pending' ||
                   selectedPayment.status === 'processing' ? (
@@ -754,6 +956,29 @@ export default function ClubPaymentsScreen() {
                         </AppText>
                       </TouchableOpacity>
                     </View>
+                  ) : selectedPayment.status === 'succeeded' ? (
+                    <View style={styles.modalPendingActions}>
+                      <TouchableOpacity
+                        style={[styles.modalCancelPaymentBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
+                        onPress={() => {
+                          setPaymentToRefund(selectedPayment);
+                          setRefundReasonInput('');
+                          setRefundDialogVisible(true);
+                        }}
+                      >
+                        <RotateCcw size={14} color="#6D28D9" />
+                        <AppText style={[styles.modalCancelPaymentBtnText, { color: '#6D28D9' }]}>
+                          Issue Refund
+                        </AppText>
+                      </TouchableOpacity>
+
+                      <PlatformButton
+                        size="md"
+                        variant="outline"
+                        label="Close"
+                        onPress={() => setSelectedPayment(null)}
+                      />
+                    </View>
                   ) : (
                     <PlatformButton
                       size="md"
@@ -766,6 +991,87 @@ export default function ClubPaymentsScreen() {
                 </View>
               </>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── Refund Confirmation Dialog ───────────────────────────────────── */}
+      <Modal
+        visible={refundDialogVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRefundDialogVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 440 }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <AppText style={styles.modalTitle}>Issue Refund</AppText>
+                <AppText style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  {paymentToRefund?.reference} • {paymentToRefund?.currency} {paymentToRefund?.amount}
+                </AppText>
+              </View>
+              <TouchableOpacity onPress={() => setRefundDialogVisible(false)} hitSlop={8}>
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16, gap: 12 }}>
+              <AppText style={{ fontSize: 13, color: '#334155', lineHeight: 18 }}>
+                Are you sure you want to refund this payment? The transaction will be marked as REFUNDED and deducted from net club revenue.
+              </AppText>
+
+              <View>
+                <AppText style={{ fontSize: 12, fontWeight: '600', color: '#1E293B', marginBottom: 6 }}>
+                  Refund Reason (Optional)
+                </AppText>
+                <TextInput
+                  value={refundReasonInput}
+                  onChangeText={setRefundReasonInput}
+                  placeholder="e.g. Customer cancelled booking / service dispute"
+                  placeholderTextColor="#94A3B8"
+                  style={styles.refundInput}
+                  multiline
+                  numberOfLines={2}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                <TouchableOpacity
+                  style={[styles.refundDialogBtn, { backgroundColor: '#F1F5F9' }]}
+                  onPress={() => setRefundDialogVisible(false)}
+                  disabled={refundPaymentMutation.isPending}
+                >
+                  <AppText style={{ color: '#475569', fontWeight: '600', fontSize: 13 }}>Cancel</AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.refundDialogBtn, { backgroundColor: '#DC2626' }]}
+                  onPress={async () => {
+                    if (!paymentToRefund) return;
+                    try {
+                      await refundPaymentMutation.mutateAsync({
+                        paymentId: paymentToRefund.id,
+                        refundReason: refundReasonInput.trim() || 'Club staff refund',
+                      });
+                      setRefundDialogVisible(false);
+                      setSelectedPayment(null);
+                      refetchSummary();
+                      refetchPayments();
+                      Alert.alert('Refund Issued', `Payment ${paymentToRefund.reference} was successfully refunded.`);
+                    } catch (err: any) {
+                      const msg = err?.response?.data?.detail || err?.message || 'Failed to refund payment';
+                      Alert.alert('Refund Error', msg);
+                    }
+                  }}
+                  disabled={refundPaymentMutation.isPending}
+                >
+                  <AppText style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 13 }}>
+                    {refundPaymentMutation.isPending ? 'Refunding...' : 'Confirm Refund'}
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1263,5 +1569,86 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+
+  // Search Bar
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    marginHorizontal: 0,
+    marginBottom: 8,
+    height: 42,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+
+  // Category Badge
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  categoryBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+
+  // Refund Status Badges
+  statusBadgeRefunded: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  statusBadgeTextRefunded: {
+    color: '#6D28D9',
+  },
+  refundCardStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#EDE9FE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  refundCardStripText: {
+    fontSize: 11.5,
+    color: '#6D28D9',
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Refund Dialog Styles
+  refundInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    textAlignVertical: 'top',
+  },
+  refundDialogBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

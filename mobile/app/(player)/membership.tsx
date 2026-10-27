@@ -55,7 +55,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, Badge, Button, ModalSheet } from '@/components';
-import { useActiveClub, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
+import { useActiveClub, usePlayerClubs, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import { formatCurrency } from '@/utils';
@@ -175,6 +175,8 @@ export default function PlayerMembershipScreen() {
     isError,
     refetch,
   } = usePlayerMemberships();
+
+  const { clubs: enrolledClubs = [], isLoading: isLoadingClubs } = usePlayerClubs();
 
   const { mutateAsync: renewSubscription, isPending: isRenewing } = useRenewPlayerSubscription();
 
@@ -309,33 +311,124 @@ export default function PlayerMembershipScreen() {
             <AppText style={styles.loadingText}>Loading membership details...</AppText>
           </View>
         ) : !activeSubscription ? (
-          /* Empty State */
-          <View style={styles.emptyCard}>
-            <View style={styles.emptyIconCircle}>
-              <ShieldCheck size={32} color="#114D3F" strokeWidth={1.8} />
+          enrolledClubs.length > 0 ? (
+            /* Free Member Clubs View */
+            <View style={{ gap: 14 }}>
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconCircle}>
+                  <ShieldCheck size={32} color="#114D3F" strokeWidth={1.8} />
+                </View>
+                <AppText style={styles.emptyTitle}>Free Club Membership</AppText>
+                <AppText style={styles.emptyDescription}>
+                  You have joined {enrolledClubs.length} club(s) as a Free Member. You can purchase an official membership plan at any time to unlock included court reservations and exclusive discounts.
+                </AppText>
+              </View>
+
+              <AppText style={{ fontSize: 15, fontWeight: '700', color: '#102B2A', marginTop: 4 }}>
+                Your Joined Clubs
+              </AppText>
+
+              {enrolledClubs.map((club) => (
+                <View
+                  key={club.club_id}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: '#E2EBE6',
+                    padding: 16,
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <AppText style={{ fontSize: 16, fontWeight: '700', color: '#102B2A' }}>
+                        {club.club_name}
+                      </AppText>
+                      {club.city && (
+                        <AppText style={{ fontSize: 12, color: '#667776', marginTop: 2 }}>
+                          {[club.city, club.state].filter(Boolean).join(', ')}
+                        </AppText>
+                      )}
+                    </View>
+                    <View
+                      style={{
+                        backgroundColor: '#E0F2FE',
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <AppText style={{ fontSize: 10, fontWeight: '800', color: '#0369A1' }}>
+                        FREE MEMBER
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderTopWidth: 1,
+                      borderTopColor: '#F0F5F2',
+                      paddingTop: 10,
+                    }}
+                  >
+                    <AppText style={{ fontSize: 11.5, color: '#8A9B95' }}>
+                      Member since {formatMembershipDate(club.joined_at)}
+                    </AppText>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#18794E',
+                        borderRadius: 8,
+                        paddingHorizontal: 14,
+                        paddingVertical: 7,
+                      }}
+                      onPress={() =>
+                        router.push({
+                          pathname: '/(player)/club-details',
+                          params: { id: club.club_id },
+                        } as any)
+                      }
+                      activeOpacity={0.88}
+                    >
+                      <AppText style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700' }}>
+                        Explore Memberships
+                      </AppText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
             </View>
-            <AppText style={styles.emptyTitle}>No Active Memberships</AppText>
-            <AppText style={styles.emptyDescription}>
-              You do not currently have an active membership subscription across your clubs.
-              Discover clubs or join a membership plan to unlock exclusive court privileges.
-            </AppText>
-            <View style={styles.emptyActionsRow}>
-              <TouchableOpacity
-                style={styles.emptyButton}
-                onPress={() => router.push('/(player)/explore' as any)}
-                activeOpacity={0.85}
-              >
-                <AppText style={styles.emptyButtonText}>Explore Clubs</AppText>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.emptyButton, styles.emptyOutlineButton]}
-                onPress={() => router.push('/(player)/clubs' as any)}
-                activeOpacity={0.85}
-              >
-                <AppText style={styles.emptyOutlineButtonText}>My Clubs</AppText>
-              </TouchableOpacity>
+          ) : (
+            /* Completely Empty State */
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconCircle}>
+                <ShieldCheck size={32} color="#114D3F" strokeWidth={1.8} />
+              </View>
+              <AppText style={styles.emptyTitle}>No Active Memberships</AppText>
+              <AppText style={styles.emptyDescription}>
+                You do not currently belong to any clubs. Discover clubs or join for free or through a membership plan.
+              </AppText>
+              <View style={styles.emptyActionsRow}>
+                <TouchableOpacity
+                  style={styles.emptyButton}
+                  onPress={() => router.push('/(player)/explore' as any)}
+                  activeOpacity={0.85}
+                >
+                  <AppText style={styles.emptyButtonText}>Explore Clubs</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.emptyButton, styles.emptyOutlineButton]}
+                  onPress={() => router.push('/(player)/clubs' as any)}
+                  activeOpacity={0.85}
+                >
+                  <AppText style={styles.emptyOutlineButtonText}>My Clubs</AppText>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          )
         ) : isError ? (
           /* Error State */
           <View style={styles.emptyCard}>

@@ -38,9 +38,11 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  Check,
   CheckCircle2,
   ChevronRight,
   Clock,
+  Crown,
   ExternalLink,
   Globe,
   Info,
@@ -57,6 +59,7 @@ import {
   usePlayerClubMembershipRequest,
   usePlayerClubs,
   useJoinClub,
+  usePlayerMembership,
   usePlayerMembershipRequests,
   usePlayerSubscribe,
 } from '@/hooks';
@@ -153,6 +156,12 @@ export default function PublicClubDetailScreen() {
     return myClubs.some((c) => c.club_id === clubId && c.status === 'active');
   }, [myClubs, clubId]);
 
+  // Check if caller has an active paid membership subscription at this club
+  const { data: playerMembership, refetch: refetchPlayerMembership } = usePlayerMembership(clubId || '');
+  const hasActivePaidSubscription = Boolean(
+    playerMembership && (playerMembership.status === 'active' || playerMembership.effective_status === 'active')
+  );
+
   // 5. Check caller's membership request status for this club
   const {
     request: existingRequest,
@@ -171,6 +180,7 @@ export default function PublicClubDetailScreen() {
 
   // Modals state
   const [modalVisible, setModalVisible] = useState(false);
+  const [joinChoiceModalVisible, setJoinChoiceModalVisible] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
   const [selectedPlanForSubscribe, setSelectedPlanForSubscribe] = useState<MembershipPlan | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
@@ -181,9 +191,12 @@ export default function PublicClubDetailScreen() {
     try {
       await joinClub(clubId);
       await refetchMyClubs();
+      await refetchClub();
+      await refetchPlayerMembership();
+      setJoinChoiceModalVisible(false);
       Alert.alert(
         'Welcome!',
-        `You have successfully joined ${club?.name || 'the club'}. Your player membership is now active!`,
+        `You have successfully joined ${club?.name || 'the club'} as a Free Member! Your player membership is now active.`,
       );
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to join club';
@@ -248,7 +261,10 @@ export default function PublicClubDetailScreen() {
       const planName = selectedPlanForSubscribe.name;
       const isFree = Number(selectedPlanForSubscribe.price) === 0;
       setSelectedPlanForSubscribe(null);
+      setJoinChoiceModalVisible(false);
       await refetchMyClubs();
+      await refetchPlayerMembership();
+      await refetchClub();
       Alert.alert(
         isFree ? 'Subscription Activated!' : 'Subscription Created',
         isFree
@@ -432,36 +448,60 @@ export default function PublicClubDetailScreen() {
                   />
                 </View>
                 <View style={styles.membershipTextCol}>
-                  <AppText style={styles.membershipHeading}>
-                    {isEnrolled
-                      ? 'Active Player Member'
-                      : isPending
-                      ? 'Application Pending'
-                      : 'Player Membership'}
-                  </AppText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <AppText style={styles.membershipHeading}>
+                      {isEnrolled
+                        ? hasActivePaidSubscription
+                          ? 'Paid Club Member'
+                          : 'Free Club Member'
+                        : isPending
+                        ? 'Application Pending'
+                        : 'Club Membership'}
+                    </AppText>
+                    {isEnrolled && (
+                      <View style={hasActivePaidSubscription ? styles.paidBadge : styles.freeBadge}>
+                        <AppText style={hasActivePaidSubscription ? styles.paidBadgeText : styles.freeBadgeText}>
+                          {hasActivePaidSubscription ? (playerMembership?.plan_name || 'PAID') : 'FREE MEMBER'}
+                        </AppText>
+                      </View>
+                    )}
+                  </View>
                   <AppText style={styles.membershipSubtext}>
                     {isEnrolled
-                      ? 'Eligible for court reservations and club events.'
+                      ? hasActivePaidSubscription
+                        ? `Enrolled in ${playerMembership?.plan_name}. Full membership privileges active.`
+                        : 'Joined for free. Eligible for pay-as-you-go court reservations and open club events.'
                       : isPending
                       ? 'Your membership request is currently awaiting club review.'
-                      : 'Join to reserve courts and access club events.'}
+                      : 'Join for free or choose a membership plan to reserve courts and access events.'}
                   </AppText>
                 </View>
               </View>
 
               {isEnrolled ? (
-                <TouchableOpacity
-                  style={styles.bookCourtBtn}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/(player)/courts',
-                      params: { clubId: club.id },
-                    } as any)
-                  }
-                  activeOpacity={0.88}
-                >
-                  <AppText style={styles.bookCourtBtnText}>Book Court</AppText>
-                </TouchableOpacity>
+                <View style={{ gap: 8, alignItems: 'flex-end' }}>
+                  <TouchableOpacity
+                    style={styles.bookCourtBtn}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/(player)/courts',
+                        params: { clubId: club.id },
+                      } as any)
+                    }
+                    activeOpacity={0.88}
+                  >
+                    <AppText style={styles.bookCourtBtnText}>Book Court</AppText>
+                  </TouchableOpacity>
+                  {!hasActivePaidSubscription && (
+                    <TouchableOpacity
+                      style={styles.upgradePlanBtn}
+                      onPress={() => setJoinChoiceModalVisible(true)}
+                      activeOpacity={0.88}
+                    >
+                      <AppText style={styles.upgradePlanBtnText}>Get Membership</AppText>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ) : isPending ? (
                 <TouchableOpacity
                   style={styles.withdrawBtn}
@@ -476,7 +516,7 @@ export default function PublicClubDetailScreen() {
               ) : (
                 <TouchableOpacity
                   style={styles.bookCourtBtn}
-                  onPress={handleJoinClub}
+                  onPress={() => setJoinChoiceModalVisible(true)}
                   disabled={isJoiningClub}
                   activeOpacity={0.88}
                 >
@@ -630,6 +670,90 @@ export default function PublicClubDetailScreen() {
               </View>
               <ChevronRight size={16} color="#6B7E76" />
             </TouchableOpacity>
+          </View>
+
+          {/* ─── Membership Plans Section ─────────────────────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderBetween}>
+              <View style={styles.sectionHeaderLeft}>
+                <Crown size={19} color="#18794E" strokeWidth={2.2} />
+                <AppText style={styles.sectionCardTitle}>Membership Plans</AppText>
+              </View>
+              <View style={styles.courtsCountBadge}>
+                <AppText style={styles.courtsCountBadgeText}>
+                  {plans.length} {plans.length === 1 ? 'Plan' : 'Plans'}
+                </AppText>
+              </View>
+            </View>
+
+            {plans.length === 0 ? (
+              <View style={styles.emptyCourtsBox}>
+                <AppText style={styles.emptyCourtsText}>
+                  No membership plans are currently published for this club.
+                  {club.allows_free_join !== false && !isEnrolled
+                    ? ' You can join this club for free!'
+                    : ''}
+                </AppText>
+              </View>
+            ) : (
+              <View style={{ gap: 12, marginTop: 12 }}>
+                {plans.map((plan) => {
+                  const isCurrentPlan = hasActivePaidSubscription && playerMembership?.plan_id === plan.id;
+                  return (
+                    <View key={plan.id} style={styles.planCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1, marginRight: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <AppText style={styles.planTitleText}>{plan.name}</AppText>
+                            {isCurrentPlan && (
+                              <View style={styles.paidBadge}>
+                                <AppText style={styles.paidBadgeText}>CURRENT</AppText>
+                              </View>
+                            )}
+                          </View>
+                          {plan.description && (
+                            <AppText style={styles.planDescText}>{plan.description}</AppText>
+                          )}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <AppText style={styles.planPriceText}>
+                            {formatCurrency(plan.price)}
+                          </AppText>
+                          <AppText style={styles.planDurationText}>
+                            /{plan.duration_label || plan.duration_unit}
+                          </AppText>
+                        </View>
+                      </View>
+
+                      {plan.benefits && plan.benefits.length > 0 && (
+                        <View style={styles.planBenefitsBox}>
+                          {plan.benefits.slice(0, 3).map((b, idx) => (
+                            <View key={idx} style={styles.benefitItemRow}>
+                              <CheckCircle2 size={13} color="#18794E" />
+                              <AppText style={styles.benefitItemText} numberOfLines={1}>
+                                {b}
+                              </AppText>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+
+                      {!isCurrentPlan && (
+                        <TouchableOpacity
+                          style={styles.selectPlanButton}
+                          onPress={() => setSelectedPlanForSubscribe(plan)}
+                          activeOpacity={0.88}
+                        >
+                          <AppText style={styles.selectPlanButtonText}>
+                            {isEnrolled ? 'Upgrade to This Plan' : 'Select Plan'}
+                          </AppText>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* ─── G. About This Club ────────────────────────────────────────── */}
@@ -918,6 +1042,152 @@ export default function PublicClubDetailScreen() {
                 style={{ width: '100%' }}
               />
             </View>
+          </Card>
+        </View>
+      </Modal>
+
+      {/* ─── Modal: Join Club Choice Modal ───────────────────────────────── */}
+      <Modal
+        visible={joinChoiceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setJoinChoiceModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Card style={[styles.modalDialog, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="heading3" color="primary">
+                  {isEnrolled ? 'Membership Options' : `Join ${club.name}`}
+                </AppText>
+                <AppText variant="caption" color="secondary">
+                  {isEnrolled
+                    ? 'Upgrade your free membership to an official plan'
+                    : 'Choose how you would like to join this club'}
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => setJoinChoiceModalVisible(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#667776" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Option A: Join for Free (Only shown if club allows free join and user not yet enrolled) */}
+              {!isEnrolled && (
+                club.allows_free_join !== false ? (
+                  <View style={styles.choiceOptionBox}>
+                    <View style={styles.choiceHeaderRow}>
+                      <View style={styles.choiceBadgeFree}>
+                        <AppText style={styles.choiceBadgeFreeText}>OPTION A • FREE</AppText>
+                      </View>
+                    </View>
+                    <AppText style={styles.choiceTitle}>Join for Free</AppText>
+                    <AppText style={styles.choiceSubtitle}>
+                      Associate with {club.name} without paying membership fees. Pay per court booking and join open events.
+                    </AppText>
+                    <View style={styles.choiceCheckList}>
+                      <View style={styles.choiceCheckRow}>
+                        <Check size={14} color="#18794E" />
+                        <AppText style={styles.choiceCheckText}>No membership fees or credit card required</AppText>
+                      </View>
+                      <View style={styles.choiceCheckRow}>
+                        <Check size={14} color="#18794E" />
+                        <AppText style={styles.choiceCheckText}>Instant association & access to player directory</AppText>
+                      </View>
+                      <View style={styles.choiceCheckRow}>
+                        <Check size={14} color="#18794E" />
+                        <AppText style={styles.choiceCheckText}>Upgrade to a paid membership at any later time</AppText>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.joinFreeBtn}
+                      onPress={handleJoinClub}
+                      disabled={isJoiningClub}
+                      activeOpacity={0.88}
+                    >
+                      <AppText style={styles.joinFreeBtnText}>
+                        {isJoiningClub ? 'Joining...' : 'Join Club for Free'}
+                      </AppText>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.freeDisabledNotice}>
+                    <Info size={16} color="#B45309" />
+                    <AppText style={styles.freeDisabledText}>
+                      Free joining is not available for this club. Please select an official membership plan below to associate.
+                    </AppText>
+                  </View>
+                )
+              )}
+
+              {/* Option B: Choose a Membership */}
+              <View style={[styles.choiceOptionBox, { marginTop: !isEnrolled && club.allows_free_join !== false ? 16 : 0 }]}>
+                <View style={styles.choiceHeaderRow}>
+                  <View style={styles.choiceBadgePaid}>
+                    <Crown size={12} color="#FFFFFF" />
+                    <AppText style={styles.choiceBadgePaidText}>
+                      {isEnrolled ? 'EXPLORE PLANS' : 'OPTION B • MEMBERSHIP'}
+                    </AppText>
+                  </View>
+                </View>
+                <AppText style={styles.choiceTitle}>Choose a Membership Plan</AppText>
+                <AppText style={styles.choiceSubtitle}>
+                  Unlock complimentary court bookings, member discounts, and exclusive benefits.
+                </AppText>
+
+                {plans.length === 0 ? (
+                  <View style={styles.noPlansNotice}>
+                    <AppText style={styles.noPlansText}>
+                      No membership plans are currently published by this club.
+                      {club.allows_free_join !== false && !isEnrolled
+                        ? ' You can join for free above!'
+                        : ' Please check back later or contact the club.'}
+                    </AppText>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10, marginTop: 10 }}>
+                    {plans.map((plan) => (
+                      <View key={plan.id} style={styles.planSelectionCard}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <AppText style={styles.planSelectionTitle}>{plan.name}</AppText>
+                            <AppText style={styles.planSelectionDuration}>
+                              {plan.duration_label || plan.duration_unit} duration
+                            </AppText>
+                          </View>
+                          <AppText style={styles.planSelectionPrice}>
+                            {formatCurrency(plan.price)}
+                          </AppText>
+                        </View>
+                        {plan.benefits && plan.benefits.length > 0 && (
+                          <View style={{ marginTop: 6, gap: 2 }}>
+                            {plan.benefits.slice(0, 2).map((b, i) => (
+                              <View key={i} style={styles.choiceCheckRow}>
+                                <Check size={12} color="#18794E" />
+                                <AppText style={styles.choiceCheckTextSmall} numberOfLines={1}>{b}</AppText>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                        <TouchableOpacity
+                          style={styles.selectPlanActionBtn}
+                          onPress={() => {
+                            setJoinChoiceModalVisible(false);
+                            setSelectedPlanForSubscribe(plan);
+                          }}
+                          activeOpacity={0.88}
+                        >
+                          <AppText style={styles.selectPlanActionBtnText}>Select {plan.name}</AppText>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </ScrollView>
           </Card>
         </View>
       </Modal>
@@ -1453,6 +1723,250 @@ const styles = StyleSheet.create({
   },
   paymentMethodTextActive: {
     color: '#18794E',
+    fontWeight: '700',
+  },
+
+  // Badges & Actions for Membership
+  paidBadge: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  paidBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#065F46',
+    letterSpacing: 0.4,
+  },
+  freeBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  freeBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369A1',
+    letterSpacing: 0.4,
+  },
+  upgradePlanBtn: {
+    backgroundColor: '#E4F4EC',
+    borderWidth: 1,
+    borderColor: '#A3D9C3',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradePlanBtnText: {
+    color: '#18794E',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+
+  // Plan Card Styles
+  planCard: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2EBE6',
+    padding: 14,
+    gap: 8,
+  },
+  planTitleText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  planDescText: {
+    fontSize: 12,
+    color: '#667776',
+    marginTop: 2,
+  },
+  planPriceText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#18794E',
+  },
+  planDurationText: {
+    fontSize: 11,
+    color: '#8A9B95',
+  },
+  planBenefitsBox: {
+    gap: 4,
+    paddingTop: 4,
+  },
+  benefitItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  benefitItemText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  selectPlanButton: {
+    backgroundColor: '#18794E',
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  selectPlanButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+
+  // Choice Modal Styles
+  choiceOptionBox: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2EBE6',
+    padding: 14,
+  },
+  choiceHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  choiceBadgeFree: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  choiceBadgeFreeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0369A1',
+    letterSpacing: 0.5,
+  },
+  choiceBadgePaid: {
+    backgroundColor: '#18794E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  choiceBadgePaidText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  choiceTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#102B2A',
+    marginBottom: 4,
+  },
+  choiceSubtitle: {
+    fontSize: 12.5,
+    color: '#667776',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  choiceCheckList: {
+    gap: 6,
+    marginBottom: 12,
+  },
+  choiceCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  choiceCheckText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  choiceCheckTextSmall: {
+    fontSize: 11,
+    color: '#475569',
+    flex: 1,
+  },
+  joinFreeBtn: {
+    backgroundColor: '#18794E',
+    borderRadius: 9,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinFreeBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  freeDisabledNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  freeDisabledText: {
+    fontSize: 12,
+    color: '#B45309',
+    flex: 1,
+    lineHeight: 16,
+  },
+  noPlansNotice: {
+    backgroundColor: '#F1F5F9',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 6,
+  },
+  noPlansText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  planSelectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    padding: 12,
+  },
+  planSelectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  planSelectionDuration: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  planSelectionPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#18794E',
+  },
+  selectPlanActionBtn: {
+    backgroundColor: '#E4F4EC',
+    borderWidth: 1,
+    borderColor: '#A3D9C3',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  selectPlanActionBtnText: {
+    color: '#18794E',
+    fontSize: 12,
     fontWeight: '700',
   },
 });
