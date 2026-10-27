@@ -56,7 +56,7 @@ export function TournamentRegistrationModal({
   onSuccess,
 }: TournamentRegistrationModalProps) {
   const { user } = useAuth();
-  const { profile } = usePlayerProfile();
+  const { profile, updateProfile } = usePlayerProfile();
 
   // Load fresh full tournament configuration by tournament ID (single source of truth)
   const { tournament: detailedTournament } = useTournamentDetails(
@@ -154,8 +154,17 @@ export function TournamentRegistrationModal({
       const userFull = user?.full_name || profile?.display_name || 'Karthik Golla';
       const userEmail = user?.email || (profile as any)?.email || 'karthik@example.com';
       const userPhone = (profile as any)?.phone || '+1 (555) 123-4567';
-      const rawGender = profile?.gender ? normalizeGender(profile.gender) : 'Male';
-      const userGender = (rawGender === 'Female' ? 'Female' : rawGender === 'Other' ? 'Other' : 'Male') as 'Male' | 'Female' | 'Other';
+      const categoryName = parsed?.category || '';
+      let defaultGender: 'Male' | 'Female' | 'Other' = 'Male';
+      if (profile?.gender) {
+        const norm = normalizeGender(profile.gender);
+        defaultGender = (norm === 'Female' ? 'Female' : norm === 'Other' ? 'Other' : 'Male');
+      } else if (categoryName.includes("Women's")) {
+        defaultGender = 'Female';
+      } else {
+        defaultGender = 'Male';
+      }
+      const userGender = defaultGender;
       const userSkill = parsed?.skillLevel || '3.5';
 
       let defaultTeam = '';
@@ -319,16 +328,19 @@ export function TournamentRegistrationModal({
     }
 
     // Category / Format gender restrictions on Player 1
-    if (isScramble && parsed) {
-      if (parsed.category === "Men's Scramble" && formState.gender !== 'Male') {
+    const catName = parsed?.category || '';
+    if (isScramble) {
+      if (catName.includes("Men's") && formState.gender !== 'Male') {
         errs.gender = "Men's Scramble is restricted to male players.";
-      } else if (parsed.category === "Women's Scramble" && formState.gender !== 'Female') {
+      } else if (catName.includes("Women's") && formState.gender !== 'Female') {
         errs.gender = "Women's Scramble is restricted to female players.";
+      } else if (catName.includes("Mixed") && formState.gender !== 'Male' && formState.gender !== 'Female') {
+        errs.gender = "Mixed Scramble requires gender to be set to Male or Female.";
       }
     } else if (parsed?.isSingles) {
-      if (parsed.category.includes("Men's") && formState.gender !== 'Male') {
+      if (catName.includes("Men's") && formState.gender !== 'Male') {
         errs.gender = "Men's Singles is restricted to male players.";
-      } else if (parsed.category.includes("Women's") && formState.gender !== 'Female') {
+      } else if (catName.includes("Women's") && formState.gender !== 'Female') {
         errs.gender = "Women's Singles is restricted to female players.";
       }
     }
@@ -527,6 +539,15 @@ export function TournamentRegistrationModal({
         payment_method: formState.paymentMethod,
         notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
       };
+
+      // Sync gender to profile if missing on profile or changed
+      if (formState.gender && (!profile?.gender || profile.gender !== formState.gender)) {
+        try {
+          await updateProfile({ gender: formState.gender });
+        } catch {
+          // Backend self_register endpoint will also persist profile gender
+        }
+      }
 
       const res = await register(payload);
       setSuccessResult(res);

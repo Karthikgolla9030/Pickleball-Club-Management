@@ -34,6 +34,7 @@ class PlayerProfileRepository:
         last_name: str | None = None,
         phone: str | None = None,
         date_of_birth: date | None = None,
+        gender: str | None = None,
         profile_image_url: str | None = None,
         bio: str | None = None,
     ) -> PlayerProfile:
@@ -44,6 +45,7 @@ class PlayerProfileRepository:
             last_name=last_name,
             phone=phone,
             date_of_birth=date_of_birth,
+            gender=gender.strip().capitalize() if gender and gender.strip() else None,
             profile_image_url=profile_image_url,
             bio=bio,
         )
@@ -60,6 +62,7 @@ class PlayerProfileRepository:
         last_name: str | None = None,
         phone: str | None = None,
         date_of_birth: date | None = None,
+        gender: str | None = None,
         profile_image_url: str | None = None,
         bio: str | None = None,
     ) -> PlayerProfile:
@@ -73,11 +76,12 @@ class PlayerProfileRepository:
             profile.phone = phone
         if date_of_birth is not None:
             profile.date_of_birth = date_of_birth
+        if gender is not None:
+            profile.gender = gender.strip().capitalize() if gender and gender.strip() else None
         if profile_image_url is not None:
             profile.profile_image_url = profile_image_url if profile_image_url != "" else None
         if bio is not None:
             profile.bio = bio
-
         await self.db.flush()
         await self.db.refresh(profile)
         return profile

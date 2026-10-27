@@ -1185,11 +1185,20 @@ class TournamentService:
         profile = user.player_profile if user and hasattr(user, "player_profile") else None
 
         # For Scramble, gender is strictly read from verified profile.
-        # Self-declared payload.gender cannot override profile gender.
+        # Self-declared payload.gender cannot override an existing profile gender,
+        # but if profile gender is not yet set, payload.gender is accepted and persists to the profile.
         if is_scramble:
             player_gender = getattr(profile, "gender", None)
+            if not player_gender and payload and payload.gender:
+                player_gender = payload.gender
+                if profile:
+                    profile.gender = player_gender.strip().capitalize()
+                    self.db.add(profile)
         else:
             player_gender = (payload.gender if payload and payload.gender else getattr(profile, "gender", None))
+            if profile and not getattr(profile, "gender", None) and payload and payload.gender:
+                profile.gender = payload.gender.strip().capitalize()
+                self.db.add(profile)
         norm_gender = player_gender.strip().capitalize() if player_gender else None
 
         # 1. Scramble specific rules

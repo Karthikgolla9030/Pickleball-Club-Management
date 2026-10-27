@@ -475,7 +475,7 @@ class TestScrambleRegistrationAndEligibilityAPI:
         assert f_bypass_res.status_code == 400
         assert "restricted to male players" in f_bypass_res.json()["detail"]
 
-        # 3. Unverified player (no gender in profile) -> 400 Rejected
+        # 3. Unverified player (no gender in profile) -> 400 Rejected if no gender sent
         unverified_headers = make_auth_header(data["unverified_user"])
         u_res = await async_client.post(
             f"/api/v1/tournaments/{t_id}/register",
@@ -484,6 +484,15 @@ class TestScrambleRegistrationAndEligibilityAPI:
         )
         assert u_res.status_code == 400
         assert "requires a verified player profile" in u_res.json()["detail"]
+
+        # 3b. Unverified player declares gender="Male" -> Accepted & persists to profile
+        u_valid_res = await async_client.post(
+            f"/api/v1/tournaments/{t_id}/register",
+            headers=unverified_headers,
+            json={"gender": "Male"},
+        )
+        assert u_valid_res.status_code == 201
+        assert u_valid_res.json()["status"] == "confirmed"
 
         # 4. Male player -> 200 Confirmed
         male_headers = make_auth_header(data["male_user"])

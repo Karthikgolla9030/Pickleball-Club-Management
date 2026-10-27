@@ -336,28 +336,35 @@ export function Step1PlayerTeamDetails({
             </View>
           </View>
 
-          {/* Gender Selector (if relevant or restricted) */}
-          {(parsed.genderEligibility !== 'Any' || category.includes("Men's") || category.includes("Women's")) && (
-            <View style={styles.genderRow}>
+          {/* Gender Selector (Always asked for all player registrations) */}
+          <View style={styles.genderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <AppText style={styles.fieldLabel}>
                 Gender <AppText style={styles.star}>*</AppText>
               </AppText>
-              <View style={styles.genderPillsRow}>
-                {(['Male', 'Female', 'Other'] as const).map((g) => (
-                  <TouchableOpacity
-                    key={g}
-                    style={[styles.genderPill, formState.gender === g && styles.genderPillActive]}
-                    onPress={() => onChange({ gender: g })}
-                  >
-                    <AppText style={[styles.genderPillText, formState.gender === g && styles.genderPillTextActive]}>
-                      {g}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {errors.gender && <AppText style={styles.errorText}>{errors.gender}</AppText>}
+              {category.includes("Men's") ? (
+                <AppText style={styles.genderRequirementHint}>Male required</AppText>
+              ) : category.includes("Women's") ? (
+                <AppText style={styles.genderRequirementHint}>Female required</AppText>
+              ) : isScramble && category.includes("Mixed") ? (
+                <AppText style={styles.genderRequirementHint}>Male or Female required</AppText>
+              ) : null}
             </View>
-          )}
+            <View style={styles.genderPillsRow}>
+              {(['Male', 'Female', 'Other'] as const).map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.genderPill, formState.gender === g && styles.genderPillActive]}
+                  onPress={() => onChange({ gender: g })}
+                >
+                  <AppText style={[styles.genderPillText, formState.gender === g && styles.genderPillTextActive]}>
+                    {g}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {errors.gender && <AppText style={styles.errorText}>{errors.gender}</AppText>}
+          </View>
         </View>
       </View>
 
@@ -922,6 +929,11 @@ const styles = StyleSheet.create({
   },
   genderRow: {
     marginTop: 2,
+  },
+  genderRequirementHint: {
+    fontSize: 11,
+    color: '#064E3B',
+    fontWeight: '600',
   },
   genderPillsRow: {
     flexDirection: 'row',

@@ -138,6 +138,7 @@ class PlayerService:
             last_name=payload.last_name,
             phone=payload.phone,
             date_of_birth=payload.date_of_birth,
+            gender=payload.gender,
             profile_image_url=payload.profile_image_url,
             bio=payload.bio,
         )
@@ -162,6 +163,7 @@ class PlayerService:
             last_name=payload.last_name,
             phone=payload.phone,
             date_of_birth=payload.date_of_birth,
+            gender=payload.gender,
             profile_image_url=payload.profile_image_url,
             bio=payload.bio,
         )
@@ -178,6 +180,7 @@ class PlayerService:
                 "last_name": updated.last_name,
                 "profile_image_url": updated.profile_image_url,
                 "phone": updated.phone,
+                "gender": updated.gender,
             }
             await dispatch_event(
                 event_type=EventType.PLAYER_PROFILE_UPDATED,

@@ -87,6 +87,7 @@ export default function PlayerProfileScreen() {
   const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editBio, setEditBio] = useState('');
+  const [editGender, setEditGender] = useState('');
   const [editLocation, setEditLocation] = useState('Tirupati, AP');
   const [editSkillLevel, setEditSkillLevel] = useState('3.5');
   const [editPlayStyle, setEditPlayStyle] = useState('Recreational');
@@ -253,6 +254,7 @@ export default function PlayerProfileScreen() {
     setEditLastName(profile?.last_name || '');
     setEditPhone(profile?.phone || '');
     setEditBio(profile?.bio || '');
+    setEditGender(profile?.gender || '');
     setEditError(null);
     setPersonalInfoModalVisible(true);
   };
@@ -271,6 +273,7 @@ export default function PlayerProfileScreen() {
         last_name: editLastName.trim() || null,
         phone: editPhone.trim() || null,
         bio: editBio.trim() || null,
+        gender: editGender || null,
       });
       setPersonalInfoModalVisible(false);
       Alert.alert('Success', 'Personal information updated successfully!');
@@ -397,10 +400,17 @@ export default function PlayerProfileScreen() {
                 {email}
               </AppText>
 
-              {/* Active Status Badge */}
-              <View style={styles.statusPill}>
-                <View style={styles.statusDot} />
-                <AppText style={styles.statusPillText}>Active</AppText>
+              {/* Active Status Badge + Gender Badge */}
+              <View style={styles.heroStatusRow}>
+                <View style={styles.statusPill}>
+                  <View style={styles.statusDot} />
+                  <AppText style={styles.statusPillText}>Active</AppText>
+                </View>
+                {profile?.gender ? (
+                  <View style={styles.genderBadge}>
+                    <AppText style={styles.genderBadgeText}>{profile.gender}</AppText>
+                  </View>
+                ) : null}
               </View>
             </View>
           </View>
@@ -476,7 +486,7 @@ export default function PlayerProfileScreen() {
             <View style={styles.settingTextColumn}>
               <AppText style={styles.settingTitle}>Personal Information</AppText>
               <AppText style={styles.settingDescription}>
-                Name, email, bio, profile photo
+                Name, email, gender, bio, profile photo
               </AppText>
             </View>
             <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
@@ -778,6 +788,25 @@ export default function PlayerProfileScreen() {
               placeholderTextColor="#8C9BA5"
               keyboardType="phone-pad"
             />
+          </View>
+
+          <View style={styles.formGroup}>
+            <AppText style={styles.formLabel}>Gender</AppText>
+            <View style={styles.genderPillsRow}>
+              {(['Male', 'Female', 'Other'] as const).map((g) => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.genderPill, editGender === g && styles.genderPillActive]}
+                  onPress={() => setEditGender(g)}
+                  activeOpacity={0.8}
+                >
+                  <AppText style={[styles.genderPillText, editGender === g && styles.genderPillTextActive]}>
+                    {g}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <AppText style={styles.formHint}>Required for division-restricted tournaments (Men's / Women's / Mixed Scramble).</AppText>
           </View>
 
           <View style={styles.formGroup}>
@@ -1584,5 +1613,55 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: '#647570',
     lineHeight: 18,
+  },
+  heroStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  genderBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1,
+    borderColor: '#C7E8D2',
+  },
+  genderBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#064E3B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  genderPillsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  genderPill: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F0F3F1',
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderPillActive: {
+    backgroundColor: '#005A36',
+    borderColor: '#005A36',
+  },
+  genderPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#647570',
+  },
+  genderPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

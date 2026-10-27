@@ -11,7 +11,7 @@ from pydantic import BaseModel, field_validator
 
 
 class PlayerProfileValidatorsMixin:
-    @field_validator("first_name", "last_name", "phone", "bio", mode="before")
+    @field_validator("first_name", "last_name", "phone", "bio", "gender", mode="before")
     @classmethod
     def clean_optional_strings(cls, v: str | None) -> str | None:
         if v is not None and isinstance(v, str):
@@ -50,6 +50,7 @@ class PlayerProfileBase(BaseModel, PlayerProfileValidatorsMixin):
     last_name: str | None = None
     phone: str | None = None
     date_of_birth: date | None = None
+    gender: str | None = None
     profile_image_url: str | None = None
     bio: str | None = None
 
@@ -72,6 +73,7 @@ class PlayerProfileUpdate(BaseModel, PlayerProfileValidatorsMixin):
     last_name: str | None = None
     phone: str | None = None
     date_of_birth: date | None = None
+    gender: str | None = None
     profile_image_url: str | None = None
     bio: str | None = None
 
@@ -94,6 +96,7 @@ class PlayerProfileResponse(BaseModel):
     last_name: str | None = None
     phone: str | None = None
     date_of_birth: date | None = None
+    gender: str | None = None
     profile_image_url: str | None = None
     bio: str | None = None
     created_at: datetime
