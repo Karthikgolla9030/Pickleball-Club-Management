@@ -51,7 +51,9 @@ from app.schemas.tournament_registration import (
     TournamentRegistrationResponse,
     UpdateRegistrationRequest,
 )
-from app.core.events import EventType, dispatch_event
+from app.core.events import EventType, dispatch_event, serialize_for_event
+from app.core.websocket_manager import ws_manager
+from app.repositories.user_repository import UserRepository
 from app.services.notification_service import NotificationService
 
 
@@ -61,25 +63,37 @@ def _build_tournament_response(
     is_registered: bool = False,
     my_registration_id: UUID | None = None,
     my_registration_status: str | None = None,
+    teams_count: int | None = None,
+    confirmed_players_count: int | None = None,
 ) -> TournamentResponse:
+    team_size = (t.format_configuration or {}).get("team_size", 1)
+    is_scramble = t.format == TournamentFormat.SCRAMBLE
+
     if participant_count is not None:
         count = participant_count
+        conf_count = confirmed_players_count if confirmed_players_count is not None else participant_count
+        t_count = teams_count if teams_count is not None else (count if (team_size == 2 and not is_scramble) else None)
     else:
         try:
             from sqlalchemy.orm import attributes
             state = attributes.instance_state(t)
             if "registrations" in state.dict and state.dict["registrations"]:
                 confirmed = [r for r in state.dict["registrations"] if r.status == RegistrationStatus.CONFIRMED]
-                team_size = (t.format_configuration or {}).get("team_size", 1)
-                is_scramble = t.format == TournamentFormat.SCRAMBLE
+                conf_count = len(confirmed)
                 if team_size == 2 and not is_scramble:
                     count = len(confirmed) // 2
+                    t_count = count
                 else:
                     count = len(confirmed)
+                    t_count = None
             else:
                 count = 0
+                conf_count = 0
+                t_count = None
         except Exception:
             count = 0
+            conf_count = 0
+            t_count = None
     club_name = t.club.name if getattr(t, "club", None) else None
     club_slug = t.club.slug if getattr(t, "club", None) else None
     return TournamentResponse(
@@ -108,6 +122,8 @@ def _build_tournament_response(
         tiebreaker_rules=t.tiebreaker_rules,
         format_configuration=t.format_configuration,
         participant_count=count,
+        teams_count=t_count,
+        confirmed_players_count=conf_count,
         created_at=t.created_at,
         updated_at=t.updated_at,
         is_registered=is_registered,
@@ -159,6 +175,7 @@ class TournamentService:
         self.player_membership_repo = ClubPlayerMembershipRepository(db)
         self.competition_repo = CompetitionRepository(db)
         self.profile_repo = PlayerProfileRepository(db)
+        self.user_repo = UserRepository(db)
 
     async def _auto_close_registration_if_deadline_passed(
         self, tournament: Tournament
@@ -288,8 +305,23 @@ class TournamentService:
                     reg_id = existing.id
                     reg_status = existing.status.value
 
+        # Authoritative registration counts directly from persisted DB records
+        all_regs = await self.registration_repo.list_by_tournament(tournament.id)
+        confirmed_regs = [r for r in all_regs if r.status == RegistrationStatus.CONFIRMED]
+        team_size = (tournament.format_configuration or {}).get("team_size", 1)
+        is_scramble = tournament.format == TournamentFormat.SCRAMBLE
+        if team_size == 2 and not is_scramble:
+            calc_participant_count = len(confirmed_regs) // 2
+            calc_teams_count = calc_participant_count
+        else:
+            calc_participant_count = len(confirmed_regs)
+            calc_teams_count = None
+
         return _build_tournament_response(
             tournament,
+            participant_count=calc_participant_count,
+            teams_count=calc_teams_count,
+            confirmed_players_count=len(confirmed_regs),
             is_registered=is_reg,
             my_registration_id=reg_id,
             my_registration_status=reg_status,
@@ -831,8 +863,10 @@ class TournamentService:
             is_scramble = t.format == TournamentFormat.SCRAMBLE
             if team_size == 2 and not is_scramble:
                 confirmed_count = len(confirmed) // 2
+                teams_count = confirmed_count
             else:
                 confirmed_count = len(confirmed)
+                teams_count = None
             now = datetime.now(timezone.utc)
             reg_open = t.registration_open_at.replace(tzinfo=timezone.utc) if t.registration_open_at.tzinfo is None else t.registration_open_at
             reg_close = t.registration_close_at.replace(tzinfo=timezone.utc) if t.registration_close_at.tzinfo is None else t.registration_close_at
@@ -874,6 +908,8 @@ class TournamentService:
                     registration_close_at=t.registration_close_at,
                     location_name=t.location_name,
                     participant_count=confirmed_count,
+                    teams_count=teams_count,
+                    confirmed_players_count=len(confirmed),
                     max_participants=t.max_participants,
                     format_configuration=t.format_configuration,
                     scoring_rules=t.scoring_rules,
@@ -1269,24 +1305,61 @@ class TournamentService:
         # 3. Doubles partner validation
         partner_membership = None
         partner_user = None
-        if not is_scramble and not is_singles and payload and payload.partner_membership_id:
-            if payload.partner_membership_id == player_membership.id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="You cannot select yourself as a partner",
-                )
-            partner_membership = await self.player_membership_repo.get_by_id(payload.partner_membership_id)
-            if not partner_membership or partner_membership.club_id != tournament.club_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected partner does not belong to this club",
-                )
-            if partner_membership.status != PlayerMembershipStatus.ACTIVE:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected partner must be an active club member",
-                )
-            partner_user = partner_membership.user
+        if not is_scramble and not is_singles and payload:
+            if payload.partner_membership_id:
+                if payload.partner_membership_id == player_membership.id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You cannot select yourself as a partner",
+                    )
+                partner_membership = await self.player_membership_repo.get_by_id(payload.partner_membership_id)
+                if not partner_membership or partner_membership.club_id != tournament.club_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected partner does not belong to this club",
+                    )
+                if partner_membership.status != PlayerMembershipStatus.ACTIVE:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected partner must be an active club member",
+                    )
+                partner_user = partner_membership.user
+            elif payload.partner_email and payload.partner_email.strip():
+                target_email = payload.partner_email.strip().lower()
+                if user and user.email and target_email == user.email.strip().lower():
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="You cannot select yourself as a partner",
+                    )
+                partner_user = await self.user_repo.get_by_email(target_email)
+                if partner_user:
+                    pm = await self.player_membership_repo.get_by_user_and_club(
+                        partner_user.id, tournament.club_id
+                    )
+                    if not pm:
+                        pm = await self.player_membership_repo.create(
+                            user_id=partner_user.id,
+                            club_id=tournament.club_id,
+                            status=PlayerMembershipStatus.ACTIVE,
+                        )
+                        await self.db.flush()
+                    partner_membership = pm
+                else:
+                    from app.core.security import hash_password
+                    from uuid import uuid4
+                    partner_name = payload.partner_name or "Partner"
+                    partner_user = await self.user_repo.create(
+                        email=target_email,
+                        hashed_password=hash_password(str(uuid4())),
+                        full_name=partner_name,
+                    )
+                    pm = await self.player_membership_repo.create(
+                        user_id=partner_user.id,
+                        club_id=tournament.club_id,
+                        status=PlayerMembershipStatus.ACTIVE,
+                    )
+                    await self.db.flush()
+                    partner_membership = pm
             partner_profile = partner_user.player_profile if partner_user and hasattr(partner_user, "player_profile") else None
             partner_gender = getattr(partner_profile, "gender", None)
             norm_partner_gender = partner_gender.strip().capitalize() if partner_gender else None
@@ -1537,6 +1610,42 @@ class TournamentService:
                 # If team creation fails or already exists, rollback gracefully
                 await self.db.rollback()
 
+        elif not is_scramble and not is_singles and target_status == RegistrationStatus.CONFIRMED:
+            # Doubles tournament with unpartnered individual registration:
+            # Pair with another confirmed unpartnered player if available
+            try:
+                existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
+                team_pm_ids = set()
+                for tm in existing_teams:
+                    for member in getattr(tm, "members", []):
+                        team_pm_ids.add(member.player_membership_id)
+
+                all_regs = await self.registration_repo.list_by_tournament(tournament.id)
+                confirmed_unteamed = [
+                    r for r in all_regs
+                    if r.status == RegistrationStatus.CONFIRMED and r.player_membership_id not in team_pm_ids
+                ]
+                if len(confirmed_unteamed) >= 2:
+                    r1 = confirmed_unteamed[0]
+                    r2 = confirmed_unteamed[1]
+                    p1_name = r1.player_membership.user.full_name if r1.player_membership and r1.player_membership.user else "Player 1"
+                    p2_name = r2.player_membership.user.full_name if r2.player_membership and r2.player_membership.user else "Player 2"
+                    created_team = await self.competition_repo.create_team(
+                        tournament_id=tournament.id,
+                        name=f"{p1_name} & {p2_name}",
+                    )
+                    await self.competition_repo.create_team_member(
+                        team_id=created_team.id,
+                        player_membership_id=r1.player_membership_id,
+                    )
+                    await self.competition_repo.create_team_member(
+                        team_id=created_team.id,
+                        player_membership_id=r2.player_membership_id,
+                    )
+                    await self.db.commit()
+            except Exception:
+                await self.db.rollback()
+
         elif is_singles and target_status == RegistrationStatus.CONFIRMED:
             caller_name = (
                 profile.display_name
@@ -1615,13 +1724,24 @@ class TournamentService:
         )
         try:
             active_count = await self.registration_repo.count_active_participants(tournament.id)
+            team_size = (tournament.format_configuration or {}).get("team_size", 1)
+            is_scramble = tournament.format == TournamentFormat.SCRAMBLE
+            if team_size == 2 and not is_scramble:
+                entry_count = active_count // 2
+                teams_count = entry_count
+            else:
+                entry_count = active_count
+                teams_count = None
+
             event_payload = {
                 "tournament_id": str(tournament.id),
                 "tournament_name": tournament.name,
                 "registration_id": str(reg.id),
                 "user_id": str(user_id),
                 "status": reg.status.value,
-                "participant_count": active_count,
+                "participant_count": entry_count,
+                "teams_count": teams_count,
+                "confirmed_players_count": active_count,
                 "reference_number": ref_no,
             }
             await dispatch_event(
@@ -1630,6 +1750,26 @@ class TournamentService:
                 club_id=tournament.club_id,
                 user_id=user_id,
             )
+            # Global broadcast so all accounts viewing tournaments update in real time
+            await ws_manager.broadcast_all({
+                "type": EventType.TOURNAMENT_REGISTRATION_CREATED.value,
+                "data": serialize_for_event(event_payload),
+                "club_id": str(tournament.club_id),
+                "user_id": str(user_id),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            await ws_manager.broadcast_all({
+                "type": EventType.TOURNAMENT_UPDATED.value,
+                "data": {
+                    "tournament_id": str(tournament.id),
+                    "participant_count": entry_count,
+                    "teams_count": teams_count,
+                    "confirmed_players_count": active_count,
+                    "status": tournament.status.value,
+                },
+                "club_id": str(tournament.club_id),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             title = "Tournament Registration Confirmed" if target_status == RegistrationStatus.CONFIRMED else "Tournament Registration Waitlisted"
             body = f"You are registered for '{tournament.name}'. Ref: {ref_no}" if target_status == RegistrationStatus.CONFIRMED else f"You are waitlisted for '{tournament.name}'."
             notif_svc = NotificationService(self.db)
@@ -1721,13 +1861,24 @@ class TournamentService:
 
         try:
             active_count = await self.registration_repo.count_active_participants(tournament.id)
+            team_size = (tournament.format_configuration or {}).get("team_size", 1)
+            is_scramble = tournament.format == TournamentFormat.SCRAMBLE
+            if team_size == 2 and not is_scramble:
+                entry_count = active_count // 2
+                teams_count = entry_count
+            else:
+                entry_count = active_count
+                teams_count = None
+
             event_payload = {
                 "tournament_id": str(tournament.id),
                 "tournament_name": tournament.name,
                 "registration_id": str(updated.id),
                 "user_id": str(user_id),
                 "status": updated.status.value,
-                "participant_count": active_count,
+                "participant_count": entry_count,
+                "teams_count": teams_count,
+                "confirmed_players_count": active_count,
             }
             await dispatch_event(
                 event_type=EventType.TOURNAMENT_REGISTRATION_CANCELLED,
@@ -1735,6 +1886,26 @@ class TournamentService:
                 club_id=tournament.club_id,
                 user_id=user_id,
             )
+            # Global broadcast so all accounts viewing tournaments update in real time
+            await ws_manager.broadcast_all({
+                "type": EventType.TOURNAMENT_REGISTRATION_CANCELLED.value,
+                "data": serialize_for_event(event_payload),
+                "club_id": str(tournament.club_id),
+                "user_id": str(user_id),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+            await ws_manager.broadcast_all({
+                "type": EventType.TOURNAMENT_UPDATED.value,
+                "data": {
+                    "tournament_id": str(tournament.id),
+                    "participant_count": entry_count,
+                    "teams_count": teams_count,
+                    "confirmed_players_count": active_count,
+                    "status": tournament.status.value,
+                },
+                "club_id": str(tournament.club_id),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
             await NotificationService(self.db).create_notification(
                 user_id=user_id,
                 club_id=tournament.club_id,

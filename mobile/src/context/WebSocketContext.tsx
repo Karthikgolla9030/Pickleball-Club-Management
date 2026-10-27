@@ -85,8 +85,25 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['standings'] });
         queryClient.invalidateQueries({ queryKey: ['bracket'] });
         queryClient.invalidateQueries({ queryKey: ['scramble'] });
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
+        const targetTournamentId = (event.data as any)?.tournament_id || (event.data as any)?.id;
+        if (targetTournamentId) {
+          const tId = String(targetTournamentId);
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'my-registration'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'player-registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'teams'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tId] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'pools'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'standings'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'matches'] });
+        }
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
+          if (targetTournamentId) {
+            queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments', String(targetTournamentId)] });
+          }
         }
       }
 

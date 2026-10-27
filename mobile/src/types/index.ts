@@ -677,6 +677,8 @@ export interface Tournament {
   } | null;
   tiebreaker_rules: string[];
   participant_count: number;
+  teams_count?: number | null;
+  confirmed_players_count?: number | null;
   is_registered?: boolean;
   my_registration_status?: string | null;
   is_registration_open?: boolean;
@@ -712,6 +714,8 @@ export interface TournamentDiscoveryItem {
   min_participants: number | null;
   max_participants: number | null;
   participant_count: number;
+  teams_count?: number | null;
+  confirmed_players_count?: number | null;
   is_registration_open: boolean;
   is_registered?: boolean;
   my_registration_id?: string | null;
@@ -824,6 +828,9 @@ export interface PlayerTournamentRegistrationStatus {
 export interface PlayerSelfRegistrationPayload {
   team_name?: string | null;
   partner_membership_id?: string | null;
+  partner_email?: string | null;
+  partner_name?: string | null;
+  partner_skill_level?: string | null;
   skill_level?: string | null;
   gender?: string | null;
   age?: number | null;

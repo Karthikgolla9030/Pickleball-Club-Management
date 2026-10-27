@@ -150,7 +150,9 @@ export function TournamentSettingsRosterModal({
 
   const targetScore = tournament.scoring_rules?.target_score ?? 11;
   const winBy = tournament.scoring_rules?.win_by ?? 2;
-  const participantCount = tournament.participant_count ?? registrations.length;
+  const isDoubles = !parsedConfig.isSingles;
+  const fallbackCount = isDoubles ? Math.floor(registrations.length / 2) : registrations.length;
+  const participantCount = tournament.teams_count ?? tournament.participant_count ?? fallbackCount;
   const maxCapacity = tournament.max_participants ?? 16;
   const capacityPercent = Math.min(100, Math.round((participantCount / maxCapacity) * 100));
 
@@ -344,7 +346,7 @@ export function TournamentSettingsRosterModal({
                       </View>
                       <View style={styles.infoTextWrap}>
                         <View style={styles.capacityHeaderRow}>
-                          <AppText style={styles.infoItemLabel}>Player Capacity</AppText>
+                          <AppText style={styles.infoItemLabel}>{parsedConfig.capacity.entryLabel} Capacity</AppText>
                           <AppText style={styles.capacityRatioText}>
                             {participantCount} / {tournament.max_participants ?? '∞'} registered (Min: {tournament.min_participants ?? '—'})
                           </AppText>

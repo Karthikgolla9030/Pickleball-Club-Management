@@ -138,17 +138,22 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
     staleTime: 10 * 1000,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      // Only poll when the tournament is actively in progress — and at a reasonable rate
       if (status === 'in_progress') {
-        return 15000; // 15s is sufficient; avoids hammering the server
+        return 15000;
+      }
+      if (status === 'registration_open') {
+        return 10000;
       }
       return false;
     },
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const invalidateTournament = () => {
     if (tournamentId) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
       queryClient.invalidateQueries({ queryKey: ['scramble', 'state', tournamentId] });
       queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
       queryClient.invalidateQueries({ queryKey: ['scramble', 'matches', tournamentId] });
@@ -156,10 +161,13 @@ export function useTournamentDetails(clubId: string | null, tournamentId: string
       queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] });
       queryClient.invalidateQueries({ queryKey: ['standings', tournamentId] });
       queryClient.invalidateQueries({ queryKey: ['bracket', tournamentId] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
     }
     if (clubId) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
     }
+    queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
   };
 
@@ -322,6 +330,8 @@ export function usePlayerTournaments(
     staleTime: 5 * 1000,
     // The 5s staleTime ensures instant synchronization when switching between club and player views.
     refetchInterval: false,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   return {
@@ -364,9 +374,16 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
     onSuccess: () => {
       if (tournamentId) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
         queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'my-registration'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'player-registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 
@@ -378,9 +395,16 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
     onSuccess: () => {
       if (tournamentId) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
         queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'my-registration'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'player-registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 

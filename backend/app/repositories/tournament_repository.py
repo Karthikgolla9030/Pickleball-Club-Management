@@ -40,6 +40,7 @@ class TournamentRepository:
                 selectinload(Tournament.club),
                 selectinload(Tournament.registrations),
             )
+            .execution_options(populate_existing=True)
         )
         if club_id is not None:
             query = query.where(Tournament.club_id == club_id)

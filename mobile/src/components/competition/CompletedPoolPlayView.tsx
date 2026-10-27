@@ -417,7 +417,7 @@ export function CompletedPoolPlayView({
                 <View style={styles.heroMetaItem}>
                   <Users size={13} color="#CBD5E1" style={{ marginRight: 4 }} />
                   <AppText variant="caption" style={styles.heroMetaText}>
-                    {tournament.participant_count ?? 0}{tournament.max_participants ? ` / ${tournament.max_participants}` : ''} players
+                    {tournament.teams_count ?? tournament.participant_count ?? 0}{tournament.max_participants ? ` / ${tournament.max_participants}` : ''} {parsedConfig.capacity.entryLabel.toLowerCase()}
                   </AppText>
                 </View>
               </View>

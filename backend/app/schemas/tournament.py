@@ -342,6 +342,8 @@ class TournamentResponse(BaseModel):
     tiebreaker_rules: list[str]
     format_configuration: dict | None = None
     participant_count: int = 0
+    teams_count: int | None = None
+    confirmed_players_count: int | None = None
     is_registered: bool = False
     my_registration_id: UUID | None = None
     my_registration_status: str | None = None
@@ -369,6 +371,8 @@ class TournamentDiscoveryResponse(BaseModel):
     registration_close_at: datetime
     location_name: str | None = None
     participant_count: int
+    teams_count: int | None = None
+    confirmed_players_count: int | None = None
     max_participants: int | None = None
     format_configuration: dict | None = None
     scoring_rules: dict | None = None

@@ -101,7 +101,7 @@ export function RegistrationHeader({
     : `$${feeNumber} per player`;
 
   // Capacity calculation
-  const registeredCount = tournament.participant_count ?? 0;
+  const registeredCount = tournament.teams_count ?? tournament.participant_count ?? 0;
   const maxCap = tournament.max_participants ?? 16;
   const spotsLeft = Math.max(0, maxCap - registeredCount);
 

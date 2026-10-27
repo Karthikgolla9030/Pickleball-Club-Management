@@ -171,7 +171,7 @@ export function PlayerTournamentCard({
     (regCloseAt ? regCloseAt >= now : true);
 
   const maxCap = tournament.max_participants || 16;
-  const currentCount = tournament.participant_count || 0;
+  const currentCount = tournament.teams_count ?? tournament.participant_count ?? 0;
   const isFull = maxCap > 0 && currentCount >= maxCap;
 
   const imageSource = getCardImage(tournament, index, clubCoverUrl);

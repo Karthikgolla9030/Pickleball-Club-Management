@@ -47,6 +47,8 @@ export interface TournamentCardData {
   start_date: string;
   end_date: string;
   participant_count: number;
+  teams_count?: number | null;
+  confirmed_players_count?: number | null;
   max_participants?: number | null;
   scoring_rules?: {
     target_score?: number;
@@ -263,7 +265,7 @@ export function TournamentCard({
         <View style={styles.infoRow}>
           <Users size={15} color="#657776" style={styles.infoIcon} />
           <AppText style={styles.infoText}>
-            {tournament.participant_count} / {tournament.max_participants ?? '∞'} {entryLabel}registered
+            {tournament.teams_count ?? tournament.participant_count ?? 0} / {tournament.max_participants ?? '∞'} {entryLabel}registered
           </AppText>
         </View>
 

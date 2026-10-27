@@ -362,8 +362,8 @@ export function UpcomingTournamentPreviewView({
               <View style={styles.noticeDateRow}>
                 <Calendar size={14} color="#065F46" strokeWidth={2} style={{ marginRight: 6 }} />
                 <AppText variant="caption" style={[styles.noticeDateText, { color: '#065F46' }]}>
-                  {tournament.max_participants && tournament.participant_count != null
-                    ? `${Math.max(0, tournament.max_participants - tournament.participant_count)} spots remaining`
+                  {tournament.max_participants && (tournament.teams_count != null || tournament.participant_count != null)
+                    ? `${Math.max(0, tournament.max_participants - (tournament.teams_count ?? tournament.participant_count ?? 0))} ${parsedConfig.capacity.entryLabel.toLowerCase()} spots remaining`
                     : 'Spots available'}
                 </AppText>
               </View>

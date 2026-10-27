@@ -248,7 +248,7 @@ export function TournamentManagementInfo({
           <View style={styles.metaItem}>
             <Users size={13} color="#64748B" />
             <AppText style={styles.metaText}>
-              {tournament?.participant_count ?? 0}
+              {tournament?.teams_count ?? tournament?.participant_count ?? 0}
               {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
               {parsedConfig.isSingles ? 'Players' : 'Teams'}
             </AppText>

@@ -251,44 +251,52 @@ export default function PoolPlayManagementScreen() {
     }
   };
 
-  // Synchronize actual teams and registrations into Pool Play state (only if teams not yet loaded/persisted)
+  // Synchronize actual teams and registrations into Pool Play state
   useEffect(() => {
-    if (teams.length > 0) return;
-    if ((tournament?.format_configuration as Record<string, any>)?.pool_play_state?.teams?.length) return;
+    // If tournament already has matches scheduled/running, do not overwrite team pool assignments
+    if (matches.length > 0) return;
 
     if (apiTeams && apiTeams.length > 0) {
-      const mapped: Team[] = apiTeams.map((t, idx) => {
-        const p1Mem = t.members?.[0];
-        const p2Mem = t.members?.[1];
-        const p1Name = p1Mem?.display_name || p1Mem?.user_email || `Player 1`;
-        const p2Name = p2Mem?.display_name || p2Mem?.user_email || `Player 2`;
-        const p1Avatar = p1Name.slice(0, 2).toUpperCase();
-        const p2Avatar = p2Name.slice(0, 2).toUpperCase();
-        const pool = idx % config.numPools === 0 ? 'A' : 'B';
-        return {
-          id: t.id,
-          teamNum: idx + 1,
-          name: t.name || `Team ${idx + 1}`,
-          p1: {
-            id: p1Mem?.player_membership_id || `p-${idx}-1`,
-            name: p1Name,
-            rating: 4.0,
-            avatar: p1Avatar,
-            color: '#1E3A8A',
-          },
-          p2: {
-            id: p2Mem?.player_membership_id || `p-${idx}-2`,
-            name: p2Name,
-            rating: 4.0,
-            avatar: p2Avatar,
-            color: '#047857',
-          },
-          pool,
-          avgRating: 4.0,
-          spread: 0.0,
-        };
+      setTeams((prevTeams) => {
+        const existingPoolMap = new Map<string, string>();
+        prevTeams.forEach((t) => {
+          if (t.id) existingPoolMap.set(t.id, t.pool);
+        });
+
+        const mapped: Team[] = apiTeams.map((t, idx) => {
+          const p1Mem = t.members?.[0];
+          const p2Mem = t.members?.[1];
+          const p1Name = p1Mem?.display_name || p1Mem?.user_email || `Player 1`;
+          const p2Name = p2Mem?.display_name || p2Mem?.user_email || `Player 2`;
+          const p1Avatar = p1Name.slice(0, 2).toUpperCase();
+          const p2Avatar = p2Name.slice(0, 2).toUpperCase();
+          const defaultPool = idx % config.numPools === 0 ? 'A' : 'B';
+          const pool = existingPoolMap.get(t.id) || defaultPool;
+          return {
+            id: t.id,
+            teamNum: idx + 1,
+            name: t.name || `Team ${idx + 1}`,
+            p1: {
+              id: p1Mem?.player_membership_id || `p-${idx}-1`,
+              name: p1Name,
+              rating: 4.0,
+              avatar: p1Avatar,
+              color: '#1E3A8A',
+            },
+            p2: {
+              id: p2Mem?.player_membership_id || `p-${idx}-2`,
+              name: p2Name,
+              rating: 4.0,
+              avatar: p2Avatar,
+              color: '#047857',
+            },
+            pool,
+            avgRating: 4.0,
+            spread: 0.0,
+          };
+        });
+        return mapped;
       });
-      setTeams(mapped);
     } else if (registrations && registrations.length > 0) {
       const confirmedRegs = registrations.filter((r) => r.status === 'confirmed');
       const isDoubles = tournamentConfig.teamSize === 2;
@@ -357,7 +365,7 @@ export default function PoolPlayManagementScreen() {
     } else {
       setTeams([]);
     }
-  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, teams.length, tournament?.format_configuration]);
+  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, matches.length]);
 
   // Calculated Stats
   const { updatedTeams, pools, poolDiff, isWithinTolerance } = useMemo(() => {
@@ -769,6 +777,32 @@ export default function PoolPlayManagementScreen() {
     );
   };
 
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchTournament(),
+      refetchRegs(),
+      refetchTeams(),
+      (async () => {
+        if (clubId && tournamentId) {
+          try {
+            const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
+            const pps = res?.pool_play_state;
+            if (pps) {
+              if (Array.isArray(pps.teams) && pps.teams.length > 0) setTeams(pps.teams);
+              if (Array.isArray(pps.matches) && pps.matches.length > 0) setMatches(pps.matches);
+              if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+                setChampionshipMatches(pps.championshipMatches);
+              }
+              if (pps.config) setConfig((prev) => ({ ...prev, ...pps.config }));
+            }
+          } catch {
+            // ignore
+          }
+        }
+      })(),
+    ]);
+  };
+
   const handleOpenOptionsMenu = () => {
     const isDraft = tournament?.status === 'draft';
     const isRegOpen = tournament?.status === 'registration_open';
@@ -912,32 +946,6 @@ export default function PoolPlayManagementScreen() {
     handleCloseRegistration,
     handleStartTournament,
   ]);
-
-  const handleRefresh = async () => {
-    await Promise.all([
-      refetchTournament(),
-      refetchRegs(),
-      refetchTeams(),
-      (async () => {
-        if (clubId && tournamentId) {
-          try {
-            const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
-            const pps = res?.pool_play_state;
-            if (pps) {
-              if (Array.isArray(pps.teams) && pps.teams.length > 0) setTeams(pps.teams);
-              if (Array.isArray(pps.matches) && pps.matches.length > 0) setMatches(pps.matches);
-              if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
-                setChampionshipMatches(pps.championshipMatches);
-              }
-              if (pps.config) setConfig((prev) => ({ ...prev, ...pps.config }));
-            }
-          } catch {
-            // ignore
-          }
-        }
-      })(),
-    ]);
-  };
 
   // ─── Loading & Error Guards (matches Bracket, Round Robin, Scramble pattern) ─
   if (isLoadingTournament && !tournament) {

@@ -20,6 +20,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { AppText } from '../AppText';
 import {
   useAuth,
@@ -28,6 +30,7 @@ import {
   usePlayerTournamentRegistration,
   useTournamentDetails,
 } from '@/hooks';
+import { QUERY_KEYS } from '@/constants';
 import type { PlayerRegistrationResponse } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { RegistrationDetailsModal } from './RegistrationDetailsModal';
@@ -83,6 +86,7 @@ export function TournamentRegistrationModal({
       }
     : tournament;
 
+  const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState<RegistrationStep>(1);
   const [successResult, setSuccessResult] = useState<PlayerRegistrationResponse | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -269,10 +273,11 @@ export function TournamentRegistrationModal({
 
     // Check capacity and tournament status
     if (activeTournament) {
+      const currentEntryCount = activeTournament.teams_count ?? activeTournament.participant_count;
       if (
         activeTournament.max_participants != null &&
-        activeTournament.participant_count != null &&
-        activeTournament.participant_count >= activeTournament.max_participants
+        currentEntryCount != null &&
+        currentEntryCount >= activeTournament.max_participants
       ) {
         errs.fullName = 'Tournament is at full capacity. Registrations are closed.';
       }
@@ -529,9 +534,18 @@ export function TournamentRegistrationModal({
         ? formState.teamName.trim() || `${formState.fullName} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}`
         : null;
 
+      const partnerEmail = isDoubles
+        ? (formState.selectedPartner?.email || formState.partnerEmail.trim() || null)
+        : null;
+      const partnerName = isDoubles
+        ? (formState.selectedPartner?.full_name || formState.partnerFullName.trim() || null)
+        : null;
+
       const payload = {
         team_name: teamName,
         partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
+        partner_email: partnerEmail,
+        partner_name: partnerName,
         skill_level: formState.skillLevel,
         partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
         gender: formState.gender,
@@ -552,6 +566,17 @@ export function TournamentRegistrationModal({
       const res = await register(payload);
       setSuccessResult(res);
       void refetchMyRegistration();
+      if (activeTournament?.id) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'player-registrations'] });
+        queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
       if (onSuccess) {
         onSuccess(res);
       }

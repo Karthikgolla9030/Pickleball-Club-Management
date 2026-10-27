@@ -413,7 +413,11 @@ export function LiveTournamentView({
   }, [tournament.start_date, tournament.end_date, scrambleState]);
 
   // Registered Count
-  const registeredCount = tournament.participant_count ?? (teams.length > 0 ? teams.length : registrations.length);
+  const isDoubles = !parsedConfig.isSingles;
+  const fallbackCount = teams.length > 0
+    ? teams.length
+    : (isDoubles ? Math.floor(registrations.length / 2) : registrations.length);
+  const registeredCount = tournament.teams_count ?? tournament.participant_count ?? fallbackCount;
   const maxCapacity = tournament.max_participants ?? 16;
   const targetScore = tournament.scoring_rules?.target_score ?? 11;
   const winBy = tournament.scoring_rules?.win_by ?? 2;
@@ -699,7 +703,7 @@ export function LiveTournamentView({
                   <View style={styles.specCol}>
                     <View style={styles.specIconLabelRow}>
                       <Users size={15} color="#64748B" style={styles.specIcon} />
-                      <AppText variant="caption" style={styles.gridLabel}>Players</AppText>
+                      <AppText variant="caption" style={styles.gridLabel}>{parsedConfig.capacity.entryLabel}</AppText>
                     </View>
                     <AppText variant="bodySmall" bold style={styles.gridValue}>
                       {registeredCount} / {maxCapacity} registered
@@ -1211,7 +1215,7 @@ export function LiveTournamentView({
               </View>
               <View style={styles.playerBottomContent}>
                 <AppText variant="bodySmall" bold style={styles.playerBottomTitle}>
-                  Total registered players
+                  Total registered {parsedConfig.capacity.entryLabel.toLowerCase()}
                 </AppText>
                 <AppText variant="caption" style={styles.playerBottomSub}>
                   {maxCapacity ? `${registeredCount} of ${maxCapacity} spots filled` : `${registeredCount} registered`}
