@@ -148,8 +148,14 @@ class PlayerService:
     async def update_profile(
         self, user_id: UUID, payload: PlayerProfileUpdate
     ) -> PlayerProfileResponse:
-        """Update authenticated user's player profile."""
+        """Update authenticated user's player profile with authoritative persistence."""
         profile = await self.profile_repo.get_by_user_id(user_id)
+        fields_set = payload.model_fields_set
+        clear_fields: set[str] = set()
+        for f in ("first_name", "last_name", "phone", "date_of_birth", "gender", "profile_image_url", "bio"):
+            if f in fields_set and getattr(payload, f) is None:
+                clear_fields.add(f)
+
         if not profile:
             user = await self.user_repo.get_by_id(user_id)
             display_name = (
@@ -182,6 +188,7 @@ class PlayerService:
                 gender=payload.gender,
                 profile_image_url=payload.profile_image_url,
                 bio=payload.bio,
+                clear_fields=clear_fields,
             )
             await self.db.commit()
             await self.db.refresh(updated)

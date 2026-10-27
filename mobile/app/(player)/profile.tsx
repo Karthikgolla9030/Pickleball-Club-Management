@@ -32,7 +32,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import {
   Calendar,
@@ -72,6 +72,13 @@ export default function PlayerProfileScreen() {
     deletePhoto,
     isDeletingPhoto,
   } = usePlayerProfile();
+
+  // Refetch profile whenever screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
 
   // ─── Modal States ──────────────────────────────────────────────────────────
   const [personalInfoModalVisible, setPersonalInfoModalVisible] = useState(false);
@@ -267,7 +274,8 @@ export default function PlayerProfileScreen() {
     }
 
     try {
-      await updateProfile({
+      setEditError(null);
+      const updated = await updateProfile({
         display_name: trimmed,
         first_name: editFirstName.trim() || null,
         last_name: editLastName.trim() || null,
@@ -275,12 +283,21 @@ export default function PlayerProfileScreen() {
         bio: editBio.trim() || null,
         gender: editGender || null,
       });
+      if (updated) {
+        setEditDisplayName(updated.display_name || '');
+        setEditFirstName(updated.first_name || '');
+        setEditLastName(updated.last_name || '');
+        setEditPhone(updated.phone || '');
+        setEditBio(updated.bio || '');
+        setEditGender(updated.gender || '');
+      }
       await refetch();
       setPersonalInfoModalVisible(false);
       Alert.alert('Success', 'Personal information updated successfully!');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save changes';
       setEditError(msg);
+      Alert.alert('Error', msg);
     }
   };
 

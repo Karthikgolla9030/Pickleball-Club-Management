@@ -1222,29 +1222,28 @@ class TournamentService:
         user = player_membership.user if hasattr(player_membership, "user") else None
         # Authoritative profile retrieval directly from repository
         profile = await self.profile_repo.get_by_user_id(user_id)
+        norm_payload_gender = (
+            payload.gender.strip().capitalize()
+            if payload and payload.gender and isinstance(payload.gender, str) and payload.gender.strip()
+            else None
+        )
         if not profile:
-            norm_gen = payload.gender.strip().capitalize() if payload and payload.gender else None
             user_full = user.full_name if user and user.full_name else "Player"
             profile = await self.profile_repo.create(
                 user_id=user_id,
                 display_name=user_full,
-                gender=norm_gen,
+                gender=norm_payload_gender,
             )
             self.db.add(profile)
             await self.db.flush()
-        elif payload and payload.gender and not getattr(profile, "gender", None):
-            profile.gender = payload.gender.strip().capitalize()
+        elif norm_payload_gender and (not getattr(profile, "gender", None) or not str(profile.gender).strip()):
+            profile.gender = norm_payload_gender
             self.db.add(profile)
             await self.db.flush()
 
-        # For Scramble, gender is strictly read from verified profile.
-        # Self-declared payload.gender cannot override an existing profile gender,
-        # but if profile gender is not yet set, it was persisted above.
-        if is_scramble:
-            player_gender = getattr(profile, "gender", None)
-        else:
-            player_gender = (payload.gender if payload and payload.gender else getattr(profile, "gender", None))
-        norm_gender = player_gender.strip().capitalize() if player_gender else None
+        # Effective player gender resolves authoritatively from profile or registration payload
+        player_gender = getattr(profile, "gender", None) or norm_payload_gender
+        norm_gender = player_gender.strip().capitalize() if player_gender and isinstance(player_gender, str) and player_gender.strip() else None
 
         # 1. Scramble specific rules
         if is_scramble:

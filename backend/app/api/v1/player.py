@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,10 +69,14 @@ router = APIRouter(prefix="/player", tags=["Player & Player Memberships"])
     },
 )
 async def get_player_profile(
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlayerProfileResponse:
     """Retrieve caller's player profile."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return await PlayerService(db).get_profile(user_id=current_user.id)
 
 
@@ -90,10 +94,14 @@ async def get_player_profile(
 )
 async def create_player_profile(
     payload: PlayerProfileCreate,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlayerProfileResponse:
     """Create player profile for authenticated user."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return await PlayerService(db).create_profile(
         user_id=current_user.id,
         payload=payload,
@@ -113,10 +121,14 @@ async def create_player_profile(
 )
 async def update_player_profile(
     payload: PlayerProfileUpdate,
+    response: Response,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlayerProfileResponse:
     """Update caller's player profile."""
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return await PlayerService(db).update_profile(
         user_id=current_user.id,
         payload=payload,

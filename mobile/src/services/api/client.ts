@@ -171,6 +171,8 @@ async function request<T>(
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'Bypass-Tunnel-Reminder': 'true',
+      'Cache-Control': 'no-cache, no-store',
+      Pragma: 'no-cache',
       ...(options.headers as Record<string, string>),
     };
 
@@ -214,6 +216,7 @@ async function request<T>(
     console.log(`[API REQUEST] ${options.method || 'GET'} ${fullUrl}`);
     const response = await fetch(fullUrl, {
       ...options,
+      cache: options.cache ?? 'no-store',
       headers,
       signal: controller.signal,
     });

@@ -8,7 +8,7 @@
  * Plus RegistrationSuccessView confirmation state.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -146,75 +146,83 @@ export function TournamentRegistrationModal({
     notes: '',
   });
 
-  // Re-initialize when modal opens or tournament changes
+  // Track initialization to avoid resetting formState when profile/user queries update in background
+  const initializedTournamentIdRef = useRef<string | null>(null);
+
+  // Re-initialize only when modal opens or tournament changes
   useEffect(() => {
-    if (visible && activeTournament) {
-      setCurrentStep(1);
-      setSuccessResult(null);
-      setSubmitError(null);
-      setErrors({});
-      setAlreadyRegisteredOverride(false);
+    if (visible && activeTournament?.id) {
+      if (initializedTournamentIdRef.current !== activeTournament.id) {
+        initializedTournamentIdRef.current = activeTournament.id;
+        setCurrentStep(1);
+        setSuccessResult(null);
+        setSubmitError(null);
+        setErrors({});
+        setAlreadyRegisteredOverride(false);
 
-      const userFull = user?.full_name || profile?.display_name || 'Karthik Golla';
-      const userEmail = user?.email || (profile as any)?.email || 'karthik@example.com';
-      const userPhone = (profile as any)?.phone || '+1 (555) 123-4567';
-      const categoryName = parsed?.category || '';
-      let defaultGender: 'Male' | 'Female' | 'Other' = 'Male';
-      if (profile?.gender) {
-        const norm = normalizeGender(profile.gender);
-        defaultGender = (norm === 'Female' ? 'Female' : norm === 'Other' ? 'Other' : 'Male');
-      } else if (categoryName.includes("Women's")) {
-        defaultGender = 'Female';
-      } else {
-        defaultGender = 'Male';
+        const userFull = user?.full_name || profile?.display_name || 'Player';
+        const userEmail = user?.email || (profile as any)?.email || '';
+        const userPhone = profile?.phone || '';
+        const categoryName = parsed?.category || '';
+        let defaultGender: 'Male' | 'Female' | 'Other' = 'Male';
+        if (profile?.gender) {
+          const norm = normalizeGender(profile.gender);
+          defaultGender = (norm === 'Female' ? 'Female' : norm === 'Other' ? 'Other' : 'Male');
+        } else if (categoryName.includes("Women's")) {
+          defaultGender = 'Female';
+        } else {
+          defaultGender = 'Male';
+        }
+        const userGender = defaultGender;
+        const userSkill = parsed?.skillLevel || '3.5';
+
+        let defaultTeam = '';
+        if (activeTournament.format === 'pool_play') {
+          defaultTeam = 'SVCE Picklers';
+        } else if (activeTournament.format === 'bracket') {
+          defaultTeam = 'The Smashers';
+        }
+
+        // Default partner gender based on category
+        let defaultPartnerGender: 'Male' | 'Female' | 'Other' = 'Male';
+        if (parsed?.category === "Women's Doubles") {
+          defaultPartnerGender = 'Female';
+        } else if (parsed?.category === 'Mixed Doubles') {
+          defaultPartnerGender = userGender === 'Male' ? 'Female' : 'Male';
+        }
+
+        setFormState({
+          fullName: userFull,
+          email: userEmail,
+          phone: userPhone,
+          skillLevel: userSkill,
+          gender: userGender,
+          age: (profile as any)?.age ? String((profile as any).age) : '28',
+          teamName: defaultTeam,
+          partnerFullName: '',
+          partnerEmail: '',
+          partnerPhone: '',
+          partnerSkillLevel: '3.5',
+          partnerGender: defaultPartnerGender,
+          partnerAge: '26',
+          selectedPartner: null,
+          partnerSearchQuery: '',
+          confirmEligibility: true,
+          acknowledgeMembership: true,
+          paymentMethod: 'card',
+          cardholderName: userFull,
+          cardNumber: '',
+          cardExpiry: '',
+          cardCvv: '',
+          upiId: '',
+          agreeRulesAndCancellation: false,
+          notes: '',
+        });
       }
-      const userGender = defaultGender;
-      const userSkill = parsed?.skillLevel || '3.5';
-
-      let defaultTeam = '';
-      if (activeTournament.format === 'pool_play') {
-        defaultTeam = 'SVCE Picklers';
-      } else if (activeTournament.format === 'bracket') {
-        defaultTeam = 'The Smashers';
-      }
-
-      // Default partner gender based on category
-      let defaultPartnerGender: 'Male' | 'Female' | 'Other' = 'Male';
-      if (parsed?.category === "Women's Doubles") {
-        defaultPartnerGender = 'Female';
-      } else if (parsed?.category === 'Mixed Doubles') {
-        defaultPartnerGender = userGender === 'Male' ? 'Female' : 'Male';
-      }
-
-      setFormState({
-        fullName: userFull,
-        email: userEmail,
-        phone: userPhone,
-        skillLevel: userSkill,
-        gender: userGender,
-        age: (profile as any)?.age ? String((profile as any).age) : '28',
-        teamName: defaultTeam,
-        partnerFullName: '',
-        partnerEmail: '',
-        partnerPhone: '',
-        partnerSkillLevel: '3.5',
-        partnerGender: defaultPartnerGender,
-        partnerAge: '26',
-        selectedPartner: null,
-        partnerSearchQuery: '',
-        confirmEligibility: true,
-        acknowledgeMembership: true,
-        paymentMethod: 'card',
-        cardholderName: userFull,
-        cardNumber: '',
-        cardExpiry: '',
-        cardCvv: '',
-        upiId: '',
-        agreeRulesAndCancellation: false,
-        notes: '',
-      });
+    } else if (!visible) {
+      initializedTournamentIdRef.current = null;
     }
-  }, [visible, activeTournament?.id, user, profile]);
+  }, [visible, activeTournament?.id]);
 
   if (!visible || !activeTournament) return null;
 
@@ -501,10 +509,22 @@ export function TournamentRegistrationModal({
     return Object.keys(errs).length === 0;
   };
 
-  const handleNextFromStep1 = () => {
-    if (validateStep1()) {
-      setCurrentStep(2);
+  const handleNextFromStep1 = async () => {
+    if (!validateStep1()) return;
+
+    // Immediately persist player gender and phone to backend profile so it's verified BEFORE review & payment
+    if (formState.gender) {
+      try {
+        await updateProfile({
+          gender: formState.gender,
+          phone: formState.phone?.trim() || undefined,
+        });
+      } catch (err) {
+        console.warn('[REGISTRATION] Profile pre-save failed:', err);
+      }
     }
+
+    setCurrentStep(2);
   };
 
   const handleNextFromStep2 = () => {

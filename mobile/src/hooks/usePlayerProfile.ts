@@ -26,13 +26,16 @@ export function usePlayerProfile() {
         throw err;
       }
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const createProfileMutation = useMutation({
     mutationFn: (payload: CreatePlayerProfilePayload) => playerApi.createProfile(payload),
     onSuccess: (newProfile) => {
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, newProfile);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
+      queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
     },
   });
 
