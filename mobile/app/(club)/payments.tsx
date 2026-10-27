@@ -35,9 +35,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
 import {
-  Bell,
   Calendar,
   Check,
   CheckCircle2,
@@ -74,10 +73,8 @@ import {
   usePermission,
   useRefundPayment,
   useSucceedPayment,
-  useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
-import { useAuthStore } from '@/store';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
 import type { Payment, PaymentMethod, PaymentPurpose, PaymentStatus } from '@/types';
@@ -144,9 +141,7 @@ function capitalize(str: string): string {
 
 export default function ClubPaymentsScreen() {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
-  const user = useAuthStore((s) => s.user);
 
   const { clubId: activeClubId } = useActiveClub();
   const { canManagePayments } = usePermission();
@@ -186,9 +181,6 @@ export default function ClubPaymentsScreen() {
       refetchPayments();
     }, [refetchSummary, refetchPayments])
   );
-
-  // Unread notifications for header badge
-  const { data: unreadCount = 0 } = useUnreadNotificationCount();
 
   // Mutations for staff reconciliation
   const succeedPaymentMutation = useSucceedPayment(clubId);
@@ -288,12 +280,6 @@ export default function ClubPaymentsScreen() {
     refetchSummary();
     refetchPayments();
   };
-
-  const avatarInitial = useMemo(() => {
-    if (user?.full_name?.trim()) return user.full_name.trim().charAt(0).toUpperCase();
-    if (user?.email?.trim()) return user.email.trim().charAt(0).toUpperCase();
-    return 'A';
-  }, [user]);
 
   // Handle Mark as Succeeded
   const handleMarkPaid = (payment: Payment) => {
@@ -672,31 +658,6 @@ export default function ClubPaymentsScreen() {
           <View style={styles.headerTitleBlock}>
             <AppText style={styles.headerTitle}>Payments</AppText>
             <AppText style={styles.headerSubtitle}>Track revenue and transactions</AppText>
-          </View>
-
-          {/* Notification Icon & Profile Avatar on the Right */}
-          <View style={styles.headerRightActions}>
-            <TouchableOpacity
-              style={styles.headerBellBtn}
-              onPress={() => router.push('/(club)/notifications' as any)}
-              hitSlop={8}
-              activeOpacity={0.75}
-              accessibilityLabel="View notifications"
-              accessibilityRole="button"
-            >
-              <Bell size={20} color="#1E293B" strokeWidth={2} />
-              {(unreadCount ?? 0) > 0 && <View style={styles.notificationDot} />}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.headerAvatarBtn}
-              onPress={() => router.push('/(club)/profile' as any)}
-              activeOpacity={0.8}
-              accessibilityLabel="View profile"
-              accessibilityRole="button"
-            >
-              <AppText style={styles.headerAvatarText}>{avatarInitial}</AppText>
-            </TouchableOpacity>
           </View>
         </View>
       </View>
@@ -1139,49 +1100,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 2,
     fontWeight: '400',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  headerBellBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  notificationDot: {
-    position: 'absolute',
-    top: 7,
-    right: 8,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#EF4444',
-  },
-  headerAvatarBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#D1FAE5',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerAvatarText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#065F46',
   },
 
   // ─── List Layout & Wrapper ─────────────────────────────────────────────────
