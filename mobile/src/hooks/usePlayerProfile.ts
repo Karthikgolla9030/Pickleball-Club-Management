@@ -37,9 +37,28 @@ export function usePlayerProfile() {
   });
 
   const updateProfileMutation = useMutation({
-    mutationFn: (payload: UpdatePlayerProfilePayload) => playerApi.updateProfile(payload),
+    mutationFn: async (payload: UpdatePlayerProfilePayload) => {
+      try {
+        return await playerApi.updateProfile(payload);
+      } catch (err) {
+        if (err instanceof ApiClientError && err.status === 404) {
+          return await playerApi.createProfile({
+            display_name: payload.display_name || 'Player',
+            first_name: payload.first_name ?? undefined,
+            last_name: payload.last_name ?? undefined,
+            phone: payload.phone ?? undefined,
+            date_of_birth: payload.date_of_birth ?? undefined,
+            gender: payload.gender ?? undefined,
+            profile_image_url: payload.profile_image_url ?? undefined,
+            bio: payload.bio ?? undefined,
+          });
+        }
+        throw err;
+      }
+    },
     onSuccess: (updatedProfile) => {
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, updatedProfile);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
       queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
     },
   });

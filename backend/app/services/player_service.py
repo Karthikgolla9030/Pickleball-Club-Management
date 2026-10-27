@@ -151,24 +151,41 @@ class PlayerService:
         """Update authenticated user's player profile."""
         profile = await self.profile_repo.get_by_user_id(user_id)
         if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Player profile not found",
+            user = await self.user_repo.get_by_id(user_id)
+            display_name = (
+                payload.display_name
+                or (user.full_name if user and user.full_name else "Player")
             )
-
-        updated = await self.profile_repo.update(
-            profile=profile,
-            display_name=payload.display_name,
-            first_name=payload.first_name,
-            last_name=payload.last_name,
-            phone=payload.phone,
-            date_of_birth=payload.date_of_birth,
-            gender=payload.gender,
-            profile_image_url=payload.profile_image_url,
-            bio=payload.bio,
-        )
-        await self.db.commit()
-        resp = PlayerProfileResponse.model_validate(updated)
+            profile = await self.profile_repo.create(
+                user_id=user_id,
+                display_name=display_name,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                phone=payload.phone,
+                date_of_birth=payload.date_of_birth,
+                gender=payload.gender,
+                profile_image_url=payload.profile_image_url,
+                bio=payload.bio,
+            )
+            await self.db.commit()
+            await self.db.refresh(profile)
+            resp = PlayerProfileResponse.model_validate(profile)
+            updated = profile
+        else:
+            updated = await self.profile_repo.update(
+                profile=profile,
+                display_name=payload.display_name,
+                first_name=payload.first_name,
+                last_name=payload.last_name,
+                phone=payload.phone,
+                date_of_birth=payload.date_of_birth,
+                gender=payload.gender,
+                profile_image_url=payload.profile_image_url,
+                bio=payload.bio,
+            )
+            await self.db.commit()
+            await self.db.refresh(updated)
+            resp = PlayerProfileResponse.model_validate(updated)
 
         # Dispatch real-time profile update to user and their clubs
         try:

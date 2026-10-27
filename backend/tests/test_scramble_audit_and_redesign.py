@@ -362,6 +362,19 @@ async def scramble_audit_setup(db_session: AsyncSession):
     unverified_cpm = ClubPlayerMembership(club_id=club.id, user_id=unverified_user.id, membership_number="U001", status=PlayerMembershipStatus.ACTIVE)
     db_session.add(unverified_cpm)
 
+    # Player with NO PlayerProfile record at all
+    no_profile_user = User(
+        email=f"noprof_{uuid.uuid4().hex[:6]}@test.local",
+        hashed_password=hash_password("Pass123!"),
+        full_name="No Profile Pete",
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(no_profile_user)
+    await db_session.flush()
+    no_profile_cpm = ClubPlayerMembership(club_id=club.id, user_id=no_profile_user.id, membership_number="NP001", status=PlayerMembershipStatus.ACTIVE)
+    db_session.add(no_profile_cpm)
+
     await db_session.commit()
 
     return {
@@ -373,6 +386,8 @@ async def scramble_audit_setup(db_session: AsyncSession):
         "female_cpm": female_cpm,
         "unverified_user": unverified_user,
         "unverified_cpm": unverified_cpm,
+        "no_profile_user": no_profile_user,
+        "no_profile_cpm": no_profile_cpm,
     }
 
 
@@ -493,6 +508,16 @@ class TestScrambleRegistrationAndEligibilityAPI:
         )
         assert u_valid_res.status_code == 201
         assert u_valid_res.json()["status"] == "confirmed"
+
+        # 3c. Player with NO PlayerProfile record at all registers with gender="Male" -> Auto-creates profile & 201 Confirmed
+        no_prof_headers = make_auth_header(data["no_profile_user"])
+        np_res = await async_client.post(
+            f"/api/v1/tournaments/{t_id}/register",
+            headers=no_prof_headers,
+            json={"gender": "Male"},
+        )
+        assert np_res.status_code == 201
+        assert np_res.json()["status"] == "confirmed"
 
         # 4. Male player -> 200 Confirmed
         male_headers = make_auth_header(data["male_user"])

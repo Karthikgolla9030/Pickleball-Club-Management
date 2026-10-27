@@ -275,6 +275,7 @@ export default function PlayerProfileScreen() {
         bio: editBio.trim() || null,
         gender: editGender || null,
       });
+      await refetch();
       setPersonalInfoModalVisible(false);
       Alert.alert('Success', 'Personal information updated successfully!');
     } catch (err: unknown) {

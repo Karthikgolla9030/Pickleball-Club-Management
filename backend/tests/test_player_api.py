@@ -820,3 +820,40 @@ async def test_30_club_members_returns_player_profile_photo(
     assert len(members) == 1
     assert members[0]["user_email"] == "player_photo@demo.local"
     assert members[0]["profile_image_url"] == "https://example.com/pete.jpg"
+
+
+@pytest.mark.asyncio
+async def test_31_updating_uninitialized_profile_upserts_and_saves_personal_info(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    user = await create_user(db_session, email="upsert_player@example.com", full_name="Karthik Golla")
+    await db_session.commit()
+
+    headers = make_auth_header(user.id)
+    # User has no PlayerProfile record yet
+    resp = await async_client.patch(
+        "/api/v1/player/profile",
+        json={
+            "display_name": "Karthik Pickler",
+            "first_name": "Karthik",
+            "last_name": "Golla",
+            "phone": "+91 98765 43210",
+            "gender": "Male",
+            "bio": "Competitive 4.0 tournament player",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["display_name"] == "Karthik Pickler"
+    assert data["first_name"] == "Karthik"
+    assert data["last_name"] == "Golla"
+    assert data["phone"] == "+91 98765 43210"
+    assert data["gender"] == "Male"
+    assert data["bio"] == "Competitive 4.0 tournament player"
+
+    # Verify GET /profile now returns the created profile
+    get_resp = await async_client.get("/api/v1/player/profile", headers=headers)
+    assert get_resp.status_code == 200
+    assert get_resp.json()["gender"] == "Male"
+

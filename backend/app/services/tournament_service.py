@@ -33,6 +33,7 @@ from app.repositories.competition_repository import CompetitionRepository
 from app.repositories.tournament_registration_repository import (
     TournamentRegistrationRepository,
 )
+from app.repositories.player_profile_repository import PlayerProfileRepository
 from app.repositories.tournament_repository import TournamentRepository
 from app.schemas.tournament import (
     VALID_COMPETITION_CATEGORIES,
@@ -157,6 +158,7 @@ class TournamentService:
         self.club_membership_repo = ClubMembershipRepository(db)
         self.player_membership_repo = ClubPlayerMembershipRepository(db)
         self.competition_repo = CompetitionRepository(db)
+        self.profile_repo = PlayerProfileRepository(db)
 
     async def _auto_close_registration_if_deadline_passed(
         self, tournament: Tournament
@@ -1182,23 +1184,30 @@ class TournamentService:
         is_singles = category == "Singles" or "singles" in category.lower()
 
         user = player_membership.user if hasattr(player_membership, "user") else None
-        profile = user.player_profile if user and hasattr(user, "player_profile") else None
+        # Authoritative profile retrieval directly from repository
+        profile = await self.profile_repo.get_by_user_id(user_id)
+        if not profile:
+            norm_gen = payload.gender.strip().capitalize() if payload and payload.gender else None
+            user_full = user.full_name if user and user.full_name else "Player"
+            profile = await self.profile_repo.create(
+                user_id=user_id,
+                display_name=user_full,
+                gender=norm_gen,
+            )
+            self.db.add(profile)
+            await self.db.flush()
+        elif payload and payload.gender and not getattr(profile, "gender", None):
+            profile.gender = payload.gender.strip().capitalize()
+            self.db.add(profile)
+            await self.db.flush()
 
         # For Scramble, gender is strictly read from verified profile.
         # Self-declared payload.gender cannot override an existing profile gender,
-        # but if profile gender is not yet set, payload.gender is accepted and persists to the profile.
+        # but if profile gender is not yet set, it was persisted above.
         if is_scramble:
             player_gender = getattr(profile, "gender", None)
-            if not player_gender and payload and payload.gender:
-                player_gender = payload.gender
-                if profile:
-                    profile.gender = player_gender.strip().capitalize()
-                    self.db.add(profile)
         else:
             player_gender = (payload.gender if payload and payload.gender else getattr(profile, "gender", None))
-            if profile and not getattr(profile, "gender", None) and payload and payload.gender:
-                profile.gender = payload.gender.strip().capitalize()
-                self.db.add(profile)
         norm_gender = player_gender.strip().capitalize() if player_gender else None
 
         # 1. Scramble specific rules
