@@ -1,64 +1,61 @@
 /**
  * Aught2 Pickleball — ScrambleOverviewTab
  *
- * Tab 1 for Scramble Tournament Workspace:
- * - Event & Round Progress card with overall tournament progress bar and 2-row metric grid:
- *   Row 1: REGISTERED (Total players), AVAILABLE (This round), COURTS (Active courts), PLANNED (Rounds)
- *   Row 2: THIS ROUND DONE, EVENT DONE
- * - Planned Rotation Plan card (with smart recommendation logic & confirmation)
- * - Round {N} of {Total} Lifecycle Action card with clear round completion vs final tournament completion
- * - Full-Field Rotation & Partner Coverage card with honest, verified metrics
- * - Scramble Rules & Rotation card
+ * Standardized Tab 1 (Overview) for Scramble Tournament Mode:
+ * Matches established tournament management layout and visual standards:
+ * - Tournament Progress card:
+ *   - "X of Y games completed" & percentage progress bar
+ *   - 4-metric grid: PLAYERS, ROUNDS, COMPLETED, REMAINING
+ *   - Info strip: "Rotating partner scramble: individual scoring with rotating partners and opponents"
+ *   - Quick action: "View Round Schedule & Enter Scores →"
+ * - Format & Structure card:
+ *   - Competition Format, Participant Structure, Rotation Engine, Planned Rounds (with inline Adjuster)
+ * - Official Scoring & Rules card:
+ *   - Target Score, Win Margin, Scoring System, Tiebreaker Order
+ * - Partner Coverage & Rotation Quality card (when coverage data is present)
+ * - Official Champion Podium card (when tournament is completed)
  */
 
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {
-  ArrowRight,
-  Award,
   BarChart2,
   Calendar,
   CheckCircle2,
   Clock,
-  DollarSign,
   Edit2,
-  FileText,
-  Flag,
   Info,
-  LayoutGrid,
+  Layers,
   Minus,
-  Play,
   Plus,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
   Trophy,
-  UserCheck,
   Users,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
+import { Card } from '@/components/Card';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
-import type { ScrambleState, ScrambleSubTab } from '@/types/scramble';
+import type { ScrambleState } from '@/types/scramble';
 
-interface ScrambleOverviewTabProps {
+export interface ScrambleOverviewTabProps {
   state: ScrambleState | null;
   tournament?: Tournament | null;
   canManage: boolean;
-  onNavigateTab: (tab: ScrambleSubTab) => void;
+  onNavigateTab: (tab: any) => void;
   onCloseRegistration?: () => Promise<void>;
-  onStartRound: () => Promise<void>;
-  onFinishRound: () => Promise<void>;
-  onStartNextRound: () => Promise<void>;
+  onStartRound?: () => Promise<void>;
+  onFinishRound?: () => Promise<void>;
+  onStartNextRound?: () => Promise<void>;
   onSetPlannedRounds?: (plannedRounds: number) => Promise<any>;
-  onEndTournament: () => void;
+  onEndTournament?: () => void;
   isClosingRegistration?: boolean;
   isStartingRound?: boolean;
   isFinishingRound?: boolean;
@@ -72,92 +69,53 @@ export function ScrambleOverviewTab({
   tournament,
   canManage,
   onNavigateTab,
-  onCloseRegistration,
-  onStartRound,
-  onFinishRound,
-  onStartNextRound,
   onSetPlannedRounds,
-  onEndTournament,
-  isClosingRegistration = false,
-  isStartingRound = false,
-  isFinishingRound = false,
-  isStartingNextRound = false,
   isSettingPlannedRounds = false,
-  isEndingTournament = false,
 }: ScrambleOverviewTabProps) {
-  // Configuration editing state
+  // Planned rounds inline editing state
   const [isEditingRounds, setIsEditingRounds] = useState(false);
-  const [editingRoundsValue, setEditingRoundsValue] = useState<number>(state?.planned_rounds ?? 5);
+  const [editingRoundsValue, setEditingRoundsValue] = useState<number>(state?.planned_rounds ?? 3);
 
   if (!state) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color="#0F766E" />
         <AppText style={styles.loadingText}>Loading Scramble Overview...</AppText>
       </View>
     );
   }
 
-  const isCompleted = state.tournament_status === 'completed';
+  const isCompleted = state.tournament_status === 'completed' || tournament?.status === 'completed';
   const isRegistrationOpen = tournament?.status === 'registration_open' || state.tournament_status === 'registration_open';
   const currentRound = state.current_round ?? 1;
-  const plannedRounds = state.planned_rounds ?? 5;
-  const isFinalRound = state.is_final_round ?? (currentRound >= plannedRounds);
-  const roundCompleted = state.round_status === 'completed';
+  const plannedRounds = state.planned_rounds ?? 3;
+  const registeredPlayersCount = state.registered_players_count ?? tournament?.participant_count ?? 0;
 
-  // Finite round progress metrics
-  const roundGamesCompleted = state.round_games_completed ?? (state.games_completed ?? 0);
-  const roundGamesRemaining = state.round_games_remaining ?? (state.games_remaining ?? 0);
-  const roundGamesTotal = state.round_games_total ?? (roundGamesCompleted + roundGamesRemaining);
-
+  // Games and progress calculations (truthful zero handling)
   const tournamentGamesCompleted = state.tournament_games_completed ?? (state.games_completed ?? 0);
-  const expectedTotalGames = state.expected_total_games ?? (plannedRounds * roundGamesTotal || (state.total_games ?? 0));
-  const tournamentPercent = expectedTotalGames > 0 ? Math.min(100, Math.round((tournamentGamesCompleted / expectedTotalGames) * 100)) : 0;
 
-  // Tournament configuration metadata
-  const targetScore = tournament?.scoring_rules?.target_score ?? 11;
-  const winBy = tournament?.scoring_rules?.win_by ?? 2;
-  const category = (tournament?.format_configuration as any)?.category || (tournament as any)?.category || 'Doubles';
-  const maxCapacity = tournament?.max_participants ?? 16;
-  const fee = (tournament as any)?.entry_fee ?? (tournament as any)?.cost ?? 0;
+  // If players < 4, no games can exist or be generated yet
+  const hasMinPlayers = registeredPlayersCount >= 4;
+  const expectedTotalGames = hasMinPlayers
+    ? (state.expected_total_games ?? (state.total_games ?? 0))
+    : 0;
 
-  const formatDate = (dStr?: string | null) => {
-    if (!dStr) return null;
-    try {
-      return new Date(dStr).toLocaleDateString(undefined, {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch {
-      return dStr;
-    }
-  };
+  const remainingGames = expectedTotalGames > 0
+    ? Math.max(0, expectedTotalGames - tournamentGamesCompleted)
+    : 0;
 
-  const startDateFormatted = formatDate(tournament?.start_date);
-  const deadlineFormatted = formatDate((tournament as any)?.registration_deadline ?? tournament?.registration_close_at);
+  const progressPercent = expectedTotalGames > 0
+    ? Math.min(100, Math.round((tournamentGamesCompleted / expectedTotalGames) * 100))
+    : 0;
 
-  const getRoundStatusBadge = () => {
-    if (isCompleted) {
-      return { label: 'COMPLETED', bg: '#E5F4EC', text: '#08785E' };
-    }
-    if (isRegistrationOpen) {
-      return { label: 'OPEN', bg: '#DCFCE7', text: '#15803D' };
-    }
-    switch (state.round_status) {
-      case 'setup':
-        return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
-      case 'matchups_created':
-        return { label: 'READY', bg: '#E0F2FE', text: '#0284C7' };
-      case 'in_progress':
-        return { label: 'IN PROGRESS', bg: '#DCFCE7', text: '#15803D' };
-      case 'completed':
-        return { label: isFinalRound ? 'FINAL ROUND COMPLETED' : 'ROUND COMPLETED', bg: '#E5F4EC', text: '#08785E' };
-      default:
-        return { label: 'SETUP', bg: '#FEF3C7', text: '#D97706' };
-    }
-  };
+  // Scoring rules
+  const scoringRules = (tournament?.scoring_rules as Record<string, any>) || {};
+  const targetScore: number = typeof scoringRules.target_score === 'number' ? scoringRules.target_score : 11;
+  const winBy: number = typeof scoringRules.win_by === 'number' ? scoringRules.win_by : 2;
 
-  const statusBadge = getRoundStatusBadge();
+  // Division / Category
+  const formatConfig = (tournament?.format_configuration as Record<string, any>) || {};
+  const category = tournament?.competition_category || formatConfig.category || 'Open Scramble';
 
   const handleSaveRounds = async () => {
     if (!onSetPlannedRounds) return;
@@ -170,176 +128,213 @@ export function ScrambleOverviewTab({
     }
   };
 
+  const getRoundStatusLabel = () => {
+    if (isCompleted) return 'Completed';
+    if (isRegistrationOpen) return 'Registration Open';
+    switch (state.round_status) {
+      case 'setup':
+        return 'Setup & Availability';
+      case 'matchups_created':
+        return 'Matchups Ready';
+      case 'in_progress':
+        return 'In Progress';
+      case 'completed':
+        return 'Round Concluded';
+      default:
+        return 'Setup';
+    }
+  };
+
   return (
     <View style={styles.container}>
-      {/* Champion Banner ONLY if Tournament is Truly Completed */}
+      {/* ─── Champion Banner (Only shown if Tournament is Officially Completed) ─── */}
       {isCompleted && state.champion_player_name && (
-        <View style={styles.championBanner}>
-          <View style={styles.championIconWrap}>
-            <Trophy size={28} color="#D97706" />
+        <Card style={styles.championCard}>
+          <View style={styles.championHeader}>
+            <View style={styles.trophyIconWrap}>
+              <Trophy size={26} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.championPreTitle}>TOURNAMENT CHAMPION</AppText>
+              <AppText style={styles.championName}>{state.champion_player_name}</AppText>
+              <AppText style={styles.championSub}>
+                All {plannedRounds} planned rounds completed! Official standings are finalized.
+              </AppText>
+            </View>
           </View>
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.championPreTitle}>TOURNAMENT CHAMPION</AppText>
-            <AppText style={styles.championName}>{state.champion_player_name}</AppText>
-            <AppText style={styles.championSub}>
-              All planned rounds have concluded! Official tournament winner crowned.
-            </AppText>
-          </View>
-        </View>
+        </Card>
       )}
 
-      {/* ── CARD 1: Event & Round Progress ── */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.headerTitleWithIcon}>
-            <BarChart2 size={20} color="#08785E" />
-            <AppText style={styles.cardTitle}>Event & Round Progress</AppText>
-          </View>
-          <View style={styles.roundProgressBadge}>
-            <AppText style={styles.roundProgressBadgeText}>
-              Round {currentRound} of {plannedRounds}
+      {/* ─── 1. Tournament Progress Card (Standardized layout matching Round Robin) ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <BarChart2 size={18} color="#0F766E" />
+          <AppText style={styles.cardHeaderTitle}>Tournament Progress</AppText>
+        </View>
+
+        {/* Progress Bar & Summary */}
+        <View style={styles.progressContainer}>
+          <View style={styles.progressTopRow}>
+            <AppText style={styles.progressSubText}>
+              {expectedTotalGames > 0
+                ? `${tournamentGamesCompleted} of ${expectedTotalGames} games completed`
+                : '0 of 0 games completed'}
             </AppText>
+            <AppText style={styles.percentText}>{progressPercent}%</AppText>
+          </View>
+          <View style={styles.progressBarBackground}>
+            <View
+              style={[
+                styles.progressBarFill,
+                { width: `${progressPercent}%` },
+              ]}
+            />
           </View>
         </View>
 
-        {/* Overall Tournament Progress Bar */}
-        <View style={styles.progressSubRow}>
-          <AppText style={styles.progressGamesText}>
-            Overall Tournament: {tournamentGamesCompleted} of {expectedTotalGames} total games
+        {/* 4-Stat Metric Tiles */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statTile}>
+            <AppText style={styles.statTileLabel}>PLAYERS</AppText>
+            <Users size={15} color="#64748B" style={styles.statTileIcon} />
+            <AppText style={styles.statTileNum}>{registeredPlayersCount}</AppText>
+          </View>
+
+          <View style={styles.statTile}>
+            <AppText style={styles.statTileLabel}>ROUNDS</AppText>
+            <Calendar size={15} color="#64748B" style={styles.statTileIcon} />
+            <AppText style={styles.statTileNum}>{plannedRounds}</AppText>
+          </View>
+
+          <View style={styles.statTile}>
+            <AppText style={styles.statTileLabel}>COMPLETED</AppText>
+            <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
+            <AppText style={styles.statTileNum}>{tournamentGamesCompleted}</AppText>
+          </View>
+
+          <View style={styles.statTile}>
+            <AppText style={styles.statTileLabel}>REMAINING</AppText>
+            <Clock size={15} color="#64748B" style={styles.statTileIcon} />
+            <AppText style={styles.statTileNum}>{remainingGames}</AppText>
+          </View>
+        </View>
+
+        {/* Informational Strip */}
+        <View style={styles.infoStrip}>
+          <Info size={14} color="#0284C7" />
+          <AppText style={styles.infoStripText}>
+            {registeredPlayersCount < 4
+              ? 'Minimum 4 players required to form official Scramble courts.'
+              : isRegistrationOpen
+              ? `${registeredPlayersCount} players registered. Close registration to seed players and configure Round 1.`
+              : 'Rotating doubles scramble: individual scoring with rotating partners and opponents across courts.'}
           </AppText>
-          <AppText style={styles.progressPercentText}>{tournamentPercent}% Done</AppText>
         </View>
 
-        <View style={styles.progressBarTrack}>
-          <View
-            style={[
-              styles.progressBarFill,
-              { width: `${Math.min(100, Math.max(tournamentPercent, 0))}%` },
-            ]}
-          />
-        </View>
-
-        {/* Current Round Callout */}
-        <View style={styles.roundCallout}>
-          <Clock size={16} color="#08785E" />
-          <AppText style={styles.roundCalloutText}>
-            <AppText style={{ fontWeight: '700', color: '#102E2A' }}>Round {currentRound}: </AppText>
-            {roundGamesCompleted} of {roundGamesTotal} games completed
-            {roundGamesRemaining > 0 ? ` (${roundGamesRemaining} remaining)` : ' (All round games done)'}
+        {/* Quick Action Button */}
+        <TouchableOpacity
+          style={styles.viewMatchupsBtn}
+          onPress={() => {
+            if (isCompleted) {
+              onNavigateTab('results');
+            } else if (registeredPlayersCount < 4 || isRegistrationOpen) {
+              onNavigateTab('participants');
+            } else {
+              onNavigateTab('rounds');
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <AppText style={styles.viewMatchupsBtnText}>
+            {isCompleted
+              ? 'View Standings & Final Results →'
+              : registeredPlayersCount < 4 || isRegistrationOpen
+              ? 'Manage Players & Availability →'
+              : 'View Round Schedule & Enter Scores →'}
           </AppText>
+        </TouchableOpacity>
+      </Card>
+
+      {/* ─── 2. Format & Structure Card ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Layers size={18} color="#0F766E" />
+          <AppText style={styles.cardHeaderTitle}>Format & Structure</AppText>
         </View>
 
-        {/* 2-Row Metric Grid */}
-        <View style={styles.metricsContainer}>
-          {/* Row 1: Registered, Available, Courts, Planned Rounds */}
-          <View style={styles.metricGridWrap}>
-            {/* Registered */}
-            <View style={styles.metricCardGrid}>
-              <AppText style={styles.metricHeader}>REGISTERED</AppText>
-              <View style={styles.metricIconWrap}>
-                <Users size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>{state.registered_players_count}</AppText>
-              <AppText style={styles.metricCaption}>Total players</AppText>
-            </View>
-
-            {/* Available */}
-            <View style={styles.metricCardGrid}>
-              <AppText style={styles.metricHeader}>AVAILABLE</AppText>
-              <View style={styles.metricIconWrap}>
-                <UserCheck size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>{state.available_players_count}</AppText>
-              <AppText style={styles.metricCaption}>This round</AppText>
-            </View>
-
-            {/* Courts */}
-            <View style={styles.metricCardGrid}>
-              <AppText style={styles.metricHeader}>COURTS</AppText>
-              <View style={styles.metricIconWrap}>
-                <LayoutGrid size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>{state.courts_count}</AppText>
-              <AppText style={styles.metricCaption}>Active courts</AppText>
-            </View>
-
-            {/* Planned Rounds */}
-            <View style={styles.metricCardGrid}>
-              <AppText style={styles.metricHeader}>PLANNED</AppText>
-              <View style={styles.metricIconWrap}>
-                <Award size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>{plannedRounds}</AppText>
-              <AppText style={styles.metricCaption}>Total rounds</AppText>
-            </View>
+        <View style={styles.infoList}>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Competition Format</AppText>
+            <AppText style={styles.infoVal}>Scramble</AppText>
           </View>
 
-          {/* Row 2: Round Done, Event Done */}
-          <View style={styles.metricRow}>
-            <View style={[styles.metricCard, { flex: 1 }]}>
-              <AppText style={styles.metricHeader}>THIS ROUND GAMES</AppText>
-              <View style={styles.metricIconWrap}>
-                <CheckCircle2 size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>
-                {roundGamesCompleted} / {roundGamesTotal}
-              </AppText>
-              <AppText style={styles.metricCaption}>Round {currentRound} progress</AppText>
-            </View>
+          <View style={styles.divider} />
 
-            <View style={[styles.metricCard, { flex: 1 }]}>
-              <AppText style={styles.metricHeader}>TOURNAMENT GAMES</AppText>
-              <View style={styles.metricIconWrap}>
-                <Trophy size={15} color="#08785E" />
-              </View>
-              <AppText style={styles.metricValue}>
-                {tournamentGamesCompleted} / {expectedTotalGames}
-              </AppText>
-              <AppText style={styles.metricCaption}>Across all {plannedRounds} rounds</AppText>
-            </View>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Participant Structure</AppText>
+            <AppText style={styles.infoVal}>Individual Players (Rotating Doubles)</AppText>
           </View>
-        </View>
-      </View>
 
-      {/* ── CARD 2: Planned Rotation Rounds & Recommendation Card ── */}
-      {canManage && (
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.headerTitleWithIcon}>
-              <Sparkles size={18} color="#D97706" />
-              <AppText style={styles.cardTitle}>Event Plan & Rotation Rounds</AppText>
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Division & Category</AppText>
+            <AppText style={styles.infoVal}>{category}</AppText>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Rotation Engine</AppText>
+            <AppText style={styles.infoVal}>Authoritative Scramble Engine (4 & 5 Courts)</AppText>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Planned Rounds Row with clean inline adjuster */}
+          <View style={styles.infoRowPlannedRounds}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.plannedRoundsHeader}>
+                <AppText style={styles.infoLabel}>Planned Rounds</AppText>
+                {canManage && !isCompleted && tournamentGamesCompleted === 0 && !isEditingRounds && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditingRoundsValue(plannedRounds);
+                      setIsEditingRounds(true);
+                    }}
+                    style={styles.adjustLink}
+                    hitSlop={8}
+                  >
+                    <Edit2 size={12} color="#0F766E" />
+                    <AppText style={styles.adjustLinkText}>Adjust</AppText>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {state.recommendation_reason && !isEditingRounds && (
+                <AppText style={styles.recommendationHint}>
+                  {state.recommendation_reason}
+                </AppText>
+              )}
             </View>
-            {!isEditingRounds && !isCompleted && tournamentGamesCompleted === 0 && (
-              <TouchableOpacity
-                onPress={() => {
-                  setEditingRoundsValue(plannedRounds);
-                  setIsEditingRounds(true);
-                }}
-                style={styles.editRoundsBtn}
-              >
-                <Edit2 size={13} color="#08785E" />
-                <AppText style={styles.editRoundsBtnText}>Adjust</AppText>
-              </TouchableOpacity>
+
+            {!isEditingRounds && (
+              <AppText style={styles.infoVal}>{plannedRounds} Rounds</AppText>
             )}
           </View>
 
-          {isEditingRounds ? (
-            <View style={styles.editRoundsBox}>
-              <AppText style={styles.editRoundsTitle}>Set Authoritative Planned Rounds</AppText>
-              <AppText style={styles.editRoundsDesc}>
-                The tournament will strictly end after this number of rounds.
-              </AppText>
-
-              <View style={styles.stepperRow}>
+          {/* Inline rounds stepper when editing */}
+          {isEditingRounds && (
+            <View style={styles.editStepperBox}>
+              <View style={styles.stepperControlRow}>
                 <TouchableOpacity
                   style={styles.stepperBtn}
                   onPress={() => setEditingRoundsValue((v) => Math.max(1, v - 1))}
                   disabled={editingRoundsValue <= 1}
                 >
-                  <Minus size={16} color="#102E2A" />
+                  <Minus size={16} color="#1E293B" />
                 </TouchableOpacity>
 
-                <View style={styles.stepperValueBox}>
+                <View style={styles.stepperValueContainer}>
                   <AppText style={styles.stepperValueText}>{editingRoundsValue} Rounds</AppText>
                 </View>
 
@@ -348,411 +343,132 @@ export function ScrambleOverviewTab({
                   onPress={() => setEditingRoundsValue((v) => Math.min(15, v + 1))}
                   disabled={editingRoundsValue >= 15}
                 >
-                  <Plus size={16} color="#102E2A" />
+                  <Plus size={16} color="#1E293B" />
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.editRoundsActionRow}>
+              <View style={styles.stepperActionsRow}>
                 <TouchableOpacity
-                  style={styles.cancelEditBtn}
+                  style={styles.cancelBtn}
                   onPress={() => setIsEditingRounds(false)}
                 >
-                  <AppText style={styles.cancelEditBtnText}>Cancel</AppText>
+                  <AppText style={styles.cancelBtnText}>Cancel</AppText>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.confirmEditBtn}
+                  style={styles.confirmBtn}
                   onPress={handleSaveRounds}
                   disabled={isSettingPlannedRounds}
                 >
                   {isSettingPlannedRounds ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <AppText style={styles.confirmEditBtnText}>Confirm Rounds</AppText>
+                    <AppText style={styles.confirmBtnText}>Save Rounds</AppText>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
-          ) : (
-            <View style={styles.planDetailsBox}>
-              <View style={styles.planSummaryRow}>
-                <View style={styles.planChip}>
-                  <AppText style={styles.planChipLabel}>CONFIGURED</AppText>
-                  <AppText style={styles.planChipValue}>{plannedRounds} Rounds</AppText>
-                </View>
-                {state.recommended_rounds != null && (
-                  <View style={[styles.planChip, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                    <AppText style={[styles.planChipLabel, { color: '#B45309' }]}>RECOMMENDED</AppText>
-                    <AppText style={[styles.planChipValue, { color: '#92400E' }]}>
-                      {state.recommended_rounds} Rounds
-                    </AppText>
-                  </View>
-                )}
-              </View>
-
-              {state.recommendation_reason && (
-                <View style={styles.recommendationNote}>
-                  <Info size={14} color="#71817E" />
-                  <AppText style={styles.recommendationNoteText}>
-                    {state.recommendation_reason}
-                  </AppText>
-                </View>
-              )}
-            </View>
           )}
-        </View>
-      )}
 
-      {/* ── CARD 3: Current Lifecycle Action Card ── */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.headerTitleWithIcon}>
-            <Award size={20} color="#08785E" />
-            <AppText style={styles.cardTitle}>
-              {isCompleted
-                ? 'Tournament Concluded'
-                : isRegistrationOpen
-                ? 'Registration Open'
-                : roundCompleted && isFinalRound
-                ? 'All Planned Rounds Completed'
-                : roundCompleted
-                ? `Round ${currentRound} Completed`
-                : `Round ${currentRound} of ${plannedRounds}`}
-            </AppText>
-          </View>
-          <View style={[styles.badge, { backgroundColor: statusBadge.bg }]}>
-            <AppText style={[styles.badgeText, { color: statusBadge.text }]}>
-              {statusBadge.label}
-            </AppText>
-          </View>
-        </View>
+          <View style={styles.divider} />
 
-        <AppText style={styles.roundCardDescription}>
-          {isCompleted
-            ? 'All configured rounds have concluded. You can review official final standings, champion podium, and full match records.'
-            : isRegistrationOpen
-            ? `${state.registered_players_count} of ${maxCapacity} players registered. Close registration to seed players by skill rating and prepare Round 1.`
-            : roundCompleted && isFinalRound
-            ? `All ${plannedRounds} planned rounds have finished! Official match records and individual standings are confirmed. End the tournament to publish results to the players.`
-            : roundCompleted
-            ? `All games in Round ${currentRound} are completed. Player availability will carry forward automatically to Round ${currentRound + 1} of ${plannedRounds}.`
-            : state.round_status === 'setup'
-            ? `Confirm player availability for Round ${currentRound} of ${plannedRounds} before generating rotating matchups.`
-            : state.round_status === 'matchups_created'
-            ? `Matchups for Round ${currentRound} of ${plannedRounds} are ready across ${state.courts_count} court${state.courts_count === 1 ? '' : 's'}. Review the schedule or start the round.`
-            : state.round_status === 'in_progress'
-            ? `Round ${currentRound} of ${plannedRounds} is currently active. Record match scores as courts finish.`
-            : `All games in Round ${currentRound} are completed.`}
-        </AppText>
-
-        {/* Dynamic Action Buttons */}
-        {canManage && (
-          <View style={styles.actionButtonContainer}>
-            {isRegistrationOpen && onCloseRegistration && (
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={onCloseRegistration}
-                disabled={isClosingRegistration}
-                activeOpacity={0.8}
-              >
-                {isClosingRegistration ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <ShieldCheck size={18} color="#FFFFFF" />
-                    <AppText style={styles.primaryActionText}>
-                      Close Registration & Begin Setup
-                    </AppText>
-                    <ArrowRight size={16} color="#FFFFFF" />
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {!isRegistrationOpen && state.round_status === 'setup' && (
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={() => onNavigateTab('players')}
-                activeOpacity={0.8}
-              >
-                <Users size={18} color="#FFFFFF" />
-                <AppText style={styles.primaryActionText}>
-                  Review Round {currentRound} Availability
-                </AppText>
-                <ArrowRight size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
-
-            {!isRegistrationOpen && state.round_status === 'matchups_created' && (
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={onStartRound}
-                disabled={isStartingRound}
-                activeOpacity={0.8}
-              >
-                <Play size={18} color="#FFFFFF" />
-                <AppText style={styles.primaryActionText}>
-                  {isStartingRound ? 'Starting...' : `Start Round ${currentRound} of ${plannedRounds}`}
-                </AppText>
-                <ArrowRight size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
-
-            {!isRegistrationOpen && state.round_status === 'in_progress' && (
-              <View style={{ gap: Spacing[2], width: '100%' }}>
-                <TouchableOpacity
-                  style={styles.primaryActionButton}
-                  onPress={() => onNavigateTab('rounds')}
-                  activeOpacity={0.8}
-                >
-                  <Clock size={18} color="#FFFFFF" />
-                  <AppText style={styles.primaryActionText}>
-                    View Courts & Record Scores
-                  </AppText>
-                  <ArrowRight size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-
-                {state.valid_actions.includes('finish_round') && (
-                  <TouchableOpacity
-                    style={[styles.primaryActionButton, { backgroundColor: '#15803D' }]}
-                    onPress={onFinishRound}
-                    disabled={isFinishingRound}
-                    activeOpacity={0.8}
-                  >
-                    <CheckCircle2 size={18} color="#FFFFFF" />
-                    <AppText style={styles.primaryActionText}>
-                      {isFinishingRound ? 'Finishing...' : `Finish Round ${currentRound} of ${plannedRounds}`}
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {/* Round Completed States: Non-Final vs Final Round */}
-            {!isRegistrationOpen && roundCompleted && !isCompleted && (
-              <View style={{ gap: Spacing[2], width: '100%' }}>
-                {!isFinalRound ? (
-                  <>
-                    <TouchableOpacity
-                      style={styles.primaryActionButton}
-                      onPress={onStartNextRound}
-                      disabled={isStartingNextRound}
-                      activeOpacity={0.8}
-                    >
-                      <RotateCcw size={18} color="#FFFFFF" />
-                      <AppText style={styles.primaryActionText}>
-                        {isStartingNextRound
-                          ? 'Preparing...'
-                          : `Prepare Round ${currentRound + 1} of ${plannedRounds}`}
-                      </AppText>
-                      <ArrowRight size={16} color="#FFFFFF" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.secondaryActionButton}
-                      onPress={() => onNavigateTab('players')}
-                      activeOpacity={0.8}
-                    >
-                      <Users size={16} color="#08785E" />
-                      <AppText style={styles.secondaryActionText}>
-                        Edit Availability for Round {currentRound + 1}
-                      </AppText>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    {/* Final Round Completed -> Direct to End Tournament */}
-                    <TouchableOpacity
-                      style={[styles.primaryActionButton, { backgroundColor: '#B45309' }]}
-                      onPress={onEndTournament}
-                      disabled={isEndingTournament}
-                      activeOpacity={0.8}
-                    >
-                      <Trophy size={18} color="#FFFFFF" />
-                      <AppText style={styles.primaryActionText}>
-                        {isEndingTournament ? 'Ending...' : 'End Tournament & Publish Results'}
-                      </AppText>
-                      <ArrowRight size={16} color="#FFFFFF" />
-                    </TouchableOpacity>
-
-                    <View style={styles.finalRoundNote}>
-                      <Info size={14} color="#71817E" />
-                      <AppText style={styles.finalRoundNoteText}>
-                        All {plannedRounds} configured rounds completed. No further rounds can be generated.
-                      </AppText>
-                    </View>
-                  </>
-                )}
-
-                {!isFinalRound && (
-                  <TouchableOpacity
-                    style={styles.endTournamentButton}
-                    onPress={onEndTournament}
-                    disabled={isEndingTournament}
-                    activeOpacity={0.8}
-                  >
-                    <Flag size={15} color="#DC2626" />
-                    <AppText style={styles.endTournamentText}>
-                      End Tournament Early
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-
-            {isCompleted && (
-              <TouchableOpacity
-                style={styles.primaryActionButton}
-                onPress={() => onNavigateTab('results')}
-                activeOpacity={0.8}
-              >
-                <Trophy size={18} color="#FFFFFF" />
-                <AppText style={styles.primaryActionText}>View Final Results & Podium</AppText>
-                <ArrowRight size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* ── CARD 4: Full-Field Rotation & Partner Coverage Card ── */}
-      {state.coverage_summary && (
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.headerTitleWithIcon}>
-              <ShieldCheck size={18} color="#08785E" />
-              <AppText style={styles.cardTitle}>Full-Field Partner Coverage</AppText>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Current Phase</AppText>
+            <View style={styles.phaseBadge}>
+              <AppText style={styles.phaseBadgeText}>
+                {isCompleted
+                  ? 'Completed'
+                  : `Round ${currentRound} of ${plannedRounds} • ${getRoundStatusLabel()}`}
+              </AppText>
             </View>
-            <View
-              style={[
-                styles.badge,
-                {
-                  backgroundColor: state.coverage_summary.all_partners_covered
-                    ? '#E5F4EC'
-                    : '#FEF3C7',
-                },
-              ]}
-            >
-              <AppText
-                style={[
-                  styles.badgeText,
-                  {
-                    color: state.coverage_summary.all_partners_covered
-                      ? '#08785E'
-                      : '#B45309',
-                  },
-                ]}
-              >
+          </View>
+        </View>
+      </Card>
+
+      {/* ─── 3. Official Scoring & Rules Card ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <ShieldCheck size={18} color="#0F766E" />
+          <AppText style={styles.cardHeaderTitle}>Official Scoring & Rules</AppText>
+        </View>
+
+        <View style={styles.infoList}>
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Target Score</AppText>
+            <AppText style={styles.infoVal}>First to {targetScore} Points</AppText>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Win Margin</AppText>
+            <AppText style={styles.infoVal}>Win by {winBy} (no ties allowed)</AppText>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Scoring Format</AppText>
+            <AppText style={styles.infoVal}>Individual cumulative points</AppText>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.infoRow}>
+            <AppText style={styles.infoLabel}>Standings Tiebreakers</AppText>
+            <AppText style={styles.infoVal}>1. Wins → 2. Point Diff → 3. Points Scored</AppText>
+          </View>
+        </View>
+      </Card>
+
+      {/* ─── 4. Partner Coverage & Rotation Quality Card (When available) ─── */}
+      {state.coverage_summary && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Sparkles size={18} color="#0F766E" />
+            <AppText style={styles.cardHeaderTitle}>Partner Coverage & Rotation</AppText>
+          </View>
+
+          <View style={styles.statsGrid}>
+            <View style={styles.statTile}>
+              <AppText style={styles.statTileLabel}>AVG PARTNERS</AppText>
+              <AppText style={styles.statTileNum}>
+                {state.coverage_summary.avg_unique_partners} / {state.coverage_summary.total_possible_partners_per_player}
+              </AppText>
+              <AppText style={styles.statTileSub}>per player</AppText>
+            </View>
+
+            <View style={styles.statTile}>
+              <AppText style={styles.statTileLabel}>REPEAT PARTNERS</AppText>
+              <AppText style={[styles.statTileNum, state.coverage_summary.total_repeat_partner_pairs > 0 && { color: '#B45309' }]}>
+                {state.coverage_summary.total_repeat_partner_pairs}
+              </AppText>
+              <AppText style={styles.statTileSub}>repeat pairs</AppText>
+            </View>
+
+            <View style={styles.statTile}>
+              <AppText style={styles.statTileLabel}>AVG OPPONENTS</AppText>
+              <AppText style={styles.statTileNum}>{state.coverage_summary.avg_unique_opponents}</AppText>
+              <AppText style={styles.statTileSub}>per player</AppText>
+            </View>
+
+            <View style={styles.statTile}>
+              <AppText style={styles.statTileLabel}>REPEAT OPPONENTS</AppText>
+              <AppText style={styles.statTileNum}>{state.coverage_summary.total_repeat_opponent_pairs}</AppText>
+              <AppText style={styles.statTileSub}>repeat pairs</AppText>
+            </View>
+          </View>
+
+          {state.coverage_summary.quality_claim && (
+            <View style={styles.coverageNote}>
+              <Info size={13} color="#0F766E" />
+              <AppText style={styles.coverageNoteText}>
                 {state.coverage_summary.quality_claim}
               </AppText>
             </View>
-          </View>
-
-          <View style={styles.coverageGrid}>
-            <View style={styles.coverageMetric}>
-              <AppText style={styles.coverageValue}>
-                {state.coverage_summary.avg_unique_partners} / {state.coverage_summary.total_possible_partners_per_player}
-              </AppText>
-              <AppText style={styles.coverageLabel}>Avg Partners / Player</AppText>
-            </View>
-
-            <View style={styles.coverageMetric}>
-              <AppText style={[styles.coverageValue, state.coverage_summary.total_repeat_partner_pairs > 0 && { color: '#B45309' }]}>
-                {state.coverage_summary.total_repeat_partner_pairs}
-              </AppText>
-              <AppText style={styles.coverageLabel}>Repeat Partner Pairs</AppText>
-            </View>
-
-            <View style={styles.coverageMetric}>
-              <AppText style={styles.coverageValue}>
-                {state.coverage_summary.avg_unique_opponents}
-              </AppText>
-              <AppText style={styles.coverageLabel}>Avg Opponents / Player</AppText>
-            </View>
-
-            <View style={styles.coverageMetric}>
-              <AppText style={styles.coverageValue}>
-                {state.coverage_summary.total_repeat_opponent_pairs}
-              </AppText>
-              <AppText style={styles.coverageLabel}>Repeat Opponent Pairs</AppText>
-            </View>
-          </View>
-        </View>
+          )}
+        </Card>
       )}
-
-      {/* ── CARD 5: Configured Tournament Rules & Scramble Rotation ── */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.headerTitleWithIcon}>
-            <FileText size={20} color="#08785E" />
-            <AppText style={styles.cardTitle}>Configured Rules & Rotation</AppText>
-          </View>
-        </View>
-
-        <View style={styles.rulesList}>
-          {startDateFormatted && (
-            <View style={styles.ruleItem}>
-              <View style={styles.ruleDot} />
-              <AppText style={styles.ruleText}>
-                <AppText style={styles.ruleBold}>Date:</AppText> {startDateFormatted}
-              </AppText>
-            </View>
-          )}
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Format & Category:</AppText> Scramble ({category})
-            </AppText>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Capacity:</AppText> {maxCapacity} players maximum ({state.registered_players_count} registered)
-            </AppText>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Planned Rounds:</AppText> {plannedRounds} confirmed rounds
-            </AppText>
-          </View>
-
-          {deadlineFormatted && (
-            <View style={styles.ruleItem}>
-              <View style={styles.ruleDot} />
-              <AppText style={styles.ruleText}>
-                <AppText style={styles.ruleBold}>Registration Deadline:</AppText> {deadlineFormatted}
-              </AppText>
-            </View>
-          )}
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Entry Fee:</AppText> {fee > 0 ? `$${fee}` : 'Free'}
-            </AppText>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Scoring Rules:</AppText> First to {targetScore}, win by {winBy} (no ties)
-            </AppText>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <AppText style={styles.ruleText}>
-              <AppText style={styles.ruleBold}>Scramble Rotation:</AppText> {category === 'Mixed Scramble'
-                ? 'Balanced 4-player courts (2 men, 2 women) with 2 games per court block. 100% mixed-gender teams.'
-                : 'Rotating partners every game. 4-player court plays 3 games (0 sit-outs); 5-player court plays 5 games (each sits out 1 game).'}
-            </AppText>
-          </View>
-        </View>
-      </View>
     </View>
   );
 }
@@ -760,442 +476,35 @@ export function ScrambleOverviewTab({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[3],
-    paddingBottom: Spacing[8],
+    paddingTop: Spacing[4],
     gap: Spacing[3],
   },
   loadingContainer: {
-    padding: Spacing[8],
+    padding: Spacing[6],
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing[2],
   },
   loadingText: {
-    color: '#71817E',
     fontSize: 14,
+    color: '#64748B',
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg ?? 16,
+  championCard: {
+    backgroundColor: '#FEF9C3',
+    borderColor: '#FDE047',
     borderWidth: 1,
-    borderColor: '#DCE8E3',
     padding: Spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: Spacing[2],
-  },
-  headerTitleWithIcon: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    flex: 1,
-    minWidth: 160,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102E2A',
-    flexShrink: 1,
-  },
-  roundProgressBadge: {
-    backgroundColor: '#E5F4EC',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  roundProgressBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#08785E',
-  },
-  progressSubRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 2,
-    marginBottom: Spacing[2],
-  },
-  progressGamesText: {
-    fontSize: 13,
-    color: '#71817E',
-    flex: 1,
-    flexShrink: 1,
-  },
-  progressPercentText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#08785E',
-    flexShrink: 0,
-  },
-  metricGridWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing[2],
-  },
-  metricCardGrid: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 120,
-    backgroundColor: '#F8FAF9',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    paddingVertical: Spacing[2] + 2,
-    paddingHorizontal: Spacing[2],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressBarTrack: {
-    height: 7,
-    backgroundColor: '#E5F4EC',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: Spacing[3],
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: '#08785E',
-    borderRadius: 4,
-  },
-  roundCallout: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    borderRadius: 8,
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2],
-    gap: 8,
-    marginBottom: Spacing[3],
-  },
-  roundCalloutText: {
-    fontSize: 12,
-    color: '#4B5563',
-    flex: 1,
-  },
-  metricsContainer: {
-    gap: Spacing[2],
-  },
-  metricRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#F8FAF9',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    paddingVertical: Spacing[2] + 2,
-    paddingHorizontal: Spacing[2],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  metricHeader: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#71817E',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  metricIconWrap: {
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#102E2A',
-    marginBottom: 2,
-  },
-  metricCaption: {
-    fontSize: 10,
-    color: '#71817E',
-    textAlign: 'center',
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  editRoundsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: '#E5F4EC',
-  },
-  editRoundsBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#08785E',
-  },
-  editRoundsBox: {
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    borderRadius: 10,
-    padding: Spacing[3],
-    gap: Spacing[2],
-  },
-  editRoundsTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#102E2A',
-  },
-  editRoundsDesc: {
-    fontSize: 12,
-    color: '#71817E',
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing[3],
-    marginVertical: Spacing[1],
-  },
-  stepperBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DCE8E3',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperValueBox: {
-    paddingHorizontal: Spacing[4],
-    paddingVertical: Spacing[2],
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#08785E',
-  },
-  stepperValueText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#08785E',
-  },
-  editRoundsActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: Spacing[2],
-  },
-  cancelEditBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  cancelEditBtnText: {
-    fontSize: 13,
-    color: '#71817E',
-  },
-  confirmEditBtn: {
-    backgroundColor: '#08785E',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  confirmEditBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  planDetailsBox: {
-    gap: Spacing[2],
-  },
-  planSummaryRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  planChip: {
-    flex: 1,
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    borderRadius: 8,
-    padding: Spacing[2],
-    alignItems: 'center',
-  },
-  planChipLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#71817E',
-    letterSpacing: 0.5,
-  },
-  planChipValue: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#102E2A',
-    marginTop: 2,
-  },
-  recommendationNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    paddingHorizontal: 4,
-  },
-  recommendationNoteText: {
-    fontSize: 12,
-    color: '#71817E',
-    lineHeight: 16,
-    flex: 1,
-  },
-  roundCardDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#71817E',
-    marginBottom: Spacing[3],
-  },
-  actionButtonContainer: {
-    width: '100%',
-  },
-  primaryActionButton: {
-    backgroundColor: '#08785E',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: Spacing[4],
-    gap: Spacing[2],
-  },
-  primaryActionText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  secondaryActionButton: {
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#DCE8E3',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    gap: Spacing[2],
-    marginTop: 4,
-  },
-  secondaryActionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#08785E',
-  },
-  finalRoundNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  finalRoundNoteText: {
-    fontSize: 12,
-    color: '#71817E',
-  },
-  endTournamentButton: {
-    backgroundColor: '#FEE2E2',
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: Spacing[2],
-    marginTop: 4,
-  },
-  endTournamentText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  coverageGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing[2],
-    marginTop: Spacing[1],
-  },
-  coverageMetric: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E5EDE9',
-    borderRadius: 8,
-    padding: Spacing[2],
-    alignItems: 'center',
-  },
-  coverageValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#102E2A',
-  },
-  coverageLabel: {
-    fontSize: 10,
-    color: '#71817E',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  rulesList: {
-    gap: 8,
-    marginTop: Spacing[1],
-  },
-  ruleItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  ruleDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#08785E',
-    marginTop: 6,
-  },
-  ruleText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#2D3748',
-    flex: 1,
-  },
-  ruleBold: {
-    fontWeight: '700',
-    color: '#102E2A',
-  },
-  championBanner: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#F59E0B',
-    borderWidth: 1.5,
-    borderRadius: Radius.lg ?? 16,
-    padding: Spacing[4],
+  championHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[3],
   },
-  championIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+  trophyIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -1210,11 +519,273 @@ const styles = StyleSheet.create({
   championName: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#102E2A',
+    color: '#78350F',
+    marginVertical: 1,
   },
   championSub: {
     fontSize: 12,
-    color: '#71817E',
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  card: {
+    gap: Spacing[3],
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  progressContainer: {
+    gap: 6,
+  },
+  progressTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressSubText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  percentText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F766E',
+    flexShrink: 0,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#0F766E',
+    borderRadius: 4,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statTile: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    minWidth: 120,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  statTileLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  statTileIcon: {
+    marginVertical: 2,
+  },
+  statTileNum: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  statTileSub: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  infoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  infoStripText: {
+    fontSize: 12,
+    color: '#0369A1',
+    flex: 1,
+    lineHeight: 16,
+    fontWeight: '500',
+  },
+  viewMatchupsBtn: {
+    backgroundColor: '#0F766E',
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  viewMatchupsBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  infoList: {
+    gap: 8,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 4,
+    gap: 12,
+  },
+  infoRowPlannedRounds: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+    gap: 12,
+  },
+  plannedRoundsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adjustLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E6F4F1',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adjustLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  recommendationHint: {
+    fontSize: 11,
+    color: '#64748B',
     marginTop: 2,
+    lineHeight: 14,
+  },
+  infoLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+    flexShrink: 0,
+  },
+  infoVal: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
+    lineHeight: 18,
+  },
+  phaseBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+  },
+  phaseBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  editStepperBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[3],
+    gap: Spacing[2],
+    marginVertical: 4,
+  },
+  stepperControlRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing[3],
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperValueContainer: {
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  stepperValueText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  stepperActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: Spacing[2],
+    marginTop: 2,
+  },
+  cancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+  },
+  cancelBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  confirmBtn: {
+    backgroundColor: '#0F766E',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+  },
+  confirmBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  coverageNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  coverageNoteText: {
+    fontSize: 12,
+    color: '#15803D',
+    fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
   },
 });

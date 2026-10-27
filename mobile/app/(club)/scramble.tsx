@@ -18,10 +18,12 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
+  AppHeader,
   DraftTournamentBanner,
   ErrorState,
   LoadingState,
@@ -51,7 +53,7 @@ import {
 } from '@/hooks';
 import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation';
 
-import { Colors } from '@/theme';
+import { Colors, Spacing } from '@/theme';
 import type { Match } from '@/types';
 
 export default function ScrambleWorkspaceScreen() {
@@ -504,14 +506,23 @@ export default function ScrambleWorkspaceScreen() {
     handleStartNextRound,
   ]);
 
+  const handleTabChange = (tab: TournamentTabKey | string) => {
+    if (tab === 'players' || tab === 'teams') {
+      setActiveTab('participants');
+    } else {
+      setActiveTab(tab as TournamentTabKey);
+    }
+  };
+
   // ─── Loading & Error States ──────────────────────────────────────────────
 
   const isInitialLoading =
     isLoadingTournament || isLoadingState || (isLoadingRegs && !registrations.length);
 
-  if (isInitialLoading && !refreshing) {
+  if (isInitialLoading && !refreshing && !tournament) {
     return (
-      <Screen>
+      <Screen safeArea={false}>
+        <AppHeader title="Scramble Tournament" showBack />
         <LoadingState message="Loading Scramble workspace..." />
       </Screen>
     );
@@ -520,7 +531,8 @@ export default function ScrambleWorkspaceScreen() {
   const generalError = tournamentError || stateError || matchesError || standingsError;
   if (generalError && !state && !tournament) {
     return (
-      <Screen>
+      <Screen safeArea={false}>
+        <AppHeader title="Scramble Tournament" showBack />
         <ErrorState
           title="Could not load Scramble workspace"
           message={generalError.message}
@@ -531,135 +543,177 @@ export default function ScrambleWorkspaceScreen() {
   }
 
   return (
-    <Screen style={styles.screen}>
+    <Screen safeArea={false} style={styles.screen}>
+      <View style={styles.responsiveContainer}>
+        {/* 1. Compact Fixed Navigation Bar */}
+        <TournamentManagementTopBar
+          tournament={tournament ?? null}
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/(club)/tournaments');
+            }
+          }}
+          onOptionsPress={handleOpenOptionsMenu}
+        />
 
+        {/* 2. Scrollable View: Info section scrolls naturally, Tabs stay sticky */}
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentContainer}
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor="#087A60"
+            />
+          }
+        >
+          {/* Child 0: Natural-Scrolling Info & Banners */}
+          <View style={styles.headerInfoWrapper}>
+            <TournamentManagementInfo
+              tournament={tournament ?? null}
+              primaryAction={primaryAction}
+              activeTab={activeTab}
+            />
 
-      {/* Tab Content with Pull to Refresh */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={Colors.brand.primary}
+            {tournament?.status === 'draft' && (
+              <DraftTournamentBanner
+                tournamentName={tournament?.name}
+                onPublish={handlePublishTournament}
+                isPublishing={isOpenRegistrationPending}
+              />
+            )}
+
+            {tournament?.status === 'registration_open' && (
+              <RegistrationOpenBanner
+                tournamentName={tournament?.name}
+                participantCount={state?.registered_players_count ?? registrations.length}
+                maxParticipants={tournament?.max_participants}
+                onCloseRegistration={handleCloseRegistration}
+                isClosing={isCloseRegistrationPending}
+              />
+            )}
+          </View>
+
+          {/* Child 1: Sticky Tab Bar */}
+          <TournamentManagementTabs
+            tabs={navTabs}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
           />
-        }
-      >
-        {activeTab === 'overview' && (
-          <ScrambleOverviewTab
-            state={state}
-            tournament={tournament}
-            canManage={canManage}
-            onNavigateTab={(tab) => setActiveTab(tab as any)}
-            onStartRound={handleStartRound}
-            onFinishRound={handleFinishRound}
-            onStartNextRound={handleStartNextRound}
-            onSetPlannedRounds={setPlannedRounds}
-            onEndTournament={() => setEndTournamentModalVisible(true)}
-            onCloseRegistration={handleCloseRegistration}
-            isClosingRegistration={isCloseRegistrationPending}
-            isStartingRound={isStartingRound}
-            isFinishingRound={isFinishingRound}
-            isStartingNextRound={isStartingNextRound}
-            isSettingPlannedRounds={isSettingPlannedRounds}
-            isEndingTournament={isEndingTournament}
-          />
-        )}
 
-        {(activeTab === 'participants' || (activeTab as string) === 'players') && (
-          <ScramblePlayersTab
-            state={state}
-            registrations={registrations}
-            tournament={tournament}
-            canManage={canManage}
-            onSaveAvailability={handleSaveAvailability}
-            onCreateMatchups={handleCreateMatchups}
-            onCloseRegistration={handleCloseRegistration}
-            isClosingRegistration={isCloseRegistrationPending}
-            isSavingAvailability={isSettingAvailability}
-            isCreatingMatchups={isCreatingMatchups}
-          />
-        )}
+          {/* Child 2: Tab Body Content */}
+          <View style={styles.tabBodyWrapper}>
+            {activeTab === 'overview' && (
+              <ScrambleOverviewTab
+                state={state}
+                tournament={tournament}
+                canManage={canManage}
+                onNavigateTab={handleTabChange}
+                onSetPlannedRounds={setPlannedRounds}
+                isSettingPlannedRounds={isSettingPlannedRounds}
+              />
+            )}
 
-        {activeTab === 'rounds' && (
-          <ScrambleRoundsTab
-            state={state}
-            matches={validMatches}
-            canManage={canManage}
-            onOpenScoreModal={handleOpenScoreModal}
-            onStartRound={handleStartRound}
-            onFinishRound={handleFinishRound}
-            onStartNextRound={handleStartNextRound}
-            onCreateMatchups={handleCreateMatchups}
-            onEndTournament={() => setEndTournamentModalVisible(true)}
-            isStartingRound={isStartingRound}
-            isFinishingRound={isFinishingRound}
-            isStartingNextRound={isStartingNextRound}
-            isCreatingMatchups={isCreatingMatchups}
-          />
-        )}
+            {(activeTab === 'participants' || (activeTab as string) === 'players') && (
+              <ScramblePlayersTab
+                state={state}
+                registrations={registrations}
+                tournament={tournament}
+                canManage={canManage}
+                onSaveAvailability={handleSaveAvailability}
+                onCreateMatchups={handleCreateMatchups}
+                onCloseRegistration={handleCloseRegistration}
+                isClosingRegistration={isCloseRegistrationPending}
+                isSavingAvailability={isSettingAvailability}
+                isCreatingMatchups={isCreatingMatchups}
+              />
+            )}
 
-        {activeTab === 'standings' && (
-          <ScrambleStandingsTab
-            state={state}
-            standings={standings}
-            isLoading={isLoadingStandings}
-          />
-        )}
+            {activeTab === 'rounds' && (
+              <ScrambleRoundsTab
+                state={state}
+                matches={validMatches}
+                canManage={canManage}
+                onOpenScoreModal={handleOpenScoreModal}
+                onStartRound={handleStartRound}
+                onFinishRound={handleFinishRound}
+                onStartNextRound={handleStartNextRound}
+                onCreateMatchups={handleCreateMatchups}
+                onEndTournament={() => setEndTournamentModalVisible(true)}
+                isStartingRound={isStartingRound}
+                isFinishingRound={isFinishingRound}
+                isStartingNextRound={isStartingNextRound}
+                isCreatingMatchups={isCreatingMatchups}
+              />
+            )}
 
-        {activeTab === 'results' && (
-          <ScrambleResultsTab
-            state={state}
-            matches={validMatches}
-            standings={standings || []}
-            canManage={canManage}
-            onOpenScoreModal={handleOpenScoreModal}
-            onNavigateTab={(tab) => setActiveTab(tab as any)}
-            onEndTournament={() => setEndTournamentModalVisible(true)}
-            isEndingTournament={isEndingTournament}
-          />
-        )}
+            {activeTab === 'standings' && (
+              <ScrambleStandingsTab
+                state={state}
+                standings={standings}
+                isLoading={isLoadingStandings}
+              />
+            )}
 
-        {activeTab === 'settings' && (
-          <TournamentSettingsTab
-            tournament={tournament ?? null}
-          />
-        )}
-      </ScrollView>
+            {activeTab === 'results' && (
+              <ScrambleResultsTab
+                state={state}
+                matches={validMatches}
+                standings={standings || []}
+                canManage={canManage}
+                onOpenScoreModal={handleOpenScoreModal}
+                onNavigateTab={handleTabChange}
+                onEndTournament={() => setEndTournamentModalVisible(true)}
+                isEndingTournament={isEndingTournament}
+              />
+            )}
 
-      {/* Score Modal */}
-      <ScrambleScoreModal
-        visible={scoreModalVisible}
-        onClose={() => {
-          setScoreModalVisible(false);
-          setActiveMatchForScore(null);
-        }}
-        match={activeMatchForScore}
-        onSave={handleSaveScore}
-        isSaving={isRecordingResult || isCorrectingResult}
-        targetPoints={
-          (tournament?.format_configuration as any)?.scoring_rules?.target_score ??
-          tournament?.scoring_rules?.target_score ??
-          (tournament?.format_configuration as any)?.points_to_win ??
-          11
-        }
-        winBy={
-          (tournament?.format_configuration as any)?.scoring_rules?.win_by ??
-          tournament?.scoring_rules?.win_by ??
-          (tournament?.format_configuration as any)?.win_by ??
-          2
-        }
-      />
+            {activeTab === 'settings' && (
+              <TournamentSettingsTab
+                tournament={tournament ?? null}
+              />
+            )}
+          </View>
+        </ScrollView>
 
-      {/* End Tournament Modal */}
-      <ScrambleEndTournamentModal
-        visible={endTournamentModalVisible}
-        onClose={() => setEndTournamentModalVisible(false)}
-        state={state}
-        onConfirm={handleEndTournament}
-        isEnding={isEndingTournament}
-      />
+        {/* Score Modal */}
+        <ScrambleScoreModal
+          visible={scoreModalVisible}
+          onClose={() => {
+            setScoreModalVisible(false);
+            setActiveMatchForScore(null);
+          }}
+          match={activeMatchForScore}
+          onSave={handleSaveScore}
+          isSaving={isRecordingResult || isCorrectingResult}
+          targetPoints={
+            (tournament?.format_configuration as any)?.scoring_rules?.target_score ??
+            tournament?.scoring_rules?.target_score ??
+            (tournament?.format_configuration as any)?.points_to_win ??
+            11
+          }
+          winBy={
+            (tournament?.format_configuration as any)?.scoring_rules?.win_by ??
+            tournament?.scoring_rules?.win_by ??
+            (tournament?.format_configuration as any)?.win_by ??
+            2
+          }
+        />
+
+        {/* End Tournament Modal */}
+        <ScrambleEndTournamentModal
+          visible={endTournamentModalVisible}
+          onClose={() => setEndTournamentModalVisible(false)}
+          state={state}
+          onConfirm={handleEndTournament}
+          isEnding={isEndingTournament}
+        />
+      </View>
     </Screen>
   );
 }
@@ -672,13 +726,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screen: {
-    flex: 1,
-    backgroundColor: '#F3FAF5',
+    backgroundColor: '#F1F8F3',
   },
-  scrollContent: {
-    flexGrow: 1,
+  responsiveContainer: {
+    flex: 1,
     maxWidth: 600,
     width: '100%',
     alignSelf: 'center',
+    backgroundColor: '#F1F8F3',
+  },
+  contentScroll: {
+    flex: 1,
+    backgroundColor: '#F1F8F3',
+  },
+  contentContainer: {
+    paddingBottom: Spacing[10],
   },
 });

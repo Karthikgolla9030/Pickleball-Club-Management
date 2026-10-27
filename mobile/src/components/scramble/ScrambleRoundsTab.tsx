@@ -144,10 +144,7 @@ export function ScrambleRoundsTab({
     roundMatches.length > 0 && roundMatches.every((m) => m.status === 'completed');
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={styles.container}>
       {/* ── 1. Top Round Selector Row: Pill "Round 1 of 3 ∨" + Status Badge ── */}
       <View style={styles.topSelectorRow}>
         <TouchableOpacity
@@ -534,7 +531,7 @@ export function ScrambleRoundsTab({
           </View>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 

@@ -200,7 +200,7 @@ export function TournamentManagementInfo({
     if (!primaryAction) return true;
     const label = primaryAction.label.toLowerCase();
     if (activeTab === 'results' && label.includes('result')) return true;
-    if ((activeTab === 'matches' || activeTab === 'matchups') && (label.includes('score') || label.includes('match'))) return true;
+    if ((activeTab === 'matches' || activeTab === 'matchups' || activeTab === 'rounds') && (label.includes('score') || label.includes('match') || label.includes('round'))) return true;
     if (activeTab === 'bracket' && label.includes('bracket')) return true;
     if (activeTab === 'standings' && label.includes('standing')) return true;
     return false;
