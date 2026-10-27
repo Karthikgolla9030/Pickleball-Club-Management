@@ -98,6 +98,28 @@ class PaymentRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_by_provider_order_id(
+        self,
+        provider_order_id: str,
+    ) -> Payment | None:
+        """Fetch a payment by provider order ID."""
+        stmt = (
+            select(Payment)
+            .options(
+                selectinload(Payment.club),
+                selectinload(Payment.player),
+                selectinload(Payment.subscription).selectinload(MemberSubscription.plan),
+                selectinload(Payment.booking).selectinload(Booking.court),
+                selectinload(Payment.tournament),
+                selectinload(Payment.event),
+                selectinload(Payment.lesson),
+                selectinload(Payment.league),
+            )
+            .where(Payment.provider_order_id == provider_order_id)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def list_by_club(
         self,
         club_id: UUID,

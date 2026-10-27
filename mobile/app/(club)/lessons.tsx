@@ -67,6 +67,8 @@ import {
   EmptyState,
   FilterChips,
   Input,
+  DateTimePickerInput,
+  InternationalPhoneInput,
   LoadingState,
   MetricGrid,
   ModalSheet,
@@ -1187,18 +1189,20 @@ export default function ClubLessonsScreen() {
             ))}
           </View>
 
-          <Input
-            label="Start Datetime (ISO) *"
-            placeholder="e.g. 2026-10-01T10:00:00Z"
+          <DateTimePickerInput
+            label="Start Date & Time *"
+            placeholder="Select lesson start"
             value={lessonStartAt}
-            onChangeText={setLessonStartAt}
+            onChangeDateTime={setLessonStartAt}
+            required
           />
 
-          <Input
-            label="End Datetime (ISO) *"
-            placeholder="e.g. 2026-10-01T11:00:00Z"
+          <DateTimePickerInput
+            label="End Date & Time *"
+            placeholder="Select lesson end"
             value={lessonEndAt}
-            onChangeText={setLessonEndAt}
+            onChangeDateTime={setLessonEndAt}
+            required
           />
 
           <Input
@@ -1260,12 +1264,11 @@ export default function ClubLessonsScreen() {
             onChangeText={setCoachSpecialization}
           />
 
-          <Input
+          <InternationalPhoneInput
             label="Phone"
-            placeholder="e.g. +91 98765 43210"
             value={coachPhone}
             onChangeText={setCoachPhone}
-            keyboardType="phone-pad"
+            hint="Format: e.g. +1 (555) 000-0000"
           />
 
           <Input

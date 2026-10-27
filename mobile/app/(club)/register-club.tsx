@@ -36,6 +36,8 @@ import {
   Button,
   Card,
   FormField,
+  InternationalPhoneInput,
+  TimePickerInput,
   Screen,
 } from '@/components';
 import { clubsApi, clubApplicationsApi } from '@/services/api';
@@ -285,12 +287,11 @@ export default function RegisterClubScreen() {
               error={errors.contactEmail}
             />
 
-            <FormField
+            <InternationalPhoneInput
               label="Contact Phone"
               value={contactPhone}
               onChangeText={setContactPhone}
-              placeholder="(512) 555-0199"
-              keyboardType="phone-pad"
+              hint="Public contact phone for member inquiries"
             />
 
             <FormField
@@ -394,19 +395,19 @@ export default function RegisterClubScreen() {
 
             <View style={styles.rowTwo}>
               <View style={styles.halfCol}>
-                <FormField
+                <TimePickerInput
                   label="Opening Time"
                   value={openingTime}
-                  onChangeText={setOpeningTime}
-                  placeholder="06:00:00"
+                  onChange={setOpeningTime}
+                  includeSeconds={true}
                 />
               </View>
               <View style={styles.halfCol}>
-                <FormField
+                <TimePickerInput
                   label="Closing Time"
                   value={closingTime}
-                  onChangeText={setClosingTime}
-                  placeholder="22:00:00"
+                  onChange={setClosingTime}
+                  includeSeconds={true}
                 />
               </View>
             </View>

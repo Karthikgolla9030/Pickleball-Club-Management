@@ -848,7 +848,7 @@ async def test_31_updating_uninitialized_profile_upserts_and_saves_personal_info
     assert data["display_name"] == "Karthik Pickler"
     assert data["first_name"] == "Karthik"
     assert data["last_name"] == "Golla"
-    assert data["phone"] == "+91 98765 43210"
+    assert data["phone"] == "+919876543210"
     assert data["gender"] == "Male"
     assert data["bio"] == "Competitive 4.0 tournament player"
 

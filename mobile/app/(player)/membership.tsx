@@ -54,7 +54,7 @@ import {
   Users,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, Badge, Button, ModalSheet } from '@/components';
+import { AppHeader, AppText, Badge, Button, CheckoutModal, ModalSheet } from '@/components';
 import { useActiveClub, usePlayerClubs, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
@@ -181,6 +181,7 @@ export default function PlayerMembershipScreen() {
   const { mutateAsync: renewSubscription, isPending: isRenewing } = useRenewPlayerSubscription();
 
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const [checkoutMembership, setCheckoutMembership] = useState<PlayerMembershipView | null>(null);
 
   const activeSubscription = useMemo(() => {
     if (!memberships || memberships.length === 0) return null;
@@ -222,27 +223,7 @@ export default function PlayerMembershipScreen() {
   }, [activeSubscription?.benefits]);
 
   const handleRenew = (sub: PlayerMembershipView) => {
-    const subId = sub.id || sub.subscription_id;
-    Alert.alert(
-      'Renew Subscription',
-      `Extend your subscription for "${sub.plan_name}" at ${sub.club_name || 'your club'}? Your new billing cycle will start following the current period.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm Renewal',
-          onPress: async () => {
-            try {
-              await renewSubscription(subId);
-              Alert.alert('Subscription Renewed', 'Your renewal subscription record has been created successfully.');
-              await refetch();
-            } catch (err: any) {
-              const msg = err?.response?.data?.detail || err?.message || 'Failed to renew subscription';
-              Alert.alert('Renewal Failed', msg);
-            }
-          },
-        },
-      ],
-    );
+    setCheckoutMembership(sub);
   };
 
   return (
@@ -709,6 +690,20 @@ export default function PlayerMembershipScreen() {
           </View>
 
           <TouchableOpacity
+            style={[styles.modalCloseButton, { backgroundColor: '#114D3F', marginBottom: 10 }]}
+            onPress={() => {
+              const sub = activeSubscription;
+              setManageModalVisible(false);
+              if (sub) handleRenew(sub);
+            }}
+            activeOpacity={0.85}
+          >
+            <AppText style={[styles.modalCloseButtonText, { color: '#FFFFFF' }]}>
+              Renew / Checkout Plan
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={styles.modalCloseButton}
             onPress={() => setManageModalVisible(false)}
             activeOpacity={0.85}
@@ -753,6 +748,22 @@ export default function PlayerMembershipScreen() {
           </TouchableOpacity>
         </View>
       </ModalSheet>
+
+      {checkoutMembership && (
+        <CheckoutModal
+          visible={!!checkoutMembership}
+          onClose={() => setCheckoutMembership(null)}
+          clubId={checkoutMembership.club_id || clubId || ''}
+          purpose="membership"
+          activityId={checkoutMembership.plan_id || checkoutMembership.subscription_id || checkoutMembership.id || ''}
+          activityTitle={checkoutMembership.plan_name}
+          activitySubtitle={`Membership Renewal · ${checkoutMembership.club_name || clubName || 'Club'}`}
+          onSuccess={() => {
+            setCheckoutMembership(null);
+            refetch();
+          }}
+        />
+      )}
     </View>
   );
 }

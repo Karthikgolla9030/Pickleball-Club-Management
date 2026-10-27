@@ -1367,6 +1367,7 @@ export interface Court {
   photo_url?: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
+  booking_interval_minutes: number;
   status: CourtStatus;
   is_active: boolean;
   display_order: number;
@@ -1385,6 +1386,7 @@ export interface PlayerCourt {
   photo_url?: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
+  booking_interval_minutes?: number;
   display_order: number;
   description: string | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
@@ -1399,6 +1401,9 @@ export interface CourtCreateRequest {
   photo_url?: string | null;
   indoor_outdoor?: CourtEnvironment;
   price_per_hour?: number | string | null;
+  booking_interval_minutes?: number;
+  opening_time?: string | null;
+  closing_time?: string | null;
   is_active?: boolean;
   display_order?: number | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
@@ -1413,6 +1418,9 @@ export interface CourtUpdateRequest {
   photo_url?: string | null;
   indoor_outdoor?: CourtEnvironment;
   price_per_hour?: number | string | null;
+  booking_interval_minutes?: number;
+  opening_time?: string | null;
+  closing_time?: string | null;
   is_active?: boolean;
   display_order?: number | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
@@ -1471,6 +1479,7 @@ export interface CourtOperatingHoursResponse {
   has_override: boolean;
   court_operating_hours?: WeeklyOperatingHoursMap | null;
   effective_operating_hours: WeeklyOperatingHoursMap;
+  booking_interval_minutes?: number;
 }
 
 export interface CourtAffectedBookingItem {
@@ -1487,6 +1496,19 @@ export interface CourtAffectedBookingsResponse {
   court_name: string;
   upcoming_confirmed_bookings_count: number;
   bookings: CourtAffectedBookingItem[];
+  message: string;
+}
+
+export interface CourtDisruptionPreviewRequest {
+  operating_hours?: WeeklyOperatingHoursMap | null;
+  booking_interval_minutes?: number | null;
+}
+
+export interface CourtDisruptionPreviewResponse {
+  court_id: string;
+  court_name: string;
+  affected_bookings_count: number;
+  affected_bookings: CourtAffectedBookingItem[];
   message: string;
 }
 
@@ -1555,6 +1577,10 @@ export interface CourtAvailability {
   surface_type: string | null;
   indoor_outdoor: CourtEnvironment;
   price_per_hour?: number | string | null;
+  booking_interval_minutes: number;
+  is_closed?: boolean;
+  open_time?: string | null;
+  close_time?: string | null;
   slots: TimeSlotAvailability[];
 }
 
@@ -1885,6 +1911,55 @@ export interface PaymentFilters {
   date_to?: string;
   limit?: number;
   offset?: number;
+}
+
+export interface CheckoutPriceBreakdown {
+  base_amount: number | string;
+  discount_amount: number | string;
+  tax_amount: number | string;
+  service_fee: number | string;
+  final_amount: number | string;
+  currency: string;
+}
+
+export interface CheckoutInitiatePayload {
+  club_id: string;
+  purpose: PaymentPurpose;
+  activity_id?: string | null;
+  start_at?: string | null;
+  end_at?: string | null;
+  payment_method?: PaymentMethod;
+  currency?: string;
+  notes?: string | null;
+  metadata?: Record<string, any>;
+}
+
+export interface CheckoutInitiateResponse {
+  payment_id: string;
+  reference: string;
+  status: PaymentStatus;
+  breakdown: CheckoutPriceBreakdown;
+  provider: string;
+  provider_order_id?: string | null;
+  provider_key_id?: string | null;
+  supported_methods: string[];
+  activity_summary: Record<string, any>;
+  is_free: boolean;
+}
+
+export interface CheckoutVerifyPayload {
+  payment_id: string;
+  provider: string;
+  provider_payment_id: string;
+  provider_order_id: string;
+  provider_signature: string;
+}
+
+export interface CheckoutVerifyResponse {
+  success: boolean;
+  payment: PlayerPayment;
+  message: string;
+  booking_or_registration?: Record<string, any> | null;
 }
 
 // ─── Phase 14 Events Types ───────────────────────────────────────────────────

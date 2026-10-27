@@ -184,9 +184,10 @@ class BookingService:
         club_closing: time,
         club_tz: timezone | zoneinfo.ZoneInfo,
         is_closed: bool = False,
+        slot_interval_minutes: int = 60,
     ) -> int:
         """
-        Validate slot alignment, horizon, and operating hours.
+        Validate slot alignment, horizon, duration, and operating hours.
         Returns duration in minutes.
         """
         now = datetime.now(timezone.utc)
@@ -231,17 +232,17 @@ class BookingService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Booking duration of {duration} minutes is not supported. Allowed durations: {sorted(list(ALLOWED_DURATIONS_MINUTES))} minutes.",
             )
+        if duration % slot_interval_minutes != 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Booking duration ({duration} minutes) must be a multiple of the court's {slot_interval_minutes}-minute booking interval.",
+            )
 
-        # Slot alignment (e.g. 00 or 30 minutes, 0 seconds)
+        # Slot alignment (clean minute boundaries)
         if start_at.second != 0 or start_at.microsecond != 0 or end_at.second != 0 or end_at.microsecond != 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Booking start and end times must be aligned to clean minute boundaries",
-            )
-        if start_at.minute % MIN_SLOT_INTERVAL_MINUTES != 0 or end_at.minute % MIN_SLOT_INTERVAL_MINUTES != 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Booking times must be aligned to {MIN_SLOT_INTERVAL_MINUTES}-minute increments",
             )
 
         # Operating hours validation in club's local timezone
@@ -252,6 +253,14 @@ class BookingService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Facility is closed on {local_start.strftime('%A')} ({local_start.date()})",
+            )
+
+        # Check alignment with court opening time and slot interval
+        start_minutes_from_open = (local_start.hour * 60 + local_start.minute) - (club_opening.hour * 60 + club_opening.minute)
+        if start_minutes_from_open % slot_interval_minutes != 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Booking start time ({local_start.strftime('%H:%M')}) must align with the court's {slot_interval_minutes}-minute booking interval starting at {club_opening.strftime('%H:%M')}.",
             )
 
         # Ensure booking does not cross day boundaries
@@ -330,6 +339,7 @@ class BookingService:
         club_tz = self._get_club_tz(club.timezone)
         local_date = s_at.astimezone(club_tz).date()
         is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, court)
+        court_interval = getattr(court, "booking_interval_minutes", 60) or 60
         duration = self._validate_time_boundaries(
             start_at=start_at,
             end_at=end_at,
@@ -337,6 +347,7 @@ class BookingService:
             club_closing=eff_closing,
             club_tz=club_tz,
             is_closed=is_closed,
+            slot_interval_minutes=court_interval,
         )
 
         rate = Decimal(str(court.price_per_hour)) if court.price_per_hour is not None else Decimal("0.00")
@@ -425,6 +436,7 @@ class BookingService:
         # 5. Operating hours validation with day-of-week & court override support
         local_date = payload_start.astimezone(club_tz).date()
         is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        court_interval = getattr(locked_court, "booking_interval_minutes", 60) or 60
         duration = self._validate_time_boundaries(
             start_at=payload.start_at,
             end_at=payload.end_at,
@@ -432,6 +444,7 @@ class BookingService:
             club_closing=eff_closing,
             club_tz=club_tz,
             is_closed=is_closed,
+            slot_interval_minutes=court_interval,
         )
 
         # 7. Check double-booking conflicts
@@ -628,6 +641,7 @@ class BookingService:
         payload_start = payload.start_at if payload.start_at.tzinfo else payload.start_at.replace(tzinfo=timezone.utc)
         local_date = payload_start.astimezone(club_tz).date()
         is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        court_interval = getattr(locked_court, "booking_interval_minutes", 60) or 60
         duration = self._validate_time_boundaries(
             start_at=payload.start_at,
             end_at=payload.end_at,
@@ -635,6 +649,7 @@ class BookingService:
             club_closing=eff_closing,
             club_tz=club_tz,
             is_closed=is_closed,
+            slot_interval_minutes=court_interval,
         )
 
         # Check conflicts
@@ -784,6 +799,7 @@ class BookingService:
         payload_start = payload.start_at if payload.start_at.tzinfo else payload.start_at.replace(tzinfo=timezone.utc)
         local_date = payload_start.astimezone(club_tz).date()
         is_closed, eff_opening, eff_closing = resolve_effective_operating_hours(local_date, club, locked_court)
+        court_interval = getattr(locked_court, "booking_interval_minutes", 60) or 60
         self._validate_time_boundaries(
             start_at=payload.start_at,
             end_at=payload.end_at,
@@ -791,6 +807,7 @@ class BookingService:
             club_closing=eff_closing,
             club_tz=club_tz,
             is_closed=is_closed,
+            slot_interval_minutes=court_interval,
         )
 
         conflicts = await self.booking_repo.find_conflicts(
@@ -1164,6 +1181,7 @@ class BookingService:
 
         for court in courts:
             court_is_closed, court_open, court_close = resolve_effective_operating_hours(target_date, club, court)
+            court_interval = getattr(court, "booking_interval_minutes", 60) or 60
             slots: list[TimeSlotAvailability] = []
 
             # If court is marked closed for this weekday, expose 0 bookable slots
@@ -1175,7 +1193,7 @@ class BookingService:
                     court_day_end = datetime.combine(target_date, court_close, tzinfo=club_tz).astimezone(timezone.utc)
 
                 slot_start = court_day_start
-                slot_delta = timedelta(minutes=slot_duration_minutes)
+                slot_delta = timedelta(minutes=court_interval)
 
                 while slot_start + slot_delta <= court_day_end:
                     slot_end = slot_start + slot_delta
@@ -1232,6 +1250,10 @@ class BookingService:
                     surface_type=court.surface_type,
                     indoor_outdoor=court.indoor_outdoor,
                     price_per_hour=court.price_per_hour,
+                    booking_interval_minutes=court_interval,
+                    is_closed=court_is_closed,
+                    open_time=court_open if not court_is_closed else None,
+                    close_time=court_close if not court_is_closed else None,
                     slots=slots,
                 )
             )

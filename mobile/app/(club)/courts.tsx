@@ -53,6 +53,8 @@ import {
   Camera,
   Trash2,
   UploadCloud,
+  Clock,
+  Timer,
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -66,6 +68,7 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  TimePickerInput,
   LoadingState,
   ModalSheet,
   Screen,
@@ -83,6 +86,7 @@ import type {
   CourtStatus,
   CourtUpdateRequest,
   Booking,
+  WeeklyOperatingHoursMap,
 } from '@/types';
 
 // ─── Image Assets ─────────────────────────────────────────────────────────────
@@ -142,6 +146,66 @@ const POPULAR_SURFACES = [
   'Concrete',
   'Asphalt',
 ];
+
+const BOOKING_INTERVAL_OPTIONS = [
+  { value: 30, label: '30 min' },
+  { value: 60, label: '60 min' },
+  { value: 90, label: '90 min' },
+  { value: 120, label: '120 min' },
+];
+
+const WEEKDAY_KEYS = [
+  { key: 'monday', label: 'Mon' },
+  { key: 'tuesday', label: 'Tue' },
+  { key: 'wednesday', label: 'Wed' },
+  { key: 'thursday', label: 'Thu' },
+  { key: 'friday', label: 'Fri' },
+  { key: 'saturday', label: 'Sat' },
+  { key: 'sunday', label: 'Sun' },
+];
+
+function parseTimeInput(input: string): { h: number; m: number; str24: string } | null {
+  if (!input) return null;
+  const trimmed = input.trim();
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+  let h = parseInt(match[1], 10);
+  const m = match[2] ? parseInt(match[2], 10) : 0;
+  const ampm = match[3]?.toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
+  const str24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+  return { h, m, str24 };
+}
+
+function formatDisplayTime(timeStr?: string | null): string {
+  if (!timeStr) return '';
+  const parsed = parseTimeInput(timeStr);
+  if (!parsed) return timeStr;
+  const { h, m } = parsed;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const displayH = h % 12 || 12;
+  return `${displayH}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function getCourtHoursSummary(court: Court): string {
+  if (court.operating_hours) {
+    const hours = court.operating_hours;
+    const mon = hours.monday;
+    if (mon && !mon.is_closed && mon.open_time && mon.close_time) {
+      return `${formatDisplayTime(mon.open_time)} – ${formatDisplayTime(mon.close_time)}`;
+    }
+    const allClosed = Object.values(hours).every((d) => d && d.is_closed);
+    if (allClosed) return 'Closed';
+    for (const d of Object.values(hours)) {
+      if (d && !d.is_closed && d.open_time && d.close_time) {
+        return `${formatDisplayTime(d.open_time)} – ${formatDisplayTime(d.close_time)}`;
+      }
+    }
+  }
+  return '6:00 AM – 10:00 PM';
+}
 
 // ─── Custom Court Glyph Icon ──────────────────────────────────────────────────
 function CourtGlyph({
@@ -256,6 +320,10 @@ export default function ClubCourtsScreen() {
   const [formDescription, setFormDescription] = useState('');
   const [formPrice, setFormPrice] = useState('');
   const [formPhotoUrl, setFormPhotoUrl] = useState<string | null>(null);
+  const [formOpeningTime, setFormOpeningTime] = useState('06:00');
+  const [formClosingTime, setFormClosingTime] = useState('22:00');
+  const [formInterval, setFormInterval] = useState<number>(60);
+  const [formClosedDays, setFormClosedDays] = useState<Record<string, boolean>>({});
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -378,6 +446,47 @@ export default function ClubCourtsScreen() {
     }
   };
 
+  // Operating Hours Validation & Schedule Serializer
+  const validateTimeSettings = (): {
+    isValid: boolean;
+    errorMsg?: string;
+    operatingHours?: any;
+    openingTime?: string;
+    closingTime?: string;
+  } => {
+    const parsedOpen = parseTimeInput(formOpeningTime);
+    const parsedClose = parseTimeInput(formClosingTime);
+    if (!parsedOpen) {
+      return { isValid: false, errorMsg: 'Please enter a valid opening time (e.g. 06:00 or 6:00 AM)' };
+    }
+    if (!parsedClose) {
+      return { isValid: false, errorMsg: 'Please enter a valid closing time (e.g. 22:00 or 10:00 PM)' };
+    }
+    if (parsedClose.h !== 0 && (parsedOpen.h * 60 + parsedOpen.m >= parsedClose.h * 60 + parsedClose.m)) {
+      return {
+        isValid: false,
+        errorMsg: `Opening time (${formOpeningTime}) must be strictly earlier than closing time (${formClosingTime}). Overnight configurations crossing calendar days are not supported.`,
+      };
+    }
+
+    const weeklyHours: Record<string, any> = {};
+    for (const { key } of WEEKDAY_KEYS) {
+      const isClosed = Boolean(formClosedDays[key]);
+      weeklyHours[key] = {
+        is_closed: isClosed,
+        open_time: isClosed ? null : parsedOpen.str24,
+        close_time: isClosed ? null : parsedClose.str24,
+      };
+    }
+
+    return {
+      isValid: true,
+      operatingHours: weeklyHours,
+      openingTime: parsedOpen.str24,
+      closingTime: parsedClose.str24,
+    };
+  };
+
   // Form Handlers
   const openCreateModal = () => {
     setFormName('');
@@ -388,6 +497,10 @@ export default function ClubCourtsScreen() {
     setFormDescription('');
     setFormPrice('');
     setFormPhotoUrl(null);
+    setFormOpeningTime('06:00');
+    setFormClosingTime('22:00');
+    setFormInterval(60);
+    setFormClosedDays({});
     setFormError(null);
     setIsCreateModalOpen(true);
   };
@@ -402,6 +515,56 @@ export default function ClubCourtsScreen() {
     setFormDescription(court.description || '');
     setFormPrice(court.price_per_hour !== null && court.price_per_hour !== undefined ? String(court.price_per_hour) : '');
     setFormPhotoUrl(court.photo_url || null);
+    setFormInterval(court.booking_interval_minutes || 60);
+
+    if (court.operating_hours) {
+      const closedMap: Record<string, boolean> = {};
+      let foundOpen = '06:00';
+      let foundClose = '22:00';
+      for (const [day, dayCfg] of Object.entries(court.operating_hours)) {
+        if (dayCfg) {
+          if (dayCfg.is_closed) {
+            closedMap[day] = true;
+          } else {
+            if (dayCfg.open_time) foundOpen = dayCfg.open_time.slice(0, 5);
+            if (dayCfg.close_time) foundClose = dayCfg.close_time.slice(0, 5);
+          }
+        }
+      }
+      setFormClosedDays(closedMap);
+      setFormOpeningTime(foundOpen);
+      setFormClosingTime(foundClose);
+    } else {
+      setFormClosedDays({});
+      setFormOpeningTime('06:00');
+      setFormClosingTime('22:00');
+      if (clubId) {
+        courtApi.getCourtOperatingHours(clubId, court.id).then((res) => {
+          if (res.effective_operating_hours) {
+            const closedMap: Record<string, boolean> = {};
+            let fOpen = '06:00';
+            let fClose = '22:00';
+            for (const [day, dayCfg] of Object.entries(res.effective_operating_hours)) {
+              if (dayCfg) {
+                if (dayCfg.is_closed) {
+                  closedMap[day] = true;
+                } else {
+                  if (dayCfg.open_time) fOpen = dayCfg.open_time.slice(0, 5);
+                  if (dayCfg.close_time) fClose = dayCfg.close_time.slice(0, 5);
+                }
+              }
+            }
+            setFormClosedDays(closedMap);
+            setFormOpeningTime(fOpen);
+            setFormClosingTime(fClose);
+          }
+          if (res.booking_interval_minutes) {
+            setFormInterval(res.booking_interval_minutes);
+          }
+        }).catch(() => {});
+      }
+    }
+
     setCourtImageErrors((prev) => {
       const next = { ...prev };
       delete next[court.id];
@@ -424,6 +587,13 @@ export default function ClubCourtsScreen() {
       }
       parsedPrice = Math.round(num * 100) / 100;
     }
+
+    const timeVal = validateTimeSettings();
+    if (!timeVal.isValid) {
+      setFormError(timeVal.errorMsg || 'Invalid operating hours settings');
+      return;
+    }
+
     setFormError(null);
     setIsSubmitting(true);
     try {
@@ -436,6 +606,10 @@ export default function ClubCourtsScreen() {
         description: formDescription.trim() || null,
         price_per_hour: parsedPrice,
         photo_url: formPhotoUrl,
+        booking_interval_minutes: formInterval,
+        operating_hours: timeVal.operatingHours,
+        opening_time: timeVal.openingTime,
+        closing_time: timeVal.closingTime,
       };
       const created = await createCourt(payload);
       if (clubId && created) {
@@ -476,22 +650,8 @@ export default function ClubCourtsScreen() {
     }
   };
 
-  const handleEditSubmit = async () => {
+  const performCourtUpdate = async (timeVal: any, parsedPrice: number | null) => {
     if (!editingCourt || !clubId) return;
-    if (!formName.trim()) {
-      setFormError('Court name is required');
-      return;
-    }
-    let parsedPrice: number | null = null;
-    if (formPrice.trim()) {
-      const num = parseFloat(formPrice.trim());
-      if (isNaN(num) || num < 0) {
-        setFormError('Price must be a valid non-negative amount ($)');
-        return;
-      }
-      parsedPrice = Math.round(num * 100) / 100;
-    }
-    setFormError(null);
     setIsSubmitting(true);
     try {
       const payload: CourtUpdateRequest = {
@@ -503,6 +663,10 @@ export default function ClubCourtsScreen() {
         description: formDescription.trim() || null,
         price_per_hour: parsedPrice,
         photo_url: formPhotoUrl,
+        booking_interval_minutes: formInterval,
+        operating_hours: timeVal.operatingHours,
+        opening_time: timeVal.openingTime,
+        closing_time: timeVal.closingTime,
       };
       const updated = await courtApi.updateCourt(clubId, editingCourt.id, payload);
       queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
@@ -535,6 +699,61 @@ export default function ClubCourtsScreen() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editingCourt || !clubId) return;
+    if (!formName.trim()) {
+      setFormError('Court name is required');
+      return;
+    }
+    let parsedPrice: number | null = null;
+    if (formPrice.trim()) {
+      const num = parseFloat(formPrice.trim());
+      if (isNaN(num) || num < 0) {
+        setFormError('Price must be a valid non-negative amount ($)');
+        return;
+      }
+      parsedPrice = Math.round(num * 100) / 100;
+    }
+
+    const timeVal = validateTimeSettings();
+    if (!timeVal.isValid) {
+      setFormError(timeVal.errorMsg || 'Invalid operating hours settings');
+      return;
+    }
+
+    setFormError(null);
+
+    // Schedule Disruption Safety Preview
+    try {
+      setIsSubmitting(true);
+      const preview = await courtApi.previewCourtDisruptions(clubId, editingCourt.id, {
+        operating_hours: timeVal.operatingHours,
+        booking_interval_minutes: formInterval,
+      });
+
+      if (preview.affected_bookings_count > 0) {
+        setIsSubmitting(false);
+        Alert.alert(
+          'Operating Hours Conflict',
+          `${preview.message}\n\nExisting bookings, durations, and payment amounts will be preserved without modification. Do you want to apply these new hours for future bookings?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Save for Future Bookings',
+              style: 'destructive',
+              onPress: () => performCourtUpdate(timeVal, parsedPrice),
+            },
+          ]
+        );
+        return;
+      }
+    } catch {
+      // If preview fails, proceed directly
+    }
+
+    await performCourtUpdate(timeVal, parsedPrice);
   };
 
   const handleDeactivate = async (court: Court) => {
@@ -941,7 +1160,7 @@ export default function ClubCourtsScreen() {
                           </AppText>
                         </View>
 
-                        {/* Metadata Row 3: Price */}
+                        {/* Metadata Row 3: Price + Operating Hours + Interval */}
                         <View style={styles.metadataRowPrice}>
                           <View
                             style={[
@@ -958,6 +1177,20 @@ export default function ClubCourtsScreen() {
                               {item.price_per_hour != null
                                 ? `${formatCurrency(item.price_per_hour)}/hr`
                                 : 'Unpriced'}
+                            </AppText>
+                          </View>
+
+                          <View style={styles.hoursBadge}>
+                            <Clock size={11} color="#176B57" strokeWidth={2} />
+                            <AppText style={styles.hoursBadgeText} numberOfLines={1}>
+                              {getCourtHoursSummary(item)}
+                            </AppText>
+                          </View>
+
+                          <View style={styles.intervalBadge}>
+                            <Timer size={11} color="#0F766E" strokeWidth={2} />
+                            <AppText style={styles.intervalBadgeText}>
+                              {`${item.booking_interval_minutes || 60}m slots`}
                             </AppText>
                           </View>
                         </View>
@@ -1189,6 +1422,116 @@ export default function ClubCourtsScreen() {
             multiline
             numberOfLines={2}
           />
+
+          {/* Operating Hours Configuration */}
+          <View style={styles.formSectionBox}>
+            <View style={styles.sectionHeaderRow}>
+              <Clock size={16} color="#176B57" strokeWidth={2} />
+              <AppText style={styles.sectionTitle}>Operating Hours</AppText>
+            </View>
+            <AppText style={styles.sectionSubtitle}>
+              Configure when this court begins accepting bookings and when it closes.
+            </AppText>
+
+            <View style={styles.timeInputsRow}>
+              <View style={{ flex: 1 }}>
+                <TimePickerInput
+                  label="Opening Time *"
+                  value={formOpeningTime}
+                  onChange={setFormOpeningTime}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TimePickerInput
+                  label="Closing Time *"
+                  value={formClosingTime}
+                  onChange={setFormClosingTime}
+                />
+              </View>
+            </View>
+            <AppText style={styles.timeHelpText}>
+              Closing time must be later than opening time. Overnight hours are not supported.
+            </AppText>
+
+            <AppText variant="caption" style={[styles.fieldLabel, { marginTop: Spacing[2] }]}>
+              Weekly Availability (Tap to toggle)
+            </AppText>
+            <View style={styles.dayPillsRow}>
+              {WEEKDAY_KEYS.map(({ key, label }) => {
+                const isClosed = Boolean(formClosedDays[key]);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.dayPillButton,
+                      !isClosed ? styles.dayPillOpen : styles.dayPillClosed,
+                    ]}
+                    onPress={() => {
+                      setFormClosedDays((prev) => ({
+                        ...prev,
+                        [key]: !prev[key],
+                      }));
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.dayPillText,
+                        !isClosed ? styles.dayPillTextOpen : styles.dayPillTextClosed,
+                      ]}
+                    >
+                      {label}
+                    </AppText>
+                    <AppText
+                      style={[
+                        styles.dayPillSubtext,
+                        !isClosed ? styles.dayPillSubtextOpen : styles.dayPillSubtextClosed,
+                      ]}
+                    >
+                      {!isClosed ? 'Open' : 'Closed'}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Booking Slot Interval Configuration */}
+          <View style={styles.formSectionBox}>
+            <View style={styles.sectionHeaderRow}>
+              <Timer size={16} color="#176B57" strokeWidth={2} />
+              <AppText style={styles.sectionTitle}>Booking Slot Interval</AppText>
+            </View>
+            <AppText style={styles.sectionSubtitle}>
+              Controls available start time frequency (e.g. every 30 or 60 min).
+            </AppText>
+
+            <View style={styles.intervalGrid}>
+              {BOOKING_INTERVAL_OPTIONS.map((opt) => {
+                const isSelected = formInterval === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.intervalChip,
+                      isSelected && styles.intervalChipSelected,
+                    ]}
+                    onPress={() => setFormInterval(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.intervalChipText,
+                        isSelected && styles.intervalChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
       </ModalSheet>
 
@@ -1371,6 +1714,116 @@ export default function ClubCourtsScreen() {
             multiline
             numberOfLines={2}
           />
+
+          {/* Operating Hours Configuration */}
+          <View style={styles.formSectionBox}>
+            <View style={styles.sectionHeaderRow}>
+              <Clock size={16} color="#176B57" strokeWidth={2} />
+              <AppText style={styles.sectionTitle}>Operating Hours</AppText>
+            </View>
+            <AppText style={styles.sectionSubtitle}>
+              Configure when this court begins accepting bookings and when it closes.
+            </AppText>
+
+            <View style={styles.timeInputsRow}>
+              <View style={{ flex: 1 }}>
+                <TimePickerInput
+                  label="Opening Time *"
+                  value={formOpeningTime}
+                  onChange={setFormOpeningTime}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <TimePickerInput
+                  label="Closing Time *"
+                  value={formClosingTime}
+                  onChange={setFormClosingTime}
+                />
+              </View>
+            </View>
+            <AppText style={styles.timeHelpText}>
+              Closing time must be later than opening time. Overnight hours are not supported.
+            </AppText>
+
+            <AppText variant="caption" style={[styles.fieldLabel, { marginTop: Spacing[2] }]}>
+              Weekly Availability (Tap to toggle)
+            </AppText>
+            <View style={styles.dayPillsRow}>
+              {WEEKDAY_KEYS.map(({ key, label }) => {
+                const isClosed = Boolean(formClosedDays[key]);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.dayPillButton,
+                      !isClosed ? styles.dayPillOpen : styles.dayPillClosed,
+                    ]}
+                    onPress={() => {
+                      setFormClosedDays((prev) => ({
+                        ...prev,
+                        [key]: !prev[key],
+                      }));
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.dayPillText,
+                        !isClosed ? styles.dayPillTextOpen : styles.dayPillTextClosed,
+                      ]}
+                    >
+                      {label}
+                    </AppText>
+                    <AppText
+                      style={[
+                        styles.dayPillSubtext,
+                        !isClosed ? styles.dayPillSubtextOpen : styles.dayPillSubtextClosed,
+                      ]}
+                    >
+                      {!isClosed ? 'Open' : 'Closed'}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Booking Slot Interval Configuration */}
+          <View style={styles.formSectionBox}>
+            <View style={styles.sectionHeaderRow}>
+              <Timer size={16} color="#176B57" strokeWidth={2} />
+              <AppText style={styles.sectionTitle}>Booking Slot Interval</AppText>
+            </View>
+            <AppText style={styles.sectionSubtitle}>
+              Controls available start time frequency (e.g. every 30 or 60 min).
+            </AppText>
+
+            <View style={styles.intervalGrid}>
+              {BOOKING_INTERVAL_OPTIONS.map((opt) => {
+                const isSelected = formInterval === opt.value;
+                return (
+                  <TouchableOpacity
+                    key={opt.value}
+                    style={[
+                      styles.intervalChip,
+                      isSelected && styles.intervalChipSelected,
+                    ]}
+                    onPress={() => setFormInterval(opt.value)}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.intervalChipText,
+                        isSelected && styles.intervalChipTextSelected,
+                      ]}
+                    >
+                      {opt.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
         </View>
       </ModalSheet>
 
@@ -1993,6 +2446,8 @@ const styles = StyleSheet.create({
   metadataRowPrice: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 4,
   },
   priceBadge: {
@@ -2015,6 +2470,149 @@ const styles = StyleSheet.create({
   priceBadgeTextUnpriced: {
     color: '#6B7280',
     fontWeight: '500',
+  },
+  hoursBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EBF6F1',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D1EAE0',
+    flexShrink: 1,
+  },
+  hoursBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  intervalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0FDFA',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+  },
+  intervalBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0F766E',
+  },
+  formSectionBox: {
+    backgroundColor: '#F9FAFA',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sectionTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  sectionSubtitle: {
+    fontSize: 11.5,
+    color: '#667776',
+    marginBottom: 4,
+  },
+  timeInputsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  timeHelpText: {
+    fontSize: 11,
+    color: '#8E9B9A',
+    fontStyle: 'italic',
+    marginTop: -2,
+  },
+  dayPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  dayPillButton: {
+    flex: 1,
+    minWidth: 40,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  dayPillOpen: {
+    backgroundColor: '#EBF6F1',
+    borderColor: '#176B57',
+  },
+  dayPillClosed: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+    opacity: 0.7,
+  },
+  dayPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  dayPillTextOpen: {
+    color: '#176B57',
+  },
+  dayPillTextClosed: {
+    color: '#9CA3AF',
+  },
+  dayPillSubtext: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  dayPillSubtextOpen: {
+    color: '#176B57',
+  },
+  dayPillSubtextClosed: {
+    color: '#EF4444',
+  },
+  intervalGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 2,
+  },
+  intervalChip: {
+    flex: 1,
+    minWidth: 68,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  intervalChipSelected: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
+  },
+  intervalChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  intervalChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   metaItem: {
     flexDirection: 'row',

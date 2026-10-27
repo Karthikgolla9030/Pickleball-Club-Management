@@ -14,6 +14,7 @@ import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
 import { formatCurrency } from '@/utils';
 import type { Booking, BookingPriceCalculation } from '@/types';
+import { CheckoutModal } from './checkout/CheckoutModal';
 
 export interface BookingFlowModalProps {
   visible: boolean;
@@ -54,6 +55,7 @@ export function BookingFlowModal({
   const [serverPrice, setServerPrice] = useState<BookingPriceCalculation | null>(null);
   const [isCalculatingPrice, setIsCalculatingPrice] = useState(false);
   const [confirmedBooking, setConfirmedBooking] = useState<Booking | null>(null);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   // Queries & Mutations
   const {
@@ -108,7 +110,27 @@ export function BookingFlowModal({
       setCourtId(availableCourts[0].court_id);
     }
   }, [availableCourts, courtId]);
-  
+
+  const selectedCourt = React.useMemo(() => {
+    return availability?.courts?.find((c) => c.court_id === courtId);
+  }, [availability?.courts, courtId]);
+
+  const courtInterval = selectedCourt?.booking_interval_minutes || 60;
+
+  const durationOptions = React.useMemo(() => {
+    const intervals = [30, 60, 90, 120];
+    const valid = intervals.filter((dur) => dur >= courtInterval && dur % courtInterval === 0);
+    return valid.length > 0 ? valid : [courtInterval];
+  }, [courtInterval]);
+
+  const [selectedDuration, setSelectedDuration] = useState<number>(60);
+
+  useEffect(() => {
+    if (courtInterval && !durationOptions.includes(selectedDuration)) {
+      setSelectedDuration(durationOptions[0] || courtInterval);
+    }
+  }, [courtInterval, durationOptions, selectedDuration]);
+
   // Only show slots for selected court that are actually available
   const selectedCourtSlots = availableCourts.find(c => c.court_id === courtId)?.slots || [];
 
@@ -121,6 +143,10 @@ export function BookingFlowModal({
       setFormError('Please select a court.');
       return;
     }
+    if (selectedCourt?.is_closed) {
+      setFormError('This court is closed on this date according to its operating hours.');
+      return;
+    }
     if (!slotIso) {
       setFormError('Please select a time slot.');
       return;
@@ -131,7 +157,7 @@ export function BookingFlowModal({
       (s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime()
     );
     const startAt = slot?.start_at || slotIso;
-    const endAt = slot?.end_at || new Date(new Date(slotIso).getTime() + 60 * 60 * 1000).toISOString();
+    const endAt = new Date(new Date(startAt).getTime() + selectedDuration * 60 * 1000).toISOString();
 
     if (mode === 'player') {
       try {
@@ -171,7 +197,7 @@ export function BookingFlowModal({
         (s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime()
       );
       const startAt = slot?.start_at || slotIso;
-      const endAt = slot?.end_at || new Date(new Date(slotIso).getTime() + 60 * 60 * 1000).toISOString();
+      const endAt = new Date(new Date(startAt).getTime() + selectedDuration * 60 * 1000).toISOString();
       
       let created: Booking | null = null;
       if (mode === 'staff') {
@@ -183,16 +209,12 @@ export function BookingFlowModal({
           end_at: endAt,
           notes: notes.trim() || null,
         });
+        setConfirmedBooking(created);
+        setStage(4);
       } else {
-        created = await createBooking({
-          court_id: courtId,
-          start_at: startAt,
-          end_at: endAt,
-          notes: notes.trim() || null,
-        });
+        setShowCheckout(true);
+        return;
       }
-      setConfirmedBooking(created);
-      setStage(4);
     } catch (err: any) {
       const isConflict =
         err?.response?.status === 409 ||
@@ -368,28 +390,73 @@ export function BookingFlowModal({
 
       {courtId !== '' && (
         <View style={styles.fieldSection}>
-          <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>Time (60 min)</AppText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing[1] }}>
+            <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>
+              Time ({courtInterval} min slots)
+            </AppText>
+            {selectedCourt?.is_closed && (
+              <AppText variant="caption" color="error" bold>
+                Court Closed Today
+              </AppText>
+            )}
+          </View>
+          {selectedCourt?.is_closed ? (
+            <View style={[styles.errorBox, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5', marginTop: 4 }]}>
+              <AppText variant="caption" style={{ color: '#DC2626' }}>
+                This court is closed on this date according to its operating hours. Please select another court or pick another date.
+              </AppText>
+            </View>
+          ) : selectedCourtSlots.length === 0 ? (
+            <View style={styles.errorBox}>
+              <AppText variant="caption" color="secondary">
+                No slots available on this court for the selected date.
+              </AppText>
+            </View>
+          ) : (
+            <View style={styles.timeGrid}>
+              {selectedCourtSlots.map(slot => {
+                const d = new Date(slot.start_at);
+                const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                const isPast = d.getTime() < Date.now();
+                const available = slot.is_available && !isPast;
+                const isActive = slotIso === slot.start_at;
+
+                return (
+                  <Button
+                    key={slot.start_at}
+                    label={label}
+                    variant={isActive ? 'primary' : 'secondary'}
+                    size="sm"
+                    onPress={() => setSlotIso(slot.start_at)}
+                    disabled={!available}
+                    fullWidth={false}
+                    style={!available ? [styles.timeBtn, styles.timeBtnDisabled] : styles.timeBtn}
+                  />
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Duration Multi-slot Selector */}
+      {courtId !== '' && !selectedCourt?.is_closed && durationOptions.length > 1 && (
+        <View style={styles.fieldSection}>
+          <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>
+            Booking Duration
+          </AppText>
           <View style={styles.timeGrid}>
-            {selectedCourtSlots.map(slot => {
-              const d = new Date(slot.start_at);
-              const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-              const isPast = d.getTime() < Date.now();
-              const available = slot.is_available && !isPast;
-              const isActive = slotIso === slot.start_at;
-              
-              return (
-                <Button
-                  key={slot.start_at}
-                  label={label}
-                  variant={isActive ? 'primary' : 'secondary'}
-                  size="sm"
-                  onPress={() => setSlotIso(slot.start_at)}
-                  disabled={!available}
-                  fullWidth={false}
-                  style={!available ? [styles.timeBtn, styles.timeBtnDisabled] : styles.timeBtn}
-                />
-              );
-            })}
+            {durationOptions.map((dur) => (
+              <Button
+                key={dur}
+                label={`${dur} min`}
+                variant={selectedDuration === dur ? 'primary' : 'secondary'}
+                size="sm"
+                fullWidth={false}
+                onPress={() => setSelectedDuration(dur)}
+                style={styles.timeBtn}
+              />
+            ))}
           </View>
         </View>
       )}
@@ -442,7 +509,9 @@ export function BookingFlowModal({
     const totalText = serverPrice != null
       ? formatCurrency(serverPrice.total_price)
       : (court?.price_per_hour != null ? formatCurrency(court.price_per_hour) : '$0.00 (Included)');
-    const durationText = serverPrice?.duration_minutes ? `${serverPrice.duration_minutes} minutes` : '1 hour';
+    const durationText = serverPrice?.duration_minutes
+      ? `${serverPrice.duration_minutes} minutes`
+      : `${selectedDuration} minutes`;
 
     return (
       <View style={styles.formContainer}>
@@ -675,6 +744,31 @@ export function BookingFlowModal({
 
           {renderFooter()}
         </KeyboardAvoidingView>
+
+        {showCheckout && (
+          <CheckoutModal
+            visible={showCheckout}
+            onClose={() => setShowCheckout(false)}
+            clubId={clubId}
+            purpose="court_booking"
+            activityId={courtId}
+            activityTitle={availableCourts.find((c) => c.court_id === courtId)?.display_name || availableCourts.find((c) => c.court_id === courtId)?.court_name || 'Court Reservation'}
+            activitySubtitle={availableCourts.find((c) => c.court_id === courtId)?.indoor_outdoor === 'indoor' ? 'Indoor Court' : 'Outdoor Court'}
+            startAt={selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso}
+            endAt={slotIso ? new Date(new Date(selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso).getTime() + selectedDuration * 60 * 1000).toISOString() : undefined}
+            durationMinutes={selectedDuration}
+            participantsInfo={`${playersCount} players`}
+            metadata={{ notes: notes.trim() }}
+            onSuccess={(res) => {
+              setShowCheckout(false);
+              if (res.booking_or_registration) {
+                setConfirmedBooking(res.booking_or_registration as any);
+              }
+              setStage(4);
+              onSuccess();
+            }}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

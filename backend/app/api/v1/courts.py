@@ -19,6 +19,8 @@ from app.permissions import Permission
 from app.schemas.court import (
     CourtAffectedBookingsResponse,
     CourtCreateRequest,
+    CourtDisruptionPreviewRequest,
+    CourtDisruptionPreviewResponse,
     CourtOperatingHoursResponse,
     CourtOperatingHoursUpdateRequest,
     CourtReorderRequest,
@@ -241,4 +243,24 @@ async def get_court_affected_bookings(
     db: AsyncSession = Depends(get_db),
 ) -> CourtAffectedBookingsResponse:
     return await CourtService(db).get_court_affected_bookings(club_id=club_id, court_id=court_id)
+
+
+@club_courts_router.post(
+    "/{court_id}/preview-disruptions",
+    response_model=CourtDisruptionPreviewResponse,
+    summary="Preview disruptions from operating hours or interval changes",
+    description="Identifies upcoming confirmed bookings that would fall outside the proposed operating hours. Never modifies bookings. Requires MANAGE_COURTS.",
+)
+async def preview_court_disruptions(
+    club_id: UUID,
+    court_id: UUID,
+    payload: CourtDisruptionPreviewRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    db: AsyncSession = Depends(get_db),
+) -> CourtDisruptionPreviewResponse:
+    return await CourtService(db).preview_court_schedule_disruptions(
+        club_id=club_id,
+        court_id=court_id,
+        payload=payload,
+    )
 

@@ -96,6 +96,16 @@ class Settings(BaseSettings):
     S3_ENDPOINT_URL: str | None = None
     S3_PUBLIC_URL_PREFIX: str | None = None
 
+    # ─── Payment Provider Configuration ─────────────────────────
+    PAYMENT_PROVIDER: str = "razorpay"  # "razorpay", "stripe", or "sandbox"
+    PAYMENT_SANDBOX_MODE: bool = True
+    RAZORPAY_KEY_ID: str = "rzp_test_aug2pickleball"
+    RAZORPAY_KEY_SECRET: str = "mock_secret_aug2pickleball_key"
+    RAZORPAY_WEBHOOK_SECRET: str = "whsec_razorpay_mock"
+    STRIPE_PUBLISHABLE_KEY: str | None = None
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+
     # ─── Platform Owners (distinct from club staff roles) ─────────
     PLATFORM_OWNER_EMAILS: Union[list[str], str] = [
         "platform.owner@pickleball.com",

@@ -136,6 +136,10 @@ class CourtAvailability(BaseModel):
     surface_type: str | None = None
     indoor_outdoor: CourtEnvironment
     price_per_hour: Decimal | None = None
+    booking_interval_minutes: int = 60
+    is_closed: bool = False
+    open_time: time | None = None
+    close_time: time | None = None
     slots: list[TimeSlotAvailability]
 
 

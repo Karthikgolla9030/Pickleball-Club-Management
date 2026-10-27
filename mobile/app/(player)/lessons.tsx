@@ -58,7 +58,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
+import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
   useActiveClub,
   useClubBranding,
@@ -170,6 +170,7 @@ export default function PlayerLessonsScreen() {
   // Selected lesson for detail / registration modal
   const [selectedLesson, setSelectedLesson] = useState<PlayerLessonDetail | null>(null);
   const [registeringLesson, setRegisteringLesson] = useState<PlayerLessonDetail | null>(null);
+  const [checkoutLesson, setCheckoutLesson] = useState<PlayerLessonDetail | null>(null);
   const [registrationNotes, setRegistrationNotes] = useState('');
 
   // Register mutation
@@ -186,8 +187,12 @@ export default function PlayerLessonsScreen() {
   );
 
   const handleOpenRegister = (lesson: PlayerLessonDetail) => {
-    setRegisteringLesson(lesson);
-    setRegistrationNotes('');
+    if (Number(lesson.price) > 0) {
+      setCheckoutLesson(lesson);
+    } else {
+      setRegisteringLesson(lesson);
+      setRegistrationNotes('');
+    }
   };
 
   const handleConfirmRegister = async () => {
@@ -876,6 +881,25 @@ export default function PlayerLessonsScreen() {
           </View>
         )}
       </ModalSheet>
+      {checkoutLesson && (
+        <CheckoutModal
+          visible={!!checkoutLesson}
+          onClose={() => setCheckoutLesson(null)}
+          clubId={checkoutLesson.club_id || effectiveClubId}
+          purpose="lesson"
+          activityId={checkoutLesson.id}
+          activityTitle={checkoutLesson.title}
+          activitySubtitle={`${checkoutLesson.coach_name ? `Coach ${checkoutLesson.coach_name} · ` : ''}${checkoutLesson.court_name || 'Club Courts'}`}
+          startAt={checkoutLesson.start_at}
+          endAt={checkoutLesson.end_at}
+          onSuccess={() => {
+            setCheckoutLesson(null);
+            setSelectedLesson(null);
+            refetchDiscover();
+            refetchMyLessons();
+          }}
+        />
+      )}
     </View>
   );
 }

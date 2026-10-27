@@ -6,15 +6,23 @@ uniqueness constraints, deterministic ordering, and lifecycle transitions.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
+import zoneinfo
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.operating_hours import WeeklyOperatingHours, build_weekly_schedule_dict
+from app.core.operating_hours import (
+    WEEKDAY_NAMES,
+    WeeklyOperatingHours,
+    build_weekly_schedule_dict,
+    parse_time_value,
+    resolve_effective_operating_hours,
+)
 from app.models.booking import Booking, BookingStatus
 from app.models.court import Court, CourtStatus
 from app.repositories.club_repository import ClubRepository
@@ -24,6 +32,8 @@ from app.schemas.court import (
     CourtAffectedBookingsItem,
     CourtAffectedBookingsResponse,
     CourtCreateRequest,
+    CourtDisruptionPreviewRequest,
+    CourtDisruptionPreviewResponse,
     CourtOperatingHoursResponse,
     CourtOperatingHoursUpdateRequest,
     CourtReorderRequest,
@@ -106,6 +116,17 @@ class CourtService:
                 operating_hours_dict = payload.operating_hours.to_dict()
             elif isinstance(payload.operating_hours, dict):
                 operating_hours_dict = payload.operating_hours
+        elif payload.opening_time is not None and payload.closing_time is not None:
+            o_str = payload.opening_time.strftime("%H:%M:%S") if isinstance(payload.opening_time, time) else str(payload.opening_time)
+            c_str = payload.closing_time.strftime("%H:%M:%S") if isinstance(payload.closing_time, time) else str(payload.closing_time)
+            operating_hours_dict = {
+                day: {
+                    "is_closed": False,
+                    "open_time": o_str,
+                    "close_time": c_str,
+                }
+                for day in WEEKDAY_NAMES
+            }
 
         return await self.court_repo.create(
             club_id=club_id,
@@ -119,6 +140,7 @@ class CourtService:
             is_active=final_is_active,
             display_order=display_order,
             price_per_hour=validated_price,
+            booking_interval_minutes=payload.booking_interval_minutes,
             operating_hours=operating_hours_dict,
             photo_url=payload.photo_url,
         )
@@ -219,6 +241,27 @@ class CourtService:
             val = update_data["operating_hours"]
             if hasattr(val, "to_dict"):
                 update_data["operating_hours"] = val.to_dict()
+            elif isinstance(val, dict):
+                update_data["operating_hours"] = val
+            update_data.pop("opening_time", None)
+            update_data.pop("closing_time", None)
+        elif "opening_time" in update_data and "closing_time" in update_data:
+            o_time = update_data.pop("opening_time", None)
+            c_time = update_data.pop("closing_time", None)
+            if o_time is not None and c_time is not None:
+                o_str = o_time.strftime("%H:%M:%S") if isinstance(o_time, time) else str(o_time)
+                c_str = c_time.strftime("%H:%M:%S") if isinstance(c_time, time) else str(c_time)
+                update_data["operating_hours"] = {
+                    day: {
+                        "is_closed": False,
+                        "open_time": o_str,
+                        "close_time": c_str,
+                    }
+                    for day in WEEKDAY_NAMES
+                }
+        else:
+            update_data.pop("opening_time", None)
+            update_data.pop("closing_time", None)
 
         old_photo_url = court.photo_url
         updated_court = await self.court_repo.update(court, **update_data)
@@ -297,6 +340,7 @@ class CourtService:
             has_override=bool(court.operating_hours),
             court_operating_hours=court.operating_hours,
             effective_operating_hours=effective_schedule,
+            booking_interval_minutes=court.booking_interval_minutes or 60,
         )
 
     async def update_court_operating_hours(
@@ -306,19 +350,25 @@ class CourtService:
         payload: CourtOperatingHoursUpdateRequest,
     ) -> CourtOperatingHoursResponse:
         """
-        Set or clear court-specific weekly operating hours override.
+        Set or clear court-specific weekly operating hours override and booking interval.
         Passing null for operating_hours clears the override and inherits club hours.
         """
         await self._require_club(club_id)
         court = await self.get_court(club_id, court_id)
         club = await self.club_repo.get_by_id(club_id)
 
+        update_fields: dict[str, Any] = {}
         if payload.operating_hours is None:
-            updated_hours = None
-        else:
-            updated_hours = payload.operating_hours.to_dict()
+            update_fields["operating_hours"] = None
+        elif hasattr(payload.operating_hours, "to_dict"):
+            update_fields["operating_hours"] = payload.operating_hours.to_dict()
+        elif isinstance(payload.operating_hours, dict):
+            update_fields["operating_hours"] = payload.operating_hours
 
-        await self.court_repo.update(court, operating_hours=updated_hours)
+        if payload.booking_interval_minutes is not None:
+            update_fields["booking_interval_minutes"] = payload.booking_interval_minutes
+
+        court = await self.court_repo.update(court, **update_fields)
         await self.db.commit()
 
         effective_schedule = build_weekly_schedule_dict(club, court)
@@ -329,6 +379,7 @@ class CourtService:
             has_override=bool(court.operating_hours),
             court_operating_hours=court.operating_hours,
             effective_operating_hours=effective_schedule,
+            booking_interval_minutes=court.booking_interval_minutes or 60,
         )
 
     async def get_court_affected_bookings(
@@ -381,6 +432,105 @@ class CourtService:
             court_name=court.name,
             upcoming_confirmed_bookings_count=count,
             bookings=items,
+            message=msg,
+        )
+
+    def _get_club_tz(self, tz_str: str | None) -> timezone | zoneinfo.ZoneInfo:
+        if not tz_str:
+            return timezone.utc
+        try:
+            return zoneinfo.ZoneInfo(tz_str)
+        except Exception:
+            return timezone.utc
+
+    async def preview_court_schedule_disruptions(
+        self,
+        club_id: UUID,
+        court_id: UUID,
+        payload: CourtDisruptionPreviewRequest,
+    ) -> CourtDisruptionPreviewResponse:
+        """
+        Check for upcoming confirmed bookings on a court that fall outside proposed operating hours.
+        Never alters or cancels any bookings.
+        """
+        await self._require_club(club_id)
+        court = await self.get_court(club_id, court_id)
+        club = await self.club_repo.get_by_id(club_id)
+        club_tz = self._get_club_tz(club.timezone if club else None)
+
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(Booking)
+            .where(
+                Booking.club_id == club_id,
+                Booking.court_id == court_id,
+                Booking.status == BookingStatus.CONFIRMED,
+                Booking.start_at >= now,
+            )
+            .order_by(Booking.start_at.asc())
+        )
+        res = await self.db.execute(stmt)
+        upcoming_bookings = list(res.scalars().all())
+
+        # Determine proposed hours map
+        proposed_hours: dict[str, Any] | None = None
+        if payload.operating_hours is not None:
+            if hasattr(payload.operating_hours, "to_dict"):
+                proposed_hours = payload.operating_hours.to_dict()
+            elif isinstance(payload.operating_hours, dict):
+                proposed_hours = payload.operating_hours
+
+        affected: list[CourtAffectedBookingsItem] = []
+
+        for b in upcoming_bookings:
+            b_start_utc = b.start_at if b.start_at.tzinfo else b.start_at.replace(tzinfo=timezone.utc)
+            b_end_utc = b.end_at if b.end_at.tzinfo else b.end_at.replace(tzinfo=timezone.utc)
+
+            local_start = b_start_utc.astimezone(club_tz)
+            local_end = b_end_utc.astimezone(club_tz)
+            weekday_idx = local_start.weekday()
+            day_name = WEEKDAY_NAMES[weekday_idx]
+
+            is_disrupted = False
+            if proposed_hours is not None and day_name in proposed_hours:
+                cfg = proposed_hours[day_name]
+                if isinstance(cfg, dict):
+                    if cfg.get("is_closed", False):
+                        is_disrupted = True
+                    else:
+                        o_time = parse_time_value(cfg.get("open_time"))
+                        c_time = parse_time_value(cfg.get("close_time"))
+                        if o_time and local_start.time() < o_time:
+                            is_disrupted = True
+                        if c_time and c_time != time(0, 0):
+                            if local_end.date() != local_start.date() or local_end.time() > c_time:
+                                is_disrupted = True
+
+            if is_disrupted:
+                affected.append(
+                    CourtAffectedBookingsItem(
+                        id=b.id,
+                        player_id=b.player_id,
+                        start_at=b.start_at,
+                        end_at=b.end_at,
+                        status=b.status.value,
+                        booking_type=b.booking_type.value,
+                    )
+                )
+
+        count = len(affected)
+        msg = (
+            f"Court '{court.name}' has {count} upcoming confirmed booking(s) that conflict with the proposed schedule. "
+            "Saving this configuration will apply to future bookings only; existing reservations and payments remain unchanged."
+            if count > 0
+            else f"No upcoming bookings will conflict with the proposed operating hours for '{court.name}'."
+        )
+
+        return CourtDisruptionPreviewResponse(
+            court_id=court.id,
+            court_name=court.name,
+            affected_bookings_count=count,
+            affected_bookings=affected,
             message=msg,
         )
 

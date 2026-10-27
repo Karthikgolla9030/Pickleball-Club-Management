@@ -51,7 +51,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, ModalSheet } from '@/components';
+import { AppHeader, AppText, DatePickerInput, InternationalPhoneInput, ModalSheet } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useAuth, usePlayerProfile } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -93,6 +93,7 @@ export default function PlayerProfileScreen() {
   const [editFirstName, setEditFirstName] = useState('');
   const [editLastName, setEditLastName] = useState('');
   const [editPhone, setEditPhone] = useState('');
+  const [editDob, setEditDob] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editGender, setEditGender] = useState('');
   const [editLocation, setEditLocation] = useState('Tirupati, AP');
@@ -260,6 +261,7 @@ export default function PlayerProfileScreen() {
     setEditFirstName(profile?.first_name || '');
     setEditLastName(profile?.last_name || '');
     setEditPhone(profile?.phone || '');
+    setEditDob(profile?.date_of_birth || '');
     setEditBio(profile?.bio || '');
     setEditGender(profile?.gender || '');
     setEditError(null);
@@ -280,6 +282,7 @@ export default function PlayerProfileScreen() {
         first_name: editFirstName.trim() || null,
         last_name: editLastName.trim() || null,
         phone: editPhone.trim() || null,
+        date_of_birth: editDob || null,
         bio: editBio.trim() || null,
         gender: editGender || null,
       });
@@ -288,6 +291,7 @@ export default function PlayerProfileScreen() {
         setEditFirstName(updated.first_name || '');
         setEditLastName(updated.last_name || '');
         setEditPhone(updated.phone || '');
+        setEditDob(updated.date_of_birth || '');
         setEditBio(updated.bio || '');
         setEditGender(updated.gender || '');
       }
@@ -797,16 +801,25 @@ export default function PlayerProfileScreen() {
           </View>
 
           <View style={styles.formGroup}>
-            <AppText style={styles.formLabel}>Phone Number</AppText>
-            <TextInput
-              style={styles.formInput}
+            <InternationalPhoneInput
+              label="Phone Number"
               value={editPhone}
               onChangeText={setEditPhone}
-              placeholder="+91 98765 43210"
-              placeholderTextColor="#8C9BA5"
-              keyboardType="phone-pad"
+              hint="Country code is automatically handled and stored in normalized E.164 format"
             />
           </View>
+
+          <View style={styles.formGroup}>
+            <DatePickerInput
+              label="Date of Birth"
+              value={editDob}
+              onChangeDate={setEditDob}
+              maxDate={new Date().toISOString().split('T')[0]}
+              placeholder="Select birth date"
+              hint="Used to determine age eligibility in tournaments"
+            />
+          </View>
+
 
           <View style={styles.formGroup}>
             <AppText style={styles.formLabel}>Gender</AppText>

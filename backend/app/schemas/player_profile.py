@@ -10,14 +10,22 @@ from uuid import UUID
 from pydantic import BaseModel, field_validator
 
 
+from app.core.phone import normalize_phone_number
+
+
 class PlayerProfileValidatorsMixin:
-    @field_validator("first_name", "last_name", "phone", "bio", "gender", mode="before")
+    @field_validator("first_name", "last_name", "bio", "gender", mode="before")
     @classmethod
     def clean_optional_strings(cls, v: str | None) -> str | None:
         if v is not None and isinstance(v, str):
             cleaned = v.strip()
             return cleaned if cleaned else None
         return v
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_and_normalize_phone(cls, v: str | None) -> str | None:
+        return normalize_phone_number(v)
 
     @field_validator("date_of_birth")
     @classmethod

@@ -180,110 +180,20 @@ export function Step3PaymentSubmit({
             </TouchableOpacity>
           </View>
 
-          {/* Form Fields: Card */}
-          {formState.paymentMethod === 'card' && (
-            <View style={styles.fieldsContainer}>
-              <View style={styles.fieldItem}>
-                <AppText style={styles.fieldLabel}>Cardholder name</AppText>
-                <TextInput
-                  style={[styles.input, errors.cardholderName && styles.inputError]}
-                  placeholder="Name on card"
-                  placeholderTextColor="#94A3B8"
-                  value={formState.cardholderName}
-                  onChangeText={(text) => onChange({ cardholderName: text })}
-                />
-                {errors.cardholderName && (
-                  <AppText style={styles.errorText}>{errors.cardholderName}</AppText>
-                )}
-              </View>
-
-              <View style={styles.fieldItem}>
-                <AppText style={styles.fieldLabel}>Card number</AppText>
-                <View style={[styles.inputWithIcon, errors.cardNumber && styles.inputError]}>
-                  <TextInput
-                    style={styles.innerInput}
-                    placeholder="1234 5678 9012 3456"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    maxLength={19}
-                    value={formState.cardNumber}
-                    onChangeText={(text) => {
-                      // format with spaces
-                      const cleaned = text.replace(/\D/g, '').slice(0, 16);
-                      const formatted = cleaned.match(/.{1,4}/g)?.join(' ') || cleaned;
-                      onChange({ cardNumber: formatted });
-                    }}
-                  />
-                  <CreditCard size={18} color="#94A3B8" />
-                </View>
-                {errors.cardNumber && (
-                  <AppText style={styles.errorText}>{errors.cardNumber}</AppText>
-                )}
-              </View>
-
-              <View style={styles.rowFields}>
-                <View style={styles.halfField}>
-                  <AppText style={styles.fieldLabel}>Expiry date</AppText>
-                  <TextInput
-                    style={[styles.input, errors.cardExpiry && styles.inputError]}
-                    placeholder="MM / YY"
-                    placeholderTextColor="#94A3B8"
-                    keyboardType="numeric"
-                    maxLength={7}
-                    value={formState.cardExpiry}
-                    onChangeText={(text) => {
-                      const cleaned = text.replace(/\D/g, '').slice(0, 4);
-                      const formatted = cleaned.length >= 2 ? `${cleaned.slice(0, 2)} / ${cleaned.slice(2)}` : cleaned;
-                      onChange({ cardExpiry: formatted });
-                    }}
-                  />
-                  {errors.cardExpiry && (
-                    <AppText style={styles.errorText}>{errors.cardExpiry}</AppText>
-                  )}
-                </View>
-
-                <View style={styles.halfField}>
-                  <AppText style={styles.fieldLabel}>CVV</AppText>
-                  <View style={[styles.inputWithIcon, errors.cardCvv && styles.inputError]}>
-                    <TextInput
-                      style={styles.innerInput}
-                      placeholder="123"
-                      placeholderTextColor="#94A3B8"
-                      keyboardType="numeric"
-                      secureTextEntry
-                      maxLength={4}
-                      value={formState.cardCvv}
-                      onChangeText={(text) => onChange({ cardCvv: text.replace(/\D/g, '') })}
-                    />
-                    <HelpCircle size={16} color="#94A3B8" />
-                  </View>
-                  {errors.cardCvv && (
-                    <AppText style={styles.errorText}>{errors.cardCvv}</AppText>
-                  )}
-                </View>
-              </View>
+          {/* Secure Provider Integration Details */}
+          <View style={styles.providerInfoBox}>
+            <View style={styles.providerInfoRow}>
+              <ShieldCheck size={18} color="#176B57" />
+              <AppText style={styles.providerInfoTitle}>
+                {formState.paymentMethod === 'upi' ? 'UPI Dynamic Verification' : 'Verified Secure Card Gateway'}
+              </AppText>
             </View>
-          )}
-
-          {/* Form Fields: UPI */}
-          {formState.paymentMethod === 'upi' && (
-            <View style={styles.fieldsContainer}>
-              <View style={styles.fieldItem}>
-                <AppText style={styles.fieldLabel}>UPI ID / VPA</AppText>
-                <TextInput
-                  style={[styles.input, errors.upiId && styles.inputError]}
-                  placeholder="e.g. mobile@upi or username@bank"
-                  placeholderTextColor="#94A3B8"
-                  autoCapitalize="none"
-                  value={formState.upiId}
-                  onChangeText={(text) => onChange({ upiId: text })}
-                />
-                {errors.upiId && (
-                  <AppText style={styles.errorText}>{errors.upiId}</AppText>
-                )}
-              </View>
-            </View>
-          )}
+            <AppText style={styles.providerInfoDesc}>
+              {formState.paymentMethod === 'upi'
+                ? 'Pay seamlessly via Google Pay, PhonePe, Paytm, BHIM or any UPI application with instant real-time booking confirmation.'
+                : 'Processed through our verified payment gateway with 3-D Secure OTP authentication. Card details are tokenized.'}
+            </AppText>
+          </View>
 
           {/* Security Banner */}
           <View style={styles.securityBox}>
@@ -635,5 +545,29 @@ const styles = StyleSheet.create({
   lockText: {
     fontSize: 11.5,
     color: '#64748B',
+  },
+  providerInfoBox: {
+    backgroundColor: '#F0F9F5',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D1E7DD',
+    marginBottom: 12,
+    gap: 6,
+  },
+  providerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  providerInfoTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  providerInfoDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
   },
 });

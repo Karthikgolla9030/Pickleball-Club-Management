@@ -13,7 +13,9 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { AppText } from '@/components/AppText';
+import { DatePickerInput } from '@/components/DatePickerInput';
 import { Input } from '@/components/Input';
+import { TimePickerInput } from '@/components/TimePickerInput';
 import { Colors, Radius, Spacing } from '@/theme';
 import {
   REGISTRATION_METHOD_OPTIONS,
@@ -40,23 +42,25 @@ export function Step4ScheduleRegistration({
         </AppText>
         <View style={styles.row}>
           <View style={styles.col}>
-            <Input
-              label="Start Date *"
-              placeholder="YYYY-MM-DD"
+            <DatePickerInput
+              label="Start Date"
+              required
+              placeholder="Select start date"
               value={state.startDate}
-              onChangeText={(startDate) => onChange({ startDate })}
+              onChangeDate={(startDate) => onChange({ startDate })}
+              maxDate={state.endDate || undefined}
               error={errors?.startDate}
-              hint="Format: YYYY-MM-DD"
             />
           </View>
           <View style={styles.col}>
-            <Input
-              label="End Date *"
-              placeholder="YYYY-MM-DD"
+            <DatePickerInput
+              label="End Date"
+              required
+              placeholder="Select end date"
               value={state.endDate}
-              onChangeText={(endDate) => onChange({ endDate })}
+              onChangeDate={(endDate) => onChange({ endDate })}
+              minDate={state.startDate || undefined}
               error={errors?.endDate}
-              hint="Format: YYYY-MM-DD"
             />
           </View>
         </View>
@@ -69,33 +73,34 @@ export function Step4ScheduleRegistration({
         </AppText>
         <View style={styles.row}>
           <View style={styles.col}>
-            <Input
+            <TimePickerInput
               label="Start Time"
-              placeholder="08:00"
               value={state.startTime}
-              onChangeText={(startTime) => onChange({ startTime })}
+              onChangeTime={(startTime) => onChange({ startTime })}
+              includeSeconds={false}
               error={errors?.startTime}
-              hint="24h time: HH:mm"
+              placeholder="08:00"
             />
           </View>
           <View style={styles.col}>
-            <Input
+            <TimePickerInput
               label="End Time"
-              placeholder="18:00"
               value={state.endTime}
-              onChangeText={(endTime) => onChange({ endTime })}
+              onChangeTime={(endTime) => onChange({ endTime })}
+              includeSeconds={false}
               error={errors?.endTime}
-              hint="24h time: HH:mm"
+              placeholder="18:00"
             />
           </View>
         </View>
 
         <View style={styles.singleField}>
-          <Input
+          <TimePickerInput
             label="Check-in Time"
-            placeholder="07:30"
             value={state.checkInTime}
-            onChangeText={(checkInTime) => onChange({ checkInTime })}
+            onChangeTime={(checkInTime) => onChange({ checkInTime })}
+            includeSeconds={false}
+            placeholder="07:30"
             hint="Players must report by this time"
           />
         </View>
@@ -121,23 +126,26 @@ export function Step4ScheduleRegistration({
         </AppText>
         <View style={styles.row}>
           <View style={styles.col}>
-            <Input
-              label="Registration Opens *"
-              placeholder="YYYY-MM-DD"
+            <DatePickerInput
+              label="Registration Opens"
+              required
+              placeholder="Select open date"
               value={state.regOpenDate}
-              onChangeText={(regOpenDate) => onChange({ regOpenDate })}
+              onChangeDate={(regOpenDate) => onChange({ regOpenDate })}
+              maxDate={state.regCloseDate || state.startDate || undefined}
               error={errors?.regOpenDate}
-              hint="When signups begin"
             />
           </View>
           <View style={styles.col}>
-            <Input
-              label="Registration Deadline *"
-              placeholder="YYYY-MM-DD"
+            <DatePickerInput
+              label="Registration Deadline"
+              required
+              placeholder="Select deadline"
               value={state.regCloseDate}
-              onChangeText={(regCloseDate) => onChange({ regCloseDate })}
+              onChangeDate={(regCloseDate) => onChange({ regCloseDate })}
+              minDate={state.regOpenDate || undefined}
+              maxDate={state.startDate || undefined}
               error={errors?.regCloseDate}
-              hint="Cutoff date"
             />
           </View>
         </View>

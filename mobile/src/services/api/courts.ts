@@ -10,6 +10,7 @@ import type {
   Court,
   CourtAffectedBookingsResponse,
   CourtCreateRequest,
+  CourtDisruptionPreviewResponse,
   CourtOperatingHoursResponse,
   CourtReorderRequest,
   CourtStatus,
@@ -73,14 +74,24 @@ export const courtApi = {
   updateCourtOperatingHours(
     clubId: string,
     courtId: string,
-    operatingHours: WeeklyOperatingHoursMap | null
+    operatingHours: WeeklyOperatingHoursMap | null,
+    bookingIntervalMinutes?: number | null
   ): Promise<CourtOperatingHoursResponse> {
     return apiClient.put<CourtOperatingHoursResponse>(API_ENDPOINTS.COURT_OPERATING_HOURS(clubId, courtId), {
       operating_hours: operatingHours,
+      booking_interval_minutes: bookingIntervalMinutes,
     });
   },
 
   getCourtAffectedBookings(clubId: string, courtId: string): Promise<CourtAffectedBookingsResponse> {
     return apiClient.get<CourtAffectedBookingsResponse>(API_ENDPOINTS.COURT_AFFECTED_BOOKINGS(clubId, courtId));
+  },
+
+  previewCourtDisruptions(
+    clubId: string,
+    courtId: string,
+    payload: { operating_hours?: WeeklyOperatingHoursMap | null; booking_interval_minutes?: number | null }
+  ): Promise<CourtDisruptionPreviewResponse> {
+    return apiClient.post<CourtDisruptionPreviewResponse>(`${clubCourtBase(clubId)}/${courtId}/preview-disruptions`, payload);
   },
 };

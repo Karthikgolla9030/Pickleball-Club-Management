@@ -68,6 +68,7 @@ class CourtRepository:
         is_active: bool = True,
         display_order: int = 0,
         price_per_hour: Decimal | None = None,
+        booking_interval_minutes: int = 60,
         operating_hours: dict | None = None,
         photo_url: str | None = None,
     ) -> Court:
@@ -84,6 +85,7 @@ class CourtRepository:
             is_active=is_active,
             display_order=display_order,
             price_per_hour=price_per_hour,
+            booking_interval_minutes=booking_interval_minutes,
             operating_hours=operating_hours,
         )
         self.db.add(court)

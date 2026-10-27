@@ -7,6 +7,10 @@
 import { API_ENDPOINTS } from '@/constants';
 import { apiClient } from './client';
 import type {
+  CheckoutInitiatePayload,
+  CheckoutInitiateResponse,
+  CheckoutVerifyPayload,
+  CheckoutVerifyResponse,
   CreatePaymentPayload,
   Payment,
   PaymentFilters,
@@ -138,5 +142,21 @@ export const paymentApi = {
    */
   getPlayerPayment(paymentId: string): Promise<PlayerPayment> {
     return apiClient.get<PlayerPayment>(API_ENDPOINTS.PLAYER_PAYMENT(paymentId));
+  },
+
+  // ─── Unified Checkout Endpoints ──────────────────────────────────────────
+
+  /**
+   * Initiate unified real-time checkout for any activity.
+   */
+  initiateCheckout(payload: CheckoutInitiatePayload): Promise<CheckoutInitiateResponse> {
+    return apiClient.post<CheckoutInitiateResponse>(API_ENDPOINTS.CHECKOUT_INITIATE, payload);
+  },
+
+  /**
+   * Cryptographically verify payment with provider and confirm activity booking.
+   */
+  verifyCheckout(payload: CheckoutVerifyPayload): Promise<CheckoutVerifyResponse> {
+    return apiClient.post<CheckoutVerifyResponse>(API_ENDPOINTS.CHECKOUT_VERIFY, payload);
   },
 };

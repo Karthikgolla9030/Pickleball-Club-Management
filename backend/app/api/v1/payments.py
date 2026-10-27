@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Header, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -38,6 +38,10 @@ from app.models.payment import PaymentMethod, PaymentPurpose, PaymentStatus
 from app.models.user import User
 from app.permissions import Permission
 from app.schemas.payment import (
+    CheckoutInitiateRequest,
+    CheckoutInitiateResponse,
+    CheckoutVerifyRequest,
+    CheckoutVerifyResponse,
     CreatePaymentRequest,
     PaymentCancelRequest,
     PaymentFailRequest,
@@ -376,3 +380,82 @@ async def get_player_payment(
         user_id=current_user.id,
         payment_id=payment_id,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# UNIFIED CHECKOUT AND WEBHOOK ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@player_payments_router.post(
+    "/checkout/initiate",
+    response_model=CheckoutInitiateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Initiate unified checkout for any activity",
+    description="Validates pricing and real-time availability, creates provider order (Razorpay/Stripe), and returns checkout payload.",
+    responses={
+        400: {"description": "Validation error or invalid state"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Activity or club not found"},
+        409: {"description": "Slot or capacity conflict"},
+    },
+)
+async def initiate_checkout(
+    payload: CheckoutInitiateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CheckoutInitiateResponse:
+    """Initiate checkout for court booking, tournament, event, lesson, league, or membership."""
+    return await PaymentService(db).initiate_checkout(
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@player_payments_router.post(
+    "/checkout/verify",
+    response_model=CheckoutVerifyResponse,
+    summary="Verify checkout payment and confirm booking",
+    description="Cryptographically verifies provider payment signature and fulfills booking or registration atomically.",
+    responses={
+        400: {"description": "Signature verification failed"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Payment not found"},
+        409: {"description": "Late hold conflict (auto-refund initiated)"},
+    },
+)
+async def verify_checkout(
+    payload: CheckoutVerifyRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CheckoutVerifyResponse:
+    """Verify cryptographic payment signature and confirm booking."""
+    return await PaymentService(db).verify_checkout(
+        user_id=current_user.id,
+        payload=payload,
+    )
+
+
+@player_payments_router.post(
+    "/webhook",
+    summary="Generic payment webhook handler",
+)
+@player_payments_router.post(
+    "/webhook/{provider}",
+    summary="Provider-specific payment webhook handler",
+)
+async def payment_webhook(
+    request: Request,
+    provider: str = "razorpay",
+    x_razorpay_signature: str | None = Header(default=None),
+    stripe_signature: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Process incoming payment webhooks from Razorpay or Stripe."""
+    signature = x_razorpay_signature or stripe_signature or request.headers.get("x-signature") or ""
+    body = await request.body()
+    return await PaymentService(db).process_webhook(
+        provider=provider,
+        payload_bytes=body,
+        signature_header=signature,
+    )
+

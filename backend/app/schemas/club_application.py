@@ -12,6 +12,9 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from app.models.club_application import ClubApplicationStatus
 
 
+from app.core.phone import normalize_phone_number
+
+
 class ClubApplicationSubmitRequest(BaseModel):
     """Payload for submitting a new club registration for platform review."""
     model_config = ConfigDict(str_strip_whitespace=True)
@@ -43,6 +46,11 @@ class ClubApplicationSubmitRequest(BaseModel):
     timezone: str = Field(default="UTC", max_length=50)
     facilities_summary: str | None = Field(default=None, max_length=500)
 
+    @field_validator("applicant_phone", "contact_phone", mode="before")
+    @classmethod
+    def validate_phones(cls, v: str | None) -> str | None:
+        return normalize_phone_number(v)
+
     @field_validator("slug", mode="before")
     @classmethod
     def normalize_slug(cls, v: str | None) -> str | None:
@@ -51,6 +59,7 @@ class ClubApplicationSubmitRequest(BaseModel):
             cleaned = re.sub(r"[^a-z0-9-]+", "-", v.lower()).strip("-")
             return cleaned or None
         return None
+
 
 
 class ClubApplicationRejectRequest(BaseModel):

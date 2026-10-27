@@ -307,3 +307,60 @@ class PaymentSummaryResponse(BaseModel):
     total_refunded_amount: Decimal = Decimal("0.00")
     net_collected: Decimal = Decimal("0.00")
     currency: str = "USD"
+
+
+# ─── Unified Checkout Schemas ────────────────────────────────────────────────
+
+class CheckoutPriceBreakdown(BaseModel):
+    base_amount: Decimal
+    discount_amount: Decimal = Decimal("0.00")
+    tax_amount: Decimal = Decimal("0.00")
+    service_fee: Decimal = Decimal("0.00")
+    final_amount: Decimal
+    currency: str = "USD"
+
+
+class CheckoutInitiateRequest(BaseModel):
+    club_id: UUID = Field(..., description="Target club for the activity")
+    purpose: PaymentPurpose = Field(..., description="Activity purpose")
+    activity_id: UUID | None = Field(default=None, description="ID of court, tournament, event, lesson, plan, or league")
+    start_at: datetime | None = Field(default=None, description="Start time for court booking or lesson")
+    end_at: datetime | None = Field(default=None, description="End time for court booking or lesson")
+    payment_method: PaymentMethod = Field(default=PaymentMethod.ONLINE, description="Requested payment method")
+    currency: str = Field(default="USD", min_length=3, max_length=3)
+    notes: str | None = Field(default=None, max_length=1000)
+    metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+
+    @field_validator("currency")
+    @classmethod
+    def uppercase_currency(cls, v: str) -> str:
+        return v.strip().upper()
+
+
+class CheckoutInitiateResponse(BaseModel):
+    payment_id: UUID
+    reference: str
+    status: PaymentStatus
+    breakdown: CheckoutPriceBreakdown
+    provider: str
+    provider_order_id: str | None = None
+    provider_key_id: str | None = None
+    supported_methods: list[str] = ["upi", "card", "netbanking"]
+    activity_summary: dict[str, str | int | float | bool | None]
+    is_free: bool = False
+
+
+class CheckoutVerifyRequest(BaseModel):
+    payment_id: UUID
+    provider: str
+    provider_payment_id: str
+    provider_order_id: str
+    provider_signature: str
+
+
+class CheckoutVerifyResponse(BaseModel):
+    success: bool
+    payment: PlayerPaymentResponse
+    message: str
+    booking_or_registration: dict[str, str | int | float | bool | None] | None = None
+

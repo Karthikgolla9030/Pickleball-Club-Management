@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.operating_hours import WeeklyOperatingHours
+from app.core.phone import normalize_phone_number
 
 
 class ClubResponse(BaseModel):
@@ -163,7 +164,12 @@ class ClubUpdateRequest(BaseModel):
             v = f"https://{v}"
         return v
 
-    @field_validator("name", "short_description", "description", "contact_phone",
+    @field_validator("contact_phone", mode="before")
+    @classmethod
+    def validate_contact_phone(cls, v: str | None) -> str | None:
+        return normalize_phone_number(v)
+
+    @field_validator("name", "short_description", "description",
                      "address_line1", "address_line2", "city", "state", "postal_code",
                      "country", "operating_days", "timezone", "holiday_closure_notes",
                      "facilities_summary")
@@ -173,6 +179,7 @@ class ClubUpdateRequest(BaseModel):
             trimmed = v.strip()
             return trimmed if trimmed else None
         return v
+
 
 
 class ClubLogoUploadRequest(BaseModel):

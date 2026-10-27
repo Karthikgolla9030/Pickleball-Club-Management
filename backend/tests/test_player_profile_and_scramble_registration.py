@@ -290,7 +290,7 @@ class TestPlayerProfilePersistence:
         assert patch_res.status_code == 200
         patch_data = patch_res.json()
         assert patch_data["display_name"] == "Updated Name"
-        assert patch_data["phone"] == "+91 98765 43210"
+        assert patch_data["phone"] == "+919876543210"
         assert patch_data["gender"] == "Male"
         assert patch_data["bio"] == "Passionate tournament player looking for competitive matches."
 
@@ -306,7 +306,7 @@ class TestPlayerProfilePersistence:
         assert get_res.status_code == 200
         get_data = get_res.json()
         assert get_data["display_name"] == "Updated Name"
-        assert get_data["phone"] == "+91 98765 43210"
+        assert get_data["phone"] == "+919876543210"
         assert get_data["gender"] == "Male"
         assert get_data["bio"] == "Passionate tournament player looking for competitive matches."
         assert "no-store" in get_res.headers.get("cache-control", "")
@@ -319,7 +319,7 @@ class TestPlayerProfilePersistence:
         )
         assert session_res.status_code == 200
         session_data = session_res.json()
-        assert session_data["phone"] == "+91 98765 43210"
+        assert session_data["phone"] == "+919876543210"
         assert session_data["gender"] == "Male"
         assert session_data["bio"] == "Passionate tournament player looking for competitive matches."
 

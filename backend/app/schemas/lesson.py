@@ -17,6 +17,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.phone import normalize_phone_number
 from app.models.lesson import LessonRegistrationStatus, LessonStatus
 
 
@@ -30,6 +31,11 @@ class CoachCreateRequest(BaseModel):
     email: str | None = Field(default=None, max_length=255)
     user_id: UUID | None = None
 
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        return normalize_phone_number(v)
+
 
 class CoachUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
@@ -38,6 +44,12 @@ class CoachUpdateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=255)
     user_id: UUID | None = None
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, v: str | None) -> str | None:
+        return normalize_phone_number(v)
+
 
 
 class CoachResponse(BaseModel):

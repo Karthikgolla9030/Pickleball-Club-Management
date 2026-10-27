@@ -52,6 +52,9 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  DatePickerInput,
+  DateRangePickerInput,
+  TimePickerInput,
   LeagueOptionsMenuModal,
   LoadingState,
   ModalSheet,
@@ -2023,18 +2026,12 @@ export default function ClubLeagueDetailsScreen() {
             </View>
           ) : null}
 
-          <Input
-            label="Start Date (YYYY-MM-DD)"
-            placeholder="e.g. 2026-10-05"
-            value={editingWeekStartDate}
-            onChangeText={setEditingWeekStartDate}
-          />
-
-          <Input
-            label="End Date (YYYY-MM-DD)"
-            placeholder="e.g. 2026-10-11"
-            value={editingWeekEndDate}
-            onChangeText={setEditingWeekEndDate}
+          <DateRangePickerInput
+            label="Week Duration"
+            startDate={editingWeekStartDate}
+            endDate={editingWeekEndDate}
+            onStartDateChange={setEditingWeekStartDate}
+            onEndDateChange={setEditingWeekEndDate}
           />
         </View>
       </ModalSheet>
@@ -2102,18 +2099,16 @@ export default function ClubLeagueDetailsScreen() {
           </View>
 
           {/* Date & Time Inputs */}
-          <Input
-            label="Date (YYYY-MM-DD) *"
-            placeholder="2026-10-07"
+          <DatePickerInput
+            label="Date *"
             value={scheduleDate}
-            onChangeText={setScheduleDate}
+            onChange={setScheduleDate}
           />
 
-          <Input
-            label="Start Time (HH:MM in 24hr format) *"
-            placeholder="18:00"
+          <TimePickerInput
+            label="Start Time *"
             value={scheduleTime}
-            onChangeText={setScheduleTime}
+            onChange={setScheduleTime}
           />
         </View>
       </ModalSheet>

@@ -66,6 +66,7 @@ import {
   Card,
   EmptyState,
   Input,
+  DateTimePickerInput,
   LoadingState,
   MetricGrid,
   ModalSheet,
@@ -941,7 +942,21 @@ function CreateEventModal({
   const [location, setLocation] = useState('');
   const [capacity, setCapacity] = useState('');
   const [fee, setFee] = useState('');
-  const [daysAhead, setDaysAhead] = useState('7');
+  const defaultStart = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    d.setHours(9, 0, 0, 0);
+    return d.toISOString();
+  }, []);
+  const defaultEnd = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    d.setHours(11, 0, 0, 0);
+    return d.toISOString();
+  }, []);
+
+  const [startAt, setStartAt] = useState(defaultStart);
+  const [endAt, setEndAt] = useState(defaultEnd);
 
   const createEventMutation = useCreateClubEvent(clubId);
 
@@ -951,18 +966,23 @@ function CreateEventModal({
       return;
     }
 
-    const days = parseInt(daysAhead, 10) || 7;
-    const now = new Date();
-    const startAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
-    const endAt = new Date(startAt.getTime() + 2 * 60 * 60 * 1000);
+    if (!startAt || !endAt) {
+      Alert.alert('Validation Error', 'Event start and end dates are required.');
+      return;
+    }
+
+    if (new Date(startAt) >= new Date(endAt)) {
+      Alert.alert('Validation Error', 'Event end time must be after the start time.');
+      return;
+    }
 
     const payload: CreateEventPayload = {
       title: title.trim(),
       description: description.trim() || null,
       event_type: eventType,
       visibility,
-      start_at: startAt.toISOString(),
-      end_at: endAt.toISOString(),
+      start_at: startAt,
+      end_at: endAt,
       location: location.trim() || null,
       capacity: capacity.trim() ? parseInt(capacity.trim(), 10) : null,
       registration_fee: fee.trim() ? parseFloat(fee.trim()) : 0,
@@ -1056,12 +1076,16 @@ function CreateEventModal({
           onChangeText={setLocation}
         />
 
-        <Input
-          label="Days From Now"
-          placeholder="7"
-          value={daysAhead}
-          onChangeText={setDaysAhead}
-          keyboardType="numeric"
+        <DateTimePickerInput
+          label="Event Start Date & Time *"
+          value={startAt}
+          onChange={setStartAt}
+        />
+
+        <DateTimePickerInput
+          label="Event End Date & Time *"
+          value={endAt}
+          onChange={setEndAt}
         />
 
         <Input

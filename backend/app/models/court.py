@@ -164,6 +164,12 @@ class Court(Base):
         nullable=True,
     )
 
+    booking_interval_minutes: Mapped[int] = mapped_column(
+        SmallInteger,
+        default=60,
+        nullable=False,
+    )
+
     # ─── Relationships ────────────────────────────────────────────────────────
     club: Mapped["Club"] = relationship("Club", back_populates="courts")  # noqa: F821
     bookings: Mapped[list["Booking"]] = relationship(  # noqa: F821

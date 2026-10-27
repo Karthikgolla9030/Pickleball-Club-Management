@@ -39,6 +39,7 @@ import { RegistrationSuccessView } from './RegistrationSuccessView';
 import { Step1PlayerTeamDetails } from './Step1PlayerTeamDetails';
 import { Step2ReviewRegistration } from './Step2ReviewRegistration';
 import { Step3PaymentSubmit } from './Step3PaymentSubmit';
+import { CheckoutModal } from '../checkout/CheckoutModal';
 import type {
   RegistrationErrors,
   RegistrationFormState,
@@ -92,6 +93,7 @@ export function TournamentRegistrationModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [alreadyRegisteredOverride, setAlreadyRegisteredOverride] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
 
   // Check player's registration status from backend
   const {
@@ -543,6 +545,22 @@ export function TournamentRegistrationModal({
   const handleSubmit = async () => {
     if (!validateStep3()) return;
     setSubmitError(null);
+
+    const rawFee = (activeTournament as any).registration_fee != null
+      ? Number((activeTournament as any).registration_fee)
+      : (activeTournament as any).format_configuration?.entry_fee != null
+      ? Number((activeTournament as any).format_configuration.entry_fee)
+      : (activeTournament as any).format_configuration?.registration_fee != null
+      ? Number((activeTournament as any).format_configuration.registration_fee)
+      : null;
+    const defaultFee = isScramble ? 35 : parsed?.isSingles ? 30 : activeTournament.format === 'bracket' ? 60 : 50;
+    const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
+
+    if (feeAmount > 0) {
+      setShowCheckout(true);
+      return;
+    }
+
     try {
       const partnerNotes = formState.selectedPartner
         ? `Partner: ${formState.selectedPartner.full_name} (${formState.selectedPartner.email})`
@@ -615,6 +633,51 @@ export function TournamentRegistrationModal({
     }
   };
 
+  const handleCheckoutSuccess = (res: any) => {
+    setShowCheckout(false);
+    void refetchMyRegistration();
+    if (activeTournament?.id) {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
+      queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
+    }
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+    queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    queryClient.invalidateQueries({ queryKey: ['clubs'] });
+
+    const rawFee = (activeTournament as any).registration_fee != null
+      ? Number((activeTournament as any).registration_fee)
+      : (activeTournament as any).format_configuration?.entry_fee != null
+      ? Number((activeTournament as any).format_configuration.entry_fee)
+      : null;
+    const defaultFee = isScramble ? 35 : parsed?.isSingles ? 30 : 50;
+    const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
+
+    const resultObj: any = {
+      id: res.payment?.id || 'reg_completed',
+      tournament_id: activeTournament.id,
+      status: 'confirmed',
+      status_label: 'Confirmed',
+      registered_at: new Date().toISOString(),
+      message: 'Successfully registered for tournament',
+      reference_number: res.payment?.reference || `REG-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
+      registration_type: isDoubles ? 'team' : 'individual',
+      tournament_name: activeTournament.name,
+      tournament_format: activeTournament.format,
+      tournament_format_label: activeTournament.format,
+      division: parsed?.category || 'Open',
+      fee_amount: feeAmount,
+      payment_status: 'completed',
+      payment_method: 'online',
+    };
+    setSuccessResult(resultObj);
+    if (onSuccess) {
+      onSuccess(resultObj);
+    }
+  };
+
   return (
     <Modal
       visible={visible}
@@ -684,6 +747,26 @@ export function TournamentRegistrationModal({
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {showCheckout && activeTournament && (
+          <CheckoutModal
+            visible={showCheckout}
+            onClose={() => setShowCheckout(false)}
+            clubId={activeTournament.club_id}
+            purpose="tournament"
+            activityId={activeTournament.id}
+            activityTitle={activeTournament.name}
+            activitySubtitle={`Division: ${parsed?.category || 'Open'}`}
+            participantsInfo={isDoubles ? `${formState.fullName} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}` : formState.fullName}
+            metadata={{
+              team_name: formState.teamName,
+              partner_name: formState.selectedPartner?.full_name || formState.partnerFullName,
+              partner_email: formState.selectedPartner?.email || formState.partnerEmail,
+              skill_level: formState.skillLevel,
+            }}
+            onSuccess={handleCheckoutSuccess}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AppText } from './AppText';
 import { Input } from './Input';
 import { Button } from './Button';
+import { DatePickerInput } from './DatePickerInput';
 import { Colors, Layout, Radius, Spacing, Typography } from '@/theme';
 import type { CreateLeaguePayload } from '@/types';
 
@@ -252,6 +253,14 @@ export function CreateLeagueModal({
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* League Start Date */}
+              <DatePickerInput
+                label="League Start Date (Optional)"
+                value={startDate}
+                onChange={setStartDate}
+                placeholder="Select start date"
+              />
 
               {/* Configured Weeks */}
               <View>

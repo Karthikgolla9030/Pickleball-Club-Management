@@ -41,6 +41,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
+import { InternationalPhoneInput } from '../InternationalPhoneInput';
 import { useEligiblePartners } from '@/hooks';
 import type {
   EligiblePartnerItem,
@@ -291,18 +292,13 @@ export function Step1PlayerTeamDetails({
           {/* Row 2: Phone number *, Skill rating *, Age * */}
           <View style={styles.formRow}>
             <View style={[styles.formCol, { flex: 1.2 }]}>
-              <AppText style={styles.fieldLabel}>
-                Phone number <AppText style={styles.star}>*</AppText>
-              </AppText>
-              <TextInput
-                style={[styles.textInput, errors.phone && styles.inputError]}
-                placeholder="+1 (555) 123-4567"
-                placeholderTextColor="#94A3B8"
-                keyboardType="phone-pad"
+              <InternationalPhoneInput
+                label="Phone number"
+                required
                 value={formState.phone}
                 onChangeText={(text) => onChange({ phone: text })}
+                error={errors.phone}
               />
-              {errors.phone && <AppText style={styles.errorText}>{errors.phone}</AppText>}
             </View>
 
             <View style={[styles.formCol, { flex: 0.9 }]}>
@@ -441,16 +437,12 @@ export function Step1PlayerTeamDetails({
             {/* Row 2: Phone number, Skill rating *, Age * */}
             <View style={styles.formRow}>
               <View style={[styles.formCol, { flex: 1.2 }]}>
-                <AppText style={styles.fieldLabel}>Phone number</AppText>
-                <TextInput
-                  style={[styles.textInput, errors.partnerPhone && styles.inputError]}
-                  placeholder="Enter phone number"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
+                <InternationalPhoneInput
+                  label="Phone number"
                   value={formState.partnerPhone}
                   onChangeText={(text) => onChange({ partnerPhone: text })}
+                  error={errors.partnerPhone}
                 />
-                {errors.partnerPhone && <AppText style={styles.errorText}>{errors.partnerPhone}</AppText>}
               </View>
 
               <View style={[styles.formCol, { flex: 0.9 }]}>

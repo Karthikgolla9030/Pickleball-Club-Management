@@ -151,6 +151,8 @@ export const API_ENDPOINTS = {
   CLUB_PAYMENT_REFUND: (clubId: string, paymentId: string) => `${API_BASE}/api/v1/clubs/${clubId}/payments/${paymentId}/refund`,
   PLAYER_PAYMENTS: `${API_BASE}/api/v1/payments`,
   PLAYER_PAYMENT: (paymentId: string) => `${API_BASE}/api/v1/payments/${paymentId}`,
+  CHECKOUT_INITIATE: `${API_BASE}/api/v1/payments/checkout/initiate`,
+  CHECKOUT_VERIFY: `${API_BASE}/api/v1/payments/checkout/verify`,
 
   // Events (Phase 14)
   CLUB_EVENTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/events`,

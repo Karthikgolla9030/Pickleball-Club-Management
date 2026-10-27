@@ -39,7 +39,7 @@ import {
   Users,
 } from 'lucide-react-native';
 
-import { AppHeader, AppText, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
+import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
   useActiveClub,
   useClubBranding,
@@ -75,6 +75,7 @@ export default function PlayerEventsScreen() {
 
   const [activeTab, setActiveTab] = useState<MainTab>('discover');
   const [selectedDetailEvent, setSelectedDetailEvent] = useState<ClubEvent | null>(null);
+  const [checkoutEvent, setCheckoutEvent] = useState<ClubEvent | null>(null);
 
   const eventBannerSlides: BannerSlide[] = useMemo(
     () => [
@@ -233,34 +234,33 @@ export default function PlayerEventsScreen() {
   // ─── Registration Handlers ─────────────────────────────────────────────────
   const handleRegister = (event: ClubEvent) => {
     const isFull = event.capacity !== null && event.registered_count >= event.capacity;
-    const actionLabel = isFull ? 'Join Waitlist' : 'Register';
-    const message = isFull
-      ? `This event is currently full (${event.registered_count}/${event.capacity}). You will be placed on the waitlist and automatically promoted if a spot opens up.`
-      : `Confirm registration for "${event.title}"?`;
+    if (isFull) {
+      Alert.alert(
+        'Join Waitlist',
+        `This event is currently full (${event.registered_count}/${event.capacity}). You will be placed on the waitlist and automatically promoted if a spot opens up.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Join Waitlist',
+            onPress: async () => {
+              try {
+                await registerMutation.mutateAsync({});
+                refetchDiscover();
+                refetchMyEvents();
+                setSelectedDetailEvent(null);
+                Alert.alert('Success', 'You are on the waitlist!');
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Registration failed';
+                Alert.alert('Error', msg);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
 
-    Alert.alert(actionLabel, message, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: actionLabel,
-        onPress: async () => {
-          try {
-            await registerMutation.mutateAsync({});
-            refetchDiscover();
-            refetchMyEvents();
-            setSelectedDetailEvent(null);
-            Alert.alert(
-              'Success',
-              isFull
-                ? 'You are on the waitlist!'
-                : 'You are registered for this event!'
-            );
-          } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Registration failed';
-            Alert.alert('Error', msg);
-          }
-        },
-      },
-    ]);
+    setCheckoutEvent(event);
   };
 
   const handleCancelRegistration = (eventId: string, title: string) => {
@@ -844,6 +844,26 @@ export default function PlayerEventsScreen() {
           </View>
         )}
       </ModalSheet>
+
+      {checkoutEvent && (
+        <CheckoutModal
+          visible={!!checkoutEvent}
+          onClose={() => setCheckoutEvent(null)}
+          clubId={checkoutEvent.club_id}
+          purpose="event"
+          activityId={checkoutEvent.id}
+          activityTitle={checkoutEvent.title}
+          activitySubtitle={checkoutEvent.location || 'Club Event'}
+          startAt={checkoutEvent.start_at}
+          endAt={checkoutEvent.end_at}
+          onSuccess={() => {
+            setCheckoutEvent(null);
+            setSelectedDetailEvent(null);
+            refetchDiscover();
+            refetchMyEvents();
+          }}
+        />
+      )}
     </View>
   );
 }

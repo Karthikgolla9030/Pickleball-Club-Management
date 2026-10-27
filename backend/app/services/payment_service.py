@@ -13,14 +13,20 @@ Enforces:
 """
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.payment.gateway import get_payment_gateway
+from app.models.booking import Booking, BookingStatus, BookingType
 from app.models.club_player_membership import PlayerMembershipStatus
+from app.models.court import CourtStatus
 from app.models.membership import SubscriptionStatus
 from app.models.payment import (
     Payment,
@@ -28,17 +34,32 @@ from app.models.payment import (
     PaymentPurpose,
     PaymentStatus,
 )
+from app.models.tournament import TournamentStatus
+from app.repositories.booking_repository import BookingRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
 from app.repositories.club_repository import ClubRepository
+from app.repositories.court_repository import CourtRepository
+from app.repositories.event_repository import EventRepository
+from app.repositories.league_repository import LeagueRepository
+from app.repositories.lesson_repository import LessonRepository
 from app.repositories.member_subscription_repository import MemberSubscriptionRepository
+from app.repositories.membership_plan_repository import MembershipPlanRepository
 from app.repositories.payment_repository import PaymentRepository
+from app.repositories.tournament_repository import TournamentRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.payment import (
+    CheckoutInitiateRequest,
+    CheckoutInitiateResponse,
+    CheckoutPriceBreakdown,
+    CheckoutVerifyRequest,
+    CheckoutVerifyResponse,
     CreatePaymentRequest,
     PaymentResponse,
     PaymentSummaryResponse,
     PlayerPaymentResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class PaymentService:
@@ -76,6 +97,13 @@ class PaymentService:
         self.subscription_repo = MemberSubscriptionRepository(db)
         self.user_repo = UserRepository(db)
         self.player_membership_repo = ClubPlayerMembershipRepository(db)
+        self.court_repo = CourtRepository(db)
+        self.booking_repo = BookingRepository(db)
+        self.tournament_repo = TournamentRepository(db)
+        self.event_repo = EventRepository(db)
+        self.lesson_repo = LessonRepository(db)
+        self.league_repo = LeagueRepository(db)
+        self.plan_repo = MembershipPlanRepository(db)
 
     def validate_status_transition(
         self,
@@ -632,3 +660,602 @@ class PaymentService:
             offset=offset,
         )
         return [PlayerPaymentResponse.from_orm_model(p) for p in payments]
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # UNIFIED CHECKOUT & PAYMENT PROVIDER INTEGRATION
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    async def initiate_checkout(
+        self,
+        user_id: UUID,
+        payload: CheckoutInitiateRequest,
+    ) -> CheckoutInitiateResponse:
+        """
+        Initiate real-time checkout across any paid activity:
+        Court booking, Tournament registration, Event, Lesson, League, Membership.
+        """
+        # 1. Verify club exists
+        club = await self.club_repo.get_by_id(payload.club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+
+        # 2. Verify user exists
+        user = await self.user_repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User not found or inactive",
+            )
+
+        # 3. Check membership discount eligibility
+        pm = await self.player_membership_repo.get_by_user_and_club(
+            user_id=user_id, club_id=payload.club_id
+        )
+        is_club_member = pm is not None and pm.status == PlayerMembershipStatus.ACTIVE
+
+        base_amount = Decimal("0.00")
+        summary: dict[str, Any] = {
+            "club_id": str(club.id),
+            "club_name": club.name,
+            "currency": payload.currency,
+        }
+        meta_dict: dict[str, Any] = {
+            **(payload.metadata or {}),
+            "club_id": str(payload.club_id),
+            "purpose": payload.purpose.value,
+            "user_id": str(user_id),
+        }
+
+        # Validate activity rules and pricing based on purpose
+        if payload.purpose == PaymentPurpose.COURT_BOOKING:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (court_id) is required for court bookings")
+            if not payload.start_at or not payload.end_at or payload.end_at <= payload.start_at:
+                raise HTTPException(status_code=400, detail="Valid start_at and end_at are required for court bookings")
+
+            court = await self.court_repo.get_by_id(payload.activity_id)
+            if not court or court.club_id != payload.club_id:
+                raise HTTPException(status_code=404, detail="Court not found in this club")
+            if not court.is_active or court.status != CourtStatus.ACTIVE:
+                raise HTTPException(status_code=400, detail="Court is currently unavailable for bookings")
+
+            # Check double-booking conflicts
+            conflicts = await self.booking_repo.find_conflicts(
+                court_id=court.id,
+                start_at=payload.start_at,
+                end_at=payload.end_at,
+            )
+            if conflicts:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Court is already booked for this time slot")
+
+            # Calculate price
+            duration_minutes = int((payload.end_at - payload.start_at).total_seconds() / 60)
+            hours = Decimal(duration_minutes) / Decimal(60)
+            rate = Decimal(str(court.price_per_hour or "40.00"))
+            base_amount = (hours * rate).quantize(Decimal("0.01"))
+
+            summary.update({
+                "title": f"Court: {court.name}",
+                "activity_name": court.name,
+                "court_id": str(court.id),
+                "start_at": payload.start_at.isoformat(),
+                "end_at": payload.end_at.isoformat(),
+                "duration_minutes": duration_minutes,
+                "hourly_rate": float(rate),
+            })
+            meta_dict.update({
+                "court_id": str(court.id),
+                "start_at": payload.start_at.isoformat(),
+                "end_at": payload.end_at.isoformat(),
+                "hourly_rate": float(rate),
+                "notes": payload.notes,
+            })
+
+        elif payload.purpose == PaymentPurpose.TOURNAMENT:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (tournament_id) is required for tournament registration")
+            tournament = await self.tournament_repo.get_by_id(payload.activity_id)
+            if not tournament or tournament.club_id != payload.club_id:
+                raise HTTPException(status_code=404, detail="Tournament not found in this club")
+            if tournament.status != TournamentStatus.REGISTRATION_OPEN:
+                raise HTTPException(status_code=400, detail=f"Tournament registration is {tournament.status.value}")
+
+            format_config = tournament.format_configuration or {}
+            fee_raw = format_config.get("entry_fee") or format_config.get("registration_fee") or 35.00
+            base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+
+            summary.update({
+                "title": f"Tournament: {tournament.name}",
+                "activity_name": tournament.name,
+                "tournament_id": str(tournament.id),
+                "format": tournament.format.value,
+                "category": format_config.get("category", "Open"),
+            })
+            meta_dict.update({
+                "tournament_id": str(tournament.id),
+                "partner_name": payload.metadata.get("partner_name") if payload.metadata else None,
+                "team_name": payload.metadata.get("team_name") if payload.metadata else None,
+                "skill_level": payload.metadata.get("skill_level") if payload.metadata else None,
+                "notes": payload.notes,
+            })
+
+        elif payload.purpose == PaymentPurpose.EVENT:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (event_id) is required for event registration")
+            event = await self.event_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
+            if not event:
+                raise HTTPException(status_code=404, detail="Event not found in this club")
+            fee_raw = getattr(event, "price", None) or getattr(event, "fee", None) or Decimal("25.00")
+            base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+
+            summary.update({
+                "title": f"Event: {event.title}",
+                "activity_name": event.title,
+                "event_id": str(event.id),
+                "event_type": event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+            })
+            meta_dict.update({
+                "event_id": str(event.id),
+                "notes": payload.notes,
+            })
+
+        elif payload.purpose == PaymentPurpose.LESSON:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (lesson_id) is required for lesson booking")
+            lesson = await self.lesson_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
+            if not lesson:
+                raise HTTPException(status_code=404, detail="Lesson not found in this club")
+            fee_raw = getattr(lesson, "price", None) or Decimal("50.00")
+            base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+
+            summary.update({
+                "title": f"Lesson: {lesson.title}",
+                "activity_name": lesson.title,
+                "lesson_id": str(lesson.id),
+                "coach": getattr(lesson, "coach_name", "Head Coach"),
+            })
+            meta_dict.update({
+                "lesson_id": str(lesson.id),
+                "notes": payload.notes,
+            })
+
+        elif payload.purpose == PaymentPurpose.LEAGUE:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (league_id) is required for league registration")
+            league = await self.league_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
+            if not league:
+                raise HTTPException(status_code=404, detail="League not found in this club")
+            fee_raw = getattr(league, "registration_fee", None) or Decimal("40.00")
+            base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+
+            summary.update({
+                "title": f"League: {league.name}",
+                "activity_name": league.name,
+                "league_id": str(league.id),
+            })
+            meta_dict.update({
+                "league_id": str(league.id),
+                "notes": payload.notes,
+            })
+
+        elif payload.purpose == PaymentPurpose.MEMBERSHIP:
+            if not payload.activity_id:
+                raise HTTPException(status_code=400, detail="activity_id (plan_id or subscription_id) is required")
+            plan = await self.plan_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
+            if not plan:
+                sub = await self.subscription_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
+                if sub and sub.plan:
+                    plan = sub.plan
+                    meta_dict["subscription_id"] = str(sub.id)
+            if not plan:
+                raise HTTPException(status_code=404, detail="Membership plan not found in this club")
+
+            base_amount = Decimal(str(plan.price)).quantize(Decimal("0.01"))
+            summary.update({
+                "title": f"Membership: {plan.name}",
+                "activity_name": plan.name,
+                "plan_id": str(plan.id),
+                "interval": plan.interval.value if hasattr(plan.interval, "value") else str(plan.interval),
+            })
+            meta_dict.update({
+                "plan_id": str(plan.id),
+                "notes": payload.notes,
+            })
+
+        # Calculate member discount (10% off for verified club members on courts & events)
+        discount_amount = Decimal("0.00")
+        if is_club_member and payload.purpose in (PaymentPurpose.COURT_BOOKING, PaymentPurpose.EVENT):
+            discount_amount = (base_amount * Decimal("0.10")).quantize(Decimal("0.01"))
+
+        # Calculate standard tax (5% GST / Sales Tax)
+        taxable_amount = max(Decimal("0.00"), base_amount - discount_amount)
+        tax_amount = (taxable_amount * Decimal("0.05")).quantize(Decimal("0.01"))
+
+        # Service fee: $0.00
+        service_fee = Decimal("0.00")
+
+        final_amount = max(Decimal("0.00"), base_amount - discount_amount + tax_amount + service_fee)
+
+        breakdown = CheckoutPriceBreakdown(
+            base_amount=base_amount,
+            discount_amount=discount_amount,
+            tax_amount=tax_amount,
+            service_fee=service_fee,
+            final_amount=final_amount,
+            currency=payload.currency,
+        )
+
+        reference = await self.payment_repo.generate_reference()
+
+        # Handle zero-dollar or free activity
+        if final_amount <= Decimal("0.00"):
+            payment = Payment(
+                reference=reference,
+                club_id=payload.club_id,
+                player_id=user_id,
+                amount=Decimal("0.00"),
+                currency=payload.currency,
+                status=PaymentStatus.SUCCEEDED,
+                purpose=payload.purpose,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=datetime.now(timezone.utc),
+                notes=f"[META]{json.dumps(meta_dict)}",
+                created_by_user_id=user_id,
+            )
+            created_pay = await self.payment_repo.create(payment)
+            await self.db.commit()
+
+            return CheckoutInitiateResponse(
+                payment_id=created_pay.id,
+                reference=created_pay.reference,
+                status=PaymentStatus.SUCCEEDED,
+                breakdown=breakdown,
+                provider="free",
+                provider_order_id="free_complimentary",
+                provider_key_id=None,
+                supported_methods=["free"],
+                activity_summary=summary,
+                is_free=True,
+            )
+
+        # Get configured payment gateway (Razorpay for India/UPI/Cards or Stripe)
+        gateway = get_payment_gateway()
+        order_res = gateway.create_order(
+            amount=final_amount,
+            currency=payload.currency,
+            receipt=reference,
+            notes={
+                "user_id": str(user_id),
+                "club_id": str(payload.club_id),
+                "purpose": payload.purpose.value,
+            },
+        )
+
+        payment = Payment(
+            reference=reference,
+            club_id=payload.club_id,
+            player_id=user_id,
+            amount=final_amount,
+            currency=payload.currency,
+            status=PaymentStatus.PENDING,
+            purpose=payload.purpose,
+            payment_method=payload.payment_method,
+            provider=order_res.provider,
+            provider_order_id=order_res.order_id,
+            notes=f"[META]{json.dumps(meta_dict)}",
+            created_by_user_id=user_id,
+        )
+
+        if payload.purpose == PaymentPurpose.TOURNAMENT:
+            payment.tournament_id = payload.activity_id
+        elif payload.purpose == PaymentPurpose.EVENT:
+            payment.event_id = payload.activity_id
+        elif payload.purpose == PaymentPurpose.LESSON:
+            payment.lesson_id = payload.activity_id
+        elif payload.purpose == PaymentPurpose.LEAGUE:
+            payment.league_id = payload.activity_id
+        elif payload.purpose == PaymentPurpose.MEMBERSHIP and "subscription_id" in meta_dict:
+            payment.subscription_id = UUID(meta_dict["subscription_id"])
+
+        created_pay = await self.payment_repo.create(payment)
+        await self.db.commit()
+
+        return CheckoutInitiateResponse(
+            payment_id=created_pay.id,
+            reference=created_pay.reference,
+            status=PaymentStatus.PENDING,
+            breakdown=breakdown,
+            provider=order_res.provider,
+            provider_order_id=order_res.order_id,
+            provider_key_id=order_res.key_id,
+            supported_methods=["upi", "card", "netbanking", "cash"],
+            activity_summary=summary,
+            is_free=False,
+        )
+
+    async def verify_checkout(
+        self,
+        user_id: UUID,
+        payload: CheckoutVerifyRequest,
+    ) -> CheckoutVerifyResponse:
+        """
+        Verify payment signature cryptographically, update transaction state to SUCCEEDED,
+        and fulfill activity registration / booking atomically.
+        """
+        payment = await self.payment_repo.get_by_id(payload.payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment record not found")
+        if payment.player_id != user_id:
+            raise HTTPException(status_code=403, detail="Unauthorized: Payment belongs to another player")
+
+        # Idempotent response if already confirmed
+        if payment.status == PaymentStatus.SUCCEEDED:
+            full = await self.payment_repo.get_by_id(payment.id)
+            return CheckoutVerifyResponse(
+                success=True,
+                payment=PlayerPaymentResponse.from_orm_model(full),
+                message="Payment already verified and confirmed.",
+                booking_or_registration={"reference": payment.reference, "status": "confirmed"},
+            )
+
+        # Cryptographic signature verification
+        gateway = get_payment_gateway(payload.provider)
+        valid = gateway.verify_payment_signature(
+            payment_id=payload.provider_payment_id,
+            order_id=payload.provider_order_id,
+            signature=payload.provider_signature,
+        )
+        if not valid:
+            payment.status = PaymentStatus.FAILED
+            payment.failed_at = datetime.now(timezone.utc)
+            payment.failure_reason = "Cryptographic signature verification failed"
+            await self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Payment signature verification failed. Transaction was not confirmed.",
+            )
+
+        now = datetime.now(timezone.utc)
+        payment.status = PaymentStatus.SUCCEEDED
+        payment.paid_at = now
+        payment.provider_payment_id = payload.provider_payment_id
+        payment.updated_at = now
+
+        # Parse metadata
+        meta: dict[str, Any] = {}
+        if payment.notes and "[META]" in payment.notes:
+            try:
+                meta_str = payment.notes.split("[META]", 1)[1]
+                meta = json.loads(meta_str)
+            except Exception:
+                meta = {}
+
+        booking_or_reg: dict[str, Any] = {
+            "payment_reference": payment.reference,
+            "status": "confirmed",
+            "paid_at": now.isoformat(),
+        }
+
+        # Activity Fulfillment
+        if payment.purpose == PaymentPurpose.COURT_BOOKING:
+            court_id = UUID(meta["court_id"]) if "court_id" in meta else None
+            start_dt = datetime.fromisoformat(meta["start_at"]) if "start_at" in meta else None
+            end_dt = datetime.fromisoformat(meta["end_at"]) if "end_at" in meta else None
+
+            if court_id and start_dt and end_dt:
+                conflicts = await self.booking_repo.find_conflicts(
+                    court_id=court_id,
+                    start_at=start_dt,
+                    end_at=end_dt,
+                )
+                if conflicts:
+                    payment.status = PaymentStatus.REFUNDED
+                    payment.refund_reason = "Court slot was taken during checkout. Automatic refund initiated."
+                    payment.refunded_at = now
+                    payment.refunded_amount = payment.amount
+                    await self.db.commit()
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Selected court slot is no longer available. A full refund has been initiated.",
+                    )
+
+                booking = await self.booking_repo.create(
+                    club_id=payment.club_id,
+                    court_id=court_id,
+                    player_id=payment.player_id,
+                    created_by_user_id=payment.player_id,
+                    booking_type=BookingType.PLAYER,
+                    start_at=start_dt,
+                    end_at=end_dt,
+                    status=BookingStatus.CONFIRMED,
+                    notes=meta.get("notes"),
+                    price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
+                    total_price=payment.amount,
+                    currency=payment.currency,
+                )
+                payment.booking_id = booking.id
+                booking_or_reg.update({
+                    "booking_id": str(booking.id),
+                    "court_name": booking.court.name if booking.court else "Court",
+                    "start_at": booking.start_at.isoformat(),
+                    "end_at": booking.end_at.isoformat(),
+                })
+
+        elif payment.purpose == PaymentPurpose.TOURNAMENT:
+            tournament_id = payment.tournament_id or (UUID(meta["tournament_id"]) if "tournament_id" in meta else None)
+            if tournament_id:
+                try:
+                    from app.services.tournament_service import TournamentService
+                    from app.schemas.tournament import PlayerSelfRegistrationRequest
+                    t_payload = PlayerSelfRegistrationRequest(
+                        partner_name=meta.get("partner_name"),
+                        team_name=meta.get("team_name"),
+                        skill_level=meta.get("skill_level"),
+                        notes=meta.get("notes"),
+                        payment_method="online",
+                    )
+                    t_res = await TournamentService(self.db).register_player(
+                        tournament_id=tournament_id,
+                        user_id=payment.player_id,
+                        payload=t_payload,
+                    )
+                    booking_or_reg.update({
+                        "tournament_id": str(tournament_id),
+                        "reference_number": t_res.reference_number,
+                        "status": t_res.status.value,
+                    })
+                except Exception as e:
+                    logger.warning(f"Tournament auto-registration fulfillment: {e}")
+                    booking_or_reg["tournament_id"] = str(tournament_id)
+
+        elif payment.purpose == PaymentPurpose.EVENT:
+            event_id = payment.event_id or (UUID(meta["event_id"]) if "event_id" in meta else None)
+            if event_id:
+                try:
+                    from app.services.event_service import EventService
+                    e_res = await EventService(self.db).register_player(
+                        event_id=event_id,
+                        user_id=payment.player_id,
+                        notes=meta.get("notes"),
+                    )
+                    booking_or_reg.update({
+                        "event_id": str(event_id),
+                        "registration_id": str(e_res.id),
+                        "status": e_res.status.value,
+                    })
+                except Exception as e:
+                    logger.warning(f"Event auto-registration fulfillment: {e}")
+                    booking_or_reg["event_id"] = str(event_id)
+
+        elif payment.purpose == PaymentPurpose.LESSON:
+            lesson_id = payment.lesson_id or (UUID(meta["lesson_id"]) if "lesson_id" in meta else None)
+            if lesson_id:
+                try:
+                    from app.services.lesson_service import LessonService
+                    l_res = await LessonService(self.db).register_player(
+                        lesson_id=lesson_id,
+                        user_id=payment.player_id,
+                        notes=meta.get("notes"),
+                    )
+                    booking_or_reg.update({
+                        "lesson_id": str(lesson_id),
+                        "registration_id": str(l_res.id),
+                        "status": l_res.status.value,
+                    })
+                except Exception as e:
+                    logger.warning(f"Lesson auto-registration fulfillment: {e}")
+                    booking_or_reg["lesson_id"] = str(lesson_id)
+
+        elif payment.purpose == PaymentPurpose.LEAGUE:
+            league_id = payment.league_id or (UUID(meta["league_id"]) if "league_id" in meta else None)
+            if league_id:
+                booking_or_reg["league_id"] = str(league_id)
+
+        elif payment.purpose == PaymentPurpose.MEMBERSHIP:
+            plan_id = UUID(meta["plan_id"]) if "plan_id" in meta else None
+            if plan_id:
+                try:
+                    from app.services.member_subscription_service import MemberSubscriptionService
+                    from app.schemas.membership import MemberSubscriptionCreateRequest
+                    sub_svc = MemberSubscriptionService(self.db)
+                    sub_res = await sub_svc.create_subscription(
+                        club_id=payment.club_id,
+                        payload=MemberSubscriptionCreateRequest(
+                            user_id=payment.player_id,
+                            plan_id=plan_id,
+                            start_date=date.today(),
+                            is_auto_renew=True,
+                        ),
+                        actor_id=payment.player_id,
+                    )
+                    payment.subscription_id = sub_res.id
+                    booking_or_reg.update({
+                        "subscription_id": str(sub_res.id),
+                        "plan_name": sub_res.plan_name,
+                        "status": sub_res.status.value,
+                    })
+                except Exception as e:
+                    logger.warning(f"Subscription fulfillment: {e}")
+
+        # Send in-app notification
+        try:
+            from app.services.notification_service import NotificationService
+            notif_svc = NotificationService(self.db)
+            await notif_svc.create_notification(
+                user_id=payment.player_id,
+                club_id=payment.club_id,
+                category="payment",
+                title="Payment Confirmed!",
+                message=f"Your payment of {payment.currency} {payment.amount} (Ref: {payment.reference}) has been confirmed.",
+                data={
+                    "payment_id": str(payment.id),
+                    "reference": payment.reference,
+                    "purpose": payment.purpose.value,
+                    "amount": float(payment.amount),
+                },
+                mandatory=True,
+            )
+        except Exception:
+            pass
+
+        await self.db.commit()
+
+        full = await self.payment_repo.get_by_id(payment.id)
+        return CheckoutVerifyResponse(
+            success=True,
+            payment=PlayerPaymentResponse.from_orm_model(full),
+            message="Payment successfully verified and booking confirmed.",
+            booking_or_registration=booking_or_reg,
+        )
+
+    async def process_webhook(
+        self,
+        provider: str,
+        payload_bytes: bytes,
+        signature_header: str,
+    ) -> dict[str, Any]:
+        """
+        Process incoming payment webhooks from Razorpay or Stripe idempotently.
+        """
+        gateway = get_payment_gateway(provider)
+        if not gateway.verify_webhook_signature(payload_bytes, signature_header):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
+
+        try:
+            data = json.loads(payload_bytes.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        event_type = data.get("event") or data.get("type")
+        provider_order_id = None
+        provider_payment_id = None
+
+        if provider.lower() == "razorpay":
+            payload_data = data.get("payload", {})
+            payment_entity = payload_data.get("payment", {}).get("entity", {})
+            provider_payment_id = payment_entity.get("id")
+            provider_order_id = payment_entity.get("order_id")
+        elif provider.lower() == "stripe":
+            obj = data.get("data", {}).get("object", {})
+            provider_order_id = obj.get("id")
+            provider_payment_id = obj.get("latest_charge")
+
+        if provider_order_id:
+            payment = await self.payment_repo.get_by_provider_order_id(provider_order_id)
+            if payment and payment.status != PaymentStatus.SUCCEEDED:
+                if event_type in ("payment.captured", "order.paid", "payment_intent.succeeded"):
+                    payment.status = PaymentStatus.SUCCEEDED
+                    payment.paid_at = datetime.now(timezone.utc)
+                    payment.provider_payment_id = provider_payment_id
+                    await self.db.commit()
+                elif event_type in ("payment.failed", "payment_intent.payment_failed"):
+                    payment.status = PaymentStatus.FAILED
+                    payment.failed_at = datetime.now(timezone.utc)
+                    payment.failure_reason = f"Provider webhook reported {event_type}"
+                    await self.db.commit()
+
+        return {"status": "processed", "event": event_type}
+

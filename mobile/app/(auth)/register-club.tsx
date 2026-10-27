@@ -41,6 +41,8 @@ import {
   Button,
   Card,
   FormField,
+  InternationalPhoneInput,
+  TimePickerInput,
   Screen,
 } from '@/components';
 import { clubApplicationsApi, type SubmitClubApplicationPayload } from '@/services/api';
@@ -282,12 +284,12 @@ export default function PublicRegisterClubScreen() {
               error={errors.applicantEmail}
             />
 
-            <FormField
+            <InternationalPhoneInput
               label="Phone Number"
               value={applicantPhone}
               onChangeText={setApplicantPhone}
-              placeholder="(555) 000-0000"
-              keyboardType="phone-pad"
+              error={errors.applicantPhone}
+              hint="For account verification & application status notifications"
             />
 
             <View style={styles.passwordContainer}>
@@ -385,12 +387,11 @@ export default function PublicRegisterClubScreen() {
               autoCapitalize="none"
             />
 
-            <FormField
+            <InternationalPhoneInput
               label="Facility Phone"
               value={contactPhone}
               onChangeText={setContactPhone}
-              placeholder="(512) 555-0100"
-              keyboardType="phone-pad"
+              hint="Public contact phone for player inquiries"
             />
 
             <FormField
@@ -482,19 +483,19 @@ export default function PublicRegisterClubScreen() {
 
             <View style={styles.row}>
               <View style={styles.rowCol}>
-                <FormField
+                <TimePickerInput
                   label="Opening Time"
                   value={openingTime}
-                  onChangeText={setOpeningTime}
-                  placeholder="06:00:00"
+                  onChange={setOpeningTime}
+                  includeSeconds={true}
                 />
               </View>
               <View style={styles.rowCol}>
-                <FormField
+                <TimePickerInput
                   label="Closing Time"
                   value={closingTime}
-                  onChangeText={setClosingTime}
-                  placeholder="22:00:00"
+                  onChange={setClosingTime}
+                  includeSeconds={true}
                 />
               </View>
             </View>

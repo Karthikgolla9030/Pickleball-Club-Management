@@ -40,6 +40,7 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  DateRangePickerInput,
   LoadingState,
   ModalSheet,
   Screen,
@@ -724,17 +725,12 @@ export default function AnalyticsScreen() {
         title="Custom Date Filter"
       >
         <View style={styles.modalFormContent}>
-          <Input
-            label="Start Date (YYYY-MM-DD)"
-            value={customStart}
-            onChangeText={setCustomStart}
-            placeholder="2026-01-01"
-          />
-          <Input
-            label="End Date (YYYY-MM-DD)"
-            value={customEnd}
-            onChangeText={setCustomEnd}
-            placeholder="2026-01-31"
+          <DateRangePickerInput
+            label="Date Filter Range"
+            startDate={customStart}
+            endDate={customEnd}
+            onStartDateChange={setCustomStart}
+            onEndDateChange={setCustomEnd}
           />
           <Button
             label="Apply Range"

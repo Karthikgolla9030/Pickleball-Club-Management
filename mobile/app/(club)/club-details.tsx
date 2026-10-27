@@ -65,6 +65,8 @@ import {
   Screen,
   SegmentedTabs,
   ClubBrandingSection,
+  InternationalPhoneInput,
+  TimePickerInput,
 } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useActiveClub, useClubDetails } from '@/hooks';
@@ -865,13 +867,11 @@ export default function ClubDetailsScreen() {
                     />
                   </View>
                   <View style={styles.halfCol}>
-                    <FormField
+                    <InternationalPhoneInput
                       label="Contact Phone"
                       value={contactPhone}
                       onChangeText={setContactPhone}
-                      placeholder="(555) 123-4567"
-                      keyboardType="phone-pad"
-                      editable={isOwner}
+                      disabled={!isOwner}
                     />
                   </View>
                 </View>
@@ -1023,23 +1023,23 @@ export default function ClubDetailsScreen() {
 
                 <View style={styles.rowTwoCols}>
                   <View style={styles.halfCol}>
-                    <FormField
-                      label="Opening Time (HH:MM)"
+                    <TimePickerInput
+                      label="Opening Time"
                       value={openingTime}
-                      onChangeText={setOpeningTime}
-                      placeholder="06:00"
+                      onChange={setOpeningTime}
                       error={validationErrors.openingTime}
-                      editable={isOwner}
+                      disabled={!isOwner}
+                      includeSeconds={false}
                     />
                   </View>
                   <View style={styles.halfCol}>
-                    <FormField
-                      label="Closing Time (HH:MM)"
+                    <TimePickerInput
+                      label="Closing Time"
                       value={closingTime}
-                      onChangeText={setClosingTime}
-                      placeholder="22:00"
+                      onChange={setClosingTime}
                       error={validationErrors.closingTime}
-                      editable={isOwner}
+                      disabled={!isOwner}
+                      includeSeconds={false}
                     />
                   </View>
                 </View>

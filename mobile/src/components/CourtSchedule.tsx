@@ -153,12 +153,23 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
 
   const courts = useMemo(() => availability?.courts ?? [], [availability]);
 
-  // Generate time headers from first court's slots
+  // Generate unified chronological time headers across all courts
   const timeHeaders = useMemo(() => {
-    if (courts.length === 0 || !courts[0].slots || courts[0].slots.length === 0) {
-      return [];
+    const map = new Map<string, { hour: string; ampm: string; timeMs: number }>();
+    for (const c of courts) {
+      if (c.slots) {
+        for (const s of c.slots) {
+          const key = s.start_at;
+          if (!map.has(key)) {
+            const parsed = parseSlotTime(key);
+            map.set(key, { ...parsed, timeMs: new Date(key).getTime() });
+          }
+        }
+      }
     }
-    return courts[0].slots.map((s) => parseSlotTime(s.start_at));
+    return Array.from(map.entries())
+      .sort(([, a], [, b]) => a.timeMs - b.timeMs)
+      .map(([key, val]) => ({ key, hour: val.hour, ampm: val.ampm }));
   }, [courts]);
 
   // Date picker handler
@@ -273,13 +284,20 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                     key={court.court_id}
                     style={[styles.stickyCourtCell, isLast && styles.lastCellBorder]}
                   >
-                    <AppText style={styles.courtTitle} numberOfLines={1}>
-                      {court.court_name}
-                    </AppText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <AppText style={styles.courtTitle} numberOfLines={1}>
+                        {court.court_name}
+                      </AppText>
+                      {court.is_closed && (
+                        <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4 }}>
+                          <AppText style={{ fontSize: 9.5, fontWeight: '700', color: '#DC2626' }}>CLOSED</AppText>
+                        </View>
+                      )}
+                    </View>
                     <AppText style={styles.courtSubtitle} numberOfLines={1}>
                       {`${formatEnv(court.indoor_outdoor)} • ${formatSurface(court.surface_type)}${
                         court.price_per_hour != null ? ` • ${formatCurrency(court.price_per_hour)}/hr` : ''
-                      }`}
+                      } • ${court.booking_interval_minutes || 60}m`}
                     </AppText>
                   </View>
                 );
@@ -309,18 +327,59 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                 {/* Court Slot Rows */}
                 {courts.map((court, rowIdx) => {
                   const isLastRow = rowIdx === courts.length - 1;
+
+                  if (court.is_closed || !court.slots || court.slots.length === 0) {
+                    return (
+                      <View
+                        key={court.court_id}
+                        style={[
+                          styles.timelineRow,
+                          isLastRow && styles.lastCellBorder,
+                          { alignItems: 'center', paddingLeft: 16, backgroundColor: '#FAFBFB' },
+                        ]}
+                      >
+                        <AppText style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', fontStyle: 'italic' }}>
+                          Court is closed on this day
+                        </AppText>
+                      </View>
+                    );
+                  }
+
                   return (
                     <View
                       key={court.court_id}
                       style={[styles.timelineRow, isLastRow && styles.lastCellBorder]}
                     >
-                      {court.slots.map((slot, colIdx) => {
+                      {timeHeaders.map((th) => {
+                        const slot = court.slots.find(
+                          (s) =>
+                            s.start_at === th.key ||
+                            new Date(s.start_at).getTime() === new Date(th.key).getTime()
+                        );
+
+                        if (!slot) {
+                          return (
+                            <View key={th.key} style={styles.slotCellWrapper}>
+                              <View
+                                style={[
+                                  styles.slotPill,
+                                  { backgroundColor: '#F3F4F6', borderWidth: 0, opacity: 0.6 },
+                                ]}
+                              >
+                                <AppText style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '500' }}>
+                                  —
+                                </AppText>
+                              </View>
+                            </View>
+                          );
+                        }
+
                         const status = slot.status;
                         const isAvailable = status === 'AVAILABLE';
                         const isBooked = status === 'BOOKED';
 
                         return (
-                          <View key={colIdx} style={styles.slotCellWrapper}>
+                          <View key={th.key} style={styles.slotCellWrapper}>
                             <TouchableOpacity
                               style={[styles.slotPill, getSlotPillStyle(status)]}
                               onPress={() => {
