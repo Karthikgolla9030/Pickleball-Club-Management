@@ -8,7 +8,7 @@
  *   Ensures zero caching of private user data, tokens, auth state, or live match scores.
  */
 
-const CACHE_NAME = 'aught2-shell-v3';
+const CACHE_NAME = 'aught2-shell-v4';
 
 // Essential app shell and static resources precached during install
 const PRECACHE_ASSETS = [
@@ -120,7 +120,10 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(request))
+        .catch(async () => {
+          const cached = await caches.match(request);
+          return cached || new Response('/* Offline Script Unavailable */', { status: 408, headers: { 'Content-Type': 'application/javascript' } });
+        })
     );
     return;
   }
@@ -152,7 +155,7 @@ self.addEventListener('fetch', (event) => {
             }
             return networkResponse;
           })
-          .catch(() => cachedResponse);
+          .catch(() => cachedResponse || new Response('', { status: 404 }));
 
         return cachedResponse || fetchPromise;
       })
@@ -160,8 +163,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default fallback: Network with cache fallback
+  // Default fallback: Network with safe cache fallback
   event.respondWith(
-    fetch(request).catch(() => caches.match(request))
+    fetch(request).catch(async () => {
+      const cached = await caches.match(request);
+      return cached || new Response('', { status: 404 });
+    })
   );
 });

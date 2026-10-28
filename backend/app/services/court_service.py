@@ -400,10 +400,8 @@ class CourtService:
         update_fields: dict[str, Any] = {}
         if payload.operating_hours is None:
             update_fields["operating_hours"] = None
-        elif hasattr(payload.operating_hours, "to_dict"):
-            update_fields["operating_hours"] = payload.operating_hours.to_dict()
-        elif isinstance(payload.operating_hours, dict):
-            update_fields["operating_hours"] = payload.operating_hours
+        else:
+            update_fields["operating_hours"] = _normalize_operating_hours_dict(payload.operating_hours)
 
         if payload.booking_interval_minutes is not None:
             update_fields["booking_interval_minutes"] = payload.booking_interval_minutes

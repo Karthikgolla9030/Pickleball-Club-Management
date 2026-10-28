@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -245,9 +246,7 @@ def create_app() -> FastAPI:
         """
         logger.exception("Unhandled exception on %s %s: %s", request.method, request.url, exc)
         headers = _build_cors_headers(request)
-        detail = "An internal server error occurred"
-        if not settings.is_production:
-            detail = f"Internal server error: {type(exc).__name__}: {str(exc)}"
+        detail = f"Internal server error: {type(exc).__name__}: {str(exc)}"
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": detail},
@@ -261,6 +260,7 @@ def create_app() -> FastAPI:
             "name": settings.APP_NAME,
             "status": "online",
             "version": settings.APP_VERSION,
+            "commit": os.getenv("RENDER_GIT_COMMIT", "local"),
         }
 
     @app.get("/health", tags=["Health"], include_in_schema=False)
@@ -278,6 +278,7 @@ def create_app() -> FastAPI:
         return {
             "status": "ok" if db_status == "ok" else "degraded",
             "version": settings.APP_VERSION,
+            "commit": os.getenv("RENDER_GIT_COMMIT", "local"),
             "database": db_status,
         }
 
