@@ -41,6 +41,53 @@ from app.schemas.court import (
 )
 
 
+def _normalize_operating_hours_dict(raw_hours: Any) -> dict[str, Any] | None:
+    """Safely normalizes any WeeklyOperatingHours, model dump, or dict into JSON-serializable strings."""
+    if raw_hours is None:
+        return None
+    if hasattr(raw_hours, "to_dict"):
+        return raw_hours.to_dict()
+    if isinstance(raw_hours, dict):
+        serialized: dict[str, Any] = {}
+        for day, day_cfg in raw_hours.items():
+            if isinstance(day_cfg, dict):
+                is_closed = bool(day_cfg.get("is_closed", False))
+                o_time = day_cfg.get("open_time")
+                c_time = day_cfg.get("close_time")
+                if is_closed:
+                    o_str = None
+                    c_str = None
+                else:
+                    if isinstance(o_time, time):
+                        o_str = o_time.strftime("%H:%M:%S")
+                    else:
+                        o_str = str(o_time).strip() if o_time is not None else None
+                    if isinstance(c_time, time):
+                        c_str = c_time.strftime("%H:%M:%S")
+                    else:
+                        c_str = str(c_time).strip() if c_time is not None else None
+                serialized[day] = {
+                    "is_closed": is_closed,
+                    "open_time": o_str,
+                    "close_time": c_str,
+                }
+            elif hasattr(day_cfg, "is_closed"):
+                is_closed = bool(day_cfg.is_closed)
+                o_time = getattr(day_cfg, "open_time", None)
+                c_time = getattr(day_cfg, "close_time", None)
+                o_str = o_time.strftime("%H:%M:%S") if isinstance(o_time, time) else (str(o_time) if o_time else None)
+                c_str = c_time.strftime("%H:%M:%S") if isinstance(c_time, time) else (str(c_time) if c_time else None)
+                serialized[day] = {
+                    "is_closed": is_closed,
+                    "open_time": None if is_closed else o_str,
+                    "close_time": None if is_closed else c_str,
+                }
+            else:
+                serialized[day] = day_cfg
+        return serialized
+    return raw_hours
+
+
 class CourtService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -112,10 +159,7 @@ class CourtService:
 
         operating_hours_dict = None
         if payload.operating_hours is not None:
-            if hasattr(payload.operating_hours, "to_dict"):
-                operating_hours_dict = payload.operating_hours.to_dict()
-            elif isinstance(payload.operating_hours, dict):
-                operating_hours_dict = payload.operating_hours
+            operating_hours_dict = _normalize_operating_hours_dict(payload.operating_hours)
         elif payload.opening_time is not None and payload.closing_time is not None:
             o_str = payload.opening_time.strftime("%H:%M:%S") if isinstance(payload.opening_time, time) else str(payload.opening_time)
             c_str = payload.closing_time.strftime("%H:%M:%S") if isinstance(payload.closing_time, time) else str(payload.closing_time)
@@ -238,11 +282,7 @@ class CourtService:
                 update_data["status"] = CourtStatus.ACTIVE if active_val else CourtStatus.INACTIVE
 
         if "operating_hours" in update_data and update_data["operating_hours"] is not None:
-            val = update_data["operating_hours"]
-            if hasattr(val, "to_dict"):
-                update_data["operating_hours"] = val.to_dict()
-            elif isinstance(val, dict):
-                update_data["operating_hours"] = val
+            update_data["operating_hours"] = _normalize_operating_hours_dict(update_data["operating_hours"])
             update_data.pop("opening_time", None)
             update_data.pop("closing_time", None)
         elif "opening_time" in update_data and "closing_time" in update_data:

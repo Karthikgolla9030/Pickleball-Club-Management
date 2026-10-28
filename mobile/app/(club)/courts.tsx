@@ -78,7 +78,14 @@ import { QUERY_KEYS } from '@/constants';
 import { useActiveClub, useClubBranding, useClubCourts, usePermission } from '@/hooks';
 import { courtApi, bookingApi, clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
-import { formatCurrency, resolveMediaUrl } from '@/utils';
+import {
+  formatCurrency,
+  resolveMediaUrl,
+  parseTimeString,
+  toCanonicalTime,
+  formatTimeDisplay,
+  validateOperatingTimeRange,
+} from '@/utils';
 import type {
   Court,
   CourtCreateRequest,
@@ -166,27 +173,14 @@ const WEEKDAY_KEYS = [
 
 function parseTimeInput(input: string): { h: number; m: number; str24: string } | null {
   if (!input) return null;
-  const trimmed = input.trim();
-  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i);
-  if (!match) return null;
-  let h = parseInt(match[1], 10);
-  const m = match[2] ? parseInt(match[2], 10) : 0;
-  const ampm = match[3]?.toUpperCase();
-  if (ampm === 'PM' && h < 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
-  if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-  const str24 = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
-  return { h, m, str24 };
+  const parsed = parseTimeString(input);
+  if (!parsed) return null;
+  return { h: parsed.hour24, m: parsed.minute, str24: parsed.str24 };
 }
 
 function formatDisplayTime(timeStr?: string | null): string {
   if (!timeStr) return '';
-  const parsed = parseTimeInput(timeStr);
-  if (!parsed) return timeStr;
-  const { h, m } = parsed;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const displayH = h % 12 || 12;
-  return `${displayH}:${String(m).padStart(2, '0')} ${ampm}`;
+  return formatTimeDisplay(timeStr, timeStr);
 }
 
 function getCourtHoursSummary(court: Court): string {
@@ -454,18 +448,23 @@ export default function ClubCourtsScreen() {
     openingTime?: string;
     closingTime?: string;
   } => {
-    const parsedOpen = parseTimeInput(formOpeningTime);
-    const parsedClose = parseTimeInput(formClosingTime);
-    if (!parsedOpen) {
-      return { isValid: false, errorMsg: 'Please enter a valid opening time (e.g. 06:00 or 6:00 AM)' };
-    }
-    if (!parsedClose) {
-      return { isValid: false, errorMsg: 'Please enter a valid closing time (e.g. 22:00 or 10:00 PM)' };
-    }
-    if (parsedClose.h !== 0 && (parsedOpen.h * 60 + parsedOpen.m >= parsedClose.h * 60 + parsedClose.m)) {
+    const rangeRes = validateOperatingTimeRange(formOpeningTime, formClosingTime, {
+      required: true,
+      allowOvernight: false,
+    });
+    if (!rangeRes.isValid) {
       return {
         isValid: false,
-        errorMsg: `Opening time (${formOpeningTime}) must be strictly earlier than closing time (${formClosingTime}). Overnight configurations crossing calendar days are not supported.`,
+        errorMsg: rangeRes.errorMsg,
+      };
+    }
+
+    // Ensure at least one day is open
+    const hasAtLeastOneOpenDay = WEEKDAY_KEYS.some(({ key }) => !formClosedDays[key]);
+    if (!hasAtLeastOneOpenDay) {
+      return {
+        isValid: false,
+        errorMsg: 'At least one operating day must be open for court bookings.',
       };
     }
 
@@ -474,16 +473,16 @@ export default function ClubCourtsScreen() {
       const isClosed = Boolean(formClosedDays[key]);
       weeklyHours[key] = {
         is_closed: isClosed,
-        open_time: isClosed ? null : parsedOpen.str24,
-        close_time: isClosed ? null : parsedClose.str24,
+        open_time: isClosed ? null : rangeRes.openCanonical,
+        close_time: isClosed ? null : rangeRes.closeCanonical,
       };
     }
 
     return {
       isValid: true,
       operatingHours: weeklyHours,
-      openingTime: parsedOpen.str24,
-      closingTime: parsedClose.str24,
+      openingTime: rangeRes.openCanonical,
+      closingTime: rangeRes.closeCanonical,
     };
   };
 
@@ -519,21 +518,21 @@ export default function ClubCourtsScreen() {
 
     if (court.operating_hours) {
       const closedMap: Record<string, boolean> = {};
-      let foundOpen = '06:00';
-      let foundClose = '22:00';
+      let foundOpen: string | null = null;
+      let foundClose: string | null = null;
       for (const [day, dayCfg] of Object.entries(court.operating_hours)) {
         if (dayCfg) {
           if (dayCfg.is_closed) {
             closedMap[day] = true;
           } else {
-            if (dayCfg.open_time) foundOpen = dayCfg.open_time.slice(0, 5);
-            if (dayCfg.close_time) foundClose = dayCfg.close_time.slice(0, 5);
+            if (dayCfg.open_time && !foundOpen) foundOpen = toCanonicalTime(dayCfg.open_time);
+            if (dayCfg.close_time && !foundClose) foundClose = toCanonicalTime(dayCfg.close_time);
           }
         }
       }
       setFormClosedDays(closedMap);
-      setFormOpeningTime(foundOpen);
-      setFormClosingTime(foundClose);
+      setFormOpeningTime(foundOpen || '06:00');
+      setFormClosingTime(foundClose || '22:00');
     } else {
       setFormClosedDays({});
       setFormOpeningTime('06:00');
@@ -542,21 +541,21 @@ export default function ClubCourtsScreen() {
         courtApi.getCourtOperatingHours(clubId, court.id).then((res) => {
           if (res.effective_operating_hours) {
             const closedMap: Record<string, boolean> = {};
-            let fOpen = '06:00';
-            let fClose = '22:00';
+            let fOpen: string | null = null;
+            let fClose: string | null = null;
             for (const [day, dayCfg] of Object.entries(res.effective_operating_hours)) {
               if (dayCfg) {
                 if (dayCfg.is_closed) {
                   closedMap[day] = true;
                 } else {
-                  if (dayCfg.open_time) fOpen = dayCfg.open_time.slice(0, 5);
-                  if (dayCfg.close_time) fClose = dayCfg.close_time.slice(0, 5);
+                  if (dayCfg.open_time && !fOpen) fOpen = toCanonicalTime(dayCfg.open_time);
+                  if (dayCfg.close_time && !fClose) fClose = toCanonicalTime(dayCfg.close_time);
                 }
               }
             }
             setFormClosedDays(closedMap);
-            setFormOpeningTime(fOpen);
-            setFormClosingTime(fClose);
+            setFormOpeningTime(fOpen || '06:00');
+            setFormClosingTime(fClose || '22:00');
           }
           if (res.booking_interval_minutes) {
             setFormInterval(res.booking_interval_minutes);
@@ -574,6 +573,7 @@ export default function ClubCourtsScreen() {
   };
 
   const handleCreateSubmit = async () => {
+    if (isSubmitting) return;
     if (!formName.trim()) {
       setFormError('Court name is required');
       return;
@@ -651,6 +651,7 @@ export default function ClubCourtsScreen() {
   };
 
   const performCourtUpdate = async (timeVal: any, parsedPrice: number | null) => {
+    if (isSubmitting) return;
     if (!editingCourt || !clubId) return;
     setIsSubmitting(true);
     try {
@@ -702,6 +703,7 @@ export default function ClubCourtsScreen() {
   };
 
   const handleEditSubmit = async () => {
+    if (isSubmitting) return;
     if (!editingCourt || !clubId) return;
     if (!formName.trim()) {
       setFormError('Court name is required');
@@ -1439,6 +1441,8 @@ export default function ClubCourtsScreen() {
                   label="Opening Time *"
                   value={formOpeningTime}
                   onChange={setFormOpeningTime}
+                  required
+                  includeSeconds={false}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -1446,6 +1450,8 @@ export default function ClubCourtsScreen() {
                   label="Closing Time *"
                   value={formClosingTime}
                   onChange={setFormClosingTime}
+                  required
+                  includeSeconds={false}
                 />
               </View>
             </View>
@@ -1731,6 +1737,8 @@ export default function ClubCourtsScreen() {
                   label="Opening Time *"
                   value={formOpeningTime}
                   onChange={setFormOpeningTime}
+                  required
+                  includeSeconds={false}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -1738,6 +1746,8 @@ export default function ClubCourtsScreen() {
                   label="Closing Time *"
                   value={formClosingTime}
                   onChange={setFormClosingTime}
+                  required
+                  includeSeconds={false}
                 />
               </View>
             </View>

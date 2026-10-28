@@ -1,15 +1,16 @@
 /**
- * TimePickerInput — Reusable time picker component.
+ * TimePickerInput — Reusable canonical time picker component.
  *
  * Provides:
- * - Native touchable input with Clock icon
- * - Formatted 12h/24h readable time display
- * - Interactive modal with hours, minutes, and AM/PM selection
- * - Returns standardized 24h format (e.g. "18:00:00" or "18:00")
- * - Matches theme and styling of FormField & Input
+ * - Native touchable input with Clock icon and 12h formatted display
+ * - Clear button for 1-tap reset
+ * - Responsive modal selector supporting hours (1..12), minutes (:00, :15, :30, :45, etc.), and AM/PM
+ * - Single-tap quick presets for common operating hours (6 AM, 7 AM, 8 AM, 5 PM, 9 PM, 10 PM)
+ * - Emits canonical 24-hour "HH:mm" by default (e.g. "06:00", "22:00")
+ * - Backwards-compatible with 3-part time strings ("06:00:00") and 12-hour strings ("06:00 AM")
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -19,13 +20,14 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Clock, ChevronDown, X } from 'lucide-react-native';
+import { Clock, ChevronDown, X, Check } from 'lucide-react-native';
 
 import { Colors, Dimensions, Radius, Spacing, Typography } from '@/theme';
+import { parseTimeString, toCanonicalTime, toCanonicalTimeWithSec } from '@/utils/timeUtils';
 
-interface TimePickerInputProps {
+export interface TimePickerInputProps {
   label?: string;
-  value?: string | null; // "HH:MM:SS" or "HH:MM" in 24hr format
+  value?: string | null; // Canonical "HH:mm", legacy "HH:mm:ss", or "hh:mm A"
   onChange?: (timeStr: string) => void;
   onChangeTime?: (timeStr: string) => void;
   placeholder?: string;
@@ -34,16 +36,27 @@ interface TimePickerInputProps {
   required?: boolean;
   disabled?: boolean;
   allowClear?: boolean;
-  includeSeconds?: boolean; // If true outputs HH:MM:00, else HH:MM
+  includeSeconds?: boolean; // Defaults to false (outputs "HH:mm")
   testID?: string;
   containerStyle?: ViewStyle;
 }
 
-const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-const MINUTES_INTERVALS = ['00', '15', '30', '45'];
-const ALL_MINUTES = [
-  '00', '05', '10', '15', '20', '25',
-  '30', '35', '40', '45', '50', '55',
+const HOURS_12 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+const PRIMARY_MINUTES = ['00', '15', '30', '45'];
+const SECONDARY_MINUTES = ['05', '10', '20', '25', '35', '40', '50', '55'];
+
+const AM_PRESETS = [
+  { label: '6:00 AM', hour: 6, min: '00', period: 'AM' as const },
+  { label: '7:00 AM', hour: 7, min: '00', period: 'AM' as const },
+  { label: '8:00 AM', hour: 8, min: '00', period: 'AM' as const },
+  { label: '9:00 AM', hour: 9, min: '00', period: 'AM' as const },
+];
+
+const PM_PRESETS = [
+  { label: '5:00 PM', hour: 5, min: '00', period: 'PM' as const },
+  { label: '8:00 PM', hour: 8, min: '00', period: 'PM' as const },
+  { label: '9:00 PM', hour: 9, min: '00', period: 'PM' as const },
+  { label: '10:00 PM', hour: 10, min: '00', period: 'PM' as const },
 ];
 
 export function TimePickerInput({
@@ -57,52 +70,68 @@ export function TimePickerInput({
   required,
   disabled = false,
   allowClear = true,
-  includeSeconds = true,
+  includeSeconds = false,
   testID,
   containerStyle,
 }: TimePickerInputProps) {
   const [modalVisible, setModalVisible] = useState(false);
+  const [showAllMinutes, setShowAllMinutes] = useState(false);
 
-  // Parse existing value into 12h hour, minute, and period
-  const parsedTime = useMemo(() => {
-    if (!value || !value.trim()) {
-      return { hour12: 9, minute: '00', period: 'AM' as 'AM' | 'PM' };
-    }
-    const parts = value.trim().split(':');
-    let h24 = parseInt(parts[0], 10) || 0;
-    const m = (parts[1] || '00').padStart(2, '0');
-    const period: 'AM' | 'PM' = h24 >= 12 ? 'PM' : 'AM';
-    let hour12 = h24 % 12;
-    if (hour12 === 0) hour12 = 12;
-    return { hour12, minute: m, period };
+  // Parse existing value using robust shared time utility
+  const parsedValue = useMemo(() => {
+    return parseTimeString(value);
   }, [value]);
 
-  const [selectedHour, setSelectedHour] = useState<number>(parsedTime.hour12);
-  const [selectedMinute, setSelectedMinute] = useState<string>(parsedTime.minute);
-  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>(parsedTime.period);
+  // Modal working state
+  const [selectedHour, setSelectedHour] = useState<number>(parsedValue ? parsedValue.hour12 : 6);
+  const [selectedMinute, setSelectedMinute] = useState<string>(
+    parsedValue ? String(parsedValue.minute).padStart(2, '0') : '00'
+  );
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>(
+    parsedValue ? parsedValue.period : 'AM'
+  );
 
-  // Sync internal state when opening modal
+  // Keep internal state in sync whenever modal opens or value changes
+  useEffect(() => {
+    if (parsedValue) {
+      setSelectedHour(parsedValue.hour12);
+      setSelectedMinute(String(parsedValue.minute).padStart(2, '0'));
+      setSelectedPeriod(parsedValue.period);
+    }
+  }, [parsedValue, modalVisible]);
+
   const handleOpen = () => {
     if (disabled) return;
-    setSelectedHour(parsedTime.hour12);
-    setSelectedMinute(parsedTime.minute);
-    setSelectedPeriod(parsedTime.period);
+    if (parsedValue) {
+      setSelectedHour(parsedValue.hour12);
+      setSelectedMinute(String(parsedValue.minute).padStart(2, '0'));
+      setSelectedPeriod(parsedValue.period);
+    } else {
+      setSelectedHour(6);
+      setSelectedMinute('00');
+      setSelectedPeriod('AM');
+    }
+    setShowAllMinutes(false);
     setModalVisible(true);
   };
 
-  // Format readable display
+  // Formatted display text on the main input row (12-hour: "06:00 AM")
   const displayText = useMemo(() => {
-    if (!value || !value.trim()) return '';
-    const { hour12, minute, period } = parsedTime;
-    const hStr = String(hour12).padStart(2, '0');
-    return `${hStr}:${minute} ${period}`;
-  }, [value, parsedTime]);
+    if (!parsedValue) return '';
+    return parsedValue.str12;
+  }, [parsedValue]);
+
+  // Real-time preview inside the modal
+  const previewText = useMemo(() => {
+    const hStr = String(selectedHour).padStart(2, '0');
+    return `${hStr}:${selectedMinute} ${selectedPeriod}`;
+  }, [selectedHour, selectedMinute, selectedPeriod]);
 
   const displayLabel = label ? (required ? `${label} *` : label) : undefined;
 
-  const triggerChange = (val: string) => {
-    onChange?.(val);
-    onChangeTime?.(val);
+  const triggerChange = (canonicalTimeStr: string) => {
+    onChange?.(canonicalTimeStr);
+    onChangeTime?.(canonicalTimeStr);
   };
 
   const handleConfirm = () => {
@@ -110,8 +139,8 @@ export function TimePickerInput({
     if (selectedPeriod === 'PM') h24 += 12;
     const hStr = String(h24).padStart(2, '0');
     const mStr = String(selectedMinute).padStart(2, '0');
-    const result = includeSeconds ? `${hStr}:${mStr}:00` : `${hStr}:${mStr}`;
-    triggerChange(result);
+    const canonical = includeSeconds ? `${hStr}:${mStr}:00` : `${hStr}:${mStr}`;
+    triggerChange(canonical);
     setModalVisible(false);
   };
 
@@ -119,6 +148,14 @@ export function TimePickerInput({
     triggerChange('');
     setModalVisible(false);
   };
+
+  const handleApplyPreset = (preset: { hour: number; min: string; period: 'AM' | 'PM' }) => {
+    setSelectedHour(preset.hour);
+    setSelectedMinute(preset.min);
+    setSelectedPeriod(preset.period);
+  };
+
+  const activePresets = selectedPeriod === 'AM' ? AM_PRESETS : PM_PRESETS;
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -138,17 +175,23 @@ export function TimePickerInput({
         accessibilityRole="button"
         accessibilityLabel={label || 'Select Time'}
       >
-        <Clock size={18} color={value ? Colors.brand.primary : Colors.text.tertiary} style={styles.leadingIcon} />
+        <Clock
+          size={18}
+          color={parsedValue ? Colors.brand.primary : Colors.text.tertiary}
+          style={styles.leadingIcon}
+        />
 
-        <Text style={[styles.valueText, !value && styles.placeholderText]}>
+        <Text style={[styles.valueText, !parsedValue && styles.placeholderText]}>
           {displayText || placeholder}
         </Text>
 
-        {value && allowClear && !disabled ? (
+        {parsedValue && allowClear && !disabled ? (
           <TouchableOpacity
             style={styles.clearBtn}
             onPress={handleClear}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Clear time"
           >
             <X size={16} color={Colors.text.tertiary} />
           </TouchableOpacity>
@@ -178,51 +221,96 @@ export function TimePickerInput({
                 <View style={styles.modalHeader}>
                   <View>
                     <Text style={styles.modalTitle}>{label || 'Select Time'}</Text>
-                    <Text style={styles.timePreview}>
-                      {String(selectedHour).padStart(2, '0')}:{selectedMinute} {selectedPeriod}
-                    </Text>
+                    <View style={styles.previewContainer}>
+                      <Text style={styles.previewText}>{previewText}</Text>
+                    </View>
                   </View>
                   <TouchableOpacity
                     style={styles.closeBtn}
                     onPress={() => setModalVisible(false)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Close picker"
                   >
                     <X size={20} color={Colors.text.primary} />
                   </TouchableOpacity>
                 </View>
 
-                {/* AM / PM Toggle */}
+                {/* AM / PM Segmented Control */}
                 <View style={styles.periodToggleRow}>
                   <TouchableOpacity
                     style={[styles.periodBtn, selectedPeriod === 'AM' && styles.periodBtnActive]}
                     onPress={() => setSelectedPeriod('AM')}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.periodBtnText, selectedPeriod === 'AM' && styles.periodBtnTextActive]}>
+                    <Text
+                      style={[
+                        styles.periodBtnText,
+                        selectedPeriod === 'AM' && styles.periodBtnTextActive,
+                      ]}
+                    >
                       AM (Morning)
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.periodBtn, selectedPeriod === 'PM' && styles.periodBtnActive]}
                     onPress={() => setSelectedPeriod('PM')}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.periodBtnText, selectedPeriod === 'PM' && styles.periodBtnTextActive]}>
+                    <Text
+                      style={[
+                        styles.periodBtnText,
+                        selectedPeriod === 'PM' && styles.periodBtnTextActive,
+                      ]}
+                    >
                       PM (Afternoon / Evening)
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Hours Grid */}
+                {/* Quick Presets Bar */}
+                <View style={styles.presetsRow}>
+                  {activePresets.map((preset) => {
+                    const isPresetSelected =
+                      selectedHour === preset.hour &&
+                      selectedMinute === preset.min &&
+                      selectedPeriod === preset.period;
+                    return (
+                      <TouchableOpacity
+                        key={preset.label}
+                        style={[
+                          styles.presetChip,
+                          isPresetSelected && styles.presetChipActive,
+                        ]}
+                        onPress={() => handleApplyPreset(preset)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.presetChipText,
+                            isPresetSelected && styles.presetChipTextActive,
+                          ]}
+                        >
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Hours Grid (1 to 12 in natural order) */}
                 <Text style={styles.sectionLabel}>HOUR</Text>
-                <View style={styles.grid}>
+                <View style={styles.hourGrid}>
                   {HOURS_12.map((hr) => {
                     const isSelected = hr === selectedHour;
                     return (
                       <TouchableOpacity
                         key={hr}
-                        style={[styles.gridCell, isSelected && styles.gridCellSelected]}
+                        style={[styles.hourCell, isSelected && styles.hourCellSelected]}
                         onPress={() => setSelectedHour(hr)}
+                        activeOpacity={0.7}
                       >
-                        <Text style={[styles.gridCellText, isSelected && styles.gridCellTextSelected]}>
+                        <Text style={[styles.hourCellText, isSelected && styles.hourCellTextSelected]}>
                           {hr}
                         </Text>
                       </TouchableOpacity>
@@ -230,18 +318,39 @@ export function TimePickerInput({
                   })}
                 </View>
 
-                {/* Minutes Grid */}
-                <Text style={styles.sectionLabel}>MINUTE</Text>
-                <View style={styles.grid}>
-                  {ALL_MINUTES.map((min) => {
+                {/* Minutes Selector */}
+                <View style={styles.minuteHeaderRow}>
+                  <Text style={styles.sectionLabel}>MINUTE</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAllMinutes((prev) => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={styles.toggleMinutesText}>
+                      {showAllMinutes ? 'Standard (:00, :15, :30, :45)' : 'Show all 5m intervals'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Primary Minutes (:00, :15, :30, :45) */}
+                <View style={styles.primaryMinuteRow}>
+                  {PRIMARY_MINUTES.map((min) => {
                     const isSelected = min === selectedMinute;
                     return (
                       <TouchableOpacity
                         key={min}
-                        style={[styles.gridCell, isSelected && styles.gridCellSelected]}
+                        style={[
+                          styles.primaryMinuteCell,
+                          isSelected && styles.primaryMinuteCellSelected,
+                        ]}
                         onPress={() => setSelectedMinute(min)}
+                        activeOpacity={0.7}
                       >
-                        <Text style={[styles.gridCellText, isSelected && styles.gridCellTextSelected]}>
+                        <Text
+                          style={[
+                            styles.primaryMinuteText,
+                            isSelected && styles.primaryMinuteTextSelected,
+                          ]}
+                        >
                           :{min}
                         </Text>
                       </TouchableOpacity>
@@ -249,21 +358,63 @@ export function TimePickerInput({
                   })}
                 </View>
 
+                {/* Secondary Minutes Grid (if toggled) */}
+                {showAllMinutes && (
+                  <View style={styles.secondaryMinuteGrid}>
+                    {SECONDARY_MINUTES.map((min) => {
+                      const isSelected = min === selectedMinute;
+                      return (
+                        <TouchableOpacity
+                          key={min}
+                          style={[
+                            styles.secondaryMinuteCell,
+                            isSelected && styles.secondaryMinuteCellSelected,
+                          ]}
+                          onPress={() => setSelectedMinute(min)}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.secondaryMinuteText,
+                              isSelected && styles.secondaryMinuteTextSelected,
+                            ]}
+                          >
+                            :{min}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
                 {/* Modal Actions */}
                 <View style={styles.modalActions}>
-                  {allowClear && (
+                  <View style={styles.leftActions}>
                     <TouchableOpacity
-                      style={styles.actionBtnSecondary}
-                      onPress={handleClear}
+                      style={styles.cancelBtn}
+                      onPress={() => setModalVisible(false)}
+                      activeOpacity={0.7}
                     >
-                      <Text style={styles.actionBtnSecondaryText}>Clear</Text>
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
                     </TouchableOpacity>
-                  )}
+                    {allowClear && (
+                      <TouchableOpacity
+                        style={styles.clearModalBtn}
+                        onPress={handleClear}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.clearModalBtnText}>Clear</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
                   <TouchableOpacity
-                    style={styles.actionBtnPrimary}
+                    style={styles.confirmBtn}
                     onPress={handleConfirm}
+                    activeOpacity={0.8}
                   >
-                    <Text style={styles.actionBtnPrimaryText}>Confirm Time</Text>
+                    <Check size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.confirmBtnText}>Confirm Time</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -314,9 +465,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.size.base,
     color: Colors.text.primary,
+    fontWeight: Typography.weight.medium,
   },
   placeholderText: {
     color: Colors.text.tertiary,
+    fontWeight: Typography.weight.regular,
   },
   clearBtn: {
     padding: Spacing[1],
@@ -324,31 +477,33 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: Typography.size.xs,
     color: Colors.status.error,
+    marginTop: 2,
   },
   hintText: {
     fontSize: Typography.size.xs,
     color: Colors.text.tertiary,
+    marginTop: 2,
   },
 
   // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing[4],
   },
   modalContent: {
     width: '100%',
-    maxWidth: 380,
-    backgroundColor: Colors.surface.default,
+    maxWidth: 390,
+    backgroundColor: '#FFFFFF',
     borderRadius: Radius.xl,
     padding: Spacing[4],
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -357,35 +512,40 @@ const styles = StyleSheet.create({
     marginBottom: Spacing[3],
   },
   modalTitle: {
-    fontSize: Typography.size.lg,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+    fontSize: Typography.size.base,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.text.secondary,
   },
-  timePreview: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
+  previewContainer: {
+    marginTop: 4,
+  },
+  previewText: {
+    fontSize: 26,
+    fontWeight: '800',
     color: Colors.brand.primary,
-    marginTop: 2,
+    letterSpacing: 0.5,
   },
   closeBtn: {
-    padding: Spacing[1],
+    padding: Spacing[1.5],
+    borderRadius: Radius.full,
+    backgroundColor: '#F3F4F6',
   },
   periodToggleRow: {
     flexDirection: 'row',
     gap: Spacing[2],
-    marginBottom: Spacing[3],
+    marginBottom: Spacing[2.5],
   },
   periodBtn: {
     flex: 1,
-    paddingVertical: Spacing[2.5],
+    paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface.elevated,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderRadius: Radius.lg,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
   },
   periodBtnActive: {
-    backgroundColor: Colors.brand.primaryLight || '#E8F5EE',
+    backgroundColor: Colors.brand.primary,
     borderColor: Colors.brand.primary,
   },
   periodBtnText: {
@@ -394,6 +554,33 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
   },
   periodBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: Typography.weight.bold,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: Spacing[3],
+  },
+  presetChip: {
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  presetChipActive: {
+    backgroundColor: '#E6F4EA',
+    borderColor: Colors.brand.primary,
+  },
+  presetChipText: {
+    fontSize: 11,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.text.secondary,
+  },
+  presetChipTextActive: {
     color: Colors.brand.primary,
     fontWeight: Typography.weight.bold,
   },
@@ -401,62 +588,149 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: Typography.weight.bold,
     color: Colors.text.tertiary,
+    letterSpacing: 0.5,
     marginBottom: Spacing[1.5],
-    marginTop: Spacing[1],
   },
-  grid: {
+  hourGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     marginBottom: Spacing[3],
   },
-  gridCell: {
-    width: '15.2%',
-    paddingVertical: Spacing[2],
+  hourCell: {
+    width: '22.8%',
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface.elevated,
+    borderRadius: Radius.lg,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  gridCellSelected: {
+  hourCellSelected: {
     backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
   },
-  gridCellText: {
+  hourCellText: {
+    fontSize: Typography.size.base,
+    fontWeight: Typography.weight.semibold,
+    color: Colors.text.primary,
+  },
+  hourCellTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: Typography.weight.bold,
+  },
+  minuteHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing[1.5],
+  },
+  toggleMinutesText: {
+    fontSize: 11,
+    fontWeight: Typography.weight.medium,
+    color: Colors.brand.primary,
+  },
+  primaryMinuteRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: Spacing[2],
+  },
+  primaryMinuteCell: {
+    flex: 1,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.lg,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  primaryMinuteCellSelected: {
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
+  },
+  primaryMinuteText: {
     fontSize: Typography.size.sm,
     fontWeight: Typography.weight.semibold,
     color: Colors.text.primary,
   },
-  gridCellTextSelected: {
+  primaryMinuteTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: Typography.weight.bold,
+  },
+  secondaryMinuteGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: Spacing[2],
+  },
+  secondaryMinuteCell: {
+    width: '23%',
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  secondaryMinuteCellSelected: {
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
+  },
+  secondaryMinuteText: {
+    fontSize: 12,
+    fontWeight: Typography.weight.medium,
+    color: Colors.text.secondary,
+  },
+  secondaryMinuteTextSelected: {
     color: '#FFFFFF',
     fontWeight: Typography.weight.bold,
   },
   modalActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: Spacing[2],
     marginTop: Spacing[2],
     paddingTop: Spacing[3],
     borderTopWidth: 1,
-    borderTopColor: Colors.surface.border,
+    borderTopColor: '#E5E7EB',
   },
-  actionBtnSecondary: {
+  leftActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  cancelBtn: {
     paddingHorizontal: Spacing[3],
     paddingVertical: Spacing[2],
     borderRadius: Radius.md,
   },
-  actionBtnSecondaryText: {
+  cancelBtnText: {
     fontSize: Typography.size.sm,
     color: Colors.text.secondary,
     fontWeight: Typography.weight.medium,
   },
-  actionBtnPrimary: {
+  clearModalBtn: {
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+  },
+  clearModalBtnText: {
+    fontSize: Typography.size.sm,
+    color: Colors.status.error,
+    fontWeight: Typography.weight.medium,
+  },
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: Spacing[4],
     paddingVertical: Spacing[2.5],
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     backgroundColor: Colors.brand.primary,
   },
-  actionBtnPrimaryText: {
+  confirmBtnText: {
     fontSize: Typography.size.sm,
     color: '#FFFFFF',
     fontWeight: Typography.weight.bold,
