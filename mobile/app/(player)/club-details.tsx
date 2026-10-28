@@ -54,8 +54,9 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppText, Button, Card, ErrorState, LoadingState, Screen } from '@/components';
+import { AppText, Button, Card, ErrorState, LoadingState, PromotionalAdsCarousel, Screen } from '@/components';
 import {
+  useClubCarouselSlides,
   usePlayerClubMembershipRequest,
   usePlayerClubs,
   useJoinClub,
@@ -152,6 +153,13 @@ export default function PublicClubDetailScreen() {
 
   // 4. Check caller's enrolled club memberships
   const { clubs: myClubs, refetch: refetchMyClubs } = usePlayerClubs();
+
+  // 5. Fetch club-specific promotional ads (only ads belonging strictly to this club)
+  const {
+    slides: clubAds = [],
+    isLoading: isLoadingAds,
+    refetch: refetchAds,
+  } = useClubCarouselSlides(clubId, true);
   const isEnrolled = useMemo(() => {
     return myClubs.some((c) => c.club_id === clubId && c.status === 'active');
   }, [myClubs, clubId]);
@@ -370,6 +378,7 @@ export default function PublicClubDetailScreen() {
               refetchPlans();
               refetchRequest();
               refetchMyClubs();
+              refetchAds();
             }}
             tintColor="#18794E"
           />
@@ -527,6 +536,15 @@ export default function PublicClubDetailScreen() {
               )}
             </View>
           </View>
+
+          {/* ─── Club-Specific Promotional Ads Carousel ───────────────────── */}
+          <PromotionalAdsCarousel
+            ads={clubAds}
+            title={`${club.name} Promotions`}
+            subtitle="Special offers, clinics, and specials at this club"
+            isLoading={isLoadingAds}
+            hideIfEmpty
+          />
 
           {/* ─── D. Courts & Facilities ────────────────────────────────────── */}
           <View style={styles.card}>

@@ -27,6 +27,7 @@ export default function PlatformLayout() {
         <Stack.Screen name="users" />
         <Stack.Screen name="audit" />
         <Stack.Screen name="support" />
+        <Stack.Screen name="banners" />
       </Stack>
     </View>
   );

@@ -34,6 +34,7 @@ import {
   ChevronRight,
   FileText,
   History,
+  ImagePlus,
   LayoutGrid,
   LifeBuoy,
   LogOut,
@@ -163,6 +164,13 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
       subtitle: 'Inquiries & triage',
       route: '/platform/support',
       icon: LifeBuoy,
+    },
+    {
+      key: 'banners',
+      label: 'Home Page Banners',
+      subtitle: 'Owner & Player global heroes',
+      route: '/platform/banners',
+      icon: ImagePlus,
     },
     {
       key: 'settings',

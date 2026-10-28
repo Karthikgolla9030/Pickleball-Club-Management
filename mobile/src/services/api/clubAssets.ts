@@ -19,6 +19,7 @@ import type {
   Court,
   LeagueSummary,
   Tournament,
+  UniversalPromotionalAd,
   UpdateClubBrandingPayload,
 } from '@/types';
 
@@ -36,11 +37,19 @@ export const clubAssetsApi = {
     return apiClient.put<ClubBranding>(API_ENDPOINTS.CLUB_BRANDING(clubId), payload);
   },
 
-  // ─── Carousel Slides ────────────────────────────────────────────────────────
+  // ─── Carousel Slides & Club Promotional Ads ─────────────────────────────────
 
   getCarouselSlides(clubId: string, activeOnly: boolean = true): Promise<ClubCarouselSlide[]> {
     const url = `${API_ENDPOINTS.CLUB_CAROUSEL_SLIDES(clubId)}?active_only=${activeOnly}`;
     return apiClient.get<ClubCarouselSlide[]>(url, false);
+  },
+
+  getClubPromotionalAds(clubId: string, activeOnly: boolean = true): Promise<ClubCarouselSlide[]> {
+    return this.getCarouselSlides(clubId, activeOnly);
+  },
+
+  getUniversalPromotionalAds(): Promise<UniversalPromotionalAd[]> {
+    return apiClient.get<UniversalPromotionalAd[]>(API_ENDPOINTS.PROMOTIONAL_ADS_UNIVERSAL, false);
   },
 
   createCarouselSlide(
@@ -54,9 +63,29 @@ export const clubAssetsApi = {
       cta_route?: string | null;
       display_order?: number;
       is_active?: boolean;
+      start_date?: string | null;
+      end_date?: string | null;
     }
   ): Promise<ClubCarouselSlide> {
     return apiClient.post<ClubCarouselSlide>(API_ENDPOINTS.CLUB_CAROUSEL_SLIDES(clubId), payload);
+  },
+
+  createClubPromotionalAd(
+    clubId: string,
+    payload: {
+      title?: string | null;
+      subtitle?: string | null;
+      tag?: string | null;
+      image_url: string;
+      cta_text?: string | null;
+      cta_route?: string | null;
+      display_order?: number;
+      is_active?: boolean;
+      start_date?: string | null;
+      end_date?: string | null;
+    }
+  ): Promise<ClubCarouselSlide> {
+    return this.createCarouselSlide(clubId, payload);
   },
 
   updateCarouselSlide(
@@ -71,6 +100,8 @@ export const clubAssetsApi = {
       cta_route?: string | null;
       display_order?: number;
       is_active?: boolean;
+      start_date?: string | null;
+      end_date?: string | null;
     }
   ): Promise<ClubCarouselSlide> {
     return apiClient.put<ClubCarouselSlide>(
@@ -79,14 +110,41 @@ export const clubAssetsApi = {
     );
   },
 
+  updateClubPromotionalAd(
+    clubId: string,
+    slideId: string,
+    payload: {
+      title?: string | null;
+      subtitle?: string | null;
+      tag?: string | null;
+      image_url?: string | null;
+      cta_text?: string | null;
+      cta_route?: string | null;
+      display_order?: number;
+      is_active?: boolean;
+      start_date?: string | null;
+      end_date?: string | null;
+    }
+  ): Promise<ClubCarouselSlide> {
+    return this.updateCarouselSlide(clubId, slideId, payload);
+  },
+
   deleteCarouselSlide(clubId: string, slideId: string): Promise<void> {
     return apiClient.delete<void>(API_ENDPOINTS.CLUB_CAROUSEL_SLIDE_DETAIL(clubId, slideId));
+  },
+
+  deleteClubPromotionalAd(clubId: string, slideId: string): Promise<void> {
+    return this.deleteCarouselSlide(clubId, slideId);
   },
 
   reorderCarouselSlides(clubId: string, slideIds: string[]): Promise<ClubCarouselSlide[]> {
     return apiClient.post<ClubCarouselSlide[]>(API_ENDPOINTS.CLUB_CAROUSEL_REORDER(clubId), {
       slide_ids: slideIds,
     });
+  },
+
+  reorderClubPromotionalAds(clubId: string, slideIds: string[]): Promise<ClubCarouselSlide[]> {
+    return this.reorderCarouselSlides(clubId, slideIds);
   },
 
   // ─── Media Upload ───────────────────────────────────────────────────────────

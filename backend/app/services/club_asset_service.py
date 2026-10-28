@@ -10,10 +10,11 @@ Handles:
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import Club
@@ -30,6 +31,7 @@ from app.schemas.club_asset import (
     ClubCarouselSlideResponse,
     ClubCarouselSlideUpdateRequest,
     MediaUploadResponse,
+    UniversalPromotionalAdResponse,
 )
 from app.services.media_storage_service import MediaStorageService
 
@@ -150,7 +152,7 @@ class ClubAssetService:
             has_custom_lesson_banner=bool(club.default_lesson_banner_url),
         )
 
-    # ─── Hero Carousel Slides ─────────────────────────────────────────────────
+    # ─── Hero Carousel Slides / Club Promotional Ads ──────────────────────────
 
     async def get_carousel_slides(
         self,
@@ -158,7 +160,8 @@ class ClubAssetService:
         active_only: bool = True,
     ) -> list[ClubCarouselSlideResponse]:
         """
-        Fetch carousel slides for a club, ordered by display_order.
+        Fetch carousel slides / promotional ads for a club, ordered by display_order.
+        When active_only is True, verifies is_active and valid start/end scheduling dates.
         """
         query = (
             select(ClubCarouselSlide)
@@ -166,7 +169,12 @@ class ClubAssetService:
             .order_by(ClubCarouselSlide.display_order.asc(), ClubCarouselSlide.created_at.asc())
         )
         if active_only:
-            query = query.where(ClubCarouselSlide.is_active.is_(True))
+            now = datetime.now(timezone.utc)
+            query = query.where(
+                ClubCarouselSlide.is_active.is_(True),
+                or_(ClubCarouselSlide.start_date.is_(None), ClubCarouselSlide.start_date <= now),
+                or_(ClubCarouselSlide.end_date.is_(None), ClubCarouselSlide.end_date >= now),
+            )
 
         res = await self.db.execute(query)
         slides = res.scalars().all()
@@ -177,7 +185,7 @@ class ClubAssetService:
         club_id: UUID,
         payload: ClubCarouselSlideCreateRequest,
     ) -> ClubCarouselSlideResponse:
-        """Create a new hero carousel slide for a club."""
+        """Create a new promotional ad / carousel slide for a club."""
         # Verify club exists
         club_check = await self.db.execute(select(Club.id).where(Club.id == club_id))
         if not club_check.scalar_one_or_none():
@@ -202,11 +210,60 @@ class ClubAssetService:
             cta_route=payload.cta_route,
             display_order=display_order,
             is_active=payload.is_active,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
         )
         self.db.add(slide)
         await self.db.commit()
         await self.db.refresh(slide)
         return ClubCarouselSlideResponse.model_validate(slide)
+
+    async def get_universal_promotional_ads(self) -> list[UniversalPromotionalAdResponse]:
+        """
+        Aggregate eligible promotional ads across all active clubs for Player App Home.
+        Only includes ads belonging to active clubs, marked active, and within scheduled dates.
+        """
+        now = datetime.now(timezone.utc)
+        stmt = (
+            select(
+                ClubCarouselSlide,
+                Club.name.label("club_name"),
+                Club.logo_url.label("club_logo_url"),
+            )
+            .join(Club, Club.id == ClubCarouselSlide.club_id)
+            .where(
+                Club.is_active.is_(True),
+                ClubCarouselSlide.is_active.is_(True),
+                or_(ClubCarouselSlide.start_date.is_(None), ClubCarouselSlide.start_date <= now),
+                or_(ClubCarouselSlide.end_date.is_(None), ClubCarouselSlide.end_date >= now),
+            )
+            .order_by(ClubCarouselSlide.display_order.asc(), ClubCarouselSlide.created_at.desc())
+        )
+        res = await self.db.execute(stmt)
+        rows = res.all()
+
+        results = []
+        for slide, club_name, club_logo_url in rows:
+            results.append(
+                UniversalPromotionalAdResponse(
+                    id=slide.id,
+                    club_id=slide.club_id,
+                    club_name=club_name,
+                    club_logo_url=club_logo_url,
+                    title=slide.title,
+                    subtitle=slide.subtitle,
+                    tag=slide.tag,
+                    image_url=slide.image_url,
+                    cta_text=slide.cta_text,
+                    cta_route=slide.cta_route,
+                    display_order=slide.display_order,
+                    is_active=slide.is_active,
+                    start_date=slide.start_date,
+                    end_date=slide.end_date,
+                    created_at=slide.created_at,
+                )
+            )
+        return results
 
     async def update_carousel_slide(
         self,

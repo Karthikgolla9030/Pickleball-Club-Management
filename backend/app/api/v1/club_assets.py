@@ -54,6 +54,7 @@ from app.schemas.club_asset import (
     EntityImageUpdateRequest,
     MediaUploadResponse,
     ReorderSlidesRequest,
+    UniversalPromotionalAdResponse,
 )
 from app.schemas.court import CourtResponse
 from app.schemas.event import EventResponse
@@ -246,6 +247,106 @@ async def reorder_carousel_slides(
 ) -> list[ClubCarouselSlideResponse]:
     """Persist new order of carousel slides."""
     return await ClubAssetService(db).reorder_carousel_slides(club_id=club_id, slide_ids=payload.slide_ids)
+
+
+# ─── Club Promotional Ads Aliases ─────────────────────────────────────────────
+
+@router.get(
+    "/promotional-ads",
+    response_model=list[ClubCarouselSlideResponse],
+    summary="List club promotional ads",
+    description="Returns promotional advertisements for this club. Supports active_only filter.",
+)
+async def list_club_promotional_ads(
+    club_id: UUID,
+    active_only: bool = Query(True, description="Filter for active, scheduled ads only"),
+    db: AsyncSession = Depends(get_db),
+) -> list[ClubCarouselSlideResponse]:
+    """Retrieve promotional ads for current club."""
+    return await ClubAssetService(db).get_carousel_slides(club_id=club_id, active_only=active_only)
+
+
+@router.post(
+    "/promotional-ads",
+    response_model=ClubCarouselSlideResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create club promotional ad",
+    description="Add a promotional ad for this club. Requires MANAGE_CLUB.",
+)
+async def create_club_promotional_ad(
+    club_id: UUID,
+    payload: ClubCarouselSlideCreateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> ClubCarouselSlideResponse:
+    """Create a new promotional advertisement."""
+    return await ClubAssetService(db).create_carousel_slide(club_id=club_id, payload=payload)
+
+
+@router.put(
+    "/promotional-ads/{ad_id}",
+    response_model=ClubCarouselSlideResponse,
+    summary="Update club promotional ad",
+    description="Modify a promotional ad's title, text, image, CTA, dates, or active status. Requires MANAGE_CLUB.",
+)
+async def update_club_promotional_ad(
+    club_id: UUID,
+    ad_id: UUID,
+    payload: ClubCarouselSlideUpdateRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> ClubCarouselSlideResponse:
+    """Update an existing promotional advertisement."""
+    return await ClubAssetService(db).update_carousel_slide(club_id=club_id, slide_id=ad_id, payload=payload)
+
+
+@router.delete(
+    "/promotional-ads/{ad_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete club promotional ad",
+    description="Remove a promotional advertisement. Requires MANAGE_CLUB.",
+)
+async def delete_club_promotional_ad(
+    club_id: UUID,
+    ad_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a promotional advertisement."""
+    await ClubAssetService(db).delete_carousel_slide(club_id=club_id, slide_id=ad_id)
+
+
+@router.post(
+    "/promotional-ads/reorder",
+    response_model=list[ClubCarouselSlideResponse],
+    summary="Reorder club promotional ads",
+    description="Update promotional ad display priority. Requires MANAGE_CLUB.",
+)
+async def reorder_club_promotional_ads(
+    club_id: UUID,
+    payload: ReorderSlidesRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_CLUB)),
+    db: AsyncSession = Depends(get_db),
+) -> list[ClubCarouselSlideResponse]:
+    """Persist new order of promotional advertisements."""
+    return await ClubAssetService(db).reorder_carousel_slides(club_id=club_id, slide_ids=payload.slide_ids)
+
+
+# ─── Universal Promotional Ads Router ─────────────────────────────────────────
+
+promotional_ads_router = APIRouter(prefix="/promotional-ads", tags=["Promotional Ads"])
+
+@promotional_ads_router.get(
+    "/universal",
+    response_model=list[UniversalPromotionalAdResponse],
+    summary="Get universal aggregated promotional ads for Player App Home",
+    description="Aggregates active, scheduled promotional ads across all active participating clubs.",
+)
+async def get_universal_promotional_ads(
+    db: AsyncSession = Depends(get_db),
+) -> list[UniversalPromotionalAdResponse]:
+    """Retrieve universal player promotional ads."""
+    return await ClubAssetService(db).get_universal_promotional_ads()
 
 
 # ─── Entity Image Endpoints ───────────────────────────────────────────────────

@@ -43,7 +43,7 @@ import { useDrawerStore } from '@/navigation';
 import { PlatformOwnerProfile } from '@/services/api/clubApplications';
 import { Radius, Spacing } from '@/theme';
 
-export type PlatformTabKey = 'overview' | 'applications' | 'clubs' | 'users' | 'audit' | 'support' | 'settings';
+export type PlatformTabKey = 'overview' | 'applications' | 'clubs' | 'users' | 'audit' | 'support' | 'settings' | 'banners';
 
 interface PlatformHeaderProps {
   activeTab: PlatformTabKey;

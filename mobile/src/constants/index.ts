@@ -250,6 +250,14 @@ export const API_ENDPOINTS = {
   NOTIFICATIONS_UNREAD_COUNT: `${API_BASE}/api/v1/notifications/unread-count`,
   NOTIFICATION_MARK_READ: (notificationId: string) => `${API_BASE}/api/v1/notifications/${notificationId}/read`,
   NOTIFICATIONS_MARK_ALL_READ: `${API_BASE}/api/v1/notifications/read-all`,
+
+  // Platform Banners & Universal Ads
+  PLATFORM_BANNERS: `${API_BASE}/api/v1/platform/banners`,
+  PLATFORM_BANNER_DETAIL: (bannerType: string) => `${API_BASE}/api/v1/platform/banners/${bannerType}`,
+  PLATFORM_BANNER_UPLOAD: (bannerType: string) => `${API_BASE}/api/v1/platform/banners/${bannerType}/upload`,
+  PROMOTIONAL_ADS_UNIVERSAL: `${API_BASE}/api/v1/promotional-ads/universal`,
+  CLUB_PROMOTIONAL_ADS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/promotional-ads`,
+  CLUB_PROMOTIONAL_AD_DETAIL: (clubId: string, adId: string) => `${API_BASE}/api/v1/clubs/${clubId}/promotional-ads/${adId}`,
 } as const;
 
 export const SECURE_STORE_KEYS = {
@@ -463,6 +471,12 @@ export const QUERY_KEYS = {
     ['clubs', clubId, 'analytics', 'competitions', filters ?? 'all'] as const,
   CLUB_ANALYTICS_PAYMENTS: (clubId: string, filters?: string) =>
     ['clubs', clubId, 'analytics', 'payments', filters ?? 'all'] as const,
+
+  // Platform Banners & Universal Ads
+  PLATFORM_BANNERS: ['platform', 'banners'] as const,
+  PLATFORM_BANNER: (bannerType: string) => ['platform', 'banners', bannerType] as const,
+  UNIVERSAL_PROMOTIONAL_ADS: ['promotional-ads', 'universal'] as const,
+  CLUB_PROMOTIONAL_ADS: (clubId: string) => ['clubs', clubId, 'promotional-ads'] as const,
 } as const;
 
 

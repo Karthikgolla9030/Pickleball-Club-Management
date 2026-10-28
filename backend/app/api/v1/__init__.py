@@ -8,7 +8,10 @@ from app.api.v1.bookings import (
     staff_bookings_router,
 )
 from app.api.v1.clubs import router as clubs_router
-from app.api.v1.club_assets import router as club_assets_router
+from app.api.v1.club_assets import (
+    promotional_ads_router,
+    router as club_assets_router,
+)
 from app.api.v1.competition import (
     club_competition_router,
     player_competition_router,
@@ -64,6 +67,7 @@ api_router.include_router(notifications_router)
 api_router.include_router(auth_router)
 api_router.include_router(clubs_router)
 api_router.include_router(club_assets_router)
+api_router.include_router(promotional_ads_router)
 api_router.include_router(player_router)
 api_router.include_router(club_tournaments_router)
 api_router.include_router(tournaments_router)

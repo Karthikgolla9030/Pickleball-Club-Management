@@ -24,13 +24,19 @@ class Base(DeclarativeBase):
 
 def _build_engine() -> any:
     settings = get_settings()
+    engine_kwargs: dict = {
+        "echo": settings.is_development,
+        "pool_pre_ping": True,
+    }
+    if "sqlite" not in settings.DATABASE_URL:
+        engine_kwargs.update({
+            "pool_size": 10,
+            "max_overflow": 20,
+            "pool_recycle": 300,
+        })
     return create_async_engine(
         settings.DATABASE_URL,
-        echo=settings.is_development,  # SQL logging only in dev
-        pool_pre_ping=True,            # Detect stale connections
-        pool_size=10,
-        max_overflow=20,
-        pool_recycle=300,              # Recycle connections every 5m for Neon serverless
+        **engine_kwargs,
     )
 
 

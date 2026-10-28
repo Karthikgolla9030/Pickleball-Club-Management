@@ -4,6 +4,13 @@ Uses in-process SQLite for isolated unit tests (models/permissions/API).
 """
 from __future__ import annotations
 
+import os
+os.environ["APP_ENV"] = "test"
+os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+
+from app.core.config import get_settings
+get_settings.cache_clear()
+
 import httpx
 import pytest
 import pytest_asyncio
@@ -18,7 +25,7 @@ from app.main import app
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine():
     """Create a shared in-memory SQLite engine with StaticPool."""
     engine = create_async_engine(

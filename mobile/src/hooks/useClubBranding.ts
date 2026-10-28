@@ -123,7 +123,9 @@ export function useCarouselMutations(clubId?: string | null) {
   const invalidateSlides = () => {
     if (clubId) {
       queryClient.invalidateQueries({ queryKey: ['club-carousel-slides', clubId] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PROMOTIONAL_ADS(clubId) });
     }
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.UNIVERSAL_PROMOTIONAL_ADS });
   };
 
   const createSlide = useMutation({
@@ -136,6 +138,8 @@ export function useCarouselMutations(clubId?: string | null) {
       cta_route?: string | null;
       display_order?: number;
       is_active?: boolean;
+      start_date?: string | null;
+      end_date?: string | null;
     }) => {
       if (!clubId) throw new Error('clubId is required');
       return clubAssetsApi.createCarouselSlide(clubId, payload);
@@ -158,6 +162,8 @@ export function useCarouselMutations(clubId?: string | null) {
         cta_route?: string | null;
         display_order?: number;
         is_active?: boolean;
+        start_date?: string | null;
+        end_date?: string | null;
       };
     }) => {
       if (!clubId) throw new Error('clubId is required');
@@ -189,3 +195,7 @@ export function useCarouselMutations(clubId?: string | null) {
     reorderSlides,
   };
 }
+
+// Aliases for clear promotional ads naming
+export const useClubPromotionalAds = useClubCarouselSlides;
+export const useClubPromotionalAdMutations = useCarouselMutations;

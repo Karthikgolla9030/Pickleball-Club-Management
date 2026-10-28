@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
-import { useActiveClub, useClubBranding, useClubCarouselSlides } from '@/hooks';
+import { useActiveClub, usePlatformBanner } from '@/hooks';
 import { resolveMediaUrl, resolveOwnerBanner } from '@/utils';
 
 export interface HeroBannerSlide {
@@ -74,11 +74,9 @@ export function ClubHeroCarousel({
 }: ClubHeroCarouselProps = {}) {
   const router = useRouter();
   const { clubId: activeClubId, clubName: activeClubName } = useActiveClub();
-  const effectiveClubId = propClubId ?? activeClubId;
   const effectiveClubName = fallbackClubName ?? activeClubName;
 
-  const { slides: dbSlides } = useClubCarouselSlides(effectiveClubId, true);
-  const { branding } = useClubBranding(effectiveClubId);
+  const { banner: platformBanner } = usePlatformBanner('owner_home');
 
   const { width: windowWidth } = useWindowDimensions();
   const [cardWidth, setCardWidth] = useState<number>(Math.max(windowWidth - 32, 280));
@@ -88,54 +86,24 @@ export function ClubHeroCarousel({
   const isInteractingRef = useRef<boolean>(false);
   const pauseCooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Compute active slides following 3-tier hierarchy:
-  // 1. Club's configured custom carousel slides
-  // 2. Club's cover banner image (if configured)
-  // 3. Neutral product fallback slides
+  // Global Owner Home Banner configured by Platform Admin
   const slides = useMemo<HeroBannerSlide[]>(() => {
-    if (dbSlides && dbSlides.length > 0) {
-      return dbSlides.map((s, idx) => ({
-        id: s.id,
-        tag: s.tag || 'PICKLEBALL',
-        title: s.title || 'Play Together\nGrow Stronger',
-        supportingText: s.subtitle || 'Great courts. Active members.',
-        ctaText: s.cta_text || 'Book a Court',
-        route: s.cta_route || '/(club)/bookings',
-        scriptLines: idx === 0 ? ['Same', 'Game', 'Bigger', 'Community'] : ['Play', 'Grow', 'Excel'],
-        image: { uri: resolveMediaUrl(s.image_url) },
-      }));
-    }
-
-    const ownerBannerImage = resolveOwnerBanner(branding);
+    const ownerBannerImage = resolveOwnerBanner(platformBanner);
     const ownerWelcomeSlide: HeroBannerSlide = {
-      id: 'club-owner-banner-slide',
+      id: 'platform-owner-home-banner-slide',
       tag: 'WELCOME TO',
-      title: effectiveClubName || 'Pickleball Club',
-      supportingText: 'Great courts. Active members.\nA healthier, happier community.',
-      ctaText: 'Book a Court',
-      route: '/(club)/bookings',
+      title: platformBanner?.title || effectiveClubName || 'Pickleball Club',
+      supportingText:
+        platformBanner?.subtitle ||
+        'Great courts. Active members.\nA healthier, happier community.',
+      ctaText: platformBanner?.cta_text || 'Book a Court',
+      route: platformBanner?.cta_destination || '/(club)/bookings',
       scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
       image: ownerBannerImage,
     };
 
-    if (dbSlides && dbSlides.length > 0) {
-      return [
-        ownerWelcomeSlide,
-        ...dbSlides.map((s, idx) => ({
-          id: s.id,
-          tag: s.tag || 'PICKLEBALL',
-          title: s.title || 'Play Together\nGrow Stronger',
-          supportingText: s.subtitle || 'Great courts. Active members.',
-          ctaText: s.cta_text || 'Book a Court',
-          route: s.cta_route || '/(club)/bookings',
-          scriptLines: idx === 0 ? ['Same', 'Game', 'Bigger', 'Community'] : ['Play', 'Grow', 'Excel'],
-          image: { uri: resolveMediaUrl(s.image_url) },
-        })),
-      ];
-    }
-
     return [ownerWelcomeSlide];
-  }, [dbSlides, branding, effectiveClubName]);
+  }, [platformBanner, effectiveClubName]);
 
   // Keep scroll position aligned on container width changes
   useEffect(() => {

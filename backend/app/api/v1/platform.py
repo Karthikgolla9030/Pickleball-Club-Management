@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_platform_owner
@@ -23,6 +23,11 @@ from app.core.database import get_db
 from app.models.club_application import ClubApplicationStatus
 from app.models.platform_audit_log import PlatformAuditLog
 from app.models.user import User
+from app.schemas.platform_banner import (
+    PlatformBannerResponse,
+    PlatformBannerUpdateRequest,
+)
+from app.services.platform_banner_service import PlatformBannerService
 from app.schemas.club_application import (
     ClubApplicationRejectRequest,
     ClubApplicationResponse,
@@ -937,6 +942,105 @@ async def update_platform_settings(
     return await PlatformSettingsService(db).update_platform_settings(
         admin_actor=current_platform_owner,
         payload=payload,
+    )
+
+
+# ─── Global Platform Home Banners ─────────────────────────────────────────────
+
+@router.get(
+    "/banners",
+    response_model=dict[str, PlatformBannerResponse],
+    summary="Get all global platform home banners",
+    description="Returns global hero banners for Owner Home and Player Home. Accessible to all client apps.",
+)
+async def get_all_platform_banners(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, PlatformBannerResponse]:
+    """Retrieve all global home page banners."""
+    return await PlatformBannerService(db).get_all_banners()
+
+
+@router.get(
+    "/banners/{banner_type}",
+    response_model=PlatformBannerResponse,
+    summary="Get a global platform banner by type",
+    description="Returns global hero banner config for specified type ('owner_home' or 'player_home').",
+)
+async def get_platform_banner(
+    banner_type: str,
+    db: AsyncSession = Depends(get_db),
+) -> PlatformBannerResponse:
+    """Retrieve a single global home page banner."""
+    return await PlatformBannerService(db).get_banner(banner_type=banner_type)
+
+
+@router.put(
+    "/banners/{banner_type}",
+    response_model=PlatformBannerResponse,
+    summary="Update a global platform banner",
+    description="Updates title, subtitle, CTA text, CTA destination, or image URL. Requires Platform Owner authorization.",
+    responses={
+        400: {"description": "Invalid banner type"},
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def update_platform_banner(
+    banner_type: str,
+    payload: PlatformBannerUpdateRequest,
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformBannerResponse:
+    """Update global home banner configuration."""
+    return await PlatformBannerService(db).update_banner(
+        banner_type=banner_type,
+        payload=payload,
+        admin_user_id=current_platform_owner.id,
+    )
+
+
+@router.post(
+    "/banners/{banner_type}/upload",
+    response_model=PlatformBannerResponse,
+    summary="Upload image for a global platform banner",
+    description="Uploads and saves custom banner image using MediaStorageService. Requires Platform Owner authorization.",
+    responses={
+        400: {"description": "Invalid banner type or file"},
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def upload_platform_banner_image(
+    banner_type: str,
+    file: UploadFile = File(...),
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformBannerResponse:
+    """Upload custom image for global home page banner."""
+    return await PlatformBannerService(db).upload_banner_image(
+        banner_type=banner_type,
+        file=file,
+        admin_user_id=current_platform_owner.id,
+    )
+
+
+@router.delete(
+    "/banners/{banner_type}",
+    response_model=PlatformBannerResponse,
+    summary="Reset a global platform banner to built-in default",
+    description="Removes custom banner image, restoring built-in platform fallback. Requires Platform Owner authorization.",
+    responses={
+        400: {"description": "Invalid banner type"},
+        403: {"description": "Platform owner authorization required"},
+    },
+)
+async def reset_platform_banner(
+    banner_type: str,
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> PlatformBannerResponse:
+    """Reset global banner to platform default."""
+    return await PlatformBannerService(db).reset_banner(
+        banner_type=banner_type,
+        admin_user_id=current_platform_owner.id,
     )
 
 

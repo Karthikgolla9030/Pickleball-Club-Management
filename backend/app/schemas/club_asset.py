@@ -53,7 +53,7 @@ class ClubBrandingUpdateRequest(BaseModel):
 
 
 class ClubCarouselSlideResponse(BaseModel):
-    """Response schema for a single carousel slide."""
+    """Response schema for a single carousel slide / promotional ad."""
     id: UUID
     club_id: UUID
     title: str | None = None
@@ -64,6 +64,8 @@ class ClubCarouselSlideResponse(BaseModel):
     cta_route: str | None = "/(player)/bookings"
     display_order: int = 0
     is_active: bool = True
+    start_date: datetime | None = None
+    end_date: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -71,7 +73,7 @@ class ClubCarouselSlideResponse(BaseModel):
 
 
 class ClubCarouselSlideCreateRequest(BaseModel):
-    """Payload to create a new promotional carousel slide."""
+    """Payload to create a new promotional carousel slide / ad."""
     title: str | None = Field(None, max_length=255)
     subtitle: str | None = Field(None, max_length=500)
     tag: str | None = Field("PICKLEBALL", max_length=100)
@@ -80,10 +82,12 @@ class ClubCarouselSlideCreateRequest(BaseModel):
     cta_route: str | None = Field("/(player)/bookings", max_length=255)
     display_order: int = Field(0, ge=0)
     is_active: bool = True
+    start_date: datetime | None = None
+    end_date: datetime | None = None
 
 
 class ClubCarouselSlideUpdateRequest(BaseModel):
-    """Payload to update an existing promotional carousel slide."""
+    """Payload to update an existing promotional carousel slide / ad."""
     title: str | None = Field(None, max_length=255)
     subtitle: str | None = Field(None, max_length=500)
     tag: str | None = Field(None, max_length=100)
@@ -92,6 +96,29 @@ class ClubCarouselSlideUpdateRequest(BaseModel):
     cta_route: str | None = Field(None, max_length=255)
     display_order: int | None = Field(None, ge=0)
     is_active: bool | None = None
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+
+
+class UniversalPromotionalAdResponse(BaseModel):
+    """Response schema for an aggregated club promotional ad shown in Player App."""
+    id: UUID
+    club_id: UUID
+    club_name: str
+    club_logo_url: str | None = None
+    title: str | None = None
+    subtitle: str | None = None
+    tag: str | None = None
+    image_url: str
+    cta_text: str | None = None
+    cta_route: str | None = None
+    display_order: int = 0
+    is_active: bool = True
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class ReorderSlidesRequest(BaseModel):

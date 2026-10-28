@@ -37,21 +37,23 @@ import {
   Trophy,
 } from 'lucide-react-native';
 
-import { AppText } from '@/components';
+import { AppText, PromotionalAdsCarousel } from '@/components';
 import {
   useActiveClub,
   useAuth,
   useClubBranding,
   useDiscoverClubEvents,
+  usePlatformBanner,
   usePlayerActivity,
   usePlayerBookings,
   usePlayerProfile,
   usePlayerTournaments,
+  useUniversalPromotionalAds,
   useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
-import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { BUILTIN_FALLBACKS, formatCurrency, resolveMediaUrl } from '@/utils';
 import { resolveEventCover, resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Booking, PlayerActivityItem, TournamentDiscoveryItem } from '@/types';
 
@@ -163,6 +165,16 @@ export default function PlayerHomeScreen() {
   // 4. Real-time Unread Notifications
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
 
+  // 5. Global Player Home Page Banner (configured by Platform Admin)
+  const { banner: playerBanner, refetch: refetchPlayerBanner } = usePlatformBanner('player_home');
+
+  // 6. Universal Promotional Ads Carousel (aggregating eligible ads from all active clubs)
+  const {
+    ads: universalAds,
+    isLoading: isUniversalAdsLoading,
+    refetch: refetchUniversalAds,
+  } = useUniversalPromotionalAds();
+
   const displayName = profile?.display_name || user?.full_name || 'Player';
 
   // ─── Compute Next Upcoming Booking ─────────────────────────────────────────
@@ -246,6 +258,8 @@ export default function PlayerHomeScreen() {
       clubId ? refetchEvents() : Promise.resolve(),
       refetchTournaments(),
       refetchActivity(),
+      refetchPlayerBanner(),
+      refetchUniversalAds(),
     ]);
   };
 
@@ -313,12 +327,16 @@ export default function PlayerHomeScreen() {
           />
         }
       >
-        {/* ─── 2. WELCOME HERO SECTION ───────────────────────────────────────── */}
+        {/* ─── 2. GLOBAL PLAYER HOME HERO SECTION (Platform Admin Managed) ────── */}
         <View style={styles.heroSection}>
           <View style={styles.heroCard}>
-            {/* Platform Welcome Court Photo on Right */}
+            {/* Banner Image */}
             <Image
-              source={require('../../assets/events/pickleball_hero.jpg')}
+              source={
+                playerBanner?.image_url
+                  ? { uri: resolveMediaUrl(playerBanner.image_url) }
+                  : BUILTIN_FALLBACKS.tournamentGeneric
+              }
               style={styles.heroImage}
               resizeMode="cover"
             />
@@ -327,15 +345,17 @@ export default function PlayerHomeScreen() {
 
             {/* Content on Left */}
             <View style={styles.heroContent}>
-              <AppText style={styles.heroTagline}>WELCOME BACK</AppText>
+              <AppText style={styles.heroTagline}>
+                {playerBanner?.title ? 'AUGHT2 PICKLEBALL' : 'WELCOME BACK'}
+              </AppText>
               <AppText
                 style={styles.heroGreeting}
                 numberOfLines={2}
               >
-                Hello,{'\n'}{displayName}
+                {playerBanner?.title || `Hello,\n${displayName}`}
               </AppText>
-              <AppText style={styles.heroDescription}>
-                Ready to play, compete and make the most of your game?
+              <AppText style={styles.heroDescription} numberOfLines={2}>
+                {playerBanner?.subtitle || 'Ready to play, compete and make the most of your game?'}
               </AppText>
 
               <Pressable
@@ -343,16 +363,30 @@ export default function PlayerHomeScreen() {
                   styles.findCourtButton,
                   pressed && styles.findCourtButtonPressed,
                 ]}
-                onPress={() => router.push('/(player)/book-court-club' as any)}
+                onPress={() => {
+                  const dest = playerBanner?.cta_destination || '/(player)/book-court-club';
+                  router.push(dest as any);
+                }}
                 accessibilityRole="button"
-                accessibilityLabel="Find a Court"
+                accessibilityLabel={playerBanner?.cta_text || 'Find a Court'}
               >
-                <AppText style={styles.findCourtButtonText}>Find a Court</AppText>
+                <AppText style={styles.findCourtButtonText}>
+                  {playerBanner?.cta_text || 'Find a Court'}
+                </AppText>
                 <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
               </Pressable>
             </View>
           </View>
         </View>
+
+        {/* ─── 2B. UNIVERSAL PROMOTIONAL ADS CAROUSEL (Aggregated Across Clubs) ── */}
+        <PromotionalAdsCarousel
+          ads={universalAds}
+          title="Club Promotions & Special Offers"
+          subtitle="Exclusive tournaments, clinics, and specials from participating clubs"
+          isLoading={isUniversalAdsLoading}
+          hideIfEmpty
+        />
 
         {/* ─── 3. YOUR NEXT BOOKING (Conditional) ────────────────────────────── */}
         {nextBooking && (

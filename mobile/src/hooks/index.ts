@@ -57,4 +57,6 @@ export * from './useMembershipRequests';
 export * from './usePlayerMembershipRequests';
 export * from './useAnalytics';
 export * from './useClubBranding';
+export * from './usePlatformBanners';
+export * from './useUniversalPromotionalAds';
 

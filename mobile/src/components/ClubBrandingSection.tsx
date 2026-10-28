@@ -38,6 +38,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronRight,
+  Eye,
   GraduationCap,
   Image as ImageIcon,
   Info,
@@ -161,6 +162,21 @@ function BrandingAssetCard({
   );
 }
 
+function formatAdDateRange(startDate?: string | null, endDate?: string | null): string | null {
+  if (!startDate && !endDate) return null;
+  const startStr = startDate ? new Date(startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Anytime';
+  const endStr = endDate ? new Date(endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Ongoing';
+  return `${startStr} – ${endStr}`;
+}
+
+function getAdScheduleStatus(startDate?: string | null, endDate?: string | null, isActive?: boolean): { label: string; type: 'active' | 'scheduled' | 'expired' | 'disabled' } {
+  if (isActive === false) return { label: 'Disabled', type: 'disabled' };
+  const now = new Date();
+  if (endDate && new Date(endDate) < now) return { label: 'Expired', type: 'expired' };
+  if (startDate && new Date(startDate) > now) return { label: 'Scheduled', type: 'scheduled' };
+  return { label: 'Active', type: 'active' };
+}
+
 export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProps) {
   const router = useRouter();
 
@@ -190,7 +206,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Slide modal state
+  // Ad modal state
   const [slideModalVisible, setSlideModalVisible] = useState(false);
   const [editingSlide, setEditingSlide] = useState<ClubCarouselSlide | null>(null);
   const [slideFormTitle, setSlideFormTitle] = useState('');
@@ -200,6 +216,9 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   const [slideFormCtaRoute, setSlideFormCtaRoute] = useState('');
   const [slideFormImageUrl, setSlideFormImageUrl] = useState('');
   const [slideFormIsActive, setSlideFormIsActive] = useState(true);
+  const [slideFormStartDate, setSlideFormStartDate] = useState('');
+  const [slideFormEndDate, setSlideFormEndDate] = useState('');
+  const [showPlayerPreview, setShowPlayerPreview] = useState(false);
   const [isUploadingSlideImage, setIsUploadingSlideImage] = useState(false);
 
   const showStatus = (type: 'success' | 'error', text: string) => {
@@ -321,7 +340,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
     );
   };
 
-  // ─── Carousel Slides Handlers ──────────────────────────────────────────────
+  // ─── Club Promotional Ads Handlers ─────────────────────────────────────────
 
   const openSlideModal = (slide?: ClubCarouselSlide) => {
     if (slide) {
@@ -332,17 +351,22 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       setSlideFormCtaText(slide.cta_text || '');
       setSlideFormCtaRoute(slide.cta_route || '');
       setSlideFormImageUrl(slide.image_url || '');
-      setSlideFormIsActive(slide.is_active);
+      setSlideFormIsActive(slide.is_active ?? true);
+      setSlideFormStartDate(slide.start_date ? slide.start_date.split('T')[0] : '');
+      setSlideFormEndDate(slide.end_date ? slide.end_date.split('T')[0] : '');
     } else {
       setEditingSlide(null);
       setSlideFormTitle('');
       setSlideFormSubtitle('');
-      setSlideFormTag('PROMOTION');
-      setSlideFormCtaText('Book a Court');
-      setSlideFormCtaRoute('/(club)/bookings');
+      setSlideFormTag('SPECIAL OFFER');
+      setSlideFormCtaText('View Details');
+      setSlideFormCtaRoute('/(player)/tournaments');
       setSlideFormImageUrl('');
       setSlideFormIsActive(true);
+      setSlideFormStartDate('');
+      setSlideFormEndDate('');
     }
+    setShowPlayerPreview(false);
     setSlideModalVisible(true);
   };
 
@@ -355,7 +379,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       const uploadRes = await clubAssetsApi.uploadClubMedia(
         clubId,
         { uri: picked.uri, name: picked.name, type: picked.type },
-        'carousel_slide'
+        'promotional_ad'
       );
       setSlideFormImageUrl(uploadRes.public_url);
     } catch (err: unknown) {
@@ -368,8 +392,29 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 
   const handleSaveSlide = async () => {
     if (!slideFormImageUrl.trim()) {
-      Alert.alert('Image Required', 'Please upload or select an image for this carousel slide.');
+      Alert.alert('Image Required', 'Please upload or select an image for this promotional ad.');
       return;
+    }
+
+    let parsedStartDate: string | null = null;
+    let parsedEndDate: string | null = null;
+
+    if (slideFormStartDate.trim()) {
+      const d = new Date(slideFormStartDate.trim());
+      if (isNaN(d.getTime())) {
+        Alert.alert('Invalid Date', 'Start Date must be a valid date format (e.g. YYYY-MM-DD).');
+        return;
+      }
+      parsedStartDate = d.toISOString();
+    }
+
+    if (slideFormEndDate.trim()) {
+      const d = new Date(slideFormEndDate.trim());
+      if (isNaN(d.getTime())) {
+        Alert.alert('Invalid Date', 'End Date must be a valid date format (e.g. YYYY-MM-DD).');
+        return;
+      }
+      parsedEndDate = d.toISOString();
     }
 
     try {
@@ -384,9 +429,11 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
             cta_text: slideFormCtaText.trim() || null,
             cta_route: slideFormCtaRoute.trim() || null,
             is_active: slideFormIsActive,
+            start_date: parsedStartDate,
+            end_date: parsedEndDate,
           },
         });
-        showStatus('success', 'Carousel slide updated successfully.');
+        showStatus('success', 'Promotional ad updated successfully.');
       } else {
         await createSlide.mutateAsync({
           title: slideFormTitle.trim() || null,
@@ -396,22 +443,24 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           cta_text: slideFormCtaText.trim() || null,
           cta_route: slideFormCtaRoute.trim() || null,
           is_active: slideFormIsActive,
+          start_date: parsedStartDate,
+          end_date: parsedEndDate,
           display_order: slides.length + 1,
         });
-        showStatus('success', 'New promotional slide added.');
+        showStatus('success', 'New promotional ad created.');
       }
       setSlideModalVisible(false);
       await refetchSlides();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save slide';
+      const msg = err instanceof Error ? err.message : 'Failed to save promotional ad';
       Alert.alert('Save Error', msg);
     }
   };
 
   const handleDeleteSlide = (slide: ClubCarouselSlide) => {
     Alert.alert(
-      'Delete Carousel Slide',
-      `Delete "${slide.title || 'Untitled Slide'}" from your club carousel?`,
+      'Delete Promotional Ad',
+      `Delete "${slide.title || 'Untitled Ad'}"? This ad will be removed from your club page and the universal player carousel.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -421,7 +470,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
             try {
               await deleteSlide.mutateAsync(slide.id);
               await refetchSlides();
-              showStatus('success', 'Slide deleted.');
+              showStatus('success', 'Promotional ad deleted.');
             } catch (err: unknown) {
               const msg = err instanceof Error ? err.message : 'Delete failed';
               showStatus('error', msg);
@@ -489,43 +538,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 1: OWNER HOME-PAGE BANNER
+          GROUP 1: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={styles.groupHeader}>
-        <View style={styles.groupIconWrapper}>
-          <LayoutGrid size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 1: Owner Home Dashboard Banner</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Custom banner displayed on the Club Owner dashboard's large welcome card. Changes affect only the owner dashboard.
-          </AppText>
-        </View>
-      </View>
-
-      <BrandingAssetCard
-        title="Owner Dashboard Welcome Banner"
-        categoryTag="OWNER HOME BANNER"
-        description="Displayed as the background for your welcome card on the Owner Dashboard. When no custom image is configured, the platform's default pickleball court banner is shown."
-        currentUrl={branding?.owner_banner_url}
-        fallbackSource={BUILTIN_FALLBACKS.ownerBanner}
-        uploading={uploadingField === 'owner_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('owner_banner_url', 'owner_banner', 'Owner Home Banner')
-        }
-        onReset={() => handleResetAsset('owner_banner_url', 'Owner Home Banner')}
-      />
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 2: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Trophy size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 2: Tournament Default Banners</AppText>
+          <AppText style={styles.groupTitle}>Group 1: Tournament Default Banners</AppText>
           <AppText style={styles.groupSubtitle}>
             Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default.
           </AppText>
@@ -617,14 +637,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 3: LEAGUE DEFAULT IMAGES
+          GROUP 2: LEAGUE DEFAULT IMAGES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Award size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 3: League Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 2: League Default Images</AppText>
           <AppText style={styles.groupSubtitle}>
             Fallback banner used across owner and player league screens when no custom league banner is supplied.
           </AppText>
@@ -646,14 +666,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 4: EVENT DEFAULT IMAGES
+          GROUP 3: EVENT DEFAULT IMAGES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Calendar size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 4: Event Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 3: Event Default Images</AppText>
           <AppText style={styles.groupSubtitle}>
             Fallback cover used across owner-side and Player App event listings for social mixers, open play, and community events.
           </AppText>
@@ -675,14 +695,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 5: LESSON AND COACHING DEFAULT IMAGES
+          GROUP 4: LESSON AND COACHING DEFAULT IMAGES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <GraduationCap size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 5: Lesson & Coaching Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 4: Lesson & Coaching Default Images</AppText>
           <AppText style={styles.groupSubtitle}>
             Fallback image for private lessons, group clinics, and academy coaching sessions.
           </AppText>
@@ -704,7 +724,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          HERO CAROUSEL SLIDES (PROMOTIONAL SLIDES)
+          CLUB PROMOTIONAL ADS
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 32 }]}>
         <View style={styles.groupIconWrapper}>
@@ -713,9 +733,9 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         <View style={styles.groupHeaderTextCol}>
           <View style={styles.headerWithAction}>
             <View style={{ flex: 1 }}>
-              <AppText style={styles.groupTitle}>Promotional Hero Carousel Slides</AppText>
+              <AppText style={styles.groupTitle}>Club Promotional Ads</AppText>
               <AppText style={styles.groupSubtitle}>
-                Add promotional cards with titles, tags, and call-to-actions shown on player and owner hero carousels.
+                Manage promotional advertisements displayed for your club in the Player App. Eligible active ads are also featured on the universal Player Home carousel.
               </AppText>
             </View>
             {isOwner && (
@@ -725,7 +745,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 activeOpacity={0.85}
               >
                 <Plus size={15} color="#FFFFFF" />
-                <AppText style={styles.addSlideBtnText}>Add Slide</AppText>
+                <AppText style={styles.addSlideBtnText}>Create Ad</AppText>
               </TouchableOpacity>
             )}
           </View>
@@ -736,14 +756,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         {isLoadingSlides ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="small" color="#176B57" />
-            <AppText style={styles.loadingText}>Loading carousel slides...</AppText>
+            <AppText style={styles.loadingText}>Loading promotional ads...</AppText>
           </View>
         ) : slides.length === 0 ? (
           <View style={styles.emptySlidesBox}>
             <ImageIcon size={32} color="#94A3B8" />
-            <AppText style={styles.emptySlidesTitle}>No Custom Carousel Slides</AppText>
+            <AppText style={styles.emptySlidesTitle}>No Promotional Ads</AppText>
             <AppText style={styles.emptySlidesDesc}>
-              The carousel automatically displays your Owner Home Banner (or default platform banner) along with quick action shortcuts.
+              Create promotional advertisements to showcase club tournaments, special clinic discounts, and membership offers to players.
             </AppText>
             {isOwner && (
               <TouchableOpacity
@@ -751,116 +771,131 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 onPress={() => openSlideModal()}
               >
                 <Plus size={14} color="#FFFFFF" />
-                <AppText style={styles.assetBtnPrimaryText}>Add Promotional Slide</AppText>
+                <AppText style={styles.assetBtnPrimaryText}>Create Promotional Ad</AppText>
               </TouchableOpacity>
             )}
           </View>
         ) : (
           <View style={styles.slidesList}>
-            {slides.map((slide: ClubCarouselSlide, index: number) => (
-              <View key={slide.id} style={styles.slideItem}>
-                {/* Thumbnail */}
-                <Image
-                  source={{ uri: resolveMediaUrl(slide.image_url) }}
-                  style={styles.slideThumbnail}
-                  resizeMode="cover"
-                />
+            {slides.map((slide: ClubCarouselSlide, index: number) => {
+              const scheduleStatus = getAdScheduleStatus(slide.start_date, slide.end_date, slide.is_active);
+              const dateRangeLabel = formatAdDateRange(slide.start_date, slide.end_date);
 
-                {/* Content */}
-                <View style={styles.slideDetails}>
-                  <View style={styles.slideTagRow}>
-                    {slide.tag ? (
-                      <View style={styles.slideTagBadge}>
-                        <AppText style={styles.slideTagText}>{slide.tag.toUpperCase()}</AppText>
-                      </View>
-                    ) : null}
-                    <View
-                      style={[
-                        styles.slideActiveBadge,
-                        slide.is_active ? styles.slideActiveBadgeOn : styles.slideActiveBadgeOff,
-                      ]}
-                    >
-                      <AppText
+              return (
+                <View key={slide.id} style={styles.slideItem}>
+                  {/* Thumbnail */}
+                  <Image
+                    source={{ uri: resolveMediaUrl(slide.image_url) }}
+                    style={styles.slideThumbnail}
+                    resizeMode="cover"
+                  />
+
+                  {/* Content */}
+                  <View style={styles.slideDetails}>
+                    <View style={styles.slideTagRow}>
+                      {slide.tag ? (
+                        <View style={styles.slideTagBadge}>
+                          <AppText style={styles.slideTagText}>{slide.tag.toUpperCase()}</AppText>
+                        </View>
+                      ) : null}
+                      <View
                         style={[
-                          styles.slideActiveBadgeText,
-                          slide.is_active ? styles.slideActiveTextOn : styles.slideActiveTextOff,
+                          styles.slideActiveBadge,
+                          scheduleStatus.type === 'active' && styles.slideActiveBadgeOn,
+                          scheduleStatus.type === 'disabled' && styles.slideActiveBadgeOff,
+                          scheduleStatus.type === 'scheduled' && styles.badgeScheduled,
+                          scheduleStatus.type === 'expired' && styles.badgeExpired,
                         ]}
                       >
-                        {slide.is_active ? 'Active' : 'Disabled'}
+                        <AppText
+                          style={[
+                            styles.slideActiveBadgeText,
+                            scheduleStatus.type === 'active' && styles.slideActiveTextOn,
+                            scheduleStatus.type === 'disabled' && styles.slideActiveTextOff,
+                            scheduleStatus.type === 'scheduled' && styles.badgeTextScheduled,
+                            scheduleStatus.type === 'expired' && styles.badgeTextExpired,
+                          ]}
+                        >
+                          {scheduleStatus.label}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    <AppText style={styles.slideTitle} numberOfLines={1}>
+                      {slide.title || 'Untitled Promotional Ad'}
+                    </AppText>
+                    {slide.subtitle ? (
+                      <AppText style={styles.slideSubtitle} numberOfLines={2}>
+                        {slide.subtitle}
                       </AppText>
-                    </View>
+                    ) : null}
+
+                    {dateRangeLabel ? (
+                      <AppText style={styles.adDateRangeText}>🗓 {dateRangeLabel}</AppText>
+                    ) : null}
+
+                    {slide.cta_text ? (
+                      <AppText style={styles.slideCtaInfo} numberOfLines={1}>
+                        CTA: "{slide.cta_text}" → {slide.cta_route || 'Default'}
+                      </AppText>
+                    ) : null}
                   </View>
 
-                  <AppText style={styles.slideTitle} numberOfLines={1}>
-                    {slide.title || 'Untitled Slide'}
-                  </AppText>
-                  {slide.subtitle ? (
-                    <AppText style={styles.slideSubtitle} numberOfLines={1}>
-                      {slide.subtitle}
-                    </AppText>
-                  ) : null}
+                  {/* Controls */}
+                  {isOwner && (
+                    <View style={styles.slideControls}>
+                      {/* Reorder Up/Down */}
+                      <View style={styles.reorderBtns}>
+                        <TouchableOpacity
+                          style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
+                          disabled={index === 0}
+                          onPress={() => handleMoveSlide(index, 'up')}
+                        >
+                          <ArrowUp size={13} color={index === 0 ? '#CBD5E1' : '#1E293B'} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.reorderBtn, index === slides.length - 1 && styles.reorderBtnDisabled]}
+                          disabled={index === slides.length - 1}
+                          onPress={() => handleMoveSlide(index, 'down')}
+                        >
+                          <ArrowDown size={13} color={index === slides.length - 1 ? '#CBD5E1' : '#1E293B'} />
+                        </TouchableOpacity>
+                      </View>
 
-                  {slide.cta_text ? (
-                    <AppText style={styles.slideCtaInfo} numberOfLines={1}>
-                      CTA: "{slide.cta_text}" → {slide.cta_route || 'Default'}
-                    </AppText>
-                  ) : null}
+                      {/* Active toggle */}
+                      <Switch
+                        value={slide.is_active}
+                        onValueChange={(val) => handleToggleSlideActive(slide, val)}
+                        trackColor={{ false: '#E2E8F0', true: '#A7F3D0' }}
+                        thumbColor={slide.is_active ? '#10B981' : '#94A3B8'}
+                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                      />
+
+                      {/* Edit & Delete */}
+                      <View style={styles.slideActionBtns}>
+                        <TouchableOpacity
+                          style={styles.slideIconBtn}
+                          onPress={() => openSlideModal(slide)}
+                        >
+                          <Sliders size={14} color="#475569" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.slideIconBtn}
+                          onPress={() => handleDeleteSlide(slide)}
+                        >
+                          <Trash2 size={14} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
                 </View>
-
-                {/* Controls */}
-                {isOwner && (
-                  <View style={styles.slideControls}>
-                    {/* Reorder Up/Down */}
-                    <View style={styles.reorderBtns}>
-                      <TouchableOpacity
-                        style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
-                        disabled={index === 0}
-                        onPress={() => handleMoveSlide(index, 'up')}
-                      >
-                        <ArrowUp size={13} color={index === 0 ? '#CBD5E1' : '#1E293B'} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.reorderBtn, index === slides.length - 1 && styles.reorderBtnDisabled]}
-                        disabled={index === slides.length - 1}
-                        onPress={() => handleMoveSlide(index, 'down')}
-                      >
-                        <ArrowDown size={13} color={index === slides.length - 1 ? '#CBD5E1' : '#1E293B'} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Active toggle */}
-                    <Switch
-                      value={slide.is_active}
-                      onValueChange={(val) => handleToggleSlideActive(slide, val)}
-                      trackColor={{ false: '#E2E8F0', true: '#A7F3D0' }}
-                      thumbColor={slide.is_active ? '#10B981' : '#94A3B8'}
-                      style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                    />
-
-                    {/* Edit & Delete */}
-                    <View style={styles.slideActionBtns}>
-                      <TouchableOpacity
-                        style={styles.slideIconBtn}
-                        onPress={() => openSlideModal(slide)}
-                      >
-                        <Sliders size={14} color="#475569" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.slideIconBtn}
-                        onPress={() => handleDeleteSlide(slide)}
-                      >
-                        <Trash2 size={14} color="#EF4444" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </Card>
 
-      {/* ── Add / Edit Slide Modal ── */}
+      {/* ── Add / Edit Promotional Ad Modal ── */}
       <Modal
         visible={slideModalVisible}
         transparent
@@ -871,7 +906,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <AppText style={styles.modalTitle}>
-                {editingSlide ? 'Edit Carousel Slide' : 'Add Hero Carousel Slide'}
+                {editingSlide ? 'Edit Promotional Ad' : 'Create Club Promotional Ad'}
               </AppText>
               <TouchableOpacity onPress={() => setSlideModalVisible(false)}>
                 <X size={20} color="#64748B" />
@@ -879,8 +914,56 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
             </View>
 
             <ScrollView style={styles.modalBody}>
+              {/* Player Preview Toggle */}
+              <View style={styles.previewToggleRow}>
+                <View style={styles.previewToggleLeft}>
+                  <Eye size={16} color="#166534" />
+                  <AppText style={styles.previewToggleText}>Preview Player App Layout</AppText>
+                </View>
+                <Switch
+                  value={showPlayerPreview}
+                  onValueChange={setShowPlayerPreview}
+                  trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
+                  thumbColor={showPlayerPreview ? '#166534' : '#FFFFFF'}
+                />
+              </View>
+
+              {showPlayerPreview && (
+                <View style={styles.playerPreviewCard}>
+                  <Image
+                    source={
+                      slideFormImageUrl
+                        ? { uri: resolveMediaUrl(slideFormImageUrl) }
+                        : BUILTIN_FALLBACKS.tournamentRoundRobin
+                    }
+                    style={styles.playerPreviewImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.playerPreviewContent}>
+                    {slideFormTag ? (
+                      <View style={styles.playerPreviewBadge}>
+                        <AppText style={styles.playerPreviewBadgeText}>{slideFormTag.toUpperCase()}</AppText>
+                      </View>
+                    ) : null}
+                    <AppText style={styles.playerPreviewTitle} numberOfLines={2}>
+                      {slideFormTitle || 'Promotional Ad Headline'}
+                    </AppText>
+                    {slideFormSubtitle ? (
+                      <AppText style={styles.playerPreviewSubtitle} numberOfLines={2}>
+                        {slideFormSubtitle}
+                      </AppText>
+                    ) : null}
+                    {slideFormCtaText ? (
+                      <View style={styles.playerPreviewCtaBtn}>
+                        <AppText style={styles.playerPreviewCtaText}>{slideFormCtaText}</AppText>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              )}
+
               {/* Image Picker */}
-              <AppText style={styles.inputLabel}>Slide Photo *</AppText>
+              <AppText style={styles.inputLabel}>Ad Image *</AppText>
               <View style={styles.slideImagePickerBox}>
                 {slideFormImageUrl ? (
                   <Image
@@ -910,7 +993,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
               >
                 <Camera size={14} color="#176B57" />
                 <AppText style={styles.pickImageBtnText}>
-                  {slideFormImageUrl ? 'Change Photo' : 'Upload Slide Photo'}
+                  {slideFormImageUrl ? 'Change Photo' : 'Upload Ad Photo'}
                 </AppText>
               </TouchableOpacity>
 
@@ -920,37 +1003,37 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 style={styles.textInput}
                 value={slideFormTag}
                 onChangeText={setSlideFormTag}
-                placeholder="e.g. TOURNAMENT, CLINIC, SPECIAL EVENT"
+                placeholder="e.g. SPECIAL OFFER, TOURNAMENT, CLINIC"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* Title */}
-              <AppText style={styles.inputLabel}>Slide Title</AppText>
+              <AppText style={styles.inputLabel}>Ad Headline / Title</AppText>
               <TextInput
                 style={styles.textInput}
                 value={slideFormTitle}
                 onChangeText={setSlideFormTitle}
-                placeholder="e.g. Spring Championship Open"
+                placeholder="e.g. Spring Championship Open - Early Bird"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* Subtitle */}
-              <AppText style={styles.inputLabel}>Subtitle / Description</AppText>
+              <AppText style={styles.inputLabel}>Promotional Description</AppText>
               <TextInput
                 style={styles.textInput}
                 value={slideFormSubtitle}
                 onChangeText={setSlideFormSubtitle}
-                placeholder="e.g. Register before May 1st for early bird entry"
+                placeholder="e.g. Save 20% on team registration before June 1st"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* CTA Text */}
-              <AppText style={styles.inputLabel}>Button Label</AppText>
+              <AppText style={styles.inputLabel}>CTA Button Label</AppText>
               <TextInput
                 style={styles.textInput}
                 value={slideFormCtaText}
                 onChangeText={setSlideFormCtaText}
-                placeholder="e.g. Register Now"
+                placeholder="e.g. Register Now, Book Court, View League"
                 placeholderTextColor="#94A3B8"
               />
 
@@ -960,13 +1043,38 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 style={styles.textInput}
                 value={slideFormCtaRoute}
                 onChangeText={setSlideFormCtaRoute}
-                placeholder="/(club)/tournaments or /(club)/bookings"
+                placeholder="e.g. /(player)/tournaments or /(player)/bookings"
                 placeholderTextColor="#94A3B8"
               />
 
+              {/* Schedule Dates */}
+              <AppText style={styles.inputLabel}>Scheduling (Optional)</AppText>
+              <View style={styles.dateInputsRow}>
+                <View style={styles.dateInputCol}>
+                  <AppText style={styles.dateSubtext}>Start Date (YYYY-MM-DD)</AppText>
+                  <TextInput
+                    style={styles.textInput}
+                    value={slideFormStartDate}
+                    onChangeText={setSlideFormStartDate}
+                    placeholder="2026-06-01"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+                <View style={styles.dateInputCol}>
+                  <AppText style={styles.dateSubtext}>End Date (YYYY-MM-DD)</AppText>
+                  <TextInput
+                    style={styles.textInput}
+                    value={slideFormEndDate}
+                    onChangeText={setSlideFormEndDate}
+                    placeholder="2026-06-30"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+              </View>
+
               {/* Active Toggle */}
               <View style={styles.switchRow}>
-                <AppText style={styles.switchLabel}>Enable slide in carousel</AppText>
+                <AppText style={styles.switchLabel}>Publish ad immediately</AppText>
                 <Switch
                   value={slideFormIsActive}
                   onValueChange={setSlideFormIsActive}
@@ -984,7 +1092,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 <AppText style={styles.modalCancelText}>Cancel</AppText>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveSlide}>
-                <AppText style={styles.modalSaveText}>Save Slide</AppText>
+                <AppText style={styles.modalSaveText}>Save Ad</AppText>
               </TouchableOpacity>
             </View>
           </View>
@@ -1475,5 +1583,111 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  dateInputsRow: {
+    flexDirection: 'row',
+    gap: Spacing[2],
+  },
+  dateInputCol: {
+    flex: 1,
+  },
+  dateSubtext: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 4,
+    fontWeight: '500',
+  },
+  previewToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: Spacing[2.5],
+    borderRadius: Radius.md,
+    marginBottom: Spacing[3],
+  },
+  previewToggleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  previewToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#166534',
+  },
+  playerPreviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: Spacing[4],
+    ...Shadows.sm,
+  },
+  playerPreviewImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#0F172A',
+  },
+  playerPreviewContent: {
+    padding: Spacing[3],
+  },
+  playerPreviewBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 4,
+  },
+  playerPreviewBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  playerPreviewTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  playerPreviewSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    marginBottom: 8,
+  },
+  playerPreviewCtaBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#176B57',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  playerPreviewCtaText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  adDateRangeText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  badgeScheduled: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  badgeTextScheduled: {
+    color: '#1D4ED8',
+  },
+  badgeExpired: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+  badgeTextExpired: {
+    color: '#64748B',
   },
 });

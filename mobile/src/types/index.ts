@@ -116,8 +116,50 @@ export interface ClubCarouselSlide {
   cta_route?: string | null;
   display_order: number;
   is_active: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface PlatformBanner {
+  id: string;
+  banner_type: 'owner_home' | 'player_home' | string;
+  image_url?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  cta_text?: string | null;
+  cta_destination?: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface UpdatePlatformBannerPayload {
+  image_url?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  cta_text?: string | null;
+  cta_destination?: string | null;
+  is_active?: boolean;
+}
+
+export interface UniversalPromotionalAd {
+  id: string;
+  club_id: string;
+  club_name: string;
+  club_logo_url?: string | null;
+  title?: string | null;
+  subtitle?: string | null;
+  tag?: string | null;
+  image_url: string;
+  cta_text?: string | null;
+  cta_route?: string | null;
+  display_order: number;
+  is_active: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at?: string;
 }
 
 export interface UpdateClubPayload {

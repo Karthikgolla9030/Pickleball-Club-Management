@@ -49,6 +49,7 @@ export { DatePickerInput } from './DatePickerInput';
 export { TimePickerInput } from './TimePickerInput';
 export { DateTimePickerInput } from './DateTimePickerInput';
 export { DateRangePickerInput } from './DateRangePickerInput';
+export { PromotionalAdsCarousel } from './PromotionalAdsCarousel';
 export * from './checkout';
 
 

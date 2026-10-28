@@ -14,9 +14,8 @@ import logging
 import sys
 from contextlib import asynccontextmanager
 
-# On Windows, psycopg async mode requires the Selector event loop policy
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+# On Windows, preserve standard Proactor event loop policy for modern Python
+
 
 # Allow .local domain for development / demo seed accounts
 try:
@@ -152,9 +151,10 @@ async def lifespan(app: FastAPI):
         settings.APP_VERSION,
         settings.APP_ENV,
     )
-    # Apply database migrations in a worker thread so the async event loop is not blocked
-    await asyncio.to_thread(_run_db_migrations)
-    await _ensure_platform_admin_exists()
+    if settings.APP_ENV != "test":
+        # Apply database migrations in a worker thread so the async event loop is not blocked
+        await asyncio.to_thread(_run_db_migrations)
+        await _ensure_platform_admin_exists()
 
     yield
     logger.info("Shutting down %s", settings.APP_NAME)

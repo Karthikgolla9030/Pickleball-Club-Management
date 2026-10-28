@@ -181,14 +181,17 @@ export function resolveLessonImage(
 
 /**
  * Resolves the owner home dashboard welcome card banner:
- * 1. clubBranding.owner_banner_url
+ * 1. platformBanner.image_url (Global Platform Admin configured banner)
  * 2. built-in owner banner fallback
  */
 export function resolveOwnerBanner(
-  clubBranding?: ClubBranding | null
+  platformBannerOrBranding?: { image_url?: string | null; owner_banner_url?: string | null } | null
 ): ImageSourcePropType {
-  if (clubBranding?.owner_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.owner_banner_url) };
+  if (platformBannerOrBranding?.image_url) {
+    return { uri: resolveMediaUrl(platformBannerOrBranding.image_url) };
+  }
+  if (platformBannerOrBranding?.owner_banner_url) {
+    return { uri: resolveMediaUrl(platformBannerOrBranding.owner_banner_url) };
   }
   return BUILTIN_FALLBACKS.ownerBanner;
 }
