@@ -105,6 +105,48 @@ export function CheckoutModal({
   const [verifyResult, setVerifyResult] = useState<CheckoutVerifyResponse | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
 
+  // Helper to fetch session for a given method
+  const fetchCheckoutSession = async (method: SelectedMethodType) => {
+    const methodMap: Record<SelectedMethodType, PaymentMethod> = {
+      upi: 'online',
+      card: 'online',
+      netbanking: 'bank_transfer',
+      cash: 'cash',
+    };
+
+    return await paymentApi.initiateCheckout({
+      club_id: clubId,
+      purpose,
+      activity_id: activityId || null,
+      start_at: startAt || null,
+      end_at: endAt || null,
+      payment_method: methodMap[method],
+      selected_method: method,
+      currency: 'INR',
+      metadata: {
+        activity_title: activityTitle,
+        activity_subtitle: activitySubtitle,
+        duration_minutes: durationMinutes,
+        participants_info: participantsInfo,
+        selected_method: method,
+        ...(metadata || {}),
+      },
+    });
+  };
+
+  // Switch payment method dynamically and re-fetch session configured for that method
+  const handleSelectMethod = async (newMethod: SelectedMethodType) => {
+    if (newMethod === selectedMethod && initData) return;
+    setSelectedMethod(newMethod);
+    setErrorMessage(null);
+    try {
+      const res = await fetchCheckoutSession(newMethod);
+      setInitData(res);
+    } catch (err: any) {
+      console.warn('Failed to switch payment method session:', err);
+    }
+  };
+
   // Initialize checkout upon modal presentation
   useEffect(() => {
     if (!visible) {
@@ -122,29 +164,7 @@ export function CheckoutModal({
         setStep('loading');
         setErrorMessage(null);
 
-        const methodMap: Record<SelectedMethodType, PaymentMethod> = {
-          upi: 'online',
-          card: 'online',
-          netbanking: 'bank_transfer',
-          cash: 'cash',
-        };
-
-        const res = await paymentApi.initiateCheckout({
-          club_id: clubId,
-          purpose,
-          activity_id: activityId || null,
-          start_at: startAt || null,
-          end_at: endAt || null,
-          payment_method: methodMap[selectedMethod],
-          currency: 'USD',
-          metadata: {
-            activity_title: activityTitle,
-            activity_subtitle: activitySubtitle,
-            duration_minutes: durationMinutes,
-            participants_info: participantsInfo,
-            ...(metadata || {}),
-          },
-        });
+        const res = await fetchCheckoutSession(selectedMethod);
 
         if (!isMounted) return;
         setInitData(res);
@@ -159,7 +179,7 @@ export function CheckoutModal({
               club_id: clubId,
               club_name: clubName,
               amount: 0,
-              currency: 'USD',
+              currency: res.breakdown?.currency || 'INR',
               status: 'succeeded',
               status_label: 'Succeeded',
               purpose,
@@ -203,17 +223,24 @@ export function CheckoutModal({
       setStep('processing');
       setErrorMessage(null);
 
-      const provider = initData.provider || 'cashfree';
-      const providerOrderId = initData.provider_order_id || `order_${Date.now()}`;
+      // Ensure the active session matches selectedMethod
+      let activeSession = initData;
+      if (activeSession.selected_method !== selectedMethod) {
+        activeSession = await fetchCheckoutSession(selectedMethod);
+        setInitData(activeSession);
+      }
+
+      const provider = activeSession.provider || 'cashfree';
+      const providerOrderId = activeSession.provider_order_id || `order_${Date.now()}`;
 
       // Open Cashfree hosted modal checkout if on web and session id is present
-      if (initData.payment_session_id && typeof window !== 'undefined') {
+      if (activeSession.payment_session_id && typeof window !== 'undefined') {
         try {
           const { load: loadCashfree } = await import('@cashfreepayments/cashfree-js');
           const cashfree = await loadCashfree({ mode: 'sandbox' });
           if (cashfree) {
             const checkoutResult: any = await cashfree.checkout({
-              paymentSessionId: initData.payment_session_id,
+              paymentSessionId: activeSession.payment_session_id,
               redirectTarget: '_modal',
             });
             if (checkoutResult?.error) {
@@ -232,10 +259,10 @@ export function CheckoutModal({
 
       // Always verify payment status directly with backend & Cashfree API
       const verifyRes = await paymentApi.verifyCheckout({
-        payment_id: initData.payment_id,
+        payment_id: activeSession.payment_id,
         provider,
         provider_order_id: providerOrderId,
-        provider_payment_id: initData.payment_session_id ? `cf_${initData.payment_session_id}` : undefined,
+        provider_payment_id: activeSession.payment_session_id ? `cf_${activeSession.payment_session_id}` : undefined,
         provider_signature: undefined,
       });
 
@@ -304,10 +331,10 @@ export function CheckoutModal({
     tax_amount: 0,
     service_fee: 0,
     final_amount: 0,
-    currency: 'USD',
+    currency: 'INR',
   };
 
-  const finalFormatted = formatCurrency(Number(breakdown.final_amount));
+  const finalFormatted = formatCurrency(Number(breakdown.final_amount), breakdown.currency || 'INR');
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -433,7 +460,7 @@ export function CheckoutModal({
                 <View style={styles.breakdownRow}>
                   <AppText style={styles.breakdownLabel}>Base booking fee</AppText>
                   <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.base_amount))}
+                    {formatCurrency(Number(breakdown.base_amount), breakdown.currency || 'INR')}
                   </AppText>
                 </View>
 
@@ -444,7 +471,7 @@ export function CheckoutModal({
                       <AppText style={styles.discountLabel}>Member privilege discount</AppText>
                     </View>
                     <AppText style={styles.discountValue}>
-                      -{formatCurrency(Number(breakdown.discount_amount))}
+                      -{formatCurrency(Number(breakdown.discount_amount), breakdown.currency || 'INR')}
                     </AppText>
                   </View>
                 ) : null}
@@ -452,13 +479,15 @@ export function CheckoutModal({
                 <View style={styles.breakdownRow}>
                   <AppText style={styles.breakdownLabel}>Estimated taxes (5% GST / Tax)</AppText>
                   <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.tax_amount))}
+                    {formatCurrency(Number(breakdown.tax_amount), breakdown.currency || 'INR')}
                   </AppText>
                 </View>
 
                 <View style={styles.breakdownRow}>
                   <AppText style={styles.breakdownLabel}>Service / Platform fee</AppText>
-                  <AppText style={styles.breakdownFree}>$0.00 (Transparent)</AppText>
+                  <AppText style={styles.breakdownFree}>
+                    {formatCurrency(0, breakdown.currency || 'INR')} (Transparent)
+                  </AppText>
                 </View>
 
                 <View style={styles.breakdownDivider} />
@@ -476,13 +505,13 @@ export function CheckoutModal({
               <Card style={styles.methodsCard}>
                 <AppText style={styles.sectionTitle}>Select Payment Method</AppText>
                 <AppText style={styles.methodSubtitle}>
-                  Encrypted & authenticated through configured payment provider
+                  Encrypted & authenticated through Cashfree payment provider
                 </AppText>
 
                 {/* Method 1: UPI */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'upi' && styles.methodOptionActive]}
-                  onPress={() => setSelectedMethod('upi')}
+                  onPress={() => handleSelectMethod('upi')}
                 >
                   <View style={styles.methodRadioCol}>
                     <View style={[styles.radioOuter, selectedMethod === 'upi' && styles.radioOuterActive]}>
@@ -510,7 +539,13 @@ export function CheckoutModal({
                     <View style={styles.upiDetailRow}>
                       <QrCode size={16} color={Colors.brand.primary} />
                       <AppText style={styles.upiDetailText}>
-                        Dynamic provider UPI QR & App Intent will launch automatically.
+                        Dynamic Cashfree UPI QR Code & Instant UPI Apps will open directly.
+                      </AppText>
+                    </View>
+                    <View style={[styles.upiDetailRow, { marginTop: 6 }]}>
+                      <Smartphone size={16} color="#18794E" />
+                      <AppText style={[styles.upiDetailText, { color: '#18794E', fontWeight: '500' }]}>
+                        Sandbox Test VPA: testsuccess@gocash (or scan the QR code to simulate approval)
                       </AppText>
                     </View>
                   </View>
@@ -519,7 +554,7 @@ export function CheckoutModal({
                 {/* Method 2: Cards */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'card' && styles.methodOptionActive]}
-                  onPress={() => setSelectedMethod('card')}
+                  onPress={() => handleSelectMethod('card')}
                 >
                   <View style={styles.methodRadioCol}>
                     <View style={[styles.radioOuter, selectedMethod === 'card' && styles.radioOuterActive]}>
@@ -537,10 +572,21 @@ export function CheckoutModal({
                   </View>
                 </TouchableOpacity>
 
+                {selectedMethod === 'card' && (
+                  <View style={styles.upiDetailsBox}>
+                    <View style={styles.upiDetailRow}>
+                      <CreditCard size={16} color={Colors.brand.primary} />
+                      <AppText style={styles.upiDetailText}>
+                        Cashfree 3-D Secure Card checkout will open with card number, expiry, and CVV fields.
+                      </AppText>
+                    </View>
+                  </View>
+                )}
+
                 {/* Method 3: NetBanking */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'netbanking' && styles.methodOptionActive]}
-                  onPress={() => setSelectedMethod('netbanking')}
+                  onPress={() => handleSelectMethod('netbanking')}
                 >
                   <View style={styles.methodRadioCol}>
                     <View style={[styles.radioOuter, selectedMethod === 'netbanking' && styles.radioOuterActive]}>
@@ -553,10 +599,21 @@ export function CheckoutModal({
                   <View style={styles.methodInfoCol}>
                     <AppText style={styles.methodTitle}>NetBanking / Direct Transfer</AppText>
                     <AppText style={styles.methodDesc}>
-                      All major banks supported via provider gateway
+                      All major banks supported via Cashfree gateway
                     </AppText>
                   </View>
                 </TouchableOpacity>
+
+                {selectedMethod === 'netbanking' && (
+                  <View style={styles.upiDetailsBox}>
+                    <View style={styles.upiDetailRow}>
+                      <Wallet size={16} color={Colors.brand.primary} />
+                      <AppText style={styles.upiDetailText}>
+                        Direct bank login through Cashfree NetBanking across all major retail banks.
+                      </AppText>
+                    </View>
+                  </View>
+                )}
               </Card>
 
               {/* Error banner if failed during commit */}
@@ -666,7 +723,7 @@ export function CheckoutModal({
                 <View style={styles.receiptRow}>
                   <AppText style={styles.receiptRowLabel}>Amount Paid</AppText>
                   <AppText style={styles.receiptRowAmount}>
-                    {formatCurrency(Number(verifyResult.payment.amount))}
+                    {formatCurrency(Number(verifyResult.payment.amount), verifyResult.payment.currency || 'INR')}
                   </AppText>
                 </View>
 

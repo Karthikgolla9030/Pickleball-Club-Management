@@ -788,7 +788,12 @@ class PaymentService:
             event = await self.event_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
             if not event:
                 raise HTTPException(status_code=404, detail="Event not found in this club")
-            fee_raw = getattr(event, "price", None) or getattr(event, "fee", None) or Decimal("25.00")
+            fee_raw = (
+                getattr(event, "registration_fee", None)
+                or getattr(event, "price", None)
+                or getattr(event, "fee", None)
+                or Decimal("25.00")
+            )
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
             summary.update({
@@ -854,11 +859,13 @@ class PaymentService:
                 raise HTTPException(status_code=404, detail="Membership plan not found in this club")
 
             base_amount = Decimal(str(plan.price)).quantize(Decimal("0.01"))
+            interval_val = getattr(plan, "duration_unit", None) or getattr(plan, "interval", None) or "yearly"
+            interval_str = interval_val.value if hasattr(interval_val, "value") else str(interval_val)
             summary.update({
                 "title": f"Membership: {plan.name}",
                 "activity_name": plan.name,
                 "plan_id": str(plan.id),
-                "interval": plan.interval.value if hasattr(plan.interval, "value") else str(plan.interval),
+                "interval": interval_str,
             })
             meta_dict.update({
                 "plan_id": str(plan.id),
@@ -917,6 +924,8 @@ class PaymentService:
                 provider_order_id="free_complimentary",
                 provider_key_id=None,
                 supported_methods=["free"],
+                selected_method="free",
+                payment_methods=None,
                 activity_summary=summary,
                 is_free=True,
             )
@@ -924,6 +933,21 @@ class PaymentService:
         # Get configured payment gateway (Cashfree, Razorpay, or Stripe)
         prov_request = payload.metadata.get("provider") if payload.metadata else None
         gateway = get_payment_gateway(prov_request)
+
+        # Selected payment method from payload or metadata (defaults to upi)
+        selected_method = (
+            payload.selected_method
+            or (payload.metadata.get("selected_method") if payload.metadata else None)
+            or ("cash" if payload.payment_method == PaymentMethod.CASH else "upi")
+        )
+
+        # Cashfree requires INR currency for domestic payments (especially UPI & NetBanking)
+        target_currency = payload.currency.upper()
+        if gateway.name == "cashfree":
+            target_currency = "INR"
+
+        breakdown.currency = target_currency
+        summary["currency"] = target_currency
 
         customer_details = {
             "customer_id": str(user_id),
@@ -934,22 +958,25 @@ class PaymentService:
 
         order_res = gateway.create_order(
             amount=final_amount,
-            currency=payload.currency,
+            currency=target_currency,
             receipt=reference,
             customer_details=customer_details,
             notes={
                 "user_id": str(user_id),
                 "club_id": str(payload.club_id),
                 "purpose": payload.purpose.value,
+                "selected_method": selected_method,
             },
         )
+
+        meta_dict["selected_method"] = selected_method
 
         payment = Payment(
             reference=reference,
             club_id=payload.club_id,
             player_id=user_id,
             amount=final_amount,
-            currency=payload.currency,
+            currency=order_res.currency or target_currency,
             status=PaymentStatus.PENDING,
             purpose=payload.purpose,
             payment_method=payload.payment_method,
@@ -973,6 +1000,8 @@ class PaymentService:
         created_pay = await self.payment_repo.create(payment)
         await self.db.commit()
 
+        cf_methods = (order_res.notes or {}).get("payment_methods", "upi,cc,dc,nb")
+
         return CheckoutInitiateResponse(
             payment_id=created_pay.id,
             reference=created_pay.reference,
@@ -983,6 +1012,8 @@ class PaymentService:
             provider_key_id=order_res.key_id,
             payment_session_id=order_res.payment_session_id,
             supported_methods=["upi", "card", "netbanking", "cash"],
+            selected_method=selected_method,
+            payment_methods=cf_methods,
             activity_summary=summary,
             is_free=False,
         )

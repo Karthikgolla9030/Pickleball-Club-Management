@@ -40,6 +40,8 @@ class ProviderOrderResponse(BaseModel):
 class PaymentGateway(abc.ABC):
     """Abstract interface for payment providers."""
 
+    name: str = "base"
+
     @abc.abstractmethod
     def create_order(
         self,
@@ -99,6 +101,8 @@ class CashfreeGateway(PaymentGateway):
     - Cryptographic webhook verification with HMAC-SHA256 Base64 (timestamp + raw_body).
     """
 
+    name: str = "cashfree"
+
     SANDBOX_BASE_URL = "https://sandbox.cashfree.com/pg"
 
     def __init__(
@@ -135,6 +139,11 @@ class CashfreeGateway(PaymentGateway):
     ) -> ProviderOrderResponse:
         subunits = int(round(amount * 100))
         curr = currency.upper()
+
+        # Cashfree strictly requires INR for domestic payment methods (UPI, NetBanking)
+        if curr != "INR":
+            curr = "INR"
+
         cust = customer_details or {}
         cust_id = str(cust.get("customer_id") or f"cust_{uuid.uuid4().hex[:10]}")[:50]
         cust_phone = str(cust.get("customer_phone") or "9999999999")[-10:]
@@ -142,6 +151,25 @@ class CashfreeGateway(PaymentGateway):
             cust_phone = "9999999999"
         cust_email = str(cust.get("customer_email") or "player@example.com")[:100]
         cust_name = str(cust.get("customer_name") or "Player")[:100]
+
+        # Map selected payment method to Cashfree supported payment_methods constraint:
+        # 'upi' -> 'upi' (locks Cashfree checkout to UPI apps, dynamic QR, VPA collect)
+        # 'card' -> 'cc,dc' (locks Cashfree checkout to credit/debit cards)
+        # 'netbanking' -> 'nb' (locks Cashfree checkout to NetBanking)
+        # fallback / all -> 'upi,cc,dc,nb'
+        selected_method = str((notes or {}).get("selected_method") or "upi").lower()
+        if selected_method == "upi":
+            cf_payment_methods = "upi"
+        elif selected_method in ("card", "cards", "cc", "dc"):
+            cf_payment_methods = "cc,dc"
+        elif selected_method in ("netbanking", "nb", "bank_transfer"):
+            cf_payment_methods = "nb"
+        else:
+            cf_payment_methods = "upi,cc,dc,nb"
+
+        order_notes = dict(notes or {})
+        order_notes["payment_methods"] = cf_payment_methods
+        order_notes["selected_method"] = selected_method
 
         order_id = f"order_cf_{uuid.uuid4().hex[:14]}"
 
@@ -168,6 +196,7 @@ class CashfreeGateway(PaymentGateway):
                     },
                     "order_meta": {
                         "return_url": "https://pickleball-club-management.vercel.app/(player)/payments?order_id={order_id}",
+                        "payment_methods": cf_payment_methods,
                     },
                     "order_note": f"Aught2 Pickleball - {receipt[:30]}",
                 }
@@ -186,7 +215,7 @@ class CashfreeGateway(PaymentGateway):
                             key_id=self.app_id,
                             payment_session_id=session_id,
                             receipt=receipt,
-                            notes=notes or {},
+                            notes=order_notes,
                         )
                     else:
                         logger.warning(
@@ -206,7 +235,7 @@ class CashfreeGateway(PaymentGateway):
             key_id=self.app_id or "cf_test_app_id",
             payment_session_id=payment_session_id,
             receipt=receipt,
-            notes=notes or {},
+            notes=order_notes,
         )
 
     def verify_order_status(
@@ -253,7 +282,8 @@ class CashfreeGateway(PaymentGateway):
                     # Validate currency
                     if expected_currency is not None:
                         cf_curr = (order_data.get("order_currency") or "").upper()
-                        if cf_curr != expected_currency.upper():
+                        exp_curr = expected_currency.upper()
+                        if cf_curr != exp_curr and not (exp_curr == "USD" and cf_curr == "INR"):
                             return False, None, f"Currency mismatch: expected {expected_currency}, got {cf_curr}", "CURRENCY_MISMATCH"
 
                     if status == "PAID":
@@ -339,6 +369,8 @@ class RazorpayGateway(PaymentGateway):
     Razorpay payment gateway implementation.
     Standard provider for Indian UPI and Cards.
     """
+
+    name: str = "razorpay"
 
     def __init__(
         self,
@@ -462,6 +494,8 @@ class StripeGateway(PaymentGateway):
     Stripe payment gateway implementation.
     Standard provider for Global Card transactions and 3DS.
     """
+
+    name: str = "stripe"
 
     def __init__(
         self,

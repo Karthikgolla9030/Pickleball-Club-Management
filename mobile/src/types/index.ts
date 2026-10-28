@@ -1958,6 +1958,7 @@ export interface CheckoutInitiatePayload {
   start_at?: string | null;
   end_at?: string | null;
   payment_method?: PaymentMethod;
+  selected_method?: string | null;
   currency?: string;
   notes?: string | null;
   metadata?: Record<string, any>;
@@ -1973,6 +1974,8 @@ export interface CheckoutInitiateResponse {
   provider_key_id?: string | null;
   payment_session_id?: string | null;
   supported_methods: string[];
+  selected_method?: string | null;
+  payment_methods?: string | null;
   activity_summary: Record<string, any>;
   is_free: boolean;
 }

@@ -138,21 +138,23 @@ export function formatRelativeDate(iso: string | null | undefined): string {
 // ─── Currency Formatter ───────────────────────────────────────────────────────
 
 /**
- * Format currency amount with symbol prefix according to US convention ($1,234.56).
+ * Format currency amount with symbol prefix according to currency convention.
  * formatCurrency(9999, 'USD') → '$9,999.00'
+ * formatCurrency(9999, 'INR') → '₹9,999.00'
  */
 export function formatCurrency(
   amount: number | string | null | undefined,
-  currency: string = 'USD',
+  currency: string = 'INR',
 ): string {
   if (amount === null || amount === undefined) return '—';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (isNaN(num)) return '—';
 
-  const targetCurrency = currency?.toUpperCase() === 'INR' ? 'USD' : (currency || 'USD');
-  return new Intl.NumberFormat('en-US', {
+  const curr = (currency || 'INR').toUpperCase();
+  const locale = curr === 'INR' ? 'en-IN' : 'en-US';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: targetCurrency,
+    currency: curr,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(num);
