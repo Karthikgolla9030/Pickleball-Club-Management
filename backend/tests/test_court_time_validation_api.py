@@ -15,6 +15,7 @@ import uuid
 from datetime import date, time
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_password
@@ -237,6 +238,12 @@ async def test_update_court_opening_and_closing_times_independently(
     assert updated["operating_hours"]["monday"]["open_time"].startswith("07:30")
     assert updated["operating_hours"]["monday"]["close_time"].startswith("21:30")
 
+    # Verify fresh from DB
+    db_session.expire_all()
+    fresh_court = (await db_session.execute(select(Court).where(Court.id == uuid.UUID(court_id)))).scalar_one()
+    print("FRESH COURT IN DB OPERATING HOURS:", fresh_court.operating_hours)
+    assert fresh_court.operating_hours["monday"]["open_time"].startswith("07:30")
+
 
 @pytest.mark.asyncio
 async def test_exact_frontend_edit_court_payload(
@@ -302,4 +309,69 @@ async def test_exact_frontend_edit_court_payload(
     assert data["name"] == "court 1"
     assert data["court_number"] == 1
     assert data["operating_hours"]["monday"]["open_time"].startswith("06:00")
+
+
+@pytest.mark.asyncio
+async def test_courts_with_different_operating_timings_availability(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """Court 1 has timings from 10:00, Court 2 from 07:00. Verify availability slots returned."""
+    owner = await create_user(db_session)
+    club = await create_club(db_session)
+    await create_membership(db_session, owner, club, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    headers = make_auth_header(owner.id)
+
+    # Court 1: 10:00 to 22:00
+    c1_resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/courts",
+        json={
+            "name": "Court 1",
+            "court_number": 1,
+            "opening_time": "10:00",
+            "closing_time": "22:00",
+        },
+        headers=headers,
+    )
+    assert c1_resp.status_code == 201
+
+    # Court 2: 07:00 to 22:00
+    c2_resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/courts",
+        json={
+            "name": "Court 2",
+            "court_number": 2,
+            "opening_time": "07:00",
+            "closing_time": "22:00",
+        },
+        headers=headers,
+    )
+    assert c2_resp.status_code == 201
+
+    target_date = "2026-10-28"  # Wednesday
+    avail_resp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/courts/availability?date={target_date}&duration=60",
+        headers=headers,
+    )
+    assert avail_resp.status_code == 200
+    data = avail_resp.json()
+    courts = data["courts"]
+    assert len(courts) == 2
+
+    c1 = next(c for c in courts if c["court_name"] == "Court 1")
+    c2 = next(c for c in courts if c["court_name"] == "Court 2")
+
+    print("\n--- C1 SLOTS ---")
+    for s in c1["slots"]:
+        print("C1 slot:", s["start_at"])
+
+    print("\n--- C2 SLOTS ---")
+    for s in c2["slots"]:
+        print("C2 slot:", s["start_at"])
+
+    assert len(c1["slots"]) == 12  # 10:00 to 22:00 = 12 hours
+    assert len(c2["slots"]) == 15  # 07:00 to 22:00 = 15 hours
+
 

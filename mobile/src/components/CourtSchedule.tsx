@@ -94,16 +94,47 @@ function formatSurface(surface?: string | null): string {
   return surface.replace(/ surface$/i, '');
 }
 
-function parseSlotTime(isoString: string): { hour: string; ampm: string } {
-  const d = new Date(isoString);
-  let hours = d.getHours();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  const minutes = String(d.getMinutes()).padStart(2, '0');
+function parseSlotTime(isoString: string): {
+  hour: string;
+  ampm: string;
+  minutesFromMidnight: number;
+  canonicalKey: string;
+} {
+  let h = 0;
+  let m = 0;
+  if (typeof isoString === 'string' && isoString.includes('T')) {
+    const timePart = isoString.split('T')[1];
+    const match = timePart.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      h = parseInt(match[1], 10);
+      m = parseInt(match[2], 10);
+    } else {
+      const d = new Date(isoString);
+      h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
+      m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
+    }
+  } else if (typeof isoString === 'string' && isoString.includes(':')) {
+    const match = isoString.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      h = parseInt(match[1], 10);
+      m = parseInt(match[2], 10);
+    }
+  } else {
+    const d = new Date(isoString);
+    h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
+    m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
+  }
+
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  const mStr = String(m).padStart(2, '0');
+  const h24Str = String(h).padStart(2, '0');
   return {
-    hour: `${hours}:${minutes}`,
+    hour: `${hour12}:${mStr}`,
     ampm,
+    minutesFromMidnight: h * 60 + m,
+    canonicalKey: `${h24Str}:${mStr}`,
   };
 }
 
@@ -153,23 +184,64 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
 
   const courts = useMemo(() => availability?.courts ?? [], [availability]);
 
-  // Generate unified chronological time headers across all courts
+  // Generate unified chronological, continuous timeline headers across all courts
   const timeHeaders = useMemo(() => {
-    const map = new Map<string, { hour: string; ampm: string; timeMs: number }>();
+    let minMinutes = Infinity;
+    let maxMinutes = -Infinity;
+    let stepMinutes = 60;
+
     for (const c of courts) {
-      if (c.slots) {
+      if (c.booking_interval_minutes && c.booking_interval_minutes >= 15 && c.booking_interval_minutes < stepMinutes) {
+        stepMinutes = c.booking_interval_minutes;
+      }
+      if (c.slots && c.slots.length > 0) {
         for (const s of c.slots) {
-          const key = s.start_at;
-          if (!map.has(key)) {
-            const parsed = parseSlotTime(key);
-            map.set(key, { ...parsed, timeMs: new Date(key).getTime() });
+          const parsed = parseSlotTime(s.start_at);
+          if (parsed.minutesFromMidnight < minMinutes) {
+            minMinutes = parsed.minutesFromMidnight;
+          }
+          if (parsed.minutesFromMidnight > maxMinutes) {
+            maxMinutes = parsed.minutesFromMidnight;
           }
         }
       }
     }
-    return Array.from(map.entries())
-      .sort(([, a], [, b]) => a.timeMs - b.timeMs)
-      .map(([key, val]) => ({ key, hour: val.hour, ampm: val.ampm }));
+
+    // Fallback if no courts have slots
+    if (minMinutes === Infinity || maxMinutes === -Infinity) {
+      minMinutes = 6 * 60;   // 06:00 AM default
+      maxMinutes = 21 * 60;  // 09:00 PM default
+    }
+
+    // Ensure start begins cleanly at interval boundary
+    const startM = Math.floor(minMinutes / stepMinutes) * stepMinutes;
+    const endM = Math.ceil(maxMinutes / stepMinutes) * stepMinutes;
+
+    const headers: {
+      key: string;
+      hour: string;
+      ampm: string;
+      minutesFromMidnight: number;
+    }[] = [];
+
+    for (let m = startM; m <= endM; m += stepMinutes) {
+      const h24 = Math.floor(m / 60) % 24;
+      const min = m % 60;
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      let hour12 = h24 % 12;
+      if (hour12 === 0) hour12 = 12;
+      const mStr = String(min).padStart(2, '0');
+      const h24Str = String(h24).padStart(2, '0');
+
+      headers.push({
+        key: `${h24Str}:${mStr}`,
+        hour: `${hour12}:${mStr}`,
+        ampm,
+        minutesFromMidnight: m,
+      });
+    }
+
+    return headers;
   }, [courts]);
 
   // Date picker handler
@@ -328,19 +400,26 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                 {courts.map((court, rowIdx) => {
                   const isLastRow = rowIdx === courts.length - 1;
 
-                  if (court.is_closed || !court.slots || court.slots.length === 0) {
+                  if (court.is_closed) {
                     return (
                       <View
                         key={court.court_id}
-                        style={[
-                          styles.timelineRow,
-                          isLastRow && styles.lastCellBorder,
-                          { alignItems: 'center', paddingLeft: 16, backgroundColor: '#FAFBFB' },
-                        ]}
+                        style={[styles.timelineRow, isLastRow && styles.lastCellBorder]}
                       >
-                        <AppText style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', fontStyle: 'italic' }}>
-                          Court is closed on this day
-                        </AppText>
+                        {timeHeaders.map((th) => (
+                          <View key={th.key} style={styles.slotCellWrapper}>
+                            <View
+                              style={[
+                                styles.slotPill,
+                                { backgroundColor: '#F3F4F6', borderWidth: 0, opacity: 0.6 },
+                              ]}
+                            >
+                              <AppText style={{ fontSize: 11, color: '#9CA3AF', fontWeight: '500' }}>
+                                —
+                              </AppText>
+                            </View>
+                          </View>
+                        ))}
                       </View>
                     );
                   }
@@ -351,11 +430,16 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                       style={[styles.timelineRow, isLastRow && styles.lastCellBorder]}
                     >
                       {timeHeaders.map((th) => {
-                        const slot = court.slots.find(
-                          (s) =>
-                            s.start_at === th.key ||
-                            new Date(s.start_at).getTime() === new Date(th.key).getTime()
-                        );
+                        const slot = court.slots
+                          ? court.slots.find((s) => {
+                              const parsed = parseSlotTime(s.start_at);
+                              return (
+                                parsed.minutesFromMidnight === th.minutesFromMidnight ||
+                                parsed.canonicalKey === th.key ||
+                                s.start_at === th.key
+                              );
+                            })
+                          : undefined;
 
                         if (!slot) {
                           return (

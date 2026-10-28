@@ -10,6 +10,7 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.court import Court, CourtEnvironment, CourtStatus
 
@@ -97,6 +98,8 @@ class CourtRepository:
         for k, v in fields.items():
             if hasattr(court, k):
                 setattr(court, k, v)
+        if "operating_hours" in fields:
+            flag_modified(court, "operating_hours")
         await self.db.flush()
         await self.db.refresh(court)
         return court

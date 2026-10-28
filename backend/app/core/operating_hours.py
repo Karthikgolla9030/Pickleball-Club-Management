@@ -6,6 +6,7 @@ validation, and inheritance rules between Clubs and Courts.
 """
 from __future__ import annotations
 
+import re
 from datetime import date, time
 from typing import Any
 
@@ -29,7 +30,7 @@ WEEKDAY_NAMES: list[str] = [
 
 
 def parse_time_value(val: Any) -> time | None:
-    """Helper to convert string/time/none into a standard datetime.time."""
+    """Helper to convert string/time/none into a standard datetime.time (supports 12h AM/PM and 24h formats)."""
     if val is None:
         return None
     if isinstance(val, time):
@@ -38,11 +39,27 @@ def parse_time_value(val: Any) -> time | None:
         val = val.strip()
         if not val:
             return None
-        # Handle 'HH:MM' or 'HH:MM:SS'
-        parts = val.split(":")
-        if len(parts) >= 2:
-            return time(int(parts[0]), int(parts[1]), int(parts[2]) if len(parts) > 2 else 0)
-        return time.fromisoformat(val)
+        # Handle 12h AM/PM or 24h HH:mm / HH:mm:ss via regex
+        m = re.match(r"^(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?\s*(AM|PM)?$", val, re.IGNORECASE)
+        if m:
+            raw_h = int(m.group(1))
+            raw_m = int(m.group(2) or 0)
+            raw_s = int(m.group(3) or 0)
+            ampm = m.group(4)
+            if ampm:
+                ampm_upper = ampm.upper()
+                if ampm_upper == "PM":
+                    h = 12 if raw_h == 12 else raw_h + 12
+                else:
+                    h = 0 if raw_h == 12 else raw_h
+            else:
+                h = raw_h
+            if 0 <= h <= 23 and 0 <= raw_m <= 59 and 0 <= raw_s <= 59:
+                return time(h, raw_m, raw_s)
+        try:
+            return time.fromisoformat(val)
+        except Exception:
+            return None
     return None
 
 
@@ -132,33 +149,46 @@ def resolve_effective_operating_hours(
     weekday_idx = target_date.weekday()  # 0=Monday, 6=Sunday
     day_name = WEEKDAY_NAMES[weekday_idx]
 
+    def _extract_from_hours_dict(hours_dict: Any) -> tuple[bool, time, time] | None:
+        if not isinstance(hours_dict, dict):
+            return None
+        # 1. Match day name case-insensitively or via 3-letter prefix
+        cfg = None
+        if day_name in hours_dict:
+            cfg = hours_dict[day_name]
+        else:
+            for k, v in hours_dict.items():
+                k_clean = str(k).strip().lower()
+                if k_clean == day_name or k_clean == day_name[:3]:
+                    cfg = v
+                    break
+
+        if not cfg and ("open_time" in hours_dict or "close_time" in hours_dict or "opening_time" in hours_dict):
+            cfg = hours_dict
+
+        if isinstance(cfg, dict):
+            is_closed = bool(cfg.get("is_closed", False))
+            if is_closed:
+                return (True, time(0, 0), time(0, 0))
+            o_raw = cfg.get("open_time") or cfg.get("opening_time") or cfg.get("open")
+            c_raw = cfg.get("close_time") or cfg.get("closing_time") or cfg.get("close")
+            o_time = parse_time_value(o_raw)
+            c_time = parse_time_value(c_raw)
+            if o_time and c_time:
+                return (False, o_time, c_time)
+        return None
+
     # 1. Check Court override
     if court is not None and getattr(court, "operating_hours", None):
-        court_hours = court.operating_hours
-        if isinstance(court_hours, dict) and day_name in court_hours:
-            cfg = court_hours[day_name]
-            if isinstance(cfg, dict):
-                is_closed = bool(cfg.get("is_closed", False))
-                if is_closed:
-                    return (True, time(0, 0), time(0, 0))
-                o_time = parse_time_value(cfg.get("open_time"))
-                c_time = parse_time_value(cfg.get("close_time"))
-                if o_time and c_time:
-                    return (False, o_time, c_time)
+        res = _extract_from_hours_dict(court.operating_hours)
+        if res is not None:
+            return res
 
     # 2. Check Club schedule
     if club is not None and getattr(club, "operating_hours", None):
-        club_hours = club.operating_hours
-        if isinstance(club_hours, dict) and day_name in club_hours:
-            cfg = club_hours[day_name]
-            if isinstance(cfg, dict):
-                is_closed = bool(cfg.get("is_closed", False))
-                if is_closed:
-                    return (True, time(0, 0), time(0, 0))
-                o_time = parse_time_value(cfg.get("open_time"))
-                c_time = parse_time_value(cfg.get("close_time"))
-                if o_time and c_time:
-                    return (False, o_time, c_time)
+        res = _extract_from_hours_dict(club.operating_hours)
+        if res is not None:
+            return res
 
     # 3. Fallback to club scalar opening_time / closing_time
     fallback_open = getattr(club, "opening_time", None) or DEFAULT_CLUB_OPENING_TIME
