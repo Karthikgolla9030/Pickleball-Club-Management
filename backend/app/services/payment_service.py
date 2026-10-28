@@ -921,12 +921,22 @@ class PaymentService:
                 is_free=True,
             )
 
-        # Get configured payment gateway (Razorpay for India/UPI/Cards or Stripe)
-        gateway = get_payment_gateway()
+        # Get configured payment gateway (Cashfree, Razorpay, or Stripe)
+        prov_request = payload.metadata.get("provider") if payload.metadata else None
+        gateway = get_payment_gateway(prov_request)
+
+        customer_details = {
+            "customer_id": str(user_id),
+            "customer_name": user.full_name or "Player",
+            "customer_email": user.email or "player@example.com",
+            "customer_phone": getattr(user, "phone", None) or "9999999999",
+        }
+
         order_res = gateway.create_order(
             amount=final_amount,
             currency=payload.currency,
             receipt=reference,
+            customer_details=customer_details,
             notes={
                 "user_id": str(user_id),
                 "club_id": str(payload.club_id),
@@ -971,6 +981,7 @@ class PaymentService:
             provider=order_res.provider,
             provider_order_id=order_res.order_id,
             provider_key_id=order_res.key_id,
+            payment_session_id=order_res.payment_session_id,
             supported_methods=["upi", "card", "netbanking", "cash"],
             activity_summary=summary,
             is_free=False,
@@ -982,7 +993,7 @@ class PaymentService:
         payload: CheckoutVerifyRequest,
     ) -> CheckoutVerifyResponse:
         """
-        Verify payment signature cryptographically, update transaction state to SUCCEEDED,
+        Verify payment signature or order status, update transaction state to SUCCEEDED,
         and fulfill activity registration / booking atomically.
         """
         payment = await self.payment_repo.get_by_id(payload.payment_id)
@@ -1001,22 +1012,48 @@ class PaymentService:
                 booking_or_registration={"reference": payment.reference, "status": "confirmed"},
             )
 
-        # Cryptographic signature verification
         gateway = get_payment_gateway(payload.provider)
-        valid = gateway.verify_payment_signature(
-            payment_id=payload.provider_payment_id,
-            order_id=payload.provider_order_id,
-            signature=payload.provider_signature,
-        )
-        if not valid:
-            payment.status = PaymentStatus.FAILED
-            payment.failed_at = datetime.now(timezone.utc)
-            payment.failure_reason = "Cryptographic signature verification failed"
-            await self.db.commit()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Payment signature verification failed. Transaction was not confirmed.",
+        provider_name = (payload.provider or "").lower()
+
+        if provider_name == "cashfree":
+            # Direct server-to-server verification with Cashfree Sandbox API
+            valid, cf_pay_id, failure_reason, cf_status = gateway.verify_order_status(
+                order_id=payload.provider_order_id,
+                expected_amount=payment.amount,
+                expected_currency=payment.currency,
             )
+            if not valid:
+                if cf_status in ("ACTIVE", "PENDING"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Payment is still pending on Cashfree. Please complete checkout before verifying.",
+                    )
+                payment.status = PaymentStatus.FAILED
+                payment.failed_at = datetime.now(timezone.utc)
+                payment.failure_reason = failure_reason or f"Cashfree verification failed ({cf_status})"
+                await self.db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cashfree payment verification failed: {failure_reason or cf_status}",
+                )
+            if cf_pay_id:
+                payload.provider_payment_id = cf_pay_id
+        else:
+            # Cryptographic signature verification for Razorpay/Stripe
+            valid = gateway.verify_payment_signature(
+                payment_id=payload.provider_payment_id or "",
+                order_id=payload.provider_order_id,
+                signature=payload.provider_signature or "",
+            )
+            if not valid:
+                payment.status = PaymentStatus.FAILED
+                payment.failed_at = datetime.now(timezone.utc)
+                payment.failure_reason = "Cryptographic signature verification failed"
+                await self.db.commit()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Payment signature verification failed. Transaction was not confirmed.",
+                )
 
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.SUCCEEDED
@@ -1216,12 +1253,13 @@ class PaymentService:
         provider: str,
         payload_bytes: bytes,
         signature_header: str,
+        timestamp_header: Optional[str] = None,
     ) -> dict[str, Any]:
         """
-        Process incoming payment webhooks from Razorpay or Stripe idempotently.
+        Process incoming payment webhooks from Cashfree, Razorpay, or Stripe idempotently.
         """
         gateway = get_payment_gateway(provider)
-        if not gateway.verify_webhook_signature(payload_bytes, signature_header):
+        if not gateway.verify_webhook_signature(payload_bytes, signature_header, timestamp_header=timestamp_header):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
 
         try:
@@ -1232,26 +1270,86 @@ class PaymentService:
         event_type = data.get("event") or data.get("type")
         provider_order_id = None
         provider_payment_id = None
+        is_success = False
+        is_failure = False
 
-        if provider.lower() == "razorpay":
+        prov_lower = provider.lower()
+        if prov_lower == "cashfree":
+            cf_data = data.get("data", {})
+            cf_order = cf_data.get("order", {})
+            cf_payment = cf_data.get("payment", {})
+            provider_order_id = cf_order.get("order_id") or data.get("order_id")
+            provider_payment_id = str(cf_payment.get("cf_payment_id") or cf_payment.get("payment_id") or "")
+            cf_status = (cf_payment.get("payment_status") or "").upper()
+
+            if event_type in ("PAYMENT_SUCCESS_WEBHOOK", "ORDER_PAID") or cf_status == "SUCCESS":
+                is_success = True
+            elif event_type in ("PAYMENT_FAILED_WEBHOOK", "PAYMENT_USER_DROPPED_WEBHOOK") or cf_status in ("FAILED", "CANCELLED", "USER_DROPPED"):
+                is_failure = True
+
+        elif prov_lower == "razorpay":
             payload_data = data.get("payload", {})
             payment_entity = payload_data.get("payment", {}).get("entity", {})
             provider_payment_id = payment_entity.get("id")
             provider_order_id = payment_entity.get("order_id")
-        elif provider.lower() == "stripe":
+            if event_type in ("payment.captured", "order.paid"):
+                is_success = True
+            elif event_type == "payment.failed":
+                is_failure = True
+
+        elif prov_lower == "stripe":
             obj = data.get("data", {}).get("object", {})
             provider_order_id = obj.get("id")
             provider_payment_id = obj.get("latest_charge")
+            if event_type in ("payment_intent.succeeded",):
+                is_success = True
+            elif event_type in ("payment_intent.payment_failed",):
+                is_failure = True
 
         if provider_order_id:
             payment = await self.payment_repo.get_by_provider_order_id(provider_order_id)
             if payment and payment.status != PaymentStatus.SUCCEEDED:
-                if event_type in ("payment.captured", "order.paid", "payment_intent.succeeded"):
+                if is_success:
+                    now = datetime.now(timezone.utc)
                     payment.status = PaymentStatus.SUCCEEDED
-                    payment.paid_at = datetime.now(timezone.utc)
-                    payment.provider_payment_id = provider_payment_id
+                    payment.paid_at = now
+                    if provider_payment_id:
+                        payment.provider_payment_id = provider_payment_id
+
+                    # Parse metadata to fulfill booking if user disconnected before verification
+                    meta: dict[str, Any] = {}
+                    if payment.notes and "[META]" in payment.notes:
+                        try:
+                            meta = json.loads(payment.notes.split("[META]", 1)[1])
+                        except Exception:
+                            meta = {}
+                    reg_dict: dict[str, Any] = {}
+                    if payment.purpose == PaymentPurpose.COURT_BOOKING and not payment.booking_id:
+                        court_id = UUID(meta["court_id"]) if "court_id" in meta else None
+                        start_dt = datetime.fromisoformat(meta["start_at"]) if "start_at" in meta else None
+                        end_dt = datetime.fromisoformat(meta["end_at"]) if "end_at" in meta else None
+                        if court_id and start_dt and end_dt:
+                            conflicts = await self.booking_repo.find_conflicts(court_id=court_id, start_at=start_dt, end_at=end_dt)
+                            if not conflicts:
+                                booking = await self.booking_repo.create(
+                                    club_id=payment.club_id,
+                                    court_id=court_id,
+                                    player_id=payment.player_id,
+                                    created_by_user_id=payment.player_id,
+                                    booking_type=BookingType.PLAYER,
+                                    start_at=start_dt,
+                                    end_at=end_dt,
+                                    status=BookingStatus.CONFIRMED,
+                                    notes=meta.get("notes"),
+                                    price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
+                                    total_price=payment.amount,
+                                    currency=payment.currency,
+                                )
+                                payment.booking_id = booking.id
+
                     await self.db.commit()
-                elif event_type in ("payment.failed", "payment_intent.payment_failed"):
+
+                elif is_failure:
                     payment.status = PaymentStatus.FAILED
                     payment.failed_at = datetime.now(timezone.utc)
                     payment.failure_reason = f"Provider webhook reported {event_type}"

@@ -203,19 +203,40 @@ export function CheckoutModal({
       setStep('processing');
       setErrorMessage(null);
 
-      // Provider credentials and signature verification
-      const provider = initData.provider || 'razorpay';
+      const provider = initData.provider || 'cashfree';
       const providerOrderId = initData.provider_order_id || `order_${Date.now()}`;
-      const providerPaymentId = `pay_${provider}_${Date.now()}`;
-      // In sandbox/test environment, the signature is cryptographically verified
-      const providerSignature = `sand_sig_${Date.now()}`;
 
+      // Open Cashfree hosted modal checkout if on web and session id is present
+      if (initData.payment_session_id && typeof window !== 'undefined') {
+        try {
+          const { load: loadCashfree } = await import('@cashfreepayments/cashfree-js');
+          const cashfree = await loadCashfree({ mode: 'sandbox' });
+          if (cashfree) {
+            const checkoutResult: any = await cashfree.checkout({
+              paymentSessionId: initData.payment_session_id,
+              redirectTarget: '_modal',
+            });
+            if (checkoutResult?.error) {
+              setStep('ready');
+              setErrorMessage(
+                checkoutResult.error.message ||
+                'Checkout window closed or payment was cancelled. You can retry safely or check status.'
+              );
+              return;
+            }
+          }
+        } catch (sdkErr: any) {
+          console.warn('Cashfree JS checkout notice:', sdkErr);
+        }
+      }
+
+      // Always verify payment status directly with backend & Cashfree API
       const verifyRes = await paymentApi.verifyCheckout({
         payment_id: initData.payment_id,
         provider,
-        provider_payment_id: providerPaymentId,
         provider_order_id: providerOrderId,
-        provider_signature: providerSignature,
+        provider_payment_id: initData.payment_session_id ? `cf_${initData.payment_session_id}` : undefined,
+        provider_signature: undefined,
       });
 
       setVerifyResult(verifyRes);
@@ -227,7 +248,37 @@ export function CheckoutModal({
         err?.response?.data?.detail ||
         err?.detail ||
         err?.message ||
-        'Payment could not be verified. Please retry or pick another method.';
+        'Payment could not be confirmed. If you just completed payment, click "Check Status" or retry.';
+      setErrorMessage(msg);
+    }
+  };
+
+  // Safe status check without duplicate charge or order creation
+  const handleCheckStatus = async () => {
+    if (!initData) return;
+
+    try {
+      setStep('processing');
+      setErrorMessage(null);
+
+      const verifyRes = await paymentApi.verifyCheckout({
+        payment_id: initData.payment_id,
+        provider: initData.provider || 'cashfree',
+        provider_order_id: initData.provider_order_id || '',
+        provider_payment_id: initData.payment_session_id ? `cf_${initData.payment_session_id}` : undefined,
+        provider_signature: undefined,
+      });
+
+      setVerifyResult(verifyRes);
+      setStep('confirmed');
+      onSuccess(verifyRes);
+    } catch (err: any) {
+      setStep('ready');
+      const msg =
+        err?.response?.data?.detail ||
+        err?.detail ||
+        err?.message ||
+        'Payment is still pending with Cashfree. Please retry checkout or wait a moment.';
       setErrorMessage(msg);
     }
   };
@@ -510,9 +561,19 @@ export function CheckoutModal({
 
               {/* Error banner if failed during commit */}
               {errorMessage && (
-                <View style={styles.inlineErrorBox}>
-                  <AlertCircle size={16} color="#B42318" />
-                  <AppText style={styles.inlineErrorText}>{errorMessage}</AppText>
+                <View style={styles.errorSection}>
+                  <View style={styles.inlineErrorBox}>
+                    <AlertCircle size={16} color="#B42318" />
+                    <AppText style={styles.inlineErrorText}>{errorMessage}</AppText>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.checkStatusBtn}
+                    onPress={handleCheckStatus}
+                    disabled={step === 'processing'}
+                  >
+                    <Clock size={14} color="#176B57" />
+                    <AppText style={styles.checkStatusText}>Check Payment Status with Cashfree</AppText>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -530,6 +591,8 @@ export function CheckoutModal({
                   label={
                     step === 'processing'
                       ? 'Processing & Verifying Payment...'
+                      : errorMessage
+                      ? `Retry Payment (${finalFormatted})`
                       : `Pay ${finalFormatted} & Confirm Booking`
                   }
                   variant="primary"
@@ -1000,6 +1063,27 @@ const styles = StyleSheet.create({
     color: '#B42318',
     fontWeight: '500',
     flex: 1,
+  },
+  errorSection: {
+    gap: 8,
+    width: '100%',
+  },
+  checkStatusBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#E6F4EA',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CEEAD6',
+  },
+  checkStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#137333',
   },
   securityRow: {
     flexDirection: 'row',

@@ -1942,6 +1942,7 @@ export interface CheckoutInitiateResponse {
   provider: string;
   provider_order_id?: string | null;
   provider_key_id?: string | null;
+  payment_session_id?: string | null;
   supported_methods: string[];
   activity_summary: Record<string, any>;
   is_free: boolean;
@@ -1950,9 +1951,9 @@ export interface CheckoutInitiateResponse {
 export interface CheckoutVerifyPayload {
   payment_id: string;
   provider: string;
-  provider_payment_id: string;
+  provider_payment_id?: string;
   provider_order_id: string;
-  provider_signature: string;
+  provider_signature?: string;
 }
 
 export interface CheckoutVerifyResponse {

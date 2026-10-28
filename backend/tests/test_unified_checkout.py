@@ -159,8 +159,8 @@ async def test_checkout_initiate_court_booking_pricing_breakdown(
     assert res.status_code == 201, res.text
     data = res.json()
 
-    assert data["provider"] == "razorpay"
-    assert data["provider_order_id"].startswith("order_")
+    assert data["provider"] in ("cashfree", "razorpay")
+    assert data["provider_order_id"].startswith("order_") or data["provider_order_id"].startswith("cf_")
     assert "payment_id" in data
     assert "reference" in data
 

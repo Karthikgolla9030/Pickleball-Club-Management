@@ -345,6 +345,7 @@ class CheckoutInitiateResponse(BaseModel):
     provider: str
     provider_order_id: str | None = None
     provider_key_id: str | None = None
+    payment_session_id: str | None = None
     supported_methods: list[str] = ["upi", "card", "netbanking"]
     activity_summary: dict[str, str | int | float | bool | None]
     is_free: bool = False
@@ -353,9 +354,9 @@ class CheckoutInitiateResponse(BaseModel):
 class CheckoutVerifyRequest(BaseModel):
     payment_id: UUID
     provider: str
-    provider_payment_id: str
+    provider_payment_id: str | None = None
     provider_order_id: str
-    provider_signature: str
+    provider_signature: str | None = None
 
 
 class CheckoutVerifyResponse(BaseModel):

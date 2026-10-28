@@ -445,17 +445,28 @@ async def verify_checkout(
 )
 async def payment_webhook(
     request: Request,
-    provider: str = "razorpay",
+    provider: str = "cashfree",
+    x_webhook_signature: str | None = Header(default=None),
+    x_webhook_timestamp: str | None = Header(default=None),
     x_razorpay_signature: str | None = Header(default=None),
     stripe_signature: str | None = Header(default=None),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Process incoming payment webhooks from Razorpay or Stripe."""
-    signature = x_razorpay_signature or stripe_signature or request.headers.get("x-signature") or ""
+    """Process incoming payment webhooks from Cashfree, Razorpay, or Stripe."""
+    signature = (
+        x_webhook_signature
+        or request.headers.get("x-webhook-signature")
+        or x_razorpay_signature
+        or stripe_signature
+        or request.headers.get("x-signature")
+        or ""
+    )
+    timestamp = x_webhook_timestamp or request.headers.get("x-webhook-timestamp")
     body = await request.body()
     return await PaymentService(db).process_webhook(
         provider=provider,
         payload_bytes=body,
         signature_header=signature,
+        timestamp_header=timestamp,
     )
 
