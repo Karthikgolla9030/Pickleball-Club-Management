@@ -45,6 +45,14 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
       clubId?: string;
       logo_url?: string | null;
       cover_image_url?: string | null;
+      owner_banner_url?: string | null;
+      default_tournament_round_robin_url?: string | null;
+      default_tournament_scramble_url?: string | null;
+      default_tournament_pool_play_url?: string | null;
+      default_tournament_bracket_url?: string | null;
+      default_league_banner_url?: string | null;
+      default_event_banner_url?: string | null;
+      default_lesson_banner_url?: string | null;
       logoUrl?: string | null;
       coverImageUrl?: string | null;
     }) => {
@@ -52,10 +60,20 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
       if (!targetClubId) throw new Error('clubId is required');
       const logo = payload.logo_url !== undefined ? payload.logo_url : payload.logoUrl;
       const cover = payload.cover_image_url !== undefined ? payload.cover_image_url : payload.coverImageUrl;
-      return clubAssetsApi.updateClubBranding(targetClubId, {
-        logo_url: logo,
-        cover_image_url: cover,
-      });
+
+      const updateData: Record<string, any> = {};
+      if (logo !== undefined) updateData.logo_url = logo;
+      if (cover !== undefined) updateData.cover_image_url = cover;
+      if (payload.owner_banner_url !== undefined) updateData.owner_banner_url = payload.owner_banner_url;
+      if (payload.default_tournament_round_robin_url !== undefined) updateData.default_tournament_round_robin_url = payload.default_tournament_round_robin_url;
+      if (payload.default_tournament_scramble_url !== undefined) updateData.default_tournament_scramble_url = payload.default_tournament_scramble_url;
+      if (payload.default_tournament_pool_play_url !== undefined) updateData.default_tournament_pool_play_url = payload.default_tournament_pool_play_url;
+      if (payload.default_tournament_bracket_url !== undefined) updateData.default_tournament_bracket_url = payload.default_tournament_bracket_url;
+      if (payload.default_league_banner_url !== undefined) updateData.default_league_banner_url = payload.default_league_banner_url;
+      if (payload.default_event_banner_url !== undefined) updateData.default_event_banner_url = payload.default_event_banner_url;
+      if (payload.default_lesson_banner_url !== undefined) updateData.default_lesson_banner_url = payload.default_lesson_banner_url;
+
+      return clubAssetsApi.updateClubBranding(targetClubId, updateData);
     },
     onSuccess: (updatedBranding, vars) => {
       const targetClubId = vars.clubId || clubIdParam;

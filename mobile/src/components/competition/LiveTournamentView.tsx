@@ -53,6 +53,7 @@ import {
 import { AppText } from '../AppText';
 import { EmptyState } from '../StateViews';
 import {
+  useClubBranding,
   usePlayerMatches,
   usePlayerPoolMatches,
   usePlayerPoolStandings,
@@ -66,20 +67,13 @@ import {
 } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { getCourtDisplayLabel } from '@/utils';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type {
   Match,
   StandingRow,
   Tournament,
   TournamentFormat,
 } from '@/types';
-
-// Format banner images
-const FORMAT_BANNERS: Record<TournamentFormat, any> = {
-  round_robin: require('../../../assets/tournaments/banner2.jpg'),
-  pool_play: require('../../../assets/tournaments/card_pool_play.jpg'),
-  scramble: require('../../../assets/tournaments/banner3.jpg'),
-  bracket: require('../../../assets/tournaments/card_bracket.jpg'),
-};
 
 interface LiveTournamentViewProps {
   tournament: Tournament;
@@ -150,7 +144,11 @@ export function LiveTournamentView({
 
   // Format Config
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
-  const bannerImage = FORMAT_BANNERS[format] || FORMAT_BANNERS.round_robin;
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerImage = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Format badge pill
   const formatBadge = useMemo(() => {

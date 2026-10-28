@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -9,18 +12,27 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { Camera, Image as ImageIcon, RotateCcw } from 'lucide-react-native';
 import { AppText } from './AppText';
-import { Input } from './Input';
+import { Badge } from './Badge';
 import { Button } from './Button';
+import { Card } from './Card';
 import { DatePickerInput } from './DatePickerInput';
+import { Input } from './Input';
+import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Layout, Radius, Spacing, Typography } from '@/theme';
-import type { CreateLeaguePayload } from '@/types';
+import type { ClubBranding, CreateLeaguePayload } from '@/types';
+import { resolveMediaUrl } from '@/utils';
+import { resolveLeagueBanner } from '@/utils/imageResolution';
 
 interface CreateLeagueModalProps {
   visible: boolean;
   onClose: () => void;
   onSubmit: (payload: CreateLeaguePayload) => Promise<void>;
   isCreating: boolean;
+  clubId?: string | null;
+  clubBranding?: ClubBranding | null;
 }
 
 export function CreateLeagueModal({
@@ -28,9 +40,13 @@ export function CreateLeagueModal({
   onClose,
   onSubmit,
   isCreating,
+  clubId,
+  clubBranding,
 }: CreateLeagueModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [format, setFormat] = useState<'doubles' | 'singles'>('doubles');
   const [maxTeams, setMaxTeams] = useState('8');
   const [numberOfWeeks, setNumberOfWeeks] = useState('4');
@@ -54,6 +70,7 @@ export function CreateLeagueModal({
     if (visible) {
       setName('');
       setDescription('');
+      setBannerImageUrl(null);
       setFormat('doubles');
       setMaxTeams('8');
       setNumberOfWeeks('4');
@@ -67,6 +84,59 @@ export function CreateLeagueModal({
 
   const handleApplySuggested = () => {
     setNumberOfWeeks(String(suggestedWeeks));
+  };
+
+  const handlePickBanner = async () => {
+    if (!clubId) {
+      Alert.alert('Notice', 'Club ID is not available to upload a banner.');
+      return;
+    }
+
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow gallery access to upload a league banner.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `league_banner_${Date.now()}.${ext}`;
+
+        setIsUploadingBanner(true);
+        try {
+          const uploadRes = await clubAssetsApi.uploadClubMedia(
+            clubId,
+            { uri: asset.uri, name: fileName, type: mime },
+            'league_banner',
+            'league'
+          );
+          setBannerImageUrl(uploadRes.public_url);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Banner upload failed.';
+          Alert.alert('Upload Failed', msg);
+        } finally {
+          setIsUploadingBanner(false);
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to open image picker.');
+    }
+  };
+
+  const handleResetBanner = () => {
+    setBannerImageUrl(null);
   };
 
   const handleSubmit = async () => {
@@ -94,6 +164,7 @@ export function CreateLeagueModal({
     const payload: CreateLeaguePayload = {
       name: name.trim(),
       description: description.trim() || null,
+      banner_image_url: bannerImageUrl || null,
       number_of_weeks: weeks,
       team_size: format === 'doubles' ? 2 : 1,
       playoff_team_count: hasPlayoffs ? playoffTeams : 2, // minimum 2 in engine schema
@@ -222,6 +293,76 @@ export function CreateLeagueModal({
                 multiline
                 numberOfLines={2}
               />
+
+              {/* Optional League Banner Card */}
+              <Card style={styles.bannerCard}>
+                <View style={styles.bannerHeader}>
+                  <View style={styles.bannerHeaderTitleRow}>
+                    <ImageIcon size={16} color={Colors.brand.primary} />
+                    <AppText variant="caption" color="secondary" style={styles.bannerHeaderLabel}>
+                      LEAGUE BANNER (OPTIONAL)
+                    </AppText>
+                  </View>
+                  <Badge
+                    label={bannerImageUrl ? 'Custom Banner' : 'Inheriting Club Default'}
+                    variant={bannerImageUrl ? 'success' : 'default'}
+                  />
+                </View>
+
+                <AppText variant="caption" color="tertiary" style={styles.bannerDescription}>
+                  {bannerImageUrl
+                    ? 'This custom banner will be displayed specifically for this league.'
+                    : "No custom banner selected. This league will automatically use your club's default league banner."}
+                </AppText>
+
+                <View style={styles.bannerPreviewContainer}>
+                  <Image
+                    source={
+                      bannerImageUrl
+                        ? { uri: resolveMediaUrl(bannerImageUrl) }
+                        : resolveLeagueBanner(null, clubBranding)
+                    }
+                    style={styles.bannerPreviewImage}
+                    resizeMode="cover"
+                  />
+                  {isUploadingBanner && (
+                    <View style={styles.bannerUploadingOverlay}>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <AppText variant="caption" style={styles.bannerUploadingText}>
+                        Uploading banner...
+                      </AppText>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.bannerActionsRow}>
+                  <TouchableOpacity
+                    style={styles.bannerActionBtn}
+                    onPress={handlePickBanner}
+                    disabled={isUploadingBanner}
+                    activeOpacity={0.8}
+                  >
+                    <Camera size={14} color={Colors.text.primary} />
+                    <AppText variant="bodySmall" style={styles.bannerActionBtnText}>
+                      {bannerImageUrl ? 'Replace Custom Banner' : 'Upload Custom Banner'}
+                    </AppText>
+                  </TouchableOpacity>
+
+                  {bannerImageUrl && (
+                    <TouchableOpacity
+                      style={styles.bannerResetBtn}
+                      onPress={handleResetBanner}
+                      disabled={isUploadingBanner}
+                      activeOpacity={0.8}
+                    >
+                      <RotateCcw size={14} color={Colors.text.secondary} />
+                      <AppText variant="bodySmall" style={styles.bannerResetBtnText}>
+                        Reset to Default
+                      </AppText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </Card>
 
               {/* Number of Teams/Entries */}
               <Input
@@ -589,5 +730,96 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  bannerCard: {
+    backgroundColor: Colors.surface.elevated,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: Spacing[2],
+  },
+  bannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  bannerHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bannerHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  bannerDescription: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  bannerPreviewContainer: {
+    height: 120,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface.default,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  bannerPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerUploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[1],
+  },
+  bannerUploadingText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  bannerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginTop: Spacing[1],
+  },
+  bannerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface.default,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  bannerActionBtnText: {
+    color: Colors.text.primary,
+    fontWeight: '600',
+  },
+  bannerResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  bannerResetBtnText: {
+    color: Colors.text.secondary,
+    fontWeight: '500',
   },
 });

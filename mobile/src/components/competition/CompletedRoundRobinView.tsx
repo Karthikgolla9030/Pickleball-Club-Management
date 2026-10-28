@@ -54,11 +54,13 @@ import { Colors, Radius, Shadows, Spacing, Typography } from '@/theme';
 import { formatDate, getCourtDisplayLabel } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import {
+  useClubBranding,
   usePlayerMatches,
   usePlayerStandings,
   usePlayerTeams,
   useAuth,
 } from '@/hooks';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, StandingRow, Tournament } from '@/types';
 
 interface CompletedRoundRobinViewProps {
@@ -120,6 +122,12 @@ export function CompletedRoundRobinView({
   // Configuration parser
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const isSingles = parsedConfig.isSingles;
+
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerSource = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Global refresh
   const handleInternalRefresh = async () => {
@@ -305,7 +313,7 @@ export function CompletedRoundRobinView({
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
           <Image
-            source={require('../../../assets/tournaments/banner2.jpg')}
+            source={bannerSource}
             style={styles.heroImage}
             resizeMode="cover"
           />

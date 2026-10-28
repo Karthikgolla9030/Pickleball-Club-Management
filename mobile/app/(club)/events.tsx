@@ -24,6 +24,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -38,13 +39,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import {
   AlertCircle,
   Calendar,
+  Camera,
   Check,
   CheckCircle2,
   Clock,
   FileText,
+  Image as ImageIcon,
   MapPin,
   MoreVertical,
   RotateCcw,
@@ -88,13 +92,16 @@ import {
   useStaffRegisterPlayer,
   useStaffResetAttendance,
 } from '@/hooks';
+import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { resolveEventCover } from '@/utils/imageResolution';
 import {
   EVENT_REGISTRATION_STATUS_LABELS,
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   EVENT_VISIBILITY_LABELS,
+  type ClubBranding,
   type ClubEvent,
   type CreateEventPayload,
   type EventRegistration,
@@ -208,6 +215,7 @@ function EventCard({
   event,
   index,
   clubCoverUrl,
+  clubBranding,
   onViewRoster,
   onPublish,
   onCancel,
@@ -217,6 +225,7 @@ function EventCard({
   event: ClubEvent;
   index: number;
   clubCoverUrl?: string | null;
+  clubBranding?: ClubBranding | null;
   onViewRoster: (event: ClubEvent) => void;
   onPublish: (event: ClubEvent) => void;
   onCancel: (event: ClubEvent) => void;
@@ -230,7 +239,7 @@ function EventCard({
   const thumbnailDate = getEventThumbnailDate(event.start_at);
   const schedule = formatEventSchedule(event.start_at, event.end_at);
   const loc = parseEventLocation(event.location);
-  const cardImg = getEventCardImage(event, index, clubCoverUrl);
+  const cardImg = resolveEventCover(event, clubBranding);
 
   const feeDisplay =
     Number(event.registration_fee) > 0
@@ -927,16 +936,20 @@ function RosterModal({
 function CreateEventModal({
   visible,
   clubId,
+  clubBranding,
   onClose,
   onSuccess,
 }: {
   visible: boolean;
   clubId: string;
+  clubBranding?: ClubBranding | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [eventType, setEventType] = useState<EventType>('social');
   const [visibility, setVisibility] = useState<EventVisibility>('public');
   const [location, setLocation] = useState('');
@@ -960,6 +973,53 @@ function CreateEventModal({
 
   const createEventMutation = useCreateClubEvent(clubId);
 
+  const handlePickCover = async () => {
+    if (!clubId) return;
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow gallery access to upload an event cover.');
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `event_cover_${Date.now()}.${ext}`;
+
+        setIsUploadingCover(true);
+        try {
+          const uploadRes = await clubAssetsApi.uploadClubMedia(
+            clubId,
+            { uri: asset.uri, name: fileName, type: mime },
+            'event_cover',
+            'event'
+          );
+          setCoverImageUrl(uploadRes.public_url);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Upload failed.';
+          Alert.alert('Upload Failed', msg);
+        } finally {
+          setIsUploadingCover(false);
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to pick image.');
+    }
+  };
+
+  const handleResetCover = () => {
+    setCoverImageUrl(null);
+  };
+
   const handleCreate = async () => {
     if (!title.trim()) {
       Alert.alert('Validation Error', 'Event title is required.');
@@ -979,6 +1039,7 @@ function CreateEventModal({
     const payload: CreateEventPayload = {
       title: title.trim(),
       description: description.trim() || null,
+      cover_image_url: coverImageUrl || null,
       event_type: eventType,
       visibility,
       start_at: startAt,
@@ -1036,6 +1097,76 @@ function CreateEventModal({
           multiline
           numberOfLines={3}
         />
+
+        {/* Optional Event Cover Card */}
+        <Card style={styles.formAssetCard}>
+          <View style={styles.formAssetHeader}>
+            <View style={styles.formAssetHeaderTitleRow}>
+              <ImageIcon size={16} color={Colors.brand.primary} />
+              <AppText variant="caption" color="secondary" style={styles.formAssetHeaderLabel}>
+                EVENT COVER PHOTO (OPTIONAL)
+              </AppText>
+            </View>
+            <Badge
+              label={coverImageUrl ? 'Custom Cover' : 'Inheriting Club Default'}
+              variant={coverImageUrl ? 'success' : 'default'}
+            />
+          </View>
+
+          <AppText variant="caption" color="tertiary" style={styles.formAssetDescription}>
+            {coverImageUrl
+              ? 'This custom image will be displayed specifically for this event.'
+              : "No custom cover selected. This event will automatically use your club's default event banner."}
+          </AppText>
+
+          <View style={styles.formAssetPreviewContainer}>
+            <Image
+              source={
+                coverImageUrl
+                  ? { uri: resolveMediaUrl(coverImageUrl) }
+                  : resolveEventCover(null, clubBranding)
+              }
+              style={styles.formAssetPreviewImage}
+              resizeMode="cover"
+            />
+            {isUploadingCover && (
+              <View style={styles.formAssetUploadingOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+                <AppText variant="caption" style={styles.formAssetUploadingText}>
+                  Uploading cover...
+                </AppText>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.formAssetActionsRow}>
+            <TouchableOpacity
+              style={styles.formAssetActionBtn}
+              onPress={handlePickCover}
+              disabled={isUploadingCover}
+              activeOpacity={0.8}
+            >
+              <Camera size={14} color={Colors.text.primary} />
+              <AppText variant="bodySmall" style={styles.formAssetActionBtnText}>
+                {coverImageUrl ? 'Replace Custom Cover' : 'Upload Custom Cover'}
+              </AppText>
+            </TouchableOpacity>
+
+            {coverImageUrl && (
+              <TouchableOpacity
+                style={styles.formAssetResetBtn}
+                onPress={handleResetCover}
+                disabled={isUploadingCover}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={14} color={Colors.text.secondary} />
+                <AppText variant="bodySmall" style={styles.formAssetResetBtnText}>
+                  Reset to Default
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+        </Card>
 
         {/* Event Type Selector */}
         <AppText style={styles.pickerLabel}>Event Type</AppText>
@@ -1211,8 +1342,8 @@ export default function ClubEventsScreen() {
       <View style={styles.heroContainer}>
         <Image
           source={
-            clubBranding?.cover_image_url
-              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+            clubBranding?.default_event_banner_url
+              ? { uri: resolveMediaUrl(clubBranding.default_event_banner_url) }
               : require('../../assets/events/hero_decor.jpg')
           }
           style={styles.heroDecorImage}
@@ -1377,7 +1508,7 @@ export default function ClubEventsScreen() {
             <EventCard
               event={item}
               index={index}
-              clubCoverUrl={clubBranding?.cover_image_url}
+              clubBranding={clubBranding}
               onViewRoster={(ev) => setSelectedRosterEvent(ev)}
               onPublish={handlePublish}
               onCancel={handleCancelEvent}
@@ -1406,6 +1537,7 @@ export default function ClubEventsScreen() {
       <CreateEventModal
         visible={showCreateModal}
         clubId={clubId}
+        clubBranding={clubBranding}
         onClose={() => setShowCreateModal(false)}
         onSuccess={refetch}
       />
@@ -2239,5 +2371,96 @@ const styles = StyleSheet.create({
   cancelledNoticeText: {
     fontSize: 11,
     color: '#64748B',
+  },
+  formAssetCard: {
+    backgroundColor: Colors.surface.elevated,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: Spacing[2],
+  },
+  formAssetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  formAssetHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  formAssetHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  formAssetDescription: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  formAssetPreviewContainer: {
+    height: 120,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface.default,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  formAssetPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  formAssetUploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[1],
+  },
+  formAssetUploadingText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  formAssetActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginTop: Spacing[1],
+  },
+  formAssetActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface.default,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  formAssetActionBtnText: {
+    color: Colors.text.primary,
+    fontWeight: '600',
+  },
+  formAssetResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  formAssetResetBtnText: {
+    color: Colors.text.secondary,
+    fontWeight: '500',
   },
 });

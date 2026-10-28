@@ -70,6 +70,7 @@ import {
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { resolveLessonImage } from '@/utils/imageResolution';
 import type {
   LessonRegistration,
   LessonRegistrationStatus,
@@ -85,27 +86,12 @@ const LESSON_CARDS = [
 ];
 
 function getLessonThumbnail(
-  title: string,
-  index: number,
+  _title: string,
+  _index: number,
   customImageUrl?: string | null,
-  clubCoverUrl?: string | null
+  clubBranding?: any
 ) {
-  // 1. Entity-level custom image
-  if (customImageUrl) {
-    return { uri: resolveMediaUrl(customImageUrl) };
-  }
-  // 2. Club-level cover fallback
-  if (clubCoverUrl) {
-    return { uri: resolveMediaUrl(clubCoverUrl) };
-  }
-  // 3. Platform neutral fallback
-  const t = (title || '').toLowerCase();
-  if (t.includes('beginner') || t.includes('clinic')) return LESSON_CARDS[0];
-  if (t.includes('third-shot') || t.includes('mastery') || t.includes('intermediate'))
-    return LESSON_CARDS[1];
-  if (t.includes('dinking') || t.includes('advanced') || t.includes('tactical'))
-    return LESSON_CARDS[2];
-  return LESSON_CARDS[index % LESSON_CARDS.length];
+  return resolveLessonImage({ image_url: customImageUrl }, clubBranding);
 }
 
 // ─── Date Formatter ──────────────────────────────────────────────────────────
@@ -306,12 +292,7 @@ export default function PlayerLessonsScreen() {
   );
 
   const renderDiscoverCard = (item: PlayerLessonDetail, index: number) => {
-    const thumbnail = getLessonThumbnail(
-      item.title,
-      index,
-      item.image_url,
-      clubBranding?.cover_image_url
-    );
+    const thumbnail = resolveLessonImage(item, clubBranding);
     const myReg = getPlayerRegistration(item.id);
     const isRegistered = !!myReg;
     const availableSpots = item.available_spots ?? 0;
@@ -432,13 +413,8 @@ export default function PlayerLessonsScreen() {
     );
   };
 
-  const renderRegistrationCard = (item: LessonRegistration, index: number) => {
-    const thumbnail = getLessonThumbnail(
-      item.lesson_title || '',
-      index,
-      item.lesson_image_url,
-      clubBranding?.cover_image_url
-    );
+  const renderRegistrationCard = (item: LessonRegistration, _index: number) => {
+    const thumbnail = resolveLessonImage({ image_url: item.lesson_image_url }, clubBranding);
     const isRegistered = item.status === 'registered';
     const isAttended = item.status === 'attended';
     const isCancelled = item.status === 'cancelled';
@@ -578,8 +554,8 @@ export default function PlayerLessonsScreen() {
         <PlayerHeroBanner
           slides={lessonBannerSlides}
           imageSource={
-            clubBranding?.cover_image_url
-              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+            clubBranding?.default_lesson_banner_url
+              ? { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) }
               : require('../../assets/lessons/hero_lessons_photo.jpg')
           }
         />

@@ -1,23 +1,20 @@
 /**
  * Aught2 Pickleball — Club Branding & Visual Assets Management Component
  *
- * Implements full tenant-isolated image and banner management for Club Owners/Managers:
- * 1. Club Identity Assets:
- *    - Logo upload / replace / remove (with 3-tier fallback to paddle icon)
- *    - Cover Banner upload / replace / remove (with 3-tier fallback to neutral asset)
- * 2. Club Hero Carousel Management:
- *    - List configured slides with active/inactive status
- *    - Add new custom slides with title, subtitle, CTA text & route, and custom photo
- *    - Edit existing slides
- *    - Reorder slides (Move Up / Down)
- *    - Toggle active/inactive per slide
- *    - Delete slide with confirmation
- * 3. Domain Entity Visual Hierarchy Guide:
- *    - Explains 3-tier fallback for Tournaments, Leagues, Events, Lessons, Courts
- *    - Links directly to respective management screens
+ * Implements centralized default image management for Club Owners/Managers:
+ * - Group 1: Owner Home Dashboard Banner (preview, upload, replace, reset)
+ * - Group 2: Tournament Default Banners for supported formats:
+ *            - Round Robin
+ *            - Scramble
+ *            - Pool Play
+ *            - Bracket Play
+ * - Group 3: League Default Banner
+ * - Group 4: Event Default Cover
+ * - Group 5: Lesson & Coaching Default Image
+ * - Promotional Hero Carousel Slides CRUD & Reordering
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -39,7 +36,6 @@ import {
   Award,
   Calendar,
   Camera,
-  Check,
   CheckCircle2,
   ChevronRight,
   GraduationCap,
@@ -48,7 +44,7 @@ import {
   LayoutGrid,
   Layers,
   Plus,
-  RefreshCw,
+  RotateCcw,
   Sliders,
   Trash2,
   Trophy,
@@ -56,6 +52,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from './AppText';
+import { Badge } from './Badge';
 import { Button } from './Button';
 import { Card } from './Card';
 import {
@@ -66,12 +63,102 @@ import {
 } from '@/hooks';
 import { clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
-import type { ClubCarouselSlide } from '@/types';
-import { resolveMediaUrl } from '@/utils';
+import type { ClubCarouselSlide, UpdateClubBrandingPayload } from '@/types';
+import { BUILTIN_FALLBACKS, resolveMediaUrl } from '@/utils';
 
 interface ClubBrandingSectionProps {
   clubId: string;
   isOwner: boolean;
+}
+
+interface BrandingAssetCardProps {
+  title: string;
+  categoryTag: string;
+  description: string;
+  currentUrl?: string | null;
+  fallbackSource: any;
+  uploading: boolean;
+  isOwner: boolean;
+  onUpload: () => void;
+  onReset: () => void;
+}
+
+function BrandingAssetCard({
+  title,
+  categoryTag,
+  description,
+  currentUrl,
+  fallbackSource,
+  uploading,
+  isOwner,
+  onUpload,
+  onReset,
+}: BrandingAssetCardProps) {
+  const isCustom = Boolean(currentUrl);
+
+  return (
+    <Card style={styles.assetCard}>
+      {/* Top Header Row */}
+      <View style={styles.assetCardHeader}>
+        <View style={styles.assetCardHeaderLeft}>
+          <View style={styles.tagBadge}>
+            <AppText style={styles.tagBadgeText}>{categoryTag}</AppText>
+          </View>
+          <AppText style={styles.assetCardTitle}>{title}</AppText>
+        </View>
+        <Badge
+          label={isCustom ? 'Custom Club Default' : 'Built-in Fallback'}
+          variant={isCustom ? 'success' : 'default'}
+        />
+      </View>
+
+      <AppText style={styles.assetCardDesc}>{description}</AppText>
+
+      {/* Image Preview Box */}
+      <View style={styles.assetPreviewWrapper}>
+        <Image
+          source={currentUrl ? { uri: resolveMediaUrl(currentUrl) } : fallbackSource}
+          style={styles.assetPreviewImage}
+          resizeMode="cover"
+        />
+        {uploading && (
+          <View style={styles.assetUploadOverlay}>
+            <ActivityIndicator size="small" color="#FFFFFF" />
+            <AppText style={styles.assetUploadOverlayText}>Saving image reference...</AppText>
+          </View>
+        )}
+      </View>
+
+      {/* Controls Row */}
+      {isOwner && (
+        <View style={styles.assetActionsRow}>
+          <TouchableOpacity
+            style={styles.assetBtnPrimary}
+            onPress={onUpload}
+            disabled={uploading}
+            activeOpacity={0.8}
+          >
+            <Camera size={14} color="#FFFFFF" />
+            <AppText style={styles.assetBtnPrimaryText}>
+              {isCustom ? 'Replace Image' : 'Upload Custom Image'}
+            </AppText>
+          </TouchableOpacity>
+
+          {isCustom && (
+            <TouchableOpacity
+              style={styles.assetBtnReset}
+              onPress={onReset}
+              disabled={uploading}
+              activeOpacity={0.8}
+            >
+              <RotateCcw size={14} color="#DC2626" />
+              <AppText style={styles.assetBtnResetText}>Reset to Default</AppText>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </Card>
+  );
 }
 
 export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProps) {
@@ -99,20 +186,9 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
     reorderSlides,
   } = useCarouselMutations(clubId);
 
-  // Local state for uploads
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  // Active uploading states per asset key
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [logoImgError, setLogoImgError] = useState(false);
-  const [coverImgError, setCoverImgError] = useState(false);
-
-  useEffect(() => {
-    setLogoImgError(false);
-  }, [branding?.logo_url]);
-
-  useEffect(() => {
-    setCoverImgError(false);
-  }, [branding?.cover_image_url]);
 
   // Slide modal state
   const [slideModalVisible, setSlideModalVisible] = useState(false);
@@ -134,7 +210,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   // ─── Image Picker Helper ───────────────────────────────────────────────────
 
   const pickImage = async (
-    aspect?: [number, number]
+    aspect: [number, number] = [16, 9]
   ): Promise<{ uri: string; name: string; type: string } | null> => {
     try {
       if (Platform.OS !== 'web') {
@@ -148,76 +224,96 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: aspect || [16, 9],
+        aspect,
         quality: 0.85,
-        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
-        if (asset.base64 && (asset.base64.length * 0.75) > 5 * 1024 * 1024) {
-          Alert.alert('File Too Large', 'Please select an image smaller than 5 MB.');
-          return null;
-        }
-        const mimeType = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
-        const defaultExt = mimeType.includes('png') ? 'png' : 'jpg';
-        const fileName = asset.fileName || `club_asset_${Date.now()}.${defaultExt}`;
-        return { uri: asset.uri, name: fileName, type: mimeType };
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `branding_${Date.now()}.${ext}`;
+
+        return {
+          uri: asset.uri,
+          name: fileName,
+          type: mime,
+        };
       }
       return null;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error picking image';
-      Alert.alert('Selection Error', msg);
+    } catch {
+      Alert.alert('Error', 'Unable to open image picker.');
       return null;
     }
   };
 
-  // ─── Logo Management ───────────────────────────────────────────────────────
+  // ─── Generic Asset Handlers ────────────────────────────────────────────────
 
-  const handleUploadLogo = async () => {
+  const handleUploadAsset = async (
+    fieldName: keyof UpdateClubBrandingPayload,
+    assetType: string,
+    successLabel: string,
+    aspect: [number, number] = [16, 9]
+  ) => {
     if (!isOwner) {
-      Alert.alert('Permission Denied', 'Only the Club Owner can manage club branding.');
+      Alert.alert('Permission Denied', 'Only the Club Owner has permission to update club defaults.');
       return;
     }
-    const picked = await pickImage([1, 1]);
+
+    const picked = await pickImage(aspect);
     if (!picked) return;
 
-    setIsUploadingLogo(true);
+    setUploadingField(fieldName);
     try {
       const uploadRes = await clubAssetsApi.uploadClubMedia(
         clubId,
         { uri: picked.uri, name: picked.name, type: picked.type },
-        'logo'
+        assetType
       );
-      await updateBrandingMutation.mutateAsync({ logo_url: uploadRes.public_url });
+
+      await updateBrandingMutation.mutateAsync({
+        [fieldName]: uploadRes.public_url,
+      });
+
       await refetchBranding();
-      showStatus('success', 'Club logo updated successfully.');
+      showStatus('success', `${successLabel} updated and saved successfully!`);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Logo upload failed';
+      const msg = err instanceof Error ? err.message : 'Upload failed. Please try again.';
       showStatus('error', msg);
+      Alert.alert('Upload Failed', msg);
     } finally {
-      setIsUploadingLogo(false);
+      setUploadingField(null);
     }
   };
 
-  const handleRemoveLogo = () => {
+  const handleResetAsset = (
+    fieldName: keyof UpdateClubBrandingPayload,
+    resetLabel: string
+  ) => {
     if (!isOwner) return;
+
     Alert.alert(
-      'Remove Custom Logo',
-      'Are you sure you want to restore the platform default logo for this club?',
+      `Reset ${resetLabel}`,
+      `Are you sure you want to restore the application's built-in fallback for ${resetLabel}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Remove',
+          text: 'Reset to Default',
           style: 'destructive',
           onPress: async () => {
+            setUploadingField(fieldName);
             try {
-              await updateBrandingMutation.mutateAsync({ logo_url: null });
+              await updateBrandingMutation.mutateAsync({
+                [fieldName]: null,
+              });
               await refetchBranding();
-              showStatus('success', 'Custom logo removed. Default restored.');
+              showStatus('success', `${resetLabel} restored to platform default.`);
             } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Failed to remove logo';
+              const msg = err instanceof Error ? err.message : 'Reset failed';
               showStatus('error', msg);
+              Alert.alert('Reset Failed', msg);
+            } finally {
+              setUploadingField(null);
             }
           },
         },
@@ -225,60 +321,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
     );
   };
 
-  // ─── Cover Banner Management ───────────────────────────────────────────────
-
-  const handleUploadCover = async () => {
-    if (!isOwner) {
-      Alert.alert('Permission Denied', 'Only the Club Owner can manage club branding.');
-      return;
-    }
-    const picked = await pickImage([16, 9]);
-    if (!picked) return;
-
-    setIsUploadingCover(true);
-    try {
-      const uploadRes = await clubAssetsApi.uploadClubMedia(
-        clubId,
-        { uri: picked.uri, name: picked.name, type: picked.type },
-        'cover'
-      );
-      await updateBrandingMutation.mutateAsync({ cover_image_url: uploadRes.public_url });
-      await refetchBranding();
-      showStatus('success', 'Club cover banner updated successfully.');
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Cover upload failed';
-      showStatus('error', msg);
-    } finally {
-      setIsUploadingCover(false);
-    }
-  };
-
-  const handleRemoveCover = () => {
-    if (!isOwner) return;
-    Alert.alert(
-      'Remove Custom Cover Banner',
-      'Are you sure you want to restore the neutral fallback cover banner?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await updateBrandingMutation.mutateAsync({ cover_image_url: null });
-              await refetchBranding();
-              showStatus('success', 'Custom cover banner removed.');
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Failed to remove cover';
-              showStatus('error', msg);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // ─── Carousel Slides Management ───────────────────────────────────────────
+  // ─── Carousel Slides Handlers ──────────────────────────────────────────────
 
   const openSlideModal = (slide?: ClubCarouselSlide) => {
     if (slide) {
@@ -295,7 +338,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       setSlideFormTitle('');
       setSlideFormSubtitle('');
       setSlideFormTag('PROMOTION');
-      setSlideFormCtaText('Learn More');
+      setSlideFormCtaText('Book a Court');
       setSlideFormCtaRoute('/(club)/bookings');
       setSlideFormImageUrl('');
       setSlideFormIsActive(true);
@@ -445,156 +488,251 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         </View>
       )}
 
-      {/* ── Section 1: Core Club Identity ── */}
-      <View style={styles.sectionHeader}>
-        <AppText style={styles.sectionTitle}>Club Visual Identity</AppText>
-        <AppText style={styles.sectionSubtitle}>
-          Scoped exclusively to your club. Used across player home, cards, switchers, and email notifications.
-        </AppText>
-      </View>
-
-      <Card style={styles.card}>
-        {/* Logo Row */}
-        <View style={styles.identityRow}>
-          <View style={styles.logoPreviewWrapper}>
-            {branding?.logo_url && !logoImgError ? (
-              <Image
-                source={{ uri: resolveMediaUrl(branding.logo_url) }}
-                style={styles.logoImage}
-                resizeMode="contain"
-                onError={() => setLogoImgError(true)}
-              />
-            ) : (
-              <View style={styles.logoPlaceholder}>
-                <ImageIcon size={26} color="#94A3B8" />
-              </View>
-            )}
-            {isUploadingLogo && (
-              <View style={styles.uploadOverlay}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              </View>
-            )}
-          </View>
-
-          <View style={styles.identityTextCol}>
-            <AppText style={styles.identityLabel}>Club Logo</AppText>
-            <AppText style={styles.identityDesc}>
-              Square aspect ratio (e.g. 512×512 PNG or JPG). Appears in navigation, header and club switchers.
-            </AppText>
-
-            {isOwner && (
-              <View style={styles.buttonRow}>
-                <TouchableOpacity
-                  style={styles.actionBtnPrimary}
-                  onPress={handleUploadLogo}
-                  disabled={isUploadingLogo}
-                  activeOpacity={0.8}
-                >
-                  <Camera size={14} color="#FFFFFF" />
-                  <AppText style={styles.actionBtnPrimaryText}>
-                    {branding?.logo_url ? 'Replace Logo' : 'Upload Logo'}
-                  </AppText>
-                </TouchableOpacity>
-
-                {branding?.logo_url && (
-                  <TouchableOpacity
-                    style={styles.actionBtnDanger}
-                    onPress={handleRemoveLogo}
-                    activeOpacity={0.8}
-                  >
-                    <Trash2 size={14} color="#DC2626" />
-                    <AppText style={styles.actionBtnDangerText}>Remove</AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-          </View>
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 1: OWNER HOME-PAGE BANNER
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={styles.groupHeader}>
+        <View style={styles.groupIconWrapper}>
+          <LayoutGrid size={18} color="#176B57" />
         </View>
-
-        <View style={styles.divider} />
-
-        {/* Cover Banner Row */}
-        <View style={styles.coverSection}>
-          <AppText style={styles.identityLabel}>Club Cover / Banner Image</AppText>
-          <AppText style={styles.identityDesc}>
-            High-resolution landscape photo (16:9). Used as fallback for tournaments, events, coaching, and player home hero.
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 1: Owner Home Dashboard Banner</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Custom banner displayed on the Club Owner dashboard's large welcome card. Changes affect only the owner dashboard.
           </AppText>
-
-          <View style={styles.coverPreviewWrapper}>
-            {branding?.cover_image_url && !coverImgError ? (
-              <Image
-                source={{ uri: resolveMediaUrl(branding.cover_image_url) }}
-                style={styles.coverImage}
-                resizeMode="cover"
-                onError={() => setCoverImgError(true)}
-              />
-            ) : (
-              <View style={styles.coverPlaceholder}>
-                <ImageIcon size={32} color="#94A3B8" />
-                <AppText style={styles.placeholderNotice}>
-                  Using neutral system fallback. Upload a custom cover banner below.
-                </AppText>
-              </View>
-            )}
-            {isUploadingCover && (
-              <View style={styles.uploadOverlay}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              </View>
-            )}
-          </View>
-
-          {isOwner && (
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.actionBtnPrimary}
-                onPress={handleUploadCover}
-                disabled={isUploadingCover}
-                activeOpacity={0.8}
-              >
-                <Camera size={14} color="#FFFFFF" />
-                <AppText style={styles.actionBtnPrimaryText}>
-                  {branding?.cover_image_url ? 'Replace Cover Banner' : 'Upload Cover Banner'}
-                </AppText>
-              </TouchableOpacity>
-
-              {branding?.cover_image_url && (
-                <TouchableOpacity
-                  style={styles.actionBtnDanger}
-                  onPress={handleRemoveCover}
-                  activeOpacity={0.8}
-                >
-                  <Trash2 size={14} color="#DC2626" />
-                  <AppText style={styles.actionBtnDangerText}>Restore Fallback</AppText>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
-      </Card>
-
-      {/* ── Section 2: Club Home Hero Carousel (Phase 5) ── */}
-      <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-        <View style={styles.headerWithAction}>
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.sectionTitle}>Home Page Hero Carousel</AppText>
-            <AppText style={styles.sectionSubtitle}>
-              Customize promotional slides displayed on your club player home screen.
-            </AppText>
-          </View>
-          {isOwner && (
-            <TouchableOpacity
-              style={styles.addSlideBtn}
-              onPress={() => openSlideModal()}
-              activeOpacity={0.85}
-            >
-              <Plus size={15} color="#FFFFFF" />
-              <AppText style={styles.addSlideBtnText}>Add Slide</AppText>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
-      <Card style={styles.card}>
+      <BrandingAssetCard
+        title="Owner Dashboard Welcome Banner"
+        categoryTag="OWNER HOME BANNER"
+        description="Displayed as the background for your welcome card on the Owner Dashboard. When no custom image is configured, the platform's default pickleball court banner is shown."
+        currentUrl={branding?.owner_banner_url}
+        fallbackSource={BUILTIN_FALLBACKS.ownerBanner}
+        uploading={uploadingField === 'owner_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('owner_banner_url', 'owner_banner', 'Owner Home Banner')
+        }
+        onReset={() => handleResetAsset('owner_banner_url', 'Owner Home Banner')}
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 2: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 28 }]}>
+        <View style={styles.groupIconWrapper}>
+          <Trophy size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 2: Tournament Default Banners</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default.
+          </AppText>
+        </View>
+      </View>
+
+      {/* Round Robin Default */}
+      <BrandingAssetCard
+        title="Round Robin Default Banner"
+        categoryTag="ROUND ROBIN"
+        description="Used as the default hero graphic for all Round Robin tournaments in this club unless a tournament-specific banner is uploaded."
+        currentUrl={branding?.default_tournament_round_robin_url}
+        fallbackSource={BUILTIN_FALLBACKS.tournamentRoundRobin}
+        uploading={uploadingField === 'default_tournament_round_robin_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset(
+            'default_tournament_round_robin_url',
+            'default_tournament_round_robin',
+            'Round Robin Default Banner'
+          )
+        }
+        onReset={() =>
+          handleResetAsset('default_tournament_round_robin_url', 'Round Robin Default Banner')
+        }
+      />
+
+      {/* Scramble Default */}
+      <BrandingAssetCard
+        title="Scramble Default Banner"
+        categoryTag="SCRAMBLE"
+        description="Used as the default hero graphic for all Scramble tournaments in this club unless a tournament-specific banner is uploaded."
+        currentUrl={branding?.default_tournament_scramble_url}
+        fallbackSource={BUILTIN_FALLBACKS.tournamentScramble}
+        uploading={uploadingField === 'default_tournament_scramble_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset(
+            'default_tournament_scramble_url',
+            'default_tournament_scramble',
+            'Scramble Default Banner'
+          )
+        }
+        onReset={() =>
+          handleResetAsset('default_tournament_scramble_url', 'Scramble Default Banner')
+        }
+      />
+
+      {/* Pool Play Default */}
+      <BrandingAssetCard
+        title="Pool Play Default Banner"
+        categoryTag="POOL PLAY"
+        description="Used as the default hero graphic for all Pool Play tournaments in this club unless a tournament-specific banner is uploaded."
+        currentUrl={branding?.default_tournament_pool_play_url}
+        fallbackSource={BUILTIN_FALLBACKS.tournamentPoolPlay}
+        uploading={uploadingField === 'default_tournament_pool_play_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset(
+            'default_tournament_pool_play_url',
+            'default_tournament_pool_play',
+            'Pool Play Default Banner'
+          )
+        }
+        onReset={() =>
+          handleResetAsset('default_tournament_pool_play_url', 'Pool Play Default Banner')
+        }
+      />
+
+      {/* Bracket Play Default */}
+      <BrandingAssetCard
+        title="Bracket Play / Championship Bracket Default"
+        categoryTag="BRACKET PLAY"
+        description="Used as the default hero graphic for all single/double elimination bracket tournaments in this club."
+        currentUrl={branding?.default_tournament_bracket_url}
+        fallbackSource={BUILTIN_FALLBACKS.tournamentBracket}
+        uploading={uploadingField === 'default_tournament_bracket_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset(
+            'default_tournament_bracket_url',
+            'default_tournament_bracket',
+            'Bracket Play Default Banner'
+          )
+        }
+        onReset={() =>
+          handleResetAsset('default_tournament_bracket_url', 'Bracket Play Default Banner')
+        }
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 3: LEAGUE DEFAULT IMAGES
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 28 }]}>
+        <View style={styles.groupIconWrapper}>
+          <Award size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 3: League Default Images</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Fallback banner used across owner and player league screens when no custom league banner is supplied.
+          </AppText>
+        </View>
+      </View>
+
+      <BrandingAssetCard
+        title="League Competition Default Banner"
+        categoryTag="LEAGUES"
+        description="Applied to multi-week league schedules, team standings, and playoff championship brackets in this club."
+        currentUrl={branding?.default_league_banner_url}
+        fallbackSource={BUILTIN_FALLBACKS.league}
+        uploading={uploadingField === 'default_league_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('default_league_banner_url', 'default_league_banner', 'League Default Banner')
+        }
+        onReset={() => handleResetAsset('default_league_banner_url', 'League Default Banner')}
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 4: EVENT DEFAULT IMAGES
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 28 }]}>
+        <View style={styles.groupIconWrapper}>
+          <Calendar size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 4: Event Default Images</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Fallback cover used across owner-side and Player App event listings for social mixers, open play, and community events.
+          </AppText>
+        </View>
+      </View>
+
+      <BrandingAssetCard
+        title="Club Event Default Cover"
+        categoryTag="EVENTS"
+        description="Applied to social play events, clinics, and member gatherings without an event-specific custom photo."
+        currentUrl={branding?.default_event_banner_url}
+        fallbackSource={BUILTIN_FALLBACKS.event}
+        uploading={uploadingField === 'default_event_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('default_event_banner_url', 'default_event_banner', 'Event Default Cover')
+        }
+        onReset={() => handleResetAsset('default_event_banner_url', 'Event Default Cover')}
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 5: LESSON AND COACHING DEFAULT IMAGES
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 28 }]}>
+        <View style={styles.groupIconWrapper}>
+          <GraduationCap size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 5: Lesson & Coaching Default Images</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Fallback image for private lessons, group clinics, and academy coaching sessions.
+          </AppText>
+        </View>
+      </View>
+
+      <BrandingAssetCard
+        title="Lesson & Coaching Default Image"
+        categoryTag="COACHING"
+        description="Applied to scheduled lesson cards, coach profiles, and booking offerings when no custom session photo is set."
+        currentUrl={branding?.default_lesson_banner_url}
+        fallbackSource={BUILTIN_FALLBACKS.lesson}
+        uploading={uploadingField === 'default_lesson_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('default_lesson_banner_url', 'default_lesson_banner', 'Lesson Default Image')
+        }
+        onReset={() => handleResetAsset('default_lesson_banner_url', 'Lesson Default Image')}
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          HERO CAROUSEL SLIDES (PROMOTIONAL SLIDES)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 32 }]}>
+        <View style={styles.groupIconWrapper}>
+          <Layers size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <View style={styles.headerWithAction}>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.groupTitle}>Promotional Hero Carousel Slides</AppText>
+              <AppText style={styles.groupSubtitle}>
+                Add promotional cards with titles, tags, and call-to-actions shown on player and owner hero carousels.
+              </AppText>
+            </View>
+            {isOwner && (
+              <TouchableOpacity
+                style={styles.addSlideBtn}
+                onPress={() => openSlideModal()}
+                activeOpacity={0.85}
+              >
+                <Plus size={15} color="#FFFFFF" />
+                <AppText style={styles.addSlideBtnText}>Add Slide</AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </View>
+
+      <Card style={styles.carouselContainerCard}>
         {isLoadingSlides ? (
           <View style={styles.loadingBox}>
             <ActivityIndicator size="small" color="#176B57" />
@@ -602,18 +740,18 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           </View>
         ) : slides.length === 0 ? (
           <View style={styles.emptySlidesBox}>
-            <ImageIcon size={30} color="#94A3B8" />
-            <AppText style={styles.emptySlidesTitle}>No Custom Slides Configured</AppText>
+            <ImageIcon size={32} color="#94A3B8" />
+            <AppText style={styles.emptySlidesTitle}>No Custom Carousel Slides</AppText>
             <AppText style={styles.emptySlidesDesc}>
-              When no custom slides are added, your club cover banner or neutral product fallbacks are displayed.
+              The carousel automatically displays your Owner Home Banner (or default platform banner) along with quick action shortcuts.
             </AppText>
             {isOwner && (
               <TouchableOpacity
-                style={[styles.actionBtnPrimary, { marginTop: 12 }]}
+                style={[styles.assetBtnPrimary, { marginTop: 14, alignSelf: 'center' }]}
                 onPress={() => openSlideModal()}
               >
                 <Plus size={14} color="#FFFFFF" />
-                <AppText style={styles.actionBtnPrimaryText}>Create First Slide</AppText>
+                <AppText style={styles.assetBtnPrimaryText}>Add Promotional Slide</AppText>
               </TouchableOpacity>
             )}
           </View>
@@ -722,213 +860,113 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         )}
       </Card>
 
-      {/* ── Section 3: Entity Fallback Hierarchy Guide ── */}
-      <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-        <AppText style={styles.sectionTitle}>Entity Visual Hierarchy & Scopes</AppText>
-        <AppText style={styles.sectionSubtitle}>
-          How images resolve across individual competitions, programs, courts, and social events.
-        </AppText>
-      </View>
-
-      <Card style={styles.card}>
-        <View style={styles.hierarchyItem}>
-          <Trophy size={18} color="#176B57" style={styles.hierarchyIcon} />
-          <View style={styles.hierarchyTextCol}>
-            <AppText style={styles.hierarchyTitle}>Tournaments & Competitions</AppText>
-            <AppText style={styles.hierarchyDesc}>
-              Custom banner set on each tournament → Falls back to your Club Cover → Falls back to neutral court photo.
-            </AppText>
-          </View>
-          <TouchableOpacity
-            style={styles.hierarchyLink}
-            onPress={() => router.push('/(club)/tournaments' as any)}
-          >
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.hierarchyItem}>
-          <Award size={18} color="#176B57" style={styles.hierarchyIcon} />
-          <View style={styles.hierarchyTextCol}>
-            <AppText style={styles.hierarchyTitle}>Leagues & Ladders</AppText>
-            <AppText style={styles.hierarchyDesc}>
-              Custom banner set on each league → Falls back to your Club Cover → Falls back to clean platform imagery.
-            </AppText>
-          </View>
-          <TouchableOpacity
-            style={styles.hierarchyLink}
-            onPress={() => router.push('/(club)/leagues' as any)}
-          >
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.hierarchyItem}>
-          <Calendar size={18} color="#176B57" style={styles.hierarchyIcon} />
-          <View style={styles.hierarchyTextCol}>
-            <AppText style={styles.hierarchyTitle}>Social Events & Open Play</AppText>
-            <AppText style={styles.hierarchyDesc}>
-              Custom event cover → Falls back to your Club Cover → Falls back to event category graphics.
-            </AppText>
-          </View>
-          <TouchableOpacity
-            style={styles.hierarchyLink}
-            onPress={() => router.push('/(club)/events' as any)}
-          >
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.hierarchyItem}>
-          <GraduationCap size={18} color="#176B57" style={styles.hierarchyIcon} />
-          <View style={styles.hierarchyTextCol}>
-            <AppText style={styles.hierarchyTitle}>Lessons & Coaching Programs</AppText>
-            <AppText style={styles.hierarchyDesc}>
-              Lesson program photo → Falls back to your Club Cover → Falls back to clinic card thumbnails.
-            </AppText>
-          </View>
-          <TouchableOpacity
-            style={styles.hierarchyLink}
-            onPress={() => router.push('/(club)/lessons' as any)}
-          >
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.divider} />
-
-        <View style={styles.hierarchyItem}>
-          <LayoutGrid size={18} color="#176B57" style={styles.hierarchyIcon} />
-          <View style={styles.hierarchyTextCol}>
-            <AppText style={styles.hierarchyTitle}>Courts & Facilities</AppText>
-            <AppText style={styles.hierarchyDesc}>
-              Individual court photo → Falls back to dedicated facility court art.
-            </AppText>
-          </View>
-          <TouchableOpacity
-            style={styles.hierarchyLink}
-            onPress={() => router.push('/(club)/courts' as any)}
-          >
-            <ChevronRight size={18} color="#94A3B8" />
-          </TouchableOpacity>
-        </View>
-      </Card>
-
-      {/* ── Slide Create / Edit Modal ── */}
+      {/* ── Add / Edit Slide Modal ── */}
       <Modal
         visible={slideModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setSlideModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            {/* Modal Header */}
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <AppText style={styles.modalTitle}>
-                {editingSlide ? 'Edit Carousel Slide' : 'Add Promotional Slide'}
+                {editingSlide ? 'Edit Carousel Slide' : 'Add Hero Carousel Slide'}
               </AppText>
               <TouchableOpacity onPress={() => setSlideModalVisible(false)}>
                 <X size={20} color="#64748B" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalFormContent}>
-              {/* Slide Image Preview & Upload */}
-              <AppText style={styles.formLabel}>Slide Photo *</AppText>
-              <View style={styles.modalImageWrapper}>
+            <ScrollView style={styles.modalBody}>
+              {/* Image Picker */}
+              <AppText style={styles.inputLabel}>Slide Photo *</AppText>
+              <View style={styles.slideImagePickerBox}>
                 {slideFormImageUrl ? (
                   <Image
                     source={{ uri: resolveMediaUrl(slideFormImageUrl) }}
-                    style={styles.modalSlidePreview}
+                    style={styles.slideImagePreview}
                     resizeMode="cover"
                   />
                 ) : (
-                  <View style={styles.modalSlidePlaceholder}>
+                  <View style={styles.slideImagePlaceholder}>
                     <ImageIcon size={28} color="#94A3B8" />
-                    <AppText style={styles.modalPlaceholderText}>No image selected</AppText>
+                    <AppText style={styles.slideImagePlaceholderText}>
+                      No image selected. Recommended 16:9 ratio.
+                    </AppText>
                   </View>
                 )}
                 {isUploadingSlideImage && (
-                  <View style={styles.uploadOverlay}>
+                  <View style={styles.slideUploadOverlay}>
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   </View>
                 )}
               </View>
 
               <TouchableOpacity
-                style={[styles.actionBtnPrimary, { marginBottom: 16 }]}
+                style={styles.pickImageBtn}
                 onPress={handlePickSlideImage}
                 disabled={isUploadingSlideImage}
               >
-                <Camera size={14} color="#FFFFFF" />
-                <AppText style={styles.actionBtnPrimaryText}>
-                  {slideFormImageUrl ? 'Change Image' : 'Upload Slide Photo'}
+                <Camera size={14} color="#176B57" />
+                <AppText style={styles.pickImageBtnText}>
+                  {slideFormImageUrl ? 'Change Photo' : 'Upload Slide Photo'}
                 </AppText>
               </TouchableOpacity>
 
-              {/* Title */}
-              <AppText style={styles.formLabel}>Headline Title</AppText>
+              {/* Tag */}
+              <AppText style={styles.inputLabel}>Category Tag</AppText>
               <TextInput
-                style={styles.formInput}
-                placeholder="e.g. Summer Smash Championship"
+                style={styles.textInput}
+                value={slideFormTag}
+                onChangeText={setSlideFormTag}
+                placeholder="e.g. TOURNAMENT, CLINIC, SPECIAL EVENT"
+                placeholderTextColor="#94A3B8"
+              />
+
+              {/* Title */}
+              <AppText style={styles.inputLabel}>Slide Title</AppText>
+              <TextInput
+                style={styles.textInput}
                 value={slideFormTitle}
                 onChangeText={setSlideFormTitle}
+                placeholder="e.g. Spring Championship Open"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* Subtitle */}
-              <AppText style={styles.formLabel}>Subtitle / Description</AppText>
+              <AppText style={styles.inputLabel}>Subtitle / Description</AppText>
               <TextInput
-                style={styles.formInput}
-                placeholder="e.g. Register by Friday for early bird pricing"
+                style={styles.textInput}
                 value={slideFormSubtitle}
                 onChangeText={setSlideFormSubtitle}
+                placeholder="e.g. Register before May 1st for early bird entry"
                 placeholderTextColor="#94A3B8"
               />
 
-              {/* Tag */}
-              <AppText style={styles.formLabel}>Badge Tag</AppText>
+              {/* CTA Text */}
+              <AppText style={styles.inputLabel}>Button Label</AppText>
               <TextInput
-                style={styles.formInput}
-                placeholder="e.g. TOURNAMENT, CLINIC, SPECIAL"
-                value={slideFormTag}
-                onChangeText={setSlideFormTag}
-                placeholderTextColor="#94A3B8"
-              />
-
-              {/* CTA Label */}
-              <AppText style={styles.formLabel}>Call To Action Label</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="e.g. Book a Court, Register Now"
+                style={styles.textInput}
                 value={slideFormCtaText}
                 onChangeText={setSlideFormCtaText}
+                placeholder="e.g. Register Now"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* CTA Route */}
-              <AppText style={styles.formLabel}>Destination Route</AppText>
+              <AppText style={styles.inputLabel}>Destination Route</AppText>
               <TextInput
-                style={styles.formInput}
-                placeholder="e.g. /(club)/tournaments, /(club)/bookings"
+                style={styles.textInput}
                 value={slideFormCtaRoute}
                 onChangeText={setSlideFormCtaRoute}
+                placeholder="/(club)/tournaments or /(club)/bookings"
                 placeholderTextColor="#94A3B8"
               />
 
               {/* Active Toggle */}
-              <View style={styles.formSwitchRow}>
-                <View>
-                  <AppText style={styles.formLabelNoMargin}>Slide Active</AppText>
-                  <AppText style={styles.formHelperText}>Show this slide to players on the home page</AppText>
-                </View>
+              <View style={styles.switchRow}>
+                <AppText style={styles.switchLabel}>Enable slide in carousel</AppText>
                 <Switch
                   value={slideFormIsActive}
                   onValueChange={setSlideFormIsActive}
@@ -938,7 +976,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
               </View>
             </ScrollView>
 
-            {/* Modal Actions */}
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
@@ -946,16 +983,8 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
               >
                 <AppText style={styles.modalCancelText}>Cancel</AppText>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleSaveSlide}
-                disabled={createSlide.isPending || updateSlide.isPending}
-              >
-                {(createSlide.isPending || updateSlide.isPending) ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <AppText style={styles.modalSaveText}>Save Slide</AppText>
-                )}
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveSlide}>
+                <AppText style={styles.modalSaveText}>Save Slide</AppText>
               </TouchableOpacity>
             </View>
           </View>
@@ -968,19 +997,19 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F4F8F5',
+    backgroundColor: '#F8FAF9',
   },
   contentContainer: {
-    padding: 16,
-    paddingBottom: 60,
+    padding: Spacing[4],
+    paddingBottom: Spacing[12],
   },
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 16,
-    gap: 8,
+    padding: Spacing[3],
+    borderRadius: Radius.md,
+    marginBottom: Spacing[4],
+    gap: Spacing[2],
   },
   statusBannerSuccess: {
     backgroundColor: '#DCFCE7',
@@ -1003,207 +1032,219 @@ const styles = StyleSheet.create({
   statusTextError: {
     color: '#B91C1C',
   },
-  sectionHeader: {
-    marginBottom: 10,
-  },
-  headerWithAction: {
+  groupHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: Spacing[3],
+    marginBottom: Spacing[3],
   },
-  sectionTitle: {
-    fontSize: 16,
+  groupIconWrapper: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  groupHeaderTextCol: {
+    flex: 1,
+  },
+  groupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+    letterSpacing: -0.2,
+  },
+  groupSubtitle: {
+    fontSize: 12,
+    color: '#49635E',
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  assetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing[4],
+    marginBottom: Spacing[3.5],
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
+  },
+  assetCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing[1.5],
+    gap: Spacing[2],
+  },
+  assetCardHeaderLeft: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 3,
+  },
+  tagBadge: {
+    backgroundColor: '#F0F5F2',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+    alignSelf: 'flex-start',
+  },
+  tagBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#176B57',
+    letterSpacing: 0.5,
+  },
+  assetCardTitle: {
+    fontSize: 14,
     fontWeight: '700',
     color: '#102B2A',
   },
-  sectionSubtitle: {
+  assetCardDesc: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 2,
+    lineHeight: 17,
+    marginBottom: Spacing[3],
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  identityRow: {
-    flexDirection: 'row',
-    gap: 16,
-    alignItems: 'flex-start',
-  },
-  logoPreviewWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+  assetPreviewWrapper: {
     position: 'relative',
-    backgroundColor: '#F8FAFC',
+    width: '100%',
+    height: 160,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  logoImage: {
+  assetPreviewImage: {
     width: '100%',
     height: '100%',
   },
-  logoPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  uploadOverlay: {
+  assetUploadOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
     justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[2],
   },
-  identityTextCol: {
-    flex: 1,
-  },
-  identityLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  identityDesc: {
+  assetUploadOverlayText: {
     fontSize: 12,
-    color: '#64748B',
-    marginTop: 3,
-    lineHeight: 16,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
-  buttonRow: {
+  assetActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
+    gap: Spacing[2.5],
+    marginTop: Spacing[3],
+    flexWrap: 'wrap',
   },
-  actionBtnPrimary: {
+  assetBtnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#176B57',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 6,
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    gap: Spacing[1.5],
   },
-  actionBtnPrimaryText: {
-    color: '#FFFFFF',
+  assetBtnPrimaryText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
-  actionBtnDanger: {
+  assetBtnReset: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    gap: Spacing[1.5],
   },
-  actionBtnDangerText: {
-    color: '#DC2626',
+  assetBtnResetText: {
     fontSize: 12,
     fontWeight: '600',
+    color: '#DC2626',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 14,
-  },
-  coverSection: {
-    marginTop: 4,
-  },
-  coverPreviewWrapper: {
-    width: '100%',
-    height: 140,
-    borderRadius: 12,
+  carouselContainerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing[4],
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    marginTop: 10,
-    backgroundColor: '#F8FAFC',
-    position: 'relative',
+    ...Shadows.sm,
   },
-  coverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  coverPlaceholder: {
-    flex: 1,
+  headerWithAction: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  placeholderNotice: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 6,
+    gap: Spacing[2],
   },
   addSlideBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#176B57',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    gap: 4,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[1.5],
+    borderRadius: Radius.md,
+    gap: Spacing[1],
   },
   addSlideBtnText: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   loadingBox: {
-    padding: 24,
+    padding: Spacing[6],
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing[2],
   },
   loadingText: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 8,
   },
   emptySlidesBox: {
-    padding: 24,
+    padding: Spacing[6],
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing[2],
   },
   emptySlidesTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
-    marginTop: 8,
+    color: '#1E293B',
+    marginTop: Spacing[1],
   },
   emptySlidesDesc: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 4,
-    maxWidth: 280,
+    maxWidth: 320,
+    lineHeight: 18,
   },
   slidesList: {
-    gap: 12,
+    gap: Spacing[3],
   },
   slideItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
+    padding: Spacing[2.5],
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 10,
+    gap: Spacing[3],
   },
   slideThumbnail: {
-    width: 68,
-    height: 52,
-    borderRadius: 6,
+    width: 64,
+    height: 48,
+    borderRadius: Radius.sm,
+    backgroundColor: '#E2E8F0',
   },
   slideDetails: {
     flex: 1,
@@ -1211,24 +1252,24 @@ const styles = StyleSheet.create({
   slideTagRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing[1.5],
     marginBottom: 2,
   },
   slideTagBadge: {
     backgroundColor: '#E2E8F0',
     paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
   slideTagText: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#334155',
+    color: '#475569',
   },
   slideActiveBadge: {
     paddingHorizontal: 5,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingVertical: 1,
+    borderRadius: 3,
   },
   slideActiveBadgeOn: {
     backgroundColor: '#DCFCE7',
@@ -1248,23 +1289,23 @@ const styles = StyleSheet.create({
   },
   slideTitle: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0F172A',
   },
   slideSubtitle: {
     fontSize: 11,
     color: '#64748B',
+    marginTop: 1,
   },
   slideCtaInfo: {
     fontSize: 10,
     color: '#176B57',
-    fontWeight: '500',
     marginTop: 2,
   },
   slideControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: Spacing[1.5],
   },
   reorderBtns: {
     flexDirection: 'column',
@@ -1273,148 +1314,149 @@ const styles = StyleSheet.create({
   reorderBtn: {
     padding: 3,
     backgroundColor: '#FFFFFF',
-    borderRadius: 4,
+    borderRadius: 3,
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
   reorderBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
   slideActionBtns: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 4,
   },
   slideIconBtn: {
     padding: 6,
-    borderRadius: 6,
     backgroundColor: '#FFFFFF',
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  hierarchyItem: {
-    flexDirection: 'row',
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    padding: Spacing[4],
   },
-  hierarchyIcon: {
-    width: 24,
-  },
-  hierarchyTextCol: {
-    flex: 1,
-  },
-  hierarchyTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  hierarchyDesc: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    lineHeight: 15,
-  },
-  hierarchyLink: {
-    padding: 4,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
+  modalCard: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: Radius.xl,
+    width: '100%',
+    maxWidth: 520,
     maxHeight: '90%',
-    padding: 20,
+    ...Shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    alignItems: 'center',
+    padding: Spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   modalTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
-  modalFormContent: {
-    marginBottom: 16,
+  modalBody: {
+    padding: Spacing[4],
   },
-  formLabel: {
+  inputLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: '#334155',
     marginBottom: 4,
+    marginTop: Spacing[2.5],
   },
-  formLabelNoMargin: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  formHelperText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  modalImageWrapper: {
+  slideImagePickerBox: {
+    position: 'relative',
     width: '100%',
     height: 140,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    backgroundColor: '#F1F5F9',
     overflow: 'hidden',
-    marginBottom: 10,
-    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
-  modalSlidePreview: {
+  slideImagePreview: {
     width: '100%',
     height: '100%',
   },
-  modalSlidePlaceholder: {
-    flex: 1,
+  slideImagePlaceholder: {
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: Spacing[1],
+    paddingHorizontal: Spacing[4],
   },
-  modalPlaceholderText: {
-    fontSize: 12,
+  slideImagePlaceholderText: {
+    fontSize: 11,
     color: '#94A3B8',
-    marginTop: 4,
+    textAlign: 'center',
   },
-  formInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#0F172A',
-    marginBottom: 12,
+  slideUploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  formSwitchRow: {
+  pickImageBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E5F6EC',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[2],
+    marginTop: Spacing[2],
+    gap: Spacing[1.5],
+  },
+  pickImageBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  textInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  switchRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderColor: '#F1F5F9',
-    marginTop: 4,
+    alignItems: 'center',
+    marginTop: Spacing[3.5],
+    paddingVertical: Spacing[1],
+  },
+  switchLabel: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
   },
   modalFooter: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'flex-end',
+    gap: Spacing[2],
+    padding: Spacing[4],
     borderTopWidth: 1,
-    borderColor: '#F1F5F9',
-    paddingTop: 12,
+    borderTopColor: '#E2E8F0',
   },
   modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
@@ -1424,11 +1466,10 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   modalSaveBtn: {
-    flex: 1,
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
     backgroundColor: '#176B57',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
   },
   modalSaveText: {
     fontSize: 13,

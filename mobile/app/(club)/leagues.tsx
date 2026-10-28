@@ -37,7 +37,7 @@ import {
   LoadingState,
   Screen,
 } from '@/components';
-import { useActiveClub, useClubLeagues, usePermission } from '@/hooks';
+import { useActiveClub, useClubBranding, useClubLeagues, usePermission } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import type {
   CreateLeaguePayload,
@@ -51,6 +51,7 @@ export default function ClubLeaguesScreen() {
   const insets = useSafeAreaInsets();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId } = useActiveClub();
+  const { branding } = useClubBranding(clubId);
   const { canManageTournaments, canManageLeagues } = usePermission();
   const canManage = canManageTournaments || canManageLeagues;
 
@@ -394,6 +395,7 @@ export default function ClubLeaguesScreen() {
             <LeagueCard
               league={item}
               imageIndex={index}
+              clubBranding={branding}
               onPress={() => handleLeaguePress(item.id)}
               onOptionsPress={() => handleOpenOptionsMenu(item)}
             />
@@ -436,6 +438,8 @@ export default function ClubLeaguesScreen() {
         onClose={() => setIsCreateModalOpen(false)}
         onSubmit={handleCreateLeague}
         isCreating={isCreating}
+        clubId={clubId}
+        clubBranding={branding}
       />
 
       {/* Standardized League Options Action Sheet (3-dot menu) */}

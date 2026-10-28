@@ -71,7 +71,9 @@ import {
   usePlayerPoolMatches,
   usePlayerPoolStandings,
   usePlayerChampionshipMatches,
+  useClubBranding,
 } from '@/hooks';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, PoolStandingRow, Tournament } from '@/types';
 
 interface CompletedPoolPlayViewProps {
@@ -119,6 +121,12 @@ export function CompletedPoolPlayView({
 
   // Parsed configuration
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerSource = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Derive Champion & Runner-Up from championship matches
   const finalResults = useMemo(() => {
@@ -362,7 +370,7 @@ export function CompletedPoolPlayView({
         {/* ─── Standardized Hero Banner matching Round Robin reference ─── */}
         <View style={styles.heroSection}>
           <Image
-            source={require('../../../assets/tournaments/banner2.jpg')}
+            source={bannerSource}
             style={styles.heroImage}
             resizeMode="cover"
           />

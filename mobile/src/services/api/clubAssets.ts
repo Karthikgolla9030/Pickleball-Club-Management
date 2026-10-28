@@ -19,6 +19,7 @@ import type {
   Court,
   LeagueSummary,
   Tournament,
+  UpdateClubBrandingPayload,
 } from '@/types';
 
 export const clubAssetsApi = {
@@ -30,7 +31,7 @@ export const clubAssetsApi = {
 
   updateClubBranding(
     clubId: string,
-    payload: { logo_url?: string | null; cover_image_url?: string | null }
+    payload: UpdateClubBrandingPayload
   ): Promise<ClubBranding> {
     return apiClient.put<ClubBranding>(API_ENDPOINTS.CLUB_BRANDING(clubId), payload);
   },

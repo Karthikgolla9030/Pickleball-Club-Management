@@ -56,7 +56,8 @@ import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatDate } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
-import { usePlayerScramble, useAuth } from '@/hooks';
+import { usePlayerScramble, useAuth, useClubBranding } from '@/hooks';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, Tournament } from '@/types';
 import type { ScrambleStandingRow } from '@/types/scramble';
 
@@ -115,6 +116,12 @@ export function CompletedScrambleView({
 
   // Configuration parser
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerSource = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Global refresh
   const handleInternalRefresh = async () => {
@@ -308,7 +315,7 @@ export function CompletedScrambleView({
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
           <Image
-            source={require('../../../assets/tournaments/banner2.jpg')}
+            source={bannerSource}
             style={styles.heroImage}
             resizeMode="cover"
           />

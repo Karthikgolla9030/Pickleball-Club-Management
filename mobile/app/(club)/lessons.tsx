@@ -20,10 +20,12 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -35,13 +37,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Calendar,
+  Camera,
   Check,
   CheckCircle2,
   Clock,
   DollarSign,
   FileText,
+  Image as ImageIcon,
   Mail,
   MapPin,
   Menu,
@@ -103,10 +108,12 @@ import {
   useUpdateLessonType,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
+import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Radius, Spacing } from '@/theme';
 import {
   LESSON_REGISTRATION_STATUS_LABELS,
   LESSON_STATUS_LABELS,
+  type ClubBranding,
   type ClubLesson,
   type ClubPlayerMember,
   type Coach,
@@ -119,6 +126,7 @@ import {
   type LessonType,
 } from '@/types';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { resolveLessonImage } from '@/utils/imageResolution';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
 
@@ -137,24 +145,8 @@ function formatLessonSchedule(iso: string): string {
   }
 }
 
-function getLessonCardImage(item: ClubLesson, clubCoverUrl?: string | null) {
-  if (item.image_url) {
-    return { uri: resolveMediaUrl(item.image_url) };
-  }
-  if (clubCoverUrl) {
-    return { uri: resolveMediaUrl(clubCoverUrl) };
-  }
-  const t = (item.title || '').toLowerCase();
-  if (t.includes('doubles') || t.includes('strategy') || t.includes('workshop') || t.includes('past')) {
-    return require('../../assets/lessons/card1.jpg');
-  }
-  if (t.includes('beginner') || t.includes('clinic') || t.includes('class') || t.includes('saturday')) {
-    return require('../../assets/lessons/card2.jpg');
-  }
-  if (item.is_private || t.includes('one-on-one') || t.includes('private')) {
-    return require('../../assets/lessons/card3.jpg');
-  }
-  return require('../../assets/lessons/card1.jpg');
+function getLessonCardImage(item: ClubLesson, clubBranding?: ClubBranding | null) {
+  return resolveLessonImage(item, clubBranding);
 }
 
 export default function ClubLessonsScreen() {
@@ -223,10 +215,59 @@ export default function ClubLessonsScreen() {
   const [courtId, setCourtId] = useState('');
   const [lessonTitle, setLessonTitle] = useState('');
   const [lessonDesc, setLessonDesc] = useState('');
+  const [lessonImageUrl, setLessonImageUrl] = useState<string | null>(null);
+  const [isUploadingLessonImage, setIsUploadingLessonImage] = useState(false);
   const [lessonStartAt, setLessonStartAt] = useState('');
   const [lessonEndAt, setLessonEndAt] = useState('');
   const [lessonCapacity, setLessonCapacity] = useState('');
   const [lessonPrice, setLessonPrice] = useState('');
+
+  const handlePickLessonImage = async () => {
+    if (!activeClubId) return;
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow gallery access to upload a lesson image.');
+          return;
+        }
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `lesson_${Date.now()}.${ext}`;
+
+        setIsUploadingLessonImage(true);
+        try {
+          const uploadRes = await clubAssetsApi.uploadClubMedia(
+            activeClubId,
+            { uri: asset.uri, name: fileName, type: mime },
+            'lesson_image',
+            'lesson'
+          );
+          setLessonImageUrl(uploadRes.public_url);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Upload failed.';
+          Alert.alert('Upload Failed', msg);
+        } finally {
+          setIsUploadingLessonImage(false);
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to pick image.');
+    }
+  };
+
+  const handleResetLessonImage = () => {
+    setLessonImageUrl(null);
+  };
 
   // Form states - Coach
   const [coachName, setCoachName] = useState('');
@@ -277,6 +318,7 @@ export default function ClubLessonsScreen() {
       const payload: CreateLessonPayload = {
         title: lessonTitle.trim(),
         description: lessonDesc.trim() || null,
+        image_url: lessonImageUrl || null,
         lesson_type_id: lessonTypeId,
         coach_id: coachId,
         court_id: courtId || null,
@@ -298,6 +340,7 @@ export default function ClubLessonsScreen() {
   const resetLessonForm = () => {
     setLessonTitle('');
     setLessonDesc('');
+    setLessonImageUrl(null);
     setLessonTypeId('');
     setCoachId('');
     setCourtId('');
@@ -551,8 +594,8 @@ export default function ClubLessonsScreen() {
       <View style={styles.promoBannerContainer}>
         <Image
           source={
-            clubBranding?.cover_image_url
-              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+            clubBranding?.default_lesson_banner_url
+              ? { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) }
               : require('../../assets/lessons/hero_decor.jpg')
           }
           style={styles.promoBannerDecor}
@@ -647,7 +690,7 @@ export default function ClubLessonsScreen() {
   );
 
   const renderLessonCard = ({ item }: { item: ClubLesson }) => {
-    const cardImg = getLessonCardImage(item, clubBranding?.cover_image_url);
+    const cardImg = getLessonCardImage(item, clubBranding);
     const rosterLabel = item.status === 'completed' ? 'View Attendance →' : 'View Roster →';
     const tagLabel = item.lesson_type_name?.toUpperCase() || (item.is_private ? 'PRIVATE' : 'GROUP LESSON');
 
@@ -1098,6 +1141,76 @@ export default function ClubLessonsScreen() {
             multiline
             numberOfLines={2}
           />
+
+          {/* Optional Lesson Image Card */}
+          <Card style={styles.formAssetCard}>
+            <View style={styles.formAssetHeader}>
+              <View style={styles.formAssetHeaderTitleRow}>
+                <ImageIcon size={16} color={Colors.brand.primary} />
+                <AppText variant="caption" color="secondary" style={styles.formAssetHeaderLabel}>
+                  LESSON IMAGE (OPTIONAL)
+                </AppText>
+              </View>
+              <Badge
+                label={lessonImageUrl ? 'Custom Image' : 'Inheriting Club Default'}
+                variant={lessonImageUrl ? 'success' : 'default'}
+              />
+            </View>
+
+            <AppText variant="caption" color="tertiary" style={styles.formAssetDescription}>
+              {lessonImageUrl
+                ? 'This custom image will be displayed specifically for this lesson session.'
+                : "No custom image selected. This lesson will automatically use your club's default coaching image."}
+            </AppText>
+
+            <View style={styles.formAssetPreviewContainer}>
+              <Image
+                source={
+                  lessonImageUrl
+                    ? { uri: resolveMediaUrl(lessonImageUrl) }
+                    : resolveLessonImage(null, clubBranding)
+                }
+                style={styles.formAssetPreviewImage}
+                resizeMode="cover"
+              />
+              {isUploadingLessonImage && (
+                <View style={styles.formAssetUploadingOverlay}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <AppText variant="caption" style={styles.formAssetUploadingText}>
+                    Uploading image...
+                  </AppText>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.formAssetActionsRow}>
+              <TouchableOpacity
+                style={styles.formAssetActionBtn}
+                onPress={handlePickLessonImage}
+                disabled={isUploadingLessonImage}
+                activeOpacity={0.8}
+              >
+                <Camera size={14} color={Colors.text.primary} />
+                <AppText variant="bodySmall" style={styles.formAssetActionBtnText}>
+                  {lessonImageUrl ? 'Replace Custom Image' : 'Upload Custom Image'}
+                </AppText>
+              </TouchableOpacity>
+
+              {lessonImageUrl && (
+                <TouchableOpacity
+                  style={styles.formAssetResetBtn}
+                  onPress={handleResetLessonImage}
+                  disabled={isUploadingLessonImage}
+                  activeOpacity={0.8}
+                >
+                  <RotateCcw size={14} color={Colors.text.secondary} />
+                  <AppText variant="bodySmall" style={styles.formAssetResetBtnText}>
+                    Reset to Default
+                  </AppText>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Card>
 
           {/* Select Lesson Type */}
           <AppText variant="caption" style={styles.inputLabel}>
@@ -3258,5 +3371,96 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginTop: 20,
+  },
+  formAssetCard: {
+    backgroundColor: Colors.surface.elevated,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: Spacing[2],
+  },
+  formAssetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  formAssetHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  formAssetHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+  },
+  formAssetDescription: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  formAssetPreviewContainer: {
+    height: 120,
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+    backgroundColor: Colors.surface.default,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  formAssetPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  formAssetUploadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[1],
+  },
+  formAssetUploadingText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  formAssetActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginTop: Spacing[1],
+  },
+  formAssetActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surface.default,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  formAssetActionBtnText: {
+    color: Colors.text.primary,
+    fontWeight: '600',
+  },
+  formAssetResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+  },
+  formAssetResetBtnText: {
+    color: Colors.text.secondary,
+    fontWeight: '500',
   },
 });

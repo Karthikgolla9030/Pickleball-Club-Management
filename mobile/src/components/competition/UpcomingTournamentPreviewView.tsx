@@ -47,16 +47,10 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
+import { useClubBranding } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Tournament, TournamentFormat } from '@/types';
-
-// Format banner images
-const FORMAT_BANNERS: Record<TournamentFormat, any> = {
-  round_robin: require('../../../assets/tournaments/banner2.jpg'),
-  pool_play: require('../../../assets/tournaments/card_pool_play.jpg'),
-  scramble: require('../../../assets/tournaments/banner3.jpg'),
-  bracket: require('../../../assets/tournaments/card_bracket.jpg'),
-};
 
 interface UpcomingTournamentPreviewViewProps {
   tournament: Tournament;
@@ -108,8 +102,11 @@ export function UpcomingTournamentPreviewView({
   const format = tournament.format ?? 'round_robin';
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
-  // Format banner image (default banner2 has the exact court & ball from screenshot)
-  const bannerImage = FORMAT_BANNERS[format] || FORMAT_BANNERS.round_robin;
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerImage = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Format Badge Config
   const formatBadge = useMemo(() => {

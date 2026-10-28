@@ -58,6 +58,7 @@ import {
 } from '@/components';
 import {
   useActiveClub,
+  useClubBranding,
   useClubTournaments,
   usePermission,
   useTournamentDetails,
@@ -138,6 +139,7 @@ function formatDate(dateStr: string | null | undefined): string {
 export default function ClubTournamentsScreen() {
   const { clubId, clubName } = useActiveClub();
   const { canManageTournaments } = usePermission();
+  const { branding } = useClubBranding(clubId);
 
   // Local filter states
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
@@ -703,6 +705,7 @@ export default function ClubTournamentsScreen() {
               <TournamentCard
                 tournament={isItemCompleted && item.status !== 'completed' ? { ...item, status: 'completed', status_label: 'COMPLETED' } : item}
                 index={index}
+                clubBranding={branding}
                 actionLabel={isItemCompleted ? 'View Results' : 'Manage'}
                 onPress={() => handleManage(item)}
                 onOptionsPress={() => handleOpenOptionsMenu(item)}

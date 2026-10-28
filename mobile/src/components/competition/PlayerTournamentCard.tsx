@@ -43,14 +43,16 @@ import {
 
 import { AppText } from '@/components/AppText';
 import { Shadows } from '@/theme';
-import type { TournamentDiscoveryItem, TournamentFormat } from '@/types';
+import type { ClubBranding, TournamentDiscoveryItem, TournamentFormat } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 
 export interface PlayerTournamentCardProps {
   tournament: TournamentDiscoveryItem;
   index?: number;
   clubCoverUrl?: string | null;
+  clubBranding?: ClubBranding | null;
   isFavorite?: boolean;
   isRegistered?: boolean;
   registrationStatus?: string | null;
@@ -60,30 +62,7 @@ export interface PlayerTournamentCardProps {
   onClubPress?: (clubId: string) => void;
 }
 
-// Format-specific authentic court imagery
-const COURT_IMAGES = {
-  pool_play: require('../../../assets/tournaments/card_pool_play.jpg'),
-  round_robin: require('../../../assets/tournaments/card_round_robin.jpg'),
-  bracket: require('../../../assets/tournaments/card_bracket.jpg'),
-  scramble: require('../../../assets/tournaments/banner2.jpg'),
-};
 
-function getCardImage(tournament: TournamentDiscoveryItem, index: number, clubCoverUrl?: string | null) {
-  if (tournament.banner_image_url) {
-    return { uri: resolveMediaUrl(tournament.banner_image_url) };
-  }
-  if (clubCoverUrl) {
-    return { uri: resolveMediaUrl(clubCoverUrl) };
-  }
-
-  const format = tournament.format;
-  if (format === 'pool_play') return COURT_IMAGES.pool_play;
-  if (format === 'round_robin') return COURT_IMAGES.round_robin;
-  if (format === 'bracket') return COURT_IMAGES.bracket;
-  if (format === 'scramble') return COURT_IMAGES.scramble;
-  const fallbacks = [COURT_IMAGES.pool_play, COURT_IMAGES.round_robin, COURT_IMAGES.bracket, COURT_IMAGES.scramble];
-  return fallbacks[index % fallbacks.length];
-}
 
 function formatTournamentDate(dateStr: string): string {
   try {
@@ -107,6 +86,7 @@ export function PlayerTournamentCard({
   tournament,
   index = 0,
   clubCoverUrl,
+  clubBranding,
   isFavorite = false,
   isRegistered: isRegisteredProp,
   registrationStatus: registrationStatusProp,
@@ -174,7 +154,10 @@ export function PlayerTournamentCard({
   const currentCount = tournament.teams_count ?? tournament.participant_count ?? 0;
   const isFull = maxCap > 0 && currentCount >= maxCap;
 
-  const imageSource = getCardImage(tournament, index, clubCoverUrl);
+  const imageSource = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Status Badge rendered on the top-left of the banner image
   const renderStatusBadge = () => {

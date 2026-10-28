@@ -72,8 +72,37 @@ export interface ClubBranding {
   name: string;
   logo_url: string | null;
   cover_image_url: string | null;
+  owner_banner_url?: string | null;
+  default_tournament_round_robin_url?: string | null;
+  default_tournament_scramble_url?: string | null;
+  default_tournament_pool_play_url?: string | null;
+  default_tournament_bracket_url?: string | null;
+  default_league_banner_url?: string | null;
+  default_event_banner_url?: string | null;
+  default_lesson_banner_url?: string | null;
   has_custom_logo: boolean;
   has_custom_cover: boolean;
+  has_custom_owner_banner?: boolean;
+  has_custom_tournament_round_robin?: boolean;
+  has_custom_tournament_scramble?: boolean;
+  has_custom_tournament_pool_play?: boolean;
+  has_custom_tournament_bracket?: boolean;
+  has_custom_league_banner?: boolean;
+  has_custom_event_banner?: boolean;
+  has_custom_lesson_banner?: boolean;
+}
+
+export interface UpdateClubBrandingPayload {
+  logo_url?: string | null;
+  cover_image_url?: string | null;
+  owner_banner_url?: string | null;
+  default_tournament_round_robin_url?: string | null;
+  default_tournament_scramble_url?: string | null;
+  default_tournament_pool_play_url?: string | null;
+  default_tournament_bracket_url?: string | null;
+  default_league_banner_url?: string | null;
+  default_event_banner_url?: string | null;
+  default_lesson_banner_url?: string | null;
 }
 
 export interface ClubCarouselSlide {

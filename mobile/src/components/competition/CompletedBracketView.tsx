@@ -63,7 +63,9 @@ import {
   usePlayerBracket,
   usePlayerTeams,
   useAuth,
+  useClubBranding,
 } from '@/hooks';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
 import type { Match, Tournament } from '@/types';
 
@@ -139,6 +141,12 @@ export function CompletedBracketView({
   // Configuration parser
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const isSingles = parsedConfig.isSingles;
+
+  const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const bannerSource = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
 
   // Refresh handler
   const handleInternalRefresh = async () => {
@@ -348,7 +356,7 @@ export function CompletedBracketView({
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
           <Image
-            source={require('../../../assets/tournaments/banner2.jpg')}
+            source={bannerSource}
             style={styles.heroImage}
             resizeMode="cover"
           />

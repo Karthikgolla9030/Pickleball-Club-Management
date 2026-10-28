@@ -13,6 +13,7 @@ export interface TournamentWizardState {
   name: string;
   description: string;
   locationName: string;
+  bannerImageUrl?: string | null;
 
   // ─── Step 3: Category & Eligibility ────────────────────
   category: string;

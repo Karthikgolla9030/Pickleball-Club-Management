@@ -44,7 +44,7 @@ class ClubAssetService:
     # ─── Club Branding ────────────────────────────────────────────────────────
 
     async def get_branding(self, club_id: UUID) -> ClubBrandingResponse:
-        """Retrieve club branding (logo and cover)."""
+        """Retrieve club branding (logo, cover, owner banner, and category defaults)."""
         stmt = select(Club).where(Club.id == club_id)
         res = await self.db.execute(stmt)
         club = res.scalar_one_or_none()
@@ -59,8 +59,24 @@ class ClubAssetService:
             name=club.name,
             logo_url=club.logo_url,
             cover_image_url=club.cover_image_url,
+            owner_banner_url=club.owner_banner_url,
+            default_tournament_round_robin_url=club.default_tournament_round_robin_url,
+            default_tournament_scramble_url=club.default_tournament_scramble_url,
+            default_tournament_pool_play_url=club.default_tournament_pool_play_url,
+            default_tournament_bracket_url=club.default_tournament_bracket_url,
+            default_league_banner_url=club.default_league_banner_url,
+            default_event_banner_url=club.default_event_banner_url,
+            default_lesson_banner_url=club.default_lesson_banner_url,
             has_custom_logo=bool(club.logo_url),
             has_custom_cover=bool(club.cover_image_url),
+            has_custom_owner_banner=bool(club.owner_banner_url),
+            has_custom_tournament_round_robin=bool(club.default_tournament_round_robin_url),
+            has_custom_tournament_scramble=bool(club.default_tournament_scramble_url),
+            has_custom_tournament_pool_play=bool(club.default_tournament_pool_play_url),
+            has_custom_tournament_bracket=bool(club.default_tournament_bracket_url),
+            has_custom_league_banner=bool(club.default_league_banner_url),
+            has_custom_event_banner=bool(club.default_event_banner_url),
+            has_custom_lesson_banner=bool(club.default_lesson_banner_url),
         )
 
     async def update_branding(
@@ -68,7 +84,7 @@ class ClubAssetService:
         club_id: UUID,
         payload: ClubBrandingUpdateRequest,
     ) -> ClubBrandingResponse:
-        """Update club logo and/or cover image."""
+        """Update club logo, cover, owner banner, and/or activity defaults."""
         stmt = select(Club).where(Club.id == club_id)
         res = await self.db.execute(stmt)
         club = res.scalar_one_or_none()
@@ -78,36 +94,60 @@ class ClubAssetService:
                 detail="Club not found",
             )
 
-        old_logo = club.logo_url
-        old_cover = club.cover_image_url
+        branding_fields = [
+            "logo_url",
+            "cover_image_url",
+            "owner_banner_url",
+            "default_tournament_round_robin_url",
+            "default_tournament_scramble_url",
+            "default_tournament_pool_play_url",
+            "default_tournament_bracket_url",
+            "default_league_banner_url",
+            "default_event_banner_url",
+            "default_lesson_banner_url",
+        ]
+
+        old_values = {field: getattr(club, field) for field in branding_fields}
         update_dict = payload.model_dump(exclude_unset=True)
-        if "logo_url" in update_dict:
-            club.logo_url = update_dict["logo_url"]
-        if "cover_image_url" in update_dict:
-            club.cover_image_url = update_dict["cover_image_url"]
+
+        for field in branding_fields:
+            if field in update_dict:
+                setattr(club, field, update_dict[field])
 
         await self.db.commit()
         await self.db.refresh(club)
 
         # Safely clean up orphaned media files on replacement
-        if old_logo and "logo_url" in update_dict and old_logo != club.logo_url:
-            try:
-                await self.storage.cleanup_unreferenced_by_url(old_logo, club.id)
-            except Exception:
-                pass
-        if old_cover and "cover_image_url" in update_dict and old_cover != club.cover_image_url:
-            try:
-                await self.storage.cleanup_unreferenced_by_url(old_cover, club.id)
-            except Exception:
-                pass
+        for field, old_url in old_values.items():
+            if old_url and field in update_dict and old_url != getattr(club, field):
+                try:
+                    await self.storage.cleanup_unreferenced_by_url(old_url, club.id)
+                except Exception:
+                    pass
 
         return ClubBrandingResponse(
             club_id=club.id,
             name=club.name,
             logo_url=club.logo_url,
             cover_image_url=club.cover_image_url,
+            owner_banner_url=club.owner_banner_url,
+            default_tournament_round_robin_url=club.default_tournament_round_robin_url,
+            default_tournament_scramble_url=club.default_tournament_scramble_url,
+            default_tournament_pool_play_url=club.default_tournament_pool_play_url,
+            default_tournament_bracket_url=club.default_tournament_bracket_url,
+            default_league_banner_url=club.default_league_banner_url,
+            default_event_banner_url=club.default_event_banner_url,
+            default_lesson_banner_url=club.default_lesson_banner_url,
             has_custom_logo=bool(club.logo_url),
             has_custom_cover=bool(club.cover_image_url),
+            has_custom_owner_banner=bool(club.owner_banner_url),
+            has_custom_tournament_round_robin=bool(club.default_tournament_round_robin_url),
+            has_custom_tournament_scramble=bool(club.default_tournament_scramble_url),
+            has_custom_tournament_pool_play=bool(club.default_tournament_pool_play_url),
+            has_custom_tournament_bracket=bool(club.default_tournament_bracket_url),
+            has_custom_league_banner=bool(club.default_league_banner_url),
+            has_custom_event_banner=bool(club.default_event_banner_url),
+            has_custom_lesson_banner=bool(club.default_lesson_banner_url),
         )
 
     # ─── Hero Carousel Slides ─────────────────────────────────────────────────
@@ -335,7 +375,22 @@ class ClubAssetService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Lesson type not found in this club",
                 )
-        elif clean_type in ("club", "club_logo", "club_cover", "logo", "cover", "branding"):
+        elif clean_type in (
+            "club",
+            "club_logo",
+            "club_cover",
+            "logo",
+            "cover",
+            "branding",
+            "owner_banner",
+            "default_tournament_round_robin",
+            "default_tournament_scramble",
+            "default_tournament_pool_play",
+            "default_tournament_bracket",
+            "default_league_banner",
+            "default_event_banner",
+            "default_lesson_banner",
+        ):
             if entity_id != club_id:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

@@ -30,9 +30,10 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import type { TournamentStatus } from '@/types';
+import type { ClubBranding, TournamentStatus } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
+import { resolveTournamentBanner } from '@/utils/imageResolution';
 
 export interface TournamentCardData {
   id: string;
@@ -63,6 +64,7 @@ interface TournamentCardProps {
   tournament: TournamentCardData;
   index?: number;
   clubCoverUrl?: string | null;
+  clubBranding?: ClubBranding | null;
   onPress: () => void;
   onOptionsPress?: () => void;
   onPublishPress?: () => void;
@@ -123,37 +125,11 @@ function getFormatBadgeStyle(format: string, label: string) {
   return { bg: '#DDEBFF', text: '#2563EB', label: (label || format).toUpperCase() };
 }
 
-function getBannerImage(tournament: TournamentCardData, index = 0, clubCoverUrl?: string | null) {
-  if (tournament.banner_image_url) {
-    return { uri: resolveMediaUrl(tournament.banner_image_url) };
-  }
-  if (clubCoverUrl) {
-    return { uri: resolveMediaUrl(clubCoverUrl) };
-  }
-
-  const normalizedName = (tournament.name || '').toLowerCase();
-  const normalizedFormat = (tournament.format || '').toLowerCase();
-
-  if (normalizedName.includes('summer slam') || normalizedFormat === 'bracket') {
-    return require('../../../assets/tournaments/banner1.jpg');
-  } else if (normalizedName.includes('pool play') || normalizedFormat === 'pool_play') {
-    return require('../../../assets/tournaments/banner3.jpg');
-  } else if (normalizedName.includes('round robin') || normalizedFormat === 'round_robin') {
-    return require('../../../assets/tournaments/banner2.jpg');
-  } else {
-    const banners = [
-      require('../../../assets/tournaments/banner1.jpg'),
-      require('../../../assets/tournaments/banner2.jpg'),
-      require('../../../assets/tournaments/banner3.jpg'),
-    ];
-    return banners[index % banners.length];
-  }
-}
-
 export function TournamentCard({
   tournament,
   index = 0,
   clubCoverUrl,
+  clubBranding,
   onPress,
   onOptionsPress,
   onPublishPress,
@@ -179,7 +155,10 @@ export function TournamentCard({
 
   const statusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const formatBadge = getFormatBadgeStyle(tournament.format || '', tournament.format_label);
-  const banner = getBannerImage(tournament, index, clubCoverUrl);
+  const banner = resolveTournamentBanner(
+    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    clubBranding
+  );
   const parsed = parseTournamentConfig(tournament as any);
   const entryLabel = parsed?.capacity?.entryLabel ? `${parsed.capacity.entryLabel.toLowerCase()} ` : '';
 

@@ -15,16 +15,41 @@ class ClubBrandingResponse(BaseModel):
     name: str
     logo_url: str | None = None
     cover_image_url: str | None = None
+    owner_banner_url: str | None = None
+    default_tournament_round_robin_url: str | None = None
+    default_tournament_scramble_url: str | None = None
+    default_tournament_pool_play_url: str | None = None
+    default_tournament_bracket_url: str | None = None
+    default_league_banner_url: str | None = None
+    default_event_banner_url: str | None = None
+    default_lesson_banner_url: str | None = None
+
     has_custom_logo: bool = False
     has_custom_cover: bool = False
+    has_custom_owner_banner: bool = False
+    has_custom_tournament_round_robin: bool = False
+    has_custom_tournament_scramble: bool = False
+    has_custom_tournament_pool_play: bool = False
+    has_custom_tournament_bracket: bool = False
+    has_custom_league_banner: bool = False
+    has_custom_event_banner: bool = False
+    has_custom_lesson_banner: bool = False
 
     model_config = {"from_attributes": True}
 
 
 class ClubBrandingUpdateRequest(BaseModel):
-    """Payload to update club logo and/or cover image."""
+    """Payload to update club logo, cover, owner banner, or activity defaults."""
     logo_url: str | None = Field(None, max_length=1000)
     cover_image_url: str | None = Field(None, max_length=1000)
+    owner_banner_url: str | None = Field(None, max_length=1000)
+    default_tournament_round_robin_url: str | None = Field(None, max_length=1000)
+    default_tournament_scramble_url: str | None = Field(None, max_length=1000)
+    default_tournament_pool_play_url: str | None = Field(None, max_length=1000)
+    default_tournament_bracket_url: str | None = Field(None, max_length=1000)
+    default_league_banner_url: str | None = Field(None, max_length=1000)
+    default_event_banner_url: str | None = Field(None, max_length=1000)
+    default_lesson_banner_url: str | None = Field(None, max_length=1000)
 
 
 class ClubCarouselSlideResponse(BaseModel):

@@ -39,6 +39,7 @@ import {
   Clock,
   Eye,
   Globe,
+  Image as ImageIcon,
   Info,
   Lock,
   Mail,
@@ -46,9 +47,11 @@ import {
   Pencil,
   Phone,
   RefreshCw,
+  RotateCcw,
   Save,
   ShieldAlert,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react-native';
 
@@ -69,11 +72,11 @@ import {
   TimePickerInput,
 } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
-import { useActiveClub, useClubDetails } from '@/hooks';
+import { useActiveClub, useClubBranding, useClubDetails, useUpdateClubBranding } from '@/hooks';
 import { clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { UpdateClubPayload } from '@/types';
-import { resolveMediaUrl } from '@/utils';
+import { BUILTIN_FALLBACKS, resolveClubCover, resolveMediaUrl } from '@/utils';
 
 // Common US timezones
 const TIMEZONE_OPTIONS = [
@@ -126,6 +129,8 @@ export default function ClubDetailsScreen() {
     uploadLogo,
     isUploadingLogo,
   } = useClubDetails(clubId);
+  const { branding, refetch: refetchBranding } = useClubBranding(clubId);
+  const updateBrandingMutation = useUpdateClubBranding(clubId);
 
   // Active view tab: 'edit', 'branding', or 'preview'
   const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'preview'>('edit');
@@ -157,9 +162,12 @@ export default function ClubDetailsScreen() {
   const [facilitiesSummary, setFacilitiesSummary] = useState('');
   const [holidayClosureNotes, setHolidayClosureNotes] = useState('');
 
-  // Logo state
+  // Logo & Cover state
   const [logoPreviewUri, setLogoPreviewUri] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
+  const [coverPreviewUri, setCoverPreviewUri] = useState<string | null>(null);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [coverError, setCoverError] = useState(false);
 
   // UI status messages
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -192,8 +200,10 @@ export default function ClubDetailsScreen() {
       setHolidayClosureNotes(club.holiday_closure_notes || '');
       setLogoPreviewUri(club.logo_url || null);
       setLogoError(false);
+      setCoverPreviewUri(club.cover_image_url || branding?.cover_image_url || null);
+      setCoverError(false);
     }
-  }, [club]);
+  }, [club, branding?.cover_image_url]);
 
   // Pull-to-refresh
   const onRefresh = async () => {
@@ -333,6 +343,103 @@ export default function ClubDetailsScreen() {
     }
   };
 
+  // Logo remove handler
+  const handleRemoveLogo = async () => {
+    if (!isOwner) return;
+    try {
+      await updateBrandingMutation.mutateAsync({ logo_url: null });
+      setLogoPreviewUri(null);
+      await refetch();
+      await refetchBranding();
+      setSaveSuccessMsg('Club logo reset to default icon.');
+      setTimeout(() => setSaveSuccessMsg(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unable to reset logo.';
+      Alert.alert('Reset Failed', msg);
+    }
+  };
+
+  // Player-facing Club Cover upload handler
+  const handlePickCover = async () => {
+    if (!isOwner) {
+      Alert.alert('Permission Denied', 'Only the Club Owner can change the club cover banner.');
+      return;
+    }
+
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            'Permission Needed',
+            'Please grant photo library access to upload a club cover banner.'
+          );
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        setIsUploadingCover(true);
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `club_cover_${Date.now()}.${ext}`;
+
+        try {
+          if (clubId) {
+            const uploadRes = await clubAssetsApi.uploadClubMedia(
+              clubId,
+              { uri: asset.uri, name: fileName, type: mime },
+              'club_cover'
+            );
+            await updateBrandingMutation.mutateAsync({ cover_image_url: uploadRes.public_url });
+            setCoverPreviewUri(resolveMediaUrl(uploadRes.public_url));
+            await refetch();
+            await refetchBranding();
+          }
+          setSaveSuccessMsg('Player-facing club cover updated successfully!');
+          setTimeout(() => setSaveSuccessMsg(null), 3000);
+        } catch (uploadErr: any) {
+          Alert.alert(
+            'Cover Upload Failed',
+            uploadErr?.message || 'Unable to upload cover banner to server. Please try again.'
+          );
+        } finally {
+          setIsUploadingCover(false);
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to open image picker.');
+      setIsUploadingCover(false);
+    }
+  };
+
+  // Player-facing Club Cover remove / reset handler
+  const handleRemoveCover = async () => {
+    if (!isOwner) return;
+    try {
+      setIsUploadingCover(true);
+      await updateBrandingMutation.mutateAsync({ cover_image_url: null });
+      setCoverPreviewUri(null);
+      await refetch();
+      await refetchBranding();
+      setSaveSuccessMsg('Club cover banner reset to platform fallback.');
+      setTimeout(() => setSaveSuccessMsg(null), 3000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unable to reset cover banner.';
+      Alert.alert('Reset Failed', msg);
+    } finally {
+      setIsUploadingCover(false);
+    }
+  };
+
   // Cancel edit mode and reload saved backend data
   const handleCancelEdit = () => {
     if (club) {
@@ -410,6 +517,7 @@ export default function ClubDetailsScreen() {
   };
 
   const currentLogoUri = getFullImageUrl(logoPreviewUri || club?.logo_url);
+  const currentCoverUri = getFullImageUrl(coverPreviewUri || club?.cover_image_url || branding?.cover_image_url);
 
   // Loading state
   if (isLoading && !club) {
@@ -570,6 +678,29 @@ export default function ClubDetailsScreen() {
                       {establishedYear ? (
                         <AppText style={styles.viewEstText}>Est. {establishedYear}</AppText>
                       ) : null}
+                    </View>
+                  </View>
+
+                  {/* Player-Facing Club Cover Banner Preview */}
+                  <View style={styles.viewCoverSection}>
+                    <View style={styles.viewCoverHeader}>
+                      <View style={{ flex: 1 }}>
+                        <AppText style={styles.viewCoverTitle}>Player-Facing Club Cover</AppText>
+                        <AppText style={styles.viewCoverSubtitle}>
+                          Displayed on your club profile when players browse or view details in the Player App.
+                        </AppText>
+                      </View>
+                      <Badge
+                        label={currentCoverUri ? 'Custom Club Cover' : 'Built-in Fallback'}
+                        variant={currentCoverUri ? 'success' : 'default'}
+                      />
+                    </View>
+                    <View style={styles.viewCoverPreviewWrapper}>
+                      <Image
+                        source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
+                        style={styles.viewCoverImg}
+                        resizeMode="cover"
+                      />
                     </View>
                   </View>
 
@@ -802,22 +933,98 @@ export default function ClubDetailsScreen() {
                     )}
                   </View>
                   <View style={styles.logoInfoTextWrapper}>
-                    <AppText style={styles.logoTitle}>Club Logo</AppText>
+                    <View style={styles.logoTitleRow}>
+                      <AppText style={styles.logoTitle}>Club Logo</AppText>
+                      <Badge
+                        label={currentLogoUri ? 'Custom Club Logo' : 'Default Icon'}
+                        variant={currentLogoUri ? 'success' : 'default'}
+                      />
+                    </View>
                     <AppText style={styles.logoHelpText}>
                       PNG, JPG, or WEBP. Max 5MB. Displayed on public discovery and player dashboards.
                     </AppText>
                     {isOwner && (
-                      <TouchableOpacity
-                        onPress={handlePickLogo}
-                        disabled={isUploadingLogo}
-                        style={styles.logoActionLink}
-                      >
-                        <AppText style={styles.logoActionLinkText}>
-                          {isUploadingLogo ? 'Uploading logo...' : 'Choose new image'}
-                        </AppText>
-                      </TouchableOpacity>
+                      <View style={styles.logoActionLinksRow}>
+                        <TouchableOpacity
+                          onPress={handlePickLogo}
+                          disabled={isUploadingLogo}
+                          style={styles.logoActionLink}
+                        >
+                          <AppText style={styles.logoActionLinkText}>
+                            {isUploadingLogo ? 'Uploading logo...' : currentLogoUri ? 'Replace logo' : 'Choose image'}
+                          </AppText>
+                        </TouchableOpacity>
+
+                        {currentLogoUri && (
+                          <TouchableOpacity
+                            onPress={handleRemoveLogo}
+                            disabled={isUploadingLogo}
+                            style={styles.logoActionLinkSecondary}
+                          >
+                            <AppText style={styles.logoActionLinkTextDanger}>Reset to default</AppText>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     )}
                   </View>
+                </View>
+
+                {/* Player-Facing Club Cover / Banner Uploader */}
+                <View style={styles.coverUploadSection}>
+                  <View style={styles.coverUploadHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <AppText style={styles.coverUploadTitle}>Player-Facing Club Cover / Banner</AppText>
+                      <AppText style={styles.coverUploadHelpText}>
+                        Displayed when players open this club's details in the Player App. Recommended 16:9 landscape photo.
+                      </AppText>
+                    </View>
+                    <Badge
+                      label={currentCoverUri ? 'Custom Club Cover' : 'Built-in Fallback'}
+                      variant={currentCoverUri ? 'success' : 'default'}
+                    />
+                  </View>
+
+                  <View style={styles.coverPreviewContainer}>
+                    <Image
+                      source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
+                      style={styles.coverPreviewImg}
+                      resizeMode="cover"
+                    />
+                    {isUploadingCover && (
+                      <View style={styles.coverUploadOverlay}>
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                        <AppText style={styles.coverUploadOverlayText}>Saving cover banner...</AppText>
+                      </View>
+                    )}
+                  </View>
+
+                  {isOwner && (
+                    <View style={styles.coverActionButtonsRow}>
+                      <TouchableOpacity
+                        style={styles.coverUploadBtn}
+                        onPress={handlePickCover}
+                        disabled={isUploadingCover}
+                        activeOpacity={0.8}
+                      >
+                        <Camera size={14} color="#FFFFFF" />
+                        <AppText style={styles.coverUploadBtnText}>
+                          {currentCoverUri ? 'Replace Cover Banner' : 'Upload Cover Banner'}
+                        </AppText>
+                      </TouchableOpacity>
+
+                      {currentCoverUri && (
+                        <TouchableOpacity
+                          style={styles.coverRemoveBtn}
+                          onPress={handleRemoveCover}
+                          disabled={isUploadingCover}
+                          activeOpacity={0.8}
+                        >
+                          <RotateCcw size={14} color="#DC2626" />
+                          <AppText style={styles.coverRemoveBtnText}>Reset to Default</AppText>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
                 </View>
 
                 {/* Club Name */}
@@ -2102,5 +2309,152 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  logoTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginBottom: 2,
+  },
+  logoActionLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+    marginTop: 4,
+  },
+  logoActionLinkSecondary: {
+    paddingVertical: 2,
+  },
+  logoActionLinkTextDanger: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  viewCoverSection: {
+    marginTop: Spacing[3.5],
+    paddingTop: Spacing[3],
+    borderTopWidth: 1,
+    borderTopColor: '#E2EAE6',
+  },
+  viewCoverHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing[2],
+    gap: Spacing[2],
+  },
+  viewCoverTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  viewCoverSubtitle: {
+    fontSize: 12,
+    color: '#667776',
+    marginTop: 2,
+  },
+  viewCoverPreviewWrapper: {
+    width: '100%',
+    height: 150,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#F0F5F2',
+    borderWidth: 1,
+    borderColor: '#D4E5DE',
+    marginTop: Spacing[1],
+  },
+  viewCoverImg: {
+    width: '100%',
+    height: '100%',
+  },
+  coverUploadSection: {
+    marginTop: Spacing[4],
+    paddingTop: Spacing[4],
+    borderTopWidth: 1,
+    borderTopColor: '#E2EAE6',
+  },
+  coverUploadHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing[2],
+    gap: Spacing[2],
+  },
+  coverUploadTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  coverUploadHelpText: {
+    fontSize: 12,
+    color: '#667776',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  coverPreviewContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 160,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#F0F5F2',
+    borderWidth: 1,
+    borderColor: '#D4E5DE',
+    marginTop: Spacing[2],
+  },
+  coverPreviewImg: {
+    width: '100%',
+    height: '100%',
+  },
+  coverUploadOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  coverUploadOverlayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  coverActionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2.5],
+    marginTop: Spacing[3],
+    flexWrap: 'wrap',
+  },
+  coverUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#176B57',
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    gap: Spacing[1.5],
+  },
+  coverUploadBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  coverRemoveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    gap: Spacing[1.5],
+  },
+  coverRemoveBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
   },
 });

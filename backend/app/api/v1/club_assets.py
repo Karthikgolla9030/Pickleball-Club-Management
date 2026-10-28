@@ -108,7 +108,7 @@ async def update_club_branding(
 async def upload_club_media(
     club_id: UUID,
     file: UploadFile = File(...),
-    asset_type: str = Form(..., description="club_logo, club_cover, carousel_slide, tournament_banner, league_banner, event_cover, court_photo, lesson_image"),
+    asset_type: str = Form(..., description="club_logo, club_cover, owner_banner, default_tournament_round_robin, default_tournament_scramble, default_tournament_pool_play, default_tournament_bracket, default_league_banner, default_event_banner, default_lesson_banner, carousel_slide, tournament_banner, league_banner, event_cover, court_photo, lesson_image"),
     entity_type: str | None = Form(None),
     entity_id: str | None = Form(None),
     current_user: User = Depends(get_current_active_user),

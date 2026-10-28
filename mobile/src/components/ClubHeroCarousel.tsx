@@ -15,7 +15,7 @@ import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { useActiveClub, useClubBranding, useClubCarouselSlides } from '@/hooks';
-import { resolveMediaUrl } from '@/utils';
+import { resolveMediaUrl, resolveOwnerBanner } from '@/utils';
 
 export interface HeroBannerSlide {
   id: string;
@@ -106,24 +106,36 @@ export function ClubHeroCarousel({
       }));
     }
 
-    const coverUrl = branding?.cover_image_url ?? fallbackCoverUrl;
-    if (coverUrl) {
+    const ownerBannerImage = resolveOwnerBanner(branding);
+    const ownerWelcomeSlide: HeroBannerSlide = {
+      id: 'club-owner-banner-slide',
+      tag: 'WELCOME TO',
+      title: effectiveClubName || 'Pickleball Club',
+      supportingText: 'Great courts. Active members.\nA healthier, happier community.',
+      ctaText: 'Book a Court',
+      route: '/(club)/bookings',
+      scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
+      image: ownerBannerImage,
+    };
+
+    if (dbSlides && dbSlides.length > 0) {
       return [
-        {
-          id: 'club-cover-slide',
-          tag: 'WELCOME TO',
-          title: effectiveClubName || 'Pickleball Club',
-          supportingText: 'Great courts. Active members.\nA healthier, happier community.',
-          ctaText: 'Book a Court',
-          route: '/(club)/bookings',
-          scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
-          image: { uri: resolveMediaUrl(coverUrl) },
-        },
+        ownerWelcomeSlide,
+        ...dbSlides.map((s, idx) => ({
+          id: s.id,
+          tag: s.tag || 'PICKLEBALL',
+          title: s.title || 'Play Together\nGrow Stronger',
+          supportingText: s.subtitle || 'Great courts. Active members.',
+          ctaText: s.cta_text || 'Book a Court',
+          route: s.cta_route || '/(club)/bookings',
+          scriptLines: idx === 0 ? ['Same', 'Game', 'Bigger', 'Community'] : ['Play', 'Grow', 'Excel'],
+          image: { uri: resolveMediaUrl(s.image_url) },
+        })),
       ];
     }
 
-    return DEFAULT_HERO_SLIDES;
-  }, [dbSlides, branding, fallbackCoverUrl, effectiveClubName]);
+    return [ownerWelcomeSlide];
+  }, [dbSlides, branding, effectiveClubName]);
 
   // Keep scroll position aligned on container width changes
   useEffect(() => {

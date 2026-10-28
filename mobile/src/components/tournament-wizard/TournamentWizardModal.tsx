@@ -21,6 +21,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useClubBranding } from '@/hooks';
 import { Colors, Spacing } from '@/theme';
 import type { CreateTournamentPayload, Tournament, TournamentFormat, TournamentVisibility } from '@/types';
 import {
@@ -72,6 +73,7 @@ function buildInitialState(): TournamentWizardState {
     name: '',
     description: '',
     locationName: 'Main Courts',
+    bannerImageUrl: null,
 
     // Step 2 / Step 3 (Category & Eligibility)
     category: 'Singles',
@@ -123,12 +125,14 @@ function buildInitialState(): TournamentWizardState {
 export function TournamentWizardModal({
   visible,
   onClose,
+  clubId,
   clubName,
   onSuccess,
   createTournament,
   openTournamentRegistration,
   isCreating = false,
 }: TournamentWizardModalProps) {
+  const { branding } = useClubBranding(clubId);
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [formState, setFormState] = useState<TournamentWizardState>(buildInitialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -447,6 +451,7 @@ export function TournamentWizardModal({
       const payload: CreateTournamentPayload = {
         name: formState.name.trim(),
         description: finalDescription,
+        banner_image_url: formState.bannerImageUrl || null,
         format: formState.format,
         visibility: formState.visibility,
         start_date: startIso,
@@ -526,6 +531,8 @@ export function TournamentWizardModal({
                 state={formState}
                 onChange={updateState}
                 clubName={clubName}
+                clubId={clubId}
+                clubBranding={branding}
                 errors={errors}
               />
             )}

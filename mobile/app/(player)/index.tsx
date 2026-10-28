@@ -41,6 +41,7 @@ import { AppText } from '@/components';
 import {
   useActiveClub,
   useAuth,
+  useClubBranding,
   useDiscoverClubEvents,
   usePlayerActivity,
   usePlayerBookings,
@@ -51,6 +52,7 @@ import {
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { resolveEventCover, resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Booking, PlayerActivityItem, TournamentDiscoveryItem } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +134,7 @@ export default function PlayerHomeScreen() {
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
   const { clubId, clubName } = useActiveClub();
+  const { branding: clubBranding } = useClubBranding(clubId);
 
   // 1. Next Booking (real authenticated player bookings)
   const {
@@ -191,6 +194,7 @@ export default function PlayerHomeScreen() {
       statusBadge: string;
       isTournament: boolean;
       imageUrl?: string | null;
+      format?: string;
     }> = [];
 
     // Tournaments
@@ -207,6 +211,7 @@ export default function PlayerHomeScreen() {
           statusBadge: t.is_registration_open ? 'Registration Open' : 'Upcoming',
           isTournament: true,
           imageUrl: t.banner_image_url || null,
+          format: t.format,
         });
       }
     });
@@ -479,9 +484,15 @@ export default function PlayerHomeScreen() {
               {/* Event Thumbnail */}
               <Image
                 source={
-                  upcomingEvent.imageUrl
-                    ? { uri: resolveMediaUrl(upcomingEvent.imageUrl) }
-                    : require('../../assets/events/card1.jpg')
+                  upcomingEvent.isTournament
+                    ? resolveTournamentBanner(
+                        { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format },
+                        clubBranding
+                      )
+                    : resolveEventCover(
+                        { cover_image_url: upcomingEvent.imageUrl },
+                        clubBranding
+                      )
                 }
                 style={styles.eventThumbnail}
                 resizeMode="cover"

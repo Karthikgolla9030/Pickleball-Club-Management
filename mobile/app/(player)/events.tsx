@@ -51,6 +51,7 @@ import {
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import { formatCurrency, formatDateTime, resolveMediaUrl } from '@/utils';
+import { resolveEventCover } from '@/utils/imageResolution';
 import type { ClubEvent, EventRegistration } from '@/types';
 
 type MainTab = 'discover' | 'my_registrations';
@@ -213,22 +214,8 @@ export default function PlayerEventsScreen() {
     }
   };
 
-  const getEventImage = (event: ClubEvent, index: number) => {
-    // 1. Entity-level custom image
-    if (event.cover_image_url) {
-      return { uri: resolveMediaUrl(event.cover_image_url) };
-    }
-    // 2. Club-level cover fallback
-    if (clubBranding?.cover_image_url) {
-      return { uri: resolveMediaUrl(clubBranding.cover_image_url) };
-    }
-    // 3. Platform neutral fallback
-    const t = event.title?.toLowerCase() || '';
-    if (t.includes('social')) return COURT_IMAGES[0];
-    if (t.includes('clinic')) return COURT_IMAGES[1];
-    if (t.includes('tournament')) return COURT_IMAGES[2];
-    if (t.includes('open play')) return COURT_IMAGES[0];
-    return COURT_IMAGES[index % COURT_IMAGES.length];
+  const getEventImage = (event: ClubEvent, _index: number) => {
+    return resolveEventCover(event, clubBranding);
   };
 
   // ─── Registration Handlers ─────────────────────────────────────────────────
@@ -438,11 +425,7 @@ export default function PlayerEventsScreen() {
     const eventDateStr = reg.event_start_at || reg.registered_at;
     const { month, day, weekday, formattedDate } = parseEventDate(eventDateStr);
     const matchingEvent = discoverEvents.find((e) => e.id === reg.event_id);
-    const imageSource = matchingEvent?.cover_image_url
-      ? { uri: resolveMediaUrl(matchingEvent.cover_image_url) }
-      : clubBranding?.cover_image_url
-      ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
-      : COURT_IMAGES[index % COURT_IMAGES.length];
+    const imageSource = resolveEventCover(matchingEvent, clubBranding);
     const isCancelled = reg.status === 'cancelled';
     const isWaitlisted = reg.status === 'waitlisted';
 
@@ -557,8 +540,8 @@ export default function PlayerEventsScreen() {
         <PlayerHeroBanner
           slides={eventBannerSlides}
           imageSource={
-            clubBranding?.cover_image_url
-              ? { uri: resolveMediaUrl(clubBranding.cover_image_url) }
+            clubBranding?.default_event_banner_url
+              ? { uri: resolveMediaUrl(clubBranding.default_event_banner_url) }
               : require('../../assets/events/hero_events_photo.jpg')
           }
         />
