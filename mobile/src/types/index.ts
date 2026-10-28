@@ -1631,7 +1631,7 @@ export interface Booking {
   club_name?: string | null;
 }
 
-export type SlotStatus = 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE' | 'BLOCKED';
+export type SlotStatus = 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE' | 'BLOCKED' | 'PAST';
 
 export interface TimeSlotAvailability {
   start_at: string;

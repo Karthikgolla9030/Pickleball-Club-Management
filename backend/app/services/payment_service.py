@@ -746,12 +746,16 @@ class PaymentService:
                 "duration_minutes": duration_minutes,
                 "hourly_rate": float(rate),
             })
+            incoming_meta = payload.metadata or {}
             meta_dict.update({
                 "court_id": str(court.id),
                 "start_at": payload.start_at.isoformat(),
                 "end_at": payload.end_at.isoformat(),
                 "hourly_rate": float(rate),
-                "notes": payload.notes,
+                "notes": incoming_meta.get("notes") or payload.notes,
+                "staff_booking": bool(incoming_meta.get("staff_booking", False)),
+                "player_id": incoming_meta.get("player_id"),
+                "guest_name": incoming_meta.get("guest_name"),
             })
 
         elif payload.purpose == PaymentPurpose.TOURNAMENT:
@@ -1130,16 +1134,32 @@ class PaymentService:
                         detail="Selected court slot is no longer available. A full refund has been initiated.",
                     )
 
+                is_staff_booking = bool(meta.get("staff_booking", False))
+                target_player_id = None
+                if meta.get("player_id"):
+                    try:
+                        target_player_id = UUID(str(meta["player_id"]))
+                    except Exception:
+                        target_player_id = None
+                elif not is_staff_booking:
+                    target_player_id = payment.player_id
+
+                booking_type = BookingType.STAFF if is_staff_booking else BookingType.PLAYER
+                booking_notes = meta.get("notes")
+                if is_staff_booking and meta.get("guest_name"):
+                    prefix = f"Walk-in Guest: {meta['guest_name']}"
+                    booking_notes = f"{prefix}\n{booking_notes}" if booking_notes else prefix
+
                 booking = await self.booking_repo.create(
                     club_id=payment.club_id,
                     court_id=court_id,
-                    player_id=payment.player_id,
-                    created_by_user_id=payment.player_id,
-                    booking_type=BookingType.PLAYER,
+                    player_id=target_player_id,
+                    created_by_user_id=user_id,
+                    booking_type=booking_type,
                     start_at=start_dt,
                     end_at=end_dt,
                     status=BookingStatus.CONFIRMED,
-                    notes=meta.get("notes"),
+                    notes=booking_notes,
                     price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
                     total_price=payment.amount,
                     currency=payment.currency,
@@ -1362,16 +1382,32 @@ class PaymentService:
                         if court_id and start_dt and end_dt:
                             conflicts = await self.booking_repo.find_conflicts(court_id=court_id, start_at=start_dt, end_at=end_dt)
                             if not conflicts:
+                                is_staff_booking = bool(meta.get("staff_booking", False))
+                                target_player_id = None
+                                if meta.get("player_id"):
+                                    try:
+                                        target_player_id = UUID(str(meta["player_id"]))
+                                    except Exception:
+                                        target_player_id = None
+                                elif not is_staff_booking:
+                                    target_player_id = payment.player_id
+
+                                booking_type = BookingType.STAFF if is_staff_booking else BookingType.PLAYER
+                                booking_notes = meta.get("notes")
+                                if is_staff_booking and meta.get("guest_name"):
+                                    prefix = f"Walk-in Guest: {meta['guest_name']}"
+                                    booking_notes = f"{prefix}\n{booking_notes}" if booking_notes else prefix
+
                                 booking = await self.booking_repo.create(
                                     club_id=payment.club_id,
                                     court_id=court_id,
-                                    player_id=payment.player_id,
+                                    player_id=target_player_id,
                                     created_by_user_id=payment.player_id,
-                                    booking_type=BookingType.PLAYER,
+                                    booking_type=booking_type,
                                     start_at=start_dt,
                                     end_at=end_dt,
                                     status=BookingStatus.CONFIRMED,
-                                    notes=meta.get("notes"),
+                                    notes=booking_notes,
                                     price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
                                     total_price=payment.amount,
                                     currency=payment.currency,

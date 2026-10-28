@@ -12,7 +12,7 @@ import { Input } from './Input';
 import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } from '@/hooks';
 import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, formatSlotLabel, parseSlotTime } from '@/utils';
 import type { Booking, BookingPriceCalculation } from '@/types';
 import { CheckoutModal } from './checkout/CheckoutModal';
 
@@ -159,28 +159,24 @@ export function BookingFlowModal({
     const startAt = slot?.start_at || slotIso;
     const endAt = new Date(new Date(startAt).getTime() + selectedDuration * 60 * 1000).toISOString();
 
-    if (mode === 'player') {
-      try {
-        setIsCalculatingPrice(true);
-        const calculation = await bookingApi.calculatePrice(clubId, {
-          court_id: courtId,
-          start_at: startAt,
-          end_at: endAt,
-        });
-        setServerPrice(calculation);
-        setStage(2);
-      } catch (err: any) {
-        const msg =
-          err?.response?.data?.detail ||
-          err?.detail ||
-          err?.message ||
-          'Failed to calculate booking price for this court and time slot.';
-        setFormError(msg);
-      } finally {
-        setIsCalculatingPrice(false);
-      }
-    } else {
+    try {
+      setIsCalculatingPrice(true);
+      const calculation = await bookingApi.calculatePrice(clubId, {
+        court_id: courtId,
+        start_at: startAt,
+        end_at: endAt,
+      });
+      setServerPrice(calculation);
       setStage(2);
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.detail ||
+        err?.message ||
+        'Failed to calculate booking price for this court and time slot.';
+      setFormError(msg);
+    } finally {
+      setIsCalculatingPrice(false);
     }
   };
 
@@ -192,64 +188,7 @@ export function BookingFlowModal({
   const handleCompletePayment = async () => {
     if (isSubmitting) return; // Prevent duplicate submissions
     setFormError(null);
-    try {
-      const slot = selectedCourtSlots.find(
-        (s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime()
-      );
-      const startAt = slot?.start_at || slotIso;
-      const endAt = new Date(new Date(startAt).getTime() + selectedDuration * 60 * 1000).toISOString();
-      
-      let created: Booking | null = null;
-      if (mode === 'staff') {
-        created = await createStaffBooking({
-          court_id: courtId,
-          player_id: playerId || undefined,
-          guest_name: !playerId ? customerText.trim() : undefined,
-          start_at: startAt,
-          end_at: endAt,
-          notes: notes.trim() || null,
-        });
-        setConfirmedBooking(created);
-        setStage(4);
-      } else {
-        setShowCheckout(true);
-        return;
-      }
-    } catch (err: any) {
-      const isConflict =
-        err?.response?.status === 409 ||
-        err?.status === 409 ||
-        err?.type === 'CONFLICT' ||
-        err?.message?.toLowerCase().includes('conflict') ||
-        err?.message?.toLowerCase().includes('already booked');
-      const isAuth =
-        err?.response?.status === 401 ||
-        err?.status === 401 ||
-        err?.type === 'UNAUTHORIZED' ||
-        err?.message?.toLowerCase().includes('authenticated');
-      const isForbidden =
-        err?.response?.status === 403 ||
-        err?.status === 403 ||
-        err?.type === 'FORBIDDEN';
-
-      let msg =
-        err?.response?.data?.detail ||
-        err?.detail ||
-        err?.message ||
-        'Failed to create booking.';
-
-      if (isConflict) {
-        msg = 'This court is no longer available for that time. Another player has just booked it. Please choose another slot.';
-        setSlotIso(''); // Clear slot selection while preserving court, date, notes
-        setStage(1); // Return to stage 1 only on slot conflict so player can select another slot
-      } else if (isAuth) {
-        msg = 'Your session has expired. Please sign in again to complete your booking.';
-      } else if (isForbidden) {
-        msg = err?.response?.data?.detail || err?.detail || 'Active club player membership required to book courts at this club.';
-      }
-      setFormError(msg);
-      // On non-conflict errors, player remains on Stage 3 with form state preserved
-    }
+    setShowCheckout(true);
   };
 
   const handleClose = () => {
@@ -415,9 +354,14 @@ export function BookingFlowModal({
           ) : (
             <View style={styles.timeGrid}>
               {selectedCourtSlots.map(slot => {
-                const d = new Date(slot.start_at);
-                const label = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-                const isPast = d.getTime() < Date.now();
+                const parsed = parseSlotTime(slot.start_at);
+                const label = formatSlotLabel(slot.start_at);
+                const isToday = dateStr === new Date().toISOString().split('T')[0];
+                const now = new Date();
+                const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                const isPast =
+                  slot.status === 'PAST' ||
+                  (isToday && parsed.minutesFromMidnight <= currentMinutes);
                 const available = slot.is_available && !isPast;
                 const isActive = slotIso === slot.start_at;
 
@@ -520,11 +464,21 @@ export function BookingFlowModal({
           <SummaryRow label="Court" value={serverPrice?.court_name || court?.display_name || court?.court_name || 'Court'} />
           <SummaryRow 
             label="Date" 
-            value={new Date(slot?.start_at || '').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} 
+            value={new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} 
           />
           <SummaryRow 
             label="Time" 
-            value={`${new Date(slot?.start_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – ${new Date(slot?.end_at || '').toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}`} 
+            value={
+              slot?.start_at
+                ? `${formatSlotLabel(slot.start_at)} – ${formatSlotLabel(
+                    slot.end_at ||
+                      new Date(
+                        new Date(slot.start_at).getTime() +
+                          selectedDuration * 60 * 1000
+                      ).toISOString()
+                  )}`
+                : '—'
+            } 
           />
           <SummaryRow label="Duration" value={durationText} />
           <SummaryRow label="Rate" value={rateText} />
@@ -587,8 +541,17 @@ export function BookingFlowModal({
       : 'You';
 
     const confirmedCourtName = confirmedBooking?.court?.name || serverPrice?.court_name || court?.display_name || court?.court_name || 'Court';
-    const confirmedStart = confirmedBooking?.start_at ? new Date(confirmedBooking.start_at) : (slot?.start_at ? new Date(slot.start_at) : null);
-    const confirmedEnd = confirmedBooking?.end_at ? new Date(confirmedBooking.end_at) : (slot?.end_at ? new Date(slot.end_at) : null);
+    const confirmedStartIso = confirmedBooking?.start_at || slot?.start_at || slotIso;
+    const confirmedEndIso =
+      confirmedBooking?.end_at ||
+      slot?.end_at ||
+      (confirmedStartIso
+        ? new Date(
+            new Date(confirmedStartIso).getTime() +
+              selectedDuration * 60 * 1000
+          ).toISOString()
+        : null);
+
     const confirmedTotal = confirmedBooking?.total_price != null
       ? `Total: ${formatCurrency(confirmedBooking.total_price)}`
       : (serverPrice != null
@@ -609,10 +572,12 @@ export function BookingFlowModal({
         <Card style={styles.summaryCard}>
           <AppText variant="heading3">{confirmedCourtName}</AppText>
           <AppText variant="body" color="secondary">
-            {confirmedStart ? confirmedStart.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : ''}
+            {new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
           </AppText>
           <AppText variant="body" color="secondary">
-            {confirmedStart && confirmedEnd ? `${confirmedStart.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })} – ${confirmedEnd.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}` : ''}
+            {confirmedStartIso && confirmedEndIso
+              ? `${formatSlotLabel(confirmedStartIso)} – ${formatSlotLabel(confirmedEndIso)}`
+              : ''}
           </AppText>
           <AppText variant="body" color="primary" bold style={{ marginTop: Spacing[1] }}>
             {confirmedTotal}
@@ -758,7 +723,12 @@ export function BookingFlowModal({
             endAt={slotIso ? new Date(new Date(selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso).getTime() + selectedDuration * 60 * 1000).toISOString() : undefined}
             durationMinutes={selectedDuration}
             participantsInfo={`${playersCount} players`}
-            metadata={{ notes: notes.trim() }}
+            metadata={{
+              notes: notes.trim(),
+              staff_booking: mode === 'staff',
+              player_id: playerId || undefined,
+              guest_name: !playerId && customerText.trim() ? customerText.trim() : undefined,
+            }}
             onSuccess={(res) => {
               setShowCheckout(false);
               if (res.booking_or_registration) {

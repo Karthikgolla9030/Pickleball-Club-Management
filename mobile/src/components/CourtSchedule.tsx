@@ -147,6 +147,8 @@ function getSlotLabel(status: SlotStatus | string): string {
       return 'Booked';
     case 'MAINTENANCE':
       return 'Maint.';
+    case 'PAST':
+      return '—';
     case 'BLOCKED':
       return 'Blocked';
     default:
@@ -458,33 +460,42 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                           );
                         }
 
-                        const status = slot.status;
-                        const isAvailable = status === 'AVAILABLE';
-                        const isBooked = status === 'BOOKED';
+                        const parsed = parseSlotTime(slot.start_at);
+                        const isToday = dayLabel === 'Today';
+                        const now = new Date();
+                        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+                        const isPast =
+                          slot.status === 'PAST' ||
+                          (isToday && parsed.minutesFromMidnight <= currentMinutes);
+
+                        const effectiveStatus: SlotStatus | string =
+                          isPast && slot.status === 'AVAILABLE' ? 'PAST' : slot.status;
+                        const isAvailable = effectiveStatus === 'AVAILABLE';
+                        const isBooked = effectiveStatus === 'BOOKED';
 
                         return (
                           <View key={th.key} style={styles.slotCellWrapper}>
                             <TouchableOpacity
-                              style={[styles.slotPill, getSlotPillStyle(status)]}
+                              style={[styles.slotPill, getSlotPillStyle(effectiveStatus)]}
                               onPress={() => {
-                                if (onSlotPress) {
+                                if (onSlotPress && (isAvailable || isBooked)) {
                                   onSlotPress(
                                     court.court_id,
                                     slot.start_at,
-                                    slot.status,
+                                    effectiveStatus,
                                     slot.booking_id || undefined
                                   );
                                 }
                               }}
                               activeOpacity={isAvailable || isBooked ? 0.75 : 1}
                               disabled={!isAvailable && !isBooked}
-                              accessibilityLabel={`${court.court_name} ${slot.start_at} ${status}`}
+                              accessibilityLabel={`${court.court_name} ${slot.start_at} ${effectiveStatus}`}
                             >
                               <AppText
-                                style={[styles.slotPillText, getSlotTextStyle(status)]}
+                                style={[styles.slotPillText, getSlotTextStyle(effectiveStatus)]}
                                 numberOfLines={1}
                               >
-                                {getSlotLabel(status)}
+                                {getSlotLabel(effectiveStatus)}
                               </AppText>
                             </TouchableOpacity>
                           </View>
@@ -540,6 +551,8 @@ function getSlotPillStyle(status: SlotStatus | string) {
       return styles.slotPillBooked;
     case 'MAINTENANCE':
       return styles.slotPillMaintenance;
+    case 'PAST':
+      return styles.slotPillPast;
     case 'BLOCKED':
       return styles.slotPillBlocked;
     default:
@@ -555,6 +568,8 @@ function getSlotTextStyle(status: SlotStatus | string) {
       return styles.slotTextBooked;
     case 'MAINTENANCE':
       return styles.slotTextMaintenance;
+    case 'PAST':
+      return styles.slotTextPast;
     case 'BLOCKED':
       return styles.slotTextBlocked;
     default:
@@ -777,6 +792,14 @@ const styles = StyleSheet.create({
   },
   slotTextBlocked: {
     color: '#4B5563',
+  },
+  slotPillPast: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 0,
+    opacity: 0.55,
+  },
+  slotTextPast: {
+    color: '#9CA3AF',
   },
 
   lastCellBorder: {

@@ -1,3 +1,4 @@
+
 /**
  * Aught2 Pickleball — Shared Formatters
  *
@@ -6,6 +7,66 @@
  */
 
 // ─── Date / Time Formatters ───────────────────────────────────────────────────
+
+/**
+ * Parses slot ISO string or time string into wall-clock hour, ampm, minutesFromMidnight, and canonical key.
+ * Preserves the literal wall-clock time as stored/scheduled by court management.
+ */
+export function parseSlotTime(isoString: string): {
+  hour: string;
+  ampm: string;
+  minutesFromMidnight: number;
+  canonicalKey: string;
+} {
+  let h = 0;
+  let m = 0;
+  if (typeof isoString === 'string' && isoString.includes('T')) {
+    const timePart = isoString.split('T')[1];
+    const match = timePart.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      h = parseInt(match[1], 10);
+      m = parseInt(match[2], 10);
+    } else {
+      const d = new Date(isoString);
+      h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
+      m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
+    }
+  } else if (typeof isoString === 'string' && isoString.includes(':')) {
+    const match = isoString.match(/^(\d{1,2}):(\d{2})/);
+    if (match) {
+      h = parseInt(match[1], 10);
+      m = parseInt(match[2], 10);
+    }
+  } else {
+    const d = new Date(isoString);
+    h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
+    m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
+  }
+
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  let hour12 = h % 12;
+  if (hour12 === 0) hour12 = 12;
+  const mStr = String(m).padStart(2, '0');
+  const h24Str = String(h).padStart(2, '0');
+  return {
+    hour: `${hour12}:${mStr}`,
+    ampm,
+    minutesFromMidnight: h * 60 + m,
+    canonicalKey: `${h24Str}:${mStr}`,
+  };
+}
+
+/**
+ * Formats a slot timestamp to a clean user-facing time label (e.g. "06:00 am")
+ * exactly matching court management configuration.
+ */
+export function formatSlotLabel(isoString: string): string {
+  const { hour, ampm } = parseSlotTime(isoString);
+  const parts = hour.split(':');
+  const paddedHour = parts[0].padStart(2, '0');
+  const min = parts[1] || '00';
+  return `${paddedHour}:${min} ${ampm.toLowerCase()}`;
+}
 
 /**
  * Short date: "Sep 22" or "Sep 22, 2025" (adds year if not current year)

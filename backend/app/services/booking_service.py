@@ -30,6 +30,7 @@ from app.models.booking import Booking, BookingStatus, BookingType
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.court import Court, CourtStatus
 from app.repositories.booking_repository import BookingRepository
+from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
 from app.repositories.club_repository import ClubRepository
 from app.repositories.court_repository import CourtRepository
@@ -60,6 +61,7 @@ class BookingService:
         self.club_repo = ClubRepository(db)
         self.player_profile_repo = PlayerProfileRepository(db)
         self.club_player_repo = ClubPlayerMembershipRepository(db)
+        self.club_membership_repo = ClubMembershipRepository(db)
         self.subscription_repo = MemberSubscriptionRepository(db)
         self.scheduling_repo = SchedulingRepository(db)
 
@@ -307,13 +309,21 @@ class BookingService:
         if not club or not club.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
 
-        # Verify active club membership
-        membership = await self.club_player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
-        if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Active club player membership required to book courts at this club",
-            )
+        # Verify caller has permission: either active staff member or active player member
+        is_staff = False
+        staff_membership = await self.club_membership_repo.get_by_user_and_club(
+            user_id=user_id, club_id=club_id
+        )
+        if staff_membership and staff_membership.is_active:
+            is_staff = True
+
+        if not is_staff:
+            membership = await self.club_player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
+            if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Active club player membership required to book courts at this club",
+                )
 
         court = await self.court_repo.get_by_id(court_id)
         if not court or court.club_id != club_id:
@@ -325,8 +335,11 @@ class BookingService:
                 detail="Court is inactive and cannot receive new bookings",
             )
 
-        # Booking horizon check (plan-aware)
-        _, max_horizon = await self._get_player_booking_limits(user_id=user_id, club_id=club_id)
+        # Booking horizon check (plan-aware, staff gets full MAX_BOOKING_HORIZON_DAYS)
+        if is_staff:
+            max_horizon = MAX_BOOKING_HORIZON_DAYS
+        else:
+            _, max_horizon = await self._get_player_booking_limits(user_id=user_id, club_id=club_id)
         now = datetime.now(timezone.utc)
         max_horizon_dt = now + timedelta(days=max_horizon)
         s_at = start_at.replace(tzinfo=timezone.utc) if start_at.tzinfo is None else start_at.astimezone(timezone.utc)
@@ -1217,7 +1230,15 @@ class BookingService:
                         None,
                     )
 
-                    is_available = conflict is None and match_conflict is None and court.is_active
+                    now_utc = datetime.now(timezone.utc)
+                    is_in_past = slot_start <= now_utc
+
+                    is_available = (
+                        conflict is None
+                        and match_conflict is None
+                        and court.is_active
+                        and not is_in_past
+                    )
                     slot_status = "AVAILABLE"
                     if not court.is_active:
                         slot_status = "BLOCKED"
@@ -1230,6 +1251,8 @@ class BookingService:
                             slot_status = "BLOCKED"
                         else:
                             slot_status = "BOOKED"
+                    elif is_in_past:
+                        slot_status = "PAST"
 
                     slots.append(
                         TimeSlotAvailability(
