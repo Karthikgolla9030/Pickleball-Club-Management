@@ -80,6 +80,7 @@ interface BrandingAssetCardProps {
   fallbackSource: any;
   uploading: boolean;
   isOwner: boolean;
+  assetKind?: 'banner' | 'picture';
   onUpload: () => void;
   onReset: () => void;
 }
@@ -92,10 +93,12 @@ function BrandingAssetCard({
   fallbackSource,
   uploading,
   isOwner,
+  assetKind = 'banner',
   onUpload,
   onReset,
 }: BrandingAssetCardProps) {
   const isCustom = Boolean(currentUrl);
+  const noun = assetKind === 'picture' ? 'Picture' : 'Banner';
 
   return (
     <Card style={styles.assetCard}>
@@ -141,7 +144,7 @@ function BrandingAssetCard({
           >
             <Camera size={14} color="#FFFFFF" />
             <AppText style={styles.assetBtnPrimaryText}>
-              {isCustom ? 'Replace Image' : 'Upload Custom Image'}
+              {isCustom ? `Replace Default ${noun}` : `Upload Default ${noun}`}
             </AppText>
           </TouchableOpacity>
 
@@ -153,7 +156,7 @@ function BrandingAssetCard({
               activeOpacity={0.8}
             >
               <RotateCcw size={14} color="#DC2626" />
-              <AppText style={styles.assetBtnResetText}>Reset to Default</AppText>
+              <AppText style={styles.assetBtnResetText}>Reset to Built-in Fallback</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -637,90 +640,93 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 2: LEAGUE DEFAULT IMAGES
+          GROUP 2: LEAGUE DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Award size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 2: League Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 2: League Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
-            Fallback banner used across owner and player league screens when no custom league banner is supplied.
+            Default picture displayed on league cards and league details when no custom picture is provided.
           </AppText>
         </View>
       </View>
 
       <BrandingAssetCard
-        title="League Competition Default Banner"
+        title="League Default Picture"
         categoryTag="LEAGUES"
-        description="Applied to multi-week league schedules, team standings, and playoff championship brackets in this club."
+        assetKind="picture"
+        description="Default picture displayed on league cards and league details when no custom picture is provided."
         currentUrl={branding?.default_league_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.league}
         uploading={uploadingField === 'default_league_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
-          handleUploadAsset('default_league_banner_url', 'default_league_banner', 'League Default Banner')
+          handleUploadAsset('default_league_banner_url', 'default_league_banner', 'League Default Picture')
         }
-        onReset={() => handleResetAsset('default_league_banner_url', 'League Default Banner')}
+        onReset={() => handleResetAsset('default_league_banner_url', 'League Default Picture')}
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 3: EVENT DEFAULT IMAGES
+          GROUP 3: EVENT DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Calendar size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 3: Event Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 3: Event Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
-            Fallback cover used across owner-side and Player App event listings for social mixers, open play, and community events.
+            Default picture displayed on event cards and event details when no custom picture is provided.
           </AppText>
         </View>
       </View>
 
       <BrandingAssetCard
-        title="Club Event Default Cover"
+        title="Event Default Picture"
         categoryTag="EVENTS"
-        description="Applied to social play events, clinics, and member gatherings without an event-specific custom photo."
+        assetKind="picture"
+        description="Default picture displayed on event cards and event details when no custom picture is provided."
         currentUrl={branding?.default_event_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.event}
         uploading={uploadingField === 'default_event_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
-          handleUploadAsset('default_event_banner_url', 'default_event_banner', 'Event Default Cover')
+          handleUploadAsset('default_event_banner_url', 'default_event_banner', 'Event Default Picture')
         }
-        onReset={() => handleResetAsset('default_event_banner_url', 'Event Default Cover')}
+        onReset={() => handleResetAsset('default_event_banner_url', 'Event Default Picture')}
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 4: LESSON AND COACHING DEFAULT IMAGES
+          GROUP 4: LESSON & COACHING DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <GraduationCap size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 4: Lesson & Coaching Default Images</AppText>
+          <AppText style={styles.groupTitle}>Group 4: Lesson & Coaching Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
-            Fallback image for private lessons, group clinics, and academy coaching sessions.
+            Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided.
           </AppText>
         </View>
       </View>
 
       <BrandingAssetCard
-        title="Lesson & Coaching Default Image"
+        title="Lesson & Coaching Default Picture"
         categoryTag="COACHING"
-        description="Applied to scheduled lesson cards, coach profiles, and booking offerings when no custom session photo is set."
+        assetKind="picture"
+        description="Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided."
         currentUrl={branding?.default_lesson_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.lesson}
         uploading={uploadingField === 'default_lesson_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
-          handleUploadAsset('default_lesson_banner_url', 'default_lesson_banner', 'Lesson Default Image')
+          handleUploadAsset('default_lesson_banner_url', 'default_lesson_banner', 'Lesson & Coaching Default Picture')
         }
-        onReset={() => handleResetAsset('default_lesson_banner_url', 'Lesson Default Image')}
+        onReset={() => handleResetAsset('default_lesson_banner_url', 'Lesson & Coaching Default Picture')}
       />
 
       {/* ══════════════════════════════════════════════════════════════════════

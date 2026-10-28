@@ -28,8 +28,8 @@ export function resolveMediaUrl(url: string | null | undefined, fallback: string
 
   // Relative upload path, e.g. "/uploads/logos/xyz.png"
   let base = API_ENDPOINTS.BASE?.replace(/\/+$/, '') || '';
-  if (!base && typeof window === 'undefined') {
-    // Native mobile fallback when base is unset in environment
+  if (!base || base.includes('vercel.app')) {
+    // Static backend uploads are hosted on the Render backend server, not Vercel
     base = 'https://pickleball-club-management.onrender.com';
   }
   if (trimmed.startsWith('/')) {

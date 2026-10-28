@@ -105,6 +105,7 @@ import {
   useStaffRegisterLessonPlayer,
   useStaffResetLessonAttendance,
   useUpdateCoach,
+  useUpdateClubLesson,
   useUpdateLessonType,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -124,6 +125,7 @@ import {
   type LessonRegistrationStatus,
   type LessonStatus,
   type LessonType,
+  type UpdateLessonPayload,
 } from '@/types';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 import { resolveLessonImage } from '@/utils/imageResolution';
@@ -195,6 +197,7 @@ export default function ClubLessonsScreen() {
 
   // Mutations
   const createLessonMutation = useCreateClubLesson(activeClubId ?? '');
+  const updateLessonMutation = useUpdateClubLesson(activeClubId ?? '');
   const publishLessonMutation = usePublishClubLesson(activeClubId ?? '');
   const cancelLessonMutation = useCancelClubLesson(activeClubId ?? '');
   const completeLessonMutation = useCompleteClubLesson(activeClubId ?? '');
@@ -209,7 +212,8 @@ export default function ClubLessonsScreen() {
   const deactivateLessonTypeMutation = useDeactivateLessonType(activeClubId ?? '');
   const reactivateLessonTypeMutation = useReactivateLessonType(activeClubId ?? '');
 
-  // Form states - Create Lesson
+  // Form states - Create / Edit Lesson
+  const [editingLesson, setEditingLesson] = useState<ClubLesson | null>(null);
   const [lessonTypeId, setLessonTypeId] = useState('');
   const [coachId, setCoachId] = useState('');
   const [courtId, setCourtId] = useState('');
@@ -315,29 +319,48 @@ export default function ClubLessonsScreen() {
     }
 
     try {
-      const payload: CreateLessonPayload = {
-        title: lessonTitle.trim(),
-        description: lessonDesc.trim() || null,
-        image_url: lessonImageUrl || null,
-        lesson_type_id: lessonTypeId,
-        coach_id: coachId,
-        court_id: courtId || null,
-        start_at: lessonStartAt.trim(),
-        end_at: lessonEndAt.trim(),
-        capacity: lessonCapacity ? parseInt(lessonCapacity, 10) : undefined,
-        price: lessonPrice ? parseFloat(lessonPrice) : undefined,
-      };
+      if (editingLesson) {
+        const payload: UpdateLessonPayload = {
+          title: lessonTitle.trim(),
+          description: lessonDesc.trim() || null,
+          image_url: lessonImageUrl || null,
+          lesson_type_id: lessonTypeId,
+          coach_id: coachId,
+          court_id: courtId || null,
+          start_at: lessonStartAt.trim(),
+          end_at: lessonEndAt.trim(),
+          capacity: lessonCapacity ? parseInt(lessonCapacity, 10) : undefined,
+          price: lessonPrice ? parseFloat(lessonPrice) : undefined,
+        };
 
-      await createLessonMutation.mutateAsync(payload);
-      Alert.alert('Success', 'Lesson created in draft status.');
+        await updateLessonMutation.mutateAsync({ lessonId: editingLesson.id, payload });
+        Alert.alert('Success', 'Lesson updated successfully.');
+      } else {
+        const payload: CreateLessonPayload = {
+          title: lessonTitle.trim(),
+          description: lessonDesc.trim() || null,
+          image_url: lessonImageUrl || null,
+          lesson_type_id: lessonTypeId,
+          coach_id: coachId,
+          court_id: courtId || null,
+          start_at: lessonStartAt.trim(),
+          end_at: lessonEndAt.trim(),
+          capacity: lessonCapacity ? parseInt(lessonCapacity, 10) : undefined,
+          price: lessonPrice ? parseFloat(lessonPrice) : undefined,
+        };
+
+        await createLessonMutation.mutateAsync(payload);
+        Alert.alert('Success', 'Lesson created in draft status.');
+      }
       setCreateLessonVisible(false);
       resetLessonForm();
     } catch (err: any) {
-      Alert.alert('Error Creating Lesson', err.message || 'Failed to create lesson.');
+      Alert.alert('Error Saving Lesson', err.message || 'Failed to save lesson.');
     }
   };
 
   const resetLessonForm = () => {
+    setEditingLesson(null);
     setLessonTitle('');
     setLessonDesc('');
     setLessonImageUrl(null);
@@ -348,6 +371,21 @@ export default function ClubLessonsScreen() {
     setLessonEndAt('');
     setLessonCapacity('');
     setLessonPrice('');
+  };
+
+  const handleOpenEditLesson = (lesson: ClubLesson) => {
+    setEditingLesson(lesson);
+    setLessonTitle(lesson.title || '');
+    setLessonDesc(lesson.description || '');
+    setLessonImageUrl(lesson.image_url || null);
+    setLessonTypeId(lesson.lesson_type_id || '');
+    setCoachId(lesson.coach_id || '');
+    setCourtId(lesson.court_id || '');
+    setLessonStartAt(lesson.start_at || '');
+    setLessonEndAt(lesson.end_at || '');
+    setLessonCapacity(lesson.capacity ? String(lesson.capacity) : '');
+    setLessonPrice(lesson.price ? String(lesson.price) : '');
+    setCreateLessonVisible(true);
   };
 
   // Handle Create/Update Coach
@@ -518,6 +556,7 @@ export default function ClubLessonsScreen() {
 
   const handleLessonMenu = (lesson: ClubLesson) => {
     const buttons: any[] = [];
+    buttons.push({ text: 'Edit Lesson & Picture', onPress: () => handleOpenEditLesson(lesson) });
     if (lesson.status === 'draft') {
       buttons.push({ text: 'Publish Lesson', onPress: () => handlePublish(lesson) });
     }
@@ -1105,23 +1144,39 @@ export default function ClubLessonsScreen() {
         />
       )}
 
-      {/* ─── MODAL: CREATE LESSON ─────────────────────────────────────────── */}
+      {/* ─── MODAL: CREATE / EDIT LESSON ──────────────────────────────────── */}
       <ModalSheet
         visible={createLessonVisible}
-        onClose={() => setCreateLessonVisible(false)}
-        title="Schedule New Lesson"
-        subtitle="Set up a clinic, private coaching, or group lesson."
+        onClose={() => {
+          setCreateLessonVisible(false);
+          resetLessonForm();
+        }}
+        title={editingLesson ? 'Edit Lesson' : 'Schedule New Lesson'}
+        subtitle={
+          editingLesson
+            ? 'Update coaching details, picture, and schedule.'
+            : 'Set up a clinic, private coaching, or group lesson.'
+        }
         actions={[
           {
             label: 'Cancel',
             variant: 'secondary',
-            onPress: () => setCreateLessonVisible(false),
+            onPress: () => {
+              setCreateLessonVisible(false);
+              resetLessonForm();
+            },
           },
           {
-            label: createLessonMutation.isPending ? 'Scheduling...' : 'Schedule Lesson',
+            label: editingLesson
+              ? updateLessonMutation.isPending
+                ? 'Saving...'
+                : 'Save Changes'
+              : createLessonMutation.isPending
+              ? 'Scheduling...'
+              : 'Schedule Lesson',
             variant: 'primary',
             onPress: handleCreateLesson,
-            loading: createLessonMutation.isPending,
+            loading: createLessonMutation.isPending || updateLessonMutation.isPending,
           },
         ]}
       >
@@ -1142,25 +1197,25 @@ export default function ClubLessonsScreen() {
             numberOfLines={2}
           />
 
-          {/* Optional Lesson Image Card */}
+          {/* Optional Lesson Picture Card */}
           <Card style={styles.formAssetCard}>
             <View style={styles.formAssetHeader}>
               <View style={styles.formAssetHeaderTitleRow}>
                 <ImageIcon size={16} color={Colors.brand.primary} />
                 <AppText variant="caption" color="secondary" style={styles.formAssetHeaderLabel}>
-                  LESSON IMAGE (OPTIONAL)
+                  LESSON PICTURE (OPTIONAL)
                 </AppText>
               </View>
               <Badge
-                label={lessonImageUrl ? 'Custom Image' : 'Inheriting Club Default'}
+                label={lessonImageUrl ? 'Custom Picture' : 'Inheriting Club Default'}
                 variant={lessonImageUrl ? 'success' : 'default'}
               />
             </View>
 
             <AppText variant="caption" color="tertiary" style={styles.formAssetDescription}>
               {lessonImageUrl
-                ? 'This custom image will be displayed specifically for this lesson session.'
-                : "No custom image selected. This lesson will automatically use your club's default coaching image."}
+                ? 'This custom picture will be displayed specifically for this lesson session.'
+                : "No custom picture selected. This lesson will automatically use your club's default coaching picture."}
             </AppText>
 
             <View style={styles.formAssetPreviewContainer}>
@@ -1177,7 +1232,7 @@ export default function ClubLessonsScreen() {
                 <View style={styles.formAssetUploadingOverlay}>
                   <ActivityIndicator size="small" color="#FFFFFF" />
                   <AppText variant="caption" style={styles.formAssetUploadingText}>
-                    Uploading image...
+                    Uploading picture...
                   </AppText>
                 </View>
               )}
@@ -1192,7 +1247,7 @@ export default function ClubLessonsScreen() {
               >
                 <Camera size={14} color={Colors.text.primary} />
                 <AppText variant="bodySmall" style={styles.formAssetActionBtnText}>
-                  {lessonImageUrl ? 'Replace Custom Image' : 'Upload Custom Image'}
+                  {lessonImageUrl ? 'Replace Custom Picture' : 'Upload Custom Picture'}
                 </AppText>
               </TouchableOpacity>
 
@@ -1205,7 +1260,7 @@ export default function ClubLessonsScreen() {
                 >
                   <RotateCcw size={14} color={Colors.text.secondary} />
                   <AppText variant="bodySmall" style={styles.formAssetResetBtnText}>
-                    Reset to Default
+                    Reset to Club Default
                   </AppText>
                 </TouchableOpacity>
               )}

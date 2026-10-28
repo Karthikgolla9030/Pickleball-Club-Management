@@ -50,6 +50,26 @@ export function useClubLeagues(clubId: string | null, status?: LeagueStatus) {
     },
   });
 
+  const updateLeagueMutation = useMutation({
+    mutationFn: ({
+      leagueId,
+      payload,
+    }: {
+      leagueId: string;
+      payload: Partial<CreateLeaguePayload>;
+    }) => {
+      if (!clubId) throw new Error('Club ID required');
+      return leagueApi.updateLeague(clubId, leagueId, payload);
+    },
+    onSuccess: (_, variables) => {
+      if (clubId) {
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUES(clubId) });
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_LEAGUE_DETAIL(clubId, variables.leagueId) });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
+    },
+  });
+
   const openRegistrationMutation = useMutation({
     mutationFn: (leagueId: string) => {
       if (!clubId) throw new Error('Club ID required');
@@ -144,6 +164,8 @@ export function useClubLeagues(clubId: string | null, status?: LeagueStatus) {
     ...leaguesQuery,
     createLeague: createLeagueMutation.mutateAsync,
     isCreating: createLeagueMutation.isPending,
+    updateLeague: updateLeagueMutation.mutateAsync,
+    isUpdating: updateLeagueMutation.isPending,
     openRegistration: openRegistrationMutation.mutateAsync,
     isOpeningRegistration: openRegistrationMutation.isPending,
     closeRegistration: closeRegistrationMutation.mutateAsync,

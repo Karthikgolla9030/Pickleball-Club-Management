@@ -204,6 +204,7 @@ class LessonService:
             default_price=payload.default_price,
             currency=payload.currency,
             is_private=payload.is_private,
+            image_url=payload.image_url,
         )
         return LessonTypeResponse.model_validate(lesson_type)
 
@@ -253,6 +254,8 @@ class LessonService:
             lt.is_private = payload.is_private
             if payload.is_private and lt.default_capacity is None:
                 lt.default_capacity = 1
+        if "image_url" in payload.model_fields_set:
+            lt.image_url = payload.image_url
 
         lt = await self.lesson_type_repo.update(lt)
         return LessonTypeResponse.model_validate(lt)
@@ -382,6 +385,7 @@ class LessonService:
             court_id=court.id if court else None,
             title=payload.title,
             description=payload.description,
+            image_url=payload.image_url,
             start_at=start_at,
             end_at=end_at,
             capacity=capacity,
@@ -540,6 +544,8 @@ class LessonService:
 
         if payload.capacity is not None and not lesson.lesson_type.is_private:
             lesson.capacity = payload.capacity
+        if "image_url" in payload.model_fields_set:
+            lesson.image_url = payload.image_url
 
         lesson = await self.lesson_repo.update(lesson)
         resp = await self._to_lesson_detail_response(lesson)
@@ -1114,6 +1120,7 @@ class LessonService:
             court_id=lesson.court_id,
             title=lesson.title,
             description=lesson.description,
+            image_url=lesson.image_url,
             start_at=lesson.start_at,
             end_at=lesson.end_at,
             capacity=lesson.capacity,

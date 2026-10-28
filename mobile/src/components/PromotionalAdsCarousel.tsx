@@ -14,7 +14,7 @@
  * - Omission or clean handling when no eligible ads exist (no fake ads)
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ImageBackground,
   NativeScrollEvent,
@@ -58,6 +58,27 @@ export function PromotionalAdsCarousel({
   const cardWidth = Math.min(Math.max(windowWidth - 48, 280), 400);
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
+  const isInteracting = useRef(false);
+
+  // Auto-scroll carousel every 5 seconds when multiple ads exist and user is not actively interacting
+  useEffect(() => {
+    if (ads.length <= 1) return;
+
+    const interval = setInterval(() => {
+      if (isInteracting.current) return;
+
+      setActiveIndex((prev) => {
+        const next = (prev + 1) % ads.length;
+        scrollRef.current?.scrollTo({
+          x: next * (cardWidth + 12),
+          animated: true,
+        });
+        return next;
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [ads.length, cardWidth]);
 
   // If no ads exist and hideIfEmpty is enabled, return null gracefully (no fake ads)
   if (!isLoading && ads.length === 0 && hideIfEmpty) {
@@ -108,11 +129,28 @@ export function PromotionalAdsCarousel({
         bounces={false}
         scrollEventThrottle={16}
         onScroll={handleScroll}
+        onScrollBeginDrag={() => {
+          isInteracting.current = true;
+        }}
+        onScrollEndDrag={() => {
+          setTimeout(() => {
+            isInteracting.current = false;
+          }, 2500);
+        }}
+        onTouchStart={() => {
+          isInteracting.current = true;
+        }}
+        onTouchEnd={() => {
+          setTimeout(() => {
+            isInteracting.current = false;
+          }, 2500);
+        }}
         contentContainerStyle={styles.scrollContent}
       >
         {ads.map((ad, idx) => {
           const clubName = 'club_name' in ad ? ad.club_name : null;
           const imageUrl = resolveMediaUrl(ad.image_url);
+          const displayTitle = ad.title || (clubName ? `${clubName} Special` : 'Featured Offer');
 
           return (
             <TouchableOpacity
@@ -151,11 +189,9 @@ export function PromotionalAdsCarousel({
 
                   {/* Middle / Bottom Content */}
                   <View style={styles.bottomContent}>
-                    {ad.title ? (
-                      <AppText style={styles.adTitle} numberOfLines={2}>
-                        {ad.title}
-                      </AppText>
-                    ) : null}
+                    <AppText style={styles.adTitle} numberOfLines={2}>
+                      {displayTitle}
+                    </AppText>
 
                     {ad.subtitle ? (
                       <AppText style={styles.adSubtitle} numberOfLines={2}>
@@ -183,8 +219,16 @@ export function PromotionalAdsCarousel({
       {ads.length > 1 && (
         <View style={styles.dotsContainer}>
           {ads.map((_, dotIdx) => (
-            <View
+            <TouchableOpacity
               key={dotIdx}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              onPress={() => {
+                setActiveIndex(dotIdx);
+                scrollRef.current?.scrollTo({
+                  x: dotIdx * (cardWidth + 12),
+                  animated: true,
+                });
+              }}
               style={[
                 styles.dot,
                 dotIdx === activeIndex ? styles.dotActive : styles.dotInactive,

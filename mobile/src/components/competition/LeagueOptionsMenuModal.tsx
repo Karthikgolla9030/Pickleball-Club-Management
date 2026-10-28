@@ -23,6 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertTriangle,
   Calendar,
+  Camera,
   CheckCircle2,
   ChevronRight,
   Lock,
@@ -50,6 +51,7 @@ export interface LeagueOptionsMenuModalProps {
   onGeneratePlayoffsPress?: (league: LeagueSummary) => void;
   onCompletePress?: (league: LeagueSummary) => void;
   onViewResultsPress?: (league: LeagueSummary) => void;
+  onEditLeaguePress?: (league: LeagueSummary) => void;
   onManagePress?: (league: LeagueSummary) => void;
   onCancelPress?: (league: LeagueSummary) => void;
 }
@@ -89,6 +91,7 @@ export function LeagueOptionsMenuModal({
   onGeneratePlayoffsPress,
   onCompletePress,
   onViewResultsPress,
+  onEditLeaguePress,
   onManagePress,
   onCancelPress,
 }: LeagueOptionsMenuModalProps) {
@@ -361,6 +364,35 @@ export function LeagueOptionsMenuModal({
                       </AppText>
                     </View>
                     <ChevronRight size={18} color="#087A60" />
+                  </TouchableOpacity>
+                )}
+
+                {/* Edit League & Picture */}
+                {!isCancelled && !isCompleted && canManage && onEditLeaguePress && (
+                  <TouchableOpacity
+                    style={[styles.actionRow, isProcessing && styles.actionDisabled]}
+                    onPress={() => {
+                      if (isProcessing) return;
+                      onClose();
+                      onEditLeaguePress(league);
+                    }}
+                    disabled={isProcessing}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit League & Picture"
+                  >
+                    <View style={styles.actionIconWrapSettings}>
+                      <Camera size={18} color="#1E293B" />
+                    </View>
+                    <View style={styles.actionTextWrap}>
+                      <AppText style={styles.actionTitle}>
+                        Edit League & Picture
+                      </AppText>
+                      <AppText variant="caption" color="secondary" style={styles.actionDesc}>
+                        Update league information, dates, and custom picture
+                      </AppText>
+                    </View>
+                    <ChevronRight size={18} color="#94A3B8" />
                   </TouchableOpacity>
                 )}
 

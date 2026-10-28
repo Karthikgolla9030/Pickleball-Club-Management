@@ -188,6 +188,7 @@ class TournamentRepository:
         scoring_rules: dict | None = None,
         tiebreaker_rules: list | None = None,
         format_configuration: dict | None = None,
+        banner_image_url: str | None = None,
     ) -> Tournament:
         """Create a new tournament."""
         tournament = Tournament(
@@ -195,6 +196,7 @@ class TournamentRepository:
             created_by_user_id=created_by_user_id,
             name=name,
             description=description,
+            banner_image_url=banner_image_url,
             status=TournamentStatus.DRAFT,
             format=format,
             visibility=visibility,

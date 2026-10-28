@@ -129,6 +129,7 @@ class LeagueService:
             scoring_rules=scoring_rules,
             start_date=payload.start_date,
             end_date=payload.end_date,
+            banner_image_url=payload.banner_image_url,
         )
 
         # Create LeagueWeek records: 1..N-1 Regular Season, N Playoffs
@@ -177,6 +178,7 @@ class LeagueService:
             club_slug=club_slug,
             name=league.name,
             description=league.description,
+            banner_image_url=league.banner_image_url,
             status=league.status,
             status_display=league.status.display_label,
             number_of_weeks=league.number_of_weeks,
@@ -315,6 +317,8 @@ class LeagueService:
             updates["end_date"] = payload.end_date
         if payload.scoring_rules is not None:
             updates["scoring_rules"] = payload.scoring_rules
+        if "banner_image_url" in payload.model_fields_set:
+            updates["banner_image_url"] = payload.banner_image_url
 
         # If number of weeks changed before schedule generation
         if payload.number_of_weeks is not None and payload.number_of_weeks != league.number_of_weeks:

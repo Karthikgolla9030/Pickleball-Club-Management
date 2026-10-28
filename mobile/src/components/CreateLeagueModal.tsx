@@ -22,7 +22,7 @@ import { DatePickerInput } from './DatePickerInput';
 import { Input } from './Input';
 import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Layout, Radius, Spacing, Typography } from '@/theme';
-import type { ClubBranding, CreateLeaguePayload } from '@/types';
+import type { ClubBranding, CreateLeaguePayload, LeagueSummary } from '@/types';
 import { resolveMediaUrl } from '@/utils';
 import { resolveLeagueBanner } from '@/utils/imageResolution';
 
@@ -33,6 +33,9 @@ interface CreateLeagueModalProps {
   isCreating: boolean;
   clubId?: string | null;
   clubBranding?: ClubBranding | null;
+  leagueToEdit?: LeagueSummary | null;
+  onUpdate?: (leagueId: string, payload: Partial<CreateLeaguePayload>) => Promise<void>;
+  isUpdating?: boolean;
 }
 
 export function CreateLeagueModal({
@@ -42,6 +45,9 @@ export function CreateLeagueModal({
   isCreating,
   clubId,
   clubBranding,
+  leagueToEdit,
+  onUpdate,
+  isUpdating,
 }: CreateLeagueModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -68,19 +74,33 @@ export function CreateLeagueModal({
 
   useEffect(() => {
     if (visible) {
-      setName('');
-      setDescription('');
-      setBannerImageUrl(null);
-      setFormat('doubles');
-      setMaxTeams('8');
-      setNumberOfWeeks('4');
-      setHasPlayoffs(true);
-      setPlayoffTeamCount('4');
-      setEntryFee('0');
-      setStartDate('');
-      setFormError(null);
+      if (leagueToEdit) {
+        setName(leagueToEdit.name || '');
+        setDescription(leagueToEdit.description || '');
+        setBannerImageUrl(leagueToEdit.banner_image_url || null);
+        setFormat(leagueToEdit.team_size === 1 ? 'singles' : 'doubles');
+        setMaxTeams(leagueToEdit.max_teams ? String(leagueToEdit.max_teams) : '8');
+        setNumberOfWeeks(leagueToEdit.number_of_weeks ? String(leagueToEdit.number_of_weeks) : '4');
+        setHasPlayoffs((leagueToEdit.playoff_team_count ?? 0) > 0);
+        setPlayoffTeamCount(leagueToEdit.playoff_team_count ? String(leagueToEdit.playoff_team_count) : '4');
+        setEntryFee(leagueToEdit.registration_fee !== undefined ? String(leagueToEdit.registration_fee) : '0');
+        setStartDate(leagueToEdit.start_date ? leagueToEdit.start_date.split('T')[0] : '');
+        setFormError(null);
+      } else {
+        setName('');
+        setDescription('');
+        setBannerImageUrl(null);
+        setFormat('doubles');
+        setMaxTeams('8');
+        setNumberOfWeeks('4');
+        setHasPlayoffs(true);
+        setPlayoffTeamCount('4');
+        setEntryFee('0');
+        setStartDate('');
+        setFormError(null);
+      }
     }
-  }, [visible]);
+  }, [visible, leagueToEdit]);
 
   const handleApplySuggested = () => {
     setNumberOfWeeks(String(suggestedWeeks));
@@ -179,9 +199,17 @@ export function CreateLeagueModal({
     };
 
     try {
-      await onSubmit(payload);
+      if (leagueToEdit && onUpdate) {
+        await onUpdate(leagueToEdit.id, payload);
+      } else {
+        await onSubmit(payload);
+      }
+      onClose();
     } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to create league';
+      const msg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        (leagueToEdit ? 'Failed to update league' : 'Failed to create league');
       setFormError(msg);
     }
   };
@@ -203,7 +231,7 @@ export function CreateLeagueModal({
           <View style={styles.headerContainer}>
             <View style={styles.topRow}>
               <AppText variant="heading2" style={styles.mainTitle}>
-                Create League
+                {leagueToEdit ? 'Edit League & Picture' : 'Create League'}
               </AppText>
               <TouchableOpacity
                 onPress={onClose}
@@ -218,7 +246,7 @@ export function CreateLeagueModal({
 
             <View style={styles.stepTitleRow}>
               <AppText variant="heading3" style={styles.stepTitle}>
-                League & Season Setup
+                {leagueToEdit ? 'Update Details & Custom Picture' : 'League & Season Setup'}
               </AppText>
             </View>
           </View>
@@ -300,19 +328,19 @@ export function CreateLeagueModal({
                   <View style={styles.bannerHeaderTitleRow}>
                     <ImageIcon size={16} color={Colors.brand.primary} />
                     <AppText variant="caption" color="secondary" style={styles.bannerHeaderLabel}>
-                      LEAGUE BANNER (OPTIONAL)
+                      LEAGUE PICTURE (OPTIONAL)
                     </AppText>
                   </View>
                   <Badge
-                    label={bannerImageUrl ? 'Custom Banner' : 'Inheriting Club Default'}
+                    label={bannerImageUrl ? 'Custom Picture' : 'Inheriting Club Default'}
                     variant={bannerImageUrl ? 'success' : 'default'}
                   />
                 </View>
 
                 <AppText variant="caption" color="tertiary" style={styles.bannerDescription}>
                   {bannerImageUrl
-                    ? 'This custom banner will be displayed specifically for this league.'
-                    : "No custom banner selected. This league will automatically use your club's default league banner."}
+                    ? 'This custom picture will be displayed on this league’s cards and details.'
+                    : "No custom picture selected. This league will automatically use your club's default league picture."}
                 </AppText>
 
                 <View style={styles.bannerPreviewContainer}>
@@ -329,7 +357,7 @@ export function CreateLeagueModal({
                     <View style={styles.bannerUploadingOverlay}>
                       <ActivityIndicator size="small" color="#FFFFFF" />
                       <AppText variant="caption" style={styles.bannerUploadingText}>
-                        Uploading banner...
+                        Uploading picture...
                       </AppText>
                     </View>
                   )}
@@ -344,7 +372,7 @@ export function CreateLeagueModal({
                   >
                     <Camera size={14} color={Colors.text.primary} />
                     <AppText variant="bodySmall" style={styles.bannerActionBtnText}>
-                      {bannerImageUrl ? 'Replace Custom Banner' : 'Upload Custom Banner'}
+                      {bannerImageUrl ? 'Replace Custom Picture' : 'Upload Custom Picture'}
                     </AppText>
                   </TouchableOpacity>
 
@@ -357,7 +385,7 @@ export function CreateLeagueModal({
                     >
                       <RotateCcw size={14} color={Colors.text.secondary} />
                       <AppText variant="bodySmall" style={styles.bannerResetBtnText}>
-                        Reset to Default
+                        Reset to Club Default
                       </AppText>
                     </TouchableOpacity>
                   )}
@@ -494,10 +522,18 @@ export function CreateLeagueModal({
               style={styles.footerButton}
             />
             <Button
-              label="Create League"
+              label={
+                leagueToEdit
+                  ? isUpdating
+                    ? 'Saving...'
+                    : 'Save Changes'
+                  : isCreating
+                  ? 'Creating...'
+                  : 'Create League'
+              }
               variant="primary"
               onPress={handleSubmit}
-              loading={isCreating}
+              loading={isCreating || isUpdating}
               style={styles.footerButton}
             />
           </View>

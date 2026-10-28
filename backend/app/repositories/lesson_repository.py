@@ -104,11 +104,13 @@ class LessonTypeRepository:
         default_capacity: int | None = None,
         currency: str = "USD",
         is_private: bool = False,
+        image_url: str | None = None,
     ) -> LessonType:
         lesson_type = LessonType(
             club_id=club_id,
             name=name,
             description=description,
+            image_url=image_url,
             duration_minutes=duration_minutes,
             default_capacity=default_capacity,
             default_price=default_price,
@@ -171,6 +173,7 @@ class LessonRepository:
         registration_closes_at: datetime | None = None,
         created_by_user_id: UUID | None = None,
         status: LessonStatus = LessonStatus.DRAFT,
+        image_url: str | None = None,
     ) -> Lesson:
         lesson = Lesson(
             club_id=club_id,
@@ -179,6 +182,7 @@ class LessonRepository:
             court_id=court_id,
             title=title,
             description=description,
+            image_url=image_url,
             start_at=start_at,
             end_at=end_at,
             capacity=capacity,

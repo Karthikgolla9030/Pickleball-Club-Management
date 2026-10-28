@@ -387,6 +387,7 @@ class TournamentService:
             scoring_rules=payload.scoring_rules.model_dump() if payload.scoring_rules else None,
             tiebreaker_rules=payload.tiebreaker_rules,
             format_configuration=format_config if format_config else None,
+            banner_image_url=payload.banner_image_url,
         )
         await self.db.commit()
         resp = _build_tournament_response(tournament)

@@ -58,6 +58,7 @@ export default function ClubLeaguesScreen() {
   // Filter state
   const [activeTab, setActiveTab] = useState<FilterTabKey>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingLeague, setEditingLeague] = useState<LeagueSummary | null>(null);
   const [optionsMenuLeague, setOptionsMenuLeague] = useState<LeagueSummary | null>(null);
   const [isActionProcessing, setIsActionProcessing] = useState(false);
 
@@ -71,6 +72,8 @@ export default function ClubLeaguesScreen() {
     isRefetching,
     createLeague,
     isCreating,
+    updateLeague,
+    isUpdating,
     openRegistration,
     closeRegistration,
     startLeague,
@@ -111,12 +114,19 @@ export default function ClubLeaguesScreen() {
   }, [leagues, activeTab]);
 
   const handleOpenCreateModal = () => {
+    setEditingLeague(null);
     setIsCreateModalOpen(true);
   };
 
   const handleCreateLeague = async (payload: CreateLeaguePayload) => {
     await createLeague(payload);
     setIsCreateModalOpen(false);
+  };
+
+  const handleUpdateLeague = async (leagueId: string, payload: Partial<CreateLeaguePayload>) => {
+    await updateLeague({ leagueId, payload });
+    setIsCreateModalOpen(false);
+    setEditingLeague(null);
   };
 
   const handleLeaguePress = (leagueId: string) => {
@@ -435,9 +445,15 @@ export default function ClubLeaguesScreen() {
       {/* Create League Modal Sheet */}
       <CreateLeagueModal
         visible={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setEditingLeague(null);
+        }}
         onSubmit={handleCreateLeague}
         isCreating={isCreating}
+        leagueToEdit={editingLeague}
+        onUpdate={handleUpdateLeague}
+        isUpdating={isUpdating}
         clubId={clubId}
         clubBranding={branding}
       />
@@ -476,6 +492,11 @@ export default function ClubLeaguesScreen() {
         onViewResultsPress={(l) => {
           setOptionsMenuLeague(null);
           handleLeaguePress(l.id);
+        }}
+        onEditLeaguePress={(l) => {
+          setOptionsMenuLeague(null);
+          setEditingLeague(l);
+          setIsCreateModalOpen(true);
         }}
         onManagePress={(l) => {
           setOptionsMenuLeague(null);

@@ -450,3 +450,102 @@ async def test_branding_media_upload_validation_and_rbac(
         files={"file": ("banner.png", valid_png_bytes, "image/png")},
     )
     assert cross_upload_resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_activity_custom_picture_persistence_and_independence(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Verify:
+    1. Creating league, event, and tournament with custom pictures persists them.
+    2. Response objects contain the custom picture URLs.
+    3. Custom pictures do not overwrite or mutate club defaults in branding.
+    4. Updating custom pictures updates only that activity.
+    """
+    owner = await create_user(db_session, "owner_activity_pic@test.local")
+    club = await create_club(db_session, "Pic Club")
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    # Configure club default pictures
+    brand_put = await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+        json={
+            "default_league_banner_url": "/uploads/defaults/club_league_default.jpg",
+            "default_event_banner_url": "/uploads/defaults/club_event_default.jpg",
+            "default_tournament_round_robin_url": "/uploads/defaults/club_rr_default.jpg",
+        },
+    )
+    assert brand_put.status_code == 200, brand_put.text
+
+    # 1. Create League with custom picture
+    custom_league_pic = "/uploads/leagues/custom_league_123.jpg"
+    league_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/leagues",
+        headers=make_auth_header(owner),
+        json={
+            "name": "Summer Super League",
+            "number_of_weeks": 4,
+            "team_size": 2,
+            "playoff_team_count": 2,
+            "max_teams": 8,
+            "banner_image_url": custom_league_pic,
+        },
+    )
+    assert league_res.status_code in (200, 201), league_res.text
+    league_data = league_res.json()
+    assert league_data["banner_image_url"] == custom_league_pic
+
+    # 2. Create Event with custom picture
+    custom_event_pic = "/uploads/events/custom_event_456.jpg"
+    now = datetime.now(timezone.utc)
+    event_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/events",
+        headers=make_auth_header(owner),
+        json={
+            "title": "Sunset Social Mixer",
+            "event_type": "social",
+            "visibility": "public",
+            "start_at": (now + timedelta(days=2)).isoformat(),
+            "end_at": (now + timedelta(days=2, hours=3)).isoformat(),
+            "capacity": 24,
+            "cover_image_url": custom_event_pic,
+        },
+    )
+    assert event_res.status_code in (200, 201), event_res.text
+    event_data = event_res.json()
+    assert event_data["cover_image_url"] == custom_event_pic
+
+    # 3. Create Tournament with custom picture
+    custom_tourn_pic = "/uploads/tournaments/custom_rr_789.jpg"
+    tourn_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments",
+        headers=make_auth_header(owner),
+        json={
+            "name": "Grand Round Robin",
+            "format": "round_robin",
+            "visibility": "public",
+            "start_date": (now + timedelta(days=5)).isoformat(),
+            "end_date": (now + timedelta(days=5, hours=4)).isoformat(),
+            "registration_open_at": (now - timedelta(days=1)).isoformat(),
+            "registration_close_at": (now + timedelta(days=4)).isoformat(),
+            "banner_image_url": custom_tourn_pic,
+        },
+    )
+    assert tourn_res.status_code in (200, 201), tourn_res.text
+    tourn_data = tourn_res.json()
+    assert tourn_data["banner_image_url"] == custom_tourn_pic
+
+    # 4. Verify Club defaults in Branding & Assets remain intact (no overwrite)
+    branding_res = await async_client.get(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+    )
+    assert branding_res.status_code == 200
+    branding_data = branding_res.json()
+    assert branding_data["default_league_banner_url"] == "/uploads/defaults/club_league_default.jpg"
+    assert branding_data["default_event_banner_url"] == "/uploads/defaults/club_event_default.jpg"
+    assert branding_data["default_tournament_round_robin_url"] == "/uploads/defaults/club_rr_default.jpg"

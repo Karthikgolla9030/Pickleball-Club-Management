@@ -22,7 +22,7 @@
  *       * Staff manual player registration
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -91,6 +91,7 @@ import {
   useStaffPromoteWaitlisted,
   useStaffRegisterPlayer,
   useStaffResetAttendance,
+  useUpdateClubEvent,
 } from '@/hooks';
 import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -109,6 +110,7 @@ import {
   type EventStatus,
   type EventType,
   type EventVisibility,
+  type UpdateEventPayload,
 } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -216,6 +218,7 @@ function EventCard({
   index,
   clubCoverUrl,
   clubBranding,
+  onEditEvent,
   onViewRoster,
   onPublish,
   onCancel,
@@ -226,6 +229,7 @@ function EventCard({
   index: number;
   clubCoverUrl?: string | null;
   clubBranding?: ClubBranding | null;
+  onEditEvent: (event: ClubEvent) => void;
   onViewRoster: (event: ClubEvent) => void;
   onPublish: (event: ClubEvent) => void;
   onCancel: (event: ClubEvent) => void;
@@ -248,6 +252,7 @@ function EventCard({
 
   const handleOptionsPress = () => {
     const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
+      { text: 'Edit Event & Picture', onPress: () => onEditEvent(event) },
       { text: 'View Roster', onPress: () => onViewRoster(event) },
     ];
 
@@ -937,12 +942,14 @@ function CreateEventModal({
   visible,
   clubId,
   clubBranding,
+  eventToEdit,
   onClose,
   onSuccess,
 }: {
   visible: boolean;
   clubId: string;
   clubBranding?: ClubBranding | null;
+  eventToEdit?: ClubEvent | null;
   onClose: () => void;
   onSuccess: () => void;
 }) {
@@ -972,6 +979,33 @@ function CreateEventModal({
   const [endAt, setEndAt] = useState(defaultEnd);
 
   const createEventMutation = useCreateClubEvent(clubId);
+  const updateEventMutation = useUpdateClubEvent(clubId);
+
+  useEffect(() => {
+    if (eventToEdit) {
+      setTitle(eventToEdit.title || '');
+      setDescription(eventToEdit.description || '');
+      setCoverImageUrl(eventToEdit.cover_image_url || null);
+      setEventType(eventToEdit.event_type || 'social');
+      setVisibility(eventToEdit.visibility || 'public');
+      setLocation(eventToEdit.location || '');
+      setCapacity(eventToEdit.capacity ? String(eventToEdit.capacity) : '');
+      setFee(eventToEdit.registration_fee ? String(eventToEdit.registration_fee) : '');
+      setStartAt(eventToEdit.start_at || defaultStart);
+      setEndAt(eventToEdit.end_at || defaultEnd);
+    } else {
+      setTitle('');
+      setDescription('');
+      setCoverImageUrl(null);
+      setEventType('social');
+      setVisibility('public');
+      setLocation('');
+      setCapacity('');
+      setFee('');
+      setStartAt(defaultStart);
+      setEndAt(defaultEnd);
+    }
+  }, [eventToEdit, visible, defaultStart, defaultEnd]);
 
   const handlePickCover = async () => {
     if (!clubId) return;
@@ -979,7 +1013,7 @@ function CreateEventModal({
       if (Platform.OS !== 'web') {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert('Permission Needed', 'Please allow gallery access to upload an event cover.');
+          Alert.alert('Permission Needed', 'Please allow gallery access to upload an event picture.');
           return;
         }
       }
@@ -1020,7 +1054,7 @@ function CreateEventModal({
     setCoverImageUrl(null);
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert('Validation Error', 'Event title is required.');
       return;
@@ -1036,28 +1070,46 @@ function CreateEventModal({
       return;
     }
 
-    const payload: CreateEventPayload = {
-      title: title.trim(),
-      description: description.trim() || null,
-      cover_image_url: coverImageUrl || null,
-      event_type: eventType,
-      visibility,
-      start_at: startAt,
-      end_at: endAt,
-      location: location.trim() || null,
-      capacity: capacity.trim() ? parseInt(capacity.trim(), 10) : null,
-      registration_fee: fee.trim() ? parseFloat(fee.trim()) : 0,
-      registration_required: true,
-    };
-
     try {
-      await createEventMutation.mutateAsync(payload);
-      Alert.alert('Success', 'Event created in Draft status.');
+      if (eventToEdit) {
+        const payload: UpdateEventPayload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          cover_image_url: coverImageUrl || null,
+          event_type: eventType,
+          visibility,
+          start_at: startAt,
+          end_at: endAt,
+          location: location.trim() || null,
+          capacity: capacity.trim() ? parseInt(capacity.trim(), 10) : null,
+          registration_fee: fee.trim() ? parseFloat(fee.trim()) : 0,
+        };
+
+        await updateEventMutation.mutateAsync({ eventId: eventToEdit.id, payload });
+        Alert.alert('Success', 'Event updated successfully.');
+      } else {
+        const payload: CreateEventPayload = {
+          title: title.trim(),
+          description: description.trim() || null,
+          cover_image_url: coverImageUrl || null,
+          event_type: eventType,
+          visibility,
+          start_at: startAt,
+          end_at: endAt,
+          location: location.trim() || null,
+          capacity: capacity.trim() ? parseInt(capacity.trim(), 10) : null,
+          registration_fee: fee.trim() ? parseFloat(fee.trim()) : 0,
+          registration_required: true,
+        };
+
+        await createEventMutation.mutateAsync(payload);
+        Alert.alert('Success', 'Event created in Draft status.');
+      }
       onSuccess();
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Creation failed';
-      Alert.alert('Creation Failed', msg);
+      const msg = err instanceof Error ? err.message : 'Operation failed';
+      Alert.alert('Error', msg);
     }
   };
 
@@ -1065,8 +1117,12 @@ function CreateEventModal({
     <ModalSheet
       visible={visible}
       onClose={onClose}
-      title="Create New Event"
-      subtitle="Set up a new social, clinic, or community event."
+      title={eventToEdit ? 'Edit Event' : 'Create New Event'}
+      subtitle={
+        eventToEdit
+          ? 'Update event details, custom picture, and schedule.'
+          : 'Set up a new social, clinic, or community event.'
+      }
       actions={[
         {
           label: 'Cancel',
@@ -1074,10 +1130,16 @@ function CreateEventModal({
           onPress: onClose,
         },
         {
-          label: 'Create Draft Event',
+          label: eventToEdit
+            ? updateEventMutation.isPending
+              ? 'Saving...'
+              : 'Save Changes'
+            : createEventMutation.isPending
+            ? 'Creating...'
+            : 'Create Draft Event',
           variant: 'primary',
-          onPress: handleCreate,
-          loading: createEventMutation.isPending,
+          onPress: handleSave,
+          loading: createEventMutation.isPending || updateEventMutation.isPending,
         },
       ]}
     >
@@ -1098,25 +1160,25 @@ function CreateEventModal({
           numberOfLines={3}
         />
 
-        {/* Optional Event Cover Card */}
+        {/* Optional Event Picture Card */}
         <Card style={styles.formAssetCard}>
           <View style={styles.formAssetHeader}>
             <View style={styles.formAssetHeaderTitleRow}>
               <ImageIcon size={16} color={Colors.brand.primary} />
               <AppText variant="caption" color="secondary" style={styles.formAssetHeaderLabel}>
-                EVENT COVER PHOTO (OPTIONAL)
+                EVENT PICTURE (OPTIONAL)
               </AppText>
             </View>
             <Badge
-              label={coverImageUrl ? 'Custom Cover' : 'Inheriting Club Default'}
+              label={coverImageUrl ? 'Custom Picture' : 'Inheriting Club Default'}
               variant={coverImageUrl ? 'success' : 'default'}
             />
           </View>
 
           <AppText variant="caption" color="tertiary" style={styles.formAssetDescription}>
             {coverImageUrl
-              ? 'This custom image will be displayed specifically for this event.'
-              : "No custom cover selected. This event will automatically use your club's default event banner."}
+              ? 'This custom picture will be displayed on this event’s cards and details.'
+              : "No custom picture selected. This event will automatically use your club's default event picture."}
           </AppText>
 
           <View style={styles.formAssetPreviewContainer}>
@@ -1133,7 +1195,7 @@ function CreateEventModal({
               <View style={styles.formAssetUploadingOverlay}>
                 <ActivityIndicator size="small" color="#FFFFFF" />
                 <AppText variant="caption" style={styles.formAssetUploadingText}>
-                  Uploading cover...
+                  Uploading picture...
                 </AppText>
               </View>
             )}
@@ -1148,7 +1210,7 @@ function CreateEventModal({
             >
               <Camera size={14} color={Colors.text.primary} />
               <AppText variant="bodySmall" style={styles.formAssetActionBtnText}>
-                {coverImageUrl ? 'Replace Custom Cover' : 'Upload Custom Cover'}
+                {coverImageUrl ? 'Replace Custom Picture' : 'Upload Custom Picture'}
               </AppText>
             </TouchableOpacity>
 
@@ -1161,7 +1223,7 @@ function CreateEventModal({
               >
                 <RotateCcw size={14} color={Colors.text.secondary} />
                 <AppText variant="bodySmall" style={styles.formAssetResetBtnText}>
-                  Reset to Default
+                  Reset to Club Default
                 </AppText>
               </TouchableOpacity>
             )}
@@ -1250,6 +1312,7 @@ export default function ClubEventsScreen() {
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all');
   const [selectedRosterEvent, setSelectedRosterEvent] = useState<ClubEvent | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<ClubEvent | null>(null);
 
   const { data: events = [], isLoading, isRefetching, refetch } = useClubEvents(
     clubId,
@@ -1459,7 +1522,10 @@ export default function ClubEventsScreen() {
       </View>
       <TouchableOpacity
         style={styles.ctaButton}
-        onPress={() => setShowCreateModal(true)}
+        onPress={() => {
+          setEditingEvent(null);
+          setShowCreateModal(true);
+        }}
         activeOpacity={0.8}
       >
         <AppText style={styles.ctaButtonText}>+ Create Event</AppText>
@@ -1479,7 +1545,10 @@ export default function ClubEventsScreen() {
         rightElement={
           <TouchableOpacity
             style={styles.headerCreateBtn}
-            onPress={() => setShowCreateModal(true)}
+            onPress={() => {
+              setEditingEvent(null);
+              setShowCreateModal(true);
+            }}
             activeOpacity={0.8}
           >
             <AppText style={styles.headerCreateBtnText}>+ Create</AppText>
@@ -1509,6 +1578,10 @@ export default function ClubEventsScreen() {
               event={item}
               index={index}
               clubBranding={clubBranding}
+              onEditEvent={(ev) => {
+                setEditingEvent(ev);
+                setShowCreateModal(true);
+              }}
               onViewRoster={(ev) => setSelectedRosterEvent(ev)}
               onPublish={handlePublish}
               onCancel={handleCancelEvent}
@@ -1538,7 +1611,11 @@ export default function ClubEventsScreen() {
         visible={showCreateModal}
         clubId={clubId}
         clubBranding={clubBranding}
-        onClose={() => setShowCreateModal(false)}
+        eventToEdit={editingEvent}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingEvent(null);
+        }}
         onSuccess={refetch}
       />
     </Screen>
