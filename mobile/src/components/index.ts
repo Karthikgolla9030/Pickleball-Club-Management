@@ -54,5 +54,6 @@ export type { SelectPickerOption, SelectPickerInputProps } from './SelectPickerI
 export { PromotionalAdsCarousel } from './PromotionalAdsCarousel';
 export * from './checkout';
 export * from './events';
+export * from './lessons';
 
 
