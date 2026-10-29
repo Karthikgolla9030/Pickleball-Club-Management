@@ -40,13 +40,18 @@ export const bookingApi = {
       court_id: string;
       start_at: string;
       end_at: string;
+      is_staff?: boolean;
     }
   ): Promise<BookingPriceCalculation> {
-    const qs = new URLSearchParams({
+    const queryParams: Record<string, string> = {
       court_id: params.court_id,
       start_at: params.start_at,
       end_at: params.end_at,
-    }).toString();
+    };
+    if (params.is_staff) {
+      queryParams.is_staff = 'true';
+    }
+    const qs = new URLSearchParams(queryParams).toString();
     return apiClient.get<BookingPriceCalculation>(
       `${API_ENDPOINTS.CLUBS}/${clubId}/bookings/calculate-price?${qs}`
     );

@@ -124,7 +124,11 @@ class BookingResponse(BaseModel):
 class TimeSlotAvailability(BaseModel):
     start_at: datetime
     end_at: datetime
+    start_time: str | None = None
+    end_time: str | None = None
+    label: str | None = None
     is_available: bool
+    is_past: bool = False
     status: str = "AVAILABLE"  # AVAILABLE, BOOKED, MAINTENANCE, BLOCKED
     booking_id: uuid.UUID | None = None
 

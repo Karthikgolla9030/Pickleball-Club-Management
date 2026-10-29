@@ -12,33 +12,44 @@
  * Parses slot ISO string or time string into wall-clock hour, ampm, minutesFromMidnight, and canonical key.
  * Preserves the literal wall-clock time as stored/scheduled by court management.
  */
-export function parseSlotTime(isoString: string): {
+export function parseSlotTime(input: string | { start_time?: string; start_at?: string; label?: string }): {
   hour: string;
   ampm: string;
   minutesFromMidnight: number;
   canonicalKey: string;
 } {
+  let raw = '';
+  if (typeof input === 'object' && input !== null) {
+    if (input.start_time) {
+      raw = input.start_time;
+    } else if (input.start_at) {
+      raw = input.start_at;
+    }
+  } else if (typeof input === 'string') {
+    raw = input;
+  }
+
   let h = 0;
   let m = 0;
-  if (typeof isoString === 'string' && isoString.includes('T')) {
-    const timePart = isoString.split('T')[1];
+  if (typeof raw === 'string' && raw.includes('T')) {
+    const timePart = raw.split('T')[1];
     const match = timePart.match(/^(\d{1,2}):(\d{2})/);
     if (match) {
       h = parseInt(match[1], 10);
       m = parseInt(match[2], 10);
     } else {
-      const d = new Date(isoString);
+      const d = new Date(raw);
       h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
       m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
     }
-  } else if (typeof isoString === 'string' && isoString.includes(':')) {
-    const match = isoString.match(/^(\d{1,2}):(\d{2})/);
+  } else if (typeof raw === 'string' && raw.includes(':')) {
+    const match = raw.match(/^(\d{1,2}):(\d{2})/);
     if (match) {
       h = parseInt(match[1], 10);
       m = parseInt(match[2], 10);
     }
   } else {
-    const d = new Date(isoString);
+    const d = new Date(raw);
     h = isNaN(d.getTime()) ? 0 : d.getUTCHours();
     m = isNaN(d.getTime()) ? 0 : d.getUTCMinutes();
   }
@@ -57,15 +68,22 @@ export function parseSlotTime(isoString: string): {
 }
 
 /**
- * Formats a slot timestamp to a clean user-facing time label (e.g. "06:00 am")
+ * Formats a slot timestamp to a clean user-facing time label (e.g. "06:00 AM" or "06:00 am")
  * exactly matching court management configuration.
  */
-export function formatSlotLabel(isoString: string): string {
-  const { hour, ampm } = parseSlotTime(isoString);
+export function formatSlotLabel(
+  input: string | { start_time?: string; start_at?: string; label?: string },
+  options?: { uppercase?: boolean }
+): string {
+  if (typeof input === 'object' && input !== null && input.label) {
+    return options?.uppercase ? input.label.toUpperCase() : input.label;
+  }
+  const { hour, ampm } = parseSlotTime(input);
   const parts = hour.split(':');
   const paddedHour = parts[0].padStart(2, '0');
   const min = parts[1] || '00';
-  return `${paddedHour}:${min} ${ampm.toLowerCase()}`;
+  const ampmFormatted = options?.uppercase ? ampm.toUpperCase() : ampm.toLowerCase();
+  return `${paddedHour}:${min} ${ampmFormatted}`;
 }
 
 /**

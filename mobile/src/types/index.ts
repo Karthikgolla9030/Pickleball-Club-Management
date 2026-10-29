@@ -1636,7 +1636,11 @@ export type SlotStatus = 'AVAILABLE' | 'BOOKED' | 'MAINTENANCE' | 'BLOCKED' | 'P
 export interface TimeSlotAvailability {
   start_at: string;
   end_at: string;
+  start_time?: string;
+  end_time?: string;
+  label?: string;
   is_available: boolean;
+  is_past?: boolean;
   status: SlotStatus;
   booking_id: string | null;
 }

@@ -165,6 +165,7 @@ export function BookingFlowModal({
         court_id: courtId,
         start_at: startAt,
         end_at: endAt,
+        is_staff: mode === 'staff',
       });
       setServerPrice(calculation);
       setStage(2);
@@ -370,15 +371,28 @@ export function BookingFlowModal({
           ) : (
             <View style={styles.timeGrid}>
               {selectedCourtSlots.map(slot => {
-                const parsed = parseSlotTime(slot.start_at);
-                const label = formatSlotLabel(slot.start_at);
+                const parsed = parseSlotTime(slot.start_time || slot.start_at);
+                const label = slot.label || formatSlotLabel(slot.start_time || slot.start_at);
                 const isToday = dateStr === new Date().toISOString().split('T')[0];
                 const now = new Date();
                 const currentMinutes = now.getHours() * 60 + now.getMinutes();
                 const isPast =
+                  slot.is_past === true ||
                   slot.status === 'PAST' ||
                   (isToday && parsed.minutesFromMidnight <= currentMinutes);
-                const available = slot.is_available && !isPast;
+
+                const closeMinutes = selectedCourt?.close_time
+                  ? parseSlotTime(selectedCourt.close_time).minutesFromMidnight
+                  : 24 * 60;
+                const hasDurationFits = parsed.minutesFromMidnight + selectedDuration <= closeMinutes;
+
+                const available =
+                  (slot.status === 'AVAILABLE' || slot.is_available) &&
+                  slot.status !== 'BOOKED' &&
+                  slot.status !== 'MAINTENANCE' &&
+                  slot.status !== 'BLOCKED' &&
+                  !isPast &&
+                  hasDurationFits;
                 const isActive = slotIso === slot.start_at;
 
                 return (

@@ -302,6 +302,7 @@ class BookingService:
         user_id: UUID,
         start_at: datetime,
         end_at: datetime,
+        is_staff: bool = False,
     ) -> BookingPriceCalculationResponse:
         """
         Calculate booking duration and price snapshot for a player court reservation.
@@ -313,12 +314,12 @@ class BookingService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
 
         # Verify caller has permission: active staff member, platform admin, or active player member
-        is_staff = False
-        staff_membership = await self.club_membership_repo.get_by_user_and_club(
-            user_id=user_id, club_id=club_id
-        )
-        if staff_membership and staff_membership.is_active:
-            is_staff = True
+        if not is_staff:
+            staff_membership = await self.club_membership_repo.get_by_user_and_club(
+                user_id=user_id, club_id=club_id
+            )
+            if staff_membership and staff_membership.is_active:
+                is_staff = True
 
         if not is_staff:
             # Check platform owner/admin emails
@@ -1224,17 +1225,35 @@ class BookingService:
 
             # If court is marked closed for this weekday, expose 0 bookable slots
             if not court_is_closed:
-                court_day_start = datetime.combine(target_date, court_open, tzinfo=club_tz).astimezone(timezone.utc)
-                if court_close == time(0, 0):
-                    court_day_end = datetime.combine(target_date + timedelta(days=1), time(0, 0), tzinfo=club_tz).astimezone(timezone.utc)
-                else:
-                    court_day_end = datetime.combine(target_date, court_close, tzinfo=club_tz).astimezone(timezone.utc)
+                open_minutes = court_open.hour * 60 + court_open.minute
+                close_minutes = 24 * 60 if court_close == time(0, 0) else court_close.hour * 60 + court_close.minute
+                curr_minutes = open_minutes
 
-                slot_start = court_day_start
-                slot_delta = timedelta(minutes=court_interval)
+                while curr_minutes + court_interval <= close_minutes:
+                    start_h = curr_minutes // 60
+                    start_m = curr_minutes % 60
+                    end_minutes = curr_minutes + court_interval
+                    end_h = end_minutes // 60
+                    end_m = end_minutes % 60
 
-                while slot_start + slot_delta <= court_day_end:
-                    slot_end = slot_start + slot_delta
+                    start_time_str = f"{start_h:02d}:{start_m:02d}"
+                    end_time_str = f"{end_h % 24:02d}:{end_m:02d}"
+
+                    ampm = "AM" if start_h < 12 else "PM"
+                    h12 = start_h % 12
+                    if h12 == 0:
+                        h12 = 12
+                    label = f"{h12:02d}:{start_m:02d} {ampm}"
+
+                    # Local datetime and UTC timestamps
+                    slot_start_local = datetime.combine(target_date, time(start_h, start_m), tzinfo=club_tz)
+                    slot_start_utc = slot_start_local.astimezone(timezone.utc)
+
+                    if end_h >= 24:
+                        slot_end_local = datetime.combine(target_date + timedelta(days=1), time(end_h % 24, end_m), tzinfo=club_tz)
+                    else:
+                        slot_end_local = datetime.combine(target_date, time(end_h, end_m), tzinfo=club_tz)
+                    slot_end_utc = slot_end_local.astimezone(timezone.utc)
 
                     # Find any overlapping confirmed booking for this court
                     def _as_utc(dt: datetime) -> datetime:
@@ -1243,20 +1262,20 @@ class BookingService:
                     conflict = next(
                         (
                             b for b in confirmed_bookings
-                            if b.court_id == court.id and _as_utc(b.start_at) < slot_end and _as_utc(b.end_at) > slot_start
+                            if b.court_id == court.id and _as_utc(b.start_at) < slot_end_utc and _as_utc(b.end_at) > slot_start_utc
                         ),
                         None,
                     )
                     match_conflict = next(
                         (
                             m for m in scheduled_matches
-                            if m.court_id == court.id and m.scheduled_start_at and m.scheduled_end_at and _as_utc(m.scheduled_start_at) < slot_end and _as_utc(m.scheduled_end_at) > slot_start
+                            if m.court_id == court.id and m.scheduled_start_at and m.scheduled_end_at and _as_utc(m.scheduled_start_at) < slot_end_utc and _as_utc(m.scheduled_end_at) > slot_start_utc
                         ),
                         None,
                     )
 
                     now_utc = datetime.now(timezone.utc)
-                    is_in_past = slot_start <= now_utc
+                    is_in_past = slot_start_utc <= now_utc
 
                     is_available = (
                         conflict is None
@@ -1276,19 +1295,21 @@ class BookingService:
                             slot_status = "BLOCKED"
                         else:
                             slot_status = "BOOKED"
-                    elif is_in_past:
-                        slot_status = "PAST"
 
                     slots.append(
                         TimeSlotAvailability(
-                            start_at=slot_start,
-                            end_at=slot_end,
+                            start_at=slot_start_utc,
+                            end_at=slot_end_utc,
+                            start_time=start_time_str,
+                            end_time=end_time_str,
+                            label=label,
                             is_available=is_available,
+                            is_past=is_in_past,
                             status=slot_status,
                             booking_id=conflict.id if conflict else None,
                         )
                     )
-                    slot_start += slot_delta
+                    curr_minutes += court_interval
 
             court_availabilities.append(
                 CourtAvailability(

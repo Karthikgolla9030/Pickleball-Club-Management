@@ -26,6 +26,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   NativeScrollEvent,
   NativeSyntheticEvent,
   ScrollView,
@@ -142,13 +143,12 @@ function parseSlotTime(isoString: string): {
 function getSlotLabel(status: SlotStatus | string): string {
   switch (status) {
     case 'AVAILABLE':
+    case 'PAST':
       return 'Avl';
     case 'BOOKED':
       return 'Booked';
     case 'MAINTENANCE':
       return 'Maint.';
-    case 'PAST':
-      return '—';
     case 'BLOCKED':
       return 'Blocked';
     default:
@@ -198,7 +198,7 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
       }
       if (c.slots && c.slots.length > 0) {
         for (const s of c.slots) {
-          const parsed = parseSlotTime(s.start_at);
+          const parsed = parseSlotTime(s.start_time || s.start_at);
           if (parsed.minutesFromMidnight < minMinutes) {
             minMinutes = parsed.minutesFromMidnight;
           }
@@ -434,11 +434,11 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                       {timeHeaders.map((th) => {
                         const slot = court.slots
                           ? court.slots.find((s) => {
-                              const parsed = parseSlotTime(s.start_at);
+                              const parsed = parseSlotTime(s.start_time || s.start_at);
                               return (
-                                parsed.minutesFromMidnight === th.minutesFromMidnight ||
+                                s.start_time === th.key ||
                                 parsed.canonicalKey === th.key ||
-                                s.start_at === th.key
+                                parsed.minutesFromMidnight === th.minutesFromMidnight
                               );
                             })
                           : undefined;
@@ -460,24 +460,36 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                           );
                         }
 
-                        const parsed = parseSlotTime(slot.start_at);
+                        const parsed = parseSlotTime(slot.start_time || slot.start_at);
                         const isToday = dayLabel === 'Today';
                         const now = new Date();
                         const currentMinutes = now.getHours() * 60 + now.getMinutes();
                         const isPast =
+                          slot.is_past === true ||
                           slot.status === 'PAST' ||
                           (isToday && parsed.minutesFromMidnight <= currentMinutes);
 
                         const effectiveStatus: SlotStatus | string =
-                          isPast && slot.status === 'AVAILABLE' ? 'PAST' : slot.status;
+                          slot.status === 'PAST' ? 'AVAILABLE' : slot.status;
                         const isAvailable = effectiveStatus === 'AVAILABLE';
                         const isBooked = effectiveStatus === 'BOOKED';
 
                         return (
                           <View key={th.key} style={styles.slotCellWrapper}>
                             <TouchableOpacity
-                              style={[styles.slotPill, getSlotPillStyle(effectiveStatus)]}
+                              style={[
+                                styles.slotPill,
+                                getSlotPillStyle(effectiveStatus),
+                                isPast && isAvailable && { opacity: 0.55 },
+                              ]}
                               onPress={() => {
+                                if (isPast && isAvailable) {
+                                  Alert.alert(
+                                    'Past Time Slot',
+                                    'This time slot has already passed and cannot be booked.'
+                                  );
+                                  return;
+                                }
                                 if (onSlotPress && (isAvailable || isBooked)) {
                                   onSlotPress(
                                     court.court_id,
@@ -487,9 +499,8 @@ export function CourtSchedule({ clubId: propClubId, onSlotPress }: CourtSchedule
                                   );
                                 }
                               }}
-                              activeOpacity={isAvailable || isBooked ? 0.75 : 1}
-                              disabled={!isAvailable && !isBooked}
-                              accessibilityLabel={`${court.court_name} ${slot.start_at} ${effectiveStatus}`}
+                              activeOpacity={isBooked || (isAvailable && !isPast) ? 0.75 : 0.9}
+                              accessibilityLabel={`${court.court_name} ${slot.label || slot.start_time || slot.start_at} ${effectiveStatus}`}
                             >
                               <AppText
                                 style={[styles.slotPillText, getSlotTextStyle(effectiveStatus)]}

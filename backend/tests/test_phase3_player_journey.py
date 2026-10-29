@@ -149,6 +149,7 @@ async def create_court(
     name: str = "Court 1",
     price_per_hour: float = 30.0,
     status: CourtStatus = CourtStatus.ACTIVE,
+    booking_interval_minutes: int = 60,
 ) -> Court:
     court = Court(
         club_id=club.id,
@@ -157,6 +158,7 @@ async def create_court(
         surface_type="Hard",
         price_per_hour=price_per_hour,
         status=status,
+        booking_interval_minutes=booking_interval_minutes,
     )
     db.add(court)
     await db.flush()
@@ -285,7 +287,7 @@ async def test_court_booking_price_calculation_endpoint(
     club = await create_club(db)
     player = await create_user(db, full_name="Price Check Player")
     await create_player_membership(db, player, club)
-    court = await create_court(db, club, price_per_hour=50.0)
+    court = await create_court(db, club, price_per_hour=50.0, booking_interval_minutes=30)
 
     target_date = (datetime.now(timezone.utc) + timedelta(days=2)).date()
     start_dt = datetime.combine(target_date, time(10, 0), tzinfo=timezone.utc)
@@ -392,7 +394,7 @@ async def test_double_booking_conflict_prevention(
     player2 = await create_user(db, full_name="Player Two")
     await create_player_membership(db, player1, club)
     await create_player_membership(db, player2, club)
-    court = await create_court(db, club, price_per_hour=30.0)
+    court = await create_court(db, club, price_per_hour=30.0, booking_interval_minutes=30)
 
     target_date = (datetime.now(timezone.utc) + timedelta(days=2)).date()
     slot1_start = datetime.combine(target_date, time(9, 0), tzinfo=timezone.utc)

@@ -74,6 +74,7 @@ async def calculate_booking_price(
     court_id: UUID = Query(..., description="ID of the court to reserve"),
     start_at: datetime = Query(..., description="Start timestamp (timezone-aware UTC)"),
     end_at: datetime = Query(..., description="End timestamp (timezone-aware UTC)"),
+    is_staff: bool = Query(False, description="Flag indicating staff booking check"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BookingPriceCalculationResponse:
@@ -83,6 +84,7 @@ async def calculate_booking_price(
         user_id=current_user.id,
         start_at=start_at,
         end_at=end_at,
+        is_staff=is_staff,
     )
 
 
