@@ -46,6 +46,7 @@ import {
   Clock,
   DollarSign,
   FileText,
+  GraduationCap,
   Image as ImageIcon,
   Mail,
   MapPin,
@@ -79,6 +80,8 @@ import {
   ModalSheet,
   Screen,
   SegmentedTabs,
+  SelectPickerInput,
+  type SelectPickerOption,
 } from '@/components';
 import {
   useActiveClub,
@@ -100,6 +103,7 @@ import {
   usePublishClubLesson,
   useReactivateCoach,
   useReactivateLessonType,
+  useSeedDefaultLessonTypes,
   useStaffCancelLessonRegistration,
   useStaffMarkLessonAttendance,
   useStaffRegisterLessonPlayer,
@@ -183,6 +187,7 @@ export default function ClubLessonsScreen() {
     data: coaches,
     isLoading: isLoadingCoaches,
     isRefetching: isRefetchingCoaches,
+    error: errorCoaches,
     refetch: refetchCoaches,
   } = useClubCoaches(activeClubId ?? '');
 
@@ -190,6 +195,7 @@ export default function ClubLessonsScreen() {
     data: lessonTypes,
     isLoading: isLoadingLessonTypes,
     isRefetching: isRefetchingLessonTypes,
+    error: errorLessonTypes,
     refetch: refetchLessonTypes,
   } = useClubLessonTypes(activeClubId ?? '');
 
@@ -211,6 +217,7 @@ export default function ClubLessonsScreen() {
   const updateLessonTypeMutation = useUpdateLessonType(activeClubId ?? '');
   const deactivateLessonTypeMutation = useDeactivateLessonType(activeClubId ?? '');
   const reactivateLessonTypeMutation = useReactivateLessonType(activeClubId ?? '');
+  const seedDefaultLessonTypesMutation = useSeedDefaultLessonTypes(activeClubId ?? '');
 
   // Form states - Create / Edit Lesson
   const [editingLesson, setEditingLesson] = useState<ClubLesson | null>(null);
@@ -225,6 +232,88 @@ export default function ClubLessonsScreen() {
   const [lessonEndAt, setLessonEndAt] = useState('');
   const [lessonCapacity, setLessonCapacity] = useState('');
   const [lessonPrice, setLessonPrice] = useState('');
+
+  // Lesson Type & Coach options for SelectPickerInput
+  const activeLessonTypes = useMemo(() => {
+    return lessonTypes?.filter((lt) => lt.is_active) ?? [];
+  }, [lessonTypes]);
+
+  const lessonTypeOptions = useMemo<SelectPickerOption[]>(() => {
+    return activeLessonTypes.map((lt) => {
+      const parts: string[] = [];
+      if (lt.duration_minutes) parts.push(`${lt.duration_minutes} min`);
+      if (lt.is_private) {
+        parts.push('1-on-1 Private');
+      } else if (lt.default_capacity) {
+        parts.push(`Max ${lt.default_capacity} players`);
+      }
+      if (lt.default_price !== undefined && lt.default_price !== null) {
+        parts.push(formatCurrency(lt.default_price, lt.currency || 'USD'));
+      }
+      return {
+        value: lt.id,
+        label: lt.name,
+        subtitle: parts.join(' • '),
+        badge: lt.is_private ? 'Private' : 'Group',
+      };
+    });
+  }, [activeLessonTypes]);
+
+  const activeCoaches = useMemo(() => {
+    return coaches?.filter((c) => c.is_active) ?? [];
+  }, [coaches]);
+
+  const coachOptions = useMemo<SelectPickerOption[]>(() => {
+    return activeCoaches.map((c) => {
+      const secondary = c.specialization || c.email || c.phone || 'Club Coach';
+      return {
+        value: c.id,
+        label: c.name,
+        subtitle: secondary,
+      };
+    });
+  }, [activeCoaches]);
+
+  const handleSelectLessonType = (selectedId: string) => {
+    setLessonTypeId(selectedId);
+    const selected = lessonTypes?.find((lt) => lt.id === selectedId);
+    if (selected) {
+      if (selected.default_capacity) {
+        setLessonCapacity(String(selected.default_capacity));
+      }
+      if (selected.default_price !== undefined && selected.default_price !== null) {
+        setLessonPrice(String(selected.default_price));
+      }
+      if (!lessonTitle && !editingLesson) {
+        setLessonTitle(selected.name);
+      }
+    }
+  };
+
+  const handleInitDefaultLessonTypes = async () => {
+    try {
+      await seedDefaultLessonTypesMutation.mutateAsync();
+      Alert.alert('Success', 'Standard lesson types initialized (Beginner, Intermediate, Private, Doubles).');
+    } catch (err: any) {
+      Alert.alert('Initialization Failed', err.message || 'Failed to initialize default lesson types.');
+    }
+  };
+
+  const handleOpenAddLessonType = () => {
+    setCreateLessonVisible(false);
+    resetLessonForm();
+    resetLessonTypeForm();
+    setActiveTab('lesson_types');
+    setCreateLessonTypeVisible(true);
+  };
+
+  const handleOpenAddCoach = () => {
+    setCreateLessonVisible(false);
+    resetLessonForm();
+    resetCoachForm();
+    setActiveTab('coaches');
+    setCreateCoachVisible(true);
+  };
 
   const handlePickLessonImage = async () => {
     if (!activeClubId) return;
@@ -1268,97 +1357,91 @@ export default function ClubLessonsScreen() {
           </Card>
 
           {/* Select Lesson Type */}
-          <AppText variant="caption" style={styles.inputLabel}>
-            Lesson Type *
-          </AppText>
-          <View style={styles.selectorGrid}>
-            {lessonTypes?.filter((lt) => lt.is_active).map((lt) => (
-              <TouchableOpacity
-                key={lt.id}
-                style={[styles.selectorItem, lessonTypeId === lt.id && styles.selectorItemActive]}
-                onPress={() => {
-                  setLessonTypeId(lt.id);
-                  if (lt.default_capacity) setLessonCapacity(String(lt.default_capacity));
-                  if (lt.default_price) setLessonPrice(String(lt.default_price));
-                }}
-              >
-                <AppText
-                  variant="bodySmall"
-                  style={[
-                    styles.selectorItemText,
-                    lessonTypeId === lt.id && styles.selectorItemTextActive,
-                  ]}
-                >
-                  {lt.name}
-                </AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SelectPickerInput
+            testID="lesson-type-picker"
+            label="Lesson Type"
+            required
+            value={lessonTypeId}
+            options={lessonTypeOptions}
+            onChange={handleSelectLessonType}
+            placeholder="Select lesson type"
+            modalTitle="Select Lesson Type"
+            leadingIcon={<GraduationCap size={18} color={lessonTypeId ? Colors.brand.primary : Colors.text.tertiary} />}
+            isLoading={isLoadingLessonTypes}
+            loadingMessage="Loading lesson types..."
+            error={errorLessonTypes ? (errorLessonTypes instanceof Error ? errorLessonTypes.message : 'Failed to load lesson types') : null}
+            onRetry={refetchLessonTypes}
+            emptyTitle="No Lesson Types Configured"
+            emptyMessage="Your club does not have any active lesson types. Initialize standard templates (Beginner, Intermediate, Private, Doubles) or create a custom lesson type."
+            emptyActionLabel={seedDefaultLessonTypesMutation.isPending ? 'Initializing...' : '+ Initialize Standard Types'}
+            onEmptyAction={handleInitDefaultLessonTypes}
+          />
 
           {/* Select Coach */}
-          <AppText variant="caption" style={styles.inputLabel}>
-            Coach Assignment *
-          </AppText>
-          <View style={styles.selectorGrid}>
-            {coaches?.filter((c) => c.is_active).map((c) => (
-              <TouchableOpacity
-                key={c.id}
-                style={[styles.selectorItem, coachId === c.id && styles.selectorItemActive]}
-                onPress={() => setCoachId(c.id)}
-              >
-                <AppText
-                  variant="bodySmall"
-                  style={[
-                    styles.selectorItemText,
-                    coachId === c.id && styles.selectorItemTextActive,
-                  ]}
-                >
-                  {c.name}
-                </AppText>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <SelectPickerInput
+            testID="coach-assignment-picker"
+            label="Coach Assignment"
+            required
+            value={coachId}
+            options={coachOptions}
+            onChange={setCoachId}
+            placeholder="Select coach"
+            modalTitle="Assign Coach"
+            leadingIcon={<User size={18} color={coachId ? Colors.brand.primary : Colors.text.tertiary} />}
+            isLoading={isLoadingCoaches}
+            loadingMessage="Loading coaches..."
+            error={errorCoaches ? (errorCoaches instanceof Error ? errorCoaches.message : 'Failed to load coaches') : null}
+            onRetry={refetchCoaches}
+            emptyTitle="No Eligible Coaches Found"
+            emptyMessage="No coaches have been registered for this club yet. A coach must be added before this lesson can be scheduled."
+            emptyActionLabel="+ Add a Coach"
+            onEmptyAction={handleOpenAddCoach}
+          />
 
           {/* Select Court (Optional) */}
-          <AppText variant="caption" style={styles.inputLabel}>
-            Court Assignment (Optional)
-          </AppText>
-          <View style={styles.selectorGrid}>
-            <TouchableOpacity
-              style={[styles.selectorItem, courtId === '' && styles.selectorItemActive]}
-              onPress={() => setCourtId('')}
-            >
-              <AppText
-                variant="bodySmall"
-                style={[
-                  styles.selectorItemText,
-                  courtId === '' && styles.selectorItemTextActive,
-                ]}
-              >
-                None
-              </AppText>
-            </TouchableOpacity>
-            {courts?.map((ct) => (
+          <View style={{ gap: Spacing[1.5] }}>
+            <AppText variant="caption" style={styles.inputLabel}>
+              Court Assignment (Optional)
+            </AppText>
+            <View style={styles.selectorGrid}>
               <TouchableOpacity
-                key={ct.id}
-                style={[styles.selectorItem, courtId === ct.id && styles.selectorItemActive]}
-                onPress={() => setCourtId(ct.id)}
+                style={[styles.selectorItem, courtId === '' && styles.selectorItemActive]}
+                onPress={() => setCourtId('')}
+                activeOpacity={0.8}
               >
                 <AppText
                   variant="bodySmall"
                   style={[
                     styles.selectorItemText,
-                    courtId === ct.id && styles.selectorItemTextActive,
+                    courtId === '' && styles.selectorItemTextActive,
                   ]}
                 >
-                  {ct.name}
+                  None
                 </AppText>
               </TouchableOpacity>
-            ))}
+              {courts?.map((ct) => (
+                <TouchableOpacity
+                  key={ct.id}
+                  style={[styles.selectorItem, courtId === ct.id && styles.selectorItemActive]}
+                  onPress={() => setCourtId(ct.id)}
+                  activeOpacity={0.8}
+                >
+                  <AppText
+                    variant="bodySmall"
+                    style={[
+                      styles.selectorItemText,
+                      courtId === ct.id && styles.selectorItemTextActive,
+                    ]}
+                  >
+                    {ct.name}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <DateTimePickerInput
-            label="Start Date & Time *"
+            label="Start Date & Time"
             placeholder="Select lesson start"
             value={lessonStartAt}
             onChangeDateTime={setLessonStartAt}
@@ -1366,7 +1449,7 @@ export default function ClubLessonsScreen() {
           />
 
           <DateTimePickerInput
-            label="End Date & Time *"
+            label="End Date & Time"
             placeholder="Select lesson end"
             value={lessonEndAt}
             onChangeDateTime={setLessonEndAt}

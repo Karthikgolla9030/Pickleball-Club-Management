@@ -109,6 +109,8 @@ export default function ClubLayout() {
           <Stack.Screen name="payments" />
           <Stack.Screen name="analytics" />
           <Stack.Screen name="events" />
+          <Stack.Screen name="event-details" />
+          <Stack.Screen name="events/[id]" />
           <Stack.Screen name="lessons" />
           <Stack.Screen name="competition-schedule" />
           <Stack.Screen name="notifications" />

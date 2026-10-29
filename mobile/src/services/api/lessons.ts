@@ -33,7 +33,7 @@ export const lessonApi = {
    */
   listCoaches(clubId: string, activeOnly?: boolean): Promise<Coach[]> {
     const base = API_ENDPOINTS.CLUB_COACHES(clubId);
-    return apiClient.get<Coach[]>(activeOnly ? `${base}?active_only=true` : base);
+    return apiClient.get<Coach[]>(activeOnly ? `${base}?is_active=true&active_only=true` : base);
   },
 
   /**
@@ -78,7 +78,14 @@ export const lessonApi = {
    */
   listLessonTypes(clubId: string, activeOnly?: boolean): Promise<LessonType[]> {
     const base = API_ENDPOINTS.CLUB_LESSON_TYPES(clubId);
-    return apiClient.get<LessonType[]>(activeOnly ? `${base}?active_only=true` : base);
+    return apiClient.get<LessonType[]>(activeOnly ? `${base}?is_active=true&active_only=true` : base);
+  },
+
+  /**
+   * Seed standard default lesson types for a club.
+   */
+  seedDefaultLessonTypes(clubId: string): Promise<LessonType[]> {
+    return apiClient.post<LessonType[]>(API_ENDPOINTS.CLUB_LESSON_TYPES_SEED_DEFAULTS(clubId), {});
   },
 
   /**

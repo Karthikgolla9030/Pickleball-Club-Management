@@ -1250,3 +1250,279 @@ async def test_player_discovery_and_my_lessons(
     assert detail.json()["is_eligible"] is True
     assert detail.json()["my_registration"] is not None
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. REGRESSION TESTS: LESSON TYPE & COACH SELECTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+@pytest.mark.asyncio
+async def test_lesson_types_loading_and_club_scoping(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    club_a: Club,
+    club_b: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    lesson_type_group: LessonType,
+):
+    """Test that lesson types load successfully and are strictly scoped to the selected club."""
+    headers = make_auth_header(owner_user)
+
+    # Add a lesson type to Club B
+    lt_b = LessonType(
+        club_id=club_b.id,
+        name="Club B Exclusive Clinic",
+        duration_minutes=45,
+        default_capacity=6,
+        default_price=Decimal("40.00"),
+        currency="USD",
+        is_private=False,
+        is_active=True,
+    )
+    db_session.add(lt_b)
+    await db_session.flush()
+
+    # List Club A lesson types
+    resp_a = await async_client.get(f"/api/v1/clubs/{club_a.id}/lesson-types", headers=headers)
+    assert resp_a.status_code == 200
+    data_a = resp_a.json()
+    assert any(x["id"] == str(lesson_type_group.id) for x in data_a)
+    assert not any(x["id"] == str(lt_b.id) for x in data_a)
+
+
+@pytest.mark.asyncio
+async def test_coaches_loading_and_club_scoping(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    club_a: Club,
+    club_b: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    coach_1: Coach,
+):
+    """Test that coaches load successfully, show secondary identifiers, and scope to club."""
+    headers = make_auth_header(owner_user)
+
+    # Add a coach to Club B
+    coach_b = Coach(
+        club_id=club_b.id,
+        name="Coach Beta",
+        specialization="Youth Development",
+        phone="+1 555-999-0000",
+        email="beta@example.com",
+        is_active=True,
+    )
+    db_session.add(coach_b)
+    await db_session.flush()
+
+    # List Club A coaches
+    resp = await async_client.get(f"/api/v1/clubs/{club_a.id}/coaches", headers=headers)
+    assert resp.status_code == 200
+    coaches = resp.json()
+
+    # Verify Coach 1 is in Club A and has readable details and secondary identifiers
+    matching = [c for c in coaches if c["id"] == str(coach_1.id)]
+    assert len(matching) == 1
+    assert matching[0]["name"] == "Coach Alex"
+    assert matching[0]["specialization"] == "Singles & Strategy"
+    assert matching[0]["email"] == "coach.alex@example.com"
+    assert matching[0]["is_active"] is True
+
+    # Verify Club B coach is NOT in Club A
+    assert not any(c["id"] == str(coach_b.id) for c in coaches)
+
+
+@pytest.mark.asyncio
+async def test_empty_lesson_type_results_and_seed_defaults(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    owner_user: User,
+):
+    """Test empty lesson types behavior and subsequent one-click default seeding."""
+    # Create a fresh club without any lesson types
+    fresh_club = Club(name="Empty Club", slug=f"empty-club-{uuid.uuid4().hex[:8]}", is_active=True)
+    db_session.add(fresh_club)
+    await db_session.flush()
+
+    mem = ClubMembership(club_id=fresh_club.id, user_id=owner_user.id, role=ClubRole.CLUB_OWNER, is_active=True)
+    db_session.add(mem)
+    await db_session.flush()
+
+    headers = make_auth_header(owner_user)
+
+    # 1. Listing should return empty list
+    resp = await async_client.get(f"/api/v1/clubs/{fresh_club.id}/lesson-types", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+    # 2. Seed default lesson types
+    seed_resp = await async_client.post(f"/api/v1/clubs/{fresh_club.id}/lesson-types/seed-defaults", headers=headers)
+    assert seed_resp.status_code == 201
+    seeded = seed_resp.json()
+    assert len(seeded) == 4
+    names = {s["name"] for s in seeded}
+    assert "Beginner Fundamentals" in names
+    assert "Intermediate Skills" in names
+    assert "Private Coaching" in names
+    assert "Doubles Strategy" in names
+
+    # 3. Listing now returns the 4 standard lesson types
+    list_after = await async_client.get(f"/api/v1/clubs/{fresh_club.id}/lesson-types", headers=headers)
+    assert list_after.status_code == 200
+    assert len(list_after.json()) == 4
+
+
+@pytest.mark.asyncio
+async def test_empty_coach_results(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    owner_user: User,
+):
+    """Test empty coach results for a club that has not yet configured coaches."""
+    fresh_club = Club(name="Coachless Club", slug=f"coachless-{uuid.uuid4().hex[:8]}", is_active=True)
+    db_session.add(fresh_club)
+    await db_session.flush()
+
+    mem = ClubMembership(club_id=fresh_club.id, user_id=owner_user.id, role=ClubRole.CLUB_OWNER, is_active=True)
+    db_session.add(mem)
+    await db_session.flush()
+
+    headers = make_auth_header(owner_user)
+    resp = await async_client.get(f"/api/v1/clubs/{fresh_club.id}/coaches", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+@pytest.mark.asyncio
+async def test_unauthorized_cross_club_coach_assignment_rejected(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    club_a: Club,
+    club_b: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    lesson_type_group: LessonType,
+):
+    """Test that a coach from another club cannot be assigned to a lesson in Club A."""
+    headers = make_auth_header(owner_user)
+    now = datetime.now(timezone.utc)
+
+    # Create coach in Club B
+    foreign_coach = Coach(
+        club_id=club_b.id,
+        name="Foreign Coach",
+        is_active=True,
+    )
+    db_session.add(foreign_coach)
+    await db_session.flush()
+
+    payload = {
+        "lesson_type_id": str(lesson_type_group.id),
+        "coach_id": str(foreign_coach.id),
+        "title": "Cross Club Fraud Lesson",
+        "start_at": (now + timedelta(days=1)).isoformat(),
+        "end_at": (now + timedelta(days=1, hours=1)).isoformat(),
+    }
+    resp = await async_client.post(f"/api/v1/clubs/{club_a.id}/lessons", json=payload, headers=headers)
+    assert resp.status_code == 404
+    assert "Coach not found" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_required_field_validation_for_lesson_scheduling(
+    async_client: AsyncClient,
+    club_a: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    coach_1: Coach,
+    lesson_type_group: LessonType,
+):
+    """Test that missing required fields or invalid schedules are rejected with 422."""
+    headers = make_auth_header(owner_user)
+    now = datetime.now(timezone.utc)
+
+    # 1. Missing lesson_type_id
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons",
+        json={
+            "coach_id": str(coach_1.id),
+            "title": "Missing Type Lesson",
+            "start_at": (now + timedelta(days=1)).isoformat(),
+            "end_at": (now + timedelta(days=1, hours=1)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    # 2. Missing coach_id
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons",
+        json={
+            "lesson_type_id": str(lesson_type_group.id),
+            "title": "Missing Coach Lesson",
+            "start_at": (now + timedelta(days=1)).isoformat(),
+            "end_at": (now + timedelta(days=1, hours=1)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    # 3. Missing title
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons",
+        json={
+            "lesson_type_id": str(lesson_type_group.id),
+            "coach_id": str(coach_1.id),
+            "start_at": (now + timedelta(days=1)).isoformat(),
+            "end_at": (now + timedelta(days=1, hours=1)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+    # 4. end_at <= start_at
+    resp = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/lessons",
+        json={
+            "lesson_type_id": str(lesson_type_group.id),
+            "coach_id": str(coach_1.id),
+            "title": "Invalid Schedule Lesson",
+            "start_at": (now + timedelta(days=1, hours=2)).isoformat(),
+            "end_at": (now + timedelta(days=1, hours=1)).isoformat(),
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_active_only_query_filter_coaches_and_lesson_types(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    club_a: Club,
+    owner_user: User,
+    owner_membership: ClubMembership,
+    coach_1: Coach,
+    lesson_type_group: LessonType,
+):
+    """Test is_active and active_only query parameters filter inactive entities."""
+    headers = make_auth_header(owner_user)
+
+    # Deactivate Coach
+    await async_client.post(f"/api/v1/clubs/{club_a.id}/coaches/{coach_1.id}/deactivate", headers=headers)
+
+    # Query with is_active=true
+    resp_active = await async_client.get(f"/api/v1/clubs/{club_a.id}/coaches?is_active=true", headers=headers)
+    assert resp_active.status_code == 200
+    assert not any(c["id"] == str(coach_1.id) for c in resp_active.json())
+
+    # Query with active_only=true
+    resp_active_only = await async_client.get(f"/api/v1/clubs/{club_a.id}/coaches?active_only=true", headers=headers)
+    assert resp_active_only.status_code == 200
+    assert not any(c["id"] == str(coach_1.id) for c in resp_active_only.json())
+
+    # Query without filter should return the inactive coach
+    resp_all = await async_client.get(f"/api/v1/clubs/{club_a.id}/coaches", headers=headers)
+    assert resp_all.status_code == 200
+    assert any(c["id"] == str(coach_1.id) for c in resp_all.json())
+

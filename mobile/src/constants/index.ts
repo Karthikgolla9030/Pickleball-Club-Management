@@ -187,6 +187,7 @@ export const API_ENDPOINTS = {
   CLUB_COACH_REACTIVATE: (clubId: string, coachId: string) => `${API_BASE}/api/v1/clubs/${clubId}/coaches/${coachId}/reactivate`,
 
   CLUB_LESSON_TYPES: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lesson-types`,
+  CLUB_LESSON_TYPES_SEED_DEFAULTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lesson-types/seed-defaults`,
   CLUB_LESSON_TYPE: (clubId: string, lessonTypeId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lesson-types/${lessonTypeId}`,
   CLUB_LESSON_TYPE_DEACTIVATE: (clubId: string, lessonTypeId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lesson-types/${lessonTypeId}/deactivate`,
   CLUB_LESSON_TYPE_REACTIVATE: (clubId: string, lessonTypeId: string) => `${API_BASE}/api/v1/clubs/${clubId}/lesson-types/${lessonTypeId}/reactivate`,

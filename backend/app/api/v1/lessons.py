@@ -108,11 +108,13 @@ async def create_coach(
 async def list_coaches(
     club_id: UUID,
     is_active: bool | None = Query(default=None),
+    active_only: bool | None = Query(default=None),
     membership: ClubMembership = Depends(require_permission(Permission.MANAGE_LESSONS)),
     db: AsyncSession = Depends(get_db),
 ) -> list[CoachResponse]:
     service = LessonService(db)
-    return await service.list_coaches(club_id=club_id, is_active=is_active)
+    active_flag = is_active if is_active is not None else (True if active_only else None)
+    return await service.list_coaches(club_id=club_id, is_active=active_flag)
 
 
 @club_lessons_router.get(
@@ -204,11 +206,28 @@ async def create_lesson_type(
 async def list_lesson_types(
     club_id: UUID,
     is_active: bool | None = Query(default=None),
+    active_only: bool | None = Query(default=None),
     membership: ClubMembership = Depends(require_permission(Permission.MANAGE_LESSONS)),
     db: AsyncSession = Depends(get_db),
 ) -> list[LessonTypeResponse]:
     service = LessonService(db)
-    return await service.list_lesson_types(club_id=club_id, is_active=is_active)
+    active_flag = is_active if is_active is not None else (True if active_only else None)
+    return await service.list_lesson_types(club_id=club_id, is_active=active_flag)
+
+
+@club_lessons_router.post(
+    "/lesson-types/seed-defaults",
+    response_model=list[LessonTypeResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="Initialize standard default lesson types for a club",
+)
+async def seed_default_lesson_types(
+    club_id: UUID,
+    membership: ClubMembership = Depends(require_permission(Permission.MANAGE_LESSONS)),
+    db: AsyncSession = Depends(get_db),
+) -> list[LessonTypeResponse]:
+    service = LessonService(db)
+    return await service.seed_default_lesson_types(club_id=club_id)
 
 
 @club_lessons_router.get(

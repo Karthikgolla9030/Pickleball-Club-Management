@@ -160,6 +160,16 @@ export function useReactivateLessonType(clubId: string) {
   });
 }
 
+export function useSeedDefaultLessonTypes(clubId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => lessonApi.seedDefaultLessonTypes(clubId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lesson-types'] });
+    },
+  });
+}
+
 // ─── Staff Lesson Hooks ──────────────────────────────────────────────────────
 
 export function useClubLessons(clubId: string, filters?: LessonFilters) {

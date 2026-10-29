@@ -183,6 +183,14 @@ class ClubService:
             await self.db.commit()
             await self.db.refresh(membership)
             await self.db.refresh(club)
+
+            # Initialize standard default lesson types for the new club
+            try:
+                from app.services.lesson_service import LessonService
+                await LessonService(self.db).seed_default_lesson_types(club.id)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Default lesson types seeding skipped for club %s: %s", club.id, e)
         except HTTPException:
             await self.db.rollback()
             raise

@@ -217,6 +217,45 @@ class LessonService:
             )
         return LessonTypeResponse.model_validate(lt)
 
+    STANDARD_LESSON_TYPES: list[dict[str, Any]] = [
+        {
+            "name": "Beginner Fundamentals",
+            "description": "Master the basics: paddle grip, dinking, serve & return rules.",
+            "duration_minutes": 60,
+            "default_capacity": 4,
+            "default_price": Decimal("35.00"),
+            "currency": "USD",
+            "is_private": False,
+        },
+        {
+            "name": "Intermediate Skills",
+            "description": "Third-shot drops, kitchen play transition, and reset defense.",
+            "duration_minutes": 60,
+            "default_capacity": 4,
+            "default_price": Decimal("45.00"),
+            "currency": "USD",
+            "is_private": False,
+        },
+        {
+            "name": "Private Coaching",
+            "description": "1-on-1 personalized technical feedback, video analysis, and target drills.",
+            "duration_minutes": 60,
+            "default_capacity": 1,
+            "default_price": Decimal("75.00"),
+            "currency": "USD",
+            "is_private": True,
+        },
+        {
+            "name": "Doubles Strategy",
+            "description": "Stacking, switching, poaching, and target placement in doubles play.",
+            "duration_minutes": 90,
+            "default_capacity": 8,
+            "default_price": Decimal("40.00"),
+            "currency": "USD",
+            "is_private": False,
+        },
+    ]
+
     async def list_lesson_types(
         self,
         club_id: UUID,
@@ -224,6 +263,43 @@ class LessonService:
     ) -> list[LessonTypeResponse]:
         types = await self.lesson_type_repo.list_by_club(club_id=club_id, is_active=is_active)
         return [LessonTypeResponse.model_validate(lt) for lt in types]
+
+    async def seed_default_lesson_types(
+        self,
+        club_id: UUID,
+    ) -> list[LessonTypeResponse]:
+        club = await self.db.get(Club, club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+
+        existing = await self.lesson_type_repo.list_by_club(club_id=club_id)
+        existing_names = {lt.name.strip().lower() for lt in existing}
+
+        created = []
+        for template in self.STANDARD_LESSON_TYPES:
+            if template["name"].strip().lower() not in existing_names:
+                lt = await self.lesson_type_repo.create(
+                    club_id=club_id,
+                    name=template["name"],
+                    description=template["description"],
+                    duration_minutes=template["duration_minutes"],
+                    default_capacity=template["default_capacity"],
+                    default_price=template["default_price"],
+                    currency=template["currency"],
+                    is_private=template["is_private"],
+                )
+                created.append(lt)
+
+        if created:
+            await self.db.commit()
+            for lt in created:
+                await self.db.refresh(lt)
+
+        all_types = await self.lesson_type_repo.list_by_club(club_id=club_id)
+        return [LessonTypeResponse.model_validate(lt) for lt in all_types]
 
     async def update_lesson_type(
         self,
