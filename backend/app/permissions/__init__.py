@@ -94,10 +94,14 @@ _TOURNAMENT_DIRECTOR_PERMISSIONS: FrozenSet[Permission] = frozenset({
     #      MANAGE_BOOKINGS, MANAGE_COURTS, MANAGE_MEMBERSHIPS
 })
 
+_STAFF_MEMBER_PERMISSIONS: FrozenSet[Permission] = frozenset()
+"""Staff Member has least-privilege access by default (general club employee association with no administrative management permissions)."""
+
 ROLE_PERMISSIONS: dict[ClubRole, FrozenSet[Permission]] = {
     ClubRole.CLUB_OWNER: _CLUB_OWNER_PERMISSIONS,
     ClubRole.CLUB_MANAGER: _CLUB_MANAGER_PERMISSIONS,
     ClubRole.TOURNAMENT_DIRECTOR: _TOURNAMENT_DIRECTOR_PERMISSIONS,
+    ClubRole.STAFF_MEMBER: _STAFF_MEMBER_PERMISSIONS,
 }
 
 

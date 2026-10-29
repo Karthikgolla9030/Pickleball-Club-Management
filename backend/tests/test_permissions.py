@@ -21,11 +21,12 @@ from app.permissions import Permission, get_permissions, has_permission
 # ─── Test 9: Permission mapping works ─────────────────────────────────────────
 
 def test_permission_mapping_exists():
-    """Test 9: ROLE_PERMISSIONS mapping covers all three roles."""
+    """Test 9: ROLE_PERMISSIONS mapping covers all roles."""
     from app.permissions import ROLE_PERMISSIONS
     assert ClubRole.CLUB_OWNER in ROLE_PERMISSIONS
     assert ClubRole.CLUB_MANAGER in ROLE_PERMISSIONS
     assert ClubRole.TOURNAMENT_DIRECTOR in ROLE_PERMISSIONS
+    assert ClubRole.STAFF_MEMBER in ROLE_PERMISSIONS
 
 
 def test_get_permissions_returns_frozenset():
@@ -33,7 +34,18 @@ def test_get_permissions_returns_frozenset():
     for role in ClubRole:
         perms = get_permissions(role)
         assert isinstance(perms, frozenset)
-        assert len(perms) > 0
+        if role == ClubRole.STAFF_MEMBER:
+            assert len(perms) == 0
+        else:
+            assert len(perms) > 0
+
+
+def test_staff_member_has_least_privilege():
+    """Staff Member role has zero administrative permissions by default."""
+    for perm in Permission:
+        assert has_permission(ClubRole.STAFF_MEMBER, perm) is False, (
+            f"Staff Member should NOT have {perm.value}"
+        )
 
 
 # ─── Test 10: Unauthorized permission is rejected ─────────────────────────────

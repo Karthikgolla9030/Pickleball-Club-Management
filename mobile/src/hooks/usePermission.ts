@@ -43,5 +43,6 @@ export function usePermission() {
     isOwner: role === 'club_owner',
     isManager: role === 'club_manager',
     isTournamentDirector: role === 'tournament_director',
+    isStaffMember: role === 'staff_member',
   };
 }

@@ -122,9 +122,11 @@ class SupportTicketService:
             ClubRole.CLUB_OWNER,
             ClubRole.CLUB_MANAGER,
             ClubRole.TOURNAMENT_DIRECTOR,
+            ClubRole.STAFF_MEMBER,
             "club_owner",
             "club_manager",
             "tournament_director",
+            "staff_member",
             "owner",
             "manager",
         ]

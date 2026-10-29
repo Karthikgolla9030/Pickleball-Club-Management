@@ -5,12 +5,13 @@
 
 // ─── Club Role ───────────────────────────────────────────────────────────────
 
-export type ClubRole = 'club_owner' | 'club_manager' | 'tournament_director';
+export type ClubRole = 'club_owner' | 'club_manager' | 'tournament_director' | 'staff_member';
 
 export const CLUB_ROLE_LABELS: Record<ClubRole, string> = {
   club_owner: 'Club Owner',
   club_manager: 'Club Manager',
   tournament_director: 'Tournament Director',
+  staff_member: 'Staff Member',
 } as const;
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -609,6 +610,7 @@ export const ROLE_PERMISSIONS: Record<ClubRole, readonly ClubPermission[]> = {
     'manage_standings',
     'manage_results',
   ],
+  staff_member: [],
 } as const;
 
 // ─── Authentication ──────────────────────────────────────────────────────────

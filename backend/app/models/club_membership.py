@@ -28,12 +28,13 @@ from app.core.database import Base
 
 class ClubRole(str, enum.Enum):
     """
-    The three and only three club management roles.
+    Club management and staff roles.
     Display labels are defined in the permissions module.
     """
     CLUB_OWNER = "club_owner"
     CLUB_MANAGER = "club_manager"
     TOURNAMENT_DIRECTOR = "tournament_director"
+    STAFF_MEMBER = "staff_member"
 
     @property
     def display_label(self) -> str:
@@ -41,6 +42,7 @@ class ClubRole(str, enum.Enum):
             ClubRole.CLUB_OWNER: "Club Owner",
             ClubRole.CLUB_MANAGER: "Club Manager",
             ClubRole.TOURNAMENT_DIRECTOR: "Tournament Director",
+            ClubRole.STAFF_MEMBER: "Staff Member",
         }
         return labels[self]
 

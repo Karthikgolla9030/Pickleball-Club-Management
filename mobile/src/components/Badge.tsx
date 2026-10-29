@@ -53,6 +53,7 @@ const roleColors: Record<ClubRole, { bg: string; text: string }> = {
   club_owner:           { bg: '#FEF3C7', text: Colors.roles.clubOwner },
   club_manager:         { bg: '#DCEBFF', text: Colors.roles.clubManager },
   tournament_director:  { bg: '#EDE9FE', text: Colors.roles.tournamentDirector },
+  staff_member:         { bg: '#F1F5F9', text: Colors.roles.staffMember },
 };
 
 export function Badge({ label, variant = 'default', role, size = 'md', icon }: BadgeProps) {

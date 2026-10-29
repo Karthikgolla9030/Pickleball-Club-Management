@@ -181,6 +181,11 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       RoleIcon = Trophy;
       roleBadgeBg = '#FEF3C7';
       roleBadgeColor = '#B45309';
+    } else if (role === 'staff_member') {
+      roleLabel = 'Staff Member';
+      RoleIcon = User;
+      roleBadgeBg = '#F1F5F9';
+      roleBadgeColor = '#475569';
     }
   }
 
@@ -266,7 +271,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
-    } else {
+    } else if (role === 'tournament_director') {
       // Tournament Director: Competitions only
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
@@ -276,6 +281,15 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       clubSection2 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
+      ];
+    } else {
+      // General Staff Member: Least-privilege basic employee experience
+      clubSection1 = [
+        { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
+      ];
+      clubSection2 = [
+        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
     }

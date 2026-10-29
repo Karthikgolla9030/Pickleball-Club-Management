@@ -63,7 +63,15 @@ export default function ClubProfileScreen() {
   const email = user?.email || 'alex.johnson@example.com';
   const profileImageUrl = (user as any)?.profile_image_url || (user as any)?.avatar_url;
 
-  const roleLabel = activeRole === 'club_owner' ? 'Club Owner' : activeRole === 'club_manager' ? 'Club Manager' : 'Club Staff';
+  const roleLabel = activeRole === 'club_owner'
+    ? 'Club Owner'
+    : activeRole === 'club_manager'
+    ? 'Club Manager'
+    : activeRole === 'tournament_director'
+    ? 'Tournament Director'
+    : activeRole === 'staff_member'
+    ? 'Staff Member'
+    : 'Club Staff';
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out of your account?', [

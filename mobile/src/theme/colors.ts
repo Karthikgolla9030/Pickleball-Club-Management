@@ -77,6 +77,7 @@ export const Colors = {
     clubOwner: '#B45309',          // Amber — ownership (dark enough for light bg)
     clubManager: '#1D4ED8',        // Blue — operations
     tournamentDirector: '#7C3AED', // Purple — competition
+    staffMember: '#475569',        // Slate — general staff
     player: '#1B6B45',             // Green — player
   },
 

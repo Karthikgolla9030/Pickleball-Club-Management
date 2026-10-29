@@ -150,6 +150,7 @@ type PlayerFilterType = 'all' | 'subscribers' | 'normal';
 
 const VALID_ROLES: { role: ClubRole; label: string }[] = [
   { role: 'club_owner', label: 'Club Owner' },
+  { role: 'staff_member', label: 'Staff Member' },
   { role: 'club_manager', label: 'Club Manager' },
   { role: 'tournament_director', label: 'Tournament Director' },
 ];
@@ -321,7 +322,7 @@ export default function ClubMembersScreen() {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState<ClubRole>('club_manager');
+  const [newStaffRole, setNewStaffRole] = useState<ClubRole>('staff_member');
   const [staffActionError, setStaffActionError] = useState<string | null>(null);
 
   // Role Edit Modal
@@ -432,7 +433,7 @@ export default function ClubMembersScreen() {
       setNewStaffEmail('');
       setNewStaffName('');
       setNewStaffPassword('');
-      setNewStaffRole('club_manager');
+      setNewStaffRole('staff_member');
     } catch (err: unknown) {
       setStaffActionError(err instanceof Error ? err.message : 'Failed to add staff member');
     }
@@ -555,7 +556,7 @@ export default function ClubMembersScreen() {
           activeOpacity={0.8}
         >
           <Users
-            size={17}
+            size={15}
             color={activeTab === 'players' ? '#FFFFFF' : '#102F2A'}
             strokeWidth={2}
           />
@@ -575,7 +576,7 @@ export default function ClubMembersScreen() {
           activeOpacity={0.8}
         >
           <User
-            size={17}
+            size={15}
             color={activeTab === 'staff' ? '#FFFFFF' : '#102F2A'}
             strokeWidth={2}
           />
@@ -598,6 +599,7 @@ export default function ClubMembersScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.filterPillsScrollContent}
+            style={styles.filterScrollView}
           >
             <TouchableOpacity
               style={[
@@ -662,7 +664,7 @@ export default function ClubMembersScreen() {
               activeOpacity={0.7}
               accessibilityLabel="Filter settings"
             >
-              <SlidersHorizontal size={17} color="#102F2A" strokeWidth={2} />
+              <SlidersHorizontal size={15} color="#102F2A" strokeWidth={2} />
             </TouchableOpacity>
           </ScrollView>
 
@@ -856,6 +858,7 @@ export default function ClubMembersScreen() {
 
     const roleConfig = {
       club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
+      staff_member: { label: 'Staff Member', bg: '#F1F5F9', text: '#475569' },
       club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
       tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
     }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
@@ -1488,26 +1491,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   mainActionBtn: {
     flex: 1,
-    height: 44,
+    height: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7E3',
-    borderRadius: 12,
+    borderRadius: 10,
+    paddingHorizontal: 12,
   },
   mainActionBtnActive: {
     backgroundColor: '#176B57',
     borderColor: '#176B57',
   },
   mainActionBtnText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#102F2A',
   },
@@ -1517,13 +1521,14 @@ const styles = StyleSheet.create({
   },
 
   // ─── Filter Pills ────────────────────────────────────────────────────────────
+  filterScrollView: {
+    marginBottom: 12,
+  },
   filterPillsScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
-    paddingHorizontal: 16,
-    paddingRight: 24,  // trailing space so last pill scrolls into view
+    paddingRight: 16,
   },
   filterPill: {
     height: 34,
@@ -1534,7 +1539,7 @@ const styles = StyleSheet.create({
     borderColor: '#DFE7E3',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,  // never compress pill
+    flexShrink: 0,
   },
   filterPillActive: {
     backgroundColor: '#176B57',
@@ -1544,21 +1549,23 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '600',
     color: '#334155',
+    lineHeight: 16,
+    textAlign: 'center',
   },
   filterPillTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
   filterIconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7E3',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 'auto',
+    flexShrink: 0,
   },
 
   // ─── Search Container ────────────────────────────────────────────────────────
