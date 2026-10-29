@@ -1,22 +1,26 @@
 /**
  * Aught2 Pickleball — Club Owner Payments Screen
  *
- * Pixel-accurate implementation matching reference specification:
- *   - Compact header: [☰ Menu] Payments (Track revenue and transactions) [🔔] [Avatar A]
- *   - 4 Summary metric cards: Total Collected, Total Payments, Successful, Pending
- *   - Horizontal status filter pills: All | Succeeded | Pending | Failed | Cancelled
- *   - Vertically scrolling transaction cards with exact hierarchy:
- *       * Player name + Status badge
- *       * Reference ID (e.g. A2P-2026-000004)
- *       * Amount + Method badge (e.g. ONLINE, BANK TRANSFER)
- *       * Purpose & Plan details
- *       * Thin divider
- *       * Creation date (e.g. Created: 27 Sept 2026)
- *       * Note / Failure reason (italic)
- *   - Detailed transaction inspection modal sheet for full history & admin reconciliation
- *   - Automatic player-side payment synchronization via 15s polling, focus refetch, & pull-to-refresh
- *   - Manual "+ Record" button & creation modal completely removed
- *   - Fixed Club Owner bottom navigation preserved
+ * Redesigned Payments Screen:
+ *   - Compact header: [☰ Menu] Payments (Track revenue and transactions)
+ *   - Summary metric cards with standard US Dollar currency formatting:
+ *       * Net Collected ($)
+ *       * Total Payments
+ *       * Successful
+ *       * Pending
+ *       * Refunded
+ *   - Multi-facet filters: Search, Service Category Pills, and Status Filter Pills
+ *   - Clean, professional transaction cards without raw metadata:
+ *       * Row 1: Player Name + Status Badge (Succeeded, Pending, Failed, Cancelled, Refunded)
+ *       * Row 2: Transaction Reference + Category Badge + Payment Method Pill
+ *       * Row 3: Prominent US Dollar Amount ($36.75)
+ *       * Row 4: Structured Service Details (Service Name & Activity Details)
+ *       * Row 5: Creation Date + Optional Provider Reference
+ *       * Friendly Failure Reason (e.g. 'Payment was not completed by the user')
+ *       * Clean User Note (strictly without [META] or raw JSON)
+ *   - Comprehensive transaction inspection modal for reconciliation and refunds
+ *   - Real-time 15s auto-polling, focus refetch, & pull-to-refresh
+ *   - Bottom padding avoiding fixed bottom navigation overlay
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -24,14 +28,12 @@ import {
   Alert,
   FlatList,
   Modal,
-  Platform,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -58,7 +60,6 @@ import {
 
 import {
   AppText,
-  Button,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -75,8 +76,7 @@ import {
   useSucceedPayment,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
-import { Colors, Radius, Shadows, Spacing } from '@/theme';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, parsePaymentDetails } from '@/utils';
 import type { Payment, PaymentMethod, PaymentPurpose, PaymentStatus } from '@/types';
 
 type FilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'cancelled' | 'refunded';
@@ -101,38 +101,6 @@ const CATEGORY_TABS: { key: CategoryTab; label: string }[] = [
   { key: 'event', label: 'Events' },
   { key: 'lesson', label: 'Lessons' },
 ];
-
-function formatTransactionDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sept',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    const day = d.getDate();
-    const month = months[d.getMonth()] || '';
-    const year = d.getFullYear();
-    return `${day} ${month} ${year}`;
-  } catch {
-    return dateStr;
-  }
-}
-
-function formatMethodLabel(method: PaymentMethod | string): string {
-  if (!method) return 'ONLINE';
-  const clean = String(method).toLowerCase().replace(/[_-]/g, ' ');
-  return clean.toUpperCase();
-}
 
 function capitalize(str: string): string {
   if (!str) return '';
@@ -187,7 +155,7 @@ export default function ClubPaymentsScreen() {
   const cancelPaymentMutation = useCancelPayment(clubId);
   const refundPaymentMutation = useRefundPayment(clubId);
 
-  // Filtered payments list
+  // Filtered payments list using clean parsed details (not raw metadata)
   const filteredPayments = useMemo(() => {
     return allPayments.filter((p) => {
       // 1. Status Filter
@@ -204,15 +172,18 @@ export default function ClubPaymentsScreen() {
         if (p.purpose !== categoryFilter) return false;
       }
 
-      // 3. Search Query Filter
+      // 3. Search Query Filter (searches clean display values only)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
+        const details = parsePaymentDetails(p);
         const refMatch = p.reference?.toLowerCase().includes(q);
         const nameMatch = p.player?.full_name?.toLowerCase().includes(q);
         const emailMatch = p.player?.email?.toLowerCase().includes(q);
-        const serviceMatch = p.service_name?.toLowerCase().includes(q);
-        const notesMatch = p.notes?.toLowerCase().includes(q);
-        if (!refMatch && !nameMatch && !emailMatch && !serviceMatch && !notesMatch) {
+        const serviceMatch = details.serviceType.toLowerCase().includes(q);
+        const activityMatch = details.activityTitle?.toLowerCase().includes(q);
+        const noteMatch = details.cleanNote?.toLowerCase().includes(q);
+
+        if (!refMatch && !nameMatch && !emailMatch && !serviceMatch && !activityMatch && !noteMatch) {
           return false;
         }
       }
@@ -221,7 +192,7 @@ export default function ClubPaymentsScreen() {
     });
   }, [allPayments, statusFilter, categoryFilter, searchQuery]);
 
-  // Metric values calculated from actual payment records
+  // Metric values calculated from actual payment records in US Dollars
   const {
     totalCollectedAmount,
     totalPaymentsCount,
@@ -283,9 +254,10 @@ export default function ClubPaymentsScreen() {
 
   // Handle Mark as Succeeded
   const handleMarkPaid = (payment: Payment) => {
+    const details = parsePaymentDetails(payment);
     Alert.alert(
       'Confirm Payment Received',
-      `Mark transaction ${payment.reference} (${payment.currency} ${payment.amount}) as successfully received?`,
+      `Mark transaction ${payment.reference} (${details.formattedAmount}) as successfully received?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -352,37 +324,56 @@ export default function ClubPaymentsScreen() {
         </View>
         <EmptyState
           title="Access Restricted"
-          description="You do not have permission to manage payments for this club."
+          description="Only club owners and managers have permission to view club payments and revenue."
         />
       </Screen>
     );
   }
 
-  // ─── Header Component inside FlatList ───────────────────────────────────────
+  // Category Icon & Badge Config
+  const getCategoryDetails = (purpose: PaymentPurpose | string) => {
+    switch (purpose) {
+      case 'court_booking':
+        return { label: 'Court Booking', color: '#0369A1', bg: '#E0F2FE', Icon: LayoutGrid };
+      case 'tournament':
+        return { label: 'Tournament', color: '#7C3AED', bg: '#EDE9FE', Icon: Trophy };
+      case 'league':
+        return { label: 'League', color: '#0D9488', bg: '#CCFBF1', Icon: Users };
+      case 'event':
+        return { label: 'Event', color: '#BE185D', bg: '#FCE7F3', Icon: Calendar };
+      case 'lesson':
+        return { label: 'Lesson', color: '#D97706', bg: '#FEF3C7', Icon: UserCheck };
+      case 'membership':
+      default:
+        return { label: 'Membership', color: '#B45309', bg: '#FEF3C7', Icon: Crown };
+    }
+  };
+
+  // ─── Render Page Header, Metrics & Filters ─────────────────────────────────
   const renderHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* ─── 1. Summary Metrics Strip ─────────────────────────────────────── */}
+      {/* ─── 1. Summary Metrics Cards (Consistent USD Formatting) ──────────── */}
       <View style={styles.metricsWrapper}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.metricsScrollContent}
         >
-          {/* Card 1: TOTAL COLLECTED (NET) */}
+          {/* Card 1: NET COLLECTED */}
           <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#E8F5EE' }]}>
-              <CreditCard size={15} color="#15803D" strokeWidth={2.2} />
+            <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
+              <CreditCard size={15} color="#059669" strokeWidth={2.2} />
             </View>
             <AppText style={styles.metricLabel}>NET COLLECTED</AppText>
-            <AppText style={[styles.metricValue, { color: '#15803D' }]} numberOfLines={1}>
-              {formatCurrency(totalCollectedAmount)}
+            <AppText style={[styles.metricValue, { color: '#047857' }]} numberOfLines={1}>
+              {formatCurrency(totalCollectedAmount, 'USD')}
             </AppText>
           </View>
 
           {/* Card 2: TOTAL PAYMENTS */}
           <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#EFF6FF' }]}>
-              <FileText size={15} color="#2563EB" strokeWidth={2.2} />
+            <View style={[styles.metricIconBox, { backgroundColor: '#F1F5F9' }]}>
+              <FileText size={15} color="#475569" strokeWidth={2.2} />
             </View>
             <AppText style={styles.metricLabel}>TOTAL PAYMENTS</AppText>
             <AppText style={styles.metricValue} numberOfLines={1}>
@@ -392,7 +383,7 @@ export default function ClubPaymentsScreen() {
 
           {/* Card 3: SUCCESSFUL */}
           <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#E8F5EE' }]}>
+            <View style={[styles.metricIconBox, { backgroundColor: '#DEF2E6' }]}>
               <CheckCircle2 size={15} color="#15803D" strokeWidth={2.2} />
             </View>
             <AppText style={styles.metricLabel}>SUCCESSFUL</AppText>
@@ -419,7 +410,7 @@ export default function ClubPaymentsScreen() {
             </View>
             <AppText style={styles.metricLabel}>REFUNDED ({refundedCount})</AppText>
             <AppText style={[styles.metricValue, { color: '#6D28D9' }]} numberOfLines={1}>
-              {formatCurrency(totalRefundedAmount)}
+              {formatCurrency(totalRefundedAmount, 'USD')}
             </AppText>
           </View>
         </ScrollView>
@@ -495,42 +486,16 @@ export default function ClubPaymentsScreen() {
     </View>
   );
 
-  // ─── Transaction Card Component ─────────────────────────────────────────────
+  // ─── Redesigned Clean Transaction Card ─────────────────────────────────────
   const renderPaymentCard = ({ item }: { item: Payment }) => {
-    const playerName =
-      item.player?.full_name || item.player?.email || 'Unknown Member';
-    const planOrItemName =
-      item.service_name ||
-      item.subscription?.plan_name ||
-      (item as any).plan_name ||
-      (item as any).booking_title ||
-      null;
+    const details = parsePaymentDetails(item);
+    const playerName = item.player?.full_name || item.player?.email || 'Unknown Member';
 
-    const displayNote = item.failure_reason || item.notes || null;
     const isFailed = item.status === 'failed';
     const isPending = item.status === 'pending' || item.status === 'processing';
     const isSucceeded = item.status === 'succeeded';
     const isCancelled = item.status === 'cancelled';
     const isRefunded = item.status === 'refunded' || item.status === 'partially_refunded';
-
-    // Category Icon & Badge Config
-    const getCategoryDetails = (purpose: PaymentPurpose | string) => {
-      switch (purpose) {
-        case 'court_booking':
-          return { label: 'Court Booking', color: '#0369A1', bg: '#E0F2FE', Icon: LayoutGrid };
-        case 'tournament':
-          return { label: 'Tournament', color: '#7C3AED', bg: '#EDE9FE', Icon: Trophy };
-        case 'league':
-          return { label: 'League', color: '#0D9488', bg: '#CCFBF1', Icon: Users };
-        case 'event':
-          return { label: 'Event', color: '#BE185D', bg: '#FCE7F3', Icon: Calendar };
-        case 'lesson':
-          return { label: 'Lesson', color: '#D97706', bg: '#FEF3C7', Icon: UserCheck };
-        case 'membership':
-        default:
-          return { label: 'Membership', color: '#B45309', bg: '#FEF3C7', Icon: Crown };
-      }
-    };
 
     const cat = getCategoryDetails(item.purpose);
     const CategoryIcon = cat.Icon;
@@ -543,7 +508,7 @@ export default function ClubPaymentsScreen() {
       >
         {/* Row 1: Player Name & Status Badge */}
         <View style={styles.cardHeaderRow}>
-          <AppText style={styles.playerName} numberOfLines={2}>
+          <AppText style={styles.playerName} numberOfLines={1}>
             {playerName}
           </AppText>
 
@@ -572,46 +537,50 @@ export default function ClubPaymentsScreen() {
           </View>
         </View>
 
-        {/* Row 2: Reference ID & Category Badge */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+        {/* Row 2: Reference ID & Badges Group */}
+        <View style={styles.transactionDetailsRow}>
           <AppText style={styles.referenceText}>{item.reference}</AppText>
-          <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
-            <CategoryIcon size={11} color={cat.color} />
-            <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
-              {cat.label}
-            </AppText>
+          <View style={styles.badgeGroupRow}>
+            <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
+              <CategoryIcon size={11} color={cat.color} />
+              <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
+                {details.serviceType}
+              </AppText>
+            </View>
+            <View style={styles.methodBadge}>
+              <AppText style={styles.methodBadgeText}>
+                {details.methodLabel}
+              </AppText>
+            </View>
           </View>
         </View>
 
-        {/* Row 3: Amount & Payment Method Pill */}
-        <View style={styles.amountMethodRow}>
-          <AppText style={styles.amountText}>
-            {formatCurrency(item.amount, item.currency)}
+        {/* Row 3: Prominent Amount in US Dollars */}
+        <View style={styles.amountRow}>
+          <AppText style={styles.amountText}>{details.formattedAmount}</AppText>
+        </View>
+
+        {/* Row 4: Meaningful Service Details (Never Raw JSON or Metadata) */}
+        <View style={styles.serviceDetailsBox}>
+          <AppText style={styles.serviceNameHeading}>
+            {details.serviceType}
           </AppText>
-
-          <View style={styles.methodBadge}>
-            <AppText style={styles.methodBadgeText}>
-              {formatMethodLabel(item.payment_method)}
+          {details.activityTitle ? (
+            <AppText style={styles.activityDetailText}>
+              {details.activityTitle}
+              {details.activitySubtitle ? ` · ${details.activitySubtitle}` : ''}
             </AppText>
-          </View>
+          ) : details.activitySubtitle ? (
+            <AppText style={styles.activityDetailText}>{details.activitySubtitle}</AppText>
+          ) : null}
         </View>
-
-        {/* Row 4: Service Title / Plan */}
-        {planOrItemName && (
-          <View style={styles.purposePlanRow}>
-            <AppText style={styles.planText} numberOfLines={1}>
-              <AppText style={styles.metaLabelText}>Service: </AppText>
-              {planOrItemName}
-            </AppText>
-          </View>
-        )}
 
         {/* Refund Strip if Refunded */}
         {isRefunded && (
           <View style={styles.refundCardStrip}>
             <RotateCcw size={13} color="#6D28D9" />
             <AppText style={styles.refundCardStripText} numberOfLines={1}>
-              Refunded: {formatCurrency(item.refunded_amount || item.amount, item.currency)}
+              Refunded: {formatCurrency(item.refunded_amount || item.amount, 'USD')}
               {item.refund_reason ? ` • ${item.refund_reason}` : ''}
             </AppText>
           </View>
@@ -620,15 +589,32 @@ export default function ClubPaymentsScreen() {
         {/* Thin Divider */}
         <View style={styles.cardDivider} />
 
-        {/* Row 5: Creation Date */}
-        <AppText style={styles.createdDateText}>
-          Created: {formatTransactionDate(item.created_at)}
-        </AppText>
+        {/* Row 5: Creation Date and Provider Ref */}
+        <View style={styles.cardBottomRow}>
+          <AppText style={styles.createdDateText}>
+            Created: {details.formattedDate}
+          </AppText>
+          {item.provider_payment_id ? (
+            <AppText style={styles.providerRefText} numberOfLines={1}>
+              Ref: {item.provider_payment_id}
+            </AppText>
+          ) : null}
+        </View>
 
-        {/* Row 6: Note or Failure Reason (Italic) */}
-        {displayNote && !isRefunded ? (
-          <AppText style={styles.noteText} numberOfLines={3}>
-            Note: {displayNote}
+        {/* Failure Explanation (Human-readable, no technical jargon) */}
+        {details.failureReason ? (
+          <View style={styles.failureReasonRow}>
+            <ShieldAlert size={13} color="#DC2626" />
+            <AppText style={styles.failureReasonText}>
+              {details.failureReason}
+            </AppText>
+          </View>
+        ) : null}
+
+        {/* User Note (Clean, no raw metadata) */}
+        {details.cleanNote && !isRefunded ? (
+          <AppText style={styles.noteText} numberOfLines={2}>
+            Note: {details.cleanNote}
           </AppText>
         ) : null}
       </TouchableOpacity>
@@ -639,10 +625,9 @@ export default function ClubPaymentsScreen() {
     <Screen style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ─── Compact Header matching Reference Screenshot ─────────────────── */}
+      {/* ─── Compact Header ─────────────────────────────────────────────────── */}
       <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
         <View style={styles.headerInner}>
-          {/* Hamburger Menu on the Left */}
           <TouchableOpacity
             style={styles.headerMenuBtn}
             onPress={openDrawer}
@@ -654,7 +639,6 @@ export default function ClubPaymentsScreen() {
             <Menu size={20} color="#1E293B" strokeWidth={2.2} />
           </TouchableOpacity>
 
-          {/* Payments Title & Subtitle beside it */}
           <View style={styles.headerTitleBlock}>
             <AppText style={styles.headerTitle}>Payments</AppText>
             <AppText style={styles.headerSubtitle}>Track revenue and transactions</AppText>
@@ -688,7 +672,7 @@ export default function ClubPaymentsScreen() {
           contentContainerStyle={[
             styles.listContent,
             {
-              paddingBottom: insets.bottom + 95,
+              paddingBottom: insets.bottom + 96,
             },
           ]}
           showsVerticalScrollIndicator={false}
@@ -723,235 +707,267 @@ export default function ClubPaymentsScreen() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            {selectedPayment && (
-              <>
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalHeaderTitleGroup}>
-                    <AppText style={styles.modalTitle}>Transaction Details</AppText>
+            {selectedPayment && (() => {
+              const modalDetails = parsePaymentDetails(selectedPayment);
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <View style={styles.modalHeaderTitleGroup}>
+                      <AppText style={styles.modalTitle}>Transaction Details</AppText>
+                      <TouchableOpacity
+                        style={styles.modalRefRow}
+                        onPress={() => {
+                          setCopiedId(true);
+                          setTimeout(() => setCopiedId(false), 2000);
+                        }}
+                        hitSlop={8}
+                      >
+                        <AppText style={styles.modalRefText}>
+                          {selectedPayment.reference}
+                        </AppText>
+                        {copiedId ? (
+                          <Check size={14} color="#15803D" />
+                        ) : (
+                          <Copy size={13} color="#64748B" />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
                     <TouchableOpacity
-                      style={styles.modalRefRow}
-                      onPress={() => {
-                        setCopiedId(true);
-                        setTimeout(() => setCopiedId(false), 2000);
-                      }}
+                      onPress={() => setSelectedPayment(null)}
+                      style={styles.modalCloseBtn}
                       hitSlop={8}
                     >
-                      <AppText style={styles.modalRefText}>
-                        {selectedPayment.reference}
-                      </AppText>
-                      {copiedId ? (
-                        <Check size={14} color="#15803D" />
-                      ) : (
-                        <Copy size={13} color="#64748B" />
-                      )}
+                      <X size={18} color="#64748B" />
                     </TouchableOpacity>
                   </View>
 
-                  <TouchableOpacity
-                    onPress={() => setSelectedPayment(null)}
-                    style={styles.modalCloseBtn}
-                    hitSlop={8}
-                  >
-                    <X size={18} color="#64748B" />
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                  <View style={styles.modalDetailsGrid}>
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Customer / Player</AppText>
-                      <AppText style={styles.modalGridVal}>
-                        {selectedPayment.player?.full_name || 'Member'}
-                      </AppText>
-                    </View>
-
-                    {selectedPayment.player?.email && (
+                  <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                    <View style={styles.modalDetailsGrid}>
                       <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Email Address</AppText>
+                        <AppText style={styles.modalGridKey}>Customer / Player</AppText>
                         <AppText style={styles.modalGridVal}>
-                          {selectedPayment.player.email}
+                          {selectedPayment.player?.full_name || 'Member'}
                         </AppText>
                       </View>
-                    )}
 
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Amount</AppText>
-                      <AppText style={[styles.modalGridVal, styles.modalAmountVal]}>
-                        {formatCurrency(selectedPayment.amount, selectedPayment.currency)}
-                      </AppText>
-                    </View>
+                      {selectedPayment.player?.email && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Email Address</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {selectedPayment.player.email}
+                          </AppText>
+                        </View>
+                      )}
 
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Status</AppText>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          selectedPayment.status === 'succeeded' && styles.statusBadgeSucceeded,
-                          selectedPayment.status === 'failed' && styles.statusBadgeFailed,
-                          (selectedPayment.status === 'pending' ||
-                            selectedPayment.status === 'processing') &&
-                            styles.statusBadgePending,
-                          selectedPayment.status === 'cancelled' && styles.statusBadgeCancelled,
-                        ]}
-                      >
-                        <AppText
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Amount</AppText>
+                        <AppText style={[styles.modalGridVal, styles.modalAmountVal]}>
+                          {modalDetails.formattedAmount}
+                        </AppText>
+                      </View>
+
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Status</AppText>
+                        <View
                           style={[
-                            styles.statusBadgeText,
-                            selectedPayment.status === 'succeeded' &&
-                              styles.statusBadgeTextSucceeded,
-                            selectedPayment.status === 'failed' && styles.statusBadgeTextFailed,
+                            styles.statusBadge,
+                            selectedPayment.status === 'succeeded' && styles.statusBadgeSucceeded,
+                            selectedPayment.status === 'failed' && styles.statusBadgeFailed,
                             (selectedPayment.status === 'pending' ||
                               selectedPayment.status === 'processing') &&
-                              styles.statusBadgeTextPending,
-                            selectedPayment.status === 'cancelled' &&
-                              styles.statusBadgeTextCancelled,
+                              styles.statusBadgePending,
+                            selectedPayment.status === 'cancelled' && styles.statusBadgeCancelled,
+                            (selectedPayment.status === 'refunded' ||
+                              selectedPayment.status === 'partially_refunded') &&
+                              styles.statusBadgeRefunded,
                           ]}
                         >
-                          {selectedPayment.status.toUpperCase()}
-                        </AppText>
+                          <AppText
+                            style={[
+                              styles.statusBadgeText,
+                              selectedPayment.status === 'succeeded' && styles.statusBadgeTextSucceeded,
+                              selectedPayment.status === 'failed' && styles.statusBadgeTextFailed,
+                              (selectedPayment.status === 'pending' ||
+                                selectedPayment.status === 'processing') &&
+                                styles.statusBadgeTextPending,
+                              selectedPayment.status === 'cancelled' && styles.statusBadgeTextCancelled,
+                              (selectedPayment.status === 'refunded' ||
+                                selectedPayment.status === 'partially_refunded') &&
+                                styles.statusBadgeTextRefunded,
+                            ]}
+                          >
+                            {selectedPayment.status.toUpperCase()}
+                          </AppText>
+                        </View>
                       </View>
-                    </View>
 
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Service Category</AppText>
-                      <AppText style={styles.modalGridVal}>
-                        {selectedPayment.purpose_label || capitalize(selectedPayment.purpose)}
-                      </AppText>
-                    </View>
-
-                    {selectedPayment.service_name && (
                       <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Service Reference</AppText>
+                        <AppText style={styles.modalGridKey}>Service Category</AppText>
                         <AppText style={styles.modalGridVal}>
-                          {selectedPayment.service_name}
+                          {modalDetails.serviceType}
                         </AppText>
                       </View>
-                    )}
 
-                    {selectedPayment.subscription?.plan_name && (
+                      {modalDetails.activityTitle && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Activity / Item</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {modalDetails.activityTitle}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {modalDetails.activitySubtitle && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Service Details</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {modalDetails.activitySubtitle}
+                          </AppText>
+                        </View>
+                      )}
+
                       <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Membership Plan</AppText>
+                        <AppText style={styles.modalGridKey}>Payment Method</AppText>
                         <AppText style={styles.modalGridVal}>
-                          {selectedPayment.subscription.plan_name}
+                          {modalDetails.methodLabel}
                         </AppText>
                       </View>
-                    )}
 
-                    <View style={styles.modalGridRow}>
-                      <AppText style={styles.modalGridKey}>Initiated At</AppText>
-                      <AppText style={styles.modalGridVal}>
-                        {new Date(selectedPayment.created_at).toLocaleString()}
-                      </AppText>
+                      {selectedPayment.provider_payment_id && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Gateway Reference</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {selectedPayment.provider_payment_id}
+                          </AppText>
+                        </View>
+                      )}
+
+                      <View style={styles.modalGridRow}>
+                        <AppText style={styles.modalGridKey}>Initiated At</AppText>
+                        <AppText style={styles.modalGridVal}>
+                          {modalDetails.formattedDate}
+                        </AppText>
+                      </View>
+
+                      {selectedPayment.paid_at && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Paid At</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {new Date(selectedPayment.paid_at).toLocaleString()}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {selectedPayment.refunded_at && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Refunded At</AppText>
+                          <AppText style={styles.modalGridVal}>
+                            {new Date(selectedPayment.refunded_at).toLocaleString()}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {selectedPayment.refunded_amount != null && (
+                        <View style={styles.modalGridRow}>
+                          <AppText style={styles.modalGridKey}>Refunded Amount</AppText>
+                          <AppText style={[styles.modalGridVal, { color: '#6D28D9', fontWeight: '700' }]}>
+                            {formatCurrency(selectedPayment.refunded_amount, 'USD')}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {selectedPayment.refund_reason && (
+                        <View style={styles.modalNoteSection}>
+                          <AppText style={styles.modalNoteLabel}>Refund Reason</AppText>
+                          <AppText style={styles.modalNoteContent}>
+                            {selectedPayment.refund_reason}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {modalDetails.failureReason && (
+                        <View style={styles.modalNoteSection}>
+                          <AppText style={[styles.modalNoteLabel, { color: '#DC2626' }]}>
+                            Failure Explanation
+                          </AppText>
+                          <AppText style={[styles.modalNoteContent, { color: '#B91C1C' }]}>
+                            {modalDetails.failureReason}
+                          </AppText>
+                        </View>
+                      )}
+
+                      {modalDetails.cleanNote && (
+                        <View style={styles.modalNoteSection}>
+                          <AppText style={styles.modalNoteLabel}>Customer Note</AppText>
+                          <AppText style={styles.modalNoteContent}>
+                            {modalDetails.cleanNote}
+                          </AppText>
+                        </View>
+                      )}
                     </View>
+                  </ScrollView>
 
-                    {selectedPayment.paid_at && (
-                      <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Paid At</AppText>
-                        <AppText style={styles.modalGridVal}>
-                          {new Date(selectedPayment.paid_at).toLocaleString()}
-                        </AppText>
+                  {/* Modal Footer Actions: Staff reconciliation and refunds */}
+                  <View style={styles.modalFooter}>
+                    {selectedPayment.status === 'pending' ||
+                    selectedPayment.status === 'processing' ? (
+                      <View style={styles.modalPendingActions}>
+                        <TouchableOpacity
+                          style={styles.modalCancelPaymentBtn}
+                          onPress={() => handleCancelPayment(selectedPayment)}
+                          disabled={cancelPaymentMutation.isPending}
+                        >
+                          <AppText style={styles.modalCancelPaymentBtnText}>Cancel</AppText>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.modalConfirmPaidBtn}
+                          onPress={() => handleMarkPaid(selectedPayment)}
+                          disabled={succeedPaymentMutation.isPending}
+                        >
+                          <CheckCircle2 size={16} color="#FFFFFF" />
+                          <AppText style={styles.modalConfirmPaidBtnText}>
+                            {succeedPaymentMutation.isPending ? 'Processing...' : 'Mark as Paid'}
+                          </AppText>
+                        </TouchableOpacity>
                       </View>
-                    )}
+                    ) : selectedPayment.status === 'succeeded' ? (
+                      <View style={styles.modalPendingActions}>
+                        <TouchableOpacity
+                          style={[styles.modalCancelPaymentBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
+                          onPress={() => {
+                            setPaymentToRefund(selectedPayment);
+                            setRefundReasonInput('');
+                            setRefundDialogVisible(true);
+                          }}
+                        >
+                          <RotateCcw size={14} color="#6D28D9" />
+                          <AppText style={[styles.modalCancelPaymentBtnText, { color: '#6D28D9' }]}>
+                            Issue Refund
+                          </AppText>
+                        </TouchableOpacity>
 
-                    {selectedPayment.refunded_at && (
-                      <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Refunded At</AppText>
-                        <AppText style={styles.modalGridVal}>
-                          {new Date(selectedPayment.refunded_at).toLocaleString()}
-                        </AppText>
+                        <PlatformButton
+                          size="md"
+                          variant="outline"
+                          label="Close"
+                          onPress={() => setSelectedPayment(null)}
+                        />
                       </View>
-                    )}
-
-                    {selectedPayment.refunded_amount != null && (
-                      <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Refunded Amount</AppText>
-                        <AppText style={[styles.modalGridVal, { color: '#6D28D9', fontWeight: '700' }]}>
-                          {formatCurrency(selectedPayment.refunded_amount, selectedPayment.currency)}
-                        </AppText>
-                      </View>
-                    )}
-
-                    {selectedPayment.refund_reason && (
-                      <View style={styles.modalNoteSection}>
-                        <AppText style={styles.modalNoteLabel}>Refund Reason</AppText>
-                        <AppText style={styles.modalNoteContent}>
-                          {selectedPayment.refund_reason}
-                        </AppText>
-                      </View>
-                    )}
-
-                    {(selectedPayment.failure_reason || selectedPayment.notes) && (
-                      <View style={styles.modalNoteSection}>
-                        <AppText style={styles.modalNoteLabel}>
-                          {selectedPayment.failure_reason ? 'Failure Explanation' : 'Note'}
-                        </AppText>
-                        <AppText style={styles.modalNoteContent}>
-                          {selectedPayment.failure_reason || selectedPayment.notes}
-                        </AppText>
-                      </View>
-                    )}
-                  </View>
-                </ScrollView>
-
-                {/* Modal Footer Actions: Staff reconciliation and refunds */}
-                <View style={styles.modalFooter}>
-                  {selectedPayment.status === 'pending' ||
-                  selectedPayment.status === 'processing' ? (
-                    <View style={styles.modalPendingActions}>
-                      <TouchableOpacity
-                        style={styles.modalCancelPaymentBtn}
-                        onPress={() => handleCancelPayment(selectedPayment)}
-                        disabled={cancelPaymentMutation.isPending}
-                      >
-                        <AppText style={styles.modalCancelPaymentBtnText}>Cancel</AppText>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.modalConfirmPaidBtn}
-                        onPress={() => handleMarkPaid(selectedPayment)}
-                        disabled={succeedPaymentMutation.isPending}
-                      >
-                        <CheckCircle2 size={16} color="#FFFFFF" />
-                        <AppText style={styles.modalConfirmPaidBtnText}>
-                          {succeedPaymentMutation.isPending ? 'Processing...' : 'Mark as Paid'}
-                        </AppText>
-                      </TouchableOpacity>
-                    </View>
-                  ) : selectedPayment.status === 'succeeded' ? (
-                    <View style={styles.modalPendingActions}>
-                      <TouchableOpacity
-                        style={[styles.modalCancelPaymentBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE' }]}
-                        onPress={() => {
-                          setPaymentToRefund(selectedPayment);
-                          setRefundReasonInput('');
-                          setRefundDialogVisible(true);
-                        }}
-                      >
-                        <RotateCcw size={14} color="#6D28D9" />
-                        <AppText style={[styles.modalCancelPaymentBtnText, { color: '#6D28D9' }]}>
-                          Issue Refund
-                        </AppText>
-                      </TouchableOpacity>
-
+                    ) : (
                       <PlatformButton
                         size="md"
                         variant="outline"
                         label="Close"
                         onPress={() => setSelectedPayment(null)}
+                        fullWidth
                       />
-                    </View>
-                  ) : (
-                    <PlatformButton
-                      size="md"
-                      variant="outline"
-                      label="Close"
-                      onPress={() => setSelectedPayment(null)}
-                      fullWidth
-                    />
-                  )}
-                </View>
-              </>
-            )}
+                    )}
+                  </View>
+                </>
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -969,7 +985,7 @@ export default function ClubPaymentsScreen() {
               <View>
                 <AppText style={styles.modalTitle}>Issue Refund</AppText>
                 <AppText style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
-                  {paymentToRefund?.reference} • {paymentToRefund?.currency} {paymentToRefund?.amount}
+                  {paymentToRefund?.reference} • {formatCurrency(paymentToRefund?.amount, 'USD')}
                 </AppText>
               </View>
               <TouchableOpacity onPress={() => setRefundDialogVisible(false)} hitSlop={8}>
@@ -1117,7 +1133,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
-  // ─── 4 Summary Metric Cards ────────────────────────────────────────────────
+  // ─── Summary Metric Cards ──────────────────────────────────────────────────
   metricsWrapper: {
     width: '100%',
   },
@@ -1133,6 +1149,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5ECE8',
     padding: 12,
     minWidth: 110,
+    minHeight: 74,
+    justifyContent: 'space-between',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
@@ -1140,8 +1158,8 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   metricIconBox: {
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1152,7 +1170,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
-    marginTop: 8,
+    marginTop: 6,
   },
   metricValue: {
     fontSize: 17,
@@ -1161,7 +1179,25 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ─── Status Filter Pills ───────────────────────────────────────────────────
+  // ─── Search Bar ────────────────────────────────────────────────────────────
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    height: 42,
+  },
+  searchInput: {
+    flex: 1,
+    paddingHorizontal: 10,
+    fontSize: 13,
+    color: '#0F172A',
+    height: '100%',
+  },
+
+  // ─── Status & Category Filter Pills ────────────────────────────────────────
   filterWrapper: {
     width: '100%',
   },
@@ -1171,9 +1207,9 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   filterPill: {
-    height: 34,
-    paddingHorizontal: 16,
-    borderRadius: 17,
+    height: 32,
+    paddingHorizontal: 14,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E5ECE8',
@@ -1185,7 +1221,7 @@ const styles = StyleSheet.create({
     borderColor: '#176B57',
   },
   filterPillText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#334155',
   },
@@ -1194,7 +1230,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ─── Transaction Cards ─────────────────────────────────────────────────────
+  // ─── Redesigned Transaction Cards ──────────────────────────────────────────
   paymentCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
@@ -1202,79 +1238,119 @@ const styles = StyleSheet.create({
     borderColor: '#E5ECE8',
     padding: 16,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 1,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
   },
   playerName: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: '700',
     color: '#0F172A',
     lineHeight: 20,
   },
+
+  // Transaction Details Row
+  transactionDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
   referenceText: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#8A9894',
-    marginTop: 2,
+    fontWeight: '600',
+    color: '#64748B',
+    fontVariant: ['tabular-nums'],
   },
-
-  // Amount & Method Row
-  amountMethodRow: {
+  badgeGroupRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 10,
-    gap: 8,
+    gap: 6,
   },
-  amountText: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0F172A',
+  categoryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   methodBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   methodBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#475569',
     letterSpacing: 0.2,
   },
 
-  // Purpose & Plan Row
-  purposePlanRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  // Amount Row
+  amountRow: {
     marginTop: 8,
-    flexWrap: 'wrap',
+  },
+  amountText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.3,
+  },
+
+  // Meaningful Service Details Box
+  serviceDetailsBox: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#EDF2EE',
+  },
+  serviceNameHeading: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  activityDetailText: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+
+  // Refund Strip
+  refundCardStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
   },
-  purposeText: {
-    fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '500',
-  },
-  planText: {
-    fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '500',
-  },
-  metaLabelText: {
-    color: '#64748B',
-    fontWeight: '400',
+  refundCardStripText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6D28D9',
   },
 
   // Divider
@@ -1284,61 +1360,92 @@ const styles = StyleSheet.create({
     marginVertical: 10,
   },
 
-  // Date & Note
-  createdDateText: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
+  // Date & Provider Bottom Row
+  cardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
+  createdDateText: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  providerRefText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+
+  // Failure Reason
+  failureReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 6,
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  failureReasonText: {
+    fontSize: 11.5,
+    color: '#B91C1C',
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 15,
+  },
+
+  // Note
   noteText: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     fontStyle: 'italic',
-    lineHeight: 16,
-    marginTop: 3,
+    lineHeight: 15,
+    marginTop: 4,
   },
 
   // ─── Status Badges ─────────────────────────────────────────────────────────
   statusBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10.5,
+    fontWeight: '800',
     letterSpacing: 0.3,
   },
-
   statusBadgeSucceeded: {
     backgroundColor: '#DEF2E6',
   },
   statusBadgeTextSucceeded: {
     color: '#15803D',
   },
-
   statusBadgePending: {
     backgroundColor: '#FEF3C7',
   },
   statusBadgeTextPending: {
     color: '#B45309',
   },
-
   statusBadgeFailed: {
     backgroundColor: '#FEE2E2',
   },
   statusBadgeTextFailed: {
     color: '#DC2626',
   },
-
   statusBadgeCancelled: {
     backgroundColor: '#F1F5F9',
   },
   statusBadgeTextCancelled: {
     color: '#64748B',
+  },
+  statusBadgeRefunded: {
+    backgroundColor: '#EDE9FE',
+  },
+  statusBadgeTextRefunded: {
+    color: '#6D28D9',
   },
 
   // ─── Modal Sheet ───────────────────────────────────────────────────────────
@@ -1350,45 +1457,48 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    width: '100%',
-    maxWidth: 500,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 520,
     maxHeight: '85%',
-    overflow: 'hidden',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
-    shadowRadius: 12,
+    shadowRadius: 16,
     elevation: 8,
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5ECE8',
-    backgroundColor: '#FAFDFB',
+    borderBottomColor: '#F1F5F9',
   },
   modalHeaderTitleGroup: {
-    gap: 2,
+    flex: 1,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
     color: '#0F172A',
+    letterSpacing: -0.3,
   },
   modalRefRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginTop: 3,
   },
   modalRefText: {
     fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     color: '#64748B',
+    fontVariant: ['tabular-nums'],
+    fontWeight: '600',
   },
   modalCloseBtn: {
     width: 32,
@@ -1399,47 +1509,50 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalScroll: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
     paddingVertical: 14,
   },
   modalDetailsGrid: {
-    gap: 10,
-    paddingBottom: 8,
+    gap: 12,
   },
   modalGridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 3,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAF9',
   },
   modalGridKey: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#64748B',
+    fontWeight: '500',
   },
   modalGridVal: {
     fontSize: 13,
-    fontWeight: '600',
     color: '#0F172A',
+    fontWeight: '600',
+    textAlign: 'right',
+    maxWidth: '60%',
   },
   modalAmountVal: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#15803D',
+    color: '#0F172A',
   },
   modalNoteSection: {
     backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
     borderRadius: 10,
     padding: 12,
-    marginTop: 6,
-    gap: 4,
+    marginTop: 4,
   },
   modalNoteLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
     textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 4,
   },
   modalNoteContent: {
     fontSize: 12.5,
@@ -1447,124 +1560,60 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   modalFooter: {
-    paddingHorizontal: 18,
-    paddingVertical: 14,
+    padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E5ECE8',
-    backgroundColor: '#FAFDFB',
+    borderTopColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
   },
   modalPendingActions: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 10,
+    alignItems: 'center',
   },
   modalCancelPaymentBtn: {
     flex: 1,
-    height: 44,
+    height: 42,
     borderRadius: 10,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E2ECE7',
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    gap: 6,
   },
   modalCancelPaymentBtnText: {
-    fontSize: 13.5,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#64748B',
   },
   modalConfirmPaidBtn: {
-    flex: 1.6,
-    height: 44,
+    flex: 2,
+    height: 42,
     borderRadius: 10,
-    backgroundColor: '#176B57',
-    flexDirection: 'row',
+    backgroundColor: '#15803D',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
     gap: 6,
   },
   modalConfirmPaidBtnText: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-
-  // Search Bar
-  searchBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+  refundInput: {
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    marginHorizontal: 0,
-    marginBottom: 8,
-    height: 42,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
-
-  // Category Badge
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-  },
-  categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-
-  // Refund Status Badges
-  statusBadgeRefunded: {
-    backgroundColor: '#F5F3FF',
-    borderColor: '#DDD6FE',
-  },
-  statusBadgeTextRefunded: {
-    color: '#6D28D9',
-  },
-  refundCardStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F5F3FF',
-    borderWidth: 1,
-    borderColor: '#EDE9FE',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  refundCardStripText: {
-    fontSize: 11.5,
-    color: '#6D28D9',
-    fontWeight: '600',
-    flex: 1,
-  },
-
-  // Refund Dialog Styles
-  refundInput: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     borderRadius: 8,
     padding: 10,
     fontSize: 13,
     color: '#0F172A',
-    textAlignVertical: 'top',
+    backgroundColor: '#FFFFFF',
   },
   refundDialogBtn: {
     flex: 1,
-    height: 42,
+    height: 40,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',

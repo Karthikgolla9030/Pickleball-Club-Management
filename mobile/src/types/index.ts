@@ -1948,6 +1948,8 @@ export interface Payment {
   lesson_id?: string | null;
   league_id?: string | null;
   service_name?: string | null;
+  activity_title?: string | null;
+  activity_subtitle?: string | null;
   amount: number | string;
   currency: string;
   status: PaymentStatus;
@@ -1986,6 +1988,8 @@ export interface PlayerPayment {
   lesson_id?: string | null;
   league_id?: string | null;
   service_name?: string | null;
+  activity_title?: string | null;
+  activity_subtitle?: string | null;
   amount: number | string;
   currency: string;
   status: PaymentStatus;

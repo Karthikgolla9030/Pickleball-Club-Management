@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+import json
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -78,6 +80,179 @@ class PaymentRefundRequest(BaseModel):
 
 # ─── Response Payloads ────────────────────────────────────────────────────────
 
+def resolve_payment_display_data(payment) -> dict[str, Any]:
+    """
+    Safely resolves display fields from a payment record without exposing raw metadata or internal fields.
+    Handles legacy [META] JSON strings, linked ORM models, and provider error codes.
+    """
+    meta: dict[str, Any] = {}
+    clean_note: str | None = None
+
+    raw_notes = getattr(payment, "notes", None)
+    if raw_notes:
+        raw_str = str(raw_notes).strip()
+        if "[META]" in raw_str:
+            parts = raw_str.split("[META]", 1)
+            pre_note = parts[0].strip() or None
+            meta_json = parts[1].strip()
+            try:
+                meta = json.loads(meta_json)
+                n = meta.get("notes")
+                clean_note = pre_note or (str(n).strip() if n and str(n).lower() not in ("null", "none") else None)
+            except Exception:
+                clean_note = pre_note
+        elif raw_str.startswith("{") and raw_str.endswith("}"):
+            try:
+                meta = json.loads(raw_str)
+                n = meta.get("notes")
+                clean_note = str(n).strip() if n and str(n).lower() not in ("null", "none") else None
+            except Exception:
+                clean_note = raw_str
+        else:
+            clean_note = raw_str
+
+    if clean_note:
+        clean_note_str = str(clean_note).strip()
+        if (
+            clean_note_str.startswith("{")
+            or "[META]" in clean_note_str
+            or clean_note_str.lower() in ("none", "null")
+        ):
+            clean_note = None
+        else:
+            clean_note = clean_note_str
+
+    purpose_val = getattr(payment, "purpose", None)
+    purpose_labels = {
+        PaymentPurpose.COURT_BOOKING: "Court Booking",
+        PaymentPurpose.MEMBERSHIP: "Membership",
+        PaymentPurpose.TOURNAMENT: "Tournament Registration",
+        PaymentPurpose.LEAGUE: "League Registration",
+        PaymentPurpose.EVENT: "Event Registration",
+        PaymentPurpose.LESSON: "Lesson & Coaching",
+    }
+    service_label = purpose_labels.get(purpose_val, "Payment")
+
+    activity_title: str | None = None
+    activity_subtitle: str | None = None
+
+    if purpose_val == PaymentPurpose.MEMBERSHIP:
+        if getattr(payment, "subscription", None):
+            try:
+                plan = getattr(payment.subscription, "plan", None)
+                if plan and getattr(plan, "name", None):
+                    activity_title = plan.name
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_name") or meta.get("plan_name")
+        if meta and meta.get("interval"):
+            activity_subtitle = f"{str(meta['interval']).capitalize()} Plan"
+
+    elif purpose_val == PaymentPurpose.COURT_BOOKING:
+        if getattr(payment, "booking", None):
+            try:
+                court = getattr(payment.booking, "court", None)
+                if court and getattr(court, "name", None):
+                    activity_title = court.name
+                    if getattr(court, "court_type", None):
+                        activity_subtitle = f"{str(court.court_type).capitalize()} Court"
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_title") or meta.get("court_name")
+        if not activity_subtitle and meta:
+            sub = meta.get("activity_subtitle")
+            dur = meta.get("duration_minutes")
+            parts = []
+            if sub and str(sub).lower() not in ("null", "none"):
+                parts.append(str(sub))
+            if dur:
+                parts.append(f"{dur} mins")
+            activity_subtitle = " · ".join(parts) if parts else None
+
+    elif purpose_val == PaymentPurpose.TOURNAMENT:
+        if getattr(payment, "tournament", None):
+            try:
+                activity_title = payment.tournament.name
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_name") or meta.get("activity_title")
+
+    elif purpose_val == PaymentPurpose.EVENT:
+        if getattr(payment, "event", None):
+            try:
+                activity_title = payment.event.title
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_name") or meta.get("activity_title")
+
+    elif purpose_val == PaymentPurpose.LESSON:
+        if getattr(payment, "lesson", None):
+            try:
+                activity_title = payment.lesson.title
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_name") or meta.get("activity_title")
+
+    elif purpose_val == PaymentPurpose.LEAGUE:
+        if getattr(payment, "league", None):
+            try:
+                activity_title = payment.league.name
+            except Exception:
+                pass
+        if not activity_title and meta:
+            activity_title = meta.get("activity_name") or meta.get("activity_title")
+
+    # Clean activity title
+    if activity_title:
+        title_str = str(activity_title).strip()
+        if title_str.startswith("{") or "[META]" in title_str:
+            activity_title = None
+        else:
+            for prefix in ("Court: ", "Tournament: ", "Event: ", "Lesson: ", "League: "):
+                if title_str.startswith(prefix):
+                    title_str = title_str[len(prefix):].strip()
+            activity_title = title_str
+
+    if activity_subtitle:
+        sub_str = str(activity_subtitle).strip()
+        if sub_str.startswith("{") or "[META]" in sub_str:
+            activity_subtitle = None
+        else:
+            activity_subtitle = sub_str
+
+    # Clean failure reason
+    raw_failure = getattr(payment, "failure_reason", None)
+    clean_failure: str | None = None
+    if raw_failure:
+        f_str = str(raw_failure).strip()
+        upper_f = f_str.upper()
+        if "USER_DROPPED" in upper_f:
+            clean_failure = "Payment was not completed by the user"
+        elif "SIGNATURE" in upper_f and "VERIFICATION" in upper_f:
+            clean_failure = "Payment verification could not be authenticated"
+        elif "FAILED_WEBHOOK" in upper_f or "PAYMENT_FAILED" in upper_f:
+            clean_failure = "Payment was declined by the bank or card issuer"
+        elif upper_f.startswith("PROVIDER WEBHOOK REPORTED"):
+            clean_failure = "Payment processing was not completed"
+        elif f_str.startswith("{") or "[META]" in f_str:
+            clean_failure = "Payment processing failed"
+        else:
+            clean_failure = f_str
+
+    return {
+        "service_name": service_label,
+        "activity_title": activity_title,
+        "activity_subtitle": activity_subtitle,
+        "notes": clean_note,
+        "failure_reason": clean_failure,
+    }
+
+
 class PaymentResponse(BaseModel):
     """
     Staff-facing detailed payment response.
@@ -94,6 +269,8 @@ class PaymentResponse(BaseModel):
     lesson_id: UUID | None = None
     league_id: UUID | None = None
     service_name: str | None = None
+    activity_title: str | None = None
+    activity_subtitle: str | None = None
     amount: Decimal
     currency: str
     status: PaymentStatus
@@ -136,7 +313,6 @@ class PaymentResponse(BaseModel):
                 player_info = None
 
         sub_info = None
-        service_title = None
         if payment.subscription:
             try:
                 plan = getattr(payment.subscription, "plan", None)
@@ -148,27 +324,10 @@ class PaymentResponse(BaseModel):
                     id=payment.subscription.id,
                     plan_name=plan_name,
                 )
-                service_title = plan_name
             except Exception:
                 sub_info = None
 
-        if not service_title:
-            try:
-                if payment.booking and getattr(payment.booking, "court", None):
-                    service_title = f"Court: {payment.booking.court.name}"
-                elif payment.tournament:
-                    service_title = f"Tournament: {payment.tournament.name}"
-                elif payment.event:
-                    service_title = f"Event: {payment.event.title}"
-                elif payment.lesson:
-                    service_title = f"Lesson: {payment.lesson.title}"
-                elif payment.league:
-                    service_title = f"League: {payment.league.name}"
-            except Exception:
-                pass
-
-        if not service_title and payment.notes:
-            service_title = payment.notes
+        display_data = resolve_payment_display_data(payment)
 
         return cls(
             id=payment.id,
@@ -181,7 +340,9 @@ class PaymentResponse(BaseModel):
             event_id=payment.event_id,
             lesson_id=payment.lesson_id,
             league_id=payment.league_id,
-            service_name=service_title,
+            service_name=display_data["service_name"],
+            activity_title=display_data["activity_title"],
+            activity_subtitle=display_data["activity_subtitle"],
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,
@@ -193,8 +354,8 @@ class PaymentResponse(BaseModel):
             provider=payment.provider,
             provider_payment_id=payment.provider_payment_id,
             provider_order_id=payment.provider_order_id,
-            notes=payment.notes,
-            failure_reason=payment.failure_reason,
+            notes=display_data["notes"],
+            failure_reason=display_data["failure_reason"],
             refunded_amount=payment.refunded_amount,
             refund_reason=payment.refund_reason,
             refunded_at=payment.refunded_at,
@@ -226,6 +387,8 @@ class PlayerPaymentResponse(BaseModel):
     lesson_id: UUID | None = None
     league_id: UUID | None = None
     service_name: str | None = None
+    activity_title: str | None = None
+    activity_subtitle: str | None = None
     amount: Decimal
     currency: str
     status: PaymentStatus
@@ -249,25 +412,7 @@ class PlayerPaymentResponse(BaseModel):
         except Exception:
             club_name = None
 
-        service_title = None
-        try:
-            if payment.subscription and getattr(payment.subscription, "plan", None):
-                service_title = payment.subscription.plan.name
-            elif payment.booking and getattr(payment.booking, "court", None):
-                service_title = f"Court Booking: {payment.booking.court.name}"
-            elif payment.tournament:
-                service_title = f"Tournament: {payment.tournament.name}"
-            elif payment.event:
-                service_title = f"Event: {payment.event.title}"
-            elif payment.lesson:
-                service_title = f"Lesson: {payment.lesson.title}"
-            elif payment.league:
-                service_title = f"League: {payment.league.name}"
-        except Exception:
-            pass
-
-        if not service_title and payment.notes:
-            service_title = payment.notes
+        display_data = resolve_payment_display_data(payment)
 
         return cls(
             id=payment.id,
@@ -280,7 +425,9 @@ class PlayerPaymentResponse(BaseModel):
             event_id=payment.event_id,
             lesson_id=payment.lesson_id,
             league_id=payment.league_id,
-            service_name=service_title,
+            service_name=display_data["service_name"],
+            activity_title=display_data["activity_title"],
+            activity_subtitle=display_data["activity_subtitle"],
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,

@@ -947,8 +947,6 @@ class PaymentService:
 
         # Standardize on USD across all checkout calculations
         target_currency = (payload.currency or "USD").upper()
-        if gateway.name == "cashfree" and getattr(gateway, "_has_live_credentials", False):
-            target_currency = "INR"
 
         breakdown.currency = target_currency
         summary["currency"] = target_currency
