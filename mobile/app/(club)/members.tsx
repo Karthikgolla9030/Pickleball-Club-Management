@@ -917,35 +917,19 @@ export default function ClubMembersScreen() {
             </View>
 
             {canManageRoles && (
-              <View style={styles.staffHeaderActions}>
-                <TouchableOpacity
-                  style={styles.manageRolesBtn}
-                  onPress={() => {
-                    blurActiveElement();
-                    setManageRolesModalVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Manage Roles"
-                  accessibilityRole="button"
-                >
-                  <Shield size={14} color="#176B57" strokeWidth={2.2} />
-                  <AppText style={styles.manageRolesBtnText}>Roles</AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.addStaffBtn}
-                  onPress={() => {
-                    blurActiveElement();
-                    setAddStaffModalVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Add Staff"
-                  accessibilityRole="button"
-                >
-                  <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
-                  <AppText style={styles.addStaffBtnText}>Staff</AppText>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={styles.addStaffBtn}
+                onPress={() => {
+                  blurActiveElement();
+                  setAddStaffModalVisible(true);
+                }}
+                activeOpacity={0.8}
+                accessibilityLabel="Add Staff"
+                accessibilityRole="button"
+              >
+                <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
+                <AppText style={styles.addStaffBtnText}>Staff</AppText>
+              </TouchableOpacity>
             )}
           </View>
         </View>
