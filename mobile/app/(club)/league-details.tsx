@@ -49,6 +49,7 @@ import {
   Badge,
   Button,
   Card,
+  CreateLeagueModal,
   EmptyState,
   ErrorState,
   Input,
@@ -64,6 +65,7 @@ import { getLeagueStatusBadgeDetails } from '@/components/competition/LeagueOpti
 import {
   useActiveClub,
   useClubCourts,
+  useClubLeagues,
   useClubPlayerMembers,
   useLeagueDetails,
   useLeagueMatches,
@@ -137,6 +139,10 @@ export default function ClubLeagueDetailsScreen() {
 
   // Overflow Actions Modal State
   const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+
+  // Edit League Modal State
+  const [isEditLeagueModalOpen, setIsEditLeagueModalOpen] = useState(false);
+  const { updateLeague, isUpdating: isUpdatingLeague } = useClubLeagues(clubId);
 
   // Selected Team Details Modal State
   const [selectedTeam, setSelectedTeam] = useState<LeagueTeam | null>(null);
@@ -724,10 +730,12 @@ export default function ClubLeagueDetailsScreen() {
   }
 
   const teamCount = teams?.length ?? league.teams_count ?? 0;
+  const maxTeamsCount = league.max_teams || 8;
+  const regPercent = maxTeamsCount > 0 ? Math.min(100, Math.round((teamCount / maxTeamsCount) * 100)) : 0;
   const statusBadge = getLeagueStatusBadgeDetails(league.status);
 
-  // Subtitle string: "12 Wks • 12 Teams • Doubles • Top 4 Playoffs"
-  const subtitleText = `${league.number_of_weeks || 4} Wks • ${league.max_teams || 8} Teams • ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'} • Top ${league.playoff_team_count || 4} Playoffs`;
+  // Subtitle string: "4 Wks | 8 Teams | Singles | Top 4 Playoffs"
+  const subtitleText = `${league.number_of_weeks || 4} Wks   |   ${league.max_teams || 8} Teams   |   ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'}   |   Top ${league.playoff_team_count || 4} Playoffs`;
 
   // Registration closes calculation
   const regCloseDateStr = league.registration_close_at
@@ -767,52 +775,23 @@ export default function ClubLeagueDetailsScreen() {
 
   return (
     <Screen style={styles.container}>
-      {/* ─── SCREENSHOT HEADER (SCREENS 2 TO 8) ─── */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
+      {/* ─── COMPACT LEAGUE HEADER ─── */}
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerTopRow}>
           {/* Back button */}
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
             accessibilityLabel="Go back"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
           </TouchableOpacity>
 
-          {/* Title & Status Pill & Subtitle Column */}
-          <View style={styles.headerCenterCol}>
+          {/* Centered League Title */}
+          <View style={styles.headerTitleWrap}>
             <AppText style={styles.headerLeagueName} numberOfLines={1}>
               {league.name}
-            </AppText>
-
-            {/* Status Pill below title */}
-            <View style={styles.headerStatusWrap}>
-              <View
-                style={[
-                  styles.statusPill,
-                  { backgroundColor: statusBadge.bg },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: statusBadge.text },
-                  ]}
-                />
-                <AppText
-                  style={[
-                    styles.statusPillText,
-                    { color: statusBadge.text },
-                  ]}
-                >
-                  {statusBadge.label}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Subtitle */}
-            <AppText style={styles.headerSubtitleText}>
-              {subtitleText}
             </AppText>
           </View>
 
@@ -826,83 +805,127 @@ export default function ClubLeagueDetailsScreen() {
             <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
           </TouchableOpacity>
         </View>
+
+        {/* Status Pill below title */}
+        <View style={styles.headerStatusWrap}>
+          <View
+            style={[
+              styles.statusPill,
+              { backgroundColor: statusBadge.bg },
+            ]}
+          >
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: statusBadge.text },
+              ]}
+            />
+            <AppText
+              style={[
+                styles.statusPillText,
+                { color: statusBadge.text },
+              ]}
+            >
+              {statusBadge.label}
+            </AppText>
+          </View>
+        </View>
+
+        {/* Subtitle / Metadata row */}
+        <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+          {subtitleText}
+        </AppText>
       </View>
 
-      {/* ─── REGISTRATION STATS (SCREEN 2) ─── */}
-      {activeTab === 'teams' && (
-        <View style={styles.heroSection}>
-          {/* 2-Column Registration Stats Card */}
-          <View style={styles.regStatsCard}>
-            <View style={styles.regStatCol}>
-              <View style={styles.regStatHeader}>
-                <View style={styles.regStatIconCircle}>
-                  <Users size={16} color="#374151" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.regStatLabel}>Teams Registered</AppText>
-                  <AppText style={styles.regStatValue}>
-                    {teamCount} / {league.max_teams || 8}
-                  </AppText>
-                </View>
-              </View>
-              {/* Progress Bar */}
-              <View style={styles.regProgressBarTrack}>
-                <View
-                  style={[
-                    styles.regProgressBarFill,
-                    {
-                      width: `${Math.min(100, (teamCount / (league.max_teams || 8)) * 100)}%`,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.regStatDivider} />
-
-            <View style={styles.regStatCol}>
-              <View style={styles.regStatHeader}>
-                <View style={styles.regStatIconCircle}>
-                  <Calendar size={16} color="#374151" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <AppText style={styles.regStatLabel}>
-                    {league.status === 'registration_closed'
-                      ? 'Registration Closed'
-                      : 'Registration Closes'}
-                  </AppText>
-                  <AppText style={styles.regStatValue}>{regCloseDateStr}</AppText>
-                  {daysLeftText ? (
-                    <AppText style={styles.regStatDaysLeft}>{daysLeftText}</AppText>
-                  ) : null}
-                </View>
-              </View>
-            </View>
+      {/* ─── 2-COLUMN REGISTRATION SUMMARY CARD ─── */}
+      <View style={styles.regStatsCard}>
+        {/* Left Col: Teams Registered */}
+        <View style={styles.regStatCol}>
+          <AppText style={styles.regStatLabel}>Teams Registered</AppText>
+          <View style={styles.regStatValueRow}>
+            <AppText style={styles.regStatValue}>
+              {teamCount} / {league.max_teams || 8}
+            </AppText>
+            <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
           </View>
+          {/* Progress Bar */}
+          <View style={styles.regProgressBarTrack}>
+            <View
+              style={[
+                styles.regProgressBarFill,
+                { width: `${regPercent}%` },
+              ]}
+            />
+          </View>
+        </View>
 
-          {/* Close Registration or Open Registration Action Button */}
-          {canManageLeague && league.status === 'registration_open' && (
+        {/* Vertical Divider */}
+        <View style={styles.regStatDivider} />
+
+        {/* Right Col: Registration Closes */}
+        <View style={styles.regStatCol}>
+          <AppText style={styles.regStatLabel}>
+            {league.status === 'registration_closed'
+              ? 'Registration Closed'
+              : 'Registration Closes'}
+          </AppText>
+          <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
+          {daysLeftText ? (
+            <AppText
+              style={[
+                styles.regStatDaysLeft,
+                league.status === 'registration_closed' && styles.regStatClosedText,
+              ]}
+            >
+              {daysLeftText}
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+
+      {/* ─── COMPACT MANAGEMENT ACTIONS (TEAMS TAB) ─── */}
+      {activeTab === 'teams' && canManageLeague && (
+        <View style={styles.managementActionsRow}>
+          {league.status === 'registration_open' ? (
             <TouchableOpacity
-              style={styles.heroActionButton}
+              style={styles.closeRegBtn}
               onPress={handleConfirmCloseRegistration}
               activeOpacity={0.8}
+              disabled={isActionProcessing}
             >
-              <AppText style={styles.heroActionButtonText}>Close Registration</AppText>
+              <AppText style={styles.closeRegBtnText}>Close Registration</AppText>
             </TouchableOpacity>
-          )}
-          {canManageLeague && league.status === 'draft' && (
+          ) : league.status === 'draft' ? (
             <TouchableOpacity
-              style={styles.heroActionButton}
+              style={styles.closeRegBtn}
               onPress={handlePublishLeague}
               activeOpacity={0.8}
+              disabled={isActionProcessing}
             >
-              <AppText style={styles.heroActionButtonText}>Open Registration</AppText>
+              <AppText style={styles.closeRegBtnText}>Open Registration</AppText>
             </TouchableOpacity>
-          )}
+          ) : league.status === 'registration_closed' ? (
+            <TouchableOpacity
+              style={styles.closeRegBtn}
+              onPress={handleConfirmStartLeague}
+              activeOpacity={0.8}
+              disabled={isActionProcessing}
+            >
+              <AppText style={styles.closeRegBtnText}>Start League</AppText>
+            </TouchableOpacity>
+          ) : null}
+
+          <TouchableOpacity
+            style={styles.editLeagueBtn}
+            onPress={() => setIsEditLeagueModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <AppText style={styles.editLeagueBtnText}>Edit League</AppText>
+          </TouchableOpacity>
         </View>
       )}
 
-      {/* ─── EXACT 6 NAVIGATION TABS (STRICTLY TEXT-ONLY, NO ICONS) ─── */}
+      {/* ─── NAVIGATION TABS WITH GREEN UNDERLINE ─── */}
       <View style={styles.tabsStripContainer}>
         <ScrollView
           horizontal
@@ -923,13 +946,14 @@ export default function ClubLeagueDetailsScreen() {
             return (
               <TouchableOpacity
                 key={tab.key}
-                style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                style={styles.tabButton}
                 onPress={() => setActiveTab(tab.key)}
                 activeOpacity={0.7}
               >
                 <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
                   {tab.label}
                 </AppText>
+                {isActive && <View style={styles.activeTabIndicator} />}
               </TouchableOpacity>
             );
           })}
@@ -1035,9 +1059,9 @@ export default function ClubLeagueDetailsScreen() {
       >
         {/* ══════════════════════════════════════════════════════════════════════════
             TAB 1: TEAMS (SCREEN 2)
-            - Heading: Teams (N) + "+ Add Team" button
-            - Table Header: #, Team Name, Avg Skill Level
-            - Rows: #, pastel initials avatar, team name, blue skill rating pill, chevron >
+            - Heading: Teams (N) + "Add Team" action
+            - Table Header: #, Team Name, Players, Avg Skill Level
+            - Rows: #, Team Name + subtitle, Players count, skill pill, chevron >
            ══════════════════════════════════════════════════════════════════════════ */}
         {activeTab === 'teams' && (
           <View style={styles.tabPane}>
@@ -1058,8 +1082,9 @@ export default function ClubLeagueDetailsScreen() {
                       setTeamError(null);
                       setIsAddTeamModalOpen(true);
                     }}
+                    activeOpacity={0.7}
                   >
-                    <AppText style={styles.addTeamButtonText}>+ Add Team</AppText>
+                    <AppText style={styles.addTeamButtonText}>Add Team</AppText>
                   </TouchableOpacity>
                 ) : null}
               </View>
@@ -1068,6 +1093,7 @@ export default function ClubLeagueDetailsScreen() {
               <View style={styles.teamsTableHeader}>
                 <AppText style={styles.thNum}>#</AppText>
                 <AppText style={styles.thTeamName}>Team Name</AppText>
+                <AppText style={styles.thPlayers}>Players</AppText>
                 <AppText style={styles.thAvgSkill}>Avg Skill Level</AppText>
                 <View style={styles.thChevronSpacer} />
               </View>
@@ -1088,9 +1114,8 @@ export default function ClubLeagueDetailsScreen() {
                 </View>
               ) : (
                 teams.map((team, index) => {
-                  const avatarColors = getAvatarColors(index);
-                  const initials = getTeamInitials(team.name);
                   const rating = team.avg_skill_level ?? 3.5;
+                  const playerCount = team.members?.length ?? 1;
 
                   return (
                     <TouchableOpacity
@@ -1105,33 +1130,28 @@ export default function ClubLeagueDetailsScreen() {
                       {/* # Number */}
                       <AppText style={styles.tdNum}>{index + 1}</AppText>
 
-                      {/* Pastel Initials Avatar */}
-                      <View
-                        style={[
-                          styles.pastelAvatar,
-                          { backgroundColor: avatarColors.bg },
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.pastelAvatarText,
-                            { color: avatarColors.text },
-                          ]}
-                        >
-                          {initials}
+                      {/* Team Name + Player subtitle */}
+                      <View style={styles.tdTeamCol}>
+                        <AppText style={styles.tdTeamName} numberOfLines={1}>
+                          {team.name}
+                        </AppText>
+                        <AppText style={styles.tdTeamSubtitle}>
+                          {playerCount === 1 ? '1 player' : `${playerCount} players`}
                         </AppText>
                       </View>
 
-                      {/* Team Name */}
-                      <AppText style={styles.tdTeamName} numberOfLines={1}>
-                        {team.name}
-                      </AppText>
+                      {/* Players count */}
+                      <View style={styles.tdPlayersCol}>
+                        <AppText style={styles.tdPlayersCount}>{playerCount}</AppText>
+                      </View>
 
                       {/* Avg Skill Level Blue Pill */}
-                      <View style={styles.skillPillBlue}>
-                        <AppText style={styles.skillPillTextBlue}>
-                          {rating.toFixed(1)}
-                        </AppText>
+                      <View style={styles.tdSkillCol}>
+                        <View style={styles.skillPillBlue}>
+                          <AppText style={styles.skillPillTextBlue}>
+                            {rating.toFixed(1)}
+                          </AppText>
+                        </View>
                       </View>
 
                       {/* Chevron > */}
@@ -1146,7 +1166,7 @@ export default function ClubLeagueDetailsScreen() {
 
         {/* ══════════════════════════════════════════════════════════════════════════
             TAB 2: SCHEDULE (SCREENS 3 & 4)
-            - Screen 3 (No Schedule): Center card, checklist, green Generate Matches button, info note
+            - Screen 3 (No Schedule): Compact card, checklist, green Generate Matches button, info callout
             - Screen 4 (Schedule Exists): Week 1 Schedule header, Week Date card, match cards,
               Edit Week Dates outline button
            ══════════════════════════════════════════════════════════════════════════ */}
@@ -1155,9 +1175,6 @@ export default function ClubLeagueDetailsScreen() {
             {!hasSchedule ? (
               /* SCREEN 3: NO SCHEDULE GENERATED CARD */
               <View style={styles.noScheduleCard}>
-                <View style={styles.calendarIconCircle}>
-                  <Calendar size={32} color="#6B7280" strokeWidth={1.8} />
-                </View>
                 <AppText style={styles.noScheduleTitle}>No Schedule Generated</AppText>
                 <AppText style={styles.noScheduleSubtitle}>
                   Registration is closed. Generate matches to create the regular season schedule across all {league.number_of_weeks || 4} weeks.
@@ -1165,19 +1182,19 @@ export default function ClubLeagueDetailsScreen() {
 
                 <View style={styles.scheduleChecklist}>
                   <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#059669" />
+                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
                     <AppText style={styles.checkItemText}>
                       {teamCount} teams registered
                     </AppText>
                   </View>
                   <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#059669" />
+                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
                     <AppText style={styles.checkItemText}>
                       {league.number_of_weeks || 4} weeks configured ({regularWeeks.length || (league.number_of_weeks || 4) - 1} regular + {league.playoff_team_count > 0 ? '1 playoffs' : '0 playoffs'})
                     </AppText>
                   </View>
                   <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#059669" />
+                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
                     <AppText style={styles.checkItemText}>
                       Round-robin matches will be generated
                     </AppText>
@@ -1199,7 +1216,7 @@ export default function ClubLeagueDetailsScreen() {
 
                 <View style={styles.infoNoticeBox}>
                   <AppText style={styles.infoNoticeText}>
-                    ⓘ This will create all regular season matches across Week 1 to Week {regularWeeks.length || (league.number_of_weeks || 4) - 1} (Week {league.number_of_weeks || 4} is for playoffs). You can assign dates and courts after generation.
+                    This will create all regular season matches across Week 1 to Week {regularWeeks.length || (league.number_of_weeks || 4) - 1} (Week {league.number_of_weeks || 4} is for playoffs). You can assign dates and courts after generation.
                   </AppText>
                 </View>
               </View>
@@ -1960,7 +1977,32 @@ export default function ClubLeagueDetailsScreen() {
           setIsOverflowOpen(false);
           setActiveTab('teams');
         }}
+        onEditLeaguePress={() => {
+          setIsOverflowOpen(false);
+          setIsEditLeagueModalOpen(true);
+        }}
         onCancelPress={handleConfirmCancelLeague}
+      />
+
+      {/* ─── MODAL: EDIT LEAGUE ─── */}
+      <CreateLeagueModal
+        visible={isEditLeagueModalOpen}
+        onClose={() => setIsEditLeagueModalOpen(false)}
+        onSubmit={async () => {}}
+        isCreating={false}
+        clubId={clubId}
+        leagueToEdit={league}
+        onUpdate={async (lid, payload) => {
+          try {
+            await updateLeague({ leagueId: lid, payload });
+            setIsEditLeagueModalOpen(false);
+            refetchLeague();
+            Alert.alert('League Updated', 'The league details have been successfully saved.');
+          } catch (err: any) {
+            Alert.alert('Error', err?.response?.data?.detail || err?.message || 'Failed to update league');
+          }
+        }}
+        isUpdating={isUpdatingLeague}
       />
 
       {/* ─── MODAL: TEAM DETAILS ─── */}
@@ -2274,228 +2316,271 @@ export default function ClubLeagueDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F8FAF9',
   },
 
-  // ─── Header Styles (Screenshots 2 to 8) ───
+  // ─── Compact Header Styles ───
   headerContainer: {
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[3],
+    backgroundColor: '#FFFFFF',
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   headerTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    height: 44,
   },
   backButton: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'flex-start',
-    marginTop: 2,
   },
-  headerCenterCol: {
+  headerTitleWrap: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: Spacing[2],
+    paddingHorizontal: 8,
   },
   headerLeagueName: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: '#111827',
     textAlign: 'center',
     letterSpacing: -0.2,
-  },
-  headerStatusWrap: {
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  headerSubtitleText: {
-    fontSize: 11.5,
-    color: '#6B7280',
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 2,
-    lineHeight: 15,
   },
   headerMenuButton: {
     width: 36,
     height: 36,
     justifyContent: 'center',
     alignItems: 'flex-end',
-    marginTop: 2,
+  },
+  headerStatusWrap: {
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 3.5,
+    borderRadius: 12,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 6,
+  },
+  statusPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  headerSubtitleText: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#4B5563',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
 
-  // ─── Hero Section (Screen 2) ───
-  heroSection: {
-    paddingHorizontal: Spacing[4],
-    marginTop: Spacing[2],
-    marginBottom: Spacing[2],
-  },
+  // ─── 2-Column Registration Stats Card ───
   regStatsCard: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: Spacing[3],
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    marginBottom: Spacing[2],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: '#E5ECE8',
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 10,
   },
   regStatCol: {
     flex: 1,
-  },
-  regStatDivider: {
-    width: 1,
-    backgroundColor: '#E5E7EB',
-    marginHorizontal: Spacing[3],
-  },
-  regStatHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  regStatIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F3F4F6',
     justifyContent: 'center',
-    alignItems: 'center',
   },
   regStatLabel: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#6B7280',
-    fontWeight: '600',
+    fontWeight: '500',
+    marginBottom: 3,
+  },
+  regStatValueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
   },
   regStatValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '800',
     color: '#111827',
-    marginTop: 2,
   },
-  regStatDaysLeft: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#EF4444', // Red
-    marginTop: 2,
+  regStatPercent: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
   },
   regProgressBarTrack: {
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
+    height: 5,
+    backgroundColor: '#E5ECE8',
+    borderRadius: 2.5,
     overflow: 'hidden',
-    marginTop: 10,
+    marginTop: 6,
   },
   regProgressBarFill: {
     height: '100%',
-    backgroundColor: '#059669', // Emerald green
-    borderRadius: 3,
+    backgroundColor: '#176B57',
+    borderRadius: 2.5,
   },
-  heroActionButton: {
-    backgroundColor: '#064E3B', // Deep forest green
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+  regStatDivider: {
+    width: 1,
+    backgroundColor: '#E5ECE8',
+    marginHorizontal: 12,
+    alignSelf: 'stretch',
   },
-  heroActionButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+  regStatValueText: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#111827',
+  },
+  regStatDaysLeft: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  regStatClosedText: {
+    color: '#6B7280',
   },
 
-  // ─── 6 Navigation Tabs Strip ───
+  // ─── Compact Management Actions (Teams Tab) ───
+  managementActionsRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    gap: 10,
+  },
+  closeRegBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#176B57',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  closeRegBtnText: {
+    color: '#176B57',
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  editLeagueBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  editLeagueBtnText: {
+    color: '#374151',
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+
+  // ─── Navigation Tabs Strip with Green Underline ───
   tabsStripContainer: {
-    marginBottom: Spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5ECE8',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 12,
   },
   tabsStripScroll: {
-    paddingHorizontal: Spacing[4],
+    paddingHorizontal: 16,
     gap: 4,
   },
   tabButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-  },
-  tabButtonActive: {
-    backgroundColor: '#064E3B', // Deep dark green pill
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
   tabButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#4B5563',
   },
   tabButtonTextActive: {
-    color: '#FFFFFF',
+    color: '#176B57',
     fontWeight: '700',
+  },
+  activeTabIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 8,
+    right: 8,
+    height: 3,
+    backgroundColor: '#176B57',
+    borderRadius: 1.5,
   },
 
   // ─── Week Selector Strip ───
   weekSelectorContainer: {
-    marginBottom: Spacing[3],
+    marginBottom: 12,
   },
   weekSelectorScroll: {
-    paddingHorizontal: Spacing[4],
+    paddingHorizontal: 16,
     gap: 8,
     alignItems: 'center',
   },
   weekPill: {
     paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   weekPillSelected: {
-    backgroundColor: '#064E3B',
+    backgroundColor: '#176B57',
+    borderWidth: 1,
+    borderColor: '#176B57',
   },
   weekPillUnselected: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5ECE8',
   },
   weekPillText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13.5,
   },
   weekPillTextSelected: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   weekPillTextUnselected: {
-    color: '#111827',
+    color: '#374151',
+    fontWeight: '500',
   },
   courtFilterPill: {
     paddingVertical: 8,
     paddingHorizontal: 14,
-    borderRadius: 12,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5ECE8',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2510,24 +2595,24 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabPane: {
-    paddingHorizontal: Spacing[4],
+    paddingHorizontal: 16,
   },
 
   // ─── Teams Tab Styles (Screen 2) ───
   teamsCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5ECE8',
     overflow: 'hidden',
   },
   teamsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   teamsTitle: {
     fontSize: 18,
@@ -2535,44 +2620,50 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   addTeamButton: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
   },
   addTeamButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#176B57',
   },
   teamsTableHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    marginHorizontal: 14,
     paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 4,
+    paddingHorizontal: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E5ECE8',
   },
   thNum: {
-    width: 24,
-    fontSize: 12,
-    fontWeight: '700',
+    width: 28,
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#6B7280',
   },
   thTeamName: {
     flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#6B7280',
-    paddingLeft: 44,
+    paddingLeft: 4,
+  },
+  thPlayers: {
+    width: 55,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
   },
   thAvgSkill: {
-    fontSize: 12,
-    fontWeight: '700',
+    width: 95,
+    fontSize: 11.5,
+    fontWeight: '600',
     color: '#6B7280',
-    paddingRight: 10,
+    textAlign: 'center',
   },
   thChevronSpacer: {
     width: 18,
@@ -2589,40 +2680,49 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
   },
   tdNum: {
-    width: 24,
+    width: 28,
     fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
-  pastelAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  pastelAvatarText: {
-    fontSize: 13,
-    fontWeight: '800',
+  tdTeamCol: {
+    flex: 1,
+    paddingLeft: 4,
+    paddingRight: 8,
   },
   tdTeamName: {
-    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tdTeamSubtitle: {
+    fontSize: 12.5,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  tdPlayersCol: {
+    width: 55,
+    alignItems: 'center',
+  },
+  tdPlayersCount: {
     fontSize: 14,
     fontWeight: '700',
     color: '#111827',
   },
+  tdSkillCol: {
+    width: 95,
+    alignItems: 'center',
+  },
   skillPillBlue: {
-    backgroundColor: '#EFF6FF', // Soft light blue
-    paddingHorizontal: 10,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
-    marginRight: 8,
+    borderRadius: 6,
   },
   skillPillTextBlue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#2563EB', // Blue
+    color: '#1D4ED8',
   },
   emptyTeamsBox: {
     padding: Spacing[6],
@@ -2643,25 +2743,16 @@ const styles = StyleSheet.create({
   // ─── Schedule Tab Styles (Screens 3 & 4) ───
   noScheduleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: Spacing[6],
+    borderRadius: 12,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  calendarIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing[3],
+    borderColor: '#E5ECE8',
   },
   noScheduleTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#111827',
+    textAlign: 'center',
     marginBottom: 6,
   },
   noScheduleSubtitle: {
@@ -2669,15 +2760,15 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: Spacing[4],
+    marginBottom: 16,
+    paddingHorizontal: 8,
   },
   scheduleChecklist: {
-    width: '100%',
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-    padding: Spacing[3],
-    gap: 8,
-    marginBottom: Spacing[4],
+    backgroundColor: '#F8FAF9',
+    borderRadius: 8,
+    padding: 12,
+    gap: 10,
+    marginBottom: 16,
   },
   checkItemRow: {
     flexDirection: 'row',
@@ -2686,35 +2777,33 @@ const styles = StyleSheet.create({
   },
   checkItemText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#374151',
   },
   generateMatchesButton: {
-    width: '100%',
-    backgroundColor: '#064E3B',
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: '#176B57',
+    borderRadius: 8,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing[4],
+    marginBottom: 14,
   },
   generateMatchesButtonText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   infoNoticeBox: {
-    flexDirection: 'row',
     backgroundColor: '#EFF6FF',
-    borderRadius: 10,
-    padding: Spacing[3],
-    borderLeftWidth: 3,
+    borderRadius: 8,
+    padding: 12,
+    borderLeftWidth: 4,
     borderLeftColor: '#3B82F6',
   },
   infoNoticeText: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#1E40AF',
-    lineHeight: 17,
+    lineHeight: 18,
   },
 
   // ─── Schedule Screen 4 Styles ───
