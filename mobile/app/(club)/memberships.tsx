@@ -533,7 +533,7 @@ export default function MembershipsScreen() {
               accessibilityRole="button"
               accessibilityLabel="Create New Plan"
             >
-              <Plus size={16} color="#FFFFFF" strokeWidth={2.6} style={{ marginRight: 6 }} />
+              <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
               <AppText style={styles.newPlanBtnText}>New Plan</AppText>
             </TouchableOpacity>
           </View>
@@ -1030,12 +1030,12 @@ const styles = StyleSheet.create({
 
   // Header Bar
   headerSectionWrapper: {
-    marginBottom: 8,
+    marginBottom: 0,
   },
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingVertical: 12,
   },
   hamburgerBtn: {
     padding: 6,
@@ -1060,14 +1060,14 @@ const styles = StyleSheet.create({
   // Hero Promotional Banner
   heroBannerContainer: {
     width: '100%',
-    height: 175,
-    borderRadius: 18,
+    height: 170,
+    borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#DCE7E1',
     backgroundColor: '#D9ECE1',
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: 2,
+    marginBottom: 12,
   },
   heroBannerBackground: {
     flex: 1,
@@ -1077,12 +1077,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   heroBannerImage: {
-    borderRadius: 18,
+    borderRadius: 16,
   },
   heroWashOverlay: {
     ...StyleSheet.absoluteFill,
     width: '70%',
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: 'rgba(240, 248, 244, 0.70)',
     ...Platform.select({
       web: {
@@ -1118,47 +1118,56 @@ const styles = StyleSheet.create({
 
   // New Plan Button
   newPlanRow: {
-    alignItems: 'flex-start',
-    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    width: '100%',
+    marginBottom: 12,
   },
   newPlanBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     backgroundColor: '#176B57',
-    height: 44,
-    paddingHorizontal: 18,
-    borderRadius: 22,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     shadowColor: '#176B57',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
     elevation: 2,
   },
   newPlanBtnText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
+    lineHeight: 18,
   },
 
   // Plans & Subscribers Switcher
   segmentedContainer: {
     flexDirection: 'row',
-    height: 38,
+    alignItems: 'center',
+    width: '100%',
+    height: 40,
     backgroundColor: '#FFFFFF',
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 3,
     borderWidth: 1,
     borderColor: '#E2ECE6',
-    marginBottom: 14,
+    gap: 4,
+    marginBottom: 12,
   },
   segmentedTab: {
     flex: 1,
-    height: 32,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
+    borderRadius: 17,
     backgroundColor: 'transparent',
+    paddingHorizontal: 8,
   },
   segmentedTabActive: {
     backgroundColor: '#176B57',
@@ -1167,6 +1176,8 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '600',
     color: '#123D38',
+    textAlign: 'center',
+    lineHeight: 18,
   },
   segmentedTabTextActive: {
     color: '#FFFFFF',
@@ -1177,7 +1188,7 @@ const styles = StyleSheet.create({
   subscriberSearchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   searchBox: {
     flex: 1,
@@ -1205,7 +1216,7 @@ const styles = StyleSheet.create({
   // Subscriber Cards
   subscriberCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -1324,9 +1335,9 @@ const styles = StyleSheet.create({
   // Plans Tab Card
   planCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E6ECE8',
     shadowColor: '#000',
