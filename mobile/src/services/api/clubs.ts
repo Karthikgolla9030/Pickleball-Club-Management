@@ -68,7 +68,7 @@ export const clubsApi = {
    * If slug is provided and the server requires UUID, dynamically resolves via public listing.
    */
   async getPublicClub(clubIdOrSlug: string): Promise<Club> {
-    const raw = (clubIdOrSlug || '').trim();
+    const raw = (clubIdOrSlug || '').trim().replace(/^\/+/, '');
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
 
     if (isUUID) {

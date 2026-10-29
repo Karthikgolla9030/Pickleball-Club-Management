@@ -88,7 +88,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   // Platform Administrator is strictly distinct from player accounts.
   const isPlayer = !isPlatformAdmin && (mode === 'player' || memberships.length === 0 || !activeMembership);
 
-  // Android back button handler
+  // Android hardware back button handler
   useEffect(() => {
     if (!isOpen || Platform.OS === 'web') return;
     const onBackPress = () => {
@@ -97,6 +97,16 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     };
     const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
     return () => sub.remove();
+  }, [isOpen, closeDrawer]);
+
+  // Web browser back button handler for open drawer
+  useEffect(() => {
+    if (!isOpen || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onPopState = () => {
+      closeDrawer();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, [isOpen, closeDrawer]);
 
   // Slide animation from LEFT
@@ -117,7 +127,8 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   const handleNavigate = (route?: string) => {
     closeDrawer();
     if (route) {
-      router.replace(route as any);
+      if (normalizedPath === route) return;
+      router.push(route as any);
     }
   };
 

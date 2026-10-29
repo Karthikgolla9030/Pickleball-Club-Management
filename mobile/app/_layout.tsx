@@ -84,7 +84,19 @@ function RootLayoutContent() {
       user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
     );
 
-    // A. Platform portal is strictly reserved for authorized platform administrators
+    // A. Already-authenticated users must NEVER be stuck on login screens (e.g. after mobile browser Back)
+    if (inAuthGroup || (rootSegment === 'platform' && segments[1] === 'login')) {
+      if (isPlatformAdmin) {
+        router.replace('/platform' as any);
+      } else if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
+        router.replace('/(club)');
+      } else {
+        router.replace('/(player)');
+      }
+      return;
+    }
+
+    // B. Platform portal is strictly reserved for authorized platform administrators
     if (rootSegment === 'platform' && segments[1] !== 'login') {
       if (!isPlatformAdmin) {
         if (memberships.length > 0) {

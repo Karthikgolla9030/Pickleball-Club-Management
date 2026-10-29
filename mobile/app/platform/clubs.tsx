@@ -123,13 +123,13 @@ export default function PlatformClubsScreen() {
   };
 
   const handleViewPublicClub = (club: PlatformClubItem) => {
-    setSelectedClub(null);
-    const identifier = club.slug || club.id;
-    router.push(`/club/${encodeURIComponent(identifier)}` as any);
+    openPublicPreview(club);
   };
 
   const handleOpenInNewTab = (club: PlatformClubItem) => {
-    const targetUrl = `/club/${club.slug || club.id}`;
+    const rawIdentifier = club.slug || club.id || '';
+    const cleanIdentifier = String(rawIdentifier).replace(/^\/+/, '');
+    const targetUrl = `/club/${encodeURIComponent(cleanIdentifier)}`;
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.open(targetUrl, '_blank');
     } else {
@@ -677,7 +677,7 @@ export default function PlatformClubsScreen() {
                       variant="outline"
                       size="sm"
                       style={{ flex: 1, height: 40 }}
-                      onPress={() => handleViewPublicClub(selectedClub)}
+                      onPress={() => openPublicPreview(selectedClub)}
                       leftIcon={<ExternalLink size={14} color="#18794E" />}
                     />
                   </View>

@@ -264,6 +264,8 @@ export const SECURE_STORE_KEYS = {
   ACCESS_TOKEN: 'aught2_access_token',
   REFRESH_TOKEN: 'aught2_refresh_token',
   ACTIVE_PORTAL: 'aught2_active_portal',
+  USER_CACHE: 'aught2_user_cache',
+  MEMBERSHIPS_CACHE: 'aught2_memberships_cache',
 } as const;
 
 export const QUERY_KEYS = {

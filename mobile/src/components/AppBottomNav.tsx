@@ -92,7 +92,8 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
   const isClubProfileActive = normalizedPath === '/(club)/settings' || normalizedPath === '/(club)/profile';
 
   const handleNavigate = (route: string) => {
-    router.replace(route as any);
+    if (normalizedPath === route) return;
+    router.push(route as any);
   };
 
   const handleQuickAction = (route: string) => {

@@ -95,6 +95,8 @@ export async function clearTokens(): Promise<void> {
   delete memoryStorage[SECURE_STORE_KEYS.ACCESS_TOKEN];
   delete memoryStorage[SECURE_STORE_KEYS.REFRESH_TOKEN];
 
+  await clearUserCache();
+
   if (Platform.OS === 'web') {
     const storage = getWebStorage();
     if (storage) {
@@ -111,6 +113,67 @@ export async function clearTokens(): Promise<void> {
       SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN),
       SecureStore.deleteItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN),
     ]);
+  } catch {}
+}
+
+let _memoryUserCache: { user: any; memberships: any[] } | null = null;
+
+export async function saveUserCache(user: any, memberships: any[]): Promise<void> {
+  _memoryUserCache = { user, memberships };
+  const str = JSON.stringify({ user, memberships });
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        storage.setItem(SECURE_STORE_KEYS.USER_CACHE, str);
+      } catch {}
+    }
+    return;
+  }
+  try {
+    await SecureStore.setItemAsync(SECURE_STORE_KEYS.USER_CACHE, str);
+  } catch {}
+}
+
+export async function getStoredUserCache(): Promise<{ user: any; memberships: any[] } | null> {
+  if (_memoryUserCache) return _memoryUserCache;
+  let str: string | null = null;
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        str = storage.getItem(SECURE_STORE_KEYS.USER_CACHE);
+      } catch {}
+    }
+  } else {
+    try {
+      str = await SecureStore.getItemAsync(SECURE_STORE_KEYS.USER_CACHE);
+    } catch {}
+  }
+  if (!str) return null;
+  try {
+    const parsed = JSON.parse(str);
+    if (parsed?.user) {
+      _memoryUserCache = parsed;
+      return parsed;
+    }
+  } catch {}
+  return null;
+}
+
+export async function clearUserCache(): Promise<void> {
+  _memoryUserCache = null;
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        storage.removeItem(SECURE_STORE_KEYS.USER_CACHE);
+      } catch {}
+    }
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.USER_CACHE);
   } catch {}
 }
 
@@ -254,9 +317,15 @@ setTokenRefreshHandler(async () => {
     const newRefreshToken = (response as any).refresh_token || refreshToken;
     await saveTokens(response.access_token, newRefreshToken);
     return response.access_token;
-  } catch (err) {
+  } catch (err: any) {
     console.warn('[AUTH] Token refresh handler failed:', err);
-    await useAuthStore.getState().logout();
+    const status = err?.status ?? err?.response?.status;
+    const msg = String(err?.message || '').toLowerCase();
+    const isNetworkError = !status && (msg.includes('network') || msg.includes('timeout') || msg.includes('abort') || msg.includes('offline'));
+    // Only logout on authentic 400/401/403 credential rejection, NEVER on network timeouts or 5xx server issues
+    if (status === 401 || status === 403 || (status === 400 && !isNetworkError)) {
+      await useAuthStore.getState().logout();
+    }
     return null;
   }
 });
@@ -291,76 +360,140 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       let accessToken = await getStoredAccessToken();
-      if (!accessToken) {
-        // Attempt refresh if access token is missing but refresh token exists
-        const refreshToken = await getStoredRefreshToken();
-        if (refreshToken) {
-          try {
-            const refreshRes = await authApi.refreshToken(refreshToken);
-            const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
-            await saveTokens(refreshRes.access_token, newRefreshToken);
-            accessToken = refreshRes.access_token;
-          } catch {
-            accessToken = null;
+      const refreshToken = await getStoredRefreshToken();
+      const cachedSession = await getStoredUserCache();
+      const storedPortal = await getStoredPortal();
+
+      // 1. Fast Session Restoration: hydrate from cache immediately to prevent login flicker
+      if (accessToken && cachedSession?.user) {
+        const isPlatformUser = Boolean(
+          cachedSession.user.is_platform_admin || isPlatformAdminEmail(cachedSession.user.email)
+        );
+        let resolvedPortal = storedPortal || (isPlatformUser ? 'platform' : (cachedSession.memberships?.length > 0 ? 'club' : 'player'));
+        if (isPlatformUser) resolvedPortal = 'platform';
+
+        set({
+          user: cachedSession.user,
+          memberships: cachedSession.memberships || [],
+          activeMembership: cachedSession.memberships?.[0] ?? null,
+          activePortal: resolvedPortal,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      }
+
+      // 2. Token refresh if access token missing or expired
+      if (!accessToken && refreshToken) {
+        try {
+          const refreshRes = await authApi.refreshToken(refreshToken);
+          const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
+          await saveTokens(refreshRes.access_token, newRefreshToken);
+          accessToken = refreshRes.access_token;
+        } catch (rErr: any) {
+          const status = rErr?.status ?? rErr?.response?.status;
+          if (status === 401 || status === 403 || status === 400) {
+            await clearTokens();
+            await clearActivePortal();
+            await clearUserCache();
+            set({ isLoading: false, isAuthenticated: false, user: null, memberships: [], activePortal: null });
+            return;
           }
         }
       }
 
       if (!accessToken) {
         await clearActivePortal();
-        set({ isLoading: false, isAuthenticated: false, activePortal: null });
+        await clearUserCache();
+        set({ isLoading: false, isAuthenticated: false, activePortal: null, user: null, memberships: [] });
         return;
       }
 
-      const response = await authApi.getMe();
-      const currentActive = get().activeMembership;
-      const validActive =
-        currentActive && response.memberships.some((m) => m.membership_id === currentActive.membership_id)
-          ? currentActive
-          : response.memberships[0] ?? null;
+      // 3. Authoritative server verification
+      try {
+        const response = await authApi.getMe();
+        const currentActive = get().activeMembership;
+        const validActive =
+          currentActive && response.memberships.some((m) => m.membership_id === currentActive.membership_id)
+            ? currentActive
+            : response.memberships[0] ?? null;
 
-      // Authoritative portal resolution:
-      // Validates stored preference against backend-verified roles to prevent privilege spoofing
-      const storedPortal = await getStoredPortal();
-      const isPlatformUser = Boolean(
-        response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
-      );
+        const isPlatformUser = Boolean(
+          response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+        );
 
-      let resolvedPortal: AuthPortal = 'player';
-      if (isPlatformUser) {
-        resolvedPortal = 'platform';
-      } else if (storedPortal === 'club' && response.memberships.length > 0) {
-        resolvedPortal = 'club';
-      } else if (storedPortal === 'player') {
-        resolvedPortal = 'player';
-      } else if (response.memberships.length > 0) {
-        resolvedPortal = 'club';
-      } else {
-        resolvedPortal = 'player';
+        let resolvedPortal: AuthPortal = 'player';
+        if (isPlatformUser) {
+          resolvedPortal = 'platform';
+        } else if (storedPortal === 'club' && response.memberships.length > 0) {
+          resolvedPortal = 'club';
+        } else if (storedPortal === 'player') {
+          resolvedPortal = 'player';
+        } else if (response.memberships.length > 0) {
+          resolvedPortal = 'club';
+        } else {
+          resolvedPortal = 'player';
+        }
+
+        await saveActivePortal(resolvedPortal);
+        await saveUserCache(response.user, response.memberships);
+
+        set({
+          user: response.user,
+          memberships: response.memberships,
+          activeMembership: validActive,
+          activePortal: resolvedPortal,
+          isAuthenticated: true,
+          isLoading: false,
+        });
+      } catch (getMeErr: any) {
+        const status = getMeErr?.status ?? getMeErr?.response?.status;
+        if (status === 401) {
+          if (refreshToken) {
+            try {
+              const refreshRes = await authApi.refreshToken(refreshToken);
+              const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
+              await saveTokens(refreshRes.access_token, newRefreshToken);
+              const retryResponse = await authApi.getMe();
+              await saveUserCache(retryResponse.user, retryResponse.memberships);
+              set({
+                user: retryResponse.user,
+                memberships: retryResponse.memberships,
+                isAuthenticated: true,
+                isLoading: false,
+              });
+              return;
+            } catch (refFail: any) {
+              const refStatus = refFail?.status ?? refFail?.response?.status;
+              if (refStatus === 401 || refStatus === 403 || refStatus === 400) {
+                await clearTokens();
+                await clearActivePortal();
+                await clearUserCache();
+                set({
+                  user: null,
+                  memberships: [],
+                  activeMembership: null,
+                  activePortal: null,
+                  isAuthenticated: false,
+                  isLoading: false,
+                });
+                return;
+              }
+            }
+          }
+        }
+
+        // If network glitch or 5xx server error occurred but we already restored from cache, keep session alive
+        if (cachedSession?.user) {
+          console.warn('[AUTH] Offline or server glitch; keeping authenticated cache alive:', getMeErr);
+          set({ isLoading: false, isAuthenticated: true });
+          return;
+        }
+
+        set({ isLoading: false });
       }
-
-      await saveActivePortal(resolvedPortal);
-
-      set({
-        user: response.user,
-        memberships: response.memberships,
-        activeMembership: validActive,
-        activePortal: resolvedPortal,
-        isAuthenticated: true,
-        isLoading: false,
-      });
-    } catch {
-      // Token invalid or expired and refresh failed — clear and force re-login
-      await clearTokens();
-      await clearActivePortal();
-      set({
-        user: null,
-        memberships: [],
-        activeMembership: null,
-        activePortal: null,
-        isAuthenticated: false,
-        isLoading: false,
-      });
+    } catch (globalErr) {
+      console.warn('[AUTH] Initialization error:', globalErr);
+      set({ isLoading: false });
     }
   },
 
@@ -386,6 +519,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           ? 'club'
           : 'player';
       await saveActivePortal(portal);
+      await saveUserCache(response.user, response.memberships);
 
       set({
         user: response.user,
@@ -414,6 +548,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const response = await authApi.loginClub(email, password);
       await saveTokens(response.access_token, response.refresh_token);
       await saveActivePortal('club');
+      await saveUserCache(response.user, response.memberships);
       const activeMembership = response.memberships[0] ?? null;
 
       set({
@@ -442,6 +577,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const response = await authApi.loginPlayer(email, password);
       await saveTokens(response.access_token, response.refresh_token);
       await saveActivePortal('player');
+      await saveUserCache(response.user, []);
 
       set({
         user: response.user,
@@ -470,6 +606,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const response = await authApi.loginPlatform(email, password);
       await saveTokens(response.access_token, response.refresh_token);
       await saveActivePortal('platform');
+      await saveUserCache(response.user, []);
 
       set({
         user: response.user,
@@ -497,6 +634,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const response = await authApi.registerPlayer(email, password, fullName);
       await saveTokens(response.access_token, response.refresh_token);
       await saveActivePortal('player');
+      await saveUserCache(response.user, []);
 
       set({
         user: response.user,
@@ -558,7 +696,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           ? currentActive
           : response.memberships[0] ?? null;
 
+      const currentUser = get().user || response.user;
+      if (currentUser) {
+        await saveUserCache(currentUser, response.memberships);
+      }
+
       set({
+        user: response.user,
         memberships: response.memberships,
         activeMembership: validActive,
       });

@@ -23,6 +23,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Screen, AppText, Input, Button, Card } from '@/components';
 import { useAuth } from '@/hooks';
+import { isPlatformAdminEmail } from '@/constants';
 import { Colors, Spacing } from '@/theme';
 
 type AuthPortal = 'club' | 'player';
@@ -30,7 +31,7 @@ type AuthPortal = 'club' | 'player';
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ portal?: string }>();
-  const { loginClub, loginPlayer, isLoading, error, clearError } = useAuth();
+  const { loginClub, loginPlayer, isAuthenticated, isLoading, user, activePortal, memberships, activeMembership, error, clearError } = useAuth();
 
   const [portal, setPortal] = useState<AuthPortal>(
     params.portal === 'player' ? 'player' : 'club'
@@ -39,6 +40,21 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  React.useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      const isPlatformAdmin = Boolean(
+        user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
+      );
+      if (isPlatformAdmin) {
+        router.replace('/platform' as any);
+      } else if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
+        router.replace('/(club)');
+      } else {
+        router.replace('/(player)');
+      }
+    }
+  }, [isAuthenticated, isLoading, user, activePortal, memberships, activeMembership, router]);
 
   React.useEffect(() => {
     if (params.portal === 'player') {

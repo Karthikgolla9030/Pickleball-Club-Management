@@ -30,12 +30,18 @@ import { Colors, Radius, Spacing } from '@/theme';
 export default function PlatformLoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { loginPlatform, isLoading, error, clearError } = useAuth();
+  const { loginPlatform, isLoading, isAuthenticated, isPlatformAdmin, error, clearError } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+
+  React.useEffect(() => {
+    if (isAuthenticated && isPlatformAdmin && !isLoading) {
+      router.replace('/platform' as any);
+    }
+  }, [isAuthenticated, isPlatformAdmin, isLoading, router]);
 
   const validate = (): boolean => {
     let valid = true;

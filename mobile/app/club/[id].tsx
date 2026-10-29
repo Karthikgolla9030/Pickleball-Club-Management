@@ -85,7 +85,7 @@ export default function StandalonePublicClubScreen() {
   const memberships = useAuthStore((s) => s.memberships);
   const activePortal = useAuthStore((s) => s.activePortal);
 
-  const identifier = params.id || params.slug || '';
+  const identifier = String(params.id || params.slug || '').trim().replace(/^\/+/, '');
 
   const [logoError, setLogoError] = useState(false);
   const [bannerError, setBannerError] = useState(false);
