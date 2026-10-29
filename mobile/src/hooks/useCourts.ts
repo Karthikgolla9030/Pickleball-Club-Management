@@ -39,14 +39,14 @@ export function useClubCourts(clubId: string | null, status?: CourtStatus) {
     onSuccess: (data: Court) => {
       if (clubId) {
         queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
-          if (!old) return [data];
+          if (!old || !Array.isArray(old)) return [data];
           if (old.some((c) => c.id === data.id)) {
             return old.map((c) => (c.id === data.id ? data : c));
           }
           return [...old, data];
         });
         queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
-          if (!old) return [data];
+          if (!old || !Array.isArray(old)) return [data];
           if (old.some((c) => c.id === data.id)) {
             return old.map((c) => (c.id === data.id ? data : c));
           }
@@ -55,6 +55,7 @@ export function useClubCourts(clubId: string | null, status?: CourtStatus) {
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+        queryClient.invalidateQueries({ queryKey: ['club-court-availability'] });
       }
     },
   });
@@ -106,19 +107,20 @@ export function useCourtDetails(clubId: string | null, courtId: string | null) {
     onSuccess: (data: Court) => {
       if (clubId) {
         queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
-          if (!old) return old;
+          if (!old || !Array.isArray(old)) return old;
           return old.map((c) => (c.id === data.id ? { ...c, ...data } : c));
         });
         if (courtId) {
           queryClient.setQueryData(QUERY_KEYS.CLUB_COURT_DETAILS(clubId, courtId), data);
         }
         queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
-          if (!old) return old;
+          if (!old || !Array.isArray(old)) return old;
           return old.map((c) => (c.id === data.id ? { ...c, ...data } : c));
         });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+        queryClient.invalidateQueries({ queryKey: ['club-court-availability'] });
       }
     },
   });

@@ -516,17 +516,27 @@ export default function ClubCourtsScreen() {
     setFormPhotoUrl(court.photo_url || null);
     setFormInterval(court.booking_interval_minutes || 60);
 
-    if (court.operating_hours) {
+    let operatingHoursObj: any = court.operating_hours;
+    if (typeof operatingHoursObj === 'string') {
+      try {
+        operatingHoursObj = JSON.parse(operatingHoursObj);
+      } catch {
+        operatingHoursObj = null;
+      }
+    }
+
+    if (operatingHoursObj && typeof operatingHoursObj === 'object') {
       const closedMap: Record<string, boolean> = {};
       let foundOpen: string | null = null;
       let foundClose: string | null = null;
-      for (const [day, dayCfg] of Object.entries(court.operating_hours)) {
-        if (dayCfg) {
-          if (dayCfg.is_closed) {
+      for (const [day, dayCfg] of Object.entries(operatingHoursObj)) {
+        if (dayCfg && typeof dayCfg === 'object') {
+          const cfg = dayCfg as any;
+          if (cfg.is_closed) {
             closedMap[day] = true;
           } else {
-            if (dayCfg.open_time && !foundOpen) foundOpen = toCanonicalTime(dayCfg.open_time);
-            if (dayCfg.close_time && !foundClose) foundClose = toCanonicalTime(dayCfg.close_time);
+            if (cfg.open_time && !foundOpen) foundOpen = toCanonicalTime(cfg.open_time);
+            if (cfg.close_time && !foundClose) foundClose = toCanonicalTime(cfg.close_time);
           }
         }
       }
@@ -539,17 +549,26 @@ export default function ClubCourtsScreen() {
       setFormClosingTime('22:00');
       if (clubId) {
         courtApi.getCourtOperatingHours(clubId, court.id).then((res) => {
-          if (res.effective_operating_hours) {
+          let effHours: any = res.effective_operating_hours;
+          if (typeof effHours === 'string') {
+            try {
+              effHours = JSON.parse(effHours);
+            } catch {
+              effHours = null;
+            }
+          }
+          if (effHours && typeof effHours === 'object') {
             const closedMap: Record<string, boolean> = {};
             let fOpen: string | null = null;
             let fClose: string | null = null;
-            for (const [day, dayCfg] of Object.entries(res.effective_operating_hours)) {
-              if (dayCfg) {
-                if (dayCfg.is_closed) {
+            for (const [day, dayCfg] of Object.entries(effHours)) {
+              if (dayCfg && typeof dayCfg === 'object') {
+                const cfg = dayCfg as any;
+                if (cfg.is_closed) {
                   closedMap[day] = true;
                 } else {
-                  if (dayCfg.open_time && !fOpen) fOpen = toCanonicalTime(dayCfg.open_time);
-                  if (dayCfg.close_time && !fClose) fClose = toCanonicalTime(dayCfg.close_time);
+                  if (cfg.open_time && !fOpen) fOpen = toCanonicalTime(cfg.open_time);
+                  if (cfg.close_time && !fClose) fClose = toCanonicalTime(cfg.close_time);
                 }
               }
             }
@@ -613,20 +632,24 @@ export default function ClubCourtsScreen() {
       };
       const created = await createCourt(payload);
       if (clubId && created) {
-        queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
-          if (!old) return [created];
-          if (old.some((c) => c.id === created.id)) {
-            return old.map((c) => (c.id === created.id ? created : c));
-          }
-          return [...old, created];
-        });
-        queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
-          if (!old) return [created];
-          if (old.some((c) => c.id === created.id)) {
-            return old.map((c) => (c.id === created.id ? created : c));
-          }
-          return [...old, created];
-        });
+        try {
+          queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
+            if (!old || !Array.isArray(old)) return [created];
+            if (old.some((c) => c.id === created.id)) {
+              return old.map((c) => (c.id === created.id ? created : c));
+            }
+            return [...old, created];
+          });
+          queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
+            if (!old || !Array.isArray(old)) return [created];
+            if (old.some((c) => c.id === created.id)) {
+              return old.map((c) => (c.id === created.id ? created : c));
+            }
+            return [...old, created];
+          });
+        } catch (cacheErr) {
+          console.warn('Cache sync notice:', cacheErr);
+        }
         setCourtImageErrors((prev) => {
           const next = { ...prev };
           delete next[created.id];
@@ -636,6 +659,7 @@ export default function ClubCourtsScreen() {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
         queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
         queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+        queryClient.invalidateQueries({ queryKey: ['club-court-availability'] });
         queryClient.invalidateQueries({ queryKey: ['bookings'] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_BOOKINGS(clubId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });
@@ -670,15 +694,19 @@ export default function ClubCourtsScreen() {
         closing_time: timeVal.closingTime,
       };
       const updated = await courtApi.updateCourt(clubId, editingCourt.id, payload);
-      queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
-        if (!old) return old;
-        return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
-      });
-      queryClient.setQueryData(QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id), updated);
-      queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
-        if (!old) return old;
-        return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
-      });
+      try {
+        queryClient.setQueriesData<Court[]>({ queryKey: ['clubs', clubId, 'courts'] }, (old) => {
+          if (!old || !Array.isArray(old)) return old;
+          return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+        });
+        queryClient.setQueryData(QUERY_KEYS.CLUB_COURT_DETAILS(clubId, editingCourt.id), updated);
+        queryClient.setQueriesData<Court[]>({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) }, (old) => {
+          if (!old || !Array.isArray(old)) return old;
+          return old.map((c) => (c.id === updated.id ? { ...c, ...updated } : c));
+        });
+      } catch (cacheErr) {
+        console.warn('Cache sync notice:', cacheErr);
+      }
       setCourtImageErrors((prev) => {
         const next = { ...prev };
         delete next[editingCourt.id];
@@ -689,6 +717,7 @@ export default function ClubCourtsScreen() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_COURTS(clubId) });
       queryClient.invalidateQueries({ queryKey: ['club-active-courts', clubId] });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
+      queryClient.invalidateQueries({ queryKey: ['club-court-availability'] });
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_BOOKINGS(clubId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_STAFF_BOOKINGS(clubId) });

@@ -27,8 +27,11 @@ from app.core.booking_config import (
 )
 from app.core.operating_hours import resolve_effective_operating_hours
 from app.models.booking import Booking, BookingStatus, BookingType
+from app.models.club_membership import ClubMembership
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.court import Court, CourtStatus
+from app.models.user import User
+from sqlalchemy import select
 from app.repositories.booking_repository import BookingRepository
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
@@ -309,13 +312,35 @@ class BookingService:
         if not club or not club.is_active:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found or inactive")
 
-        # Verify caller has permission: either active staff member or active player member
+        # Verify caller has permission: active staff member, platform admin, or active player member
         is_staff = False
         staff_membership = await self.club_membership_repo.get_by_user_and_club(
             user_id=user_id, club_id=club_id
         )
         if staff_membership and staff_membership.is_active:
             is_staff = True
+
+        if not is_staff:
+            # Check platform owner/admin emails
+            user_res = await self.db.execute(select(User).where(User.id == user_id))
+            user_obj = user_res.scalar_one_or_none()
+            if user_obj and user_obj.email:
+                from app.core.config import get_settings
+                settings = get_settings()
+                allowed_platform = {e.lower().strip() for e in settings.PLATFORM_OWNER_EMAILS}
+                if user_obj.email.lower().strip() in allowed_platform:
+                    is_staff = True
+
+        if not is_staff:
+            # Check if caller has any active club staff role (owner, manager, tournament director)
+            any_staff_res = await self.db.execute(
+                select(ClubMembership).where(
+                    ClubMembership.user_id == user_id,
+                    ClubMembership.is_active == True,  # noqa: E712
+                )
+            )
+            if any_staff_res.scalars().first():
+                is_staff = True
 
         if not is_staff:
             membership = await self.club_player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)

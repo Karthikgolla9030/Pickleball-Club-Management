@@ -169,12 +169,28 @@ export function BookingFlowModal({
       setServerPrice(calculation);
       setStage(2);
     } catch (err: any) {
-      const msg =
-        err?.response?.data?.detail ||
-        err?.detail ||
-        err?.message ||
-        'Failed to calculate booking price for this court and time slot.';
-      setFormError(msg);
+      if (mode === 'staff') {
+        // Staff/owner booking for walk-in player/guest: fallback to court hourly rate
+        const rate = selectedCourt?.price_per_hour != null ? Number(selectedCourt.price_per_hour) : 0;
+        const hours = selectedDuration / 60;
+        const totalPrice = Math.round(rate * hours * 100) / 100;
+        setServerPrice({
+          court_id: courtId,
+          court_name: selectedCourt?.court_name || selectedCourt?.display_name || 'Court',
+          duration_minutes: selectedDuration,
+          price_per_hour: rate,
+          total_price: totalPrice,
+          currency: 'USD',
+        });
+        setStage(2);
+      } else {
+        const msg =
+          err?.response?.data?.detail ||
+          err?.detail ||
+          err?.message ||
+          'Failed to calculate booking price for this court and time slot.';
+        setFormError(msg);
+      }
     } finally {
       setIsCalculatingPrice(false);
     }

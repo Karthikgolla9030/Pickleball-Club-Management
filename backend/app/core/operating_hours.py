@@ -150,6 +150,12 @@ def resolve_effective_operating_hours(
     day_name = WEEKDAY_NAMES[weekday_idx]
 
     def _extract_from_hours_dict(hours_dict: Any) -> tuple[bool, time, time] | None:
+        if isinstance(hours_dict, str):
+            try:
+                import json
+                hours_dict = json.loads(hours_dict)
+            except Exception:
+                return None
         if not isinstance(hours_dict, dict):
             return None
         # 1. Match day name case-insensitively or via 3-letter prefix
@@ -165,6 +171,13 @@ def resolve_effective_operating_hours(
 
         if not cfg and ("open_time" in hours_dict or "close_time" in hours_dict or "opening_time" in hours_dict):
             cfg = hours_dict
+
+        if isinstance(cfg, str):
+            try:
+                import json
+                cfg = json.loads(cfg)
+            except Exception:
+                pass
 
         if isinstance(cfg, dict):
             is_closed = bool(cfg.get("is_closed", False))

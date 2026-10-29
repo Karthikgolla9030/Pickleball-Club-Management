@@ -42,9 +42,15 @@ from app.schemas.court import (
 
 
 def _normalize_operating_hours_dict(raw_hours: Any) -> dict[str, Any] | None:
-    """Safely normalizes any WeeklyOperatingHours, model dump, or dict into JSON-serializable strings."""
+    """Safely normalizes any WeeklyOperatingHours, model dump, JSON string, or dict into JSON-serializable strings."""
     if raw_hours is None:
         return None
+    if isinstance(raw_hours, str):
+        try:
+            import json
+            raw_hours = json.loads(raw_hours)
+        except Exception:
+            return None
     if hasattr(raw_hours, "to_dict"):
         return raw_hours.to_dict()
     if isinstance(raw_hours, dict):
