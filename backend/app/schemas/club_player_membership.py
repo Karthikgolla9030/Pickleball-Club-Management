@@ -125,5 +125,9 @@ class ClubPlayerMembershipResponse(BaseModel):
     expires_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+    is_subscriber: bool = False
+    subscription_status: str | None = None
+    subscription_id: UUID | None = None
+    plan_name: str | None = None
 
     model_config = {"from_attributes": True}

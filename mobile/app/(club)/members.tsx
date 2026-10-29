@@ -15,7 +15,7 @@
  * - Real API queries, mutations, permissions, tenant isolation, and error handling preserved
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -281,19 +281,69 @@ export default function ClubMembersScreen() {
     isUpdatingPlayerMember,
   } = useClubPlayerMembers(clubId);
 
-  // Subscriptions query (for subscriber identification)
-  const { data: subscriptions = [] } = useClubSubscriptions(clubId || '');
+  // Subscriptions query (for subscriber identification and real-time syncing)
+  const {
+    data: subscriptions = [],
+    isLoading: isSubscriptionsLoading,
+    isRefetching: isSubscriptionsRefetching,
+    error: subscriptionsError,
+    refetch: refetchSubscriptions,
+  } = useClubSubscriptions(clubId || '');
 
-  // Map of user IDs with active subscriptions
+  // Qualifying subscription statuses: both active and scheduled subscriptions qualify as subscribers
+  const QUALIFYING_STATUSES = useMemo(() => new Set(['active', 'scheduled']), []);
+
+  // Multi-key subscriber mapping (user_id, player_membership_id, email)
   const subscriberMap = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { planName: string; status: string }>();
     subscriptions.forEach((s) => {
-      if (s.effective_status === 'active' && s.player?.user_id) {
-        map.set(s.player.user_id, s.plan_name || 'Active Subscriber');
+      const effStatus = (s.effective_status || s.status || '').toLowerCase().trim();
+      if (QUALIFYING_STATUSES.has(effStatus)) {
+        const info = {
+          planName: s.plan_name || 'Membership Plan',
+          status: effStatus,
+        };
+        if (s.player?.user_id) {
+          map.set(s.player.user_id, info);
+        }
+        if (s.player_membership_id) {
+          map.set(s.player_membership_id, info);
+        }
+        if (s.player?.player_membership_id) {
+          map.set(s.player.player_membership_id, info);
+        }
+        if (s.player?.user_email) {
+          map.set(s.player.user_email.toLowerCase().trim(), info);
+        }
       }
     });
     return map;
-  }, [subscriptions]);
+  }, [subscriptions, QUALIFYING_STATUSES]);
+
+  const getSubscriberInfo = useCallback(
+    (p: ClubPlayerMember) => {
+      if (p.user_id && subscriberMap.has(p.user_id)) return subscriberMap.get(p.user_id);
+      if (p.id && subscriberMap.has(p.id)) return subscriberMap.get(p.id);
+      if (p.user_email && subscriberMap.has(p.user_email.toLowerCase().trim())) {
+        return subscriberMap.get(p.user_email.toLowerCase().trim());
+      }
+      if (p.is_subscriber) {
+        return {
+          planName: p.plan_name || 'Membership Plan',
+          status: (p.subscription_status || 'active').toLowerCase(),
+        };
+      }
+      return null;
+    },
+    [subscriberMap]
+  );
+
+  const isPlayerSubscriber = useCallback(
+    (p: ClubPlayerMember) => {
+      return getSubscriberInfo(p) !== null;
+    },
+    [getSubscriberInfo]
+  );
 
   // Set of staff user IDs and emails to strictly exclude from Players section
   const staffUserIds = useMemo(() => {
@@ -324,24 +374,34 @@ export default function ClubMembersScreen() {
 
     // 2. Filter by tab pill
     if (playerFilter === 'subscribers') {
-      list = list.filter((p) => subscriberMap.has(p.user_id));
+      list = list.filter((p) => isPlayerSubscriber(p));
     } else if (playerFilter === 'normal') {
-      list = list.filter((p) => !subscriberMap.has(p.user_id));
+      list = list.filter((p) => !isPlayerSubscriber(p));
     }
 
     // 3. Filter by search query
     if (playerSearchQuery.trim()) {
       const q = playerSearchQuery.toLowerCase().trim();
       list = list.filter((p) => {
+        const subInfo = getSubscriberInfo(p);
         const emailMatch = p.user_email?.toLowerCase().includes(q);
         const nameMatch = formatPlayerName(p).toLowerCase().includes(q);
         const numMatch = p.membership_number?.toLowerCase().includes(q);
-        return emailMatch || nameMatch || numMatch;
+        const planMatch = subInfo?.planName?.toLowerCase().includes(q);
+        return emailMatch || nameMatch || numMatch || planMatch;
       });
     }
 
     return list;
-  }, [playerMembers, staffUserIds, staffEmails, playerFilter, playerSearchQuery, subscriberMap]);
+  }, [
+    playerMembers,
+    staffUserIds,
+    staffEmails,
+    playerFilter,
+    playerSearchQuery,
+    isPlayerSubscriber,
+    getSubscriberInfo,
+  ]);
 
   // ─── Filtered Staff List ─────────────────────────────────────────────────────
 
@@ -721,12 +781,19 @@ export default function ClubMembersScreen() {
     );
   }
 
-  const isLoading = isStaffLoading || isPlayersLoading;
-  const isRefetching = isStaffRefetching || isPlayersRefetching;
-  const currentError = activeTab === 'staff' ? staffError : playersError;
+  const isLoading =
+    isStaffLoading ||
+    isPlayersLoading ||
+    (activeTab === 'players' && playerFilter === 'subscribers' && isSubscriptionsLoading && playerMembers.length === 0);
+  const isRefetching = isStaffRefetching || isPlayersRefetching || isSubscriptionsRefetching;
+  const currentError =
+    activeTab === 'staff'
+      ? staffError
+      : playersError || (playerFilter === 'subscribers' ? subscriptionsError : null);
   const onRefresh = () => {
     refetchStaff();
     refetchPlayers();
+    refetchSubscriptions();
   };
 
   if (currentError) {
@@ -946,6 +1013,8 @@ export default function ClubMembersScreen() {
       ? `#${item.membership_number.replace(/^#/, '')}`
       : '—';
 
+    const subInfo = getSubscriberInfo(item);
+
     return (
       <View style={styles.memberCard}>
         {/* Top Profile Information Area */}
@@ -984,7 +1053,7 @@ export default function ClubMembersScreen() {
               {item.user_email}
             </AppText>
 
-            {/* Row 3: Status Badge */}
+            {/* Row 3: Status Badge & Subscriber Plan Badge */}
             <View style={styles.statusRow}>
               <View
                 style={[
@@ -1013,6 +1082,15 @@ export default function ClubMembersScreen() {
                   {item.status.toUpperCase()}
                 </AppText>
               </View>
+
+              {subInfo && (
+                <View style={styles.playerSubPlanBadge}>
+                  <AppText style={styles.playerSubPlanBadgeText} numberOfLines={1}>
+                    {subInfo.planName}
+                    {subInfo.status === 'scheduled' ? ' · SCHEDULED' : ''}
+                  </AppText>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -1215,12 +1293,12 @@ export default function ClubMembersScreen() {
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <EmptyState
-                title="No Players Found"
+                title={playerFilter === 'subscribers' ? 'No Subscribers Found' : 'No Players Found'}
                 description={
                   playerSearchQuery.trim()
                     ? 'No players matched your search.'
                     : playerFilter === 'subscribers'
-                    ? 'No players currently have active subscriptions.'
+                    ? 'No players currently have active or scheduled subscriptions in this club.'
                     : playerFilter === 'normal'
                     ? 'No normal users currently registered.'
                     : 'No players have joined this club yet. Players appear here when they join or subscribe.'
@@ -2472,6 +2550,18 @@ const styles = StyleSheet.create({
   },
   statusBadgeTextDanger: {
     color: '#DC2626',
+  },
+  playerSubPlanBadge: {
+    backgroundColor: '#E7F0FB',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    maxWidth: 160,
+  },
+  playerSubPlanBadgeText: {
+    color: '#1E69D2',
+    fontSize: 11,
+    fontWeight: '700',
   },
   roleBadge: {
     paddingHorizontal: 8,

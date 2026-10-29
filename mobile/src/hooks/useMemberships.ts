@@ -168,6 +168,7 @@ export function useUpdateSubscription(clubId: string, subscriptionId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SUBSCRIPTION_DETAIL(clubId, subscriptionId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_SUBSCRIPTIONS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PLAYER_MEMBERS(clubId) });
     },
   });
 }
@@ -184,6 +185,7 @@ export function useCancelSubscription(clubId: string, subscriptionId: string) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.SUBSCRIPTION_DETAIL(clubId, subscriptionId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_SUBSCRIPTIONS(clubId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.MEMBERSHIP_PLANS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PLAYER_MEMBERS(clubId) });
     },
   });
 }
@@ -198,6 +200,7 @@ export function useRenewSubscription(clubId: string, subscriptionId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_SUBSCRIPTIONS(clubId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.MEMBERSHIP_PLANS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PLAYER_MEMBERS(clubId) });
     },
   });
 }
@@ -255,6 +258,7 @@ export function usePlayerSubscribe() {
       queryClient.invalidateQueries({ queryKey: ['player', 'clubs'] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_SUBSCRIPTIONS(variables.clubId) });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.MEMBERSHIP_PLANS(variables.clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PLAYER_MEMBERS(variables.clubId) });
     },
   });
 }

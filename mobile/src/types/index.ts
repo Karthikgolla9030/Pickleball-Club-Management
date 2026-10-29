@@ -562,6 +562,10 @@ export interface ClubPlayerMember {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
+  is_subscriber?: boolean;
+  subscription_status?: string | null;
+  subscription_id?: string | null;
+  plan_name?: string | null;
 }
 
 export interface UpdateClubPlayerMemberPayload {

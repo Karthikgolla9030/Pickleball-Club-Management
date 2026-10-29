@@ -403,22 +403,17 @@ class MemberSubscriptionService:
         now = datetime.now(timezone.utc)
         pm = await self.player_repo.get_by_user_and_club(user_id=user_id, club_id=club_id)
         if not pm:
-            initial_pm_status = (
-                PlayerMembershipStatus.ACTIVE
-                if is_free
-                else PlayerMembershipStatus.INACTIVE
-            )
             pm = await self.player_repo.create(
                 user_id=user_id,
                 club_id=club_id,
-                status=initial_pm_status,
-                joined_at=now if is_free else None,
+                status=PlayerMembershipStatus.ACTIVE,
+                joined_at=now,
             )
-        elif is_free and pm.status != PlayerMembershipStatus.ACTIVE:
+        elif pm.status == PlayerMembershipStatus.INACTIVE:
             pm = await self.player_repo.update(
                 pm,
                 status=PlayerMembershipStatus.ACTIVE,
-                joined_at=now,
+                joined_at=pm.joined_at or now,
             )
 
         # 4. Verify no conflicting active/scheduled subscription

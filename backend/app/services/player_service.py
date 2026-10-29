@@ -4,7 +4,7 @@ Ensures tenant isolation, validation, and complete separation from staff roles.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -21,6 +21,8 @@ from app.models.club_player_membership import (
     ClubPlayerMembership,
     PlayerMembershipStatus,
 )
+from app.models.membership import MemberSubscription, SubscriptionStatus
+from app.models.user import User
 from app.models.event import EventRegistration
 from app.models.player_profile import PlayerProfile
 from app.models.tournament_registration import TournamentRegistration
@@ -47,10 +49,34 @@ from app.core.events import EventType, dispatch_event
 from app.services.notification_service import NotificationService
 
 
-def _build_club_player_response(m: ClubPlayerMembership) -> ClubPlayerMembershipResponse:
+def _build_club_player_response(
+    m: ClubPlayerMembership,
+    sub: MemberSubscription | None = None,
+) -> ClubPlayerMembershipResponse:
     profile_img: str | None = None
     if m.user and getattr(m.user, "player_profile", None):
         profile_img = m.user.player_profile.profile_image_url
+
+    is_sub = False
+    sub_status: str | None = None
+    sub_id: UUID | None = None
+    plan_name: str | None = None
+
+    if sub:
+        eff_status = (
+            sub.effective_status.value
+            if hasattr(sub.effective_status, "value")
+            else str(sub.effective_status)
+        )
+        is_sub = eff_status in ("active", "scheduled")
+        sub_status = eff_status
+        sub_id = sub.id
+        if getattr(sub, "plan", None):
+            plan_name = sub.plan.name
+
+    eff_status_enum = m.status
+    if is_sub and eff_status_enum == PlayerMembershipStatus.INACTIVE:
+        eff_status_enum = PlayerMembershipStatus.ACTIVE
 
     return ClubPlayerMembershipResponse(
         id=m.id,
@@ -60,12 +86,16 @@ def _build_club_player_response(m: ClubPlayerMembership) -> ClubPlayerMembership
         user_full_name=m.user.full_name if m.user else None,
         profile_image_url=profile_img,
         membership_number=m.membership_number,
-        status=m.status,
-        status_label=m.status.display_label,
+        status=eff_status_enum,
+        status_label=eff_status_enum.display_label,
         joined_at=m.joined_at,
         expires_at=m.expires_at,
         created_at=m.created_at,
         updated_at=m.updated_at,
+        is_subscriber=is_sub,
+        subscription_status=sub_status,
+        subscription_id=sub_id,
+        plan_name=plan_name,
     )
 
 
@@ -408,12 +438,72 @@ class PlayerService:
         staff_res = await self.db.execute(staff_stmt)
         staff_user_ids = set(staff_res.scalars().all())
 
-        filtered = [
-            m for m in memberships
-            if m.user_id not in staff_user_ids
-            and m.status != PlayerMembershipStatus.INACTIVE
+        # Fetch active and scheduled subscriptions for this club to identify subscribers
+        sub_stmt = (
+            select(MemberSubscription)
+            .options(
+                selectinload(MemberSubscription.plan),
+                selectinload(MemberSubscription.player_membership)
+                .selectinload(ClubPlayerMembership.user)
+                .selectinload(User.player_profile),
+            )
+            .where(
+                MemberSubscription.club_id == club_id,
+                MemberSubscription.status.in_([
+                    SubscriptionStatus.ACTIVE,
+                    SubscriptionStatus.SCHEDULED,
+                ]),
+            )
+        )
+        sub_res = await self.db.execute(sub_stmt)
+        active_subs = list(sub_res.scalars().all())
+
+        # Determine valid active or scheduled subscriptions using effective_status
+        valid_subs: list[MemberSubscription] = []
+        for s in active_subs:
+            eff_s = s.effective_status if hasattr(s, "effective_status") else s.status
+            if eff_s in (SubscriptionStatus.ACTIVE, SubscriptionStatus.SCHEDULED):
+                valid_subs.append(s)
+
+        sub_by_pm_id: dict[UUID, MemberSubscription] = {}
+        sub_by_user_id: dict[UUID, MemberSubscription] = {}
+        for s in valid_subs:
+            if s.player_membership_id:
+                sub_by_pm_id[s.player_membership_id] = s
+            if s.player_membership and s.player_membership.user_id:
+                sub_by_user_id[s.player_membership.user_id] = s
+
+        # Include all legitimate club player memberships:
+        # Exclude staff accounts.
+        # Exclude inactive checkouts EXCEPT if they have a qualifying (active or scheduled) subscription.
+        # If a member has a qualifying subscription, they are an active club member.
+        filtered: list[ClubPlayerMembership] = []
+        seen_pm_ids = set()
+
+        for m in memberships:
+            if m.user_id in staff_user_ids:
+                continue
+            has_sub = (m.id in sub_by_pm_id) or (m.user_id in sub_by_user_id)
+            if m.status == PlayerMembershipStatus.INACTIVE and not has_sub:
+                continue
+            filtered.append(m)
+            seen_pm_ids.add(m.id)
+
+        # Ensure any qualifying subscriber belonging to this club whose PM was not in memberships is included
+        for s in valid_subs:
+            if s.player_membership and s.player_membership.id not in seen_pm_ids:
+                pm = s.player_membership
+                if pm.user_id not in staff_user_ids:
+                    filtered.append(pm)
+                    seen_pm_ids.add(pm.id)
+
+        return [
+            _build_club_player_response(
+                m,
+                sub=sub_by_pm_id.get(m.id) or sub_by_user_id.get(m.user_id),
+            )
+            for m in filtered
         ]
-        return [_build_club_player_response(m) for m in filtered]
 
     async def add_club_player_membership(
         self, club_id: UUID, payload: CreateClubPlayerMembershipRequest
