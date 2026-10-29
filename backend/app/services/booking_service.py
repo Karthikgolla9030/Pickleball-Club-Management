@@ -175,6 +175,7 @@ class BookingService:
             price_per_hour=b.price_per_hour,
             total_price=b.total_price,
             currency=getattr(b, "currency", "USD") or "USD",
+            player_count=getattr(b, "player_count", None),
             court=court_info,
             player=player_info,
             club_name=b.club.name if getattr(b, "club", None) else None,
@@ -531,6 +532,7 @@ class BookingService:
                 price_per_hour=rate_snapshot,
                 total_price=total_price_snapshot,
                 currency="USD",
+                player_count=payload.player_count,
             )
         except IntegrityError:
             await self.db.rollback()
@@ -736,6 +738,7 @@ class BookingService:
                 price_per_hour=rate_snapshot,
                 total_price=total_price_snapshot,
                 currency="USD",
+                player_count=payload.player_count,
             )
         except IntegrityError:
             await self.db.rollback()

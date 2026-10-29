@@ -122,7 +122,7 @@ export function CheckoutModal({
       end_at: endAt || null,
       payment_method: methodMap[method],
       selected_method: method,
-      currency: 'INR',
+      currency: 'USD',
       metadata: {
         activity_title: activityTitle,
         activity_subtitle: activitySubtitle,
@@ -179,7 +179,7 @@ export function CheckoutModal({
               club_id: clubId,
               club_name: clubName,
               amount: 0,
-              currency: res.breakdown?.currency || 'INR',
+              currency: res.breakdown?.currency || 'USD',
               status: 'succeeded',
               status_label: 'Succeeded',
               purpose,
@@ -331,10 +331,10 @@ export function CheckoutModal({
     tax_amount: 0,
     service_fee: 0,
     final_amount: 0,
-    currency: 'INR',
+    currency: 'USD',
   };
 
-  const finalFormatted = formatCurrency(Number(breakdown.final_amount), breakdown.currency || 'INR');
+  const finalFormatted = formatCurrency(Number(breakdown.final_amount), breakdown.currency || 'USD');
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -460,7 +460,7 @@ export function CheckoutModal({
                 <View style={styles.breakdownRow}>
                   <AppText style={styles.breakdownLabel}>Base booking fee</AppText>
                   <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.base_amount), breakdown.currency || 'INR')}
+                    {formatCurrency(Number(breakdown.base_amount), breakdown.currency || 'USD')}
                   </AppText>
                 </View>
 
@@ -471,22 +471,22 @@ export function CheckoutModal({
                       <AppText style={styles.discountLabel}>Member privilege discount</AppText>
                     </View>
                     <AppText style={styles.discountValue}>
-                      -{formatCurrency(Number(breakdown.discount_amount), breakdown.currency || 'INR')}
+                      -{formatCurrency(Number(breakdown.discount_amount), breakdown.currency || 'USD')}
                     </AppText>
                   </View>
                 ) : null}
 
                 <View style={styles.breakdownRow}>
-                  <AppText style={styles.breakdownLabel}>Estimated taxes (5% GST / Tax)</AppText>
+                  <AppText style={styles.breakdownLabel}>Estimated taxes (5% Tax)</AppText>
                   <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.tax_amount), breakdown.currency || 'INR')}
+                    {formatCurrency(Number(breakdown.tax_amount), breakdown.currency || 'USD')}
                   </AppText>
                 </View>
 
                 <View style={styles.breakdownRow}>
                   <AppText style={styles.breakdownLabel}>Service / Platform fee</AppText>
                   <AppText style={styles.breakdownFree}>
-                    {formatCurrency(0, breakdown.currency || 'INR')} (Transparent)
+                    {formatCurrency(0, breakdown.currency || 'USD')} (Transparent)
                   </AppText>
                 </View>
 
@@ -723,7 +723,7 @@ export function CheckoutModal({
                 <View style={styles.receiptRow}>
                   <AppText style={styles.receiptRowLabel}>Amount Paid</AppText>
                   <AppText style={styles.receiptRowAmount}>
-                    {formatCurrency(Number(verifyResult.payment.amount), verifyResult.payment.currency || 'INR')}
+                    {formatCurrency(Number(verifyResult.payment.amount), verifyResult.payment.currency || 'USD')}
                   </AppText>
                 </View>
 

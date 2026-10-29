@@ -945,9 +945,9 @@ class PaymentService:
             or ("cash" if payload.payment_method == PaymentMethod.CASH else "upi")
         )
 
-        # Cashfree requires INR currency for domestic payments (especially UPI & NetBanking)
-        target_currency = payload.currency.upper()
-        if gateway.name == "cashfree":
+        # Standardize on USD across all checkout calculations
+        target_currency = (payload.currency or "USD").upper()
+        if gateway.name == "cashfree" and getattr(gateway, "_has_live_credentials", False):
             target_currency = "INR"
 
         breakdown.currency = target_currency
@@ -1150,6 +1150,9 @@ class PaymentService:
                     prefix = f"Walk-in Guest: {meta['guest_name']}"
                     booking_notes = f"{prefix}\n{booking_notes}" if booking_notes else prefix
 
+                raw_player_count = meta.get("player_count")
+                parsed_player_count = int(raw_player_count) if raw_player_count is not None and str(raw_player_count).isdigit() else None
+
                 booking = await self.booking_repo.create(
                     club_id=payment.club_id,
                     court_id=court_id,
@@ -1163,6 +1166,7 @@ class PaymentService:
                     price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
                     total_price=payment.amount,
                     currency=payment.currency,
+                    player_count=parsed_player_count,
                 )
                 payment.booking_id = booking.id
                 booking_or_reg.update({
@@ -1398,6 +1402,9 @@ class PaymentService:
                                     prefix = f"Walk-in Guest: {meta['guest_name']}"
                                     booking_notes = f"{prefix}\n{booking_notes}" if booking_notes else prefix
 
+                                raw_player_count = meta.get("player_count")
+                                parsed_player_count = int(raw_player_count) if raw_player_count is not None and str(raw_player_count).isdigit() else None
+
                                 booking = await self.booking_repo.create(
                                     club_id=payment.club_id,
                                     court_id=court_id,
@@ -1411,6 +1418,7 @@ class PaymentService:
                                     price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
                                     total_price=payment.amount,
                                     currency=payment.currency,
+                                    player_count=parsed_player_count,
                                 )
                                 payment.booking_id = booking.id
 

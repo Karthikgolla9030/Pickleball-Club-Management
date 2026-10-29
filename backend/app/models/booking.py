@@ -16,6 +16,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     Numeric,
     String,
     Text,
@@ -129,6 +130,12 @@ class Booking(Base):
     notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
+    )
+
+    player_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
     )
 
     cancellation_reason: Mapped[str | None] = mapped_column(

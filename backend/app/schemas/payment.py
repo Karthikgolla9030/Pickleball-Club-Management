@@ -317,7 +317,7 @@ class CheckoutPriceBreakdown(BaseModel):
     tax_amount: Decimal = Decimal("0.00")
     service_fee: Decimal = Decimal("0.00")
     final_amount: Decimal
-    currency: str = "INR"
+    currency: str = "USD"
 
 
 class CheckoutInitiateRequest(BaseModel):
@@ -328,7 +328,7 @@ class CheckoutInitiateRequest(BaseModel):
     end_at: datetime | None = Field(default=None, description="End time for court booking or lesson")
     payment_method: PaymentMethod = Field(default=PaymentMethod.ONLINE, description="Requested payment method")
     selected_method: str | None = Field(default=None, description="Requested checkout payment method: upi, card, netbanking")
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+    currency: str = Field(default="USD", min_length=3, max_length=3)
     notes: str | None = Field(default=None, max_length=1000)
     metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 

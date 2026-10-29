@@ -1624,6 +1624,7 @@ export interface Booking {
   price_per_hour?: number | string | null;
   total_price?: number | string | null;
   currency?: string;
+  player_count?: number | null;
   notes: string | null;
   cancelled_at: string | null;
   cancelled_by_user_id: string | null;
@@ -1677,6 +1678,7 @@ export interface BookingCreatePayload {
   start_at: string;
   end_at: string;
   notes?: string | null;
+  player_count?: number | null;
 }
 
 export interface StaffBookingCreatePayload {
@@ -1686,6 +1688,7 @@ export interface StaffBookingCreatePayload {
   start_at: string;
   end_at: string;
   notes?: string | null;
+  player_count?: number | null;
 }
 
 export interface BookingCancelPayload {

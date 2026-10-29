@@ -27,6 +27,7 @@ class BookingCreateRequest(BaseModel):
     start_at: datetime = Field(..., description="Start timestamp (timezone-aware UTC)")
     end_at: datetime = Field(..., description="End timestamp (timezone-aware UTC)")
     notes: str | None = Field(None, max_length=500, description="Optional booking notes")
+    player_count: int | None = Field(None, ge=1, le=50, description="Optional expected number of players")
 
     @model_validator(mode="after")
     def validate_timestamps(self) -> BookingCreateRequest:
@@ -48,6 +49,7 @@ class StaffBookingCreateRequest(BaseModel):
     start_at: datetime = Field(..., description="Start timestamp (timezone-aware UTC)")
     end_at: datetime = Field(..., description="End timestamp (timezone-aware UTC)")
     notes: str | None = Field(None, max_length=500, description="Optional staff booking notes")
+    player_count: int | None = Field(None, ge=1, le=50, description="Optional expected number of players")
 
     @model_validator(mode="after")
     def validate_timestamps(self) -> StaffBookingCreateRequest:
@@ -114,6 +116,7 @@ class BookingResponse(BaseModel):
     price_per_hour: Decimal | None = None
     total_price: Decimal | None = None
     currency: str = "USD"
+    player_count: int | None = None
     court: BookingCourtInfo | None = None
     player: BookingPlayerInfo | None = None
     club_name: str | None = None

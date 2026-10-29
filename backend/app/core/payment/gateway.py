@@ -140,9 +140,8 @@ class CashfreeGateway(PaymentGateway):
         subunits = int(round(amount * 100))
         curr = currency.upper()
 
-        # Cashfree strictly requires INR for domestic payment methods (UPI, NetBanking)
-        if curr != "INR":
-            curr = "INR"
+        # Cashfree live domestic account requires INR for domestic payment methods (UPI, NetBanking)
+        api_curr = "INR" if self._has_live_credentials else curr
 
         cust = customer_details or {}
         cust_id = str(cust.get("customer_id") or f"cust_{uuid.uuid4().hex[:10]}")[:50]
@@ -187,7 +186,7 @@ class CashfreeGateway(PaymentGateway):
                 payload = {
                     "order_id": order_id,
                     "order_amount": float(amount),
-                    "order_currency": curr,
+                    "order_currency": api_curr,
                     "customer_details": {
                         "customer_id": cust_id,
                         "customer_phone": cust_phone,

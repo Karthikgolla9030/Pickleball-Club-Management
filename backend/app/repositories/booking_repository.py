@@ -208,6 +208,7 @@ class BookingRepository:
         price_per_hour: Decimal | None = None,
         total_price: Decimal | None = None,
         currency: str = "USD",
+        player_count: int | None = None,
     ) -> Booking:
         booking = Booking(
             club_id=club_id,
@@ -222,6 +223,7 @@ class BookingRepository:
             price_per_hour=price_per_hour,
             total_price=total_price,
             currency=currency,
+            player_count=player_count,
         )
         self.db.add(booking)
         await self.db.flush()

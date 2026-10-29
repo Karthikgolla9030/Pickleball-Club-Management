@@ -217,19 +217,20 @@ export function formatRelativeDate(iso: string | null | undefined): string {
 // ─── Currency Formatter ───────────────────────────────────────────────────────
 
 /**
- * Format currency amount with symbol prefix according to currency convention.
- * formatCurrency(9999, 'USD') → '$9,999.00'
- * formatCurrency(9999, 'INR') → '₹9,999.00'
+ * Format currency amount with USD symbol prefix by default ($30.00, $1,250.00).
+ * Uses en-US locale for consistent standard US Dollar presentation across the application.
+ * formatCurrency(9999)        → '$9,999.00'
+ * formatCurrency(30, 'USD')   → '$30.00'
  */
 export function formatCurrency(
   amount: number | string | null | undefined,
-  currency: string = 'INR',
+  currency: string = 'USD',
 ): string {
   if (amount === null || amount === undefined) return '—';
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
   if (isNaN(num)) return '—';
 
-  const curr = (currency || 'INR').toUpperCase();
+  const curr = (currency || 'USD').toUpperCase();
   const locale = curr === 'INR' ? 'en-IN' : 'en-US';
   return new Intl.NumberFormat(locale, {
     style: 'currency',

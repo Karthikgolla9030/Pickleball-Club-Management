@@ -48,7 +48,7 @@ export function BookingFlowModal({
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [customerText, setCustomerText] = useState<string>('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [playersCount, setPlayersCount] = useState<string>('4');
+  const [playersCount, setPlayersCount] = useState<string | null>(null);
   const [notes, setNotes] = useState<string>('');
   const [formError, setFormError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -80,6 +80,8 @@ export function BookingFlowModal({
       setServerPrice(null);
       setConfirmedBooking(null);
       setShowDatePicker(false);
+      setPlayersCount(null);
+      setNotes('');
       if (initialDate) setDateStr(initialDate);
       if (initialCourtId) setCourtId(initialCourtId);
       if (initialSlot) setSlotIso(initialSlot);
@@ -436,18 +438,28 @@ export function BookingFlowModal({
       )}
 
       <View style={styles.fieldSection}>
-        <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>Number of Players</AppText>
+        <AppText variant="caption" color="secondary" bold style={styles.fieldLabel}>
+          Expected Number of Players (Optional)
+        </AppText>
         <View style={styles.timeGrid}>
-          {['1','2','3','4','5+'].map(c => (
+          {['1', '2', '3', '4', '5+'].map((c) => (
             <Button
               key={c}
-              label={`${c} players`}
+              label={`${c} player${c === '1' ? '' : 's'}`}
               variant={playersCount === c ? 'primary' : 'secondary'}
               size="sm"
               fullWidth={false}
-              onPress={() => setPlayersCount(c)}
+              onPress={() => setPlayersCount(playersCount === c ? null : c)}
             />
           ))}
+          <Button
+            key="not_specified"
+            label="Not sure yet"
+            variant={playersCount === null ? 'primary' : 'secondary'}
+            size="sm"
+            fullWidth={false}
+            onPress={() => setPlayersCount(null)}
+          />
         </View>
       </View>
 
@@ -512,7 +524,7 @@ export function BookingFlowModal({
           />
           <SummaryRow label="Duration" value={durationText} />
           <SummaryRow label="Rate" value={rateText} />
-          <SummaryRow label="Players" value={playersCount} />
+          <SummaryRow label="Expected Players" value={playersCount ? `${playersCount} players` : 'Not specified'} />
           
           <View style={styles.divider} />
           <SummaryRow label="Total" value={totalText} isTotal />
@@ -752,12 +764,13 @@ export function BookingFlowModal({
             startAt={selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso}
             endAt={slotIso ? new Date(new Date(selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso).getTime() + selectedDuration * 60 * 1000).toISOString() : undefined}
             durationMinutes={selectedDuration}
-            participantsInfo={`${playersCount} players`}
+            participantsInfo={playersCount ? `${playersCount} players` : undefined}
             metadata={{
               notes: notes.trim(),
               staff_booking: mode === 'staff',
               player_id: playerId || undefined,
               guest_name: !playerId && customerText.trim() ? customerText.trim() : undefined,
+              player_count: playersCount ? (playersCount === '5+' ? 5 : parseInt(playersCount, 10)) : null,
             }}
             onSuccess={(res) => {
               setShowCheckout(false);

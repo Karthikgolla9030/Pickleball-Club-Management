@@ -88,6 +88,10 @@ export function BookingDetailsModal({
           <DetailRow label="Date" value={dateStr} />
           <DetailRow label="Time" value={timeStr} />
           <DetailRow 
+            label="Expected Players" 
+            value={booking.player_count != null ? `${booking.player_count} player${booking.player_count === 1 ? '' : 's'}` : 'Not specified'} 
+          />
+          <DetailRow 
             label="Rate" 
             value={booking.price_per_hour != null ? `${formatCurrency(booking.price_per_hour)}/hr` : 'Unpriced / Free'} 
           />
