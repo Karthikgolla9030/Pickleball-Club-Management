@@ -1,14 +1,19 @@
 /**
- * Aught2 Pickleball — Club Event Details Screen
+ * Aught2 Pickleball — Unified Club Event Details Screen
  *
- * Dedicated owner/manager event details screen providing:
+ * Owner & Manager single-page event details with direct inline registration overview:
  *   - Direct URL and browser refresh support via event ID parameter
- *   - Seamless Back navigation preserving club context
- *   - Hero image with club branding fallback & date badge overlay
- *   - Comprehensive metadata: schedule, location, fee, capacity, status
- *   - Prominent "View Roster" button opening the full participant roster
- *   - Management lifecycle actions: Edit, Publish, Complete, Cancel
- *   - Proper Loading, 404 Not Found, and Error retry states
+ *   - Seamless Back navigation preserving club context and list filter
+ *   - Event Hero image with club branding fallback, date overlay & status badge
+ *   - Event Overview with category, visibility, fee, and full description
+ *   - Dedicated "Schedule & Venue" section
+ *   - Integrated "Registration Overview" section:
+ *       * Live status summary cards (Registered, Waitlisted, Attended, No Show, Cancelled)
+ *       * Real-time capacity and remaining spaces
+ *       * Interactive status filter chips
+ *       * Direct inline participant list with real names, emails, dates, notes, and attendance
+ *       * Empty state when no participants exist (strictly without Add Player / View Roster buttons)
+ *   - Lifecycle management actions: Edit Details, Publish, Complete, Cancel
  */
 
 import React, { useMemo, useState } from 'react';
@@ -25,15 +30,19 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import {
   Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Edit3,
   MapPin,
   MoreVertical,
-  Tag,
-  Users,
-  CheckCircle2,
-  XCircle,
   PlayCircle,
+  Tag,
+  UserCheck,
+  Users,
+  UserX,
+  XCircle,
 } from 'lucide-react-native';
 
 import {
@@ -41,11 +50,9 @@ import {
   AppText,
   Badge,
   Button,
-  Card,
   CreateEventModal,
   EmptyState,
   ErrorState,
-  EventRosterModal,
   LoadingState,
   Screen,
 } from '@/components';
@@ -58,15 +65,20 @@ import {
   useEventRegistrations,
   usePermission,
   usePublishClubEvent,
+  useStaffCancelRegistration,
+  useStaffMarkAttendance,
 } from '@/hooks';
-import { Colors, Spacing } from '@/theme';
+import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
 import { resolveEventCover } from '@/utils/imageResolution';
 import {
+  EVENT_REGISTRATION_STATUS_LABELS,
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
   EVENT_VISIBILITY_LABELS,
   type ClubEvent,
+  type EventRegistration,
+  type EventRegistrationStatus,
 } from '@/types';
 
 function getEventThumbnailDate(iso: string) {
@@ -113,8 +125,19 @@ function formatEventSchedule(startIso: string, endIso: string) {
   }
 }
 
+function formatRegistrationDate(iso?: string | null): string {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch {
+    return iso;
+  }
+}
+
 function parseEventLocation(loc: string | null) {
-  if (!loc) return { court: 'Main Courts', city: 'Clubhouse' };
+  if (!loc) return { court: 'Main Courts', city: '' };
   if (loc.includes(',')) {
     const parts = loc.split(',');
     return { court: parts[0].trim(), city: parts.slice(1).join(',').trim() };
@@ -133,8 +156,9 @@ export default function EventDetailsScreen() {
   const { canManageEvents } = usePermission();
   const { data: clubBranding } = useClubBranding(clubId);
 
-  const [showRosterModal, setShowRosterModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<EventRegistrationStatus | 'all'>('all');
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Fetch event details
   const {
@@ -145,15 +169,21 @@ export default function EventDetailsScreen() {
     refetch,
   } = useClubEvent(clubId, eventId);
 
-  // Fetch registrations to keep capacity stats live
-  const { data: registrations = [], refetch: refetchRegistrations } = useEventRegistrations(
-    clubId,
-    eventId,
-  );
+  // Fetch registrations for live attendance, capacity and integrated participant list
+  const {
+    data: registrations = [],
+    isLoading: isLoadingRegistrations,
+    refetch: refetchRegistrations,
+  } = useEventRegistrations(clubId, eventId);
 
+  // Lifecycle mutations
   const publishMutation = usePublishClubEvent(clubId);
   const cancelMutation = useCancelClubEvent(clubId);
   const completeMutation = useCompleteClubEvent(clubId);
+
+  // Attendance mutations
+  const markAttendanceMutation = useStaffMarkAttendance(clubId, eventId);
+  const cancelRegMutation = useStaffCancelRegistration(clubId, eventId);
 
   const handleBack = () => {
     if (router.canGoBack()) {
@@ -163,6 +193,7 @@ export default function EventDetailsScreen() {
     }
   };
 
+  // Authoritative status counts
   const counts = useMemo(() => {
     let reg = 0;
     let wait = 0;
@@ -179,12 +210,40 @@ export default function EventDetailsScreen() {
     }
 
     const activeSpots = reg + att + noShow;
-    return { reg, wait, att, noShow, canc, activeSpots, total: registrations.length };
-  }, [registrations]);
+    const remainingSpaces =
+      event?.capacity !== null && event?.capacity !== undefined
+        ? Math.max(0, event.capacity - activeSpots)
+        : null;
+
+    return {
+      reg,
+      wait,
+      att,
+      noShow,
+      canc,
+      activeSpots,
+      remainingSpaces,
+      total: registrations.length,
+    };
+  }, [registrations, event?.capacity]);
+
+  // Filtered participant list
+  const filteredRegistrations = useMemo(() => {
+    if (filterStatus === 'all') return registrations;
+    return registrations.filter((r) => r.status === filterStatus);
+  }, [registrations, filterStatus]);
+
+  // Expandable subset
+  const displayedRegistrations = useMemo(() => {
+    if (isExpanded || filteredRegistrations.length <= 8) {
+      return filteredRegistrations;
+    }
+    return filteredRegistrations.slice(0, 8);
+  }, [filteredRegistrations, isExpanded]);
 
   const handlePublish = () => {
     if (!event) return;
-    Alert.alert('Publish Event', `Publish "${event.title}"? It will become visible to players.`, [
+    Alert.alert('Publish Event', `Publish "${event.title}"? It will become visible to club players.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Publish',
@@ -203,15 +262,16 @@ export default function EventDetailsScreen() {
 
   const handleCancelEvent = () => {
     if (!event) return;
-    Alert.alert('Cancel Event', `Are you sure you want to cancel "${event.title}"?`, [
+    Alert.alert('Cancel Event', `Are you sure you want to cancel "${event.title}"? Active registrations will be cancelled.`, [
       { text: 'Back', style: 'cancel' },
       {
-        text: 'Cancel Event',
+        text: 'Confirm Cancel',
         style: 'destructive',
         onPress: async () => {
           try {
             await cancelMutation.mutateAsync(event.id);
             refetch();
+            refetchRegistrations();
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Cancellation failed';
             Alert.alert('Error', msg);
@@ -247,8 +307,7 @@ export default function EventDetailsScreen() {
     const isCompleted = event.status === 'completed';
 
     const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [
-      { text: 'View Roster', onPress: () => setShowRosterModal(true) },
-      { text: 'Edit Event', onPress: () => setShowEditModal(true) },
+      { text: 'Edit Event Details', onPress: () => setShowEditModal(true) },
     ];
 
     if (isDraft) {
@@ -265,6 +324,40 @@ export default function EventDetailsScreen() {
     Alert.alert(event.title, 'Event Management Actions', options);
   };
 
+  const handleMarkAttendance = async (registrationId: string, attended: boolean) => {
+    try {
+      await markAttendanceMutation.mutateAsync({ registrationId, attended });
+      refetchRegistrations();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update attendance';
+      Alert.alert('Attendance Error', msg);
+    }
+  };
+
+  const handleCancelRegistration = (reg: EventRegistration) => {
+    const playerName = reg.user_full_name || reg.user_name || reg.user_email || 'this player';
+    Alert.alert(
+      'Cancel Registration',
+      `Cancel event registration for ${playerName}?`,
+      [
+        { text: 'Keep Spot', style: 'cancel' },
+        {
+          text: 'Confirm Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelRegMutation.mutateAsync(reg.id);
+              refetchRegistrations();
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Cancellation failed';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   // Permission check
   if (!canManageEvents) {
     return (
@@ -272,7 +365,7 @@ export default function EventDetailsScreen() {
         <AppHeader title="Event Details" showBack={true} />
         <EmptyState
           title="Access Restricted"
-          description="Only club owners and managers have permission to manage club events."
+          description="Only club owners and managers have permission to view and manage club events."
           actionLabel="Back to Events"
           onAction={handleBack}
         />
@@ -344,16 +437,16 @@ export default function EventDetailsScreen() {
 
   const statusStyle = getStatusBadgeStyle();
 
-  const capacityText =
+  const capacitySummaryText =
     event.capacity !== null && event.capacity !== undefined
-      ? `${counts.activeSpots} / ${event.capacity} spots filled`
-      : `${counts.activeSpots} participants (unlimited capacity)`;
+      ? `${counts.activeSpots} / ${event.capacity} spots filled • ${counts.remainingSpaces} spaces remaining`
+      : `${counts.activeSpots} registered participants (unlimited capacity)`;
 
   return (
     <Screen style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#F3F8F5" />
 
-      {/* Header with Back, Title, and Overflow Menu */}
+      {/* 1. COMPACT HEADER */}
       <AppHeader
         title={event.title}
         subtitle="Event Details & Management"
@@ -364,6 +457,7 @@ export default function EventDetailsScreen() {
             style={styles.headerMoreBtn}
             onPress={handleOpenActionMenu}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Event management actions"
           >
             <MoreVertical size={20} color="#102B2A" />
           </TouchableOpacity>
@@ -374,15 +468,16 @@ export default function EventDetailsScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
+            refreshing={isLoading || isLoadingRegistrations}
             onRefresh={() => {
               refetch();
               refetchRegistrations();
             }}
+            tintColor="#176B57"
           />
         }
       >
-        {/* Hero Cover Card */}
+        {/* 2. EVENT HERO COVER IMAGE */}
         <View style={styles.heroCard}>
           <Image source={cardImg} style={styles.heroImage} resizeMode="cover" />
 
@@ -400,10 +495,8 @@ export default function EventDetailsScreen() {
           </View>
         </View>
 
-        {/* Title & Badges Section */}
+        {/* 3. EVENT OVERVIEW CARD */}
         <View style={styles.sectionCard}>
-          <AppText style={styles.eventTitle}>{event.title}</AppText>
-
           <View style={styles.badgeRow}>
             <View style={styles.categoryBadge}>
               <AppText style={styles.categoryBadgeText}>
@@ -415,30 +508,21 @@ export default function EventDetailsScreen() {
                 {EVENT_VISIBILITY_LABELS[event.visibility]?.toUpperCase() || event.visibility.toUpperCase()}
               </AppText>
             </View>
+            <View style={styles.feeBadge}>
+              <AppText style={styles.feeBadgeText}>{feeDisplay}</AppText>
+            </View>
           </View>
 
-          {/* Primary View Roster Action Banner */}
-          <TouchableOpacity
-            style={styles.rosterCtaBox}
-            onPress={() => setShowRosterModal(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.rosterCtaIconCircle}>
-              <Users size={18} color="#176B57" />
-            </View>
-            <View style={styles.rosterCtaTextCol}>
-              <AppText style={styles.rosterCtaTitle}>Participant Roster</AppText>
-              <AppText style={styles.rosterCtaSubtitle}>{capacityText}</AppText>
-            </View>
-            <View style={styles.rosterCtaBtn}>
-              <AppText style={styles.rosterCtaBtnText}>View Roster →</AppText>
-            </View>
-          </TouchableOpacity>
+          {event.description ? (
+            <AppText style={styles.descriptionText}>{event.description}</AppText>
+          ) : (
+            <AppText style={styles.noDescriptionText}>No detailed description provided for this event.</AppText>
+          )}
         </View>
 
-        {/* Schedule & Location Information */}
+        {/* 4. SCHEDULE & VENUE SECTION */}
         <View style={styles.sectionCard}>
-          <AppText style={styles.sectionHeading}>Event Schedule & Venue</AppText>
+          <AppText style={styles.sectionHeading}>Schedule & Venue</AppText>
 
           <View style={styles.infoRow}>
             <View style={styles.infoIconBox}>
@@ -486,17 +570,16 @@ export default function EventDetailsScreen() {
           </View>
         </View>
 
-        {/* Description Section */}
-        {event.description ? (
-          <View style={styles.sectionCard}>
-            <AppText style={styles.sectionHeading}>About This Event</AppText>
-            <AppText style={styles.descriptionText}>{event.description}</AppText>
-          </View>
-        ) : null}
-
-        {/* Capacity Breakdown Metrics */}
+        {/* 5. INTEGRATED REGISTRATION OVERVIEW & PARTICIPANT LIST */}
         <View style={styles.sectionCard}>
-          <AppText style={styles.sectionHeading}>Registration Overview</AppText>
+          <View style={styles.rosterSectionHeader}>
+            <View>
+              <AppText style={styles.sectionHeading}>Registration Overview</AppText>
+              <AppText style={styles.rosterCapacitySubtitle}>{capacitySummaryText}</AppText>
+            </View>
+          </View>
+
+          {/* Status Metrics Bar */}
           <View style={styles.metricsRow}>
             <View style={styles.metricItem}>
               <AppText style={styles.metricNumber}>{counts.activeSpots}</AppText>
@@ -520,10 +603,196 @@ export default function EventDetailsScreen() {
               </AppText>
               <AppText style={styles.metricLabel}>No Show</AppText>
             </View>
+            <View style={styles.metricItem}>
+              <AppText style={[styles.metricNumber, { color: '#64748B' }]}>
+                {counts.canc}
+              </AppText>
+              <AppText style={styles.metricLabel}>Cancelled</AppText>
+            </View>
+          </View>
+
+          {/* Status Filter Chips */}
+          <View style={styles.rosterFilterContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rosterFilterScroll}
+            >
+              {(
+                [
+                  { key: 'all', label: `All (${counts.total})` },
+                  { key: 'registered', label: `Registered (${counts.reg})` },
+                  { key: 'waitlisted', label: `Waitlisted (${counts.wait})` },
+                  { key: 'attended', label: `Attended (${counts.att})` },
+                  { key: 'no_show', label: `No Show (${counts.noShow})` },
+                  { key: 'cancelled', label: `Cancelled (${counts.canc})` },
+                ] as const
+              ).map((chip) => {
+                const isSelected = filterStatus === chip.key;
+                return (
+                  <TouchableOpacity
+                    key={chip.key}
+                    style={[styles.rosterChip, isSelected && styles.rosterChipActive]}
+                    onPress={() => setFilterStatus(chip.key)}
+                    activeOpacity={0.8}
+                  >
+                    <AppText style={[styles.rosterChipText, isSelected && styles.rosterChipTextActive]}>
+                      {chip.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Participant Rows List */}
+          <View style={styles.participantListContainer}>
+            {filteredRegistrations.length === 0 ? (
+              <View style={styles.emptyParticipantState}>
+                <Users size={28} color="#94A3B8" style={{ marginBottom: 6 }} />
+                <AppText style={styles.emptyParticipantTitle}>
+                  {filterStatus === 'all' ? 'No registrations yet' : 'No participants found'}
+                </AppText>
+                <AppText style={styles.emptyParticipantSubtitle}>
+                  {filterStatus === 'all'
+                    ? 'No players have registered for this event yet.'
+                    : `No registrations found with status "${filterStatus}".`}
+                </AppText>
+              </View>
+            ) : (
+              <>
+                {displayedRegistrations.map((reg) => {
+                  const playerName =
+                    reg.user_full_name || reg.user_name || (reg.user_email ? reg.user_email.split('@')[0] : 'Participant');
+                  const initials = playerName
+                    .split(' ')
+                    .map((n: string) => n[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2);
+
+                  const isAttended = reg.status === 'attended';
+                  const isNoShow = reg.status === 'no_show';
+                  const isCancelledReg = reg.status === 'cancelled';
+                  const regDate = formatRegistrationDate(reg.registered_at);
+
+                  const getBadgeVariant = (st: EventRegistrationStatus) => {
+                    switch (st) {
+                      case 'attended':
+                        return 'success';
+                      case 'registered':
+                        return 'info';
+                      case 'waitlisted':
+                        return 'warning';
+                      case 'no_show':
+                        return 'error';
+                      case 'cancelled':
+                      default:
+                        return 'default';
+                    }
+                  };
+
+                  return (
+                    <View key={reg.id} style={styles.participantRow}>
+                      <View style={styles.participantLeftCol}>
+                        <View style={[styles.participantAvatar, isAttended && { backgroundColor: '#18794E' }]}>
+                          <AppText style={styles.avatarInitialsText}>{initials || 'P'}</AppText>
+                        </View>
+                        <View style={styles.participantTextCol}>
+                          <View style={styles.participantNameLine}>
+                            <AppText style={styles.participantName} numberOfLines={1}>
+                              {playerName}
+                            </AppText>
+                            <Badge
+                              label={EVENT_REGISTRATION_STATUS_LABELS[reg.status] || reg.status}
+                              variant={getBadgeVariant(reg.status)}
+                            />
+                          </View>
+                          {reg.user_email ? (
+                            <AppText style={styles.participantEmail} numberOfLines={1}>
+                              {reg.user_email}
+                            </AppText>
+                          ) : null}
+                          <AppText style={styles.participantDateText}>
+                            {regDate ? `Registered on ${regDate}` : 'Registered'}
+                          </AppText>
+                          {reg.notes ? (
+                            <AppText style={styles.participantNotesText} numberOfLines={2}>
+                              Note: {reg.notes}
+                            </AppText>
+                          ) : null}
+                        </View>
+                      </View>
+
+                      {/* Staff Attendance Quick Actions */}
+                      {!isCancelledReg && (
+                        <View style={styles.participantActionsCol}>
+                          {!isAttended && (
+                            <TouchableOpacity
+                              style={[styles.attActionBtn, styles.attActionAttended]}
+                              onPress={() => handleMarkAttendance(reg.id, true)}
+                              activeOpacity={0.8}
+                              accessibilityLabel={`Mark ${playerName} attended`}
+                            >
+                              <UserCheck size={12} color="#18794E" />
+                              <AppText style={[styles.attActionText, { color: '#18794E' }]}>
+                                Attended
+                              </AppText>
+                            </TouchableOpacity>
+                          )}
+
+                          {!isNoShow && (
+                            <TouchableOpacity
+                              style={[styles.attActionBtn, styles.attActionNoShow]}
+                              onPress={() => handleMarkAttendance(reg.id, false)}
+                              activeOpacity={0.8}
+                              accessibilityLabel={`Mark ${playerName} no-show`}
+                            >
+                              <UserX size={12} color="#9A6B00" />
+                              <AppText style={[styles.attActionText, { color: '#9A6B00' }]}>
+                                No Show
+                              </AppText>
+                            </TouchableOpacity>
+                          )}
+
+                          <TouchableOpacity
+                            style={styles.cancelSpotBtn}
+                            onPress={() => handleCancelRegistration(reg)}
+                            activeOpacity={0.8}
+                            accessibilityLabel={`Cancel registration for ${playerName}`}
+                          >
+                            <XCircle size={14} color="#B42318" />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {filteredRegistrations.length > 8 && (
+                  <TouchableOpacity
+                    style={styles.expandToggleBtn}
+                    onPress={() => setIsExpanded(!isExpanded)}
+                    activeOpacity={0.8}
+                  >
+                    <AppText style={styles.expandToggleText}>
+                      {isExpanded
+                        ? 'Show Fewer Participants'
+                        : `Show All (${filteredRegistrations.length}) Participants`}
+                    </AppText>
+                    {isExpanded ? (
+                      <ChevronUp size={16} color="#176B57" />
+                    ) : (
+                      <ChevronDown size={16} color="#176B57" />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         </View>
 
-        {/* Management Quick Actions */}
+        {/* 6. MANAGEMENT ACTIONS */}
         <View style={styles.managementSection}>
           <Button
             label="Edit Event Details"
@@ -567,18 +836,6 @@ export default function EventDetailsScreen() {
           )}
         </View>
       </ScrollView>
-
-      {/* Roster Management Modal — strictly without Add Player */}
-      <EventRosterModal
-        visible={showRosterModal}
-        event={event}
-        clubId={clubId}
-        onClose={() => {
-          setShowRosterModal(false);
-          refetch();
-          refetchRegistrations();
-        }}
-      />
 
       {/* Edit Event Modal */}
       <CreateEventModal
@@ -652,7 +909,7 @@ const styles = StyleSheet.create({
   dateOverlayDay: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     lineHeight: 20,
   },
   statusOverlayBadge: {
@@ -664,8 +921,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   statusOverlayText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 10.5,
+    fontWeight: '800',
     letterSpacing: 0.4,
   },
   sectionCard: {
@@ -673,99 +930,78 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    padding: 16,
-  },
-  eventTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#102B2A',
-    lineHeight: 26,
-    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 1,
   },
   badgeRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 8,
   },
   categoryBadge: {
     backgroundColor: '#EFF3F6',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
+    paddingVertical: 3.5,
+    borderRadius: 6,
   },
   categoryBadgeText: {
     fontSize: 10.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#475569',
   },
   visibilityBadge: {
     backgroundColor: '#EAF2FB',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 5,
+    paddingVertical: 3.5,
+    borderRadius: 6,
   },
   visibilityBadgeText: {
     fontSize: 10.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#2563A8',
   },
-  rosterCtaBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDF7F2',
-    borderWidth: 1,
-    borderColor: '#D5EAE0',
-    borderRadius: 12,
-    padding: 12,
+  feeBadge: {
+    backgroundColor: '#E5F5EC',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
   },
-  rosterCtaIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#D9EFE4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+  feeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#18794E',
   },
-  rosterCtaTextCol: {
-    flex: 1,
+  descriptionText: {
+    fontSize: 13,
+    color: '#4A5568',
+    lineHeight: 18,
   },
-  rosterCtaTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#102B2A',
-  },
-  rosterCtaSubtitle: {
-    fontSize: 11.5,
-    color: '#4A605A',
-    marginTop: 1,
-  },
-  rosterCtaBtn: {
-    backgroundColor: '#176B57',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-  },
-  rosterCtaBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11.5,
-    fontWeight: '600',
+  noDescriptionText: {
+    fontSize: 12.5,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
   sectionHeading: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#102B2A',
-    marginBottom: 12,
+    marginBottom: 4,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
     gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
   },
   infoIconBox: {
     width: 32,
@@ -781,51 +1017,222 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     fontSize: 11,
-    color: '#657776',
-    marginBottom: 1,
+    fontWeight: '600',
+    color: '#718096',
+    textTransform: 'uppercase',
   },
   infoValue: {
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '600',
     color: '#102B2A',
-  },
-  infoSubtext: {
-    fontSize: 11.5,
-    color: '#657776',
     marginTop: 1,
   },
-  descriptionText: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 19,
+  infoSubtext: {
+    fontSize: 12,
+    color: '#657776',
+    marginTop: 2,
+  },
+
+  // Roster Integrated Section
+  rosterSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  rosterCapacitySubtitle: {
+    fontSize: 12,
+    color: '#0F766E',
+    fontWeight: '600',
+    marginTop: 2,
   },
   metricsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
+    marginVertical: 10,
   },
   metricItem: {
     flex: 1,
-    backgroundColor: '#F8FAF9',
-    borderRadius: 10,
-    paddingVertical: 8,
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    backgroundColor: '#F8FAF9',
     borderWidth: 1,
-    borderColor: '#E2EAE6',
+    borderColor: '#E6ECE8',
   },
   metricNumber: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '800',
     color: '#102B2A',
   },
   metricLabel: {
-    fontSize: 10,
-    color: '#657776',
-    fontWeight: '500',
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
     marginTop: 2,
   },
+
+  // Roster Filters
+  rosterFilterContainer: {
+    marginVertical: 8,
+  },
+  rosterFilterScroll: {
+    gap: 6,
+  },
+  rosterChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  rosterChipActive: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
+  },
+  rosterChipText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#3D544F',
+  },
+  rosterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
+  // Participant List
+  participantListContainer: {
+    marginTop: 6,
+  },
+  emptyParticipantState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+  },
+  emptyParticipantTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  emptyParticipantSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+    textAlign: 'center',
+  },
+  participantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
+  },
+  participantLeftCol: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  participantAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0F392D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  avatarInitialsText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  participantTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  participantNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  participantName: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  participantEmail: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  participantDateText: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  participantNotesText: {
+    fontSize: 11,
+    color: '#B45309',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  participantActionsCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  attActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  attActionAttended: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  attActionNoShow: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+  },
+  attActionText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  cancelSpotBtn: {
+    padding: 4,
+  },
+  expandToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+    marginTop: 4,
+  },
+  expandToggleText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+
+  // Management Section
   managementSection: {
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 14,
     gap: 10,
   },
   managementBtn: {
