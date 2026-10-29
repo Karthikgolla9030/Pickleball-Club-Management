@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, computed_field, field_validator
 
 _EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -30,5 +30,16 @@ class UserResponse(UserBase):
     is_verified: bool
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def is_platform_admin(self) -> bool:
+        """Dynamically evaluate whether user is an authorized platform administrator."""
+        try:
+            from app.core.config import get_settings
+            owners = {e.lower().strip() for e in get_settings().PLATFORM_OWNER_EMAILS}
+            return bool(self.email and self.email.lower().strip() in owners)
+        except Exception:
+            return False
 
     model_config = {"from_attributes": True}

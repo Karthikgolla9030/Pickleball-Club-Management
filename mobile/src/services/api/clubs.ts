@@ -64,9 +64,42 @@ export const clubsApi = {
 
   /**
    * Get public profile info for a club (accessible without club membership).
+   * Supports either club UUID or URL slug.
+   * If slug is provided and the server requires UUID, dynamically resolves via public listing.
    */
-  getPublicClub(clubId: string): Promise<Club> {
-    return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/${clubId}/public`);
+  async getPublicClub(clubIdOrSlug: string): Promise<Club> {
+    const raw = (clubIdOrSlug || '').trim();
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw);
+
+    if (isUUID) {
+      return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/${encodeURIComponent(raw)}/public`);
+    }
+
+    // Try slug endpoint first
+    try {
+      return await apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/slug/${encodeURIComponent(raw)}/public`);
+    } catch {
+      // If backend rejects slug on /{id}/public with 422 or /slug/... with 404, resolve slug via discovery
+      try {
+        const discovery = await clubsApi.discoverPublicClubs({ search: raw });
+        const matched = discovery.items.find(
+          (c) => c.slug?.toLowerCase() === raw.toLowerCase() || c.id === raw
+        );
+        if (matched) {
+          return matched;
+        }
+      } catch {}
+
+      // Fallback: direct attempt on endpoint
+      return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/${encodeURIComponent(raw)}/public`);
+    }
+  },
+
+  /**
+   * Explicitly retrieve public club info by URL slug.
+   */
+  getPublicClubBySlug(slug: string): Promise<Club> {
+    return apiClient.get<Club>(`${API_ENDPOINTS.CLUBS}/slug/${encodeURIComponent(slug)}/public`);
   },
 
   /**

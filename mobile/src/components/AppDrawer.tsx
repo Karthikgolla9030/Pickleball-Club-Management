@@ -54,6 +54,7 @@ import {
 import { AppText } from './AppText';
 import { useDrawerStore } from '@/navigation';
 import { useAuth, useActiveClub } from '@/hooks';
+import { isPlatformAdminEmail } from '@/constants';
 
 interface NavItemConfig {
   key: string;
@@ -76,11 +77,16 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   // Responsive drawer width: comfortably fits narrow screens (320px) while leaving tap-to-dismiss margin
   const drawerWidth = Math.min(Math.max(windowWidth * 0.82, 280), 340);
 
-  const { user, memberships, logout } = useAuth();
+  const { user, memberships, logout, activePortal } = useAuth();
   const { role, activeMembership } = useActiveClub();
 
+  const isPlatformAdmin = Boolean(
+    user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
+  );
+
   // Strict check: if mode is player OR user has no active club membership -> Player experience
-  const isPlayer = mode === 'player' || memberships.length === 0 || !activeMembership;
+  // Platform Administrator is strictly distinct from player accounts.
+  const isPlayer = !isPlatformAdmin && (mode === 'player' || memberships.length === 0 || !activeMembership);
 
   // Android back button handler
   useEffect(() => {
@@ -118,9 +124,12 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   const handleSignOut = async () => {
     closeDrawer();
     try {
+      const wasPlatformAdmin = isPlatformAdmin;
       const wasPlayer = isPlayer;
       await logout();
-      if (wasPlayer) {
+      if (wasPlatformAdmin) {
+        router.replace('/platform/login' as any);
+      } else if (wasPlayer) {
         router.replace('/(auth)/login?portal=player' as any);
       } else {
         router.replace('/(auth)/login?portal=club' as any);
@@ -130,9 +139,9 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     }
   };
 
-  const displayName = user?.full_name || (user as any)?.display_name || (isPlayer ? 'Player' : 'Staff Member');
+  const displayName = user?.full_name || (user as any)?.display_name || (isPlatformAdmin ? 'Platform Administrator' : isPlayer ? 'Player' : 'Staff Member');
   const email = user?.email || '';
-  const initial = displayName.charAt(0).toUpperCase() || (isPlayer ? 'P' : 'S');
+  const initial = displayName.charAt(0).toUpperCase() || (isPlatformAdmin ? 'P' : isPlayer ? 'P' : 'S');
 
   // Role Badge configuration
   let roleLabel = 'Player';
@@ -140,7 +149,12 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   let roleBadgeBg = '#E4F4EC';
   let roleBadgeColor = '#176F5B';
 
-  if (!isPlayer) {
+  if (isPlatformAdmin) {
+    roleLabel = 'Platform Administrator';
+    RoleIcon = ShieldCheck;
+    roleBadgeBg = '#E0F2FE';
+    roleBadgeColor = '#0E7490';
+  } else if (!isPlayer) {
     if (role === 'club_owner') {
       roleLabel = 'Club Owner';
       RoleIcon = Crown;
@@ -158,6 +172,17 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       roleBadgeColor = '#B45309';
     }
   }
+
+  // ─── 0. PLATFORM ADMIN NAVIGATION ──────────────────────────────────────────
+  const platformAdminActivities: NavItemConfig[] = [
+    { key: 'platform_dashboard', label: 'Platform Dashboard', icon: Home, route: '/platform' },
+    { key: 'platform_clubs', label: 'Clubs Directory', icon: Building2, route: '/platform/clubs' },
+    { key: 'platform_applications', label: 'Club Applications', icon: FileText, route: '/platform/applications' },
+    { key: 'platform_users', label: 'Platform Users', icon: Users, route: '/platform/users' },
+    { key: 'platform_audit', label: 'Audit Logs', icon: ShieldCheck, route: '/platform/audit' },
+    { key: 'platform_settings', label: 'Platform Settings', icon: Settings, route: '/platform/settings' },
+    { key: 'platform_support', label: 'Support & Tickets', icon: HelpCircle, route: '/platform/support' },
+  ];
 
   // ─── 1. PLAYER NAVIGATION ─────────────────────────────────────────────────
   const playerActivities: NavItemConfig[] = [
@@ -370,7 +395,11 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
         <View style={styles.profileDivider} />
 
-        {isPlayer ? (
+        {isPlatformAdmin ? (
+          <View style={styles.itemGroup}>
+            {platformAdminActivities.map(renderNavRow)}
+          </View>
+        ) : isPlayer ? (
           <>
             {/* Player Main Activities */}
             <View style={styles.itemGroup}>

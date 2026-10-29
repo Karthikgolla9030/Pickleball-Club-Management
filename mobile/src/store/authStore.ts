@@ -17,9 +17,9 @@ import { create } from 'zustand';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
-import { SECURE_STORE_KEYS } from '@/constants';
+import { SECURE_STORE_KEYS, isPlatformAdminEmail } from '@/constants';
 import { authApi, setTokenProvider, setTokenRefreshHandler } from '@/services/api';
-import type { AuthSession, MembershipInfo } from '@/types';
+import type { AuthPortal, AuthSession, MembershipInfo } from '@/types';
 
 interface AuthStoreState extends AuthSession {
   // Actions
@@ -31,6 +31,7 @@ interface AuthStoreState extends AuthSession {
   registerPlayer: (fullName: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setActiveMembership: (membership: MembershipInfo) => void;
+  setActivePortal: (portal: AuthPortal) => void;
   refreshMemberships: () => Promise<void>;
   clearError: () => void;
   error: string | null;
@@ -42,6 +43,7 @@ interface AuthStoreState extends AuthSession {
 
 let _memoryAccessToken: string | null = null;
 let _memoryRefreshToken: string | null = null;
+let _memoryActivePortal: AuthPortal | null = null;
 const memoryStorage: Record<string, string> = {};
 
 function getWebStorage(): Storage | null {
@@ -109,6 +111,75 @@ export async function clearTokens(): Promise<void> {
       SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACCESS_TOKEN),
       SecureStore.deleteItemAsync(SECURE_STORE_KEYS.REFRESH_TOKEN),
     ]);
+  } catch {}
+}
+
+export async function saveActivePortal(portal: AuthPortal): Promise<void> {
+  _memoryActivePortal = portal;
+  memoryStorage[SECURE_STORE_KEYS.ACTIVE_PORTAL] = portal;
+
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        storage.setItem(SECURE_STORE_KEYS.ACTIVE_PORTAL, portal);
+      } catch {}
+    }
+    return;
+  }
+
+  try {
+    await SecureStore.setItemAsync(SECURE_STORE_KEYS.ACTIVE_PORTAL, portal);
+  } catch {}
+}
+
+export async function getStoredPortal(): Promise<AuthPortal | null> {
+  if (_memoryActivePortal) return _memoryActivePortal;
+
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        const val = storage.getItem(SECURE_STORE_KEYS.ACTIVE_PORTAL);
+        if (val === 'platform' || val === 'club' || val === 'player') {
+          _memoryActivePortal = val;
+          return val;
+        }
+      } catch {}
+    }
+    const memVal = memoryStorage[SECURE_STORE_KEYS.ACTIVE_PORTAL];
+    if (memVal === 'platform' || memVal === 'club' || memVal === 'player') {
+      return memVal;
+    }
+    return null;
+  }
+
+  try {
+    const val = await SecureStore.getItemAsync(SECURE_STORE_KEYS.ACTIVE_PORTAL);
+    if (val === 'platform' || val === 'club' || val === 'player') {
+      _memoryActivePortal = val;
+      return val;
+    }
+  } catch {}
+  return null;
+}
+
+export async function clearActivePortal(): Promise<void> {
+  _memoryActivePortal = null;
+  delete memoryStorage[SECURE_STORE_KEYS.ACTIVE_PORTAL];
+
+  if (Platform.OS === 'web') {
+    const storage = getWebStorage();
+    if (storage) {
+      try {
+        storage.removeItem(SECURE_STORE_KEYS.ACTIVE_PORTAL);
+      } catch {}
+    }
+    return;
+  }
+
+  try {
+    await SecureStore.deleteItemAsync(SECURE_STORE_KEYS.ACTIVE_PORTAL);
   } catch {}
 }
 
@@ -207,6 +278,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   user: null,
   memberships: [],
   activeMembership: null,
+  activePortal: null,
   isAuthenticated: false,
   isLoading: true, // Start loading until initialize() completes
   error: null,
@@ -235,7 +307,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       }
 
       if (!accessToken) {
-        set({ isLoading: false, isAuthenticated: false });
+        await clearActivePortal();
+        set({ isLoading: false, isAuthenticated: false, activePortal: null });
         return;
       }
 
@@ -246,20 +319,45 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           ? currentActive
           : response.memberships[0] ?? null;
 
+      // Authoritative portal resolution:
+      // Validates stored preference against backend-verified roles to prevent privilege spoofing
+      const storedPortal = await getStoredPortal();
+      const isPlatformUser = Boolean(
+        response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+      );
+
+      let resolvedPortal: AuthPortal = 'player';
+      if (isPlatformUser) {
+        resolvedPortal = 'platform';
+      } else if (storedPortal === 'club' && response.memberships.length > 0) {
+        resolvedPortal = 'club';
+      } else if (storedPortal === 'player') {
+        resolvedPortal = 'player';
+      } else if (response.memberships.length > 0) {
+        resolvedPortal = 'club';
+      } else {
+        resolvedPortal = 'player';
+      }
+
+      await saveActivePortal(resolvedPortal);
+
       set({
         user: response.user,
         memberships: response.memberships,
         activeMembership: validActive,
+        activePortal: resolvedPortal,
         isAuthenticated: true,
         isLoading: false,
       });
     } catch {
       // Token invalid or expired and refresh failed — clear and force re-login
       await clearTokens();
+      await clearActivePortal();
       set({
         user: null,
         memberships: [],
         activeMembership: null,
+        activePortal: null,
         isAuthenticated: false,
         isLoading: false,
       });
@@ -279,11 +377,21 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       await saveTokens(response.access_token, response.refresh_token);
 
       const activeMembership = response.memberships[0] ?? null;
+      const isPlatformUser = Boolean(
+        response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+      );
+      const portal: AuthPortal = isPlatformUser
+        ? 'platform'
+        : response.memberships.length > 0
+          ? 'club'
+          : 'player';
+      await saveActivePortal(portal);
 
       set({
         user: response.user,
         memberships: response.memberships,
         activeMembership,
+        activePortal: portal,
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -305,12 +413,14 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const response = await authApi.loginClub(email, password);
       await saveTokens(response.access_token, response.refresh_token);
+      await saveActivePortal('club');
       const activeMembership = response.memberships[0] ?? null;
 
       set({
         user: response.user,
         memberships: response.memberships,
         activeMembership,
+        activePortal: 'club',
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -331,11 +441,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const response = await authApi.loginPlayer(email, password);
       await saveTokens(response.access_token, response.refresh_token);
+      await saveActivePortal('player');
 
       set({
         user: response.user,
         memberships: [],
         activeMembership: null,
+        activePortal: 'player',
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -357,11 +469,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const response = await authApi.loginPlatform(email, password);
       await saveTokens(response.access_token, response.refresh_token);
+      await saveActivePortal('platform');
 
       set({
         user: response.user,
         memberships: [],
         activeMembership: null,
+        activePortal: 'platform',
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -382,11 +496,13 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const response = await authApi.registerPlayer(email, password, fullName);
       await saveTokens(response.access_token, response.refresh_token);
+      await saveActivePortal('player');
 
       set({
         user: response.user,
         memberships: [],
         activeMembership: null,
+        activePortal: 'player',
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -404,6 +520,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
    */
   logout: async () => {
     await clearTokens();
+    await clearActivePortal();
     _onLogoutCallbacks.forEach((cb) => {
       try {
         cb();
@@ -416,6 +533,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       user: null,
       memberships: [],
       activeMembership: null,
+      activePortal: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
@@ -424,6 +542,11 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
 
   setActiveMembership: (membership: MembershipInfo) => {
     set({ activeMembership: membership });
+  },
+
+  setActivePortal: (portal: AuthPortal) => {
+    saveActivePortal(portal);
+    set({ activePortal: portal });
   },
 
   refreshMemberships: async () => {

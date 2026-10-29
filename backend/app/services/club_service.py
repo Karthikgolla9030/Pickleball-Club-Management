@@ -482,11 +482,21 @@ class ClubService:
 
         return ClubResponse.model_validate(updated)
 
-    async def get_public_club(self, club_id: UUID) -> PublicClubResponse:
+    async def get_public_club(self, identifier: str | UUID) -> PublicClubResponse:
         """
         Return public club information for players and discovery.
+        Supports lookup by UUID or slug string without exposing private data.
         """
-        club = await self.club_repo.get_by_id(club_id)
+        club = None
+        if isinstance(identifier, UUID):
+            club = await self.club_repo.get_by_id(identifier)
+        else:
+            try:
+                club_uuid = UUID(str(identifier).strip())
+                club = await self.club_repo.get_by_id(club_uuid)
+            except (ValueError, AttributeError):
+                club = await self.club_repo.get_by_slug(str(identifier).strip().lower())
+
         if not club or not club.is_active:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -508,6 +518,10 @@ class ClubService:
         data.court_count = court_count or 0
         data.member_count = member_count or 0
         return data
+
+    async def get_public_club_by_slug(self, slug: str) -> PublicClubResponse:
+        """Convenience method for explicit slug lookup."""
+        return await self.get_public_club(identifier=slug)
 
     async def get_membership(
         self, user_id: UUID, club_id: UUID

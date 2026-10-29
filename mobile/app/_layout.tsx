@@ -22,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore, registerLogoutHandler } from '@/store';
+import { isPlatformAdminEmail } from '@/constants';
 import { WebSocketProvider } from '@/context/WebSocketContext';
 
 const queryClient = new QueryClient({
@@ -41,6 +42,10 @@ function RootLayoutContent() {
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  const memberships = useAuthStore((s) => s.memberships);
+  const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
   const segments = useSegments();
   const router = useRouter();
 
@@ -55,15 +60,58 @@ function RootLayoutContent() {
 
   const rootSegment = segments[0] as string | undefined;
 
-  // Auth route guard: prevent access to authenticated screens when session is terminated
+  // Centralized Route Guard: enforces authentication, role boundaries, and portal isolation
   useEffect(() => {
     if (isLoading) return;
-    const inAuthGroup = rootSegment === '(auth)' || rootSegment === 'platform';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      router.replace('/(auth)/login');
+    const inAuthGroup = rootSegment === '(auth)';
+    const isPublicClubRoute = rootSegment === 'club';
+
+    // 1. Unauthenticated route protection
+    if (!isAuthenticated) {
+      if (!inAuthGroup && !isPublicClubRoute) {
+        if (rootSegment === 'platform') {
+          router.replace('/platform/login' as any);
+        } else {
+          router.replace('/(auth)/login');
+        }
+      }
+      return;
     }
-  }, [isLoading, isAuthenticated, rootSegment, router]);
+
+    // 2. Strict portal & role boundaries for authenticated users:
+    const isPlatformAdmin = Boolean(
+      user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
+    );
+
+    // A. Platform portal is strictly reserved for authorized platform administrators
+    if (rootSegment === 'platform' && segments[1] !== 'login') {
+      if (!isPlatformAdmin) {
+        if (memberships.length > 0) {
+          router.replace('/(club)');
+        } else {
+          router.replace('/(player)');
+        }
+        return;
+      }
+    }
+
+    // B. Platform Admin must NEVER be placed in Player or Club portals
+    if (isPlatformAdmin) {
+      if (rootSegment === '(player)' || rootSegment === '(club)') {
+        router.replace('/platform' as any);
+        return;
+      }
+    }
+
+    // C. Non-staff players cannot enter club management screens
+    if (rootSegment === '(club)') {
+      if (memberships.length === 0 || !activeMembership) {
+        router.replace('/(player)');
+        return;
+      }
+    }
+  }, [isLoading, isAuthenticated, user, memberships, activeMembership, activePortal, rootSegment, segments, router]);
 
   return (
     <>
@@ -74,6 +122,7 @@ function RootLayoutContent() {
         <Stack.Screen name="(player)" />
         <Stack.Screen name="(club)" />
         <Stack.Screen name="platform" />
+        <Stack.Screen name="club" />
       </Stack>
     </>
   );

@@ -20,6 +20,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 
 import { AppDrawer, AppBottomNav, DrawerOverlay } from '@/components';
 import { useAuthStore } from '@/store';
+import { isPlatformAdminEmail } from '@/constants';
 import { Colors } from '@/theme';
 
 export default function ClubLayout() {
@@ -27,15 +28,27 @@ export default function ClubLayout() {
   const pathname = usePathname();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
   const memberships = useAuthStore((s) => s.memberships);
   const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
 
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/login?portal=club');
       return;
     }
+
+    // Platform Admin users without club staff memberships must stay in the Platform portal
+    const isPlatformAdmin = Boolean(
+      user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
+    );
+    if (isPlatformAdmin && memberships.length === 0) {
+      router.replace('/platform' as any);
+      return;
+    }
+
     // Allow club registration for authenticated users
     if (pathname === '/(club)/register-club' || pathname.startsWith('/(club)/register-club')) {
       return;

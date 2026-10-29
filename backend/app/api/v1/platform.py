@@ -360,6 +360,67 @@ async def list_platform_clubs(
     }
 
 
+@router.get(
+    "/clubs/{club_id}",
+    summary="Get single platform club details for inspection",
+    description="Returns complete administrative details for a specific club.",
+    responses={
+        403: {"description": "Platform owner authorization required"},
+        404: {"description": "Club not found"},
+    },
+)
+async def get_platform_club_details(
+    club_id: UUID,
+    current_platform_owner: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Retrieve full details of a specific club for administrative inspection."""
+    from sqlalchemy import func, select
+    from app.models.club import Club
+    from app.models.club_membership import ClubMembership
+
+    club = await db.get(Club, club_id)
+    if not club:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Club facility not found",
+        )
+
+    active_members_count = await db.scalar(
+        select(func.count(ClubMembership.id)).where(
+            ClubMembership.club_id == club.id,
+            ClubMembership.is_active == True,  # noqa: E712
+        )
+    )
+
+    return {
+        "id": str(club.id),
+        "name": club.name,
+        "slug": club.slug,
+        "logo_url": club.logo_url,
+        "cover_image_url": club.cover_image_url,
+        "is_active": club.is_active,
+        "short_description": club.short_description,
+        "description": club.description,
+        "city": club.city,
+        "state": club.state,
+        "country": club.country or "United States",
+        "address_line1": club.address_line1,
+        "address_line2": club.address_line2,
+        "postal_code": club.postal_code,
+        "contact_email": club.contact_email,
+        "contact_phone": club.contact_phone,
+        "website": club.website,
+        "established_year": club.established_year,
+        "operating_days": club.operating_days,
+        "opening_time": str(club.opening_time) if club.opening_time else None,
+        "closing_time": str(club.closing_time) if club.closing_time else None,
+        "timezone": club.timezone,
+        "created_at": club.created_at.isoformat() if club.created_at else None,
+        "active_members_count": active_members_count or 0,
+    }
+
+
 def _map_user_to_platform_item(u: User) -> PlatformUserItem:
     staff_list = []
     for m in (u.club_memberships or []):

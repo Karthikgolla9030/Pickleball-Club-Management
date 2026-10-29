@@ -516,7 +516,7 @@ export default function ClubCourtsScreen() {
     setFormPhotoUrl(court.photo_url || null);
     setFormInterval(court.booking_interval_minutes || 60);
 
-    let operatingHoursObj: any = court.operating_hours;
+    let operatingHoursObj = court.operating_hours;
     if (typeof operatingHoursObj === 'string') {
       try {
         operatingHoursObj = JSON.parse(operatingHoursObj);
@@ -579,7 +579,7 @@ export default function ClubCourtsScreen() {
           if (res.booking_interval_minutes) {
             setFormInterval(res.booking_interval_minutes);
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     }
 
@@ -1946,7 +1946,7 @@ export default function ClubCourtsScreen() {
                       style={[
                         styles.actionSheetItem,
                         sortedAllCourts.findIndex((c) => c.id === selectedCourtForActions.id) ===
-                          0 && styles.actionSheetItemDisabled,
+                        0 && styles.actionSheetItemDisabled,
                       ]}
                       disabled={
                         sortedAllCourts.findIndex((c) => c.id === selectedCourtForActions.id) === 0
@@ -1965,11 +1965,11 @@ export default function ClubCourtsScreen() {
                       style={[
                         styles.actionSheetItem,
                         sortedAllCourts.findIndex((c) => c.id === selectedCourtForActions.id) ===
-                          sortedAllCourts.length - 1 && styles.actionSheetItemDisabled,
+                        sortedAllCourts.length - 1 && styles.actionSheetItemDisabled,
                       ]}
                       disabled={
                         sortedAllCourts.findIndex((c) => c.id === selectedCourtForActions.id) ===
-                          sortedAllCourts.length - 1
+                        sortedAllCourts.length - 1
                       }
                       onPress={() => {
                         handleMoveCourt(selectedCourtForActions, 'down');

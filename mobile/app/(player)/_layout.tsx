@@ -15,19 +15,33 @@ import { Stack, useRouter } from 'expo-router';
 
 import { AppDrawer, AppBottomNav, DrawerOverlay } from '@/components';
 import { useAuthStore } from '@/store';
+import { isPlatformAdminEmail } from '@/constants';
 import { Colors } from '@/theme';
 
 export default function PlayerLayout() {
   const router = useRouter();
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  const activePortal = useAuthStore((s) => s.activePortal);
+  const memberships = useAuthStore((s) => s.memberships);
 
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/login?portal=player');
+      return;
     }
-  }, [isAuthenticated, isLoading, router]);
+
+    // Platform Admin users belong in the Platform Admin Portal and must not be treated as Players
+    const isPlatformAdmin = Boolean(
+      user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
+    );
+    if (isPlatformAdmin) {
+      router.replace('/platform' as any);
+      return;
+    }
+  }, [isAuthenticated, isLoading, user, activePortal, memberships, router]);
 
   return (
     <View style={styles.container}>

@@ -263,6 +263,7 @@ export const API_ENDPOINTS = {
 export const SECURE_STORE_KEYS = {
   ACCESS_TOKEN: 'aught2_access_token',
   REFRESH_TOKEN: 'aught2_refresh_token',
+  ACTIVE_PORTAL: 'aught2_active_portal',
 } as const;
 
 export const QUERY_KEYS = {
@@ -504,3 +505,17 @@ export const APP_CONFIG = {
   API_MUTATION_TIMEOUT_MS: 60000,
   TOKEN_REFRESH_BUFFER_MS: 60 * 1000, // Refresh 60s before expiry
 } as const;
+
+export const PLATFORM_ADMIN_EMAILS: readonly string[] = [
+  'admin@pickleball.com',
+  'platform.owner@pickleball.com',
+  'platform@pickleball.com',
+  'platform.owner@aught2.com',
+  'platform@aught2.com',
+] as const;
+
+export function isPlatformAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return PLATFORM_ADMIN_EMAILS.some((e) => e.toLowerCase() === normalized);
+}

@@ -21,6 +21,7 @@ export interface User {
   full_name: string | null;
   is_active: boolean;
   is_verified: boolean;
+  is_platform_admin?: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -629,10 +630,13 @@ export interface TokenRefreshResponse {
 // Stored in Zustand (non-sensitive metadata only).
 // Tokens are stored in SecureStore, not here.
 
+export type AuthPortal = 'platform' | 'club' | 'player';
+
 export interface AuthSession {
   user: User | null;
   memberships: MembershipInfo[];
   activeMembership: MembershipInfo | null;
+  activePortal: AuthPortal | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }

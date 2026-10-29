@@ -21,6 +21,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Image,
+  Linking,
   Modal,
   Platform,
   RefreshControl,
@@ -52,6 +53,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  ShieldCheck,
   SlidersHorizontal,
   User,
   Users,
@@ -77,6 +79,9 @@ import {
 import { Radius, Spacing } from '@/theme';
 import { resolveMediaUrl } from '@/utils';
 
+const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
+const DEFAULT_LOGO = require('../../assets/pickleball_logo_primary.png');
+
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 function formatRegistrationDate(dateStr?: string | null): string {
@@ -100,6 +105,37 @@ export default function PlatformClubsScreen() {
 
   // Detail Modal
   const [selectedClub, setSelectedClub] = useState<PlatformClubItem | null>(null);
+
+  // Administrative Public Facility Preview (In-App Preview without portal/session switching)
+  const [previewClub, setPreviewClub] = useState<PlatformClubItem | null>(null);
+
+  const openPublicPreview = (club: PlatformClubItem) => {
+    setSelectedClub(null);
+    setPreviewClub(club);
+  };
+
+  const closePublicPreview = () => {
+    const club = previewClub;
+    setPreviewClub(null);
+    if (club) {
+      setSelectedClub(club);
+    }
+  };
+
+  const handleViewPublicClub = (club: PlatformClubItem) => {
+    setSelectedClub(null);
+    const identifier = club.slug || club.id;
+    router.push(`/club/${encodeURIComponent(identifier)}` as any);
+  };
+
+  const handleOpenInNewTab = (club: PlatformClubItem) => {
+    const targetUrl = `/club/${club.slug || club.id}`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(targetUrl, '_blank');
+    } else {
+      Linking.openURL(targetUrl).catch(() => {});
+    }
+  };
 
   // Status Change State (Suspend / Reactivate)
   const [statusTarget, setStatusTarget] = useState<{
@@ -641,7 +677,7 @@ export default function PlatformClubsScreen() {
                       variant="outline"
                       size="sm"
                       style={{ flex: 1, height: 40 }}
-                      onPress={() => router.push(`/club/${selectedClub.slug}` as any)}
+                      onPress={() => handleViewPublicClub(selectedClub)}
                       leftIcon={<ExternalLink size={14} color="#18794E" />}
                     />
                   </View>
@@ -649,6 +685,203 @@ export default function PlatformClubsScreen() {
               )}
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* ─── Administrative Public Facility Preview Modal ──────────────────────── */}
+      <Modal
+        visible={!!previewClub}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={closePublicPreview}
+      >
+        <View style={styles.previewModalContainer}>
+          {/* Header Bar */}
+          <View style={styles.previewHeaderBar}>
+            <View style={styles.previewHeaderLeft}>
+              <View style={styles.previewShieldBadge}>
+                <ShieldCheck size={14} color="#0E7490" />
+                <AppText style={styles.previewShieldText}>ADMIN PREVIEW</AppText>
+              </View>
+              <AppText variant="heading3" color="primary" numberOfLines={1}>
+                {previewClub?.name}
+              </AppText>
+            </View>
+
+            <View style={styles.previewHeaderActions}>
+              <TouchableOpacity
+                style={styles.newTabBtn}
+                onPress={() => previewClub && handleOpenInNewTab(previewClub)}
+                activeOpacity={0.8}
+                accessibilityLabel="Open in new browser tab"
+              >
+                <ExternalLink size={14} color="#176F5B" />
+                <AppText style={styles.newTabBtnText}>Open New Tab</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.closePreviewBtn}
+                onPress={closePublicPreview}
+                activeOpacity={0.8}
+                accessibilityLabel="Close facility preview"
+              >
+                <X size={18} color="#15362B" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {previewClub && (
+            <ScrollView
+              contentContainerStyle={styles.previewScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Notice Banner */}
+              <View style={styles.previewNoticeCard}>
+                <Info size={16} color="#0E7490" style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <AppText style={styles.previewNoticeTitle}>Public Facility Inspection Mode</AppText>
+                  <AppText style={styles.previewNoticeBody}>
+                    Previewing this club facility as prospective players and the public see it. Platform Administrator session and permissions remain completely isolated.
+                  </AppText>
+                </View>
+              </View>
+
+              {/* Hero Banner Card */}
+              <View style={styles.previewHeroCard}>
+                <Image
+                  source={
+                    previewClub.cover_image_url
+                      ? { uri: resolveMediaUrl(previewClub.cover_image_url) }
+                      : DEFAULT_BANNER
+                  }
+                  style={styles.previewHeroImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.previewHeroOverlay} />
+
+                <View style={styles.previewHeroContent}>
+                  <View style={styles.previewTopRow}>
+                    <View style={styles.previewLogoWrap}>
+                      <Image
+                        source={
+                          previewClub.logo_url
+                            ? { uri: resolveMediaUrl(previewClub.logo_url) }
+                            : DEFAULT_LOGO
+                        }
+                        style={styles.previewLogo}
+                        resizeMode="contain"
+                      />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.previewStatusPill,
+                        { backgroundColor: previewClub.is_active ? 'rgba(234, 246, 240, 0.95)' : 'rgba(254, 226, 226, 0.95)' },
+                      ]}
+                    >
+                      <CheckCircle2
+                        size={12}
+                        color={previewClub.is_active ? '#15803D' : '#DC2626'}
+                        strokeWidth={2.4}
+                      />
+                      <AppText
+                        style={[
+                          styles.previewStatusText,
+                          { color: previewClub.is_active ? '#15803D' : '#DC2626' },
+                        ]}
+                      >
+                        {previewClub.is_active ? 'ACTIVE' : 'SUSPENDED'}
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <AppText variant="heading2" style={styles.previewClubName}>
+                    {previewClub.name}
+                  </AppText>
+
+                  {previewClub.short_description ? (
+                    <AppText style={styles.previewTagline}>
+                      {previewClub.short_description}
+                    </AppText>
+                  ) : null}
+
+                  <View style={styles.previewMetaCol}>
+                    <View style={styles.previewMetaItem}>
+                      <MapPin size={13} color="#C4DDD4" />
+                      <AppText style={styles.previewMetaText}>
+                        {[previewClub.address_line1, previewClub.city, previewClub.state, previewClub.country]
+                          .filter(Boolean)
+                          .join(', ') || 'Address not listed'}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.previewMetaItem}>
+                      <Clock size={13} color="#C4DDD4" />
+                      <AppText style={styles.previewMetaText}>
+                        {previewClub.operating_days || 'Mon - Sun'} · {previewClub.opening_time ? `${previewClub.opening_time.slice(0, 5)} - ${previewClub.closing_time?.slice(0, 5)}` : 'Standard Hours'} ({previewClub.timezone || 'UTC'})
+                      </AppText>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Facility Metrics Card */}
+              <View style={styles.previewSectionCard}>
+                <AppText variant="heading3" color="primary">Facility Overview</AppText>
+                <View style={styles.previewMetricsGrid}>
+                  <View style={styles.previewMetricItem}>
+                    <AppText style={styles.previewMetricVal}>{previewClub.active_members_count ?? 0}</AppText>
+                    <AppText style={styles.previewMetricLbl}>Active Members</AppText>
+                  </View>
+                  <View style={styles.previewMetricItem}>
+                    <AppText style={styles.previewMetricVal}>/{previewClub.slug}</AppText>
+                    <AppText style={styles.previewMetricLbl}>Public Slug</AppText>
+                  </View>
+                  <View style={styles.previewMetricItem}>
+                    <AppText style={styles.previewMetricVal}>{previewClub.timezone || 'UTC'}</AppText>
+                    <AppText style={styles.previewMetricLbl}>Timezone</AppText>
+                  </View>
+                </View>
+              </View>
+
+              {/* About Section */}
+              <View style={styles.previewSectionCard}>
+                <AppText variant="heading3" color="primary">About This Club</AppText>
+                <AppText style={styles.previewAboutBody}>
+                  {previewClub.description || previewClub.short_description || `${previewClub.name} is a verified pickleball facility registered on the platform.`}
+                </AppText>
+
+                <View style={styles.previewContactList}>
+                  {previewClub.contact_email ? (
+                    <View style={styles.previewContactRow}>
+                      <Mail size={15} color="#5A716A" />
+                      <AppText style={styles.previewContactText}>{previewClub.contact_email}</AppText>
+                    </View>
+                  ) : null}
+
+                  {previewClub.contact_phone ? (
+                    <View style={styles.previewContactRow}>
+                      <Phone size={15} color="#5A716A" />
+                      <AppText style={styles.previewContactText}>{previewClub.contact_phone}</AppText>
+                    </View>
+                  ) : null}
+
+                  {previewClub.website ? (
+                    <TouchableOpacity
+                      style={styles.previewContactRow}
+                      onPress={() => Linking.openURL(previewClub.website!.startsWith('http') ? previewClub.website! : `https://${previewClub.website}`)}
+                      activeOpacity={0.7}
+                    >
+                      <Globe size={15} color="#176F5B" />
+                      <AppText style={[styles.previewContactText, { color: '#176F5B', textDecorationLine: 'underline' }]}>
+                        {previewClub.website}
+                      </AppText>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </Modal>
 
@@ -1452,5 +1685,234 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+
+  // ─── Administrative Public Facility Preview Modal ──────────────────────────
+  previewModalContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAF9',
+  },
+  previewHeaderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  previewHeaderLeft: {
+    flex: 1,
+    gap: 4,
+    marginRight: 12,
+  },
+  previewShieldBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  previewShieldText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0369A1',
+    letterSpacing: 0.5,
+  },
+  previewHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  newTabBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#D1E5DE',
+    backgroundColor: '#F0FDF4',
+  },
+  newTabBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#15803D',
+  },
+  closePreviewBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  previewScrollContent: {
+    padding: 16,
+    gap: 16,
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
+    paddingBottom: 48,
+  },
+  previewNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    borderRadius: Radius.lg,
+    padding: 12,
+  },
+  previewNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0369A1',
+    marginBottom: 2,
+  },
+  previewNoticeBody: {
+    fontSize: 12,
+    color: '#0284C7',
+    lineHeight: 17,
+  },
+  previewHeroCard: {
+    position: 'relative',
+    borderRadius: Radius.xl,
+    overflow: 'hidden',
+    minHeight: 200,
+    backgroundColor: '#0F172A',
+  },
+  previewHeroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  previewHeroOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+  },
+  previewHeroContent: {
+    padding: 20,
+    gap: 10,
+    position: 'relative',
+  },
+  previewTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  previewLogoWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: Radius.lg,
+    backgroundColor: '#FFFFFF',
+    padding: 4,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  previewLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  previewStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  previewStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  previewClubName: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  previewTagline: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  previewMetaCol: {
+    gap: 6,
+    marginTop: 4,
+  },
+  previewMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  previewMetaText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+  },
+  previewSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 12,
+  },
+  previewMetricsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  previewMetricItem: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  previewMetricVal: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  previewMetricLbl: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  previewAboutBody: {
+    fontSize: 13,
+    color: '#475569',
+    lineHeight: 20,
+  },
+  previewContactList: {
+    gap: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  previewContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewContactText: {
+    fontSize: 13,
+    color: '#334155',
   },
 });

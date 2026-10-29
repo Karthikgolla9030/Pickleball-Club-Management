@@ -175,20 +175,37 @@ async def get_club(
 
 
 @router.get(
+    "/slug/{slug}/public",
+    response_model=PublicClubResponse,
+    summary="Get public club details by slug",
+    description="Returns public details of an active club looked up by slug.",
+    responses={
+        404: {"description": "Club not found or inactive"},
+    },
+)
+async def get_public_club_by_slug(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+) -> PublicClubResponse:
+    """Retrieve public profile for an active club by slug."""
+    return await ClubService(db).get_public_club_by_slug(slug=slug)
+
+
+@router.get(
     "/{club_id}/public",
     response_model=PublicClubResponse,
     summary="Get public club details",
-    description="Returns public details of an active club for players and discovery.",
+    description="Returns public details of an active club for players and discovery. Supports UUID or slug.",
     responses={
         404: {"description": "Club not found or inactive"},
     },
 )
 async def get_public_club(
-    club_id: UUID,
+    club_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> PublicClubResponse:
     """Retrieve public profile for an active club without requiring staff role."""
-    return await ClubService(db).get_public_club(club_id=club_id)
+    return await ClubService(db).get_public_club(identifier=club_id)
 
 
 @router.patch(

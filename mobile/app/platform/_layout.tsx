@@ -6,11 +6,40 @@
  * to prevent maximum update depth and blank screen errors.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import { useAuthStore } from '@/store';
+import { isPlatformAdminEmail } from '@/constants';
 
 export default function PlatformLayout() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const user = useAuthStore((s) => s.user);
+  const memberships = useAuthStore((s) => s.memberships);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (pathname === '/platform/login') return;
+
+    if (!isAuthenticated) {
+      router.replace('/platform/login' as any);
+      return;
+    }
+
+    const isPlatformAdmin = Boolean(user?.is_platform_admin || isPlatformAdminEmail(user?.email));
+    if (!isPlatformAdmin) {
+      // Non-platform-administrators cannot access platform portal
+      if (memberships.length > 0) {
+        router.replace('/(club)');
+      } else {
+        router.replace('/(player)');
+      }
+    }
+  }, [isAuthenticated, isLoading, user, memberships, pathname, router]);
+
   return (
     <View style={styles.container}>
       <Stack

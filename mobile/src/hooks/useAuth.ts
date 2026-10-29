@@ -4,11 +4,13 @@
  */
 
 import { useAuthStore } from '@/store';
+import { isPlatformAdminEmail } from '@/constants';
 
 export function useAuth() {
   const user = useAuthStore((s) => s.user);
   const memberships = useAuthStore((s) => s.memberships);
   const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
@@ -19,12 +21,14 @@ export function useAuth() {
   const registerPlayer = useAuthStore((s) => s.registerPlayer);
   const logout = useAuthStore((s) => s.logout);
   const setActiveMembership = useAuthStore((s) => s.setActiveMembership);
+  const setActivePortal = useAuthStore((s) => s.setActivePortal);
   const clearError = useAuthStore((s) => s.clearError);
 
   return {
     user,
     memberships,
     activeMembership,
+    activePortal,
     isAuthenticated,
     isLoading,
     error,
@@ -35,9 +39,11 @@ export function useAuth() {
     registerPlayer,
     logout,
     setActiveMembership,
+    setActivePortal,
     clearError,
 
     // Convenience
+    isPlatformAdmin: Boolean(user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'),
     hasClubMembership: memberships.length > 0,
     isMultiClub: memberships.length > 1,
     activeRole: activeMembership?.role ?? null,
