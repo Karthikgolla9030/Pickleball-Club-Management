@@ -78,6 +78,12 @@ class ClubMembership(Base):
         Enum(ClubRole, name="club_role", create_type=True),
         nullable=False,
     )
+    custom_role_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("club_custom_roles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
@@ -96,6 +102,13 @@ class ClubMembership(Base):
     # ─── Relationships ───────────────────────────────────────────
     user: Mapped["User"] = relationship("User", back_populates="club_memberships")  # noqa: F821
     club: Mapped["Club"] = relationship("Club", back_populates="memberships")  # noqa: F821
+    custom_role: Mapped["ClubCustomRole | None"] = relationship("ClubCustomRole", back_populates="memberships")  # noqa: F821
+
+    @property
+    def display_role_label(self) -> str:
+        if self.custom_role_id and getattr(self, "custom_role", None):
+            return self.custom_role.name
+        return self.role.display_label
 
     def __repr__(self) -> str:
         return (

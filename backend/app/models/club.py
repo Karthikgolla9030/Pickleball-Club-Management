@@ -102,6 +102,11 @@ class Club(Base):
         back_populates="club",
         cascade="all, delete-orphan",
     )
+    custom_roles: Mapped[list["ClubCustomRole"]] = relationship(  # noqa: F821
+        "ClubCustomRole",
+        back_populates="club",
+        cascade="all, delete-orphan",
+    )
     player_memberships: Mapped[list["ClubPlayerMembership"]] = relationship(  # noqa: F821
         "ClubPlayerMembership",
         back_populates="club",

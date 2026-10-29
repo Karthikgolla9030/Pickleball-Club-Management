@@ -22,6 +22,7 @@ class ClubMembershipRepository:
             .options(
                 selectinload(ClubMembership.club),
                 selectinload(ClubMembership.user).selectinload(User.player_profile),
+                selectinload(ClubMembership.custom_role),
             )
             .where(ClubMembership.id == membership_id)
         )
@@ -33,7 +34,10 @@ class ClubMembershipRepository:
         """Get all club memberships for a user, with club data loaded."""
         stmt = (
             select(ClubMembership)
-            .options(selectinload(ClubMembership.club))
+            .options(
+                selectinload(ClubMembership.club),
+                selectinload(ClubMembership.custom_role),
+            )
             .where(ClubMembership.user_id == user_id)
         )
         if not include_inactive:
@@ -51,6 +55,7 @@ class ClubMembershipRepository:
             .options(
                 selectinload(ClubMembership.club),
                 selectinload(ClubMembership.user).selectinload(User.player_profile),
+                selectinload(ClubMembership.custom_role),
             )
             .where(
                 ClubMembership.user_id == user_id,
@@ -69,6 +74,7 @@ class ClubMembershipRepository:
         club_id: UUID,
         role: ClubRole,
         is_active: bool = True,
+        custom_role_id: UUID | None = None,
     ) -> ClubMembership:
         """Create and persist a new club membership."""
         membership = ClubMembership(
@@ -76,6 +82,7 @@ class ClubMembershipRepository:
             club_id=club_id,
             role=role,
             is_active=is_active,
+            custom_role_id=custom_role_id,
         )
         self.db.add(membership)
         await self.db.flush()
@@ -85,11 +92,12 @@ class ClubMembershipRepository:
     async def get_club_members(
         self, club_id: UUID, include_inactive: bool = True
     ) -> list[ClubMembership]:
-        """Get all members of a club, loading the user and player profile."""
+        """Get all members of a club, loading the user, player profile, and custom role."""
         stmt = (
             select(ClubMembership)
             .options(
-                selectinload(ClubMembership.user).selectinload(User.player_profile)
+                selectinload(ClubMembership.user).selectinload(User.player_profile),
+                selectinload(ClubMembership.custom_role),
             )
             .where(ClubMembership.club_id == club_id)
             .order_by(ClubMembership.created_at)
@@ -111,17 +119,58 @@ class ClubMembershipRepository:
         )
         return result.scalar() or 0
 
+    async def count_by_custom_role(self, custom_role_id: UUID) -> int:
+        """Count staff members assigned to a custom role."""
+        result = await self.db.execute(
+            select(func.count(ClubMembership.id)).where(
+                ClubMembership.custom_role_id == custom_role_id,
+            )
+        )
+        return result.scalar() or 0
+
+    async def reassign_custom_role(
+        self,
+        club_id: UUID,
+        from_role_id: UUID,
+        to_role_id: UUID | None = None,
+        fallback_role: ClubRole = ClubRole.STAFF_MEMBER,
+        target_role: Any = None,
+    ) -> int:
+        """Reassign all staff members from one custom role to another or fallback role."""
+        stmt = (
+            select(ClubMembership)
+            .where(
+                ClubMembership.club_id == club_id,
+                ClubMembership.custom_role_id == from_role_id,
+            )
+        )
+        result = await self.db.execute(stmt)
+        members = list(result.scalars().all())
+        for m in members:
+            m.custom_role = target_role
+            m.custom_role_id = to_role_id
+            if to_role_id is None:
+                m.role = fallback_role
+        await self.db.flush()
+        return len(members)
+
     async def update(
         self,
         membership: ClubMembership,
         role: ClubRole | None = None,
         is_active: bool | None = None,
+        custom_role_id: UUID | None = None,
+        clear_custom_role: bool = False,
     ) -> ClubMembership:
-        """Update role and/or is_active status of a membership."""
+        """Update role, custom_role_id, and/or is_active status of a membership."""
         if role is not None:
             membership.role = role
         if is_active is not None:
             membership.is_active = is_active
+        if custom_role_id is not None:
+            membership.custom_role_id = custom_role_id
+        elif clear_custom_role:
+            membership.custom_role_id = None
         await self.db.flush()
         return await self.get_by_id(membership.id) or membership
 

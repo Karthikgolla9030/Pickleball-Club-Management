@@ -34,13 +34,18 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  Check,
+  Edit3,
   Mail,
   Menu,
   MoreVertical,
   Plus,
   Search,
+  Shield,
+  ShieldAlert,
   SlidersHorizontal,
   SquarePen,
+  Trash2,
   User,
   UserCheck,
   Users,
@@ -70,6 +75,7 @@ import type {
   ClubMember,
   ClubPlayerMember,
   ClubRole,
+  CustomRole,
   PlayerMembershipStatus,
 } from '@/types';
 
@@ -162,6 +168,44 @@ const VALID_STATUSES: { status: PlayerMembershipStatus; label: string }[] = [
   { status: 'expired', label: 'Expired' },
 ];
 
+const PERMISSION_GROUPS = [
+  {
+    category: 'Club Operations',
+    permissions: [
+      { key: 'manage_members', label: 'Members & Staff', description: 'View and manage enrolled players & staff' },
+      { key: 'manage_memberships', label: 'Membership Plans', description: 'Configure membership plans and subscriptions' },
+      { key: 'manage_bookings', label: 'Court Bookings', description: 'Create, edit, and cancel court reservations' },
+      { key: 'manage_courts', label: 'Courts & Facilities', description: 'Configure court settings, availability, and status' },
+      { key: 'manage_reports', label: 'Reports & Analytics', description: 'Access club operational and financial reports' },
+    ],
+  },
+  {
+    category: 'Activities & Competitions',
+    permissions: [
+      { key: 'manage_tournaments', label: 'Tournaments', description: 'Create and organize tournament draws and brackets' },
+      { key: 'manage_leagues', label: 'Leagues', description: 'Run league seasons, divisions, and rounds' },
+      { key: 'manage_events', label: 'Events & Open Plays', description: 'Schedule and manage club social events' },
+      { key: 'manage_lessons', label: 'Lessons & Clinics', description: 'Manage coaches, private lessons, and clinics' },
+      { key: 'manage_schedules', label: 'Schedules', description: 'Configure schedules and timeslot rules' },
+      { key: 'manage_scores', label: 'Scores & Results', description: 'Enter match scores and update standings' },
+      { key: 'manage_teams', label: 'Teams & Rosters', description: 'Organize competition teams and player rosters' },
+    ],
+  },
+  {
+    category: 'Financial Operations',
+    permissions: [
+      { key: 'manage_payments', label: 'Payments & Billing', description: 'Process payments, view charges and receipts' },
+    ],
+  },
+  {
+    category: 'Club Configuration',
+    permissions: [
+      { key: 'manage_club', label: 'Club Profile & Hours', description: 'Update facility profile, contact, and hours' },
+      { key: 'manage_settings', label: 'Club Settings', description: 'Configure general club preferences' },
+    ],
+  },
+];
+
 function formatPlayerName(member: ClubPlayerMember): string {
   if (member.user_full_name && member.user_full_name.trim().length > 0) {
     return member.user_full_name.trim();
@@ -217,6 +261,13 @@ export default function ClubMembersScreen() {
     updateMember,
     isUpdatingMember,
     deactivateMember,
+    customRoles = [],
+    createCustomRole,
+    isCreatingRole,
+    updateCustomRole,
+    isUpdatingRole,
+    deleteCustomRole,
+    isDeletingRole,
   } = useClubMembers(clubId);
 
   // Player members query
@@ -322,13 +373,34 @@ export default function ClubMembersScreen() {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState<ClubRole>('staff_member');
+  const [selectedRoleChoice, setSelectedRoleChoice] = useState<
+    { type: 'builtin'; role: ClubRole } | { type: 'custom'; roleId: string }
+  >({ type: 'builtin', role: 'staff_member' });
   const [staffActionError, setStaffActionError] = useState<string | null>(null);
 
-  // Role Edit Modal
+  // Manage Roles Modal
+  const [manageRolesModalVisible, setManageRolesModalVisible] = useState(false);
+
+  // Create / Edit Custom Role Modal
+  const [roleFormModalVisible, setRoleFormModalVisible] = useState(false);
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
+  const [roleFormName, setRoleFormName] = useState('');
+  const [roleFormDescription, setRoleFormDescription] = useState('');
+  const [roleFormPermissions, setRoleFormPermissions] = useState<Set<string>>(new Set());
+  const [roleFormError, setRoleFormError] = useState<string | null>(null);
+  const [roleFormReturnToAddStaff, setRoleFormReturnToAddStaff] = useState(false);
+
+  // Reassign & Delete Role Modal
+  const [deleteRoleReassignModalVisible, setDeleteRoleReassignModalVisible] = useState(false);
+  const [selectedRoleForDeletion, setSelectedRoleForDeletion] = useState<CustomRole | null>(null);
+  const [reassignTargetRoleId, setReassignTargetRoleId] = useState<string | null>(null);
+
+  // Role Edit Modal (Staff member role modification)
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [selectedStaffMember, setSelectedStaffMember] = useState<ClubMember | null>(null);
-  const [selectedRole, setSelectedRole] = useState<ClubRole>('club_manager');
+  const [staffEditRoleChoice, setStaffEditRoleChoice] = useState<
+    { type: 'builtin'; role: ClubRole } | { type: 'custom'; roleId: string }
+  >({ type: 'builtin', role: 'staff_member' });
 
   // Filter settings info modal
   const [filterInfoVisible, setFilterInfoVisible] = useState(false);
@@ -395,9 +467,10 @@ export default function ClubMembersScreen() {
   const handleStaffMenu = (member: ClubMember) => {
     blurActiveElement();
     const formattedName = member.user_full_name || member.user_email.split('@')[0];
+    const displayRole = member.custom_role_name || member.role_label || member.role;
     Alert.alert(
       formattedName,
-      `Email: ${member.user_email}\nRole: ${member.role_label || member.role}\nStatus: ${member.is_active ? 'ACTIVE' : 'DISABLED'}`,
+      `Email: ${member.user_email}\nRole: ${displayRole}\nStatus: ${member.is_active ? 'ACTIVE' : 'DISABLED'}`,
       [
         { text: 'Edit Role', onPress: () => handleOpenEditRole(member) },
         { text: 'Send Message', onPress: () => handleMessageStaff(member) },
@@ -411,6 +484,125 @@ export default function ClubMembersScreen() {
     );
   };
 
+  const handleOpenCreateRoleFromAddStaff = () => {
+    blurActiveElement();
+    setEditingRole(null);
+    setRoleFormName('');
+    setRoleFormDescription('');
+    setRoleFormPermissions(new Set());
+    setRoleFormError(null);
+    setRoleFormReturnToAddStaff(true);
+    setRoleFormModalVisible(true);
+  };
+
+  const handleOpenCreateRoleFromManager = () => {
+    blurActiveElement();
+    setEditingRole(null);
+    setRoleFormName('');
+    setRoleFormDescription('');
+    setRoleFormPermissions(new Set());
+    setRoleFormError(null);
+    setRoleFormReturnToAddStaff(false);
+    setRoleFormModalVisible(true);
+  };
+
+  const handleOpenEditCustomRole = (role: CustomRole) => {
+    blurActiveElement();
+    setEditingRole(role);
+    setRoleFormName(role.name);
+    setRoleFormDescription(role.description || '');
+    setRoleFormPermissions(new Set(role.permissions || []));
+    setRoleFormError(null);
+    setRoleFormReturnToAddStaff(false);
+    setRoleFormModalVisible(true);
+  };
+
+  const handleSaveRoleForm = async () => {
+    setRoleFormError(null);
+    const trimmed = roleFormName.trim();
+    if (!trimmed) {
+      setRoleFormError('Role name is required.');
+      return;
+    }
+    try {
+      if (editingRole) {
+        await updateCustomRole({
+          roleId: editingRole.id,
+          payload: {
+            name: trimmed,
+            description: roleFormDescription.trim() || null,
+            permissions: Array.from(roleFormPermissions),
+          },
+        });
+        blurActiveElement();
+        setRoleFormModalVisible(false);
+        setEditingRole(null);
+      } else {
+        const created = await createCustomRole({
+          name: trimmed,
+          description: roleFormDescription.trim() || null,
+          permissions: Array.from(roleFormPermissions),
+        });
+        blurActiveElement();
+        setRoleFormModalVisible(false);
+        if (roleFormReturnToAddStaff) {
+          setSelectedRoleChoice({ type: 'custom', roleId: created.id });
+          setRoleFormReturnToAddStaff(false);
+        }
+      }
+    } catch (err: unknown) {
+      setRoleFormError(err instanceof Error ? err.message : 'Failed to save role');
+    }
+  };
+
+  const handleDeleteCustomRole = (role: CustomRole) => {
+    blurActiveElement();
+    if (role.staff_count > 0) {
+      setSelectedRoleForDeletion(role);
+      const otherRoles = customRoles.filter((r) => r.id !== role.id);
+      setReassignTargetRoleId(otherRoles.length > 0 ? otherRoles[0].id : null);
+      setDeleteRoleReassignModalVisible(true);
+    } else {
+      Alert.alert(
+        'Delete Custom Role',
+        `Are you sure you want to delete the role "${role.name}"? This action cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await deleteCustomRole({ roleId: role.id });
+              } catch (err: unknown) {
+                Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete role');
+              }
+            },
+          },
+        ]
+      );
+    }
+  };
+
+  const handleConfirmReassignAndDelete = async () => {
+    if (!selectedRoleForDeletion) return;
+    if (!reassignTargetRoleId) {
+      Alert.alert('Reassignment Target Required', 'Please select a replacement custom role for assigned staff.');
+      return;
+    }
+    try {
+      await deleteCustomRole({
+        roleId: selectedRoleForDeletion.id,
+        reassignToRoleId: reassignTargetRoleId,
+      });
+      blurActiveElement();
+      setDeleteRoleReassignModalVisible(false);
+      setSelectedRoleForDeletion(null);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to delete role');
+    }
+  };
+
   const handleAddStaff = async () => {
     setStaffActionError(null);
     if (!newStaffEmail.trim()) {
@@ -422,18 +614,28 @@ export default function ClubMembersScreen() {
       return;
     }
     try {
-      await addMember({
-        email: newStaffEmail.trim(),
-        role: newStaffRole,
-        full_name: newStaffName.trim(),
-        temporary_password: newStaffPassword.trim() || undefined,
-      });
+      if (selectedRoleChoice.type === 'custom' && selectedRoleChoice.roleId) {
+        await addMember({
+          email: newStaffEmail.trim(),
+          role: 'staff_member',
+          custom_role_id: selectedRoleChoice.roleId,
+          full_name: newStaffName.trim(),
+          temporary_password: newStaffPassword.trim() || undefined,
+        });
+      } else {
+        await addMember({
+          email: newStaffEmail.trim(),
+          role: selectedRoleChoice.type === 'builtin' ? selectedRoleChoice.role : 'staff_member',
+          full_name: newStaffName.trim(),
+          temporary_password: newStaffPassword.trim() || undefined,
+        });
+      }
       blurActiveElement();
       setAddStaffModalVisible(false);
       setNewStaffEmail('');
       setNewStaffName('');
       setNewStaffPassword('');
-      setNewStaffRole('staff_member');
+      setSelectedRoleChoice({ type: 'builtin', role: 'staff_member' });
     } catch (err: unknown) {
       setStaffActionError(err instanceof Error ? err.message : 'Failed to add staff member');
     }
@@ -442,43 +644,40 @@ export default function ClubMembersScreen() {
   const handleOpenEditRole = (member: ClubMember) => {
     blurActiveElement();
     setSelectedStaffMember(member);
-    setSelectedRole(member.role);
+    if (member.custom_role_id) {
+      setStaffEditRoleChoice({ type: 'custom', roleId: member.custom_role_id });
+    } else {
+      setStaffEditRoleChoice({ type: 'builtin', role: member.role });
+    }
     setRoleModalVisible(true);
   };
 
   const handleSaveRole = async () => {
     if (!selectedStaffMember) return;
-    if (selectedRole === selectedStaffMember.role) {
+    try {
+      if (staffEditRoleChoice.type === 'custom') {
+        await updateMember({
+          membershipId: selectedStaffMember.id,
+          payload: {
+            role: 'staff_member',
+            custom_role_id: staffEditRoleChoice.roleId,
+          },
+        });
+      } else {
+        await updateMember({
+          membershipId: selectedStaffMember.id,
+          payload: {
+            role: staffEditRoleChoice.role,
+            clear_custom_role: true,
+          },
+        });
+      }
       blurActiveElement();
       setRoleModalVisible(false);
       setSelectedStaffMember(null);
-      return;
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update role');
     }
-
-    const targetRoleLabel = VALID_ROLES.find((r) => r.role === selectedRole)?.label || selectedRole;
-    Alert.alert(
-      'Confirm Role Change',
-      `Are you sure you want to change the role of ${selectedStaffMember.user_email} to ${targetRoleLabel}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm Change',
-          onPress: async () => {
-            try {
-              await updateMember({
-                membershipId: selectedStaffMember.id,
-                payload: { role: selectedRole },
-              });
-              blurActiveElement();
-              setRoleModalVisible(false);
-              setSelectedStaffMember(null);
-            } catch (err: unknown) {
-              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update role');
-            }
-          },
-        },
-      ]
-    );
   };
 
   const handleToggleStaffActive = (member: ClubMember) => {
@@ -718,19 +917,35 @@ export default function ClubMembersScreen() {
             </View>
 
             {canManageRoles && (
-              <TouchableOpacity
-                style={styles.addStaffBtn}
-                onPress={() => {
-                  blurActiveElement();
-                  setAddStaffModalVisible(true);
-                }}
-                activeOpacity={0.8}
-                accessibilityLabel="Add Staff"
-                accessibilityRole="button"
-              >
-                <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
-                <AppText style={styles.addStaffBtnText}>Staff</AppText>
-              </TouchableOpacity>
+              <View style={styles.staffHeaderActions}>
+                <TouchableOpacity
+                  style={styles.manageRolesBtn}
+                  onPress={() => {
+                    blurActiveElement();
+                    setManageRolesModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Manage Roles"
+                  accessibilityRole="button"
+                >
+                  <Shield size={14} color="#176B57" strokeWidth={2.2} />
+                  <AppText style={styles.manageRolesBtnText}>Roles</AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.addStaffBtn}
+                  onPress={() => {
+                    blurActiveElement();
+                    setAddStaffModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                  accessibilityLabel="Add Staff"
+                  accessibilityRole="button"
+                >
+                  <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
+                  <AppText style={styles.addStaffBtnText}>Staff</AppText>
+                </TouchableOpacity>
+              </View>
             )}
           </View>
         </View>
@@ -856,12 +1071,15 @@ export default function ClubMembersScreen() {
         ? item.user_email.split('@')[0].replace(/[._-]+/g, ' ').split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
         : 'Staff Member';
 
-    const roleConfig = {
-      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
-      staff_member: { label: 'Staff Member', bg: '#F1F5F9', text: '#475569' },
-      club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
-      tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
-    }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
+    const isCustomRole = Boolean(item.custom_role_name);
+    const roleConfig = isCustomRole
+      ? { label: item.custom_role_name!, bg: '#E6F4EA', text: '#0D5F4D' }
+      : {
+          club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
+          staff_member: { label: 'Staff Member', bg: '#F1F5F9', text: '#475569' },
+          club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
+          tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
+        }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
 
     return (
       <View style={styles.memberCard}>
@@ -881,6 +1099,9 @@ export default function ClubMembersScreen() {
               </AppText>
               <View style={styles.badgeAndMenuRow}>
                 <View style={[styles.roleBadge, { backgroundColor: roleConfig.bg }]}>
+                  {isCustomRole && (
+                    <Shield size={11} color="#0D5F4D" strokeWidth={2.2} style={{ marginRight: 3 }} />
+                  )}
                   <AppText style={[styles.roleBadgeText, { color: roleConfig.text }]}>
                     {roleConfig.label}
                   </AppText>
@@ -1187,7 +1408,10 @@ export default function ClubMembersScreen() {
             setAddStaffModalVisible(false);
           }}
         >
-          <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={[styles.modalSheetContent, { maxHeight: '92%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeaderRow}>
               <View>
                 <AppText style={styles.modalTitle}>Add Staff Member</AppText>
@@ -1210,65 +1434,134 @@ export default function ClubMembersScreen() {
               </View>
             )}
 
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Full Name *</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="Alex Morgan"
-                placeholderTextColor="#8C9BA5"
-                autoCapitalize="words"
-                value={newStaffName}
-                onChangeText={setNewStaffName}
-              />
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>Full Name *</AppText>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Alex Morgan"
+                  placeholderTextColor="#8C9BA5"
+                  autoCapitalize="words"
+                  value={newStaffName}
+                  onChangeText={setNewStaffName}
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>User Email *</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="staff@example.com"
-                placeholderTextColor="#8C9BA5"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={newStaffEmail}
-                onChangeText={setNewStaffEmail}
-              />
-            </View>
+              <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>User Email *</AppText>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="staff@example.com"
+                  placeholderTextColor="#8C9BA5"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={newStaffEmail}
+                  onChangeText={setNewStaffEmail}
+                />
+              </View>
 
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Staff Role</AppText>
-              {VALID_ROLES.filter((r) => r.role !== 'club_owner').map((r) => (
-                <TouchableOpacity
-                  key={r.role}
-                  style={[
-                    styles.roleSelectOption,
-                    newStaffRole === r.role && styles.roleSelectOptionActive,
-                  ]}
-                  onPress={() => setNewStaffRole(r.role)}
-                >
-                  <AppText
-                    style={[
-                      styles.roleSelectOptionText,
-                      newStaffRole === r.role && styles.roleSelectOptionTextActive,
-                    ]}
+              <View style={styles.formGroup}>
+                <View style={styles.roleHeaderRow}>
+                  <AppText style={styles.formLabel}>Staff Role</AppText>
+                  <TouchableOpacity
+                    style={styles.inlineCreateRoleBtn}
+                    onPress={handleOpenCreateRoleFromAddStaff}
+                    activeOpacity={0.7}
                   >
-                    {r.label}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
+                    <Plus size={13} color="#176B57" strokeWidth={2.4} />
+                    <AppText style={styles.inlineCreateRoleText}>Create New Role</AppText>
+                  </TouchableOpacity>
+                </View>
 
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Temporary Password</AppText>
-              <TextInput
-                style={styles.formInput}
-                placeholder="•••••••• (optional, min 6 chars)"
-                placeholderTextColor="#8C9BA5"
-                secureTextEntry
-                value={newStaffPassword}
-                onChangeText={setNewStaffPassword}
-              />
-            </View>
+                <AppText style={styles.roleSectionSubtitle}>System Built-in Roles</AppText>
+                {VALID_ROLES.filter((r) => r.role !== 'club_owner').map((r) => {
+                  const isSelected =
+                    selectedRoleChoice.type === 'builtin' && selectedRoleChoice.role === r.role;
+                  return (
+                    <TouchableOpacity
+                      key={r.role}
+                      style={[
+                        styles.roleSelectOption,
+                        isSelected && styles.roleSelectOptionActive,
+                      ]}
+                      onPress={() => setSelectedRoleChoice({ type: 'builtin', role: r.role })}
+                    >
+                      <View style={styles.roleOptionRow}>
+                        <AppText
+                          style={[
+                            styles.roleSelectOptionText,
+                            isSelected && styles.roleSelectOptionTextActive,
+                          ]}
+                        >
+                          {r.label}
+                        </AppText>
+                        {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                <View style={styles.customRolesHeaderRow}>
+                  <AppText style={styles.roleSectionSubtitle}>
+                    Custom Roles ({customRoles.length})
+                  </AppText>
+                </View>
+
+                {customRoles.length === 0 ? (
+                  <View style={styles.emptyCustomRolesBox}>
+                    <AppText style={styles.emptyCustomRolesText}>
+                      No custom roles created yet. Tap "+ Create New Role" above to configure a role with specific permissions.
+                    </AppText>
+                  </View>
+                ) : (
+                  customRoles.map((cr) => {
+                    const isSelected =
+                      selectedRoleChoice.type === 'custom' && selectedRoleChoice.roleId === cr.id;
+                    const permCount = (cr.permissions || []).length;
+                    return (
+                      <TouchableOpacity
+                        key={cr.id}
+                        style={[
+                          styles.roleSelectOption,
+                          isSelected && styles.roleSelectOptionActive,
+                        ]}
+                        onPress={() => setSelectedRoleChoice({ type: 'custom', roleId: cr.id })}
+                      >
+                        <View style={styles.roleOptionRow}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <AppText
+                              style={[
+                                styles.roleSelectOptionText,
+                                isSelected && styles.roleSelectOptionTextActive,
+                              ]}
+                            >
+                              {cr.name}
+                            </AppText>
+                            <AppText style={styles.roleOptionMeta}>
+                              {permCount} {permCount === 1 ? 'permission' : 'permissions'}
+                              {cr.description ? ` • ${cr.description}` : ''}
+                            </AppText>
+                          </View>
+                          {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
+
+              <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>Temporary Password</AppText>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="•••••••• (optional, min 6 chars)"
+                  placeholderTextColor="#8C9BA5"
+                  secureTextEntry
+                  value={newStaffPassword}
+                  onChangeText={setNewStaffPassword}
+                />
+              </View>
+            </ScrollView>
 
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
@@ -1295,7 +1588,7 @@ export default function ClubMembersScreen() {
         </Pressable>
       </Modal>
 
-      {/* ─── Role Edit Modal ─────────────────────────────────────────────────── */}
+      {/* ─── Role Edit Modal (Staff member role modification) ─────────────────── */}
       <Modal
         visible={roleModalVisible}
         transparent
@@ -1312,7 +1605,10 @@ export default function ClubMembersScreen() {
             setRoleModalVisible(false);
           }}
         >
-          <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            style={[styles.modalSheetContent, { maxHeight: '90%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeaderRow}>
               <View>
                 <AppText style={styles.modalTitle}>Change Staff Role</AppText>
@@ -1331,28 +1627,76 @@ export default function ClubMembersScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.formGroup}>
-              <AppText style={styles.formLabel}>Select Role</AppText>
-              {VALID_ROLES.map((r) => (
-                <TouchableOpacity
-                  key={r.role}
-                  style={[
-                    styles.roleSelectOption,
-                    selectedRole === r.role && styles.roleSelectOptionActive,
-                  ]}
-                  onPress={() => setSelectedRole(r.role)}
-                >
-                  <AppText
-                    style={[
-                      styles.roleSelectOptionText,
-                      selectedRole === r.role && styles.roleSelectOptionTextActive,
-                    ]}
-                  >
-                    {r.label}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              <View style={styles.formGroup}>
+                <AppText style={styles.roleSectionSubtitle}>System Built-in Roles</AppText>
+                {VALID_ROLES.map((r) => {
+                  const isSelected =
+                    staffEditRoleChoice.type === 'builtin' && staffEditRoleChoice.role === r.role;
+                  return (
+                    <TouchableOpacity
+                      key={r.role}
+                      style={[
+                        styles.roleSelectOption,
+                        isSelected && styles.roleSelectOptionActive,
+                      ]}
+                      onPress={() => setStaffEditRoleChoice({ type: 'builtin', role: r.role })}
+                    >
+                      <View style={styles.roleOptionRow}>
+                        <AppText
+                          style={[
+                            styles.roleSelectOptionText,
+                            isSelected && styles.roleSelectOptionTextActive,
+                          ]}
+                        >
+                          {r.label}
+                        </AppText>
+                        {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+
+                {customRoles.length > 0 && (
+                  <>
+                    <AppText style={[styles.roleSectionSubtitle, { marginTop: 10 }]}>
+                      Custom Roles
+                    </AppText>
+                    {customRoles.map((cr) => {
+                      const isSelected =
+                        staffEditRoleChoice.type === 'custom' && staffEditRoleChoice.roleId === cr.id;
+                      return (
+                        <TouchableOpacity
+                          key={cr.id}
+                          style={[
+                            styles.roleSelectOption,
+                            isSelected && styles.roleSelectOptionActive,
+                          ]}
+                          onPress={() => setStaffEditRoleChoice({ type: 'custom', roleId: cr.id })}
+                        >
+                          <View style={styles.roleOptionRow}>
+                            <View style={{ flex: 1, paddingRight: 8 }}>
+                              <AppText
+                                style={[
+                                  styles.roleSelectOptionText,
+                                  isSelected && styles.roleSelectOptionTextActive,
+                                ]}
+                              >
+                                {cr.name}
+                              </AppText>
+                              <AppText style={styles.roleOptionMeta}>
+                                {(cr.permissions || []).length} permissions
+                              </AppText>
+                            </View>
+                            {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
+              </View>
+            </ScrollView>
 
             <View style={styles.modalActionButtons}>
               <TouchableOpacity
@@ -1372,6 +1716,385 @@ export default function ClubMembersScreen() {
               >
                 <AppText style={styles.submitModalBtnText}>
                   {isUpdatingMember ? 'Saving...' : 'Update Role'}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ─── Manage Roles Modal (Dedicated Role Management) ───────────────────── */}
+      <Modal
+        visible={manageRolesModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          blurActiveElement();
+          setManageRolesModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            blurActiveElement();
+            setManageRolesModalVisible(false);
+          }}
+        >
+          <Pressable
+            style={[styles.modalSheetContent, { maxHeight: '90%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <AppText style={styles.modalTitle}>Custom Staff Roles</AppText>
+                <AppText style={styles.modalSubtitle}>
+                  Manage roles and permission profiles for this club
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  blurActiveElement();
+                  setManageRolesModalVisible(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#647570" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.manageRolesCreateBtn}
+              onPress={handleOpenCreateRoleFromManager}
+              activeOpacity={0.8}
+            >
+              <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
+              <AppText style={styles.manageRolesCreateBtnText}>Create New Role</AppText>
+            </TouchableOpacity>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+              {customRoles.length === 0 ? (
+                <View style={styles.emptyRolesSection}>
+                  <Shield size={36} color="#A0AEC0" strokeWidth={1.5} />
+                  <AppText style={styles.emptyRolesTitle}>No Custom Roles Yet</AppText>
+                  <AppText style={styles.emptyRolesDesc}>
+                    Create customized staff roles such as Receptionist, Coach, or Accountant with tailor-made permissions.
+                  </AppText>
+                </View>
+              ) : (
+                customRoles.map((role) => (
+                  <View key={role.id} style={styles.customRoleCard}>
+                    <View style={styles.customRoleCardHeader}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <AppText style={styles.customRoleCardTitle}>{role.name}</AppText>
+                          <View style={styles.staffCountBadge}>
+                            <AppText style={styles.staffCountBadgeText}>
+                              {role.staff_count} {role.staff_count === 1 ? 'staff' : 'staff'}
+                            </AppText>
+                          </View>
+                        </View>
+                        {role.description ? (
+                          <AppText style={styles.customRoleCardDesc}>{role.description}</AppText>
+                        ) : null}
+                      </View>
+                      <View style={styles.customRoleActions}>
+                        <TouchableOpacity
+                          style={styles.roleActionIconBtn}
+                          onPress={() => handleOpenEditCustomRole(role)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Edit3 size={16} color="#176B57" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.roleActionIconBtn}
+                          onPress={() => handleDeleteCustomRole(role)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Trash2 size={16} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={styles.permissionPillsRow}>
+                      {(role.permissions || []).map((permKey) => (
+                        <View key={permKey} style={styles.permissionPill}>
+                          <AppText style={styles.permissionPillText}>
+                            {permKey.replace(/^manage_/, '').replace(/_/g, ' ')}
+                          </AppText>
+                        </View>
+                      ))}
+                      {(role.permissions || []).length === 0 && (
+                        <AppText style={styles.noPermsText}>No permissions granted</AppText>
+                      )}
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.cancelModalBtn, { marginTop: 14 }]}
+              onPress={() => {
+                blurActiveElement();
+                setManageRolesModalVisible(false);
+              }}
+            >
+              <AppText style={styles.cancelModalBtnText}>Close</AppText>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ─── Create / Edit Role Modal ─────────────────────────────────────────── */}
+      <Modal
+        visible={roleFormModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          blurActiveElement();
+          setRoleFormModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            blurActiveElement();
+            setRoleFormModalVisible(false);
+          }}
+        >
+          <Pressable
+            style={[styles.modalSheetContent, { maxHeight: '92%' }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <AppText style={styles.modalTitle}>
+                  {editingRole ? 'Edit Custom Role' : 'Create New Role'}
+                </AppText>
+                <AppText style={styles.modalSubtitle}>
+                  Configure custom role name and granular permissions
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  blurActiveElement();
+                  setRoleFormModalVisible(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#647570" />
+              </TouchableOpacity>
+            </View>
+
+            {roleFormError && (
+              <View style={styles.modalErrorBox}>
+                <AppText style={styles.modalErrorText}>{roleFormError}</AppText>
+              </View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+              <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>Role Name *</AppText>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g. Receptionist, Coach, Front Desk"
+                  placeholderTextColor="#8C9BA5"
+                  value={roleFormName}
+                  onChangeText={setRoleFormName}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>Description (Optional)</AppText>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Briefly describe the responsibilities..."
+                  placeholderTextColor="#8C9BA5"
+                  value={roleFormDescription}
+                  onChangeText={setRoleFormDescription}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <AppText style={[styles.formLabel, { marginBottom: 2 }]}>Permissions</AppText>
+                <AppText style={styles.permissionSectionNote}>
+                  Select specific operations this role is authorized to perform:
+                </AppText>
+
+                {PERMISSION_GROUPS.map((group) => (
+                  <View key={group.category} style={styles.permissionCategoryBox}>
+                    <AppText style={styles.permissionCategoryTitle}>{group.category}</AppText>
+                    {group.permissions.map((perm) => {
+                      const isChecked = roleFormPermissions.has(perm.key);
+                      return (
+                        <TouchableOpacity
+                          key={perm.key}
+                          style={styles.permissionRow}
+                          onPress={() => {
+                            setRoleFormPermissions((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(perm.key)) {
+                                next.delete(perm.key);
+                              } else {
+                                next.add(perm.key);
+                              }
+                              return next;
+                            });
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View
+                            style={[
+                              styles.checkboxBox,
+                              isChecked && styles.checkboxBoxChecked,
+                            ]}
+                          >
+                            {isChecked && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <AppText style={styles.permissionItemLabel}>{perm.label}</AppText>
+                            <AppText style={styles.permissionItemDesc}>{perm.description}</AppText>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => {
+                  blurActiveElement();
+                  setRoleFormModalVisible(false);
+                }}
+              >
+                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.submitModalBtn}
+                onPress={handleSaveRoleForm}
+                disabled={isCreatingRole || isUpdatingRole}
+              >
+                <AppText style={styles.submitModalBtnText}>
+                  {isCreatingRole || isUpdatingRole
+                    ? 'Saving...'
+                    : editingRole
+                    ? 'Save Changes'
+                    : 'Create Role'}
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ─── Reassign & Delete Role Modal ─────────────────────────────────────── */}
+      <Modal
+        visible={deleteRoleReassignModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          blurActiveElement();
+          setDeleteRoleReassignModalVisible(false);
+        }}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => {
+            blurActiveElement();
+            setDeleteRoleReassignModalVisible(false);
+          }}
+        >
+          <Pressable style={styles.modalSheetContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <AppText style={styles.modalTitle}>Reassign Staff Before Deletion</AppText>
+                <AppText style={styles.modalSubtitle}>
+                  Safe role deletion requirement
+                </AppText>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  blurActiveElement();
+                  setDeleteRoleReassignModalVisible(false);
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={20} color="#647570" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.warningBox}>
+              <ShieldAlert size={20} color="#B45309" />
+              <AppText style={styles.warningBoxText}>
+                The role <AppText style={{ fontWeight: '700' }}>{selectedRoleForDeletion?.name}</AppText> is currently assigned to <AppText style={{ fontWeight: '700' }}>{selectedRoleForDeletion?.staff_count}</AppText> staff member(s).
+              </AppText>
+            </View>
+
+            <AppText style={[styles.formLabel, { marginTop: 12, marginBottom: 6 }]}>
+              Select replacement custom role:
+            </AppText>
+
+            {customRoles.filter((r) => r.id !== selectedRoleForDeletion?.id).length === 0 ? (
+              <View style={styles.emptyCustomRolesBox}>
+                <AppText style={styles.emptyCustomRolesText}>
+                  No other custom roles exist. Please create another custom role first to reassign these staff members.
+                </AppText>
+              </View>
+            ) : (
+              customRoles
+                .filter((r) => r.id !== selectedRoleForDeletion?.id)
+                .map((r) => (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[
+                      styles.roleSelectOption,
+                      reassignTargetRoleId === r.id && styles.roleSelectOptionActive,
+                    ]}
+                    onPress={() => setReassignTargetRoleId(r.id)}
+                  >
+                    <View style={styles.roleOptionRow}>
+                      <AppText
+                        style={[
+                          styles.roleSelectOptionText,
+                          reassignTargetRoleId === r.id && styles.roleSelectOptionTextActive,
+                        ]}
+                      >
+                        {r.name}
+                      </AppText>
+                      {reassignTargetRoleId === r.id && (
+                        <Check size={16} color="#176B57" strokeWidth={2.5} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                ))
+            )}
+
+            <View style={styles.modalActionButtons}>
+              <TouchableOpacity
+                style={styles.cancelModalBtn}
+                onPress={() => {
+                  blurActiveElement();
+                  setDeleteRoleReassignModalVisible(false);
+                }}
+              >
+                <AppText style={styles.cancelModalBtnText}>Cancel</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.submitModalBtn,
+                  { backgroundColor: '#DC2626' },
+                ]}
+                onPress={handleConfirmReassignAndDelete}
+                disabled={isDeletingRole || !reassignTargetRoleId}
+              >
+                <AppText style={styles.submitModalBtnText}>
+                  {isDeletingRole ? 'Reassigning...' : 'Reassign & Delete'}
                 </AppText>
               </TouchableOpacity>
             </View>
@@ -1960,5 +2683,254 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  staffHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  manageRolesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#176B57',
+    paddingHorizontal: 12,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  manageRolesBtnText: {
+    color: '#176B57',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  roleHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  inlineCreateRoleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#DEF2E6',
+    borderRadius: 6,
+  },
+  inlineCreateRoleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  roleSectionSubtitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#5E716D',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  roleOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  roleOptionMeta: {
+    fontSize: 11.5,
+    color: '#647570',
+    marginTop: 2,
+  },
+  customRolesHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  emptyCustomRolesBox: {
+    backgroundColor: '#F8FAF9',
+    borderWidth: 1,
+    borderColor: '#E2EAE5',
+    borderRadius: 8,
+    padding: 10,
+    marginVertical: 4,
+  },
+  emptyCustomRolesText: {
+    fontSize: 12,
+    color: '#647570',
+    lineHeight: 16,
+  },
+  permissionSectionNote: {
+    fontSize: 12,
+    color: '#647570',
+    marginBottom: 8,
+  },
+  permissionCategoryBox: {
+    backgroundColor: '#F8FAF9',
+    borderWidth: 1,
+    borderColor: '#E2EAE5',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  permissionCategoryTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#102F2A',
+    marginBottom: 8,
+  },
+  permissionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    paddingVertical: 6,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#A0AEC0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxBoxChecked: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
+  },
+  permissionItemLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#102F2A',
+  },
+  permissionItemDesc: {
+    fontSize: 11.5,
+    color: '#647570',
+    marginTop: 1,
+  },
+  manageRolesCreateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#176B57',
+    height: 42,
+    borderRadius: 10,
+    marginBottom: 14,
+  },
+  manageRolesCreateBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  emptyRolesSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+  },
+  emptyRolesTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102F2A',
+    marginTop: 10,
+  },
+  emptyRolesDesc: {
+    fontSize: 12.5,
+    color: '#647570',
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  customRoleCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2EAE5',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  customRoleCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  customRoleCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102F2A',
+  },
+  customRoleCardDesc: {
+    fontSize: 12,
+    color: '#647570',
+    marginTop: 2,
+  },
+  staffCountBadge: {
+    backgroundColor: '#EEF2F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  staffCountBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#5E716D',
+  },
+  customRoleActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  roleActionIconBtn: {
+    padding: 6,
+    borderRadius: 6,
+    backgroundColor: '#F0F4F2',
+  },
+  permissionPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 8,
+  },
+  permissionPill: {
+    backgroundColor: '#E8F3EE',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+  },
+  permissionPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#176B57',
+    textTransform: 'capitalize',
+  },
+  noPermsText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: '#8C9BA5',
+  },
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+  },
+  warningBoxText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 17,
   },
 });

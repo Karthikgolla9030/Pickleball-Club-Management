@@ -26,7 +26,7 @@ from app.core.database import get_db
 from app.core.security import decode_access_token
 from app.models.club_membership import ClubMembership, ClubRole
 from app.models.user import User
-from app.permissions import Permission, has_permission
+from app.permissions import Permission, has_permission, membership_has_permission
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_repository import ClubRepository
 from app.repositories.user_repository import UserRepository
@@ -149,7 +149,7 @@ def require_permission(permission: Permission):
     async def _check(
         membership: ClubMembership = Depends(get_club_membership),
     ) -> ClubMembership:
-        if not has_permission(membership.role, permission):
+        if not membership_has_permission(membership, permission):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {permission.value} required",

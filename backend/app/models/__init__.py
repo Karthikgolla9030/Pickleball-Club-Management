@@ -13,6 +13,7 @@ from app.models.membership import (
     SubscriptionStatus,
 )
 from app.models.club_membership import ClubMembership, ClubRole
+from app.models.club_custom_role import ClubCustomRole
 from app.models.club_membership_request import (
     ClubMembershipRequest,
     MembershipRequestStatus,
@@ -102,6 +103,7 @@ __all__ = [
     "TicketPriority",
     "TicketStatus",
     "ClubMembership",
+    "ClubCustomRole",
     "ClubMembershipRequest",
     "ClubPlayerMembership",
     "ClubRole",

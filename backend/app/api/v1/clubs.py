@@ -47,6 +47,11 @@ from app.schemas.club import (
     PublicClubResponse,
     UserClubResponse,
 )
+from app.schemas.club_custom_role import (
+    CustomRoleCreateRequest,
+    CustomRoleResponse,
+    CustomRoleUpdateRequest,
+)
 from app.schemas.club_membership import (
     AddMemberRequest,
     ClubMembershipDetailResponse,
@@ -433,6 +438,7 @@ async def get_club_member_detail(
 async def add_club_member(
     club_id: UUID,
     payload: AddMemberRequest,
+    current_user: User = Depends(get_current_user),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_ROLES)),
     db: AsyncSession = Depends(get_db),
 ) -> MemberResponse:
@@ -441,8 +447,11 @@ async def add_club_member(
         club_id=club_id,
         email=payload.email,
         role=payload.role,
+        custom_role_id=payload.custom_role_id,
         full_name=payload.full_name,
         temporary_password=payload.temporary_password,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
     )
 
 
@@ -463,6 +472,7 @@ async def update_club_member(
     club_id: UUID,
     membership_id: UUID,
     payload: UpdateMemberRequest,
+    current_user: User = Depends(get_current_user),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_ROLES)),
     db: AsyncSession = Depends(get_db),
 ) -> MemberResponse:
@@ -471,7 +481,11 @@ async def update_club_member(
         club_id=club_id,
         membership_id=membership_id,
         role=payload.role,
+        custom_role_id=payload.custom_role_id,
+        clear_custom_role=payload.clear_custom_role,
         is_active=payload.is_active,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
     )
 
 
@@ -497,6 +511,138 @@ async def deactivate_club_member(
     return await ClubService(db).deactivate_member(
         club_id=club_id,
         membership_id=membership_id,
+    )
+
+
+# ─── Custom Staff Roles & Granular Permissions ──────────────────────────────
+
+
+@router.get(
+    "/{club_id}/custom-roles",
+    response_model=list[CustomRoleResponse],
+    summary="List club custom roles",
+    description="Retrieve all custom staff roles created for this club. Requires MANAGE_MEMBERS permission.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_members required)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def list_custom_roles(
+    club_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> list[CustomRoleResponse]:
+    """List all custom staff roles configured for this club."""
+    return await ClubService(db).list_custom_roles(club_id=club_id)
+
+
+@router.post(
+    "/{club_id}/custom-roles",
+    response_model=CustomRoleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create custom staff role",
+    description="Create a new custom staff role with granular permissions. Club Owner only (manage_roles required).",
+    responses={
+        400: {"description": "Duplicate role name or reserved role name"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_roles required)"},
+        404: {"description": "Club not found"},
+    },
+)
+async def create_custom_role(
+    club_id: UUID,
+    payload: CustomRoleCreateRequest,
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_ROLES)),
+    db: AsyncSession = Depends(get_db),
+) -> CustomRoleResponse:
+    """Create a new custom staff role with granular permissions (Club Owner only)."""
+    return await ClubService(db).create_custom_role(
+        club_id=club_id,
+        payload=payload,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+    )
+
+
+@router.get(
+    "/{club_id}/custom-roles/{role_id}",
+    response_model=CustomRoleResponse,
+    summary="Get custom staff role details",
+    description="Retrieve details of a custom staff role including assigned permissions and staff count.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_members required)"},
+        404: {"description": "Custom role not found"},
+    },
+)
+async def get_custom_role(
+    club_id: UUID,
+    role_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    db: AsyncSession = Depends(get_db),
+) -> CustomRoleResponse:
+    """Get custom staff role details."""
+    return await ClubService(db).get_custom_role(club_id=club_id, role_id=role_id)
+
+
+@router.patch(
+    "/{club_id}/custom-roles/{role_id}",
+    response_model=CustomRoleResponse,
+    summary="Update custom staff role",
+    description="Update a custom role's name, description, or permissions. Club Owner only (manage_roles required).",
+    responses={
+        400: {"description": "Duplicate role name or reserved name"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_roles required)"},
+        404: {"description": "Custom role not found"},
+    },
+)
+async def update_custom_role(
+    club_id: UUID,
+    role_id: UUID,
+    payload: CustomRoleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_ROLES)),
+    db: AsyncSession = Depends(get_db),
+) -> CustomRoleResponse:
+    """Update custom staff role configuration (Club Owner only)."""
+    return await ClubService(db).update_custom_role(
+        club_id=club_id,
+        role_id=role_id,
+        payload=payload,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+    )
+
+
+@router.delete(
+    "/{club_id}/custom-roles/{role_id}",
+    summary="Delete custom staff role",
+    description="Deletes a custom staff role. If staff members are assigned, requires reassign_to_role_id. Club Owner only (manage_roles required).",
+    responses={
+        400: {"description": "Cannot delete role with assigned staff without reassignment"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Insufficient permissions (manage_roles required)"},
+        404: {"description": "Custom role not found"},
+    },
+)
+async def delete_custom_role(
+    club_id: UUID,
+    role_id: UUID,
+    reassign_to_role_id: UUID | None = Query(default=None, description="Target role ID to reassign currently assigned staff to"),
+    current_user: User = Depends(get_current_user),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_ROLES)),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Delete a custom staff role with safe staff reassignment (Club Owner only)."""
+    return await ClubService(db).delete_custom_role(
+        club_id=club_id,
+        role_id=role_id,
+        reassign_to_role_id=reassign_to_role_id,
+        actor_id=current_user.id,
+        actor_email=current_user.email,
     )
 
 

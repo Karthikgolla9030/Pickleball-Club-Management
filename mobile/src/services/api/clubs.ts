@@ -13,6 +13,8 @@ import type {
   ClubOperatingHoursResponse,
   ClubPlayerMember,
   CreateClubPayload,
+  CreateCustomRolePayload,
+  CustomRole,
   DiscoverClubsParams,
   MembershipPlan,
   MembershipRequest,
@@ -20,6 +22,7 @@ import type {
   PublicClubDiscoveryResponse,
   UpdateClubPayload,
   UpdateClubPlayerMemberPayload,
+  UpdateCustomRolePayload,
   UpdateMemberPayload,
   UserClubItem,
   WeeklyOperatingHoursMap,
@@ -189,6 +192,57 @@ export const clubsApi = {
   ): Promise<ClubMember> {
     return apiClient.delete<ClubMember>(
       `${API_ENDPOINTS.CLUBS}/${clubId}/members/${membershipId}`,
+    );
+  },
+
+  // ─── Custom Staff Roles & Permissions ─────────────────────────────────────
+
+  /**
+   * Get all custom staff roles defined for a club.
+   */
+  getClubCustomRoles(clubId: string): Promise<CustomRole[]> {
+    return apiClient.get<CustomRole[]>(API_ENDPOINTS.CLUB_CUSTOM_ROLES(clubId));
+  },
+
+  /**
+   * Get a specific custom role's details.
+   */
+  getClubCustomRole(clubId: string, roleId: string): Promise<CustomRole> {
+    return apiClient.get<CustomRole>(API_ENDPOINTS.CLUB_CUSTOM_ROLE_DETAIL(clubId, roleId));
+  },
+
+  /**
+   * Create a new custom staff role with granular permissions.
+   */
+  createClubCustomRole(clubId: string, payload: CreateCustomRolePayload): Promise<CustomRole> {
+    return apiClient.post<CustomRole>(API_ENDPOINTS.CLUB_CUSTOM_ROLES(clubId), payload);
+  },
+
+  /**
+   * Update an existing custom role's name, description, or permissions.
+   */
+  updateClubCustomRole(
+    clubId: string,
+    roleId: string,
+    payload: UpdateCustomRolePayload,
+  ): Promise<CustomRole> {
+    return apiClient.patch<CustomRole>(
+      API_ENDPOINTS.CLUB_CUSTOM_ROLE_DETAIL(clubId, roleId),
+      payload,
+    );
+  },
+
+  /**
+   * Delete a custom staff role, optionally reassigning staff to another role.
+   */
+  deleteClubCustomRole(
+    clubId: string,
+    roleId: string,
+    reassignToRoleId?: string,
+  ): Promise<{ success: boolean; deleted_role_id: string; reassigned_count: number }> {
+    const qs = reassignToRoleId ? `?reassign_to_role_id=${encodeURIComponent(reassignToRoleId)}` : '';
+    return apiClient.delete<{ success: boolean; deleted_role_id: string; reassigned_count: number }>(
+      `${API_ENDPOINTS.CLUB_CUSTOM_ROLES(clubId)}/${roleId}${qs}`,
     );
   },
 

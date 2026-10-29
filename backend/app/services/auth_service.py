@@ -25,13 +25,32 @@ from app.schemas.user import UserResponse
 
 
 def _build_membership_info(membership: ClubMembership) -> MembershipInfo:
+    custom_role_id = membership.custom_role_id
+    custom_role_name = None
+    perms: list[str] = []
+    role_label = membership.role.display_label
+
+    if getattr(membership, "custom_role", None):
+        custom_role_name = membership.custom_role.name
+        role_label = membership.custom_role.name
+        perms = list(membership.custom_role.permissions or [])
+    elif membership.role == ClubRole.CLUB_OWNER:
+        from app.permissions import Permission
+        perms = [p.value for p in Permission]
+    else:
+        from app.permissions import get_permissions
+        perms = [p.value for p in get_permissions(membership.role)]
+
     return MembershipInfo(
         membership_id=membership.id,
         club_id=membership.club_id,
         club_name=membership.club.name,
         club_slug=membership.club.slug,
         role=membership.role,
-        role_label=membership.role.display_label,
+        role_label=role_label,
+        custom_role_id=custom_role_id,
+        custom_role_name=custom_role_name,
+        permissions=perms,
         is_active=membership.is_active,
     )
 

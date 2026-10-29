@@ -130,3 +130,30 @@ def get_permissions(role: ClubRole) -> FrozenSet[Permission]:
 def get_role_display_label(role: ClubRole) -> str:
     """Return the human-readable display label for a role."""
     return role.display_label
+
+
+def membership_has_permission(membership, permission: Permission) -> bool:
+    """
+    Authoritative check on a ClubMembership instance.
+    If the member is assigned a custom role, evaluates against the custom role's permission set.
+    Otherwise, evaluates against the built-in ClubRole permissions.
+    """
+    if not getattr(membership, "is_active", True):
+        return False
+    if getattr(membership, "role", None) == ClubRole.CLUB_OWNER:
+        return True
+    if getattr(membership, "custom_role_id", None) and getattr(membership, "custom_role", None):
+        custom_perms = set(getattr(membership.custom_role, "permissions", []) or [])
+        return permission.value in custom_perms
+    return has_permission(membership.role, permission)
+
+
+def get_membership_permissions(membership) -> FrozenSet[str]:
+    """Return all granted permission strings for a ClubMembership."""
+    if not getattr(membership, "is_active", True):
+        return frozenset()
+    if getattr(membership, "role", None) == ClubRole.CLUB_OWNER:
+        return frozenset(p.value for p in Permission)
+    if getattr(membership, "custom_role_id", None) and getattr(membership, "custom_role", None):
+        return frozenset(getattr(membership.custom_role, "permissions", []) or [])
+    return frozenset(p.value for p in get_permissions(membership.role))

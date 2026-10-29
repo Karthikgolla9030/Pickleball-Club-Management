@@ -73,6 +73,9 @@ export const API_ENDPOINTS = {
   CLUB_DASHBOARD: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/dashboard`,
   CLUB_MEMBER_DETAIL: (clubId: string, membershipId: string) =>
     `${API_BASE}/api/v1/clubs/${clubId}/members/${membershipId}`,
+  CLUB_CUSTOM_ROLES: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/custom-roles`,
+  CLUB_CUSTOM_ROLE_DETAIL: (clubId: string, roleId: string) =>
+    `${API_BASE}/api/v1/clubs/${clubId}/custom-roles/${roleId}`,
   CLUB_BRANDING: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/branding`,
   CLUB_MEDIA_UPLOAD: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/media/upload`,
   CLUB_CAROUSEL_SLIDES: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/carousel-slides`,
@@ -276,6 +279,9 @@ export const QUERY_KEYS = {
   CLUB_MEMBERS: (clubId: string) => ['clubs', clubId, 'members'] as const,
   CLUB_MEMBER_DETAIL: (clubId: string, memberId: string) =>
     ['clubs', clubId, 'members', memberId] as const,
+  CLUB_CUSTOM_ROLES: (clubId: string) => ['clubs', clubId, 'custom-roles'] as const,
+  CLUB_CUSTOM_ROLE_DETAIL: (clubId: string, roleId: string) =>
+    ['clubs', clubId, 'custom-roles', roleId] as const,
   CLUB_MEMBERSHIP: (clubId: string) => ['clubs', clubId, 'membership'] as const,
   CLUB_PLAYER_MEMBERS: (clubId: string) => ['clubs', clubId, 'player-memberships'] as const,
   PLAYER_PROFILE: ['player', 'profile'] as const,

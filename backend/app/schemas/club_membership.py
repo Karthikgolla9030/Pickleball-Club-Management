@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.club_membership import ClubRole
 
@@ -22,6 +22,9 @@ class MembershipInfo(BaseModel):
     club_slug: str
     role: ClubRole
     role_label: str
+    custom_role_id: UUID | None = None
+    custom_role_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -34,6 +37,9 @@ class ClubMembershipDetailResponse(BaseModel):
     club_id: UUID
     role: ClubRole
     role_label: str
+    custom_role_id: UUID | None = None
+    custom_role_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -48,6 +54,9 @@ class MemberResponse(BaseModel):
     club_id: UUID
     role: ClubRole
     role_label: str
+    custom_role_id: UUID | None = None
+    custom_role_name: str | None = None
+    permissions: list[str] = Field(default_factory=list)
     is_active: bool
     user_email: str
     user_full_name: str | None = None
@@ -59,9 +68,10 @@ class MemberResponse(BaseModel):
 
 
 class AddMemberRequest(BaseModel):
-    """Request to add a staff member to a club with a designated role."""
+    """Request to add a staff member to a club with a designated built-in or custom role."""
     email: str
-    role: ClubRole
+    role: ClubRole = ClubRole.STAFF_MEMBER
+    custom_role_id: UUID | None = None
     full_name: str | None = None
     temporary_password: str | None = None
 
@@ -74,8 +84,9 @@ class AddMemberRequest(BaseModel):
         return v
 
 
-
 class UpdateMemberRequest(BaseModel):
-    """Request to update member role and/or active status."""
+    """Request to update member role, custom role assignment, and/or active status."""
     role: ClubRole | None = None
+    custom_role_id: UUID | None = None
+    clear_custom_role: bool = False
     is_active: bool | None = None

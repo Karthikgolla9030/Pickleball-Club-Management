@@ -24,6 +24,7 @@ from app.models.league import League, LeagueStatus
 from app.models.lesson import Lesson, LessonStatus
 from app.models.payment import Payment, PaymentStatus
 from app.permissions import Permission, has_permission
+from app.repositories.club_custom_role_repository import ClubCustomRoleRepository
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_repository import ClubRepository
 from app.repositories.user_repository import UserRepository
@@ -52,6 +53,11 @@ from app.core.operating_hours import (
     parse_time_value,
     WEEKDAY_NAMES,
 )
+from app.schemas.club_custom_role import (
+    CustomRoleCreateRequest,
+    CustomRoleResponse,
+    CustomRoleUpdateRequest,
+)
 from app.schemas.club_membership import (
     ClubMembershipDetailResponse,
     MemberResponse,
@@ -63,12 +69,31 @@ def _build_member_response(m: ClubMembership) -> MemberResponse:
     if m.user and getattr(m.user, "player_profile", None):
         profile_img = m.user.player_profile.profile_image_url
 
+    custom_role_id = m.custom_role_id
+    custom_role_name = None
+    perms: list[str] = []
+    role_label = m.role.display_label
+
+    if getattr(m, "custom_role", None):
+        custom_role_name = m.custom_role.name
+        role_label = m.custom_role.name
+        perms = list(m.custom_role.permissions or [])
+    elif m.role == ClubRole.CLUB_OWNER:
+        from app.permissions import Permission
+        perms = [p.value for p in Permission]
+    else:
+        from app.permissions import get_permissions
+        perms = [p.value for p in get_permissions(m.role)]
+
     return MemberResponse(
         id=m.id,
         user_id=m.user_id,
         club_id=m.club_id,
         role=m.role,
-        role_label=m.role.display_label,
+        role_label=role_label,
+        custom_role_id=custom_role_id,
+        custom_role_name=custom_role_name,
+        permissions=perms,
         is_active=m.is_active,
         user_email=m.user.email if m.user else "",
         user_full_name=m.user.full_name if m.user else None,
@@ -84,6 +109,7 @@ class ClubService:
         self.club_repo = ClubRepository(db)
         self.membership_repo = ClubMembershipRepository(db)
         self.user_repo = UserRepository(db)
+        self.custom_role_repo = ClubCustomRoleRepository(db)
 
     async def list_user_clubs(self, user_id: UUID) -> list[UserClubResponse]:
         """
@@ -858,18 +884,33 @@ class ClubService:
         self,
         club_id: UUID,
         email: str,
-        role: ClubRole,
+        role: ClubRole = ClubRole.STAFF_MEMBER,
+        custom_role_id: UUID | None = None,
         full_name: str | None = None,
         temporary_password: str | None = None,
+        actor_id: UUID | None = None,
+        actor_email: str | None = None,
     ) -> MemberResponse:
         """
-        Add or invite a staff member to the club with a designated role.
+        Add or invite a staff member to the club with a designated built-in or custom role.
         Validates:
+        - If custom_role_id is provided, verifies that it exists and belongs to club_id.
         - If user does not exist: creates User with full_name, email, and hashed password.
         - If user exists: updates full_name/password if provided.
         - If previously deactivated in club: reactivates with new role.
         - User is not already an active member of this club.
         """
+        custom_role = None
+        if custom_role_id:
+            from app.repositories.club_custom_role_repository import ClubCustomRoleRepository
+            custom_role = await ClubCustomRoleRepository(self.db).get_by_id(custom_role_id, club_id=club_id)
+            if not custom_role:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Custom role not found in this club",
+                )
+            role = ClubRole.STAFF_MEMBER
+
         user = await self.user_repo.get_by_email(email)
         if not user:
             import secrets
@@ -902,10 +943,34 @@ class ClubService:
                 detail="User is already an active member of this club",
             )
 
+        assigned_label = custom_role.name if custom_role else role.display_label
+
         if existing and not existing.is_active:
             # Reactivate membership and update role
             updated = await self.membership_repo.update(
-                existing, role=role, is_active=True
+                existing,
+                role=role,
+                is_active=True,
+                custom_role_id=custom_role_id,
+                clear_custom_role=custom_role_id is None,
+            )
+            # Log audit
+            from app.models.platform_audit_log import PlatformAuditLog
+            self.db.add(
+                PlatformAuditLog(
+                    actor_id=actor_id,
+                    actor_email=actor_email,
+                    action="staff_role.reassigned",
+                    entity_type="club_membership",
+                    entity_id=str(updated.id),
+                    entity_name=user.email,
+                    reason=f"Reactivated staff member with role '{assigned_label}'",
+                    details={
+                        "club_id": str(club_id),
+                        "role": role.value,
+                        "custom_role_id": str(custom_role_id) if custom_role_id else None,
+                    },
+                )
             )
             await self.db.commit()
             try:
@@ -917,11 +982,12 @@ class ClubService:
                     club_id=club_id,
                     category="administrative",
                     title="Staff Role Assigned",
-                    message=f"You have been assigned the role of {role.display_label} for {c_name}.",
+                    message=f"You have been assigned the role of {assigned_label} for {c_name}.",
                     data={
                         "resource_type": "club_membership",
                         "resource_id": str(updated.id),
                         "role": role.value,
+                        "custom_role_id": str(custom_role_id) if custom_role_id else None,
                         "action_url": "/(club)/",
                     },
                     mandatory=True,
@@ -936,6 +1002,26 @@ class ClubService:
             club_id=club_id,
             role=role,
             is_active=True,
+            custom_role_id=custom_role_id,
+        )
+
+        # Log audit
+        from app.models.platform_audit_log import PlatformAuditLog
+        self.db.add(
+            PlatformAuditLog(
+                actor_id=actor_id,
+                actor_email=actor_email,
+                action="staff_role.assigned",
+                entity_type="club_membership",
+                entity_id=str(new_membership.id),
+                entity_name=user.email,
+                reason=f"Assigned staff role '{assigned_label}'",
+                details={
+                    "club_id": str(club_id),
+                    "role": role.value,
+                    "custom_role_id": str(custom_role_id) if custom_role_id else None,
+                },
+            )
         )
         await self.db.commit()
         try:
@@ -947,11 +1033,12 @@ class ClubService:
                 club_id=club_id,
                 category="administrative",
                 title="Staff Role Assigned",
-                message=f"You have been assigned the role of {role.display_label} for {c_name}.",
+                message=f"You have been assigned the role of {assigned_label} for {c_name}.",
                 data={
                     "resource_type": "club_membership",
                     "resource_id": str(new_membership.id),
                     "role": role.value,
+                    "custom_role_id": str(custom_role_id) if custom_role_id else None,
                     "action_url": "/(club)/",
                 },
                 mandatory=True,
@@ -966,10 +1053,14 @@ class ClubService:
         club_id: UUID,
         membership_id: UUID,
         role: ClubRole | None = None,
+        custom_role_id: UUID | None = None,
+        clear_custom_role: bool = False,
         is_active: bool | None = None,
+        actor_id: UUID | None = None,
+        actor_email: str | None = None,
     ) -> MemberResponse:
         """
-        Update member role and/or is_active status.
+        Update member role, custom role, and/or is_active status.
         Enforces Owner Safety Rules:
         - A club must always have at least one active owner.
         - Cannot demote the final active owner.
@@ -982,9 +1073,21 @@ class ClubService:
                 detail="Member not found in this club",
             )
 
+        custom_role = None
+        if custom_role_id is not None:
+            from app.repositories.club_custom_role_repository import ClubCustomRoleRepository
+            custom_role = await ClubCustomRoleRepository(self.db).get_by_id(custom_role_id, club_id=club_id)
+            if not custom_role:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Custom role not found in this club",
+                )
+            role = ClubRole.STAFF_MEMBER
+            clear_custom_role = False
+
         # Owner Safety Check
         if target.role == ClubRole.CLUB_OWNER and target.is_active:
-            is_changing_role = role is not None and role != ClubRole.CLUB_OWNER
+            is_changing_role = (role is not None and role != ClubRole.CLUB_OWNER) or (custom_role_id is not None)
             is_deactivating = is_active is not None and is_active is False
             if is_changing_role or is_deactivating:
                 active_owners = await self.membership_repo.count_active_owners(club_id)
@@ -1000,18 +1103,40 @@ class ClubService:
                     )
 
         updated = await self.membership_repo.update(
-            target, role=role, is_active=is_active
+            target,
+            role=role,
+            is_active=is_active,
+            custom_role_id=custom_role_id,
+            clear_custom_role=clear_custom_role,
+        )
+
+        display_name = updated.custom_role.name if updated.custom_role else updated.role.display_label
+
+        # Log audit
+        from app.models.platform_audit_log import PlatformAuditLog
+        self.db.add(
+            PlatformAuditLog(
+                actor_id=actor_id,
+                actor_email=actor_email,
+                action="staff_role.reassigned",
+                entity_type="club_membership",
+                entity_id=str(updated.id),
+                entity_name=updated.user.email if updated.user else None,
+                reason=f"Updated staff member role to '{display_name}'",
+                details={
+                    "club_id": str(club_id),
+                    "role": updated.role.value,
+                    "custom_role_id": str(updated.custom_role_id) if updated.custom_role_id else None,
+                    "is_active": updated.is_active,
+                },
+            )
         )
         await self.db.commit()
         try:
             from app.services.notification_service import NotificationService
             club_obj = await self.club_repo.get_by_id(club_id)
             c_name = club_obj.name if club_obj else "the club"
-            msg = (
-                f"Your role for {c_name} has been updated to {role.display_label}."
-                if role is not None
-                else f"Your staff account for {c_name} was updated."
-            )
+            msg = f"Your role for {c_name} has been updated to {display_name}."
             await NotificationService(self.db).create_notification(
                 user_id=target.user_id,
                 club_id=club_id,
@@ -1022,6 +1147,7 @@ class ClubService:
                     "resource_type": "club_membership",
                     "resource_id": str(target.id),
                     "role": updated.role.value,
+                    "custom_role_id": str(updated.custom_role_id) if updated.custom_role_id else None,
                     "action_url": "/(club)/",
                 },
                 mandatory=True,
@@ -1058,6 +1184,280 @@ class ClubService:
         deactivated = await self.membership_repo.deactivate(target)
         await self.db.commit()
         return _build_member_response(deactivated)
+
+    async def list_custom_roles(self, club_id: UUID) -> list[CustomRoleResponse]:
+        """
+        List all custom roles defined for a club, including count of assigned staff members.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+        roles = await self.custom_role_repo.list_by_club(club_id)
+        items = []
+        for r in roles:
+            staff_count = await self.custom_role_repo.count_assigned_staff(r.id)
+            items.append(
+                CustomRoleResponse(
+                    id=r.id,
+                    club_id=r.club_id,
+                    name=r.name,
+                    description=r.description,
+                    permissions=list(r.permissions or []),
+                    staff_count=staff_count,
+                    created_at=r.created_at,
+                    updated_at=r.updated_at,
+                )
+            )
+        return items
+
+    async def get_custom_role(self, club_id: UUID, role_id: UUID) -> CustomRoleResponse:
+        """
+        Get details of a specific custom role within a club.
+        """
+        role = await self.custom_role_repo.get_by_id(role_id, club_id=club_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Custom role not found",
+            )
+        staff_count = await self.custom_role_repo.count_assigned_staff(role.id)
+        return CustomRoleResponse(
+            id=role.id,
+            club_id=role.club_id,
+            name=role.name,
+            description=role.description,
+            permissions=list(role.permissions or []),
+            staff_count=staff_count,
+            created_at=role.created_at,
+            updated_at=role.updated_at,
+        )
+
+    async def create_custom_role(
+        self,
+        club_id: UUID,
+        payload: CustomRoleCreateRequest,
+        actor_id: UUID | None = None,
+        actor_email: str | None = None,
+    ) -> CustomRoleResponse:
+        """
+        Create a new custom staff role for the club with configured granular permissions.
+        Enforces:
+        - Unique role name per club.
+        - Cannot use reserved system role names.
+        """
+        club = await self.club_repo.get_by_id(club_id)
+        if not club:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Club not found",
+            )
+
+        name_lower = payload.name.strip().lower()
+        reserved = {"club owner", "club manager", "tournament director", "staff member", "player", "admin", "platform admin"}
+        if name_lower in reserved:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"'{payload.name}' is a reserved system role name. Please choose a different name.",
+            )
+
+        existing = await self.custom_role_repo.get_by_name(club_id, payload.name)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A role named '{payload.name}' already exists in this club.",
+            )
+
+        new_role = await self.custom_role_repo.create(
+            club_id=club_id,
+            name=payload.name,
+            description=payload.description,
+            permissions=payload.permissions,
+        )
+
+        from app.models.platform_audit_log import PlatformAuditLog
+        self.db.add(
+            PlatformAuditLog(
+                actor_id=actor_id,
+                actor_email=actor_email,
+                action="custom_role.created",
+                entity_type="club_custom_role",
+                entity_id=str(new_role.id),
+                entity_name=new_role.name,
+                reason=f"Created custom role '{new_role.name}' with {len(new_role.permissions or [])} permissions",
+                details={
+                    "club_id": str(club_id),
+                    "name": new_role.name,
+                    "permissions": new_role.permissions,
+                },
+            )
+        )
+        await self.db.commit()
+
+        return CustomRoleResponse(
+            id=new_role.id,
+            club_id=new_role.club_id,
+            name=new_role.name,
+            description=new_role.description,
+            permissions=list(new_role.permissions or []),
+            staff_count=0,
+            created_at=new_role.created_at,
+            updated_at=new_role.updated_at,
+        )
+
+    async def update_custom_role(
+        self,
+        club_id: UUID,
+        role_id: UUID,
+        payload: CustomRoleUpdateRequest,
+        actor_id: UUID | None = None,
+        actor_email: str | None = None,
+    ) -> CustomRoleResponse:
+        """
+        Update an existing custom role's name, description, and/or permissions.
+        """
+        role = await self.custom_role_repo.get_by_id(role_id, club_id=club_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Custom role not found",
+            )
+
+        updates: dict = {}
+        if payload.name is not None:
+            name_lower = payload.name.strip().lower()
+            reserved = {"club owner", "club manager", "tournament director", "staff member", "player", "admin", "platform admin"}
+            if name_lower in reserved:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"'{payload.name}' is a reserved system role name.",
+                )
+            existing = await self.custom_role_repo.get_by_name(club_id, payload.name, exclude_id=role.id)
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"A role named '{payload.name}' already exists in this club.",
+                )
+            updates["name"] = payload.name
+
+        if payload.description is not None:
+            updates["description"] = payload.description
+
+        if payload.permissions is not None:
+            updates["permissions"] = payload.permissions
+
+        updated = await self.custom_role_repo.update(role, **updates)
+
+        from app.models.platform_audit_log import PlatformAuditLog
+        self.db.add(
+            PlatformAuditLog(
+                actor_id=actor_id,
+                actor_email=actor_email,
+                action="custom_role.updated",
+                entity_type="club_custom_role",
+                entity_id=str(updated.id),
+                entity_name=updated.name,
+                reason=f"Updated custom role '{updated.name}'",
+                details={
+                    "club_id": str(club_id),
+                    "name": updated.name,
+                    "permissions": updated.permissions,
+                },
+            )
+        )
+        await self.db.commit()
+
+        staff_count = await self.custom_role_repo.count_assigned_staff(updated.id)
+        return CustomRoleResponse(
+            id=updated.id,
+            club_id=updated.club_id,
+            name=updated.name,
+            description=updated.description,
+            permissions=list(updated.permissions or []),
+            staff_count=staff_count,
+            created_at=updated.created_at,
+            updated_at=updated.updated_at,
+        )
+
+    async def delete_custom_role(
+        self,
+        club_id: UUID,
+        role_id: UUID,
+        reassign_to_role_id: UUID | None = None,
+        actor_id: UUID | None = None,
+        actor_email: str | None = None,
+    ) -> dict:
+        """
+        Delete a custom role.
+        Enforces deletion guard:
+        - If active staff are assigned, requires reassign_to_role_id (or raises 400).
+        - Reassigns staff members before removing the role.
+        """
+        role = await self.custom_role_repo.get_by_id(role_id, club_id=club_id)
+        if not role:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Custom role not found",
+            )
+
+        staff_count = await self.custom_role_repo.count_assigned_staff(role.id)
+        reassigned_count = 0
+        if staff_count > 0:
+            if not reassign_to_role_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Cannot delete role '{role.name}' because {staff_count} staff member(s) are assigned to it. Please reassign them to another role first.",
+                )
+            if reassign_to_role_id == role_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot reassign to the same role being deleted.",
+                )
+            target_role = await self.custom_role_repo.get_by_id(reassign_to_role_id, club_id=club_id)
+            if not target_role:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Target reassignment role does not exist in this club.",
+                )
+            reassigned_count = await self.membership_repo.reassign_custom_role(
+                club_id=club_id,
+                from_role_id=role.id,
+                to_role_id=target_role.id,
+                target_role=target_role,
+            )
+            if hasattr(role, "memberships") and role.memberships:
+                role.memberships.clear()
+
+        role_name = role.name
+        await self.custom_role_repo.delete(role)
+
+        from app.models.platform_audit_log import PlatformAuditLog
+        self.db.add(
+            PlatformAuditLog(
+                actor_id=actor_id,
+                actor_email=actor_email,
+                action="custom_role.deleted",
+                entity_type="club_custom_role",
+                entity_id=str(role_id),
+                entity_name=role_name,
+                reason=f"Deleted custom role '{role_name}' (reassigned {reassigned_count} staff)",
+                details={
+                    "club_id": str(club_id),
+                    "deleted_role_name": role_name,
+                    "reassigned_to_role_id": str(reassign_to_role_id) if reassign_to_role_id else None,
+                    "reassigned_count": reassigned_count,
+                },
+            )
+        )
+        await self.db.commit()
+
+        return {
+            "success": True,
+            "deleted_role_id": str(role_id),
+            "reassigned_count": reassigned_count,
+        }
 
     async def discover_public_clubs(
         self,

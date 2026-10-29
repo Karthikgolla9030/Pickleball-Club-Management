@@ -221,6 +221,9 @@ export interface MembershipInfo {
   club_slug: string;
   role: ClubRole;
   role_label: string;
+  custom_role_id?: string | null;
+  custom_role_name?: string | null;
+  permissions?: string[];
   is_active: boolean;
 }
 
@@ -230,6 +233,9 @@ export interface ClubMembershipDetail {
   club_id: string;
   role: ClubRole;
   role_label: string;
+  custom_role_id?: string | null;
+  custom_role_name?: string | null;
+  permissions?: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -257,6 +263,9 @@ export interface ClubMember {
   club_id: string;
   role: ClubRole;
   role_label: string;
+  custom_role_id?: string | null;
+  custom_role_name?: string | null;
+  permissions?: string[];
   is_active: boolean;
   user_email: string;
   user_full_name: string | null;
@@ -267,14 +276,40 @@ export interface ClubMember {
 
 export interface AddMemberPayload {
   email: string;
-  role: ClubRole;
+  role?: ClubRole;
+  custom_role_id?: string | null;
   full_name?: string;
   temporary_password?: string;
 }
 
 export interface UpdateMemberPayload {
   role?: ClubRole;
+  custom_role_id?: string | null;
+  clear_custom_role?: boolean;
   is_active?: boolean;
+}
+
+export interface CustomRole {
+  id: string;
+  club_id: string;
+  name: string;
+  description: string | null;
+  permissions: string[];
+  staff_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateCustomRolePayload {
+  name: string;
+  description?: string | null;
+  permissions: string[];
+}
+
+export interface UpdateCustomRolePayload {
+  name?: string;
+  description?: string | null;
+  permissions?: string[];
 }
 
 // ─── Phase 6: Club Dashboard ─────────────────────────────────────────────────
