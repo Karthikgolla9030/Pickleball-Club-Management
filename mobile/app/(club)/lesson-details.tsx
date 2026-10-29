@@ -4,15 +4,15 @@
  * Owner & Manager single-page lesson details with direct inline registration overview:
  *   - Direct URL and browser refresh support via lesson ID parameter
  *   - Seamless Back navigation preserving club context and list filter
- *   - Lesson Hero image with club coaching default fallback & status badge overlay
- *   - Lesson Overview with format, lesson type, fee, and full description
- *   - Dedicated "Schedule & Assignments" section with Coach, Court, and Capacity
- *   - Integrated "Registration Overview" section:
- *       * Live status summary cards (Enrolled, Attended, No Show, Available, Cancelled)
- *       * Real-time capacity and remaining spaces
- *       * Interactive status filter chips
+ *   - Lesson Hero image with club branding fallback & status badge
+ *   - Lesson Overview with format (private/group), type, fee, and full description
+ *   - Dedicated "Schedule & Assignments" section (coach, court, capacity)
+ *   - Redesigned "Registration Overview" section:
+ *       * Concise top summary (X registered participants · capacity & available spots)
+ *       * Responsive 2-column metric cards on mobile (wider on tablet/desktop) with readable labels
+ *       * Completely removed duplicate status-filter buttons row
  *       * Direct inline participant list with real names, emails, dates, notes, and attendance
- *       * Empty state when no participants exist (strictly without Add Player / View Roster buttons)
+ *       * Compact empty state when no participants exist (strictly without Add Player / View Roster buttons)
  *   - Lifecycle management actions: Publish, Complete, Cancel
  */
 
@@ -25,6 +25,7 @@ import {
   StatusBar,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -69,9 +70,8 @@ import {
   useStaffMarkLessonAttendance,
   useStaffResetLessonAttendance,
 } from '@/hooks';
-import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
-import { resolveLessonImage } from '@/utils/imageResolution';
+import { resolveLessonPicture } from '@/utils/imageResolution';
 import {
   LESSON_REGISTRATION_STATUS_LABELS,
   LESSON_STATUS_LABELS,
@@ -80,7 +80,7 @@ import {
   type LessonRegistrationStatus,
 } from '@/types';
 
-function formatLessonDateTime(startIso: string, endIso: string) {
+function formatLessonSchedule(startIso: string, endIso: string) {
   try {
     const dStart = new Date(startIso);
     const dEnd = new Date(endIso);
@@ -126,16 +126,18 @@ function formatRegistrationDate(iso?: string | null): string {
 
 export default function LessonDetailsScreen() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const isWide = windowWidth >= 640;
+
   const params = useLocalSearchParams<{ id?: string; lessonId?: string; clubId?: string }>();
   const lessonId = params.id || params.lessonId || '';
 
   const { clubId: activeClubId } = useActiveClub();
   const clubId = params.clubId || activeClubId || '';
 
-  const { canManageLessons } = usePermission();
+  const { canManageEvents } = usePermission();
   const { data: clubBranding } = useClubBranding(clubId);
 
-  const [filterStatus, setFilterStatus] = useState<LessonRegistrationStatus | 'all'>('all');
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Fetch lesson details
@@ -203,19 +205,22 @@ export default function LessonDetailsScreen() {
     };
   }, [registrations, lesson?.capacity]);
 
-  // Filtered participant list
-  const filteredRegistrations = useMemo(() => {
-    if (filterStatus === 'all') return registrations;
-    return registrations.filter((r) => r.status === filterStatus);
-  }, [registrations, filterStatus]);
+  // Sort registrations: active first, cancelled last, then newest
+  const sortedRegistrations = useMemo(() => {
+    return [...registrations].sort((a, b) => {
+      if (a.status === 'cancelled' && b.status !== 'cancelled') return 1;
+      if (a.status !== 'cancelled' && b.status === 'cancelled') return -1;
+      return new Date(b.registered_at || 0).getTime() - new Date(a.registered_at || 0).getTime();
+    });
+  }, [registrations]);
 
   // Expandable subset
   const displayedRegistrations = useMemo(() => {
-    if (isExpanded || filteredRegistrations.length <= 8) {
-      return filteredRegistrations;
+    if (isExpanded || sortedRegistrations.length <= 8) {
+      return sortedRegistrations;
     }
-    return filteredRegistrations.slice(0, 8);
-  }, [filteredRegistrations, isExpanded]);
+    return sortedRegistrations.slice(0, 8);
+  }, [sortedRegistrations, isExpanded]);
 
   const handlePublish = () => {
     if (!lesson) return;
@@ -295,7 +300,7 @@ export default function LessonDetailsScreen() {
     }
     options.push({ text: 'Close', style: 'cancel' });
 
-    Alert.alert(lesson.title, 'Lesson Actions', options);
+    Alert.alert(lesson.title, 'Lesson Management Actions', options);
   };
 
   const handleMarkAttendance = async (registrationId: string, attended: boolean) => {
@@ -314,7 +319,7 @@ export default function LessonDetailsScreen() {
       refetchRegistrations();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to reset attendance';
-      Alert.alert('Reset Error', msg);
+      Alert.alert('Attendance Error', msg);
     }
   };
 
@@ -342,13 +347,14 @@ export default function LessonDetailsScreen() {
     );
   };
 
-  if (!canManageLessons) {
+  // Permission check
+  if (!canManageEvents) {
     return (
       <Screen style={styles.container}>
         <AppHeader title="Lesson Details" showBack={true} />
         <EmptyState
           title="Access Restricted"
-          description="Only club owners and managers have permission to view and manage club lessons."
+          description="Only club owners and managers have permission to view and manage coaching lessons."
           actionLabel="Back to Lessons"
           onAction={handleBack}
         />
@@ -356,6 +362,7 @@ export default function LessonDetailsScreen() {
     );
   }
 
+  // Loading state
   if (isLoading) {
     return (
       <Screen style={styles.container}>
@@ -365,6 +372,7 @@ export default function LessonDetailsScreen() {
     );
   }
 
+  // Error / Not Found states
   if (isError || !lesson) {
     const isNotFound = !lesson || (error as any)?.status === 404;
     return (
@@ -388,8 +396,8 @@ export default function LessonDetailsScreen() {
     );
   }
 
-  const schedule = formatLessonDateTime(lesson.start_at, lesson.end_at);
-  const cardImg = resolveLessonImage(lesson, clubBranding);
+  const schedule = formatLessonSchedule(lesson.start_at, lesson.end_at);
+  const cardImg = resolveLessonPicture(lesson, clubBranding);
 
   const feeDisplay =
     Number(lesson.price) > 0 ? formatCurrency(Number(lesson.price)) : 'Free';
@@ -402,11 +410,10 @@ export default function LessonDetailsScreen() {
   const getStatusBadgeStyle = () => {
     switch (lesson.status) {
       case 'completed':
-        return { bg: '#E3F2FD', text: '#2563A8' };
       case 'published':
-        return { bg: '#E8F5E9', text: '#18794E' };
+        return { bg: '#E5F5EC', text: '#18794E' };
       case 'draft':
-        return { bg: '#FFF8E1', text: '#9A6B00' };
+        return { bg: '#FFF5D9', text: '#9A6B00' };
       case 'cancelled':
       default:
         return { bg: '#FDECEC', text: '#B42318' };
@@ -415,10 +422,51 @@ export default function LessonDetailsScreen() {
 
   const statusStyle = getStatusBadgeStyle();
 
+  // Concise capacity summary header
   const capacitySummaryText =
     lesson.capacity !== null && lesson.capacity !== undefined
-      ? `${counts.activeSpots} / ${lesson.capacity} spots filled • ${counts.availableSpots !== null ? counts.availableSpots : '0'} spaces remaining`
-      : `${counts.activeSpots} enrolled participants (unlimited capacity)`;
+      ? `${counts.activeSpots} registered participant${counts.activeSpots === 1 ? '' : 's'} · ${lesson.capacity} capacity (${counts.availableSpots} spots available)`
+      : `${counts.activeSpots} registered participant${counts.activeSpots === 1 ? '' : 's'} · Unlimited capacity`;
+
+  // Spacious 2-column metrics definition
+  const metricCards = [
+    {
+      key: 'registered',
+      label: 'Registered',
+      count: counts.reg,
+      Icon: Users,
+      color: '#0F766E',
+      bg: '#F0FDF4',
+      border: '#DCFCE7',
+    },
+    {
+      key: 'attended',
+      label: 'Attended',
+      count: counts.att,
+      Icon: CheckCircle2,
+      color: '#15803D',
+      bg: '#ECFDF5',
+      border: '#D1FAE5',
+    },
+    {
+      key: 'no_show',
+      label: 'No Show',
+      count: counts.noShow,
+      Icon: UserX,
+      color: '#B91C1C',
+      bg: '#FEF2F2',
+      border: '#FEE2E2',
+    },
+    {
+      key: 'cancelled',
+      label: 'Cancelled',
+      count: counts.canc,
+      Icon: XCircle,
+      color: '#64748B',
+      bg: '#F8FAFC',
+      border: '#E2E8F0',
+    },
+  ];
 
   return (
     <Screen style={styles.container}>
@@ -472,7 +520,7 @@ export default function LessonDetailsScreen() {
           <View style={styles.badgeRow}>
             <View style={styles.formatBadge}>
               <AppText style={styles.formatBadgeText}>
-                {lesson.is_private ? 'PRIVATE LESSON' : 'GROUP CLINIC'}
+                {lesson.is_private ? 'PRIVATE' : 'GROUP'}
               </AppText>
             </View>
             {lesson.lesson_type_name ? (
@@ -569,92 +617,46 @@ export default function LessonDetailsScreen() {
           </View>
         </View>
 
-        {/* 5. INTEGRATED REGISTRATION OVERVIEW & PARTICIPANT LIST */}
+        {/* 5. REDESIGNED REGISTRATION OVERVIEW & INLINE PARTICIPANT LIST */}
         <View style={styles.sectionCard}>
           <View style={styles.rosterSectionHeader}>
-            <View>
-              <AppText style={styles.sectionHeading}>Registration Overview</AppText>
-              <AppText style={styles.rosterCapacitySubtitle}>{capacitySummaryText}</AppText>
-            </View>
+            <AppText style={styles.sectionHeading}>Registration Overview</AppText>
+            <AppText style={styles.rosterCapacitySubtitle}>{capacitySummaryText}</AppText>
           </View>
 
-          {/* Status Metrics Bar */}
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <AppText style={styles.metricNumber}>{counts.activeSpots}</AppText>
-              <AppText style={styles.metricLabel}>Enrolled</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#18794E' }]}>
-                {counts.att}
-              </AppText>
-              <AppText style={styles.metricLabel}>Attended</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#B45309' }]}>
-                {counts.noShow}
-              </AppText>
-              <AppText style={styles.metricLabel}>No Show</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#0F766E' }]}>
-                {counts.availableSpots !== null ? counts.availableSpots : '∞'}
-              </AppText>
-              <AppText style={styles.metricLabel}>Available</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#64748B' }]}>
-                {counts.canc}
-              </AppText>
-              <AppText style={styles.metricLabel}>Cancelled</AppText>
-            </View>
+          {/* Clean Responsive 2-Column Metrics Grid */}
+          <View style={styles.metricsGrid}>
+            {metricCards.map((m) => (
+              <View
+                key={m.key}
+                style={[
+                  styles.metricCard,
+                  {
+                    width: isWide ? '23.5%' : '48.4%',
+                    backgroundColor: m.bg,
+                    borderColor: m.border,
+                  },
+                ]}
+              >
+                <View style={styles.metricCardHeader}>
+                  <m.Icon size={16} color={m.color} />
+                  <AppText style={[styles.metricNumber, { color: m.color }]}>
+                    {m.count}
+                  </AppText>
+                </View>
+                <AppText style={styles.metricLabel}>{m.label}</AppText>
+              </View>
+            ))}
           </View>
 
-          {/* Status Filter Chips */}
-          <View style={styles.rosterFilterContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rosterFilterScroll}
-            >
-              {(
-                [
-                  { key: 'all', label: `All (${counts.total})` },
-                  { key: 'registered', label: `Enrolled (${counts.reg})` },
-                  { key: 'attended', label: `Attended (${counts.att})` },
-                  { key: 'no_show', label: `No Show (${counts.noShow})` },
-                  { key: 'cancelled', label: `Cancelled (${counts.canc})` },
-                ] as const
-              ).map((chip) => {
-                const isSelected = filterStatus === chip.key;
-                return (
-                  <TouchableOpacity
-                    key={chip.key}
-                    style={[styles.rosterChip, isSelected && styles.rosterChipActive]}
-                    onPress={() => setFilterStatus(chip.key)}
-                    activeOpacity={0.8}
-                  >
-                    <AppText style={[styles.rosterChipText, isSelected && styles.rosterChipTextActive]}>
-                      {chip.label}
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* Participant Rows List */}
+          {/* Participant Rows List (Directly Below Summary without Duplicate Filter Buttons) */}
           <View style={styles.participantListContainer}>
-            {filteredRegistrations.length === 0 ? (
+            {sortedRegistrations.length === 0 ? (
               <View style={styles.emptyParticipantState}>
-                <Users size={28} color="#94A3B8" style={{ marginBottom: 6 }} />
-                <AppText style={styles.emptyParticipantTitle}>
-                  {filterStatus === 'all' ? 'No registrations yet' : 'No participants found'}
-                </AppText>
+                <Users size={24} color="#94A3B8" style={{ marginBottom: 6 }} />
+                <AppText style={styles.emptyParticipantTitle}>No participants yet</AppText>
                 <AppText style={styles.emptyParticipantSubtitle}>
-                  {filterStatus === 'all'
-                    ? 'No club members have enrolled in this coaching session yet.'
-                    : `No registrations found with status "${filterStatus}".`}
+                  Registrations will appear here when players join.
                 </AppText>
               </View>
             ) : (
@@ -768,10 +770,10 @@ export default function LessonDetailsScreen() {
                           <TouchableOpacity
                             style={styles.cancelSpotBtn}
                             onPress={() => handleCancelRegistration(reg)}
-                            activeOpacity={0.8}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             accessibilityLabel={`Cancel registration for ${playerName}`}
                           >
-                            <XCircle size={14} color="#B42318" />
+                            <XCircle size={16} color="#94A3B8" />
                           </TouchableOpacity>
                         </View>
                       )}
@@ -779,16 +781,17 @@ export default function LessonDetailsScreen() {
                   );
                 })}
 
-                {filteredRegistrations.length > 8 && (
+                {/* Show More / Show Less Toggle when participants > 8 */}
+                {sortedRegistrations.length > 8 && (
                   <TouchableOpacity
                     style={styles.expandToggleBtn}
                     onPress={() => setIsExpanded(!isExpanded)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
                   >
                     <AppText style={styles.expandToggleText}>
                       {isExpanded
-                        ? 'Show Fewer Participants'
-                        : `Show All (${filteredRegistrations.length}) Participants`}
+                        ? 'Show fewer participants'
+                        : `Show all ${sortedRegistrations.length} participants`}
                     </AppText>
                     {isExpanded ? (
                       <ChevronUp size={16} color="#176B57" />
@@ -802,7 +805,7 @@ export default function LessonDetailsScreen() {
           </View>
         </View>
 
-        {/* 6. MANAGEMENT ACTIONS */}
+        {/* 6. PRIMARY MANAGEMENT ACTIONS */}
         <View style={styles.managementSection}>
           {isDraft && (
             <Button
@@ -829,11 +832,12 @@ export default function LessonDetailsScreen() {
           {!isCompleted && !isCancelled && (
             <Button
               label="Cancel Lesson"
-              variant="ghost"
+              variant="outline"
               leftIcon={<XCircle size={16} color="#B42318" />}
               onPress={handleCancelLesson}
               loading={cancelMutation.isPending}
-              style={[styles.managementBtn, { borderColor: '#FDECEC' }]}
+              style={[styles.managementBtn, { borderColor: '#FECDCA' }]}
+              labelStyle={{ color: '#B42318' }}
             />
           )}
         </View>
@@ -847,32 +851,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F8F5',
   },
-  scrollContent: {
-    paddingBottom: 100,
-    maxWidth: 720,
-    width: '100%',
-    alignSelf: 'center',
-  },
   headerMoreBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    backgroundColor: '#E8F2EC',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 96,
   },
   heroCard: {
     marginHorizontal: 16,
     marginTop: 8,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     height: 180,
-    backgroundColor: '#E5F5EC',
+    backgroundColor: '#102B2A',
     position: 'relative',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   heroImage: {
     width: '100%',
@@ -959,7 +961,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#102B2A',
-    marginBottom: 4,
   },
   infoRow: {
     flexDirection: 'row',
@@ -996,92 +997,65 @@ const styles = StyleSheet.create({
 
   // Roster Integrated Section
   rosterSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 8,
   },
   rosterCapacitySubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#0F766E',
     fontWeight: '600',
-    marginTop: 2,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginVertical: 10,
-  },
-  metricItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 10,
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E6ECE8',
-  },
-  metricNumber: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#102B2A',
-  },
-  metricLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    marginTop: 2,
+    marginTop: 3,
   },
 
-  // Roster Filters
-  rosterFilterContainer: {
-    marginVertical: 8,
+  // 2-Column Responsive Metrics Grid
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 12,
   },
-  rosterFilterScroll: {
-    gap: 6,
-  },
-  rosterChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    borderRadius: 16,
+  metricCard: {
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderWidth: 1,
+    minHeight: 66,
+    justifyContent: 'space-between',
   },
-  rosterChipActive: {
-    backgroundColor: '#176B57',
-    borderColor: '#176B57',
+  metricCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  rosterChipText: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: '#3D544F',
+  metricNumber: {
+    fontSize: 18,
+    fontWeight: '800',
   },
-  rosterChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 4,
   },
 
   // Participant List
   participantListContainer: {
-    marginTop: 6,
+    marginTop: 4,
   },
   emptyParticipantState: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 18,
     paddingHorizontal: 16,
   },
   emptyParticipantTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#102B2A',
   },
   emptyParticipantSubtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 3,
+    marginTop: 2,
     textAlign: 'center',
   },
   participantRow: {
@@ -1168,7 +1142,7 @@ const styles = StyleSheet.create({
     borderColor: '#FEF3C7',
   },
   attActionReset: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
     borderColor: '#E2E8F0',
   },
   attActionText: {

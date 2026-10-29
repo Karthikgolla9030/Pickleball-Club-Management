@@ -7,12 +7,12 @@
  *   - Event Hero image with club branding fallback, date overlay & status badge
  *   - Event Overview with category, visibility, fee, and full description
  *   - Dedicated "Schedule & Venue" section
- *   - Integrated "Registration Overview" section:
- *       * Live status summary cards (Registered, Waitlisted, Attended, No Show, Cancelled)
- *       * Real-time capacity and remaining spaces
- *       * Interactive status filter chips
+ *   - Redesigned "Registration Overview" section:
+ *       * Concise top summary (X registered participants · capacity & remaining spots)
+ *       * Responsive 2-column metric cards on mobile (wider on tablet/desktop) with readable labels
+ *       * Completely removed duplicate status-filter buttons row
  *       * Direct inline participant list with real names, emails, dates, notes, and attendance
- *       * Empty state when no participants exist (strictly without Add Player / View Roster buttons)
+ *       * Compact empty state when no participants exist (strictly without Add Player / View Roster buttons)
  *   - Lifecycle management actions: Edit Details, Publish, Complete, Cancel
  */
 
@@ -25,6 +25,7 @@ import {
   StatusBar,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -147,6 +148,9 @@ function parseEventLocation(loc: string | null) {
 
 export default function EventDetailsScreen() {
   const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const isWide = windowWidth >= 640;
+
   const params = useLocalSearchParams<{ id?: string; eventId?: string; clubId?: string }>();
   const eventId = params.id || params.eventId || '';
 
@@ -157,7 +161,6 @@ export default function EventDetailsScreen() {
   const { data: clubBranding } = useClubBranding(clubId);
 
   const [showEditModal, setShowEditModal] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<EventRegistrationStatus | 'all'>('all');
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Fetch event details
@@ -227,19 +230,22 @@ export default function EventDetailsScreen() {
     };
   }, [registrations, event?.capacity]);
 
-  // Filtered participant list
-  const filteredRegistrations = useMemo(() => {
-    if (filterStatus === 'all') return registrations;
-    return registrations.filter((r) => r.status === filterStatus);
-  }, [registrations, filterStatus]);
+  // Sort registrations: active first, cancelled last, then newest
+  const sortedRegistrations = useMemo(() => {
+    return [...registrations].sort((a, b) => {
+      if (a.status === 'cancelled' && b.status !== 'cancelled') return 1;
+      if (a.status !== 'cancelled' && b.status === 'cancelled') return -1;
+      return new Date(b.registered_at || 0).getTime() - new Date(a.registered_at || 0).getTime();
+    });
+  }, [registrations]);
 
   // Expandable subset
   const displayedRegistrations = useMemo(() => {
-    if (isExpanded || filteredRegistrations.length <= 8) {
-      return filteredRegistrations;
+    if (isExpanded || sortedRegistrations.length <= 8) {
+      return sortedRegistrations;
     }
-    return filteredRegistrations.slice(0, 8);
-  }, [filteredRegistrations, isExpanded]);
+    return sortedRegistrations.slice(0, 8);
+  }, [sortedRegistrations, isExpanded]);
 
   const handlePublish = () => {
     if (!event) return;
@@ -437,10 +443,60 @@ export default function EventDetailsScreen() {
 
   const statusStyle = getStatusBadgeStyle();
 
+  // Concise capacity summary header
   const capacitySummaryText =
     event.capacity !== null && event.capacity !== undefined
-      ? `${counts.activeSpots} / ${event.capacity} spots filled • ${counts.remainingSpaces} spaces remaining`
-      : `${counts.activeSpots} registered participants (unlimited capacity)`;
+      ? `${counts.activeSpots} registered participant${counts.activeSpots === 1 ? '' : 's'} · ${event.capacity} capacity (${counts.remainingSpaces} spots remaining)`
+      : `${counts.activeSpots} registered participant${counts.activeSpots === 1 ? '' : 's'} · Unlimited capacity`;
+
+  // Spacious 2-column metrics definition
+  const metricCards = [
+    {
+      key: 'registered',
+      label: 'Registered',
+      count: counts.reg,
+      Icon: Users,
+      color: '#0F766E',
+      bg: '#F0FDF4',
+      border: '#DCFCE7',
+    },
+    {
+      key: 'waitlisted',
+      label: 'Waitlisted',
+      count: counts.wait,
+      Icon: Clock,
+      color: '#B45309',
+      bg: '#FFFBEB',
+      border: '#FEF3C7',
+    },
+    {
+      key: 'attended',
+      label: 'Attended',
+      count: counts.att,
+      Icon: CheckCircle2,
+      color: '#15803D',
+      bg: '#ECFDF5',
+      border: '#D1FAE5',
+    },
+    {
+      key: 'no_show',
+      label: 'No Show',
+      count: counts.noShow,
+      Icon: UserX,
+      color: '#B91C1C',
+      bg: '#FEF2F2',
+      border: '#FEE2E2',
+    },
+    {
+      key: 'cancelled',
+      label: 'Cancelled',
+      count: counts.canc,
+      Icon: XCircle,
+      color: '#64748B',
+      bg: '#F8FAFC',
+      border: '#E2E8F0',
+    },
+  ];
 
   return (
     <Screen style={styles.container}>
@@ -570,93 +626,46 @@ export default function EventDetailsScreen() {
           </View>
         </View>
 
-        {/* 5. INTEGRATED REGISTRATION OVERVIEW & PARTICIPANT LIST */}
+        {/* 5. REDESIGNED REGISTRATION OVERVIEW & INLINE PARTICIPANT LIST */}
         <View style={styles.sectionCard}>
           <View style={styles.rosterSectionHeader}>
-            <View>
-              <AppText style={styles.sectionHeading}>Registration Overview</AppText>
-              <AppText style={styles.rosterCapacitySubtitle}>{capacitySummaryText}</AppText>
-            </View>
+            <AppText style={styles.sectionHeading}>Registration Overview</AppText>
+            <AppText style={styles.rosterCapacitySubtitle}>{capacitySummaryText}</AppText>
           </View>
 
-          {/* Status Metrics Bar */}
-          <View style={styles.metricsRow}>
-            <View style={styles.metricItem}>
-              <AppText style={styles.metricNumber}>{counts.activeSpots}</AppText>
-              <AppText style={styles.metricLabel}>Registered</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#9A6B00' }]}>
-                {counts.wait}
-              </AppText>
-              <AppText style={styles.metricLabel}>Waitlist</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#18794E' }]}>
-                {counts.att}
-              </AppText>
-              <AppText style={styles.metricLabel}>Attended</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#B42318' }]}>
-                {counts.noShow}
-              </AppText>
-              <AppText style={styles.metricLabel}>No Show</AppText>
-            </View>
-            <View style={styles.metricItem}>
-              <AppText style={[styles.metricNumber, { color: '#64748B' }]}>
-                {counts.canc}
-              </AppText>
-              <AppText style={styles.metricLabel}>Cancelled</AppText>
-            </View>
+          {/* Clean Responsive 2-Column Metrics Grid */}
+          <View style={styles.metricsGrid}>
+            {metricCards.map((m) => (
+              <View
+                key={m.key}
+                style={[
+                  styles.metricCard,
+                  {
+                    width: isWide ? '18.4%' : '48.4%',
+                    backgroundColor: m.bg,
+                    borderColor: m.border,
+                  },
+                ]}
+              >
+                <View style={styles.metricCardHeader}>
+                  <m.Icon size={16} color={m.color} />
+                  <AppText style={[styles.metricNumber, { color: m.color }]}>
+                    {m.count}
+                  </AppText>
+                </View>
+                <AppText style={styles.metricLabel}>{m.label}</AppText>
+              </View>
+            ))}
           </View>
 
-          {/* Status Filter Chips */}
-          <View style={styles.rosterFilterContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rosterFilterScroll}
-            >
-              {(
-                [
-                  { key: 'all', label: `All (${counts.total})` },
-                  { key: 'registered', label: `Registered (${counts.reg})` },
-                  { key: 'waitlisted', label: `Waitlisted (${counts.wait})` },
-                  { key: 'attended', label: `Attended (${counts.att})` },
-                  { key: 'no_show', label: `No Show (${counts.noShow})` },
-                  { key: 'cancelled', label: `Cancelled (${counts.canc})` },
-                ] as const
-              ).map((chip) => {
-                const isSelected = filterStatus === chip.key;
-                return (
-                  <TouchableOpacity
-                    key={chip.key}
-                    style={[styles.rosterChip, isSelected && styles.rosterChipActive]}
-                    onPress={() => setFilterStatus(chip.key)}
-                    activeOpacity={0.8}
-                  >
-                    <AppText style={[styles.rosterChipText, isSelected && styles.rosterChipTextActive]}>
-                      {chip.label}
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* Participant Rows List */}
+          {/* Participant Rows List (Directly Below Summary without Duplicate Filter Buttons) */}
           <View style={styles.participantListContainer}>
-            {filteredRegistrations.length === 0 ? (
+            {sortedRegistrations.length === 0 ? (
               <View style={styles.emptyParticipantState}>
-                <Users size={28} color="#94A3B8" style={{ marginBottom: 6 }} />
-                <AppText style={styles.emptyParticipantTitle}>
-                  {filterStatus === 'all' ? 'No registrations yet' : 'No participants found'}
-                </AppText>
+                <Users size={24} color="#94A3B8" style={{ marginBottom: 6 }} />
+                <AppText style={styles.emptyParticipantTitle}>No participants yet</AppText>
                 <AppText style={styles.emptyParticipantSubtitle}>
-                  {filterStatus === 'all'
-                    ? 'No players have registered for this event yet.'
-                    : `No registrations found with status "${filterStatus}".`}
+                  Registrations will appear here when players join.
                 </AppText>
               </View>
             ) : (
@@ -748,8 +757,8 @@ export default function EventDetailsScreen() {
                               activeOpacity={0.8}
                               accessibilityLabel={`Mark ${playerName} no-show`}
                             >
-                              <UserX size={12} color="#9A6B00" />
-                              <AppText style={[styles.attActionText, { color: '#9A6B00' }]}>
+                              <UserX size={12} color="#B42318" />
+                              <AppText style={[styles.attActionText, { color: '#B42318' }]}>
                                 No Show
                               </AppText>
                             </TouchableOpacity>
@@ -758,10 +767,10 @@ export default function EventDetailsScreen() {
                           <TouchableOpacity
                             style={styles.cancelSpotBtn}
                             onPress={() => handleCancelRegistration(reg)}
-                            activeOpacity={0.8}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             accessibilityLabel={`Cancel registration for ${playerName}`}
                           >
-                            <XCircle size={14} color="#B42318" />
+                            <XCircle size={16} color="#94A3B8" />
                           </TouchableOpacity>
                         </View>
                       )}
@@ -769,16 +778,17 @@ export default function EventDetailsScreen() {
                   );
                 })}
 
-                {filteredRegistrations.length > 8 && (
+                {/* Show More / Show Less Toggle when participants > 8 */}
+                {sortedRegistrations.length > 8 && (
                   <TouchableOpacity
                     style={styles.expandToggleBtn}
                     onPress={() => setIsExpanded(!isExpanded)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.7}
                   >
                     <AppText style={styles.expandToggleText}>
                       {isExpanded
-                        ? 'Show Fewer Participants'
-                        : `Show All (${filteredRegistrations.length}) Participants`}
+                        ? 'Show fewer participants'
+                        : `Show all ${sortedRegistrations.length} participants`}
                     </AppText>
                     {isExpanded ? (
                       <ChevronUp size={16} color="#176B57" />
@@ -792,12 +802,12 @@ export default function EventDetailsScreen() {
           </View>
         </View>
 
-        {/* 6. MANAGEMENT ACTIONS */}
+        {/* 6. PRIMARY MANAGEMENT ACTIONS */}
         <View style={styles.managementSection}>
           <Button
             label="Edit Event Details"
-            variant="secondary"
-            leftIcon={<Edit3 size={16} color={Colors.text.primary} />}
+            variant="outline"
+            leftIcon={<Edit3 size={16} color="#176B57" />}
             onPress={() => setShowEditModal(true)}
             style={styles.managementBtn}
           />
@@ -827,28 +837,31 @@ export default function EventDetailsScreen() {
           {!isCompleted && !isCancelled && (
             <Button
               label="Cancel Event"
-              variant="ghost"
+              variant="outline"
               leftIcon={<XCircle size={16} color="#B42318" />}
               onPress={handleCancelEvent}
               loading={cancelMutation.isPending}
-              style={[styles.managementBtn, { borderColor: '#FDECEC' }]}
+              style={[styles.managementBtn, { borderColor: '#FECDCA' }]}
+              labelStyle={{ color: '#B42318' }}
             />
           )}
         </View>
       </ScrollView>
 
       {/* Edit Event Modal */}
-      <CreateEventModal
-        visible={showEditModal}
-        clubId={clubId}
-        clubBranding={clubBranding}
-        eventToEdit={event}
-        onClose={() => setShowEditModal(false)}
-        onSuccess={() => {
-          refetch();
-          refetchRegistrations();
-        }}
-      />
+      {showEditModal && (
+        <CreateEventModal
+          visible={showEditModal}
+          clubId={clubId}
+          clubBranding={clubBranding}
+          eventToEdit={event}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={() => {
+            setShowEditModal(false);
+            refetch();
+          }}
+        />
+      )}
     </Screen>
   );
 }
@@ -858,32 +871,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F8F5',
   },
-  scrollContent: {
-    paddingBottom: 100,
-    maxWidth: 720,
-    width: '100%',
-    alignSelf: 'center',
-  },
   headerMoreBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    backgroundColor: '#E8F2EC',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  scrollContent: {
+    paddingBottom: 96,
   },
   heroCard: {
     marginHorizontal: 16,
     marginTop: 8,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
     height: 180,
-    backgroundColor: '#E5F5EC',
+    backgroundColor: '#102B2A',
     position: 'relative',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   heroImage: {
     width: '100%',
@@ -893,10 +904,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     left: 10,
-    backgroundColor: 'rgba(16, 43, 42, 0.85)',
+    backgroundColor: 'rgba(15, 57, 45, 0.88)',
     borderRadius: 8,
-    paddingVertical: 4,
     paddingHorizontal: 8,
+    paddingVertical: 4,
     alignItems: 'center',
     minWidth: 40,
   },
@@ -993,7 +1004,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#102B2A',
-    marginBottom: 4,
   },
   infoRow: {
     flexDirection: 'row',
@@ -1035,92 +1045,65 @@ const styles = StyleSheet.create({
 
   // Roster Integrated Section
   rosterSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     marginBottom: 8,
   },
   rosterCapacitySubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: '#0F766E',
     fontWeight: '600',
-    marginTop: 2,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginVertical: 10,
-  },
-  metricItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    borderRadius: 10,
-    backgroundColor: '#F8FAF9',
-    borderWidth: 1,
-    borderColor: '#E6ECE8',
-  },
-  metricNumber: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#102B2A',
-  },
-  metricLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    marginTop: 2,
+    marginTop: 3,
   },
 
-  // Roster Filters
-  rosterFilterContainer: {
-    marginVertical: 8,
+  // 2-Column Responsive Metrics Grid
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 8,
+    marginBottom: 12,
   },
-  rosterFilterScroll: {
-    gap: 6,
-  },
-  rosterChip: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    borderRadius: 16,
+  metricCard: {
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    borderWidth: 1,
+    minHeight: 66,
+    justifyContent: 'space-between',
   },
-  rosterChipActive: {
-    backgroundColor: '#176B57',
-    borderColor: '#176B57',
+  metricCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  rosterChipText: {
-    fontSize: 11.5,
-    fontWeight: '500',
-    color: '#3D544F',
+  metricNumber: {
+    fontSize: 18,
+    fontWeight: '800',
   },
-  rosterChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
+  metricLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 4,
   },
 
   // Participant List
   participantListContainer: {
-    marginTop: 6,
+    marginTop: 4,
   },
   emptyParticipantState: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: 18,
     paddingHorizontal: 16,
   },
   emptyParticipantTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#102B2A',
   },
   emptyParticipantSubtitle: {
     fontSize: 12,
     color: '#64748B',
-    marginTop: 3,
+    marginTop: 2,
     textAlign: 'center',
   },
   participantRow: {
