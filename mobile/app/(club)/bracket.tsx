@@ -678,6 +678,11 @@ export default function BracketWorkspaceScreen() {
             isLoading={isLoadingStandings}
             onRefresh={handleRefreshAll}
             isRefreshing={isRefreshing}
+            teamSize={teamSize}
+            teams={teams}
+            matches={matches}
+            progress={progress}
+            isTournamentCompleted={isTournamentCompleted}
           />
         )}
 
