@@ -1,30 +1,28 @@
 /**
  * Aught2 Pickleball — Player Tournament Details Screen
  *
- * Dedicated live and completed tournament viewer supporting:
- *   1. Round Robin (Completed / Live)
- *   2. Pool Play (Completed / Live)
- *   3. Scramble (Completed / Live)
- *   4. Bracket (Completed / Live)
- *   5. Upcoming Preview (Pre-registration)
+ * Unified player-facing tournament details screen for all four tournament formats:
+ *   1. Round Robin
+ *   2. Bracket
+ *   3. Pool Play
+ *   4. Scramble
  *
- * NOTE: Registration and registration details are handled directly via modals
- * from the Player Tournaments discovery list. Redundant registration-open
- * and "You are Registered!" pages have been completely removed from this screen.
+ * Implements the standardized common pages, layout, and tab structure:
+ *   - Overview & Rules
+ *   - Players
+ *   - Bracket / Pools & Standings / Championship Bracket (where format-specific)
+ *   - Matches
+ *   - Standings
+ *   - Results
  */
 
 import React, { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
-  CompletedBracketView,
-  CompletedPoolPlayView,
-  CompletedRoundRobinView,
-  CompletedScrambleView,
   ErrorState,
-  LiveTournamentView,
   LoadingState,
-  UpcomingTournamentPreviewView,
+  PlayerTournamentDetailsView,
 } from '@/components';
 import { TournamentRegistrationModal } from '@/components/tournament-registration';
 import { useTournamentDetails } from '@/hooks';
@@ -45,16 +43,6 @@ export default function PlayerTournamentDetailsScreen() {
     refetch: refetchTournament,
   } = useTournamentDetails(null, tournamentId);
 
-  const format = tournament?.format ?? 'round_robin';
-  const status = tournament?.status ?? 'draft';
-  const isPoolPlay = format === 'pool_play';
-  const isScramble = format === 'scramble';
-  const isBracket = format === 'bracket';
-  const isRoundRobin = !isPoolPlay && !isScramble && !isBracket;
-
-  const isLive = status === 'in_progress';
-  const isCompleted = status === 'completed';
-
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
@@ -67,13 +55,6 @@ export default function PlayerTournamentDetailsScreen() {
     setIsRefreshing(true);
     await refetchTournament();
     setIsRefreshing(false);
-  };
-
-  const handleClubPress = (clubId: string) => {
-    router.push({
-      pathname: '/(player)/club-details' as any,
-      params: { id: clubId },
-    });
   };
 
   if (isLoadingTournament) {
@@ -89,76 +70,14 @@ export default function PlayerTournamentDetailsScreen() {
     );
   }
 
-  // 1. Dedicated Finished Pool Play view
-  if (isPoolPlay && isCompleted) {
-    return (
-      <CompletedPoolPlayView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 2. Dedicated Finished Round Robin view
-  if (isRoundRobin && isCompleted) {
-    return (
-      <CompletedRoundRobinView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 3. Dedicated Finished Bracket view
-  if (isBracket && isCompleted) {
-    return (
-      <CompletedBracketView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 4. Dedicated Finished Scramble view
-  if (isScramble && isCompleted) {
-    return (
-      <CompletedScrambleView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 5. Dedicated Live Tournament view
-  if (isLive) {
-    return (
-      <LiveTournamentView
-        tournament={tournament}
-        onBack={handleBack}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-    );
-  }
-
-  // 6. Pre-Live / Registration / Upcoming Tournament view
   return (
     <>
-      <UpcomingTournamentPreviewView
+      <PlayerTournamentDetailsView
         tournament={tournament}
         onBack={handleBack}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
         onRegister={() => setShowRegisterModal(true)}
-        onClubPress={handleClubPress}
       />
       {showRegisterModal && (
         <TournamentRegistrationModal

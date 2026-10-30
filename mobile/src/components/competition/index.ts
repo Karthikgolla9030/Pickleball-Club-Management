@@ -20,3 +20,4 @@ export { TournamentOptionsMenuModal } from './TournamentOptionsMenuModal';
 export { LeagueOptionsMenuModal } from './LeagueOptionsMenuModal';
 export { TournamentSettingsRosterModal } from './TournamentSettingsRosterModal';
 export * from './StandardMatchScoreModal';
+export * from './player-tournament';
