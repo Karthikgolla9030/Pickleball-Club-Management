@@ -626,6 +626,7 @@ export default function BracketWorkspaceScreen() {
 
         {(activeTab === 'participants' || (activeTab as string) === 'players' || (activeTab as string) === 'teams') && (
           <BracketTeamsTab
+            tournament={tournament}
             teams={teams}
             canManage={canManage}
             canModifyTeams={canModifyTeams}

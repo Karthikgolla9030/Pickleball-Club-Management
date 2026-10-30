@@ -19,7 +19,14 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { FilterChips } from '@/components/FilterChips';
+import {
+  TournamentFormatInfoCard,
+  TournamentRegistrationSummaryCard,
+  TournamentSectionHeading,
+  TournamentTeamCard,
+} from '@/components/tournament-management';
 import { Colors, Radius, Spacing } from '@/theme';
+import type { Tournament } from '@/types';
 import type { Player, PoolPlayConfig, PoolStat, Team } from '@/types/poolPlay';
 import { TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
 import { AddTeamModal } from './modals/AddTeamModal';
@@ -27,6 +34,7 @@ import { EditPlayerRatingModal } from './modals/EditPlayerRatingModal';
 import { SwapPlayersModal } from './modals/SwapPlayersModal';
 
 interface TeamsPoolsTabProps {
+  tournament?: Tournament | null;
   teams: Team[];
   pools: PoolStat[];
   poolDiff: number;
@@ -53,6 +61,7 @@ interface TeamsPoolsTabProps {
 }
 
 export function TeamsPoolsTab({
+  tournament,
   teams,
   pools,
   poolDiff,
@@ -104,8 +113,42 @@ export function TeamsPoolsTab({
     );
   };
 
+  const totalPlayersCount = isSingles ? teams.length : teams.length * 2;
+  const maxPlayersCount = tournament?.max_participants ?? totalPlayersCount;
+  const maxTeamsCount = isSingles ? maxPlayersCount : Math.floor(maxPlayersCount / 2);
+
   return (
     <View style={styles.container}>
+      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
+      <TournamentRegistrationSummaryCard
+        registeredPlayersCount={totalPlayersCount}
+        maxPlayersCount={maxPlayersCount}
+        isDoubles={!isSingles}
+        registeredTeamsCount={teams.length}
+        maxTeamsCount={maxTeamsCount}
+        categoryLabel={(tournament?.format_configuration as any)?.category || (isSingles ? 'Singles Pool Play' : 'Doubles Pool Play')}
+        registrationTypeLabel={isSingles ? 'Singles individual' : 'Fixed teams'}
+        extraRows={[
+          { label: 'Pools configured', value: pools.length },
+          { label: 'Qualifiers advancing', value: config.qualifierCount },
+        ]}
+      />
+
+      {/* ─── 2. Section Heading: Players/Teams (N) [SINGLES/DOUBLES] ───────── */}
+      <TournamentSectionHeading
+        title={isSingles ? `Players (${teams.length})` : `Teams (${teams.length})`}
+        subtitle={!isSingles ? `· ${totalPlayersCount} Players across ${pools.length} Pools` : `· Across ${pools.length} Pools`}
+        badgeLabel={isSingles ? 'SINGLES' : 'DOUBLES'}
+        badgeVariant="blue"
+      />
+
+      {/* ─── 3. Format Callout Card ────────────────────────────────────────── */}
+      <TournamentFormatInfoCard
+        variant="info"
+        title="Pool Play + Championship Bracket Format"
+        description="Teams compete in round-robin play within assigned pools. The top advancing qualifiers from each pool qualify for the single-elimination Championship Bracket."
+      />
+
       {/* ─── Action Bar ────────────────────────────────────────────── */}
       <View style={styles.actionBar}>
         <View style={styles.actionBtnRow}>
@@ -243,113 +286,78 @@ export function TeamsPoolsTab({
 
           {/* Teams List */}
           <View style={styles.teamCardsContainer}>
-            {pool.teams.map((team) => (
-              <Card key={team.id} style={styles.teamCard}>
-                {/* Team Card Header */}
-                <View style={styles.teamCardHeader}>
-                  <View style={styles.teamCardTitleCol}>
-                    <AppText style={styles.gripIcon}>⠿</AppText>
-                    <AppText variant="body" bold style={styles.teamName}>
-                      {team.name}
+            {pool.teams.map((team, idx) => (
+              <TournamentTeamCard
+                key={team.id}
+                name={team.name}
+                seed={team.teamNum}
+                displayIndex={idx + 1}
+                avgRating={team.avgRating}
+                poolBadge={`Pool ${team.pool}`}
+                statusLabel="Confirmed"
+                statusBadgeVariant="success"
+                teamSize={isSingles ? 1 : 2}
+                members={
+                  isSingles
+                    ? [
+                        {
+                          id: team.p1.id,
+                          display_name: team.p1.name,
+                          skill_rating: team.p1.rating,
+                        },
+                      ]
+                    : [
+                        {
+                          id: team.p1.id,
+                          display_name: team.p1.name,
+                          skill_rating: team.p1.rating,
+                        },
+                        {
+                          id: team.p2.id,
+                          display_name: team.p2.name,
+                          skill_rating: team.p2.rating,
+                        },
+                      ]
+                }
+                canDelete={true}
+                onDelete={() => handleDeletePrompt(team)}
+                onEditMemberRating={(memberIndex) => {
+                  const targetSlot = memberIndex === 0 ? 'p1' : 'p2';
+                  const targetPlayer = memberIndex === 0 ? team.p1 : team.p2;
+                  setEditingPlayer({
+                    player: targetPlayer,
+                    teamId: team.id,
+                    teamName: team.name,
+                    slot: targetSlot,
+                  });
+                }}
+                onSwapMember={(memberIndex) => {
+                  const targetSlot = memberIndex === 0 ? 'p1' : 'p2';
+                  setSwappingSource({ team, slot: targetSlot });
+                }}
+                footer={
+                  <View style={styles.teamCardFooter}>
+                    <AppText variant="caption" color="tertiary">
+                      Move to:
                     </AppText>
+                    <View style={styles.movePoolButtons}>
+                      {pools
+                        .filter((p) => p.key !== team.pool)
+                        .map((targetP) => (
+                          <TouchableOpacity
+                            key={targetP.key}
+                            onPress={() => onMoveTeamPool(team.id, targetP.key)}
+                            style={styles.movePill}
+                          >
+                            <AppText style={styles.movePillText}>
+                              Pool {targetP.key}
+                            </AppText>
+                          </TouchableOpacity>
+                        ))}
+                    </View>
                   </View>
-                  <View style={styles.teamBadges}>
-                    <Badge label={`Avg ${team.avgRating.toFixed(2)}`} variant="info" />
-                    <Badge label={`Spread ${team.spread.toFixed(2)}`} variant="default" />
-                    <TouchableOpacity
-                      onPress={() => handleDeletePrompt(team)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      style={styles.trashBtn}
-                    >
-                      <AppText style={styles.trashIcon}>🗑</AppText>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {/* Player 1 Row */}
-                <View style={styles.playerRow}>
-                  <View style={[styles.playerAvatar, { backgroundColor: team.p1.color }]}>
-                    <AppText style={styles.avatarText}>{team.p1.avatar}</AppText>
-                  </View>
-                  <AppText variant="bodySmall" style={styles.playerName} numberOfLines={1}>
-                    {team.p1.name}
-                  </AppText>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setEditingPlayer({
-                        player: team.p1,
-                        teamId: team.id,
-                        teamName: team.name,
-                        slot: 'p1',
-                      })
-                    }
-                    style={styles.ratingEditBadge}
-                  >
-                    <AppText style={styles.ratingBadgeText}>
-                      {team.p1.rating.toFixed(2)} ✎
-                    </AppText>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setSwappingSource({ team, slot: 'p1' })}
-                    style={styles.swapBtn}
-                  >
-                    <AppText style={styles.swapBtnText}>Swap</AppText>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Player 2 Row */}
-                <View style={styles.playerRow}>
-                  <View style={[styles.playerAvatar, { backgroundColor: team.p2.color }]}>
-                    <AppText style={styles.avatarText}>{team.p2.avatar}</AppText>
-                  </View>
-                  <AppText variant="bodySmall" style={styles.playerName} numberOfLines={1}>
-                    {team.p2.name}
-                  </AppText>
-                  <TouchableOpacity
-                    onPress={() =>
-                      setEditingPlayer({
-                        player: team.p2,
-                        teamId: team.id,
-                        teamName: team.name,
-                        slot: 'p2',
-                      })
-                    }
-                    style={styles.ratingEditBadge}
-                  >
-                    <AppText style={styles.ratingBadgeText}>
-                      {team.p2.rating.toFixed(2)} ✎
-                    </AppText>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => setSwappingSource({ team, slot: 'p2' })}
-                    style={styles.swapBtn}
-                  >
-                    <AppText style={styles.swapBtnText}>Swap</AppText>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Team Card Footer: Move Pool */}
-                <View style={styles.teamCardFooter}>
-                  <AppText variant="caption" color="tertiary">
-                    Move to:
-                  </AppText>
-                  <View style={styles.movePoolButtons}>
-                    {pools
-                      .filter((p) => p.key !== team.pool)
-                      .map((targetP) => (
-                        <TouchableOpacity
-                          key={targetP.key}
-                          onPress={() => onMoveTeamPool(team.id, targetP.key)}
-                          style={styles.movePill}
-                        >
-                          <AppText style={styles.movePillText}>
-                            Pool {targetP.key}
-                          </AppText>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                </View>
-              </Card>
+                }
+              />
             ))}
           </View>
         </View>

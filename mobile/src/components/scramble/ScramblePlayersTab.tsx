@@ -28,6 +28,12 @@ import {
   Users,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
+import {
+  TournamentFormatInfoCard,
+  TournamentRegistrationSummaryCard,
+  TournamentSectionHeading,
+  TournamentTeamCard,
+} from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { ScrambleState } from '@/types/scramble';
 import type { Tournament, TournamentRegistrationItem } from '@/types';
@@ -190,30 +196,46 @@ export function ScramblePlayersTab({
         </View>
       )}
 
-      {/* ── 1. Header: Round Availability & Quick Select ── */}
-      <View style={styles.headerRow}>
-        <View>
-          <AppText style={styles.headingTitle}>
-            Round {currentRound}{state?.planned_rounds ? ` of ${state.planned_rounds}` : ''} Availability & Check-in
-          </AppText>
-          <AppText style={styles.headingSubtitle}>
-            {selectedIds.length} of {confirmedPlayers.length} players available • Carried forward automatically
-          </AppText>
+      {/* ── 1. Registration & Category Overview Card ── */}
+      <TournamentRegistrationSummaryCard
+        registeredPlayersCount={confirmedPlayers.length}
+        maxPlayersCount={tournament?.max_participants ?? confirmedPlayers.length}
+        isDoubles={false}
+        categoryLabel={categoryName || 'Doubles Scramble'}
+        registrationTypeLabel="Individual rotating partner scramble"
+        extraRows={[
+          { label: 'Planned rounds', value: state?.planned_rounds ?? 3 },
+          { label: 'Active round', value: `Round ${currentRound}` },
+        ]}
+      />
+
+      {/* ── 2. Format Callout Card ── */}
+      <TournamentFormatInfoCard
+        variant="info"
+        title="Rotating Partner Scramble Format"
+        description={`Individual scoring with rotating partners and opponents across courts. Check in available players for Round ${currentRound} below.`}
+      />
+
+      {/* ── 3. Header: Round Availability & Quick Select ── */}
+      <TournamentSectionHeading
+        title={`Round ${currentRound} Availability`}
+        subtitle={`· ${selectedIds.length} of ${confirmedPlayers.length} available`}
+        badgeLabel="SCRAMBLE"
+        badgeVariant="green"
+      />
+
+      {canManage && confirmedPlayers.length > 0 && (
+        <View style={styles.quickLinksRow}>
+          <TouchableOpacity onPress={handleSelectAll} activeOpacity={0.7}>
+            <AppText style={styles.quickLinkText}>Select All</AppText>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7}>
+            <AppText style={styles.quickLinkText}>Clear</AppText>
+          </TouchableOpacity>
         </View>
+      )}
 
-        {canManage && confirmedPlayers.length > 0 && (
-          <View style={styles.quickLinksRow}>
-            <TouchableOpacity onPress={handleSelectAll} activeOpacity={0.7}>
-              <AppText style={styles.quickLinkText}>Select All</AppText>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7}>
-              <AppText style={styles.quickLinkText}>Clear</AppText>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* ── 2. Search Input ── */}
+      {/* ── 4. Search Input ── */}
       <View style={styles.searchBar}>
         <Search size={18} color="#A3ADB8" style={styles.searchIcon} />
         <TextInput
@@ -227,7 +249,7 @@ export function ScramblePlayersTab({
         />
       </View>
 
-      {/* ── 3. Player List or Empty State ── */}
+      {/* ── 5. Player List or Empty State ── */}
       {confirmedPlayers.length === 0 ? (
         <View style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>
@@ -258,49 +280,26 @@ export function ScramblePlayersTab({
             const seedNumber = item.seed ?? (index + 1);
 
             return (
-              <TouchableOpacity
+              <TournamentTeamCard
                 key={item.player_membership_id}
-                style={[styles.playerRow, isSelected && styles.playerRowSelected]}
-                onPress={() => togglePlayer(item.player_membership_id)}
-                activeOpacity={0.7}
-                disabled={!canManage}
-              >
-                {/* Checkbox */}
-                <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-                  {isSelected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
-                </View>
-
-                {/* Player Details */}
-                <View style={{ flex: 1 }}>
-                  <View style={styles.nameRow}>
-                    <View style={styles.seedBadge}>
-                      <AppText style={styles.seedBadgeText}>#{seedNumber}</AppText>
-                    </View>
-                    <AppText style={styles.playerName} numberOfLines={1}>{playerName}</AppText>
-                  </View>
-
-                  <View style={styles.playerMetaRow}>
-                    <View style={styles.ratingBadge}>
-                      <AppText style={styles.ratingBadgeText}>★ {ratingValue}</AppText>
-                    </View>
-                    {item.membership_number && (
-                      <AppText style={styles.playerMeta}>
-                        Member #{item.membership_number}
-                      </AppText>
-                    )}
-                    <View style={styles.categoryBadge}>
-                      <AppText style={styles.categoryBadgeText}>{categoryName}</AppText>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Status indicator */}
-                <View style={[styles.availableBadge, !isSelected && styles.unavailableBadge]}>
-                  <AppText style={[styles.availableBadgeText, !isSelected && styles.unavailableBadgeText]}>
-                    {isSelected ? 'AVAILABLE' : 'BENCH'}
-                  </AppText>
-                </View>
-              </TouchableOpacity>
+                name={playerName}
+                seed={seedNumber}
+                avgRating={Number(ratingValue)}
+                statusLabel={isSelected ? 'AVAILABLE' : 'BENCH'}
+                statusBadgeVariant={isSelected ? 'success' : 'default'}
+                selectable={canManage}
+                isSelected={isSelected}
+                onToggleSelect={() => togglePlayer(item.player_membership_id)}
+                teamSize={1}
+                members={[
+                  {
+                    id: item.player_membership_id,
+                    display_name: playerName,
+                    skill_rating: Number(ratingValue),
+                    membership_number: item.membership_number,
+                  },
+                ]}
+              />
             );
           })}
         </View>

@@ -1,29 +1,36 @@
 /**
  * Aught2 Pickleball — BracketTeamsTab
  *
- * Tab 2 for Bracket Tournament Mode:
- * - Fixed-partner doubles teams roster
- * - Displays team seed, player 1, player 2, and combined ratings
- * - Roster lock status banner once matches exist
- * - Add/delete team management for authorized staff before tournament starts
+ * Standardized Tab 2 for Bracket Tournament Mode:
+ * - Registration summary card (registered players, max players, category, registration type)
+ * - Standardized section heading with category badge (SINGLES / DOUBLES) and Add action
+ * - Informational format callout card & locked roster status banner once matches exist
+ * - Standardized TournamentTeamCard with seed, avg rating, Confirmed status badge, and player roster
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Alert,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Users, Lock, Info, Plus } from 'lucide-react-native';
-import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
-import { TournamentTeamCard } from '@/components/tournament-management/TournamentTeamCard';
-import { Colors, Radius, Spacing } from '@/theme';
-import type { Team } from '@/types';
+import { Users, UserPlus } from 'lucide-react-native';
 
-interface BracketTeamsTabProps {
+import { AppText } from '@/components/AppText';
+import { Card } from '@/components/Card';
+import {
+  TournamentFormatInfoCard,
+  TournamentRegistrationSummaryCard,
+  TournamentSectionHeading,
+  TournamentTeamCard,
+} from '@/components/tournament-management';
+import { Spacing } from '@/theme';
+import type { Team, TeamMember, Tournament } from '@/types';
+import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+
+export interface BracketTeamsTabProps {
+  tournament?: Tournament | null;
   teams: Team[];
   canManage: boolean;
   canModifyTeams: boolean;
@@ -36,6 +43,7 @@ interface BracketTeamsTabProps {
 }
 
 export function BracketTeamsTab({
+  tournament,
   teams,
   canManage,
   canModifyTeams,
@@ -46,10 +54,47 @@ export function BracketTeamsTab({
   matchesCount = 0,
   status = 'draft',
 }: BracketTeamsTabProps) {
+  const config = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+  const effectiveTeamSize = teamSize > 1 ? teamSize : (config.teamSize > 1 ? config.teamSize : 1);
+  const isDoubles = effectiveTeamSize > 1;
+
+  // Derive counts based on singles vs doubles category logic
+  const rawMax = tournament?.max_participants ?? (isDoubles ? teams.length * effectiveTeamSize : teams.length);
+  let maxTeamsCount: number;
+  let maxPlayersCount: number;
+
+  if (isDoubles) {
+    if (rawMax > 0 && rawMax <= Math.max(teams.length, 12)) {
+      maxTeamsCount = rawMax;
+      maxPlayersCount = rawMax * effectiveTeamSize;
+    } else if (rawMax > 12) {
+      maxPlayersCount = rawMax;
+      maxTeamsCount = Math.floor(rawMax / effectiveTeamSize);
+    } else {
+      maxTeamsCount = Math.max(teams.length, 4);
+      maxPlayersCount = maxTeamsCount * effectiveTeamSize;
+    }
+  } else {
+    maxTeamsCount = rawMax;
+    maxPlayersCount = rawMax;
+  }
+
+  const registeredPlayersCount = isDoubles
+    ? teams.reduce(
+        (sum, t) => sum + (t.members && t.members.length > 0 ? t.members.length : effectiveTeamSize),
+        0
+      )
+    : teams.length;
+  const registeredTeamsCount = teams.length;
+
+  const categoryLabel =
+    config.category || (isDoubles ? "Men's Doubles" : 'Singles');
+  const registrationTypeLabel = isDoubles ? 'Fixed teams' : 'Singles individual';
+
   const handleDeleteConfirm = (team: Team) => {
     Alert.alert(
-      teamSize === 1 ? 'Remove Player' : 'Remove Team',
-      `Are you sure you want to remove "${team.name}"?`,
+      effectiveTeamSize === 1 ? 'Remove Player' : 'Remove Team',
+      `Are you sure you want to remove "${team.name}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -67,100 +112,84 @@ export function BracketTeamsTab({
       .map((m) => (m.skill_rating !== null && m.skill_rating !== undefined ? Number(m.skill_rating) : null))
       .filter((r): r is number => r !== null);
     if (ratings.length === 0) return 3.5;
-    return ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+    return Number((ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(2));
   };
 
   // Sort teams by seed ascending, then rating descending, then name
-  const sortedTeams = [...teams].sort((a, b) => {
-    if (a.seed !== null && b.seed !== null) return a.seed - b.seed;
-    if (a.seed !== null) return -1;
-    if (b.seed !== null) return 1;
-    const rA = getTeamAvgRating(a);
-    const rB = getTeamAvgRating(b);
-    if (rA !== rB) return rB - rA;
-    return a.name.localeCompare(b.name);
-  });
-
-  const entityName = teamSize === 1 ? 'player' : 'team';
-  const entityNamePlural = teamSize === 1 ? 'players' : 'teams';
+  const sortedTeams = useMemo(() => {
+    return [...teams].sort((a, b) => {
+      if (a.seed !== null && a.seed !== undefined && b.seed !== null && b.seed !== undefined) {
+        if (a.seed !== b.seed) return a.seed - b.seed;
+      }
+      if (a.seed !== null && a.seed !== undefined) return -1;
+      if (b.seed !== null && b.seed !== undefined) return 1;
+      const rA = getTeamAvgRating(a);
+      const rB = getTeamAvgRating(b);
+      if (rA !== rB) return rB - rA;
+      return a.name.localeCompare(b.name);
+    });
+  }, [teams]);
 
   return (
     <View style={styles.container}>
-      {/* ─── Top Info & Action Bar ───────────────────────────────────────── */}
-      <View style={styles.topRow}>
-        <View style={styles.titleCol}>
-          <AppText style={styles.headerTitle}>
-            Registered {teamSize === 1 ? 'Players' : 'Teams'} ({teams.length})
-          </AppText>
-          <AppText style={styles.headerSubtitle}>
-            {teams.length} {entityNamePlural} registered for this tournament
-          </AppText>
-        </View>
+      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
+      <TournamentRegistrationSummaryCard
+        registeredPlayersCount={registeredPlayersCount}
+        maxPlayersCount={maxPlayersCount}
+        isDoubles={isDoubles}
+        registeredTeamsCount={registeredTeamsCount}
+        maxTeamsCount={maxTeamsCount}
+        categoryLabel={categoryLabel}
+        registrationTypeLabel={registrationTypeLabel}
+      />
 
-        {canManage && canModifyTeams && (
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={onOpenAddTeam}
-            activeOpacity={0.8}
-          >
-            <Plus size={14} color="#FFFFFF" />
-            <AppText style={styles.addBtnText}>
-              {teamSize === 1 ? 'Add Player' : 'Add Team'}
-            </AppText>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* ─── 2. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
+      <TournamentSectionHeading
+        title={isDoubles ? `Teams (${registeredTeamsCount})` : `Players (${registeredTeamsCount})`}
+        subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
+        badgeLabel={isDoubles ? 'DOUBLES' : 'SINGLES'}
+        badgeVariant="blue"
+        actionLabel={canManage && canModifyTeams ? (isDoubles ? 'Add Team' : 'Add Player') : undefined}
+        onActionPress={onOpenAddTeam}
+      />
 
-      {/* ─── Locked Roster Banner (ONLY once bracket matches exist) ──────── */}
-      {matchesCount > 0 && (
-        <View style={styles.lockedBanner}>
-          <Lock size={16} color="#D97706" />
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.lockedTitle}>
-              Bracket Generated — Rosters Locked
-            </AppText>
-            <AppText style={styles.lockedSub}>
-              {teamSize === 1
-                ? 'Players cannot be modified while the bracket is active.'
-                : 'Teams and partner assignments cannot be modified while the bracket is active.'}
-            </AppText>
-          </View>
-        </View>
+      {/* ─── 3. Format Callout Card & Locked Roster Banner ─────────────────── */}
+      {matchesCount > 0 ? (
+        <TournamentFormatInfoCard
+          variant="locked"
+          title="Bracket Generated — Rosters Locked"
+          description={
+            isDoubles
+              ? 'Teams and partner assignments cannot be modified while the bracket is active.'
+              : 'Players cannot be modified while the bracket is active.'
+          }
+        />
+      ) : (
+        <TournamentFormatInfoCard
+          variant="info"
+          title={isDoubles ? 'Single Elimination Fixed Doubles Format' : 'Single Elimination Singles Format'}
+          description={
+            isDoubles
+              ? 'Each entry consists of 2 fixed partner players who compete in a knockout elimination bracket. Winners advance until the final.'
+              : 'Each entry consists of 1 player who competes in a knockout elimination bracket. Winners advance each round until a champion is crowned.'
+          }
+        />
       )}
 
-      {/* ─── Registration Open Informational Banner ─────────────────────── */}
-      {status === 'registration_open' && matchesCount === 0 && (
-        <View style={styles.openRegBanner}>
-          <Info size={16} color="#059669" />
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.openRegTitle}>Registration Open</AppText>
-            <AppText style={styles.openRegSub}>
-              Players are currently registering. Seeding is automatically calculated by player skill ratings when registration closes.
-            </AppText>
-          </View>
-        </View>
-      )}
-
-      {/* ─── Teams List / Empty State ────────────────────────────────────── */}
+      {/* ─── 4. Empty State vs Standardized Teams/Players List ──────────────── */}
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>
-            <Users size={32} color="#102F2B" />
+            <Users size={32} color="#94A3B8" />
           </View>
           <AppText style={styles.emptyTitle}>
-            No players yet
+            {isDoubles ? 'No teams registered yet' : 'No players registered yet'}
           </AppText>
           <AppText style={styles.emptySubtitle}>
-            Confirmed registrations will appear here. Add or confirm players before building the bracket.
+            {isDoubles
+              ? 'Teams will appear here as players register and form pairs.'
+              : 'Players will appear here as they register for this tournament.'}
           </AppText>
-
-          {/* Pale Mint Info Box */}
-          <View style={styles.infoStrip}>
-            <Info size={16} color="#059669" />
-            <AppText style={styles.infoStripText}>
-              Players who register from the player app will appear here automatically.
-            </AppText>
-          </View>
 
           {canManage && canModifyTeams && (
             <TouchableOpacity
@@ -168,8 +197,9 @@ export function BracketTeamsTab({
               onPress={onOpenAddTeam}
               activeOpacity={0.8}
             >
+              <UserPlus size={16} color="#FFFFFF" />
               <AppText style={styles.addFirstBtnText}>
-                {teamSize === 1 ? '+ Add Player' : '+ Add Team'}
+                {isDoubles ? 'Add team' : 'Add player'}
               </AppText>
             </TouchableOpacity>
           )}
@@ -184,8 +214,10 @@ export function BracketTeamsTab({
               displayIndex={index + 1}
               avgRating={getTeamAvgRating(item)}
               members={item.members}
-              teamSize={teamSize}
-              canDelete={canManage && canModifyTeams}
+              teamSize={effectiveTeamSize}
+              statusLabel="Confirmed"
+              statusBadgeVariant="success"
+              canDelete={canManage && canModifyTeams && matchesCount === 0}
               onDelete={() => handleDeleteConfirm(item)}
               isDeleting={isDeletingTeam}
             />
@@ -202,230 +234,53 @@ const styles = StyleSheet.create({
     paddingTop: Spacing[4],
     gap: Spacing[3],
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  titleCol: {
-    gap: 3,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#102F2B',
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: '#71817E',
-  },
-  addBtn: {
-    backgroundColor: '#064E3B',
-    borderRadius: Radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  addBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  lockedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[3],
-    padding: Spacing[3],
-    borderRadius: Radius.md,
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-  },
-  lockedTitle: {
-    color: '#D97706',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  lockedSub: {
-    color: '#71817E',
-    fontSize: 11,
-  },
-  openRegBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[3],
-    padding: Spacing[3],
-    borderRadius: Radius.md,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  openRegTitle: {
-    color: '#064E3B',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  openRegSub: {
-    color: '#047857',
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  ratingBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  ratingText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  playerRatingPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: Radius.sm,
-  },
-  playerRatingText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#475569',
-  },
   listContent: {
     gap: Spacing[3],
-  },
-  teamCard: {
-    padding: Spacing[3.5],
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DDE8E2',
-    borderWidth: 1,
-    borderRadius: 16,
-    gap: Spacing[2.5],
-  },
-  teamHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  teamTitleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    flex: 1,
-  },
-  seedBadge: {
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    backgroundColor: '#087A60',
-    minWidth: 28,
-    alignItems: 'center',
-  },
-  unseededBadge: {
-    backgroundColor: '#F1F5F9',
-  },
-  seedBadgeText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 11,
-  },
-  teamNameText: {
-    color: '#102F2B',
-    fontWeight: '700',
-    flex: 1,
-  },
-  trashBtn: {
-    padding: 6,
-    borderRadius: Radius.sm,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  partnersBox: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    padding: Spacing[2.5],
-    gap: Spacing[1.5],
-  },
-  partnerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  partnerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: Radius.full,
-    backgroundColor: '#087A60',
-  },
-  partnerName: {
-    color: '#102F2B',
-    fontWeight: '500',
-    flex: 1,
+    paddingBottom: Spacing[8],
   },
   emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
     padding: Spacing[6],
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: '#DDE8E2',
-    borderWidth: 1,
-    borderRadius: 16,
-    gap: 8,
+    gap: 12,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#EBF4F0',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#102F2B',
+    color: '#0F172A',
     textAlign: 'center',
   },
   emptySubtitle: {
-    textAlign: 'center',
     fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
     lineHeight: 18,
-    color: '#71817E',
     maxWidth: 280,
-    marginBottom: 12,
-  },
-  infoStrip: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-  },
-  infoStripText: {
-    fontSize: 12,
-    color: '#102F2B',
-    fontWeight: '500',
-    flex: 1,
-    lineHeight: 16,
   },
   addFirstBtn: {
-    backgroundColor: '#064E3B',
-    borderRadius: Radius.full,
-    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#087A60',
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    marginTop: 12,
+    borderRadius: 9999,
+    marginTop: 4,
   },
   addFirstBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

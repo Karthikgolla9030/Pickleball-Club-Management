@@ -11,11 +11,12 @@
  * - Team names never truncate with ellipses; wraps naturally onto multiple lines
  * - Consistent seed badge, average rating pill, and player rows
  * - Proper spacing, border radius, and mobile viewport adaptability (320px - 430px)
+ * - Supports selectable state for Scramble availability and pool badge for Pool Play
  */
 
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Trash2 } from 'lucide-react-native';
+import { Check, Trash2 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -36,9 +37,18 @@ export interface TournamentTeamCardProps {
   members: TournamentTeamMember[];
   teamSize?: number;
   statusLabel?: string;
+  statusBadgeVariant?: 'success' | 'warning' | 'info' | 'default';
+  poolBadge?: string;
+  selectable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: () => void;
   canDelete?: boolean;
   onDelete?: () => void;
   isDeleting?: boolean;
+  extraActions?: React.ReactNode;
+  footer?: React.ReactNode;
+  onEditMemberRating?: (memberIndex: number, member: TournamentTeamMember) => void;
+  onSwapMember?: (memberIndex: number, member: TournamentTeamMember) => void;
 }
 
 export function TournamentTeamCard({
@@ -48,10 +58,19 @@ export function TournamentTeamCard({
   avgRating,
   members,
   teamSize = 2,
-  statusLabel,
+  statusLabel = 'Confirmed',
+  statusBadgeVariant = 'success',
+  poolBadge,
+  selectable = false,
+  isSelected = false,
+  onToggleSelect,
   canDelete = false,
   onDelete,
   isDeleting = false,
+  extraActions,
+  footer,
+  onEditMemberRating,
+  onSwapMember,
 }: TournamentTeamCardProps) {
   const member1 = members[0];
   const member2 = members[1];
@@ -66,10 +85,43 @@ export function TournamentTeamCard({
         : avgRating
       : null;
 
+  const statusBgStyle =
+    statusBadgeVariant === 'warning'
+      ? styles.statusBadgeWarning
+      : statusBadgeVariant === 'info'
+      ? styles.statusBadgeInfo
+      : statusBadgeVariant === 'default'
+      ? styles.statusBadgeDefault
+      : styles.statusBadgeSuccess;
+
+  const statusTextStyle =
+    statusBadgeVariant === 'warning'
+      ? styles.statusTextWarning
+      : statusBadgeVariant === 'info'
+      ? styles.statusTextInfo
+      : statusBadgeVariant === 'default'
+      ? styles.statusTextDefault
+      : styles.statusTextSuccess;
+
+  const CardWrapper = selectable && onToggleSelect ? TouchableOpacity : View;
+
   return (
-    <View style={styles.card}>
-      {/* ─── Header: Seed, Name, Avg Rating, Delete Action ────────────────── */}
+    <CardWrapper
+      style={[styles.card, selectable && isSelected && styles.cardSelected]}
+      {...(selectable && onToggleSelect ? { onPress: onToggleSelect, activeOpacity: 0.8 } : {})}
+    >
+      {/* ─── Header: Checkbox (Scramble), Seed, Name, Avg Rating, Delete Action ─── */}
       <View style={styles.headerRow}>
+        {selectable && (
+          <TouchableOpacity
+            style={[styles.checkbox, isSelected && styles.checkboxSelected]}
+            onPress={onToggleSelect}
+            activeOpacity={0.7}
+          >
+            {isSelected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
+          </TouchableOpacity>
+        )}
+
         <View style={styles.titleArea}>
           {/* Seed / Position Badge */}
           {seed !== null && seed !== undefined ? (
@@ -82,10 +134,15 @@ export function TournamentTeamCard({
             </View>
           ) : null}
 
-          {/* Team Name: Multi-line wrapping, standardized font */}
-          <AppText style={styles.teamNameText}>
-            {name}
-          </AppText>
+          {/* Optional Pool Badge (Pool Play) */}
+          {poolBadge && (
+            <View style={styles.poolBadge}>
+              <AppText style={styles.poolBadgeText}>{poolBadge}</AppText>
+            </View>
+          )}
+
+          {/* Team / Player Name: Multi-line wrapping, standardized font */}
+          <AppText style={styles.teamNameText}>{name}</AppText>
         </View>
 
         {/* Right side: Avg Rating pill & Optional Actions */}
@@ -96,11 +153,13 @@ export function TournamentTeamCard({
             </View>
           )}
 
-          {statusLabel && (
-            <View style={styles.statusBadge}>
-              <AppText style={styles.statusBadgeText}>{statusLabel}</AppText>
+          {statusLabel ? (
+            <View style={[styles.statusBadge, statusBgStyle]}>
+              <AppText style={[styles.statusBadgeText, statusTextStyle]}>{statusLabel}</AppText>
             </View>
-          )}
+          ) : null}
+
+          {extraActions}
 
           {canDelete && onDelete && (
             <TouchableOpacity
@@ -123,20 +182,31 @@ export function TournamentTeamCard({
           {/* Member 1 */}
           <View style={styles.partnerRow}>
             <View style={styles.partnerDot} />
-            <AppText style={styles.partnerName}>
+            <AppText style={styles.partnerName} numberOfLines={1}>
               {p1Name}
             </AppText>
             {member1?.skill_rating !== null && member1?.skill_rating !== undefined && (
-              <View style={styles.playerRatingPill}>
+              <TouchableOpacity
+                disabled={!onEditMemberRating}
+                onPress={() => onEditMemberRating && onEditMemberRating(0, member1)}
+                style={[styles.playerRatingPill, onEditMemberRating && styles.clickableRatingPill]}
+              >
                 <AppText style={styles.playerRatingText}>
                   {Number(member1.skill_rating).toFixed(1)}
+                  {onEditMemberRating ? ' ✎' : ''}
                 </AppText>
-              </View>
+              </TouchableOpacity>
             )}
             {member1?.membership_number && (
-              <AppText style={styles.membershipTag}>
-                #{member1.membership_number}
-              </AppText>
+              <AppText style={styles.membershipTag}>#{member1.membership_number}</AppText>
+            )}
+            {onSwapMember && (
+              <TouchableOpacity
+                onPress={() => onSwapMember(0, member1)}
+                style={styles.memberActionBtn}
+              >
+                <AppText style={styles.memberActionText}>Swap</AppText>
+              </TouchableOpacity>
             )}
           </View>
 
@@ -144,26 +214,40 @@ export function TournamentTeamCard({
           {teamSize > 1 && (
             <View style={styles.partnerRow}>
               <View style={styles.partnerDot} />
-              <AppText style={styles.partnerName}>
+              <AppText style={styles.partnerName} numberOfLines={1}>
                 {p2Name}
               </AppText>
               {member2?.skill_rating !== null && member2?.skill_rating !== undefined && (
-                <View style={styles.playerRatingPill}>
+                <TouchableOpacity
+                  disabled={!onEditMemberRating}
+                  onPress={() => onEditMemberRating && onEditMemberRating(1, member2)}
+                  style={[styles.playerRatingPill, onEditMemberRating && styles.clickableRatingPill]}
+                >
                   <AppText style={styles.playerRatingText}>
                     {Number(member2.skill_rating).toFixed(1)}
+                    {onEditMemberRating ? ' ✎' : ''}
                   </AppText>
-                </View>
+                </TouchableOpacity>
               )}
               {member2?.membership_number && (
-                <AppText style={styles.membershipTag}>
-                  #{member2.membership_number}
-                </AppText>
+                <AppText style={styles.membershipTag}>#{member2.membership_number}</AppText>
+              )}
+              {onSwapMember && member2 && (
+                <TouchableOpacity
+                  onPress={() => onSwapMember(1, member2)}
+                  style={styles.memberActionBtn}
+                >
+                  <AppText style={styles.memberActionText}>Swap</AppText>
+                </TouchableOpacity>
               )}
             </View>
           )}
         </View>
       )}
-    </View>
+
+      {/* ─── Footer Action Slot (e.g. Move to Pool for Pool Play) ───────────── */}
+      {footer}
+    </CardWrapper>
   );
 }
 
@@ -181,11 +265,30 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  cardSelected: {
+    borderColor: '#087A60',
+    backgroundColor: '#F7FCF9',
+  },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: Spacing[2],
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    marginRight: 4,
+  },
+  checkboxSelected: {
+    backgroundColor: '#087A60',
+    borderColor: '#087A60',
   },
   titleArea: {
     flex: 1,
@@ -218,6 +321,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 14,
   },
+  poolBadge: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  poolBadgeText: {
+    color: '#0284C7',
+    fontWeight: '800',
+    fontSize: 11,
+  },
   teamNameText: {
     fontSize: 15,
     fontWeight: '700',
@@ -231,6 +345,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flexShrink: 0,
+    flexWrap: 'wrap',
   },
   ratingBadge: {
     backgroundColor: '#FEF3C7',
@@ -246,26 +361,58 @@ const styles = StyleSheet.create({
     color: '#92400E',
   },
   statusBadge: {
-    backgroundColor: '#DCFCE7',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
   },
+  statusBadgeSuccess: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusTextSuccess: {
+    color: '#15803D',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusBadgeWarning: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusTextWarning: {
+    color: '#B45309',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusBadgeInfo: {
+    backgroundColor: '#E0F2FE',
+  },
+  statusTextInfo: {
+    color: '#0284C7',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusBadgeDefault: {
+    backgroundColor: '#F1F5F9',
+  },
+  statusTextDefault: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   statusBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
-    color: '#15803D',
+    fontWeight: '700',
   },
   trashBtn: {
-    padding: 6,
+    padding: 4,
     borderRadius: Radius.sm,
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
   },
   partnersBox: {
     backgroundColor: '#F8FAFC',
     borderRadius: Radius.md,
-    padding: Spacing[2.5],
-    gap: Spacing[1.5],
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
+    gap: Spacing[2],
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   partnerRow: {
     flexDirection: 'row',
@@ -280,26 +427,43 @@ const styles = StyleSheet.create({
   },
   partnerName: {
     fontSize: 13,
-    color: '#1E293B',
-    fontWeight: '500',
+    fontWeight: '600',
+    color: '#334155',
     flex: 1,
   },
   playerRatingPill: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingVertical: 1.5,
     borderRadius: Radius.sm,
+  },
+  clickableRatingPill: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
   },
   playerRatingText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0F766E',
+    color: '#475569',
   },
   membershipTag: {
     fontSize: 11,
-    color: '#64748B',
+    color: '#94A3B8',
     fontWeight: '500',
+  },
+  memberActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: '#F1F5F9',
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  memberActionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
   },
 });

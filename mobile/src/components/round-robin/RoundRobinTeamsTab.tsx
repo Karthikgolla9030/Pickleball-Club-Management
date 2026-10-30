@@ -24,7 +24,12 @@ import { UserPlus, Trash2, CheckCircle2, Shield } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
-import { TournamentTeamCard } from '@/components/tournament-management/TournamentTeamCard';
+import {
+  TournamentFormatInfoCard,
+  TournamentRegistrationSummaryCard,
+  TournamentSectionHeading,
+  TournamentTeamCard,
+} from '@/components/tournament-management';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Team, TeamMember, Tournament } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
@@ -136,74 +141,39 @@ export function RoundRobinTeamsTab({
 
   return (
     <View style={styles.container}>
-      {/* Tournament Registration & Category Overview Card */}
-      <Card style={styles.summaryOverviewCard}>
-        <View style={styles.summaryOverviewRow}>
-          <AppText style={styles.summaryOverviewLabel}>Registered players:</AppText>
-          <AppText style={styles.summaryOverviewValue}>
-            {registeredPlayersCount} / {maxPlayersCount}
-          </AppText>
-        </View>
+      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
+      <TournamentRegistrationSummaryCard
+        registeredPlayersCount={registeredPlayersCount}
+        maxPlayersCount={maxPlayersCount}
+        isDoubles={isDoubles}
+        registeredTeamsCount={registeredTeamsCount}
+        maxTeamsCount={maxTeamsCount}
+        categoryLabel={categoryLabel}
+        registrationTypeLabel={isDoubles ? 'Fixed teams' : 'Singles individual'}
+      />
 
-        {isDoubles && (
-          <View style={styles.summaryOverviewRow}>
-            <AppText style={styles.summaryOverviewLabel}>Registered teams:</AppText>
-            <AppText style={styles.summaryOverviewValue}>
-              {registeredTeamsCount} / {maxTeamsCount}
-            </AppText>
-          </View>
-        )}
+      {/* ─── 2. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
+      <TournamentSectionHeading
+        title={isDoubles ? `Teams (${registeredTeamsCount})` : `Players (${registeredTeamsCount})`}
+        subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
+        badgeLabel={isDoubles ? 'DOUBLES' : 'SINGLES'}
+        badgeVariant="blue"
+        actionLabel={canModifyTeams ? (isDoubles ? 'Add team' : 'Add player') : undefined}
+        onActionPress={onAddTeamPress}
+      />
 
-        <View style={styles.summaryOverviewRow}>
-          <AppText style={styles.summaryOverviewLabel}>Competition category:</AppText>
-          <AppText style={styles.summaryOverviewValue}>{categoryLabel}</AppText>
-        </View>
+      {/* ─── 3. Format Callout Card ────────────────────────────────────────── */}
+      <TournamentFormatInfoCard
+        variant="info"
+        title={teamSize === 1 ? 'Singles Format' : 'Fixed Partner Doubles Format'}
+        description={
+          teamSize === 1
+            ? 'Each entry consists of 1 player who competes individually for all rounds. Every player will play every other player once.'
+            : 'Each entry consists of 2 fixed partner players who compete together for all rounds. Every team will play every other team once.'
+        }
+      />
 
-        <View style={styles.summaryOverviewRow}>
-          <AppText style={styles.summaryOverviewLabel}>Registration type:</AppText>
-          <AppText style={styles.summaryOverviewValue}>
-            {isDoubles ? 'Fixed teams' : 'Singles individual'}
-          </AppText>
-        </View>
-      </Card>
-
-      {/* Section Heading: Teams (N) · X Players [DOUBLES] */}
-      <View style={styles.headerRow}>
-        <AppText style={styles.headingTitle}>
-          {isDoubles
-            ? `Teams (${registeredTeamsCount})`
-            : `Players (${registeredTeamsCount})`}
-        </AppText>
-        {isDoubles && (
-          <AppText style={styles.headingSub}>
-            · {registeredPlayersCount} Players
-          </AppText>
-        )}
-        <View style={styles.categoryBadge}>
-          <AppText style={styles.categoryBadgeText}>
-            {isDoubles ? 'DOUBLES' : 'SINGLES'}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Format Information Card */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoIconCol}>
-          <UserPlus size={20} color="#0284C7" />
-        </View>
-        <View style={styles.infoContentCol}>
-          <AppText style={styles.infoTitle}>
-            {teamSize === 1 ? 'Singles Format' : 'Fixed Partner Doubles Format'}
-          </AppText>
-          <AppText style={styles.infoDesc}>
-            {teamSize === 1
-              ? 'Each entry consists of 1 player who competes individually for all rounds. Every player will play every other player once.'
-              : 'Each entry consists of 2 fixed partner players who compete together for all rounds. Every team will play every other team once.'}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Empty State vs Team / Player List */}
+      {/* ─── 4. Empty State vs Standardized Teams/Players List ──────────────── */}
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>

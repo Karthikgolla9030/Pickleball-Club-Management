@@ -1059,6 +1059,7 @@ export default function PoolPlayManagementScreen() {
           {/* ─── Tab 2: Players & Pools / Teams & Pools ─────────────────── */}
           {(activeTab === 'participants' || (activeTab as string) === 'teams_pools') && (
             <TeamsPoolsTab
+              tournament={tournament}
               teams={updatedTeams}
               pools={pools}
               poolDiff={poolDiff}
