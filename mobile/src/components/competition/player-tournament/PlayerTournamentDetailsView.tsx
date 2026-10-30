@@ -141,8 +141,148 @@ export function PlayerTournamentDetailsView({
         status_label: s.status_label || (idx === 0 ? 'Leader 🏆' : undefined),
       }));
     }
+
+    if (format === 'bracket' && standings.length === 0 && activeMatches.length > 0) {
+      const statsMap = new Map<
+        string,
+        {
+          id: string;
+          name: string;
+          wins: number;
+          losses: number;
+          pointsFor: number;
+          pointsAgainst: number;
+          highestRound: number;
+          isChampion: boolean;
+          isRunnerUp: boolean;
+        }
+      >();
+
+      const winnersMatches = activeMatches.filter(
+        (m) => m.bracket_section !== 'consolation' && !(m as any).is_consolation
+      );
+      const sortedWinners = [...(winnersMatches.length > 0 ? winnersMatches : activeMatches)].sort(
+        (a, b) => (b.bracket_round ?? 1) - (a.bracket_round ?? 1)
+      );
+      const finalMatch = sortedWinners.find((m) => m.status === 'completed') || sortedWinners[0];
+
+      activeMatches.forEach((m) => {
+        const teamAId = m.team_a_id || 'team_a';
+        const teamBId = m.team_b_id || 'team_b';
+        const teamAName = m.team_a?.name || (m as any).team_a_name || 'Team A';
+        const teamBName = m.team_b?.name || (m as any).team_b_name || 'Team B';
+
+        if (!statsMap.has(teamAId)) {
+          statsMap.set(teamAId, {
+            id: teamAId,
+            name: teamAName,
+            wins: 0,
+            losses: 0,
+            pointsFor: 0,
+            pointsAgainst: 0,
+            highestRound: m.bracket_round ?? 1,
+            isChampion: false,
+            isRunnerUp: false,
+          });
+        }
+        if (!statsMap.has(teamBId)) {
+          statsMap.set(teamBId, {
+            id: teamBId,
+            name: teamBName,
+            wins: 0,
+            losses: 0,
+            pointsFor: 0,
+            pointsAgainst: 0,
+            highestRound: m.bracket_round ?? 1,
+            isChampion: false,
+            isRunnerUp: false,
+          });
+        }
+
+        const statsA = statsMap.get(teamAId)!;
+        const statsB = statsMap.get(teamBId)!;
+
+        statsA.highestRound = Math.max(statsA.highestRound, m.bracket_round ?? 1);
+        statsB.highestRound = Math.max(statsB.highestRound, m.bracket_round ?? 1);
+
+        if (m.status === 'completed') {
+          const scoreA = m.score_a ?? (m as any).score_team_a ?? 0;
+          const scoreB = m.score_b ?? (m as any).score_team_b ?? 0;
+          statsA.pointsFor += scoreA;
+          statsA.pointsAgainst += scoreB;
+          statsB.pointsFor += scoreB;
+          statsB.pointsAgainst += scoreA;
+
+          const isWinnerA =
+            m.winner_team_id === m.team_a_id ||
+            m.winner_side === 'side_a' ||
+            (m as any).winner_id === m.team_a_id;
+          const isWinnerB =
+            m.winner_team_id === m.team_b_id ||
+            m.winner_side === 'side_b' ||
+            (m as any).winner_id === m.team_b_id;
+
+          if (isWinnerA) {
+            statsA.wins += 1;
+            statsB.losses += 1;
+          } else if (isWinnerB) {
+            statsB.wins += 1;
+            statsA.losses += 1;
+          }
+        }
+      });
+
+      if (finalMatch && finalMatch.status === 'completed') {
+        const isWinnerA =
+          finalMatch.winner_team_id === finalMatch.team_a_id ||
+          finalMatch.winner_side === 'side_a' ||
+          (finalMatch as any).winner_id === finalMatch.team_a_id;
+        const champId = isWinnerA ? finalMatch.team_a_id : finalMatch.team_b_id;
+        const runnerId = isWinnerA ? finalMatch.team_b_id : finalMatch.team_a_id;
+
+        if (champId && statsMap.has(champId)) {
+          statsMap.get(champId)!.isChampion = true;
+        }
+        if (runnerId && statsMap.has(runnerId)) {
+          statsMap.get(runnerId)!.isRunnerUp = true;
+        }
+      }
+
+      const list = Array.from(statsMap.values()).sort((a, b) => {
+        if (a.isChampion) return -1;
+        if (b.isChampion) return 1;
+        if (a.isRunnerUp) return -1;
+        if (b.isRunnerUp) return 1;
+        if (a.highestRound !== b.highestRound) return b.highestRound - a.highestRound;
+        if (a.wins !== b.wins) return b.wins - a.wins;
+        const diffA = a.pointsFor - a.pointsAgainst;
+        const diffB = b.pointsFor - b.pointsAgainst;
+        return diffB - diffA;
+      });
+
+      return list.map((item, idx) => {
+        let statusLabel: string | undefined;
+        if (item.isChampion) statusLabel = 'Champion 🏆';
+        else if (item.isRunnerUp) statusLabel = 'Runner-Up 🥈';
+        else if (item.highestRound >= 2) statusLabel = 'Semifinalist';
+        else if (item.losses > 0) statusLabel = 'Eliminated';
+
+        return {
+          rank: idx + 1,
+          team_name: item.name,
+          matches_played: item.wins + item.losses,
+          wins: item.wins,
+          losses: item.losses,
+          points_scored: item.pointsFor,
+          points_allowed: item.pointsAgainst,
+          points_differential: item.pointsFor - item.pointsAgainst,
+          status_label: statusLabel,
+        };
+      });
+    }
+
     return standings;
-  }, [format, scrambleStandings, standings]);
+  }, [format, scrambleStandings, standings, activeMatches]);
 
   // Global refresh
   const handleInternalRefresh = async () => {
@@ -175,6 +315,7 @@ export function PlayerTournamentDetailsView({
           { key: 'bracket', label: 'Bracket' },
           { key: 'matches', label: 'Matches', count: matchCount },
           { key: 'standings', label: 'Standings' },
+          { key: 'results', label: 'Results' },
         ];
 
       case 'pool_play':
