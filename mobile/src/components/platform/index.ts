@@ -4,6 +4,9 @@ export { PlatformBottomNav } from './PlatformBottomNav';
 export { PlatformShell } from './PlatformShell';
 export { PlatformButton } from './PlatformButton';
 export { ClubEmptyIllustration } from './ClubEmptyIllustration';
+export { HelpAndFaqsManager } from './HelpAndFaqsManager';
+export { LegalDocumentManager } from './LegalDocumentManager';
+export { LegalAndHelpManager } from './LegalAndHelpManager';
 export type { PlatformButtonProps, PlatformButtonVariant, PlatformButtonSize } from './PlatformButton';
 export type { PlatformTabKey } from './PlatformHeader';
 

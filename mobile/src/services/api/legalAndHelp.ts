@@ -261,6 +261,9 @@ export const platformLegalApi = {
   getDocument: (documentId: string): Promise<LegalDocumentDetailResponse> => {
     return apiClient.get<LegalDocumentDetailResponse>(`/api/v1/platform/legal/documents/${documentId}`);
   },
+  getDocumentByType: (documentType: string): Promise<LegalDocumentDetailResponse> => {
+    return apiClient.get<LegalDocumentDetailResponse>(`/api/v1/platform/legal/documents/by-type/${documentType}`);
+  },
   createVersion: (
     documentId: string,
     payload: {

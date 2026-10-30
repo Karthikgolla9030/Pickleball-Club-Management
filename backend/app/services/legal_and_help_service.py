@@ -750,6 +750,7 @@ class LegalAndHelpService:
 
     async def admin_list_documents(self) -> list[LegalDocumentResponse]:
         """List all managed legal documents with their current published version."""
+        await self.seed_defaults_if_empty()
         stmt = (
             select(LegalDocument)
             .options(selectinload(LegalDocument.versions))
@@ -785,6 +786,32 @@ class LegalAndHelpService:
             published_vers.sort(key=lambda x: x.published_at or x.created_at, reverse=True)
             resp.current_version = LegalDocumentVersionResponse.model_validate(published_vers[0])
         resp.versions = [LegalDocumentVersionResponse.model_validate(v) for v in doc.versions]
+        resp.versions.sort(key=lambda x: x.created_at, reverse=True)
+        return resp
+
+    async def admin_get_document_by_type(self, document_type: str) -> LegalDocumentDetailResponse:
+        """Get legal document details with complete version history by document type."""
+        await self.seed_defaults_if_empty()
+        stmt = (
+            select(LegalDocument)
+            .options(selectinload(LegalDocument.versions))
+            .where(LegalDocument.document_type == document_type)
+        )
+        res = await self.db.execute(stmt)
+        doc = res.scalars().first()
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Legal document of type '{document_type}' not found."
+            )
+
+        resp = LegalDocumentDetailResponse.model_validate(doc)
+        published_vers = [v for v in doc.versions if v.status == DocumentVersionStatus.PUBLISHED.value]
+        if published_vers:
+            published_vers.sort(key=lambda x: x.published_at or x.created_at, reverse=True)
+            resp.current_version = LegalDocumentVersionResponse.model_validate(published_vers[0])
+        resp.versions = [LegalDocumentVersionResponse.model_validate(v) for v in doc.versions]
+        resp.versions.sort(key=lambda x: x.created_at, reverse=True)
         return resp
 
     async def admin_create_version(

@@ -1417,6 +1417,19 @@ async def platform_list_legal_documents(
 
 
 @router.get(
+    "/legal/documents/by-type/{document_type}",
+    response_model=LegalDocumentDetailResponse,
+    summary="Get document details with full version history by document type",
+)
+async def platform_get_legal_document_by_type(
+    document_type: str,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> LegalDocumentDetailResponse:
+    return await LegalAndHelpService(db).admin_get_document_by_type(document_type=document_type)
+
+
+@router.get(
     "/legal/documents/{document_id}",
     response_model=LegalDocumentDetailResponse,
     summary="Get document details with full version history",

@@ -39,6 +39,7 @@ import {
   ChevronRight,
   Clock,
   Database,
+  FileCheck,
   FileText,
   Globe,
   HardDrive,
@@ -73,7 +74,6 @@ import {
   LoadingState,
   PlatformButton,
   PlatformShell,
-  LegalAndHelpManager,
 } from '@/components';
 import {
   PlatformReadOnlyConfig,
@@ -84,13 +84,7 @@ import {
 } from '@/services/api/clubApplications';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
 
-type SettingsView =
-  | 'menu'
-  | 'operational'
-  | 'help'
-  | 'player_terms'
-  | 'club_terms'
-  | 'privacy_policy';
+type SettingsView = 'menu' | 'operational';
 
 export default function PlatformSettingsScreen() {
   const router = useRouter();
@@ -336,7 +330,7 @@ export default function PlatformSettingsScreen() {
                 {/* Row 1: Help & FAQs */}
                 <TouchableOpacity
                   style={styles.navRow}
-                  onPress={() => setCurrentView('help')}
+                  onPress={() => router.push('/platform/legal/help-faqs' as any)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.navRowLeft}>
@@ -356,7 +350,7 @@ export default function PlatformSettingsScreen() {
                 {/* Row 2: Player Terms of Service */}
                 <TouchableOpacity
                   style={styles.navRow}
-                  onPress={() => setCurrentView('player_terms')}
+                  onPress={() => router.push('/platform/legal/player-terms' as any)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.navRowLeft}>
@@ -376,7 +370,7 @@ export default function PlatformSettingsScreen() {
                 {/* Row 3: Club Terms of Service */}
                 <TouchableOpacity
                   style={styles.navRow}
-                  onPress={() => setCurrentView('club_terms')}
+                  onPress={() => router.push('/platform/legal/club-terms' as any)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.navRowLeft}>
@@ -395,8 +389,8 @@ export default function PlatformSettingsScreen() {
 
                 {/* Row 4: Privacy Policy */}
                 <TouchableOpacity
-                  style={[styles.navRow, styles.navRowLast]}
-                  onPress={() => setCurrentView('privacy_policy')}
+                  style={styles.navRow}
+                  onPress={() => router.push('/platform/legal/privacy-policy' as any)}
                   activeOpacity={0.7}
                 >
                   <View style={styles.navRowLeft}>
@@ -407,6 +401,26 @@ export default function PlatformSettingsScreen() {
                       <AppText style={styles.rowTitle}>Privacy Policy</AppText>
                       <AppText style={styles.rowDesc}>
                         Manage privacy policy and version history
+                      </AppText>
+                    </View>
+                  </View>
+                  <ChevronRight size={18} color="#94A3B8" strokeWidth={2} style={styles.chevron} />
+                </TouchableOpacity>
+
+                {/* Row 5: Club Agreement */}
+                <TouchableOpacity
+                  style={[styles.navRow, styles.navRowLast]}
+                  onPress={() => router.push('/platform/legal/club-agreement' as any)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.navRowLeft}>
+                    <View style={styles.rowIconWrap}>
+                      <FileCheck size={18} color="#15803D" strokeWidth={2} />
+                    </View>
+                    <View style={styles.rowTextCol}>
+                      <AppText style={styles.rowTitle}>Club Agreement</AppText>
+                      <AppText style={styles.rowDesc}>
+                        Manage club registration agreements, acceptance requirements and agreement version history
                       </AppText>
                     </View>
                   </View>
@@ -452,18 +466,7 @@ export default function PlatformSettingsScreen() {
             </>
           )}
 
-          {/* ─── 2. LEGAL & HELP SUB-VIEWS ─────────────────────────────────── */}
-          {(currentView === 'help' ||
-            currentView === 'player_terms' ||
-            currentView === 'club_terms' ||
-            currentView === 'privacy_policy') && (
-            <LegalAndHelpManager
-              initialSection={currentView}
-              onBack={() => setCurrentView('menu')}
-            />
-          )}
-
-          {/* ─── 3. OPERATIONAL CONTROLS SUB-VIEW ──────────────────────────── */}
+          {/* ─── 2. OPERATIONAL CONTROLS SUB-VIEW ──────────────────────────── */}
           {currentView === 'operational' && (
             <>
               {/* Back to Settings Header */}
