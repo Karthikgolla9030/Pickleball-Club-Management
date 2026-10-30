@@ -11,11 +11,12 @@ import React from 'react';
 import {
   Alert,
   Share,
+  StyleProp,
   StyleSheet,
   TouchableOpacity,
   View,
+  ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, MoreVertical, Share2 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -26,6 +27,7 @@ export interface PlayerTournamentHeaderProps {
   onBack: () => void;
   onShare?: () => void;
   onOptionsPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function PlayerTournamentHeader({
@@ -33,9 +35,8 @@ export function PlayerTournamentHeader({
   onBack,
   onShare,
   onOptionsPress,
+  style,
 }: PlayerTournamentHeaderProps) {
-  const insets = useSafeAreaInsets();
-
   const handleShare = async () => {
     if (onShare) {
       onShare();
@@ -64,7 +65,7 @@ export function PlayerTournamentHeader({
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 10) }]}>
+    <View style={[styles.container, style]}>
       <View style={styles.inner}>
         <TouchableOpacity
           onPress={onBack}
@@ -105,11 +106,6 @@ export function PlayerTournamentHeader({
 
 const styles = StyleSheet.create({
   container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 50,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',

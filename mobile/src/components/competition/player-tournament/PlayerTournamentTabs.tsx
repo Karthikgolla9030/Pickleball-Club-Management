@@ -7,8 +7,15 @@
  * - Smooth horizontal scroll on smaller screens
  */
 
-import React from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  ScrollView,
+  StyleProp,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+  ViewStyle,
+} from 'react-native';
 
 import { AppText } from '@/components/AppText';
 
@@ -22,16 +29,32 @@ export interface PlayerTournamentTabsProps {
   tabs: TabItem[];
   activeTab: string;
   onTabChange: (key: string) => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function PlayerTournamentTabs({
   tabs,
   activeTab,
   onTabChange,
+  style,
 }: PlayerTournamentTabsProps) {
+  const scrollViewRef = useRef<ScrollView>(null);
+  const tabLayouts = useRef<{ [key: string]: { x: number; width: number } }>({});
+
+  useEffect(() => {
+    const layout = tabLayouts.current[activeTab];
+    if (layout && scrollViewRef.current) {
+      scrollViewRef.current.scrollTo({
+        x: Math.max(0, layout.x - 32),
+        animated: true,
+      });
+    }
+  }, [activeTab]);
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <ScrollView
+        ref={scrollViewRef}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -46,6 +69,12 @@ export function PlayerTournamentTabs({
           return (
             <TouchableOpacity
               key={tab.key}
+              onLayout={(e) => {
+                tabLayouts.current[tab.key] = {
+                  x: e.nativeEvent.layout.x,
+                  width: e.nativeEvent.layout.width,
+                };
+              }}
               style={[styles.pill, isActive && styles.pillActive]}
               onPress={() => onTabChange(tab.key)}
               activeOpacity={0.8}
@@ -73,6 +102,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
+    zIndex: 10,
+    elevation: 4,
   },
   scrollContent: {
     paddingHorizontal: 16,

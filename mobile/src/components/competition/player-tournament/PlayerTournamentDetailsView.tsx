@@ -392,17 +392,12 @@ export function PlayerTournamentDetailsView({
     Boolean(onRegister);
 
   return (
-    <View style={styles.screenWrapper}>
-      {/* ─── 1. Fixed Header ─── */}
-      <PlayerTournamentHeader tournament={tournament} onBack={onBack} />
-
-      {/* ─── 2. Scrollable Body ─── */}
+    <View style={[styles.screenWrapper, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
+      {/* ─── Scrollable Body: Header scrolls naturally, Tab Bar remains sticky ─── */}
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: Math.max(insets.top, 10) + 52 },
-        ]}
+        contentContainerStyle={styles.scrollContent}
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -412,83 +407,90 @@ export function PlayerTournamentDetailsView({
           />
         }
       >
-        {/* ─── Shared Hero Banner ─── */}
-        <PlayerTournamentBanner
-          tournament={tournament}
-          registeredCount={teams.length > 0 ? teams.length : registrations.length}
-        />
-
-        {/* ─── Standardized Horizontal Navigation Tabs ─── */}
-        <PlayerTournamentTabs
-          tabs={tabs}
-          activeTab={currentTab}
-          onTabChange={setActiveTab}
-        />
-
-        {/* ─── Tab Content Rendering ─── */}
-        {currentTab === 'overview' && (
-          <PlayerTournamentOverviewTab tournament={tournament} />
-        )}
-
-        {currentTab === 'players' && (
-          <PlayerTournamentPlayersTab
+        {/* ─── Child 0: Natural-Scrolling Tournament Header & Hero Banner ─── */}
+        <View style={styles.scrollHeaderWrapper}>
+          <PlayerTournamentHeader tournament={tournament} onBack={onBack} />
+          <PlayerTournamentBanner
             tournament={tournament}
-            teams={teams}
-            registrations={registrations}
-            isBracketLocked={status === 'in_progress' || status === 'completed'}
+            registeredCount={teams.length > 0 ? teams.length : registrations.length}
           />
-        )}
+        </View>
 
-        {currentTab === 'bracket' && (
-          <PlayerTournamentBracketTab
-            tournament={tournament}
-            matches={activeMatches}
+        {/* ─── Child 1: Sticky Horizontal Navigation Tabs Bar ─── */}
+        <View style={styles.stickyTabsContainer}>
+          <PlayerTournamentTabs
+            tabs={tabs}
+            activeTab={currentTab}
+            onTabChange={setActiveTab}
           />
-        )}
+        </View>
 
-        {currentTab === 'pools' && (
-          <PlayerTournamentPoolsTab
-            tournament={tournament}
-            poolAStandings={poolAStandings}
-            poolBStandings={poolBStandings}
-            matches={activeMatches}
-          />
-        )}
+        {/* ─── Child 2: Tab Body Content ─── */}
+        <View style={styles.tabBodyWrapper}>
+          {currentTab === 'overview' && (
+            <PlayerTournamentOverviewTab tournament={tournament} />
+          )}
 
-        {currentTab === 'championship' && (
-          <PlayerTournamentBracketTab
-            tournament={tournament}
-            matches={
-              championshipMatches.length > 0 ? championshipMatches : activeMatches
-            }
-          />
-        )}
+          {currentTab === 'players' && (
+            <PlayerTournamentPlayersTab
+              tournament={tournament}
+              teams={teams}
+              registrations={registrations}
+              isBracketLocked={status === 'in_progress' || status === 'completed'}
+            />
+          )}
 
-        {currentTab === 'matches' && (
-          <PlayerTournamentMatchesTab
-            tournament={tournament}
-            matches={activeMatches}
-            teams={teams}
-          />
-        )}
+          {currentTab === 'bracket' && (
+            <PlayerTournamentBracketTab
+              tournament={tournament}
+              matches={activeMatches}
+            />
+          )}
 
-        {currentTab === 'standings' && (
-          <PlayerTournamentStandingsTab
-            tournament={tournament}
-            standings={activeStandings}
-          />
-        )}
+          {currentTab === 'pools' && (
+            <PlayerTournamentPoolsTab
+              tournament={tournament}
+              poolAStandings={poolAStandings}
+              poolBStandings={poolBStandings}
+              matches={activeMatches}
+            />
+          )}
 
-        {currentTab === 'results' && (
-          <PlayerTournamentResultsTab
-            tournament={tournament}
-            matches={activeMatches}
-            standings={activeStandings}
-          />
-        )}
+          {currentTab === 'championship' && (
+            <PlayerTournamentBracketTab
+              tournament={tournament}
+              matches={
+                championshipMatches.length > 0 ? championshipMatches : activeMatches
+              }
+            />
+          )}
 
-        {/* Bottom padding */}
-        <View style={{ height: canRegister ? 90 : 40 }} />
+          {currentTab === 'matches' && (
+            <PlayerTournamentMatchesTab
+              tournament={tournament}
+              matches={activeMatches}
+              teams={teams}
+            />
+          )}
+
+          {currentTab === 'standings' && (
+            <PlayerTournamentStandingsTab
+              tournament={tournament}
+              standings={activeStandings}
+            />
+          )}
+
+          {currentTab === 'results' && (
+            <PlayerTournamentResultsTab
+              tournament={tournament}
+              matches={activeMatches}
+              standings={activeStandings}
+            />
+          )}
+
+          {/* Bottom padding */}
+          <View style={{ height: canRegister ? 90 : 40 }} />
+        </View>
       </ScrollView>
 
       {/* ─── Floating Registration CTA if open and not registered ─── */}
@@ -512,13 +514,26 @@ export function PlayerTournamentDetailsView({
 const styles = StyleSheet.create({
   screenWrapper: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   scrollArea: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
   scrollContent: {
+    flexGrow: 1,
     paddingBottom: 24,
+  },
+  scrollHeaderWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  stickyTabsContainer: {
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
+    elevation: 4,
+  },
+  tabBodyWrapper: {
+    flex: 1,
   },
   bottomBar: {
     position: 'absolute',
@@ -530,6 +545,8 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
     paddingHorizontal: 16,
     paddingTop: 12,
+    zIndex: 20,
+    elevation: 5,
   },
   registerBtn: {
     backgroundColor: '#064E3B',
