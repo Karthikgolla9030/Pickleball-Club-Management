@@ -619,6 +619,18 @@ export function usePlayerLeagueDetails(leagueId: string | null) {
   });
 }
 
+export function usePlayerLeagueTeams(leagueId: string | null) {
+  return useQuery<LeagueTeam[], Error>({
+    queryKey: leagueId ? ['player', 'leagues', leagueId, 'teams'] : ['player', 'leagues', 'none', 'teams'],
+    queryFn: () => {
+      if (!leagueId) throw new Error('League ID required');
+      return leagueApi.getPlayerTeams(leagueId);
+    },
+    enabled: Boolean(leagueId),
+    staleTime: 30 * 1000,
+  });
+}
+
 export function usePlayerLeagueStandings(leagueId: string | null) {
   return useQuery<LeagueStandingsResponse, Error>({
     queryKey: leagueId ? QUERY_KEYS.PLAYER_LEAGUE_STANDINGS(leagueId) : ['leagues', 'none', 'standings'],

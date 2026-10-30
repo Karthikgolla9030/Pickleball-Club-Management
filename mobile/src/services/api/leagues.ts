@@ -263,6 +263,10 @@ export const leagueApi = {
     return apiClient.get<LeagueSummary>(`${playerLeagueBase()}/${leagueId}`);
   },
 
+  getPlayerTeams(leagueId: string): Promise<LeagueTeam[]> {
+    return apiClient.get<LeagueTeam[]>(`${playerLeagueBase()}/${leagueId}/teams`);
+  },
+
   getPlayerStandings(leagueId: string): Promise<LeagueStandingsResponse> {
     return apiClient.get<LeagueStandingsResponse>(`${playerLeagueBase()}/${leagueId}/standings`);
   },

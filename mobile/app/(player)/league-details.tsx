@@ -49,12 +49,17 @@ import {
   LeagueRegistrationModal,
 } from '@/components/league-registration';
 import {
+  PlayerLeagueOverviewTab,
+  PlayerLeagueTeamsTab,
+} from '@/components/league';
+import {
   useAuth,
   usePlayerLeagueDetails,
   usePlayerLeagueMatches,
   usePlayerLeaguePlayoffs,
   usePlayerLeagueRegistrationStatus,
   usePlayerLeagueStandings,
+  usePlayerLeagueTeams,
   usePlayerLeagueWeeks,
 } from '@/hooks';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
@@ -62,22 +67,14 @@ import type { LeagueMatch, LeagueSummary, LeagueWeek } from '@/types';
 import { formatDate } from '@/utils/formatters';
 import { getCourtDisplayLabel } from '@/utils';
 
-type TabKey = 'standings' | 'schedule' | 'playoffs' | 'results';
-
-const DETAIL_TABS: { key: TabKey; label: string }[] = [
-  { key: 'standings', label: 'Standings' },
-  { key: 'schedule', label: 'Schedule' },
-  { key: 'playoffs', label: 'Playoffs' },
-  { key: 'results', label: 'Results' },
-];
+type TabKey = 'overview' | 'players' | 'teams' | 'schedule' | 'standings' | 'playoffs' | 'results';
 
 export default function PlayerLeagueDetailsScreen() {
   const router = useRouter();
-  const { id, tab } = useLocalSearchParams<{ id: string; tab?: TabKey }>();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const leagueId = id ?? null;
 
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<TabKey>(tab || 'standings');
   const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
 
   // Modals state
@@ -94,6 +91,12 @@ export default function PlayerLeagueDetailsScreen() {
   } = usePlayerLeagueDetails(leagueId);
 
   const {
+    data: teamsData,
+    isLoading: isLoadingTeams,
+    refetch: refetchTeams,
+  } = usePlayerLeagueTeams(leagueId);
+
+  const {
     data: standingsData,
     isLoading: isLoadingStandings,
     refetch: refetchStandings,
@@ -104,6 +107,14 @@ export default function PlayerLeagueDetailsScreen() {
     refetch: refetchWeeks,
   } = usePlayerLeagueWeeks(leagueId);
 
+  // All matches for Results tab (completed matches across the entire league)
+  const {
+    data: allMatches,
+    isLoading: isLoadingAllMatches,
+    refetch: refetchAllMatches,
+  } = usePlayerLeagueMatches(leagueId);
+
+  // Matches for Schedule tab (filtered by selected week)
   const {
     data: matches,
     isLoading: isLoadingMatches,
@@ -125,8 +136,10 @@ export default function PlayerLeagueDetailsScreen() {
   const handleRefresh = async () => {
     await Promise.all([
       refetchLeague(),
+      refetchTeams(),
       refetchStandings(),
       refetchWeeks(),
+      refetchAllMatches(),
       refetchMatches(),
       refetchPlayoffs(),
       refetchRegStatus(),
@@ -155,8 +168,14 @@ export default function PlayerLeagueDetailsScreen() {
   // Determine active week
   const activeWeekNumber = league?.current_week || 1;
   const totalWeeks = league?.total_weeks || league?.number_of_weeks || 12;
-  const isSingles = (league?.team_size ?? 2) === 1;
+  const isSingles =
+    (league?.team_size ?? 2) === 1 ||
+    (league?.category?.toLowerCase().includes('singles') ?? false);
   const formatLabel = isSingles ? 'Singles' : (league?.category || 'Doubles');
+
+  const hasPlayoffs = (league?.playoff_team_count ?? 0) > 0;
+  const playersOrTeamsTabKey: TabKey = isSingles ? 'players' : 'teams';
+  const playersOrTeamsTabLabel = isSingles ? 'Players' : 'Teams';
 
   const isLive = league?.status === 'in_progress';
   const isCompleted = league?.status === 'completed';
@@ -185,6 +204,63 @@ export default function PlayerLeagueDetailsScreen() {
   const standings = useMemo(() => {
     return standingsData?.standings || [];
   }, [standingsData]);
+
+  // Completed matches across the league
+  const completedMatchesList = useMemo(() => {
+    return (allMatches || []).filter((m: LeagueMatch) => m.status === 'completed');
+  }, [allMatches]);
+
+  // Tab definitions in required order:
+  // 1. Overview & Rules
+  // 2. Players / Teams (dynamic)
+  // 3. Schedule
+  // 4. Standings
+  // 5. Playoffs (only if playoffs configured)
+  // 6. Results
+  const detailTabs = useMemo(() => {
+    const participantCount =
+      teamsData && teamsData.length > 0
+        ? teamsData.length
+        : standings.length > 0
+        ? standings.length
+        : undefined;
+
+    const list: { key: TabKey; label: string; count?: number }[] = [
+      { key: 'overview', label: 'Overview & Rules' },
+      {
+        key: playersOrTeamsTabKey,
+        label: playersOrTeamsTabLabel,
+        count: participantCount,
+      },
+      { key: 'schedule', label: 'Schedule' },
+      { key: 'standings', label: 'Standings' },
+    ];
+
+    if (hasPlayoffs) {
+      list.push({ key: 'playoffs', label: 'Playoffs' });
+    }
+
+    list.push({ key: 'results', label: 'Results' });
+    return list;
+  }, [playersOrTeamsTabKey, playersOrTeamsTabLabel, teamsData, standings, hasPlayoffs]);
+
+  const initialTabKey = useMemo<TabKey>(() => {
+    if (tab) {
+      if (tab === 'players' || tab === 'teams') return playersOrTeamsTabKey;
+      if (
+        tab === 'overview' ||
+        tab === 'schedule' ||
+        tab === 'standings' ||
+        tab === 'results'
+      ) {
+        return tab as TabKey;
+      }
+      if (tab === 'playoffs' && hasPlayoffs) return 'playoffs';
+    }
+    return 'overview';
+  }, [tab, playersOrTeamsTabKey, hasPlayoffs]);
+
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTabKey);
 
   // Formatted date helpers
   const formatRangeDates = (start?: string | null, end?: string | null): string => {
@@ -322,7 +398,7 @@ export default function PlayerLeagueDetailsScreen() {
           </View>
 
           <AppText style={styles.metadataSubtitle}>
-            {`${totalWeeks} Weeks  •  ${league.max_teams || 12} Teams  •  ${formatLabel}  •  Top ${league.playoff_team_count || 4} to Playoffs`}
+            {`${totalWeeks} Weeks  •  ${league.max_teams || 12} ${isSingles ? 'Players' : 'Teams'}  •  ${formatLabel}  •  ${hasPlayoffs ? `Top ${league.playoff_team_count || 4} to Playoffs` : 'Regular Season Only'}`}
           </AppText>
         </View>
 
@@ -400,10 +476,12 @@ export default function PlayerLeagueDetailsScreen() {
             <View style={styles.infoCardHeader}>
               <Trophy size={15} color="#0D9488" />
               <AppText style={styles.infoCardTitle}>
-                Top {league.playoff_team_count || 4}
+                {hasPlayoffs ? `Top ${league.playoff_team_count || 4}` : 'Round Robin'}
               </AppText>
             </View>
-            <AppText style={styles.infoCardSub}>to Playoffs</AppText>
+            <AppText style={styles.infoCardSub}>
+              {hasPlayoffs ? 'to Playoffs' : 'Standings Only'}
+            </AppText>
           </View>
         </View>
 
@@ -460,174 +538,63 @@ export default function PlayerLeagueDetailsScreen() {
           </View>
         ) : null}
 
-        {/* ─── Segmented Tabs ───────────────────────────────────────── */}
-        <View style={styles.tabBar}>
-          {DETAIL_TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.tabItem, isActive && styles.tabItemActive]}
-                onPress={() => setActiveTab(tab.key)}
-                activeOpacity={0.85}
-              >
-                <AppText style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                  {tab.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
+        {/* ─── Segmented Tabs (Horizontal Scroll) ───────────────────── */}
+        <View style={styles.tabBarContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabBarScroll}
+          >
+            {detailTabs.map((t) => {
+              const isActive =
+                activeTab === t.key ||
+                ((t.key === 'players' || t.key === 'teams') &&
+                  (activeTab === 'players' || activeTab === 'teams'));
+              const displayLabel =
+                typeof t.count === 'number' && t.count >= 0
+                  ? `${t.label} (${t.count})`
+                  : t.label;
+
+              return (
+                <TouchableOpacity
+                  key={t.key}
+                  style={[styles.tabPill, isActive && styles.tabPillActive]}
+                  onPress={() => setActiveTab(t.key)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <AppText
+                    style={[styles.tabPillText, isActive && styles.tabPillTextActive]}
+                  >
+                    {displayLabel}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
-        {/* ─── TAB 1: STANDINGS ─────────────────────────────────────── */}
-        {activeTab === 'standings' && (
+        {/* ─── TAB 1: OVERVIEW & RULES ──────────────────────────────── */}
+        {activeTab === 'overview' && (
           <View style={styles.tabContent}>
-            {/* League Progress Card (for live/in progress leagues) */}
-            {isLive && (
-              <View style={styles.progressCard}>
-                <View style={styles.progressCardHeader}>
-                  <View style={styles.progressTitleRow}>
-                    <BarChart2 size={18} color="#065F46" />
-                    <AppText style={styles.progressCardTitle}>League Progress</AppText>
-                  </View>
-                  <View style={styles.weekPill}>
-                    <AppText style={styles.weekPillText}>
-                      Week {activeWeekNumber} of {totalWeeks}
-                    </AppText>
-                  </View>
-                </View>
-
-                <View style={styles.progressDetailsRow}>
-                  <AppText style={styles.progressMatchesCompleted}>
-                    {completedMatches} of {totalMatches} matches completed
-                  </AppText>
-                  <AppText style={styles.progressPctValue}>{progressPct}%</AppText>
-                </View>
-
-                <View style={styles.largeProgressBarTrack}>
-                  <View
-                    style={[
-                      styles.largeProgressBarFill,
-                      { width: `${Math.max(4, progressPct)}%` },
-                    ]}
-                  />
-                </View>
-              </View>
-            )}
-
-            {/* Standings Table Card */}
-            <View style={styles.standingsCard}>
-              <View style={styles.standingsHeaderRow}>
-                <Trophy size={18} color="#065F46" />
-                <AppText style={styles.standingsCardTitle}>Standings</AppText>
-              </View>
-
-              {isLoadingStandings ? (
-                <View style={styles.tabLoading}>
-                  <ActivityIndicator size="small" color={Colors.brand.primary} />
-                  <AppText style={styles.tabLoadingText}>Loading standings...</AppText>
-                </View>
-              ) : standings.length === 0 ? (
-                <View style={styles.tabEmpty}>
-                  <AppText style={styles.tabEmptyText}>
-                    Standings will be computed once week matches begin.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={styles.tableContainer}>
-                  {/* Table Header */}
-                  <View style={styles.tableHeaderRow}>
-                    <AppText style={styles.colRankHeader}>#</AppText>
-                    <AppText style={styles.colTeamHeader}>Team</AppText>
-                    <AppText style={styles.colStatHeader}>MP</AppText>
-                    <AppText style={styles.colStatHeader}>W</AppText>
-                    <AppText style={styles.colStatHeader}>L</AppText>
-                    <AppText style={styles.colDiffHeader}>Diff</AppText>
-                    <AppText style={styles.colPtsHeader}>Pts</AppText>
-                  </View>
-
-                  {/* Table Rows */}
-                  {standings.map((row) => {
-                    const isRank1 = row.rank === 1;
-                    const isRank2 = row.rank === 2;
-                    const isRank3 = row.rank === 3;
-                    const isPlayoffSpot = row.rank <= (league.playoff_team_count || 4);
-
-                    const diffNum = row.points_differential ?? 0;
-                    const diffStr = diffNum > 0 ? `+${diffNum}` : `${diffNum}`;
-                    const diffColor =
-                      diffNum > 0 ? '#16A34A' : diffNum < 0 ? '#DC2626' : '#64748B';
-
-                    // Points: calculate 2 * wins or default
-                    const pts = (row as any).points ?? (row.wins * 2);
-
-                    const memberNames =
-                      row.members && row.members.length > 0
-                        ? row.members.join(' & ')
-                        : null;
-
-                    return (
-                      <View
-                        key={row.team_id}
-                        style={[
-                          styles.tableRow,
-                          row.team_name === myTeamName && styles.myTeamTableRow,
-                        ]}
-                      >
-                        {/* Rank Badge */}
-                        <View style={styles.colRank}>
-                          <View
-                            style={[
-                              styles.rankCircle,
-                              isRank1 && styles.rankCircle1,
-                              isRank2 && styles.rankCircle2,
-                              isRank3 && styles.rankCircle3,
-                            ]}
-                          >
-                            <AppText
-                              style={[
-                                styles.rankCircleText,
-                                isRank1 && styles.rankCircleText1,
-                                isRank2 && styles.rankCircleText2,
-                                isRank3 && styles.rankCircleText3,
-                              ]}
-                            >
-                              {row.rank}
-                            </AppText>
-                          </View>
-                        </View>
-
-                        {/* Team & Players */}
-                        <View style={styles.colTeam}>
-                          <AppText style={styles.teamNameText} numberOfLines={1}>
-                            {row.team_name}
-                            {row.team_name === myTeamName ? ' ★' : ''}
-                          </AppText>
-                          {memberNames && (
-                            <AppText style={styles.teamMembersText} numberOfLines={1}>
-                              {memberNames}
-                            </AppText>
-                          )}
-                        </View>
-
-                        {/* Stats */}
-                        <AppText style={styles.colStat}>{row.matches_played ?? 0}</AppText>
-                        <AppText style={styles.colStatBold}>{row.wins ?? 0}</AppText>
-                        <AppText style={styles.colStat}>{row.losses ?? 0}</AppText>
-                        <AppText style={[styles.colDiff, { color: diffColor }]}>
-                          {diffStr}
-                        </AppText>
-                        <AppText style={styles.colPts}>{pts}</AppText>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
+            <PlayerLeagueOverviewTab league={league} />
           </View>
         )}
 
-        {/* ─── TAB 2: SCHEDULE ──────────────────────────────────────── */}
+        {/* ─── TAB 2: PLAYERS / TEAMS ────────────────────────────────── */}
+        {(activeTab === 'players' || activeTab === 'teams') && (
+          <View style={styles.tabContent}>
+            <PlayerLeagueTeamsTab
+              league={league}
+              teams={teamsData}
+              standings={standings}
+              isLoading={isLoadingTeams}
+            />
+          </View>
+        )}
+
+        {/* ─── TAB 3: SCHEDULE ──────────────────────────────────────── */}
         {activeTab === 'schedule' && (
           <View style={styles.tabContent}>
             {/* Week Filter Chips */}
@@ -729,7 +696,7 @@ export default function PlayerLeagueDetailsScreen() {
                             >
                               {teamAName}
                             </AppText>
-                            {m.team_a_members && m.team_a_members.length > 0 && (
+                            {!isSingles && m.team_a_members && m.team_a_members.length > 0 && (
                               <AppText style={styles.matchTeamMembers} numberOfLines={1}>
                                 {m.team_a_members.join(' & ')}
                               </AppText>
@@ -760,7 +727,7 @@ export default function PlayerLeagueDetailsScreen() {
                             >
                               {teamBName}
                             </AppText>
-                            {m.team_b_members && m.team_b_members.length > 0 && (
+                            {!isSingles && m.team_b_members && m.team_b_members.length > 0 && (
                               <AppText style={styles.matchTeamMembers} numberOfLines={1}>
                                 {m.team_b_members.join(' & ')}
                               </AppText>
@@ -796,8 +763,157 @@ export default function PlayerLeagueDetailsScreen() {
           </View>
         )}
 
-        {/* ─── TAB 3: PLAYOFFS ──────────────────────────────────────── */}
-        {activeTab === 'playoffs' && (
+        {/* ─── TAB 4: STANDINGS ─────────────────────────────────────── */}
+        {activeTab === 'standings' && (
+          <View style={styles.tabContent}>
+            {/* League Progress Card (for live/in progress leagues) */}
+            {isLive && (
+              <View style={styles.progressCard}>
+                <View style={styles.progressCardHeader}>
+                  <View style={styles.progressTitleRow}>
+                    <BarChart2 size={18} color="#065F46" />
+                    <AppText style={styles.progressCardTitle}>League Progress</AppText>
+                  </View>
+                  <View style={styles.weekPill}>
+                    <AppText style={styles.weekPillText}>
+                      Week {activeWeekNumber} of {totalWeeks}
+                    </AppText>
+                  </View>
+                </View>
+
+                <View style={styles.progressDetailsRow}>
+                  <AppText style={styles.progressMatchesCompleted}>
+                    {completedMatches} of {totalMatches} matches completed
+                  </AppText>
+                  <AppText style={styles.progressPctValue}>{progressPct}%</AppText>
+                </View>
+
+                <View style={styles.largeProgressBarTrack}>
+                  <View
+                    style={[
+                      styles.largeProgressBarFill,
+                      { width: `${Math.max(4, progressPct)}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Standings Table Card */}
+            <View style={styles.standingsCard}>
+              <View style={styles.standingsHeaderRow}>
+                <Trophy size={18} color="#065F46" />
+                <AppText style={styles.standingsCardTitle}>Standings</AppText>
+              </View>
+
+              {isLoadingStandings ? (
+                <View style={styles.tabLoading}>
+                  <ActivityIndicator size="small" color={Colors.brand.primary} />
+                  <AppText style={styles.tabLoadingText}>Loading standings...</AppText>
+                </View>
+              ) : standings.length === 0 ? (
+                <View style={styles.tabEmpty}>
+                  <AppText style={styles.tabEmptyText}>
+                    Standings will be computed once week matches begin.
+                  </AppText>
+                </View>
+              ) : (
+                <View style={styles.tableContainer}>
+                  {/* Table Header */}
+                  <View style={styles.tableHeaderRow}>
+                    <AppText style={styles.colRankHeader}>#</AppText>
+                    <AppText style={styles.colTeamHeader}>
+                      {isSingles ? 'Player' : 'Team'}
+                    </AppText>
+                    <AppText style={styles.colStatHeader}>MP</AppText>
+                    <AppText style={styles.colStatHeader}>W</AppText>
+                    <AppText style={styles.colStatHeader}>L</AppText>
+                    <AppText style={styles.colDiffHeader}>Diff</AppText>
+                    <AppText style={styles.colPtsHeader}>Pts</AppText>
+                  </View>
+
+                  {/* Table Rows */}
+                  {standings.map((row) => {
+                    const isRank1 = row.rank === 1;
+                    const isRank2 = row.rank === 2;
+                    const isRank3 = row.rank === 3;
+
+                    const diffNum = row.points_differential ?? 0;
+                    const diffStr = diffNum > 0 ? `+${diffNum}` : `${diffNum}`;
+                    const diffColor =
+                      diffNum > 0 ? '#16A34A' : diffNum < 0 ? '#DC2626' : '#64748B';
+
+                    // Points: calculate 2 * wins or default
+                    const pts = (row as any).points ?? (row.wins * 2);
+
+                    const memberNames =
+                      row.members && row.members.length > 0
+                        ? row.members.join(' & ')
+                        : null;
+
+                    return (
+                      <View
+                        key={row.team_id}
+                        style={[
+                          styles.tableRow,
+                          row.team_name === myTeamName && styles.myTeamTableRow,
+                        ]}
+                      >
+                        {/* Rank Badge */}
+                        <View style={styles.colRank}>
+                          <View
+                            style={[
+                              styles.rankCircle,
+                              isRank1 && styles.rankCircle1,
+                              isRank2 && styles.rankCircle2,
+                              isRank3 && styles.rankCircle3,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.rankCircleText,
+                                isRank1 && styles.rankCircleText1,
+                                isRank2 && styles.rankCircleText2,
+                                isRank3 && styles.rankCircleText3,
+                              ]}
+                            >
+                              {row.rank}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        {/* Team & Players */}
+                        <View style={styles.colTeam}>
+                          <AppText style={styles.teamNameText} numberOfLines={1}>
+                            {row.team_name}
+                            {row.team_name === myTeamName ? ' ★' : ''}
+                          </AppText>
+                          {!isSingles && memberNames && memberNames !== row.team_name && (
+                            <AppText style={styles.teamMembersText} numberOfLines={1}>
+                              {memberNames}
+                            </AppText>
+                          )}
+                        </View>
+
+                        {/* Stats */}
+                        <AppText style={styles.colStat}>{row.matches_played ?? 0}</AppText>
+                        <AppText style={styles.colStatBold}>{row.wins ?? 0}</AppText>
+                        <AppText style={styles.colStat}>{row.losses ?? 0}</AppText>
+                        <AppText style={[styles.colDiff, { color: diffColor }]}>
+                          {diffStr}
+                        </AppText>
+                        <AppText style={styles.colPts}>{pts}</AppText>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* ─── TAB 5: PLAYOFFS ──────────────────────────────────────── */}
+        {activeTab === 'playoffs' && hasPlayoffs && (
           <View style={styles.tabContent}>
             <View style={styles.playoffsCard}>
               <View style={styles.playoffsHeader}>
@@ -805,7 +921,7 @@ export default function PlayerLeagueDetailsScreen() {
                 <View>
                   <AppText style={styles.playoffsTitle}>Championship Playoffs</AppText>
                   <AppText style={styles.playoffsSub}>
-                    Top {league.playoff_team_count || 4} teams qualify for the championship bracket
+                    Top {league.playoff_team_count || 4} qualify for the championship bracket
                   </AppText>
                 </View>
               </View>
@@ -843,7 +959,7 @@ export default function PlayerLeagueDetailsScreen() {
           </View>
         )}
 
-        {/* ─── TAB 4: RESULTS ───────────────────────────────────────── */}
+        {/* ─── TAB 6: RESULTS ───────────────────────────────────────── */}
         {activeTab === 'results' && (
           <View style={styles.tabContent}>
             <View style={styles.resultsCard}>
@@ -888,6 +1004,119 @@ export default function PlayerLeagueDetailsScreen() {
                   <AppText style={styles.inProgressResultsText}>
                     Final official results and championship placement will be recorded once regular season fixtures and championship playoffs are completed.
                   </AppText>
+                </View>
+              )}
+            </View>
+
+            {/* Completed Match Results List */}
+            <View style={styles.resultsMatchesCard}>
+              <View style={styles.standingsHeaderRow}>
+                <Award size={18} color="#065F46" />
+                <AppText style={styles.standingsCardTitle}>
+                  Completed Matches ({completedMatchesList.length})
+                </AppText>
+              </View>
+
+              {isLoadingAllMatches ? (
+                <View style={styles.tabLoading}>
+                  <ActivityIndicator size="small" color={Colors.brand.primary} />
+                  <AppText style={styles.tabLoadingText}>Loading completed fixtures...</AppText>
+                </View>
+              ) : completedMatchesList.length === 0 ? (
+                <View style={styles.tabEmpty}>
+                  <AppText style={styles.tabEmptyText}>
+                    No completed matches yet. Results will appear here as scores are recorded.
+                  </AppText>
+                </View>
+              ) : (
+                <View style={styles.matchesList}>
+                  {completedMatchesList.map((m: LeagueMatch) => {
+                    const teamAName = m.team_a?.name || m.team_a_name || 'TBD';
+                    const teamBName = m.team_b?.name || m.team_b_name || 'TBD';
+
+                    return (
+                      <View key={m.id} style={styles.matchCard}>
+                        <View style={styles.matchCardHeader}>
+                          <AppText style={styles.matchCourtText}>
+                            {m.week_number ? `Week ${m.week_number} • ` : ''}
+                            {getCourtDisplayLabel(m, { unassignedLabel: 'Court TBD' })}
+                          </AppText>
+                          <View style={[styles.matchStatusBadge, styles.matchStatusCompleted]}>
+                            <AppText style={[styles.matchStatusText, styles.matchStatusTextCompleted]}>
+                              COMPLETED
+                            </AppText>
+                          </View>
+                        </View>
+
+                        <View style={styles.matchBody}>
+                          <View style={styles.teamScoreRow}>
+                            <View style={styles.teamNameContainer}>
+                              <AppText
+                                style={[
+                                  styles.matchTeamName,
+                                  m.winner_team_id === m.team_a_id && styles.matchTeamWinner,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {teamAName}
+                              </AppText>
+                              {!isSingles && m.team_a_members && m.team_a_members.length > 0 && (
+                                <AppText style={styles.matchTeamMembers} numberOfLines={1}>
+                                  {m.team_a_members.join(' & ')}
+                                </AppText>
+                              )}
+                            </View>
+                            <AppText
+                              style={[
+                                styles.matchScore,
+                                m.winner_team_id === m.team_a_id && styles.matchScoreWinner,
+                              ]}
+                            >
+                              {m.score_a ?? 0}
+                            </AppText>
+                          </View>
+
+                          <View style={styles.matchDivider} />
+
+                          <View style={styles.teamScoreRow}>
+                            <View style={styles.teamNameContainer}>
+                              <AppText
+                                style={[
+                                  styles.matchTeamName,
+                                  m.winner_team_id === m.team_b_id && styles.matchTeamWinner,
+                                ]}
+                                numberOfLines={1}
+                              >
+                                {teamBName}
+                              </AppText>
+                              {!isSingles && m.team_b_members && m.team_b_members.length > 0 && (
+                                <AppText style={styles.matchTeamMembers} numberOfLines={1}>
+                                  {m.team_b_members.join(' & ')}
+                                </AppText>
+                              )}
+                            </View>
+                            <AppText
+                              style={[
+                                styles.matchScore,
+                                m.winner_team_id === m.team_b_id && styles.matchScoreWinner,
+                              ]}
+                            >
+                              {m.score_b ?? 0}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        {m.scheduled_start_at && (
+                          <View style={styles.matchFooter}>
+                            <Clock size={12} color="#64748B" />
+                            <AppText style={styles.matchFooterText}>
+                              {formatDate(m.scheduled_start_at)}
+                            </AppText>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -1134,30 +1363,49 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#E6ECE8',
+  tabBarContainer: {
+    backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    padding: 3,
+    padding: 4,
     marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Shadows.sm,
   },
-  tabItem: {
-    flex: 1,
+  tabBarScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  tabPill: {
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    alignItems: 'center',
     borderRadius: Radius.md,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tabItemActive: {
-    backgroundColor: '#065F46',
+  tabPillActive: {
+    backgroundColor: '#064E3B',
   },
-  tabLabel: {
-    fontSize: 12.5,
+  tabPillText: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
   },
-  tabLabelActive: {
+  tabPillTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  resultsMatchesCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#E6ECE8',
+    ...Shadows.sm,
+    gap: Spacing.sm,
   },
   tabContent: {
     gap: Spacing.md,
