@@ -41,6 +41,7 @@ import {
   ScreenHeader,
   AppHeader,
   DraftTournamentBanner,
+  TournamentConfigurationCard,
 } from '@/components';
 import {
   useActiveClub,
@@ -69,10 +70,16 @@ type ActiveTab = 'overview' | 'teams' | 'matches' | 'standings' | 'pools' | 'cha
 
 
 export default function TournamentDetailsScreen() {
-  const { tournamentId } = useLocalSearchParams<{ tournamentId: string }>();
+  const { tournamentId, tab } = useLocalSearchParams<{ tournamentId: string; tab?: string }>();
   const { clubId } = useActiveClub();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('overview');
+  const [activeTab, setActiveTab] = useState<ActiveTab>((tab as ActiveTab) || 'overview');
+
+  React.useEffect(() => {
+    if (tab) {
+      setActiveTab(tab as ActiveTab);
+    }
+  }, [tab]);
   const [selectedRound, setSelectedRound] = useState<number | 'all'>('all');
   const [selectedPoolId, setSelectedPoolId] = useState<string>('all');
   const [showConfigureModal, setShowConfigureModal] = useState(false);
@@ -939,55 +946,11 @@ export default function TournamentDetailsScreen() {
               </View>
             </Card>
 
-            {/* Tournament Structure & Eligibility Card */}
-            <Card style={styles.overviewCard}>
-              <View style={styles.cardHeaderRow}>
-                <AppText variant="heading3">Tournament Structure & Eligibility</AppText>
-                <Badge
-                  label={tournament.format === 'scramble' ? 'Rotating Partners' : tournamentConfig.isSingles ? 'Singles' : 'Doubles'}
-                  variant={tournament.format === 'scramble' ? 'default' : tournamentConfig.isSingles ? 'warning' : 'info'}
-                />
-              </View>
-
-              <View style={styles.structureGrid}>
-                <View style={styles.structureItem}>
-                  <AppText variant="caption" color="tertiary">CATEGORY</AppText>
-                  <AppText variant="bodySmall" style={{ fontWeight: '600' }}>
-                    {tournamentConfig.category}
-                  </AppText>
-                </View>
-                <View style={styles.structureItem}>
-                  <AppText variant="caption" color="tertiary">
-                    {tournamentConfig.skillLevelMode === 'range' ? 'ELIGIBLE RATING RANGE' : 'SKILL LEVEL'}
-                  </AppText>
-                  <AppText variant="bodySmall" style={{ fontWeight: '600' }}>
-                    {tournamentConfig.skillLevelDisplay}
-                  </AppText>
-                </View>
-                <View style={styles.structureItem}>
-                  <AppText variant="caption" color="tertiary">GENDER</AppText>
-                  <AppText variant="bodySmall" style={{ fontWeight: '600' }}>
-                    {tournamentConfig.genderEligibility}
-                  </AppText>
-                </View>
-                <View style={styles.structureItem}>
-                  <AppText variant="caption" color="tertiary">AGE RESTRICTION</AppText>
-                  <AppText variant="bodySmall" style={{ fontWeight: '600' }}>
-                    {tournamentConfig.ageRestrictionText}
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.capacityBanner}>
-                <AppText variant="caption" style={styles.capacityBannerText}>
-                  {tournament.format === 'scramble'
-                    ? `Scramble • ${tournament.max_participants ?? 16} Individual Players • Rotating Partners`
-                    : tournamentConfig.isSingles
-                    ? `Singles • ${tournament.max_participants ?? 8} Players • ${tournament.max_participants ?? 8} Entries • 1 Player / Team`
-                    : `${tournamentConfig.category} • ${tournament.max_participants ?? 8} Teams • ${(tournament.max_participants ?? 8) * 2} Players • 2 Players / Team`}
-                </AppText>
-              </View>
-            </Card>
+            {/* Tournament Configuration Card */}
+            <TournamentConfigurationCard
+              tournament={tournament}
+              style={{ marginBottom: Spacing[4] }}
+            />
 
             {/* Bracket Mode Card (Bracket Only) */}
             {isBracket && (

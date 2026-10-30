@@ -226,6 +226,8 @@ export interface ParsedTournamentConfig {
   targetScore: number;
   winBy: number;
   rulesSummary: string;
+  entryFee: number | null;
+  entryFeeDisplay: string | null;
 }
 
 /**
@@ -254,6 +256,8 @@ export function parseTournamentConfig(
       targetScore: 11,
       winBy: 2,
       rulesSummary: 'To 11 pts (win by 2)',
+      entryFee: null,
+      entryFeeDisplay: null,
     };
   }
 
@@ -305,6 +309,14 @@ export function parseTournamentConfig(
     skillLevelMode = 'range';
   } else if (!rawMode && skillLevel && (skillLevel.includes('-') || skillLevel.includes('–'))) {
     skillLevelMode = 'range';
+  } else if (!rawMode && !minSkillLevel && !maxSkillLevel && !skillLevel && tournament.description) {
+    const rangeMatch = tournament.description.match(/Skill:\s*([0-9.]+)[–-]([0-9.]+)/i);
+    if (rangeMatch && rangeMatch[1] && rangeMatch[2]) {
+      skillLevelMode = 'range';
+      minSkillLevel = rangeMatch[1].trim();
+      maxSkillLevel = rangeMatch[2].trim();
+      skillLevel = `${minSkillLevel}-${maxSkillLevel}`;
+    }
   }
 
   if (skillLevelMode === 'range') {
@@ -365,12 +377,26 @@ export function parseTournamentConfig(
   }
 
   // Extract age
-  const minAge = formatConfig.min_age !== undefined && formatConfig.min_age !== null
+  let minAge = formatConfig.min_age !== undefined && formatConfig.min_age !== null
     ? Number(formatConfig.min_age)
     : null;
-  const maxAge = formatConfig.max_age !== undefined && formatConfig.max_age !== null
+  let maxAge = formatConfig.max_age !== undefined && formatConfig.max_age !== null
     ? Number(formatConfig.max_age)
     : null;
+
+  if (minAge === null && maxAge === null && tournament.description) {
+    const ageMatch = tournament.description.match(/Age:\s*([0-9]+)[–-]([0-9]+)/i);
+    if (ageMatch && ageMatch[1] && ageMatch[2]) {
+      minAge = parseInt(ageMatch[1], 10);
+      maxAge = parseInt(ageMatch[2], 10);
+    } else {
+      const agePlusMatch = tournament.description.match(/Age:\s*([0-9]+)\+/i);
+      if (agePlusMatch && agePlusMatch[1]) {
+        minAge = parseInt(agePlusMatch[1], 10);
+      }
+    }
+  }
+
   const ageRestrictionText = formatAgeRestriction(minAge, maxAge);
 
   const entryCount = tournament.max_participants ?? 8;
@@ -381,6 +407,28 @@ export function parseTournamentConfig(
   const targetScore = scoringRules?.target_score ?? (formatConfig.points_to_win ? Number(formatConfig.points_to_win) : 11);
   const winBy = scoringRules?.win_by ?? (formatConfig.win_by ? Number(formatConfig.win_by) : 2);
   const rulesSummary = `To ${targetScore} pts (win by ${winBy})`;
+
+  // Extract entry fee
+  const rawFee = formatConfig.entry_fee ?? (tournament as any).entry_fee ?? (tournament as any).fee;
+  let entryFee: number | null = null;
+  if (rawFee !== undefined && rawFee !== null && !isNaN(Number(rawFee))) {
+    entryFee = Number(rawFee);
+  } else if (tournament.description) {
+    const feeMatch = tournament.description.match(/Fee:\s*\$?([0-9.]+)/i);
+    if (feeMatch && feeMatch[1] && !isNaN(parseFloat(feeMatch[1]))) {
+      entryFee = parseFloat(feeMatch[1]);
+    }
+  }
+
+  let entryFeeDisplay: string | null = null;
+  if (entryFee !== null) {
+    if (entryFee === 0) {
+      entryFeeDisplay = 'Free ($0.00)';
+    } else {
+      const formattedNum = entryFee % 1 === 0 ? entryFee.toFixed(0) : entryFee.toFixed(2);
+      entryFeeDisplay = `$${formattedNum} / player`;
+    }
+  }
 
   return {
     category,
@@ -399,5 +447,7 @@ export function parseTournamentConfig(
     targetScore,
     winBy,
     rulesSummary,
+    entryFee,
+    entryFeeDisplay,
   };
 }

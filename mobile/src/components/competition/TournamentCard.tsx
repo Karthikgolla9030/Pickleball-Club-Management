@@ -69,6 +69,7 @@ interface TournamentCardProps {
   onOptionsPress?: () => void;
   onPublishPress?: () => void;
   onCloseRegistrationPress?: () => void;
+  onViewResultsPress?: () => void;
   actionLabel?: string;
 }
 
@@ -134,6 +135,7 @@ export function TournamentCard({
   onOptionsPress,
   onPublishPress,
   onCloseRegistrationPress,
+  onViewResultsPress,
   actionLabel,
 }: TournamentCardProps) {
   const targetScore = tournament.scoring_rules?.target_score ?? 11;
@@ -150,9 +152,6 @@ export function TournamentCard({
     Boolean(fc.pool_play_state?.completed) ||
     Boolean(fc.pool_play_state?.winner);
 
-  const defaultActionLabel = isCompleted ? 'View Results' : 'Manage';
-  const resolvedActionLabel = actionLabel && actionLabel !== 'Manage' ? actionLabel : defaultActionLabel;
-
   const statusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const formatBadge = getFormatBadgeStyle(tournament.format || '', tournament.format_label);
   const banner = resolveTournamentBanner(
@@ -168,9 +167,9 @@ export function TournamentCard({
       activeOpacity={0.93}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${resolvedActionLabel} ${tournament.name}`}
+      accessibilityLabel={`Open ${tournament.name}`}
     >
-      {/* ─── Top: Hero Banner (Consistent 142px across all formats) ─────────── */}
+      {/* ─── Top: Hero Banner (Clean, consistent across all formats) ───────── */}
       <View style={styles.heroBanner}>
         {/* Background Image: object-fit cover, zero gaps */}
         <Image source={banner} style={styles.bannerImage} resizeMode="cover" />
@@ -188,7 +187,10 @@ export function TournamentCard({
 
           {onOptionsPress && (
             <TouchableOpacity
-              onPress={onOptionsPress}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onOptionsPress();
+              }}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={styles.moreBtn}
               accessibilityLabel="Tournament options"
@@ -204,23 +206,27 @@ export function TournamentCard({
             <AppText style={styles.tournamentTitle} numberOfLines={2}>
               {tournament.name}
             </AppText>
-
-            {tournament.description ? (
-              <AppText style={styles.tournamentDesc} numberOfLines={2}>
-                {tournament.description}
-              </AppText>
-            ) : null}
           </View>
 
-          {/* Manage Button on banner */}
-          <TouchableOpacity
-            style={styles.manageBtn}
-            onPress={onPress}
-            activeOpacity={0.8}
-            accessibilityLabel={`${resolvedActionLabel} ${tournament.name}`}
-          >
-            <AppText style={styles.manageBtnText}>{resolvedActionLabel} →</AppText>
-          </TouchableOpacity>
+          {/* View Results Action Button on banner — only when completed / results are available */}
+          {isCompleted && (
+            <TouchableOpacity
+              style={styles.manageBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                if (onViewResultsPress) {
+                  onViewResultsPress();
+                } else {
+                  onPress();
+                }
+              }}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`View Results for ${tournament.name}`}
+            >
+              <AppText style={styles.manageBtnText}>View Results →</AppText>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -260,7 +266,10 @@ export function TournamentCard({
           {isDraft && onPublishPress && (
             <TouchableOpacity
               style={styles.bottomPublishBtn}
-              onPress={onPublishPress}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPublishPress();
+              }}
               activeOpacity={0.8}
               accessibilityLabel={`Publish and open registration for ${tournament.name}`}
             >
@@ -271,7 +280,10 @@ export function TournamentCard({
           {isRegistrationOpen && onCloseRegistrationPress && (
             <TouchableOpacity
               style={styles.bottomCloseRegBtn}
-              onPress={onCloseRegistrationPress}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onCloseRegistrationPress();
+              }}
               activeOpacity={0.8}
               accessibilityLabel={`Close registration for ${tournament.name}`}
             >
@@ -301,7 +313,7 @@ const styles = StyleSheet.create({
 
   heroBanner: {
     position: 'relative',
-    minHeight: 142,
+    minHeight: 124,
     paddingTop: 12,
     paddingHorizontal: 14,
     paddingBottom: 12,
@@ -358,23 +370,14 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   tournamentTitle: {
-    fontSize: 18.5,
+    fontSize: 18,
     fontWeight: '700',
-    lineHeight: 22.5,
+    lineHeight: 22,
     letterSpacing: -0.2,
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.65)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
-  },
-  tournamentDesc: {
-    fontSize: 11.5,
-    lineHeight: 15,
-    marginTop: 3,
-    color: 'rgba(255, 255, 255, 0.92)',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 
   // Manage Button on Banner

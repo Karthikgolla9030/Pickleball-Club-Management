@@ -2,6 +2,7 @@
  * Aught2 Pickleball — Tournament Management Components Barrel Export
  */
 
+export * from './TournamentConfigurationCard';
 export * from './TournamentManagementHeader';
 export * from './TournamentSettingsTab';
 export * from './TournamentTeamCard';

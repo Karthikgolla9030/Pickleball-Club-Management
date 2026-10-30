@@ -43,6 +43,7 @@ import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { LoadingState } from '@/components/StateViews';
+import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Colors, Radius, Spacing } from '@/theme';
 import type {
   Tournament,
@@ -303,89 +304,12 @@ export function TournamentSettingsRosterModal({
                   )}
                 </View>
 
-                {/* 2. Tournament Information Card */}
-                <View style={styles.sectionCard}>
-                  <View style={styles.sectionHeaderRow}>
-                    <Info size={15} color="#087A60" />
-                    <AppText style={styles.sectionHeaderTitle}>
-                      TOURNAMENT INFORMATION
-                    </AppText>
-                  </View>
-
-                  <View style={styles.infoGrid}>
-                    {/* Dates */}
-                    <View style={styles.infoGridItem}>
-                      <View style={styles.infoIconWrap}>
-                        <Calendar size={13} color="#087A60" />
-                      </View>
-                      <View style={styles.infoTextWrap}>
-                        <AppText style={styles.infoItemLabel}>Tournament Dates</AppText>
-                        <AppText style={styles.infoItemValue}>
-                          {formatDate(tournament.start_date)} – {formatDate(tournament.end_date)}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Registration Window */}
-                    <View style={styles.infoGridItem}>
-                      <View style={styles.infoIconWrap}>
-                        <Clock size={13} color="#087A60" />
-                      </View>
-                      <View style={styles.infoTextWrap}>
-                        <AppText style={styles.infoItemLabel}>Registration Window</AppText>
-                        <AppText style={styles.infoItemValue}>
-                          {formatDate(tournament.registration_open_at)} – {formatDate(tournament.registration_close_at)}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Capacity & Progress */}
-                    <View style={styles.infoGridItemFull}>
-                      <View style={styles.infoIconWrap}>
-                        <Users size={13} color="#087A60" />
-                      </View>
-                      <View style={styles.infoTextWrap}>
-                        <View style={styles.capacityHeaderRow}>
-                          <AppText style={styles.infoItemLabel}>{parsedConfig.capacity.entryLabel} Capacity</AppText>
-                          <AppText style={styles.capacityRatioText}>
-                            {participantCount} / {tournament.max_participants ?? '∞'} registered (Min: {tournament.min_participants ?? '—'})
-                          </AppText>
-                        </View>
-                        {tournament.max_participants ? (
-                          <View style={styles.progressBarTrack}>
-                            <View style={[styles.progressBarFill, { width: `${capacityPercent}%` }]} />
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-
-                    {/* Category & Format */}
-                    <View style={styles.infoGridItem}>
-                      <View style={styles.infoIconWrap}>
-                        <Layers size={13} color="#087A60" />
-                      </View>
-                      <View style={styles.infoTextWrap}>
-                        <AppText style={styles.infoItemLabel}>Format & Category</AppText>
-                        <AppText style={styles.infoItemValue}>
-                          {tournament.format_label} • {parsedConfig.category}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Scoring Rules */}
-                    <View style={styles.infoGridItem}>
-                      <View style={styles.infoIconWrap}>
-                        <Target size={13} color="#087A60" />
-                      </View>
-                      <View style={styles.infoTextWrap}>
-                        <AppText style={styles.infoItemLabel}>Scoring Rules</AppText>
-                        <AppText style={styles.infoItemValue}>
-                          Single game to {targetScore} (win by {winBy})
-                        </AppText>
-                      </View>
-                    </View>
-                  </View>
-                </View>
+                {/* 2. Tournament Configuration Section */}
+                <TournamentConfigurationCard
+                  tournament={tournament}
+                  title="TOURNAMENT INFORMATION"
+                  style={{ marginBottom: Spacing[3] }}
+                />
 
                 {/* 3. Participants / Roster Section */}
                 <View style={styles.sectionCard}>

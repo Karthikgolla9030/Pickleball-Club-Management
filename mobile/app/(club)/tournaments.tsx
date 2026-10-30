@@ -370,6 +370,35 @@ export default function ClubTournamentsScreen() {
     }
   };
 
+  const handleViewResults = (item: Tournament) => {
+    if (item.format === 'scramble') {
+      router.push({
+        pathname: '/(club)/scramble' as never,
+        params: { tournamentId: item.id, tab: 'standings' },
+      });
+    } else if (item.format === 'bracket') {
+      router.push({
+        pathname: '/(club)/bracket' as never,
+        params: { tournamentId: item.id, tab: 'results' },
+      });
+    } else if (item.format === 'pool_play') {
+      router.push({
+        pathname: '/(club)/pool-play' as never,
+        params: { tournamentId: item.id, tab: 'results' },
+      });
+    } else if (item.format === 'round_robin') {
+      router.push({
+        pathname: '/(club)/round-robin' as never,
+        params: { tournamentId: item.id, tab: 'results' },
+      });
+    } else {
+      router.push({
+        pathname: '/(club)/tournament-details' as never,
+        params: { tournamentId: item.id, tab: 'standings' },
+      });
+    }
+  };
+
   const handleOpenOptionsMenu = (item: Tournament) => {
     setOptionsMenuTournament(item);
   };
@@ -708,6 +737,7 @@ export default function ClubTournamentsScreen() {
                 clubBranding={branding}
                 actionLabel={isItemCompleted ? 'View Results' : 'Manage'}
                 onPress={() => handleManage(item)}
+                onViewResultsPress={() => handleViewResults(item)}
                 onOptionsPress={() => handleOpenOptionsMenu(item)}
                 onPublishPress={item.status === 'draft' ? () => handlePublishTournament(item) : undefined}
                 onCloseRegistrationPress={
@@ -757,7 +787,7 @@ export default function ClubTournamentsScreen() {
         tournament={optionsMenuTournament}
         onPublishPress={handlePublishTournament}
         onCloseRegistrationPress={handleConfirmCloseRegistration}
-        onViewResultsPress={handleManage}
+        onViewResultsPress={handleViewResults}
         onSettingsPress={(t) => {
           setSelectedTournament(t);
         }}

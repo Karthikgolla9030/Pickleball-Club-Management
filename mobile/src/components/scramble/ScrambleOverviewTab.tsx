@@ -41,6 +41,7 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
+import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ScrambleState } from '@/types/scramble';
@@ -255,74 +256,51 @@ export function ScrambleOverviewTab({
         </TouchableOpacity>
       </Card>
 
-      {/* ─── 2. Format & Structure Card ─── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Layers size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Format & Structure</AppText>
-        </View>
+      {/* ─── 2. Tournament Configuration Card ─── */}
+      {tournament ? (
+        <TournamentConfigurationCard
+          tournament={tournament}
+          plannedRounds={plannedRounds}
+          courtCount={state?.courts_count || 4}
+          extraFields={[
+            {
+              label: 'Current Phase',
+              value: isCompleted
+                ? 'Completed'
+                : `Round ${currentRound} of ${plannedRounds} • ${getRoundStatusLabel()}`,
+            },
+            {
+              label: 'Standings Tiebreakers',
+              value: '1. Wins → 2. Point Diff → 3. Points Scored',
+            },
+          ]}
+        />
+      ) : null}
 
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Competition Format</AppText>
-            <AppText style={styles.infoVal}>Scramble</AppText>
+      {/* Optional Planned Rounds Adjuster (Pre-match setup only) */}
+      {canManage && !isCompleted && tournamentGamesCompleted === 0 && (
+        <Card style={styles.card}>
+          <View style={styles.plannedRoundsHeader}>
+            <AppText style={styles.cardHeaderTitle}>Adjust Planned Rounds</AppText>
+            {!isEditingRounds ? (
+              <TouchableOpacity
+                onPress={() => {
+                  setEditingRoundsValue(plannedRounds);
+                  setIsEditingRounds(true);
+                }}
+                style={styles.adjustLink}
+                hitSlop={8}
+              >
+                <Edit2 size={13} color="#0F766E" />
+                <AppText style={styles.adjustLinkText}>Edit</AppText>
+              </TouchableOpacity>
+            ) : null}
           </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Participant Structure</AppText>
-            <AppText style={styles.infoVal}>Individual Players (Rotating Doubles)</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Division & Category</AppText>
-            <AppText style={styles.infoVal}>{category}</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Rotation Engine</AppText>
-            <AppText style={styles.infoVal}>Authoritative Scramble Engine (4 & 5 Courts)</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Planned Rounds Row with clean inline adjuster */}
-          <View style={styles.infoRowPlannedRounds}>
-            <View style={{ flex: 1 }}>
-              <View style={styles.plannedRoundsHeader}>
-                <AppText style={styles.infoLabel}>Planned Rounds</AppText>
-                {canManage && !isCompleted && tournamentGamesCompleted === 0 && !isEditingRounds && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setEditingRoundsValue(plannedRounds);
-                      setIsEditingRounds(true);
-                    }}
-                    style={styles.adjustLink}
-                    hitSlop={8}
-                  >
-                    <Edit2 size={12} color="#0F766E" />
-                    <AppText style={styles.adjustLinkText}>Adjust</AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-              {state.recommendation_reason && !isEditingRounds && (
-                <AppText style={styles.recommendationHint}>
-                  {state.recommendation_reason}
-                </AppText>
-              )}
-            </View>
-
-            {!isEditingRounds && (
-              <AppText style={styles.infoVal}>{plannedRounds} Rounds</AppText>
-            )}
-          </View>
-
-          {/* Inline rounds stepper when editing */}
+          {state.recommendation_reason && !isEditingRounds && (
+            <AppText style={styles.recommendationHint}>
+              {state.recommendation_reason}
+            </AppText>
+          )}
           {isEditingRounds && (
             <View style={styles.editStepperBox}>
               <View style={styles.stepperControlRow}>
@@ -369,57 +347,8 @@ export function ScrambleOverviewTab({
               </View>
             </View>
           )}
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Current Phase</AppText>
-            <View style={styles.phaseBadge}>
-              <AppText style={styles.phaseBadgeText}>
-                {isCompleted
-                  ? 'Completed'
-                  : `Round ${currentRound} of ${plannedRounds} • ${getRoundStatusLabel()}`}
-              </AppText>
-            </View>
-          </View>
-        </View>
-      </Card>
-
-      {/* ─── 3. Official Scoring & Rules Card ─── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <ShieldCheck size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Official Scoring & Rules</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Target Score</AppText>
-            <AppText style={styles.infoVal}>First to {targetScore} Points</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Win Margin</AppText>
-            <AppText style={styles.infoVal}>Win by {winBy} (no ties allowed)</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Scoring Format</AppText>
-            <AppText style={styles.infoVal}>Individual cumulative points</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Standings Tiebreakers</AppText>
-            <AppText style={styles.infoVal}>1. Wins → 2. Point Diff → 3. Points Scored</AppText>
-          </View>
-        </View>
-      </Card>
+        </Card>
+      )}
 
       {/* ─── 4. Partner Coverage & Rotation Quality Card (When available) ─── */}
       {state.coverage_summary && (

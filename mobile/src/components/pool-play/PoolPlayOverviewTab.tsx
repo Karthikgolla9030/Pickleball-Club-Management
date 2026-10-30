@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
+import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ChampionshipMatch, Match, PoolStat, PoolPlayConfig, Team } from '@/types/poolPlay';
@@ -45,7 +46,7 @@ interface PoolPlayOverviewTabProps {
 }
 
 export function PoolPlayOverviewTab({
-  tournament: _tournament,
+  tournament,
   teams,
   matches,
   championshipMatches,
@@ -206,43 +207,13 @@ export function PoolPlayOverviewTab({
         </View>
       </Card>
 
-      {/* ─── 3. Structure & Advancement Card ───────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <ShieldCheck size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Format & Rules</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Tournament Stage</AppText>
-            <AppText style={styles.infoVal}>Round Robin Pools + Championship</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Advancement Rule</AppText>
-            <AppText style={styles.infoVal}>
-              Top {Math.max(1, Math.floor(config.qualifierCount / config.numPools))} per pool advance
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Championship Bracket</AppText>
-            <AppText style={styles.infoVal}>{config.bracketType}</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Courts Assigned</AppText>
-            <AppText style={styles.infoVal}>{config.courts.length} Courts</AppText>
-          </View>
-        </View>
-      </Card>
+      {/* ─── 3. Tournament Configuration Card ─────────────────────────────── */}
+      <TournamentConfigurationCard
+        tournament={tournament}
+        poolCount={pools.length > 0 ? pools.length : config.numPools}
+        qualifiersPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
+        courtCount={config.courts.length}
+      />
     </View>
   );
 }

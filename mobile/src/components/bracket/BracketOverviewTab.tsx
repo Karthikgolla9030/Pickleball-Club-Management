@@ -28,6 +28,7 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
+import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, Match, BracketSummaryResponse } from '@/types';
 import type { BracketProgress, BracketSubTab } from '@/types/bracket';
@@ -143,72 +144,12 @@ export function BracketOverviewTab({
         </TouchableOpacity>
       </Card>
 
-      {/* ─── 2. Format & Structure Card ────────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Layers size={18} color="#10B981" />
-          <AppText style={styles.cardHeaderTitle}>Format & Structure</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Competition Format</AppText>
-            <AppText style={styles.infoVal}>{bracketType} Bracket</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Team Structure</AppText>
-            <AppText style={styles.infoVal}>
-              {teamSize === 1 ? 'Individual Singles' : 'Fixed Partner Doubles'}
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Bracket Engine</AppText>
-            <AppText style={styles.infoVal}>Power-of-Two Standard Seeding</AppText>
-          </View>
-        </View>
-      </Card>
-
-      {/* ─── 3. Official Scoring Rules Card ─────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <ShieldCheck size={18} color="#10B981" />
-          <AppText style={styles.cardHeaderTitle}>Official Scoring Rules</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Game Format</AppText>
-            <AppText style={styles.infoVal}>Single Game</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Target Score</AppText>
-            <AppText style={styles.infoVal}>First to {targetScore} points</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Win Margin</AppText>
-            <AppText style={styles.infoVal}>Win by {winBy} or more</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Ties</AppText>
-            <AppText style={styles.infoVal}>Not allowed</AppText>
-          </View>
-        </View>
-      </Card>
+      {/* ─── 2. Tournament Configuration Card ─────────────────────────────── */}
+      <TournamentConfigurationCard
+        tournament={tournament}
+        byesCount={byesCount}
+        bracketSize={bracketSize}
+      />
     </View>
   );
 }

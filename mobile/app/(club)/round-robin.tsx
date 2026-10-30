@@ -60,15 +60,23 @@ import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function RoundRobinWorkspaceScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ tournamentId?: string }>();
+  const params = useLocalSearchParams<{ tournamentId?: string; tab?: string }>();
   const tournamentId = params.tournamentId ?? null;
 
   const { clubId } = useActiveClub();
   const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
   const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
 
-  // Active Sub-Tab State — defaults to 'overview'
-  const [activeTab, setActiveTab] = useState<TournamentTabKey>('overview');
+  // Active Sub-Tab State — defaults to 'overview' unless tab param provided
+  const [activeTab, setActiveTab] = useState<TournamentTabKey>(
+    (params.tab as TournamentTabKey) || 'overview'
+  );
+
+  React.useEffect(() => {
+    if (params.tab) {
+      setActiveTab(params.tab as TournamentTabKey);
+    }
+  }, [params.tab]);
 
   // Modals State
   const [scoreModalVisible, setScoreModalVisible] = useState(false);

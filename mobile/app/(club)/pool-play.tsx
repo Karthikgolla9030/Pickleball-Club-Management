@@ -71,7 +71,7 @@ import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function PoolPlayManagementScreen() {
   const router = useRouter();
-  const { tournamentId } = useLocalSearchParams<{ tournamentId: string }>();
+  const { tournamentId, tab } = useLocalSearchParams<{ tournamentId: string; tab?: string }>();
   const { clubId, clubName } = useActiveClub();
   const { courts: clubCourts } = useClubCourts(clubId);
   const activeClubCourts = useMemo(() => (clubCourts || []).filter((c) => c.is_active), [clubCourts]);
@@ -102,8 +102,14 @@ export default function PoolPlayManagementScreen() {
     refetch: refetchTeams,
   } = useTeams(clubId, tournamentId ?? null);
 
-  // Active Tab: defaults to 'overview'
-  const [activeTab, setActiveTab] = useState<TournamentTabKey>('overview');
+  // Active Tab: defaults to 'overview' unless tab param provided
+  const [activeTab, setActiveTab] = useState<TournamentTabKey>((tab as TournamentTabKey) || 'overview');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab as TournamentTabKey);
+    }
+  }, [tab]);
 
   // Config
   const [config, setConfig] = useState<PoolPlayConfig>({

@@ -27,6 +27,7 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
+import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, Match } from '@/types';
 import type { RoundRobinProgress } from '@/types/roundRobin';
@@ -131,65 +132,13 @@ export function RoundRobinOverviewTab({
         </TouchableOpacity>
       </Card>
 
-      {/* ─── 2. Format & Structure Card ────────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Layers size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Format & Structure</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Competition Format</AppText>
-            <AppText style={styles.infoVal}>Round Robin</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Participant Structure</AppText>
-            <AppText style={styles.infoVal}>
-              {isSingles ? 'Individual Singles' : 'Fixed Partner Doubles'}
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Scheduling Engine</AppText>
-            <AppText style={styles.infoVal}>Round-Robin Berger Tables</AppText>
-          </View>
-        </View>
-      </Card>
-
-      {/* ─── 3. Official Scoring Rules Card ─────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <ShieldCheck size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Official Scoring Rules</AppText>
-        </View>
-
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Game Format</AppText>
-            <AppText style={styles.infoVal}>Single Game to {targetScore}</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Win Margin</AppText>
-            <AppText style={styles.infoVal}>Win by {winBy} points</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.infoRow}>
-            <AppText style={styles.infoLabel}>Tiebreaker Hierarchy</AppText>
-            <AppText style={styles.infoVal}>1. Wins  2. H2H  3. Diff  4. Pts</AppText>
-          </View>
-        </View>
-      </Card>
+      {/* ─── 2. Tournament Configuration Card ─────────────────────────────── */}
+      <TournamentConfigurationCard
+        tournament={tournament}
+        extraFields={[
+          { label: 'Tiebreaker Hierarchy', value: '1. Wins  2. H2H  3. Diff  4. Pts' },
+        ]}
+      />
     </View>
   );
 }

@@ -393,21 +393,11 @@ export function TournamentWizardModal({
       const skillLevelDisplay = isRange ? `${minSkillLevel}–${maxSkillLevel}` : (formState.skillLevel || '3.5');
       const skillLevelValue = isRange ? `${minSkillLevel}-${maxSkillLevel}` : (formState.skillLevel || '3.5');
 
-      // Format clean metadata note for category, skill level, fee
-      const metadataParts: string[] = [];
-      if (formState.category) metadataParts.push(formState.category);
-      metadataParts.push(isRange ? `Skill: ${skillLevelDisplay}` : `Level ${formState.skillLevel}`);
-      if (formState.genderCategory) metadataParts.push(formState.genderCategory);
-      const ageStr = formatAgeRestriction(formState.minAge, formState.maxAge);
-      if (ageStr !== 'None') metadataParts.push(`Age: ${ageStr}`);
-      if (formState.entryFee && parseFloat(formState.entryFee) > 0) {
-        metadataParts.push(`Fee: $${formState.entryFee}/player`);
-      }
+      const parsedFee = formState.entryFee && !isNaN(parseFloat(formState.entryFee))
+        ? parseFloat(formState.entryFee)
+        : null;
 
-      const metaPrefix = metadataParts.length > 0 ? `[${metadataParts.join(' • ')}]` : '';
-      const finalDescription = formState.description.trim()
-        ? metaPrefix ? `${metaPrefix}\n\n${formState.description.trim()}` : formState.description.trim()
-        : metaPrefix || null;
+      const finalDescription = formState.description.trim() || null;
 
       const regType = getRegistrationType(formState.format, formState.category);
       const teamSize = getTeamSize(formState.category, formState.format);
@@ -425,6 +415,7 @@ export function TournamentWizardModal({
         max_age: maxAgeNum,
         team_size: teamSize,
         registration_type: regType,
+        entry_fee: parsedFee,
       };
 
       if (formState.format === 'scramble') {
