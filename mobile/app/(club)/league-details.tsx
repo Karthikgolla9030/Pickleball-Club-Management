@@ -86,8 +86,9 @@ import {
 } from '@/types';
 import { formatDate, formatDateTime } from '@/utils/formatters';
 import { getCourtDisplayLabel } from '@/utils';
+import { PlayerLeagueOverviewTab } from '@/components/league';
 
-type TabKey = 'teams' | 'schedule' | 'matches' | 'standings' | 'playoffs' | 'results';
+type TabKey = 'overview' | 'teams' | 'schedule' | 'matches' | 'standings' | 'playoffs' | 'results';
 
 // Pastel palette for team avatars matching reference design
 const PASTEL_PALETTE = [
@@ -118,14 +119,21 @@ function getAvatarColors(index: number) {
 export default function ClubLeagueDetailsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const leagueId = id || null;
   const { clubId } = useActiveClub();
   const { canManageTournaments, canManageLeagues } = usePermission();
   const canManageLeague = canManageTournaments || canManageLeagues;
 
-  // Active navigation tab (Exact 6 text tabs matching mockup)
-  const [activeTab, setActiveTab] = useState<TabKey>('teams');
+  // Active navigation tab (Exact required order: Overview & Rules, Players/Teams, Schedule, Standings, Playoffs, Results)
+  const initialTab = useMemo<TabKey>(() => {
+    if (tab === 'overview' || tab === 'teams' || tab === 'schedule' || tab === 'matches' || tab === 'standings' || tab === 'playoffs' || tab === 'results') {
+      return tab as TabKey;
+    }
+    return 'overview';
+  }, [tab]);
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
+  const [scheduleSubView, setScheduleSubView] = useState<'fixtures' | 'scores'>(tab === 'matches' ? 'scores' : 'fixtures');
   const [selectedWeekId, setSelectedWeekId] = useState<string | undefined>(undefined);
 
   // Filters
@@ -734,8 +742,25 @@ export default function ClubLeagueDetailsScreen() {
   const regPercent = maxTeamsCount > 0 ? Math.min(100, Math.round((teamCount / maxTeamsCount) * 100)) : 0;
   const statusBadge = getLeagueStatusBadgeDetails(league.status);
 
+  const isSingles =
+    (league.team_size ?? 2) === 1 ||
+    (league.category?.toLowerCase().includes('singles') ?? false);
+  const totalWeeks = league.total_weeks || league.number_of_weeks || 4;
+  const hasPlayoffs = (league.playoff_team_count ?? 0) > 0;
+  const playoffSpots = league.playoff_team_count || 4;
+
   // Subtitle string: "4 Wks | 8 Teams | Singles | Top 4 Playoffs"
-  const subtitleText = `${league.number_of_weeks || 4} Wks   |   ${league.max_teams || 8} Teams   |   ${(league.team_size ?? 2) === 1 ? 'Singles' : 'Doubles'}   |   Top ${league.playoff_team_count || 4} Playoffs`;
+  const subtitleText = `${totalWeeks} Wks | ${maxTeamsCount} ${isSingles ? 'Players' : 'Teams'} | ${isSingles ? 'Singles' : (league.category || 'Doubles')} | ${hasPlayoffs ? `Top ${playoffSpots} Playoffs` : 'Regular Season'}`;
+
+  // Tab definitions (Exact required order: Overview & Rules, Players/Teams, Schedule, Standings, Playoffs, Results)
+  const clubTabs = [
+    { key: 'overview', label: 'Overview & Rules' },
+    { key: 'teams', label: isSingles ? 'Players' : 'Teams' },
+    { key: 'schedule', label: 'Schedule' },
+    { key: 'standings', label: 'Standings' },
+    { key: 'playoffs', label: 'Playoffs' },
+    { key: 'results', label: 'Results' },
+  ] as const;
 
   // Registration closes calculation
   const regCloseDateStr = league.registration_close_at
@@ -774,281 +799,12 @@ export default function ClubLeagueDetailsScreen() {
   });
 
   return (
-    <Screen style={styles.container}>
-      {/* ─── COMPACT LEAGUE HEADER ─── */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerTopRow}>
-          {/* Back button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
-          </TouchableOpacity>
-
-          {/* Centered League Title */}
-          <View style={styles.headerTitleWrap}>
-            <AppText style={styles.headerLeagueName} numberOfLines={1}>
-              {league.name}
-            </AppText>
-          </View>
-
-          {/* 3-Dot Overflow Menu */}
-          <TouchableOpacity
-            style={styles.headerMenuButton}
-            onPress={() => setIsOverflowOpen(true)}
-            accessibilityLabel="League options"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Status Pill below title */}
-        <View style={styles.headerStatusWrap}>
-          <View
-            style={[
-              styles.statusPill,
-              { backgroundColor: statusBadge.bg },
-            ]}
-          >
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: statusBadge.text },
-              ]}
-            />
-            <AppText
-              style={[
-                styles.statusPillText,
-                { color: statusBadge.text },
-              ]}
-            >
-              {statusBadge.label}
-            </AppText>
-          </View>
-        </View>
-
-        {/* Subtitle / Metadata row */}
-        <AppText style={styles.headerSubtitleText} numberOfLines={1}>
-          {subtitleText}
-        </AppText>
-      </View>
-
-      {/* ─── 2-COLUMN REGISTRATION SUMMARY CARD ─── */}
-      <View style={styles.regStatsCard}>
-        {/* Left Col: Teams Registered */}
-        <View style={styles.regStatCol}>
-          <AppText style={styles.regStatLabel}>Teams Registered</AppText>
-          <View style={styles.regStatValueRow}>
-            <AppText style={styles.regStatValue}>
-              {teamCount} / {league.max_teams || 8}
-            </AppText>
-            <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
-          </View>
-          {/* Progress Bar */}
-          <View style={styles.regProgressBarTrack}>
-            <View
-              style={[
-                styles.regProgressBarFill,
-                { width: `${regPercent}%` },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Vertical Divider */}
-        <View style={styles.regStatDivider} />
-
-        {/* Right Col: Registration Closes */}
-        <View style={styles.regStatCol}>
-          <AppText style={styles.regStatLabel}>
-            {league.status === 'registration_closed'
-              ? 'Registration Closed'
-              : 'Registration Closes'}
-          </AppText>
-          <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
-          {daysLeftText ? (
-            <AppText
-              style={[
-                styles.regStatDaysLeft,
-                league.status === 'registration_closed' && styles.regStatClosedText,
-              ]}
-            >
-              {daysLeftText}
-            </AppText>
-          ) : null}
-        </View>
-      </View>
-
-      {/* ─── COMPACT MANAGEMENT ACTIONS (TEAMS TAB) ─── */}
-      {activeTab === 'teams' && canManageLeague && (
-        <View style={styles.managementActionsRow}>
-          {league.status === 'registration_open' ? (
-            <TouchableOpacity
-              style={styles.closeRegBtn}
-              onPress={handleConfirmCloseRegistration}
-              activeOpacity={0.8}
-              disabled={isActionProcessing}
-            >
-              <AppText style={styles.closeRegBtnText}>Close Registration</AppText>
-            </TouchableOpacity>
-          ) : league.status === 'draft' ? (
-            <TouchableOpacity
-              style={styles.closeRegBtn}
-              onPress={handlePublishLeague}
-              activeOpacity={0.8}
-              disabled={isActionProcessing}
-            >
-              <AppText style={styles.closeRegBtnText}>Open Registration</AppText>
-            </TouchableOpacity>
-          ) : league.status === 'registration_closed' ? (
-            <TouchableOpacity
-              style={styles.closeRegBtn}
-              onPress={handleConfirmStartLeague}
-              activeOpacity={0.8}
-              disabled={isActionProcessing}
-            >
-              <AppText style={styles.closeRegBtnText}>Start League</AppText>
-            </TouchableOpacity>
-          ) : null}
-
-          <TouchableOpacity
-            style={styles.editLeagueBtn}
-            onPress={() => setIsEditLeagueModalOpen(true)}
-            activeOpacity={0.8}
-          >
-            <AppText style={styles.editLeagueBtnText}>Edit League</AppText>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ─── NAVIGATION TABS WITH GREEN UNDERLINE ─── */}
-      <View style={styles.tabsStripContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsStripScroll}
-        >
-          {(
-            [
-              { key: 'teams', label: 'Teams' },
-              { key: 'schedule', label: 'Schedule' },
-              { key: 'matches', label: 'Matches' },
-              { key: 'standings', label: 'Standings' },
-              { key: 'playoffs', label: 'Playoffs' },
-              { key: 'results', label: 'Results' },
-            ] as const
-          ).map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={styles.tabButton}
-                onPress={() => setActiveTab(tab.key)}
-                activeOpacity={0.7}
-              >
-                <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
-                  {tab.label}
-                </AppText>
-                {isActive && <View style={styles.activeTabIndicator} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* ─── WEEK SELECTOR (SHOWN ON SCHEDULE AND MATCHES TABS) ─── */}
-      {(activeTab === 'schedule' || activeTab === 'matches') && (
-        <View style={styles.weekSelectorContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.weekSelectorScroll}
-          >
-            {regularWeeks && regularWeeks.length > 0
-              ? regularWeeks.map((w: LeagueWeek) => {
-                  const isSelected =
-                    selectedWeekId !== 'all' &&
-                    (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
-                  return (
-                    <TouchableOpacity
-                      key={w.id}
-                      style={[
-                        styles.weekPill,
-                        isSelected ? styles.weekPillSelected : styles.weekPillUnselected,
-                      ]}
-                      onPress={() => setSelectedWeekId(w.id)}
-                      activeOpacity={0.8}
-                    >
-                      <AppText
-                        style={[
-                          styles.weekPillText,
-                          isSelected ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
-                        ]}
-                      >
-                        Week {w.week_number}
-                      </AppText>
-                    </TouchableOpacity>
-                  );
-                })
-              : Array.from({
-                  length: Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0)),
-                }).map((_, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.weekPill,
-                      idx === 0 ? styles.weekPillSelected : styles.weekPillUnselected,
-                    ]}
-                  >
-                    <AppText
-                      style={[
-                        styles.weekPillText,
-                        idx === 0 ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
-                      ]}
-                    >
-                      Week {idx + 1}
-                    </AppText>
-                  </View>
-                ))}
-
-            {/* Dropdown filter on Matches tab: "All Courts ▾" */}
-            {activeTab === 'matches' && (
-              <TouchableOpacity
-                style={styles.courtFilterPill}
-                onPress={() => {
-                  const courtIds = clubCourts?.map((c) => c.id) || [];
-                  if (!courtFilterId) {
-                    setCourtFilterId(courtIds[0] || null);
-                  } else {
-                    const currentIdx = courtIds.indexOf(courtFilterId);
-                    if (currentIdx === courtIds.length - 1) {
-                      setCourtFilterId(null);
-                    } else {
-                      setCourtFilterId(courtIds[currentIdx + 1]);
-                    }
-                  }
-                }}
-              >
-                <AppText style={styles.courtFilterPillText}>
-                  {courtFilterId
-                    ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
-                    : 'All Courts'}{' '}
-                  ▾
-                </AppText>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      )}
-
-      {/* ─── TAB CONTENT BODY ─── */}
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
       <ScrollView
-        style={styles.contentScroll}
-        contentContainerStyle={{ paddingBottom: Spacing[16] }}
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.mainScrollContent}
+        stickyHeaderIndices={[1]}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isLeagueLoading || isMatchesLoading || isStandingsLoading || isTeamsLoading}
@@ -1057,46 +813,239 @@ export default function ClubLeagueDetailsScreen() {
           />
         }
       >
-        {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 1: TEAMS (SCREEN 2)
-            - Heading: Teams (N) + "Add Team" action
-            - Table Header: #, Team Name, Players, Avg Skill Level
-            - Rows: #, Team Name + subtitle, Players count, skill pill, chevron >
-           ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'teams' && (
-          <View style={styles.tabPane}>
-            <View style={styles.teamsCard}>
-              {/* Teams Header */}
-              <View style={styles.teamsHeaderRow}>
-                <AppText style={styles.teamsTitle}>
-                  Teams ({teams?.length ?? 0})
+        {/* ─── INDEX 0: NATURAL-SCROLLING HEADER & CARDS ─── */}
+        <View style={styles.scrollHeaderWrapper}>
+          <View style={styles.headerContainer}>
+            <View style={styles.headerTopRow}>
+              {/* Back button */}
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => router.back()}
+                accessibilityLabel="Go back"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
+              </TouchableOpacity>
+
+              {/* Centered League Title */}
+              <View style={styles.headerTitleWrap}>
+                <AppText style={styles.headerLeagueName} numberOfLines={1}>
+                  {league.name}
                 </AppText>
-                {canManageLeague &&
-                (league.status === 'draft' || league.status === 'registration_open') ? (
-                  <TouchableOpacity
-                    style={styles.addTeamButton}
-                    onPress={() => {
-                      setTeamName('');
-                      setSelectedPlayerA('');
-                      setSelectedPlayerB('');
-                      setTeamError(null);
-                      setIsAddTeamModalOpen(true);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <AppText style={styles.addTeamButtonText}>Add Team</AppText>
-                  </TouchableOpacity>
-                ) : null}
               </View>
 
-              {/* Table Header */}
-              <View style={styles.teamsTableHeader}>
-                <AppText style={styles.thNum}>#</AppText>
-                <AppText style={styles.thTeamName}>Team Name</AppText>
-                <AppText style={styles.thPlayers}>Players</AppText>
-                <AppText style={styles.thAvgSkill}>Avg Skill Level</AppText>
-                <View style={styles.thChevronSpacer} />
+              {/* 3-Dot Overflow Menu */}
+              <TouchableOpacity
+                style={styles.headerMenuButton}
+                onPress={() => setIsOverflowOpen(true)}
+                accessibilityLabel="League options"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Status Pill below title */}
+            <View style={styles.headerStatusWrap}>
+              <View
+                style={[
+                  styles.statusPill,
+                  { backgroundColor: statusBadge.bg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: statusBadge.text },
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.statusPillText,
+                    { color: statusBadge.text },
+                  ]}
+                >
+                  {statusBadge.label}
+                </AppText>
               </View>
+            </View>
+
+            {/* Subtitle / Metadata row */}
+            <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+              {subtitleText}
+            </AppText>
+          </View>
+
+          {/* ─── 2-COLUMN REGISTRATION SUMMARY CARD ─── */}
+          <View style={styles.regStatsCard}>
+            {/* Left Col: Teams/Players Registered */}
+            <View style={styles.regStatCol}>
+              <AppText style={styles.regStatLabel}>
+                {isSingles ? 'Players Registered' : 'Teams Registered'}
+              </AppText>
+              <View style={styles.regStatValueRow}>
+                <AppText style={styles.regStatValue}>
+                  {teamCount} / {league.max_teams || 8}
+                </AppText>
+                <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
+              </View>
+              {/* Progress Bar */}
+              <View style={styles.regProgressBarTrack}>
+                <View
+                  style={[
+                    styles.regProgressBarFill,
+                    { width: `${regPercent}%` },
+                  ]}
+                />
+              </View>
+            </View>
+
+            {/* Vertical Divider */}
+            <View style={styles.regStatDivider} />
+
+            {/* Right Col: Registration Closes */}
+            <View style={styles.regStatCol}>
+              <AppText style={styles.regStatLabel}>
+                {league.status === 'registration_closed'
+                  ? 'Registration Closed'
+                  : 'Registration Closes'}
+              </AppText>
+              <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
+              {daysLeftText ? (
+                <AppText
+                  style={[
+                    styles.regStatDaysLeft,
+                    league.status === 'registration_closed' && styles.regStatClosedText,
+                  ]}
+                >
+                  {daysLeftText}
+                </AppText>
+              ) : null}
+            </View>
+          </View>
+
+          {/* ─── COMPACT MANAGEMENT ACTIONS (TEAMS/PLAYERS TAB) ─── */}
+          {activeTab === 'teams' && canManageLeague && (
+            <View style={styles.managementActionsRow}>
+              {league.status === 'registration_open' ? (
+                <TouchableOpacity
+                  style={styles.closeRegBtn}
+                  onPress={handleConfirmCloseRegistration}
+                  activeOpacity={0.8}
+                  disabled={isActionProcessing}
+                >
+                  <AppText style={styles.closeRegBtnText}>Close Registration</AppText>
+                </TouchableOpacity>
+              ) : league.status === 'draft' ? (
+                <TouchableOpacity
+                  style={styles.closeRegBtn}
+                  onPress={handlePublishLeague}
+                  activeOpacity={0.8}
+                  disabled={isActionProcessing}
+                >
+                  <AppText style={styles.closeRegBtnText}>Open Registration</AppText>
+                </TouchableOpacity>
+              ) : league.status === 'registration_closed' ? (
+                <TouchableOpacity
+                  style={styles.closeRegBtn}
+                  onPress={handleConfirmStartLeague}
+                  activeOpacity={0.8}
+                  disabled={isActionProcessing}
+                >
+                  <AppText style={styles.closeRegBtnText}>Start League</AppText>
+                </TouchableOpacity>
+              ) : null}
+
+              <TouchableOpacity
+                style={styles.editLeagueBtn}
+                onPress={() => setIsEditLeagueModalOpen(true)}
+                activeOpacity={0.8}
+              >
+                <AppText style={styles.editLeagueBtnText}>Edit League</AppText>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* ─── INDEX 1: STICKY NAVIGATION TABS WITH GREEN UNDERLINE ─── */}
+        <View style={styles.stickyTabsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsStripScroll}
+          >
+            {clubTabs.map((tab) => {
+              const isActive = activeTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={styles.tabButton}
+                  onPress={() => setActiveTab(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
+                    {tab.label}
+                  </AppText>
+                  {isActive && <View style={styles.activeTabIndicator} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ─── INDEX 2: TAB BODY CONTENT ─── */}
+        <View style={styles.tabBodyWrapper}>
+          {/* ══════════════════════════════════════════════════════════════════════════
+              TAB 1: OVERVIEW & RULES
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'overview' && (
+            <View style={styles.tabPane}>
+              <PlayerLeagueOverviewTab league={league as any} />
+            </View>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
+              TAB 2: TEAMS / PLAYERS (SCREEN 2)
+              - Heading: Teams/Players (N) + "Add Team/Player" action
+              - Table Header: #, Team/Player Name, Players/Division, Avg Skill Level
+              - Rows: #, Team/Player Name + subtitle, Players count, skill pill, chevron >
+             ══════════════════════════════════════════════════════════════════════════ */}
+          {activeTab === 'teams' && (
+            <View style={styles.tabPane}>
+              <View style={styles.teamsCard}>
+                {/* Teams Header */}
+                <View style={styles.teamsHeaderRow}>
+                  <AppText style={styles.teamsTitle}>
+                    {isSingles ? 'Players' : 'Teams'} ({teams?.length ?? 0})
+                  </AppText>
+                  {canManageLeague &&
+                  (league.status === 'draft' || league.status === 'registration_open') ? (
+                    <TouchableOpacity
+                      style={styles.addTeamButton}
+                      onPress={() => {
+                        setTeamName('');
+                        setSelectedPlayerA('');
+                        setSelectedPlayerB('');
+                        setTeamError(null);
+                        setIsAddTeamModalOpen(true);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <AppText style={styles.addTeamButtonText}>
+                        {isSingles ? 'Add Player' : 'Add Team'}
+                      </AppText>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Table Header */}
+                <View style={styles.teamsTableHeader}>
+                  <AppText style={styles.thNum}>#</AppText>
+                  <AppText style={styles.thTeamName}>{isSingles ? 'Player Name' : 'Team Name'}</AppText>
+                  <AppText style={styles.thPlayers}>{isSingles ? 'Division' : 'Players'}</AppText>
+                  <AppText style={styles.thAvgSkill}>Avg Skill Level</AppText>
+                  <View style={styles.thChevronSpacer} />
+                </View>
 
               {/* Team Rows */}
               {isTeamsLoading ? (
@@ -1135,14 +1084,18 @@ export default function ClubLeagueDetailsScreen() {
                         <AppText style={styles.tdTeamName} numberOfLines={1}>
                           {team.name}
                         </AppText>
-                        <AppText style={styles.tdTeamSubtitle}>
-                          {playerCount === 1 ? '1 player' : `${playerCount} players`}
-                        </AppText>
+                        {!isSingles && (
+                          <AppText style={styles.tdTeamSubtitle}>
+                            {playerCount === 1 ? '1 player' : `${playerCount} players`}
+                          </AppText>
+                        )}
                       </View>
 
-                      {/* Players count */}
+                      {/* Players count or Division */}
                       <View style={styles.tdPlayersCol}>
-                        <AppText style={styles.tdPlayersCount}>{playerCount}</AppText>
+                        <AppText style={styles.tdPlayersCount}>
+                          {isSingles ? ((league as any).division || (league as any).skill_level || 'Singles') : playerCount}
+                        </AppText>
                       </View>
 
                       {/* Avg Skill Level Blue Pill */}
@@ -1170,8 +1123,91 @@ export default function ClubLeagueDetailsScreen() {
             - Screen 4 (Schedule Exists): Week 1 Schedule header, Week Date card, match cards,
               Edit Week Dates outline button
            ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'schedule' && (
+        {(activeTab === 'schedule' || activeTab === 'matches') && (
           <View style={styles.tabPane}>
+            {/* Week Selector */}
+            <View style={styles.weekSelectorContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.weekSelectorScroll}
+              >
+                {regularWeeks && regularWeeks.length > 0
+                  ? regularWeeks.map((w: LeagueWeek) => {
+                      const isSelected =
+                        selectedWeekId !== 'all' &&
+                        (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
+                      return (
+                        <TouchableOpacity
+                          key={w.id}
+                          style={[
+                            styles.weekPill,
+                            isSelected ? styles.weekPillSelected : styles.weekPillUnselected,
+                          ]}
+                          onPress={() => setSelectedWeekId(w.id)}
+                          activeOpacity={0.8}
+                        >
+                          <AppText
+                            style={[
+                              styles.weekPillText,
+                              isSelected ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
+                            ]}
+                          >
+                            Week {w.week_number}
+                          </AppText>
+                        </TouchableOpacity>
+                      );
+                    })
+                  : Array.from({
+                      length: Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0)),
+                    }).map((_, idx) => (
+                      <View
+                        key={idx}
+                        style={[
+                          styles.weekPill,
+                          idx === 0 ? styles.weekPillSelected : styles.weekPillUnselected,
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.weekPillText,
+                            idx === 0 ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
+                          ]}
+                        >
+                          Week {idx + 1}
+                        </AppText>
+                      </View>
+                    ))}
+
+                {/* Dropdown filter on Match Scores: "All Courts ▾" */}
+                {scheduleSubView === 'scores' && (
+                  <TouchableOpacity
+                    style={styles.courtFilterPill}
+                    onPress={() => {
+                      const courtIds = clubCourts?.map((c) => c.id) || [];
+                      if (!courtFilterId) {
+                        setCourtFilterId(courtIds[0] || null);
+                      } else {
+                        const currentIdx = courtIds.indexOf(courtFilterId);
+                        if (currentIdx === courtIds.length - 1) {
+                          setCourtFilterId(null);
+                        } else {
+                          setCourtFilterId(courtIds[currentIdx + 1]);
+                        }
+                      }
+                    }}
+                  >
+                    <AppText style={styles.courtFilterPillText}>
+                      {courtFilterId
+                        ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
+                        : 'All Courts'}{' '}
+                      ▾
+                    </AppText>
+                  </TouchableOpacity>
+                )}
+              </ScrollView>
+            </View>
+
             {!hasSchedule ? (
               /* SCREEN 3: NO SCHEDULE GENERATED CARD */
               <View style={styles.noScheduleCard}>
@@ -1184,7 +1220,7 @@ export default function ClubLeagueDetailsScreen() {
                   <View style={styles.checkItemRow}>
                     <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
                     <AppText style={styles.checkItemText}>
-                      {teamCount} teams registered
+                      {teamCount} {isSingles ? 'players' : 'teams'} registered
                     </AppText>
                   </View>
                   <View style={styles.checkItemRow}>
@@ -1221,7 +1257,48 @@ export default function ClubLeagueDetailsScreen() {
                 </View>
               </View>
             ) : (
-              /* SCREEN 4: SCHEDULE GENERATED */
+              <View>
+                {/* Mode toggle: Fixtures & Times vs Match Scores */}
+                <View style={styles.scheduleViewModeRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.scheduleViewModeBtn,
+                      scheduleSubView === 'fixtures' && styles.scheduleViewModeBtnActive,
+                    ]}
+                    onPress={() => setScheduleSubView('fixtures')}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.scheduleViewModeText,
+                        scheduleSubView === 'fixtures' && styles.scheduleViewModeTextActive,
+                      ]}
+                    >
+                      Fixtures & Times
+                    </AppText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.scheduleViewModeBtn,
+                      scheduleSubView === 'scores' && styles.scheduleViewModeBtnActive,
+                    ]}
+                    onPress={() => setScheduleSubView('scores')}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.scheduleViewModeText,
+                        scheduleSubView === 'scores' && styles.scheduleViewModeTextActive,
+                      ]}
+                    >
+                      Match Scores
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+
+                {scheduleSubView === 'fixtures' ? (
+                  /* SCREEN 4: SCHEDULE GENERATED */
               <View style={styles.scheduleContent}>
                 {/* Week Header Row */}
                 <View style={styles.weekHeaderRow}>
@@ -1347,24 +1424,8 @@ export default function ClubLeagueDetailsScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-            )}
-          </View>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════════════
-            TAB 3: MATCHES (SCREEN 5)
-            - Week 1 Matches heading + match cards with status badge
-            - Scheduled / In Progress / Not Started status pills
-            - Inline score inputs [ 11 ] - [ 9 ] with Save Score button
-           ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'matches' && (
-          <View style={styles.tabPane}>
-            {!hasSchedule ? (
-              <EmptyState
-                title="No Matches Available"
-                description="Generate the regular-season schedule in the Schedule tab to create weekly fixtures."
-              />
             ) : (
+              /* SCREEN 5: MATCH SCORES */
               <View style={styles.scheduleContent}>
                 {/* Week Matches Header */}
                 <View style={styles.weekHeaderRow}>
@@ -1535,6 +1596,8 @@ export default function ClubLeagueDetailsScreen() {
             )}
           </View>
         )}
+      </View>
+    )}
 
         {/* ══════════════════════════════════════════════════════════════════════════
             TAB 4: STANDINGS (SCREEN 6)
@@ -1569,7 +1632,7 @@ export default function ClubLeagueDetailsScreen() {
                 {/* Table Header */}
                 <View style={styles.standingsTableHeader}>
                   <AppText style={[styles.sTh, styles.sThRank]}>#</AppText>
-                  <AppText style={[styles.sTh, styles.sThTeam]}>Team</AppText>
+                  <AppText style={[styles.sTh, styles.sThTeam]}>{isSingles ? 'Player' : 'Team'}</AppText>
                   <AppText style={[styles.sTh, styles.sThStat]}>MP</AppText>
                   <AppText style={[styles.sTh, styles.sThStat]}>W</AppText>
                   <AppText style={[styles.sTh, styles.sThStat]}>L</AppText>
@@ -1634,7 +1697,7 @@ export default function ClubLeagueDetailsScreen() {
             <View style={styles.standingsInfoNotice}>
               <Info size={16} color="#0284C7" style={{ marginTop: 2 }} />
               <AppText style={styles.standingsInfoNoticeText}>
-                Top {league.playoff_team_count || 4} teams will advance to the playoffs after the regular season is completed. Playoff seeding will be determined based on final standings and tiebreaker rules.
+                Top {league.playoff_team_count || 4} {isSingles ? 'players' : 'teams'} will advance to the playoffs after the regular season is completed. Playoff seeding will be determined based on final standings and tiebreaker rules.
               </AppText>
             </View>
           </View>
@@ -1954,6 +2017,7 @@ export default function ClubLeagueDetailsScreen() {
             )}
           </View>
         )}
+        </View>
       </ScrollView>
 
       {/* ─── MODAL: LIFECYCLE OVERFLOW ACTIONS (⋮) ─── */}
@@ -2309,7 +2373,7 @@ export default function ClubLeagueDetailsScreen() {
           )}
         </View>
       </ModalSheet>
-    </Screen>
+    </View>
   );
 }
 
@@ -2317,6 +2381,59 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAF9',
+  },
+  mainScrollView: {
+    flex: 1,
+    backgroundColor: '#F8FAF9',
+  },
+  mainScrollContent: {
+    flexGrow: 1,
+  },
+  scrollHeaderWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  stickyTabsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5ECE8',
+    zIndex: 10,
+    elevation: 4,
+  },
+  tabBodyWrapper: {
+    flex: 1,
+    paddingTop: Spacing[2],
+  },
+  scheduleViewModeRow: {
+    flexDirection: 'row',
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 3,
+  },
+  scheduleViewModeBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  scheduleViewModeBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  scheduleViewModeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  scheduleViewModeTextActive: {
+    color: '#176B57',
+    fontWeight: '700',
   },
 
   // ─── Compact Header Styles ───

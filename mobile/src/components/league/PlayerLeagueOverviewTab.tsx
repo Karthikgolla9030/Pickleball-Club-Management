@@ -30,7 +30,7 @@ import { formatDate } from '@/utils';
 import type { LeagueSummary } from '@/types';
 
 export interface PlayerLeagueOverviewTabProps {
-  league: LeagueSummary;
+  league: LeagueSummary | any;
 }
 
 export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps) {
@@ -43,7 +43,7 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
   const hasPlayoffs = playoffSpots > 0;
 
   // Clean structured summary string without brackets or duplication:
-  // e.g. "Singles · Skill: All Levels · 6 Weeks · Top 4 to Playoffs · Pickleball Club"
+  // e.g. "Singles · Skill: All Levels · 6 Weeks · Top 4 to Playoffs · Pickleball Club · $100/entry"
   const summaryString = useMemo(() => {
     const parts: string[] = [];
 
@@ -53,6 +53,19 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
 
     // Skill level
     parts.push('All Skill Levels');
+
+    // Gender eligibility if configured
+    const gender = (league as any).gender_preference || (league as any).gender_eligibility || (league as any).gender;
+    if (gender && gender.toLowerCase() !== 'any' && gender.toLowerCase() !== 'all') {
+      parts.push(gender);
+    }
+
+    // Age limits if configured
+    const minAge = (league as any).age_limit_min || (league as any).min_age;
+    const maxAge = (league as any).age_limit_max || (league as any).max_age;
+    if (minAge || maxAge) {
+      parts.push(`Age: ${minAge || 18}–${maxAge || 99}`);
+    }
 
     // Duration
     parts.push(`${totalWeeks} Weeks`);
@@ -490,18 +503,22 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   gridContainer: {
-    gap: 12,
+    gap: 14,
   },
   gridRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 16,
   },
   gridColLeft: {
     flex: 1,
+    minWidth: 0,
+    paddingRight: 4,
   },
   gridColRight: {
     flex: 1,
+    minWidth: 0,
+    paddingLeft: 22,
   },
   item: {
     gap: 3,

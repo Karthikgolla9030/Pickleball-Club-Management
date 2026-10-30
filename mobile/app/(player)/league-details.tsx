@@ -345,188 +345,11 @@ export default function PlayerLeagueDetailsScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* ─── COMPACT LEAGUE HEADER (Matching Owner Side) ─── */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerTopRow}>
-          {/* Back button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={handleBack}
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
-          </TouchableOpacity>
-
-          {/* Centered League Title */}
-          <View style={styles.headerTitleWrap}>
-            <AppText style={styles.headerLeagueName} numberOfLines={1}>
-              {league.name}
-            </AppText>
-          </View>
-
-          {/* 3-Dot Overflow Menu */}
-          <TouchableOpacity
-            style={styles.headerMenuButton}
-            onPress={handleOptionsPress}
-            accessibilityLabel="League options"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Status Pill below title */}
-        <View style={styles.headerStatusWrap}>
-          <View
-            style={[
-              styles.statusPill,
-              { backgroundColor: statusBadge.bg },
-            ]}
-          >
-            <View
-              style={[
-                styles.statusDot,
-                { backgroundColor: statusBadge.text },
-              ]}
-            />
-            <AppText
-              style={[
-                styles.statusPillText,
-                { color: statusBadge.text },
-              ]}
-            >
-              {statusBadge.label}
-            </AppText>
-          </View>
-        </View>
-
-        {/* Subtitle / Metadata row */}
-        <AppText style={styles.headerSubtitleText} numberOfLines={1}>
-          {subtitleText}
-        </AppText>
-      </View>
-
-      {/* ─── 2-COLUMN REGISTRATION SUMMARY CARD (Matching Owner Side) ─── */}
-      <View style={styles.regStatsCard}>
-        {/* Left Col: Teams/Players Registered */}
-        <View style={styles.regStatCol}>
-          <AppText style={styles.regStatLabel}>
-            {isSingles ? 'Players Registered' : 'Teams Registered'}
-          </AppText>
-          <View style={styles.regStatValueRow}>
-            <AppText style={styles.regStatValue}>
-              {participantCount} / {league.max_teams || 8}
-            </AppText>
-            <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
-          </View>
-          {/* Progress Bar */}
-          <View style={styles.regProgressBarTrack}>
-            <View
-              style={[
-                styles.regProgressBarFill,
-                { width: `${regPercent}%` },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Vertical Divider */}
-        <View style={styles.regStatDivider} />
-
-        {/* Right Col: Registration Closes */}
-        <View style={styles.regStatCol}>
-          <AppText style={styles.regStatLabel}>
-            {league.status === 'registration_closed' || league.registration_status === 'closed'
-              ? 'Registration Closed'
-              : 'Registration Closes'}
-          </AppText>
-          <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
-          {daysLeftText ? (
-            <AppText
-              style={[
-                styles.regStatDaysLeft,
-                (league.status === 'registration_closed' ||
-                  league.registration_status === 'closed' ||
-                  league.status === 'cancelled' ||
-                  league.status === 'completed') &&
-                  styles.regStatClosedText,
-              ]}
-            >
-              {daysLeftText}
-            </AppText>
-          ) : null}
-        </View>
-      </View>
-
-      {/* ─── COMPACT PLAYER ACTION (Register / View Entry Details) ─── */}
-      {isRegistered ? (
-        <View style={styles.actionSectionRow}>
-          <TouchableOpacity
-            style={styles.actionBtnOutline}
-            onPress={() => setIsDetailsModalOpen(true)}
-            activeOpacity={0.8}
-          >
-            <AppText style={styles.actionBtnOutlineText}>
-              {isSingles ? 'View Entry Details' : 'View Team Details'}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      ) : isOpenReg ? (
-        <View style={styles.actionSectionRow}>
-          <TouchableOpacity
-            style={styles.actionBtnPrimary}
-            onPress={() => setIsRegisterModalOpen(true)}
-            activeOpacity={0.85}
-          >
-            <AppText style={styles.actionBtnPrimaryText}>Register for this League</AppText>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {/* ─── NAVIGATION TABS WITH GREEN UNDERLINE (Matching Owner Side) ─── */}
-      <View style={styles.tabsStripContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsStripScroll}
-        >
-          {detailTabs.map((t) => {
-            const isActive =
-              activeTab === t.key ||
-              ((t.key === 'players' || t.key === 'teams') &&
-                (activeTab === 'players' || activeTab === 'teams'));
-            const displayLabel =
-              typeof t.count === 'number' && t.count >= 0
-                ? `${t.label} (${t.count})`
-                : t.label;
-
-            return (
-              <TouchableOpacity
-                key={t.key}
-                style={styles.tabButton}
-                onPress={() => setActiveTab(t.key)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-              >
-                <AppText
-                  style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}
-                >
-                  {displayLabel}
-                </AppText>
-                {isActive && <View style={styles.activeTabIndicator} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* ─── TAB CONTENT BODY ─── */}
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView
-        style={styles.contentScroll}
-        contentContainerStyle={styles.contentContainer}
+        style={styles.mainScrollView}
+        contentContainerStyle={styles.mainScrollContent}
+        stickyHeaderIndices={[1]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -537,6 +360,189 @@ export default function PlayerLeagueDetailsScreen() {
           />
         }
       >
+        {/* ─── INDEX 0: NATURAL-SCROLLING HEADER & CARDS ─── */}
+        <View style={styles.scrollHeaderWrapper}>
+          <View style={styles.headerTopSection}>
+            <View style={styles.headerTopRow}>
+              {/* Back button */}
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={handleBack}
+                accessibilityLabel="Go back"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
+              </TouchableOpacity>
+
+              {/* Centered League Title */}
+              <View style={styles.headerTitleWrap}>
+                <AppText style={styles.headerLeagueName} numberOfLines={1}>
+                  {league.name}
+                </AppText>
+              </View>
+
+              {/* 3-Dot Overflow Menu */}
+              <TouchableOpacity
+                style={styles.headerMenuButton}
+                onPress={handleOptionsPress}
+                accessibilityLabel="League options"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Status Pill below title */}
+            <View style={styles.headerStatusWrap}>
+              <View
+                style={[
+                  styles.statusPill,
+                  { backgroundColor: statusBadge.bg },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    { backgroundColor: statusBadge.text },
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.statusPillText,
+                    { color: statusBadge.text },
+                  ]}
+                >
+                  {statusBadge.label}
+                </AppText>
+              </View>
+            </View>
+
+            {/* Subtitle / Metadata row */}
+            <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+              {subtitleText}
+            </AppText>
+          </View>
+
+          {/* 2-COLUMN REGISTRATION SUMMARY CARD */}
+          <View style={styles.headerCardsSection}>
+            <View style={styles.regStatsCard}>
+              {/* Left Col: Teams/Players Registered */}
+              <View style={styles.regStatCol}>
+                <AppText style={styles.regStatLabel}>
+                  {isSingles ? 'Players Registered' : 'Teams Registered'}
+                </AppText>
+                <View style={styles.regStatValueRow}>
+                  <AppText style={styles.regStatValue}>
+                    {participantCount} / {league.max_teams || 8}
+                  </AppText>
+                  <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
+                </View>
+                {/* Progress Bar */}
+                <View style={styles.regProgressBarTrack}>
+                  <View
+                    style={[
+                      styles.regProgressBarFill,
+                      { width: `${regPercent}%` },
+                    ]}
+                  />
+                </View>
+              </View>
+
+              {/* Vertical Divider */}
+              <View style={styles.regStatDivider} />
+
+              {/* Right Col: Registration Closes */}
+              <View style={styles.regStatCol}>
+                <AppText style={styles.regStatLabel}>
+                  {league.status === 'registration_closed' || league.registration_status === 'closed'
+                    ? 'Registration Closed'
+                    : 'Registration Closes'}
+                </AppText>
+                <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
+                {daysLeftText ? (
+                  <AppText
+                    style={[
+                      styles.regStatDaysLeft,
+                      (league.status === 'registration_closed' ||
+                        league.registration_status === 'closed' ||
+                        league.status === 'cancelled' ||
+                        league.status === 'completed') &&
+                        styles.regStatClosedText,
+                    ]}
+                  >
+                    {daysLeftText}
+                  </AppText>
+                ) : null}
+              </View>
+            </View>
+
+            {/* COMPACT PLAYER ACTION (Register / View Entry Details) */}
+            {isRegistered ? (
+              <View style={styles.actionSectionRow}>
+                <TouchableOpacity
+                  style={styles.actionBtnOutline}
+                  onPress={() => setIsDetailsModalOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <AppText style={styles.actionBtnOutlineText}>
+                    {isSingles ? 'View Entry Details' : 'View Team Details'}
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            ) : isOpenReg ? (
+              <View style={styles.actionSectionRow}>
+                <TouchableOpacity
+                  style={styles.actionBtnPrimary}
+                  onPress={() => setIsRegisterModalOpen(true)}
+                  activeOpacity={0.85}
+                >
+                  <AppText style={styles.actionBtnPrimaryText}>Register for this League</AppText>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        </View>
+
+        {/* ─── INDEX 1: STICKY NAVIGATION TABS STRIP ─── */}
+        <View style={styles.stickyTabsContainer}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabsStripScroll}
+          >
+            {detailTabs.map((t) => {
+              const isActive =
+                activeTab === t.key ||
+                ((t.key === 'players' || t.key === 'teams') &&
+                  (activeTab === 'players' || activeTab === 'teams'));
+              const displayLabel =
+                typeof t.count === 'number' && t.count >= 0
+                  ? `${t.label} (${t.count})`
+                  : t.label;
+
+              return (
+                <TouchableOpacity
+                  key={t.key}
+                  style={styles.tabButton}
+                  onPress={() => setActiveTab(t.key)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <AppText
+                    style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}
+                  >
+                    {displayLabel}
+                  </AppText>
+                  {isActive && <View style={styles.activeTabIndicator} />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* ─── INDEX 2: TAB BODY CONTENT ─── */}
+        <View style={styles.tabBodyWrapper}>
         {/* ─── TAB 1: OVERVIEW & RULES ─── */}
         {activeTab === 'overview' && (
           <View style={styles.tabPane}>
@@ -1090,6 +1096,7 @@ export default function PlayerLeagueDetailsScreen() {
             </View>
           </View>
         )}
+        </View>
       </ScrollView>
 
       {/* ─── Modals ─────────────────────────────────────────────────── */}
@@ -1119,15 +1126,28 @@ export default function PlayerLeagueDetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  mainScrollView: {
+    flex: 1,
     backgroundColor: '#F9FAFB',
   },
-
-  // ─── Compact Header Styles (Matching Owner Side) ───
-  headerContainer: {
+  mainScrollContent: {
+    flexGrow: 1,
+  },
+  scrollHeaderWrapper: {
+    backgroundColor: '#F9FAFB',
+  },
+  headerTopSection: {
     backgroundColor: '#FFFFFF',
+    paddingTop: 8,
     paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  headerCardsSection: {
+    backgroundColor: '#F9FAFB',
+    paddingTop: 4,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1297,12 +1317,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ─── Navigation Tabs Strip with Green Underline (Matching Owner Side) ───
-  tabsStripContainer: {
+  // ─── Sticky Navigation Tabs Strip with Green Underline ───
+  stickyTabsContainer: {
     borderBottomWidth: 1,
     borderBottomColor: '#E5ECE8',
     backgroundColor: '#FFFFFF',
-    marginBottom: 10,
+    zIndex: 10,
+    elevation: 4,
   },
   tabsStripScroll: {
     paddingHorizontal: 16,
@@ -1334,12 +1355,10 @@ const styles = StyleSheet.create({
     borderRadius: 1.5,
   },
 
-  // ─── Scroll Body & Pane ───
-  contentScroll: {
-    flex: 1,
-  },
-  contentContainer: {
+  // ─── Tab Body Wrapper ───
+  tabBodyWrapper: {
     paddingHorizontal: 16,
+    paddingTop: 12,
     paddingBottom: 110,
   },
   tabPane: {
