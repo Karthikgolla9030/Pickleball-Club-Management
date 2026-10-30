@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import {
   AlertCircle,
+  ArrowLeft,
   CheckCircle2,
   Clock,
   Edit2,
@@ -52,8 +53,16 @@ import { Colors, Radius, Spacing, Typography } from '@/theme';
 type MainSection = 'help' | 'player_terms' | 'club_terms' | 'privacy_policy' | 'club_agreement';
 type HelpSubSection = 'faqs' | 'articles' | 'categories';
 
-export function LegalAndHelpManager() {
-  const [section, setSection] = useState<MainSection>('help');
+export interface LegalAndHelpManagerProps {
+  initialSection?: MainSection;
+  onBack?: () => void;
+}
+
+export function LegalAndHelpManager({
+  initialSection = 'help',
+  onBack,
+}: LegalAndHelpManagerProps = {}) {
+  const [section, setSection] = useState<MainSection>(initialSection);
   const [helpSubSection, setHelpSubSection] = useState<HelpSubSection>('faqs');
 
   // Loading and alerts
@@ -399,6 +408,17 @@ export function LegalAndHelpManager() {
 
   return (
     <View style={styles.container}>
+      {onBack && (
+        <TouchableOpacity
+          style={styles.backButtonRow}
+          onPress={onBack}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={18} color="#0F172A" strokeWidth={2.2} />
+          <AppText style={styles.backButtonText}>Back to Settings</AppText>
+        </TouchableOpacity>
+      )}
+
       {/* Top Section Nav Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.topTabs}>
         {[
@@ -1116,6 +1136,18 @@ export function LegalAndHelpManager() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  backButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: Spacing[3],
+    paddingVertical: 6,
+  },
+  backButtonText: {
+    fontSize: Typography.size.sm,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   topTabs: {
     flexDirection: 'row',
