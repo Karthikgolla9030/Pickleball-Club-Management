@@ -15,7 +15,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.models.club_membership import ClubMembership
+from app.models.club_membership import ClubMembership, ClubRole
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.player_profile_repository import PlayerProfileRepository
 from app.repositories.user_repository import UserRepository
