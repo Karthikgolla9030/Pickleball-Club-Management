@@ -151,6 +151,14 @@ class SupportTicket(Base):
         index=True,
     )
 
+    # Originating portal: "player" | "club"
+    source_portal: Mapped[str] = mapped_column(
+        String(30),
+        default="player",
+        nullable=False,
+        index=True,
+    )
+
     # Assigned platform admin handler
     assigned_admin_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

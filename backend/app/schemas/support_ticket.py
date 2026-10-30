@@ -68,6 +68,10 @@ class SupportTicketCreateRequest(BaseModel):
         default=None,
         description="Optional related club facility ID",
     )
+    source_portal: str | None = Field(
+        default=None,
+        description="Origin portal: 'player' or 'club'",
+    )
 
 
 class SupportTicketUpdateRequest(BaseModel):
@@ -104,6 +108,9 @@ class SupportTicketItem(BaseModel):
     club_id: UUID | None = None
     club_name: str | None = None
     club_slug: str | None = None
+    source_portal: str = "player"
+    origin: str = "player"  # "player" | "club"
+    origin_label: str = "Player Support"  # "Player Support" | "Club Support"
     assigned_admin_id: UUID | None = None
     assigned_admin_email: str | None = None
     assigned_admin_name: str | None = None

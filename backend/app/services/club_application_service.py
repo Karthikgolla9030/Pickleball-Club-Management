@@ -188,6 +188,27 @@ class ClubApplicationService:
             created_app = await self.app_repo.create(application)
             await self.db.commit()
             await self.db.refresh(created_app)
+
+            # Record initial legal document acceptances for club applicant
+            if user_id:
+                try:
+                    applicant_user = await self.user_repo.get_by_id(user_id)
+                    if applicant_user:
+                        from app.schemas.legal_and_help import LegalAcceptanceCreateRequest
+                        from app.services.legal_and_help_service import LegalAndHelpService
+                        legal_svc = LegalAndHelpService(self.db)
+                        for doc_type in ("club_terms", "privacy_policy", "club_agreement"):
+                            await legal_svc.record_acceptance(
+                                user=applicant_user,
+                                payload=LegalAcceptanceCreateRequest(
+                                    document_type=doc_type,
+                                    source="club_registration",
+                                ),
+                            )
+                except Exception as exc:
+                    import logging
+                    logging.getLogger(__name__).warning("Could not auto-record club registration legal acceptances: %s", exc)
+
             return _build_application_response(created_app)
         except Exception as exc:
             await self.db.rollback()

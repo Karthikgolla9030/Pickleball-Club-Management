@@ -83,6 +83,17 @@ from app.models.support_ticket import (
     TicketPriority,
     TicketStatus,
 )
+from app.models.legal_and_help import (
+    ContentAudience,
+    DocumentVersionStatus,
+    FAQ,
+    HelpArticle,
+    HelpCategory,
+    LegalAcceptance,
+    LegalDocument,
+    LegalDocumentType,
+    LegalDocumentVersion,
+)
 from app.models.user import User
 
 __all__ = [
@@ -93,6 +104,15 @@ __all__ = [
     "ClubApplication",
     "ClubApplicationStatus",
     "ClubCarouselSlide",
+    "ContentAudience",
+    "DocumentVersionStatus",
+    "FAQ",
+    "HelpArticle",
+    "HelpCategory",
+    "LegalAcceptance",
+    "LegalDocument",
+    "LegalDocumentType",
+    "LegalDocumentVersion",
     "ClubMediaAsset",
     "PlatformAuditLog",
     "PlatformBanner",

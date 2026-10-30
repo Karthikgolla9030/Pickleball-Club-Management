@@ -41,6 +41,7 @@ import {
   CheckCircle2,
   Clock,
   Database,
+  FileText,
   Globe,
   HardDrive,
   History,
@@ -73,6 +74,7 @@ import {
   LoadingState,
   PlatformButton,
   PlatformShell,
+  LegalAndHelpManager,
 } from '@/components';
 import {
   PlatformReadOnlyConfig,
@@ -89,6 +91,7 @@ export default function PlatformSettingsScreen() {
   const { width } = useWindowDimensions();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [mainTab, setMainTab] = useState<'operational' | 'legal'>('operational');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,6 +251,46 @@ export default function PlatformSettingsScreen() {
               Operational parameters & global configuration
             </AppText>
           </View>
+
+          {/* Main Top Tab Switcher */}
+          <View style={styles.mainTabSwitcher}>
+            <TouchableOpacity
+              style={[styles.mainTabBtn, mainTab === 'operational' && styles.mainTabBtnActive]}
+              onPress={() => setMainTab('operational')}
+              activeOpacity={0.8}
+            >
+              <Sliders size={16} color={mainTab === 'operational' ? '#FFFFFF' : '#475569'} />
+              <AppText
+                style={[
+                  styles.mainTabBtnText,
+                  mainTab === 'operational' && styles.mainTabBtnTextActive,
+                ]}
+              >
+                Operational Controls
+              </AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.mainTabBtn, mainTab === 'legal' && styles.mainTabBtnActive]}
+              onPress={() => setMainTab('legal')}
+              activeOpacity={0.8}
+            >
+              <FileText size={16} color={mainTab === 'legal' ? '#FFFFFF' : '#475569'} />
+              <AppText
+                style={[
+                  styles.mainTabBtnText,
+                  mainTab === 'legal' && styles.mainTabBtnTextActive,
+                ]}
+              >
+                Legal & Help Content Management
+              </AppText>
+            </TouchableOpacity>
+          </View>
+
+          {mainTab === 'legal' ? (
+            <LegalAndHelpManager />
+          ) : (
+            <>
 
           {/* Success Banner */}
           {successMsg && (
@@ -586,6 +629,8 @@ export default function PlatformSettingsScreen() {
             </View>
             <ArrowRight size={18} color="#15803D" />
           </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
 
@@ -656,6 +701,37 @@ const styles = StyleSheet.create({
   headerSection: {
     paddingTop: 2,
     paddingBottom: 12,
+  },
+  mainTabSwitcher: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  mainTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mainTabBtnActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  mainTabBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  mainTabBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   screenTitle: {
     fontSize: 27,

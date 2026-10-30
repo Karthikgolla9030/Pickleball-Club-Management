@@ -38,9 +38,11 @@ import {
   Calendar,
   Camera,
   ChevronRight,
+  FileText,
   LogOut,
   MapPin,
   Menu,
+  Shield,
   ShieldCheck,
   SquarePen,
   Star,
@@ -568,7 +570,43 @@ export default function PlayerProfileScreen() {
             <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
           </TouchableOpacity>
 
-          {/* 5. Sign Out */}
+          {/* 5. Terms of Service */}
+          <TouchableOpacity
+            style={styles.settingCard}
+            onPress={() => router.push('/legal/player_terms' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingIconCircle}>
+              <FileText size={20} color="#114D3F" strokeWidth={2} />
+            </View>
+            <View style={styles.settingTextColumn}>
+              <AppText style={styles.settingTitle}>Terms of Service</AppText>
+              <AppText style={styles.settingDescription}>
+                Player terms, rules & policies
+              </AppText>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
+          </TouchableOpacity>
+
+          {/* 6. Privacy Policy */}
+          <TouchableOpacity
+            style={styles.settingCard}
+            onPress={() => router.push('/legal/privacy_policy' as any)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingIconCircle}>
+              <Shield size={20} color="#114D3F" strokeWidth={2} />
+            </View>
+            <View style={styles.settingTextColumn}>
+              <AppText style={styles.settingTitle}>Privacy Policy</AppText>
+              <AppText style={styles.settingDescription}>
+                Data protection & user rights
+              </AppText>
+            </View>
+            <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
+          </TouchableOpacity>
+
+          {/* 7. Sign Out */}
           <TouchableOpacity
             style={[styles.settingCard, styles.signOutCard]}
             onPress={handleSignOut}

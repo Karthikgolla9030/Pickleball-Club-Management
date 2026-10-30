@@ -161,6 +161,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
         category,
         priority,
         club_id: targetClubId,
+        source_portal: mode === 'club' ? 'club' : 'player',
       });
 
       setSubject('');

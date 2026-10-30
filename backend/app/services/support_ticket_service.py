@@ -60,6 +60,9 @@ def _format_ticket_item(ticket: SupportTicket, messages_count: int | None = None
     except ValueError:
         pass
 
+    origin = getattr(ticket, "source_portal", None) or ("club" if ticket.club_id is not None else "player")
+    origin_label = "Club Support" if origin == "club" else "Player Support"
+
     return SupportTicketItem(
         id=ticket.id,
         reference_number=ticket.reference_number,
@@ -77,6 +80,9 @@ def _format_ticket_item(ticket: SupportTicket, messages_count: int | None = None
         club_id=ticket.club_id,
         club_name=ticket.club.name if ticket.club else None,
         club_slug=ticket.club.slug if ticket.club else None,
+        source_portal=origin,
+        origin=origin,
+        origin_label=origin_label,
         assigned_admin_id=ticket.assigned_admin_id,
         assigned_admin_email=ticket.assigned_admin_email,
         assigned_admin_name=ticket.assigned_admin_name,
@@ -193,6 +199,8 @@ class SupportTicketService:
         if clean_priority not in valid_priorities:
             clean_priority = TicketPriority.MEDIUM.value
 
+        source_portal = payload.source_portal or ("club" if payload.club_id is not None else "player")
+
         ticket = SupportTicket(
             id=uuid.uuid4(),
             reference_number=ref_number,
@@ -205,6 +213,7 @@ class SupportTicketService:
             requester_email=requester.email,
             requester_name=requester.full_name,
             club_id=payload.club_id,
+            source_portal=source_portal,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
         )
@@ -422,12 +431,20 @@ class SupportTicketService:
         priority_filter: str | None = None,
         club_id: UUID | None = None,
         search: str | None = None,
+        source_filter: str | None = None,
     ) -> SupportTicketsListResponse:
-        """Platform-owner queue listing with search, category, priority, and status filters."""
+        """Platform-owner queue listing with search, category, priority, status, and source filters."""
         base_query = (
             select(SupportTicket)
             .options(selectinload(SupportTicket.club), selectinload(SupportTicket.messages))
         )
+
+        if source_filter and source_filter.strip().lower() != "all":
+            sf = source_filter.strip().lower()
+            if sf in ("player", "player_support", "players"):
+                base_query = base_query.where(SupportTicket.club_id.is_(None))
+            elif sf in ("club", "club_support", "clubs"):
+                base_query = base_query.where(SupportTicket.club_id.is_not(None))
 
         if status_filter and status_filter.strip().lower() != "all":
             base_query = base_query.where(SupportTicket.status == status_filter.strip().lower())

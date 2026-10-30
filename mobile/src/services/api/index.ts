@@ -22,3 +22,19 @@ export { clubAssetsApi } from './clubAssets';
 export { platformBannersApi } from './platformBanners';
 export { clubApplicationsApi, platformApplicationsApi, type SubmitClubApplicationPayload, type ClubApplicationResponse, type ClubApplicationStatusLookupResponse, type PlatformSupportTicketItem, type PlatformSupportTicketDetailResponse, type PlatformSupportTicketMessageItem, type PlatformSupportTicketsListResponse } from './clubApplications';
 export { supportApi, type CreateSupportTicketPayload } from './support';
+export {
+  helpApi,
+  legalApi,
+  platformLegalApi,
+  type HelpCategoryItem,
+  type FAQItem,
+  type FAQsListResponse,
+  type HelpArticleItem,
+  type HelpArticlesListResponse,
+  type LegalDocumentItem,
+  type LegalDocumentVersionItem,
+  type LegalDocumentDetailResponse,
+  type PendingAcceptanceItem,
+  type PendingAcceptancesResponse,
+  type LegalAcceptanceItem,
+} from './legalAndHelp';

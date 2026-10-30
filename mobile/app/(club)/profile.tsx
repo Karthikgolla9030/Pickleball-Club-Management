@@ -31,6 +31,7 @@ import {
   ChevronRight,
   CreditCard,
   Crown,
+  FileCheck,
   FileText,
   HelpCircle,
   Lock,
@@ -288,12 +289,12 @@ export default function ClubProfileScreen() {
           </View>
 
           {/* 5. GROUP 3: SUPPORT */}
-          <AppText style={styles.sectionHeaderTitle}>Support</AppText>
+          <AppText style={styles.sectionHeaderTitle}>Support & Legal</AppText>
           <View style={styles.groupCard}>
             {/* Help & Support */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Help & Support', '/(club)/help-support')}
+              onPress={() => router.push('/(club)/help-support' as any)}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>
@@ -305,10 +306,25 @@ export default function ClubProfileScreen() {
 
             <View style={styles.rowDivider} />
 
+            {/* Terms of Service */}
+            <TouchableOpacity
+              style={styles.settingRow}
+              onPress={() => router.push('/legal/club_terms' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rowLeft}>
+                <FileText size={19} color="#293D38" strokeWidth={1.8} />
+                <AppText style={styles.rowLabel}>Terms of Service</AppText>
+              </View>
+              <ChevronRight size={16} color="#94A3B8" strokeWidth={2} />
+            </TouchableOpacity>
+
+            <View style={styles.rowDivider} />
+
             {/* Privacy Policy */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Privacy Policy')}
+              onPress={() => router.push('/legal/privacy_policy' as any)}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>
@@ -320,15 +336,15 @@ export default function ClubProfileScreen() {
 
             <View style={styles.rowDivider} />
 
-            {/* Terms of Service */}
+            {/* Club/Facility Agreement */}
             <TouchableOpacity
               style={styles.settingRow}
-              onPress={() => handleRowPress('Terms of Service')}
+              onPress={() => router.push('/legal/club_agreement' as any)}
               activeOpacity={0.7}
             >
               <View style={styles.rowLeft}>
-                <FileText size={19} color="#293D38" strokeWidth={1.8} />
-                <AppText style={styles.rowLabel}>Terms of Service</AppText>
+                <FileCheck size={19} color="#293D38" strokeWidth={1.8} />
+                <AppText style={styles.rowLabel}>Club/Facility Agreement</AppText>
               </View>
               <ChevronRight size={16} color="#94A3B8" strokeWidth={2} />
             </TouchableOpacity>

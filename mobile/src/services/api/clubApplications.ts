@@ -229,6 +229,9 @@ export interface PlatformSupportTicketItem {
   club_id?: string | null;
   club_name?: string | null;
   club_slug?: string | null;
+  source_portal?: 'player' | 'club' | string;
+  origin?: 'player' | 'club' | string;
+  origin_label?: string;
   assigned_admin_id?: string | null;
   assigned_admin_email?: string | null;
   assigned_admin_name?: string | null;
@@ -480,6 +483,7 @@ export const platformApplicationsApi = {
     priority?: string;
     clubId?: string;
     search?: string;
+    source?: 'all' | 'player' | 'club' | string;
   }): Promise<PlatformSupportTicketsListResponse> => {
     const query = new URLSearchParams();
     if (params?.page) query.append('page', String(params.page));
@@ -488,6 +492,7 @@ export const platformApplicationsApi = {
     if (params?.category && params.category !== 'all') query.append('category_filter', params.category);
     if (params?.priority && params.priority !== 'all') query.append('priority_filter', params.priority);
     if (params?.clubId) query.append('club_id', params.clubId);
+    if (params?.source && params.source !== 'all') query.append('source', params.source);
     if (params?.search && params.search.trim()) query.append('search', params.search.trim());
     return apiClient.get<PlatformSupportTicketsListResponse>(`/api/v1/platform/support/tickets?${query.toString()}`);
   },

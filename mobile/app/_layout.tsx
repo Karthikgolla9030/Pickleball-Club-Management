@@ -24,6 +24,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore, registerLogoutHandler } from '@/store';
 import { isPlatformAdminEmail } from '@/constants';
 import { WebSocketProvider } from '@/context/WebSocketContext';
+import { PendingAcceptancesModal } from '@/components/legal/PendingAcceptancesModal';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,10 +67,11 @@ function RootLayoutContent() {
 
     const inAuthGroup = rootSegment === '(auth)';
     const isPublicClubRoute = rootSegment === 'club';
+    const isPublicLegalRoute = rootSegment === 'legal';
 
     // 1. Unauthenticated route protection
     if (!isAuthenticated) {
-      if (!inAuthGroup && !isPublicClubRoute) {
+      if (!inAuthGroup && !isPublicClubRoute && !isPublicLegalRoute) {
         if (rootSegment === 'platform') {
           router.replace('/platform/login' as any);
         } else {
@@ -135,7 +137,9 @@ function RootLayoutContent() {
         <Stack.Screen name="(club)" />
         <Stack.Screen name="platform" />
         <Stack.Screen name="club" />
+        <Stack.Screen name="legal" />
       </Stack>
+      <PendingAcceptancesModal />
     </>
   );
 }

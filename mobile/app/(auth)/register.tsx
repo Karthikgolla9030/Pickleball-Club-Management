@@ -170,6 +170,27 @@ export default function RegisterScreen() {
                 </View>
               )}
 
+              {/* Terms of Service & Privacy Policy Acceptance */}
+              <View style={styles.termsNoticeWrap}>
+                <AppText style={styles.termsNoticeText}>
+                  By creating an account, you agree to our{' '}
+                  <AppText
+                    style={styles.termsLink}
+                    onPress={() => router.push('/legal/player_terms' as any)}
+                  >
+                    Terms of Service
+                  </AppText>
+                  {' '}and acknowledge our{' '}
+                  <AppText
+                    style={styles.termsLink}
+                    onPress={() => router.push('/legal/privacy_policy' as any)}
+                  >
+                    Privacy Policy
+                  </AppText>
+                  .
+                </AppText>
+              </View>
+
               <Button
                 testID="register-submit"
                 label={isLoading ? 'Creating Account...' : 'Sign Up as Player'}
@@ -237,6 +258,20 @@ const styles = StyleSheet.create({
     padding: Spacing[3],
     borderWidth: 1,
     borderColor: Colors.status.error,
+  },
+  termsNoticeWrap: {
+    marginVertical: Spacing[2],
+  },
+  termsNoticeText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: Colors.brand.primary,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   signInLink: {
     paddingVertical: Spacing[2],

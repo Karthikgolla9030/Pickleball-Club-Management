@@ -42,6 +42,8 @@ export { ClubBrandingSection } from './ClubBrandingSection';
 export { PlayerHeroBanner } from './PlayerHeroBanner';
 export type { BannerSlide } from './PlayerHeroBanner';
 export * from './platform';
+export { LegalAndHelpManager } from './platform/LegalAndHelpManager';
+export { PendingAcceptancesModal } from './legal/PendingAcceptancesModal';
 export { RequesterSupportSection } from './support/RequesterSupportSection';
 export { InternationalPhoneInput } from './InternationalPhoneInput';
 export type { InternationalPhoneInputProps } from './InternationalPhoneInput';

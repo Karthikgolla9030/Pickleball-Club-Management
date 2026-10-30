@@ -69,6 +69,7 @@ import {
 import { Radius, Spacing } from '@/theme';
 
 type StatusFilter = 'all' | 'open' | 'in_progress' | 'waiting_for_requester' | 'resolved' | 'closed';
+type OriginFilter = 'all' | 'player' | 'club';
 
 function formatDate(dateStr?: string | null): string {
   if (!dateStr) return '';
@@ -122,6 +123,7 @@ export default function PlatformSupportScreen() {
   const [priorityCounts, setPriorityCounts] = useState<Record<string, number>>({});
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [originFilter, setOriginFilter] = useState<OriginFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -168,6 +170,7 @@ export default function PlatformSupportScreen() {
           status: statusFilter !== 'all' ? statusFilter : undefined,
           category: categoryFilter !== 'all' ? categoryFilter : undefined,
           priority: priorityFilter !== 'all' ? priorityFilter : undefined,
+          source: originFilter !== 'all' ? originFilter : undefined,
           search: debouncedSearch || undefined,
         });
 
@@ -184,12 +187,12 @@ export default function PlatformSupportScreen() {
         setIsRefreshing(false);
       }
     },
-    [page, pageSize, statusFilter, categoryFilter, priorityFilter, debouncedSearch]
+    [page, pageSize, statusFilter, categoryFilter, priorityFilter, originFilter, debouncedSearch]
   );
 
   useEffect(() => {
     fetchTickets(false, 1);
-  }, [statusFilter, categoryFilter, priorityFilter, debouncedSearch]);
+  }, [statusFilter, categoryFilter, priorityFilter, originFilter, debouncedSearch]);
 
   const handleOpenTicket = async (ticketId: string) => {
     setIsLoadingDetail(true);
@@ -267,6 +270,7 @@ export default function PlatformSupportScreen() {
     setStatusFilter('all');
     setCategoryFilter('all');
     setPriorityFilter('all');
+    setOriginFilter('all');
     setPage(1);
   };
 
@@ -290,6 +294,7 @@ export default function PlatformSupportScreen() {
   const isDesktop = width >= 800;
   const isFiltered =
     statusFilter !== 'all' ||
+    originFilter !== 'all' ||
     categoryFilter !== 'all' ||
     priorityFilter !== 'all' ||
     debouncedSearch.length > 0;
@@ -476,6 +481,34 @@ export default function PlatformSupportScreen() {
                   </View>
                 </View>
               )}
+            </View>
+
+            {/* 2.5 Origin Filter Tabs (All Tickets | Player Support | Club Support) */}
+            <View style={styles.originTabsContainer}>
+              {[
+                { key: 'all', label: 'All Tickets', icon: Ticket },
+                { key: 'player', label: 'Player Support', icon: User },
+                { key: 'club', label: 'Club Support', icon: Building2 },
+              ].map((orig) => {
+                const isActive = originFilter === orig.key;
+                const IconCmp = orig.icon;
+                return (
+                  <TouchableOpacity
+                    key={orig.key}
+                    style={[styles.originTab, isActive && styles.originTabActive]}
+                    onPress={() => {
+                      setOriginFilter(orig.key as OriginFilter);
+                      setPage(1);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <IconCmp size={13} color={isActive ? '#FFFFFF' : '#475569'} />
+                    <AppText style={[styles.originTabText, isActive && styles.originTabTextActive]}>
+                      {orig.label}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
             {/* 3. Ticket Status Tabs (All Tickets | Open | In Progress | Resolved) */}
@@ -685,11 +718,38 @@ export default function PlatformSupportScreen() {
             onPress={() => handleOpenTicket(item.id)}
             activeOpacity={0.85}
           >
-            {/* Header row: Reference # and badges */}
+            {/* Header row: Reference #, Origin, and badges */}
             <View style={styles.ticketCardHeader}>
               <View style={styles.ticketRefRow}>
                 <View style={styles.refBadge}>
                   <AppText style={styles.refText}>{item.reference_number}</AppText>
+                </View>
+                <View
+                  style={[
+                    styles.originBadge,
+                    item.origin === 'club' || item.source_portal === 'club' || !!item.club_id
+                      ? styles.originBadgeClub
+                      : styles.originBadgePlayer,
+                  ]}
+                >
+                  {item.origin === 'club' || item.source_portal === 'club' || !!item.club_id ? (
+                    <Building2 size={11} color="#065F46" />
+                  ) : (
+                    <User size={11} color="#1E40AF" />
+                  )}
+                  <AppText
+                    style={[
+                      styles.originBadgeText,
+                      item.origin === 'club' || item.source_portal === 'club' || !!item.club_id
+                        ? styles.originBadgeTextClub
+                        : styles.originBadgeTextPlayer,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.origin === 'club' || item.source_portal === 'club' || !!item.club_id
+                      ? (item.club_name ? `Club: ${item.club_name}` : 'Club Support')
+                      : 'Player Support'}
+                  </AppText>
                 </View>
                 <Badge
                   label={item.status_label}
@@ -807,6 +867,17 @@ export default function PlatformSupportScreen() {
                 <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
                   {/* Meta Bar */}
                   <View style={styles.modalMetaGrid}>
+                    <View style={styles.modalMetaCol}>
+                      <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
+                        ORIGIN
+                      </AppText>
+                      <AppText style={styles.modalMetaValue}>
+                        {selectedTicket.origin === 'club' || selectedTicket.source_portal === 'club' || !!selectedTicket.club_id
+                          ? 'Club Support'
+                          : 'Player Support'}
+                      </AppText>
+                    </View>
+
                     <View style={styles.modalMetaCol}>
                       <AppText variant="caption" color="secondary" style={styles.modalMetaHeader}>
                         REQUESTER
@@ -1120,6 +1191,38 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
 
+  // ─── Origin Filter Tabs ───────────────────────────────────────────────────
+  originTabsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  originTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  originTabActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  originTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  originTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
   // ─── Ticket Status Tabs ───────────────────────────────────────────────────
   tabsContainer: {
     marginBottom: 12,
@@ -1370,6 +1473,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flexWrap: 'wrap',
+  },
+  originBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  originBadgeClub: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  originBadgePlayer: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  originBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  originBadgeTextClub: {
+    color: '#065F46',
+  },
+  originBadgeTextPlayer: {
+    color: '#1E40AF',
   },
   refBadge: {
     backgroundColor: '#F1F5F9',

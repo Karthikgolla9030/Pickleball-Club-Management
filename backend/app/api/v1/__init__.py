@@ -52,6 +52,8 @@ from app.api.v1.tournaments import (
 
 from app.api.v1.analytics import router as analytics_router
 from app.api.v1.club_applications import router as club_applications_router
+from app.api.v1.help import router as help_router
+from app.api.v1.legal import router as legal_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.support import router as support_router
@@ -60,6 +62,8 @@ from app.api.v1.websocket import ws_router
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(club_applications_router)
 api_router.include_router(platform_router)
+api_router.include_router(help_router)
+api_router.include_router(legal_router)
 api_router.include_router(support_router)
 api_router.include_router(analytics_router)
 api_router.include_router(ws_router)

@@ -231,6 +231,29 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
 
+        # Record initial legal document acceptances for registered player
+        try:
+            from app.schemas.legal_and_help import LegalAcceptanceCreateRequest
+            from app.services.legal_and_help_service import LegalAndHelpService
+            legal_svc = LegalAndHelpService(self.db)
+            await legal_svc.record_acceptance(
+                user=user,
+                payload=LegalAcceptanceCreateRequest(
+                    document_type="player_terms",
+                    source="player_registration",
+                ),
+            )
+            await legal_svc.record_acceptance(
+                user=user,
+                payload=LegalAcceptanceCreateRequest(
+                    document_type="privacy_policy",
+                    source="player_registration",
+                ),
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Could not auto-record player registration legal acceptances: %s", exc)
+
         user_id_str = str(user.id)
         return AuthResponse(
             access_token=create_access_token(user_id_str),

@@ -66,6 +66,27 @@ from app.schemas.platform_setting import (
 )
 from app.services.platform_settings_service import PlatformSettingsService
 from app.services.support_ticket_service import SupportTicketService
+from app.schemas.legal_and_help import (
+    FAQCreateRequest,
+    FAQResponse,
+    FAQsListResponse,
+    FAQUpdateRequest,
+    HelpArticleCreateRequest,
+    HelpArticleResponse,
+    HelpArticlesListResponse,
+    HelpArticleUpdateRequest,
+    HelpCategoryCreateRequest,
+    HelpCategoryResponse,
+    HelpCategoryUpdateRequest,
+    LegalAcceptanceResponse,
+    LegalDocumentDetailResponse,
+    LegalDocumentPublishRequest,
+    LegalDocumentResponse,
+    LegalDocumentVersionCreateRequest,
+    LegalDocumentVersionResponse,
+    LegalDocumentVersionUpdateRequest,
+)
+from app.services.legal_and_help_service import LegalAndHelpService
 
 router = APIRouter(prefix="/platform", tags=["Platform Administration"])
 
@@ -857,6 +878,7 @@ async def platform_list_support_tickets(
     category: str | None = Query(default=None, description="Filter by category"),
     priority: str | None = Query(default=None, description="Filter by priority"),
     club_id: UUID | None = Query(default=None, description="Filter by club"),
+    source: str | None = Query(default=None, description="Filter by origin: all, player, club"),
     search: str | None = Query(default=None, description="Search across ticket subject, description, or requester email"),
     current_platform_owner: User = Depends(get_current_platform_owner),
     db: AsyncSession = Depends(get_db),
@@ -870,6 +892,7 @@ async def platform_list_support_tickets(
         priority_filter=priority,
         club_id=club_id,
         search=search,
+        source_filter=source,
     )
 
 
@@ -1218,6 +1241,265 @@ async def reset_database_endpoint(
         "purged_tables": purged_counts,
         "platform_admins_preserved": PRESERVED_ADMIN_EMAILS,
     }
+
+
+# ─── Platform Legal & Help Content Management ────────────────────────────────
+
+@router.get(
+    "/help/categories",
+    response_model=list[HelpCategoryResponse],
+    summary="List all help categories for platform administration",
+)
+async def platform_list_help_categories(
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> list[HelpCategoryResponse]:
+    return await LegalAndHelpService(db).admin_list_categories()
+
+
+@router.post(
+    "/help/categories",
+    response_model=HelpCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new help category",
+)
+async def platform_create_help_category(
+    payload: HelpCategoryCreateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> HelpCategoryResponse:
+    return await LegalAndHelpService(db).admin_create_category(payload=payload)
+
+
+@router.patch(
+    "/help/categories/{category_id}",
+    response_model=HelpCategoryResponse,
+    summary="Update a help category",
+)
+async def platform_update_help_category(
+    category_id: UUID,
+    payload: HelpCategoryUpdateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> HelpCategoryResponse:
+    return await LegalAndHelpService(db).admin_update_category(category_id=category_id, payload=payload)
+
+
+@router.delete(
+    "/help/categories/{category_id}",
+    summary="Delete a help category",
+)
+async def platform_delete_help_category(
+    category_id: UUID,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    return await LegalAndHelpService(db).admin_delete_category(category_id=category_id)
+
+
+# FAQs
+@router.get(
+    "/help/faqs",
+    response_model=FAQsListResponse,
+    summary="List all FAQs for platform administration",
+)
+async def platform_list_faqs(
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> FAQsListResponse:
+    return await LegalAndHelpService(db).admin_list_faqs()
+
+
+@router.post(
+    "/help/faqs",
+    response_model=FAQResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new FAQ",
+)
+async def platform_create_faq(
+    payload: FAQCreateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> FAQResponse:
+    return await LegalAndHelpService(db).admin_create_faq(payload=payload)
+
+
+@router.patch(
+    "/help/faqs/{faq_id}",
+    response_model=FAQResponse,
+    summary="Update an existing FAQ",
+)
+async def platform_update_faq(
+    faq_id: UUID,
+    payload: FAQUpdateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> FAQResponse:
+    return await LegalAndHelpService(db).admin_update_faq(faq_id=faq_id, payload=payload)
+
+
+@router.delete(
+    "/help/faqs/{faq_id}",
+    summary="Delete an FAQ",
+)
+async def platform_delete_faq(
+    faq_id: UUID,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    return await LegalAndHelpService(db).admin_delete_faq(faq_id=faq_id)
+
+
+# Articles
+@router.get(
+    "/help/articles",
+    response_model=HelpArticlesListResponse,
+    summary="List all help articles for platform administration",
+)
+async def platform_list_articles(
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> HelpArticlesListResponse:
+    return await LegalAndHelpService(db).admin_list_articles()
+
+
+@router.post(
+    "/help/articles",
+    response_model=HelpArticleResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new help article",
+)
+async def platform_create_article(
+    payload: HelpArticleCreateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> HelpArticleResponse:
+    return await LegalAndHelpService(db).admin_create_article(payload=payload)
+
+
+@router.patch(
+    "/help/articles/{article_id}",
+    response_model=HelpArticleResponse,
+    summary="Update a help article",
+)
+async def platform_update_article(
+    article_id: UUID,
+    payload: HelpArticleUpdateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> HelpArticleResponse:
+    return await LegalAndHelpService(db).admin_update_article(article_id=article_id, payload=payload)
+
+
+@router.delete(
+    "/help/articles/{article_id}",
+    summary="Delete a help article",
+)
+async def platform_delete_article(
+    article_id: UUID,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    return await LegalAndHelpService(db).admin_delete_article(article_id=article_id)
+
+
+# Legal Documents Management
+@router.get(
+    "/legal/documents",
+    response_model=list[LegalDocumentResponse],
+    summary="List all managed legal documents with published versions",
+)
+async def platform_list_legal_documents(
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> list[LegalDocumentResponse]:
+    return await LegalAndHelpService(db).admin_list_documents()
+
+
+@router.get(
+    "/legal/documents/{document_id}",
+    response_model=LegalDocumentDetailResponse,
+    summary="Get document details with full version history",
+)
+async def platform_get_legal_document(
+    document_id: UUID,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> LegalDocumentDetailResponse:
+    return await LegalAndHelpService(db).admin_get_document(document_id=document_id)
+
+
+@router.post(
+    "/legal/documents/{document_id}/versions",
+    response_model=LegalDocumentVersionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a new draft version for a legal document",
+)
+async def platform_create_document_version(
+    document_id: UUID,
+    payload: LegalDocumentVersionCreateRequest,
+    current_admin: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> LegalDocumentVersionResponse:
+    return await LegalAndHelpService(db).admin_create_version(
+        document_id=document_id,
+        payload=payload,
+        admin_user=current_admin,
+    )
+
+
+@router.patch(
+    "/legal/versions/{version_id}",
+    response_model=LegalDocumentVersionResponse,
+    summary="Update a draft document version",
+)
+async def platform_update_document_version(
+    version_id: UUID,
+    payload: LegalDocumentVersionUpdateRequest,
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> LegalDocumentVersionResponse:
+    return await LegalAndHelpService(db).admin_update_version(version_id=version_id, payload=payload)
+
+
+@router.post(
+    "/legal/versions/{version_id}/publish",
+    response_model=LegalDocumentVersionResponse,
+    summary="Publish document version and archive previous active version",
+)
+async def platform_publish_document_version(
+    version_id: UUID,
+    payload: LegalDocumentPublishRequest,
+    current_admin: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> LegalDocumentVersionResponse:
+    return await LegalAndHelpService(db).admin_publish_version(
+        version_id=version_id,
+        payload=payload,
+        admin_user=current_admin,
+    )
+
+
+@router.get(
+    "/legal/acceptances",
+    response_model=list[LegalAcceptanceResponse],
+    summary="List user acceptance records for compliance audit",
+)
+async def platform_list_legal_acceptances(
+    document_id: UUID | None = Query(default=None),
+    version_id: UUID | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=100),
+    _: User = Depends(get_current_platform_owner),
+    db: AsyncSession = Depends(get_db),
+) -> list[LegalAcceptanceResponse]:
+    return await LegalAndHelpService(db).admin_list_acceptances(
+        document_id=document_id,
+        version_id=version_id,
+        page=page,
+        page_size=page_size,
+    )
+
 
 
 

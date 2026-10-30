@@ -16,6 +16,7 @@ export interface CreateSupportTicketPayload {
   category?: 'general' | 'billing' | 'account' | 'technical' | 'club_operations' | 'tournament' | string;
   priority?: 'low' | 'medium' | 'high' | 'urgent' | string;
   club_id?: string | null;
+  source_portal?: 'player' | 'club' | string;
 }
 
 export const supportApi = {

@@ -524,9 +524,34 @@ export default function PublicRegisterClubScreen() {
               loading={isSubmitting}
               disabled={isSubmitting}
             />
-            <AppText variant="caption" color="secondary" center style={styles.legalNotice}>
-              By submitting, you agree that your facility information will be reviewed by the Pickleball platform team before activation.
-            </AppText>
+
+            {/* Legal Acceptance Notice */}
+            <View style={styles.termsNoticeWrap}>
+              <AppText style={styles.termsNoticeText}>
+                By submitting this application, you agree to the{' '}
+                <AppText
+                  style={styles.termsLink}
+                  onPress={() => router.push('/legal/club_terms' as any)}
+                >
+                  Club Terms of Service
+                </AppText>
+                , acknowledge our{' '}
+                <AppText
+                  style={styles.termsLink}
+                  onPress={() => router.push('/legal/privacy_policy' as any)}
+                >
+                  Privacy Policy
+                </AppText>
+                , and agree to the{' '}
+                <AppText
+                  style={styles.termsLink}
+                  onPress={() => router.push('/legal/club_agreement' as any)}
+                >
+                  Club / Facility Agreement
+                </AppText>
+                .
+              </AppText>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -621,6 +646,21 @@ const styles = StyleSheet.create({
   submitContainer: {
     gap: Spacing[2],
     marginTop: Spacing[2],
+  },
+  termsNoticeWrap: {
+    marginTop: Spacing[2],
+    paddingHorizontal: Spacing[2],
+  },
+  termsNoticeText: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: '#18794E',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   legalNotice: {
     fontSize: 12,
