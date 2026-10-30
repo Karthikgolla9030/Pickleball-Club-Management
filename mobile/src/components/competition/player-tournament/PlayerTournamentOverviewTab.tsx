@@ -55,6 +55,20 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
     }
   }, [format]);
 
+  // Elimination type for Bracket tournaments
+  const eliminationType = useMemo(() => {
+    const fc = tournament.format_configuration as any;
+    const raw =
+      fc?.bracket_type ||
+      fc?.bracket_format ||
+      (tournament as any)?.bracket_type ||
+      (tournament as any)?.bracket_format;
+    if (typeof raw === 'string' && raw.trim()) {
+      return raw.trim();
+    }
+    return 'Single Elimination';
+  }, [tournament]);
+
   // Summary bracketed string: e.g. [Singles • Skill: 3.5–4.5 • Any • Age: 20–30 • Fee: $55/player]
   const summaryMetaString = useMemo(() => {
     const parts: string[] = [];
@@ -225,7 +239,7 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
                   </AppText>
                 </View>
                 <AppText variant="bodySmall" bold style={styles.value}>
-                  Single Elimination
+                  {eliminationType}
                 </AppText>
               </View>
             )}

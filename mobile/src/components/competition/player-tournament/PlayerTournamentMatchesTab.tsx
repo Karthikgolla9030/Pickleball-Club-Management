@@ -170,9 +170,11 @@ export function PlayerTournamentMatchesTab({
             const { scoreA, scoreB, isTeamAWinner, isTeamBWinner } = parseScores(match);
             const statusBadge = getStatusBadge(match.status);
             const courtLabel = getCourtDisplayLabel(match);
-            const roundLabel = match.round_number
-              ? `Round ${match.round_number}`
-              : `Match #${match.match_number ?? idx + 1}`;
+            const roundLabel =
+              match.label ||
+              (match.round_number
+                ? `Round ${match.round_number}`
+                : `Match #${match.match_number ?? idx + 1}`);
 
             const teamAName = match.team_a?.name || (match as any).team_a_name || 'Team A';
             const teamBName = match.team_b?.name || (match as any).team_b_name || 'Team B';

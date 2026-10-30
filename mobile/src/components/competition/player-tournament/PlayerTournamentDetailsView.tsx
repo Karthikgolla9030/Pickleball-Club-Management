@@ -37,6 +37,7 @@ import {
   useAuth,
 } from '@/hooks';
 import type { Tournament } from '@/types';
+import { isConsolationMatch } from '@/utils/bracketLogic';
 
 import { PlayerTournamentHeader } from './PlayerTournamentHeader';
 import { PlayerTournamentBanner } from './PlayerTournamentBanner';
@@ -159,7 +160,7 @@ export function PlayerTournamentDetailsView({
       >();
 
       const winnersMatches = activeMatches.filter(
-        (m) => m.bracket_section !== 'consolation' && !(m as any).is_consolation
+        (m) => !isConsolationMatch(m)
       );
       const sortedWinners = [...(winnersMatches.length > 0 ? winnersMatches : activeMatches)].sort(
         (a, b) => (b.bracket_round ?? 1) - (a.bracket_round ?? 1)
@@ -248,11 +249,29 @@ export function PlayerTournamentDetailsView({
         }
       }
 
+      // Check completed consolation final for 3rd place
+      const consMatches = activeMatches.filter(isConsolationMatch);
+      const completedConsFinal = consMatches.find(
+        (m) => m.status === 'completed' && !m.next_match_id
+      );
+      if (completedConsFinal) {
+        const isWinnerA =
+          completedConsFinal.winner_team_id === completedConsFinal.team_a_id ||
+          completedConsFinal.winner_side === 'side_a' ||
+          (completedConsFinal as any).winner_id === completedConsFinal.team_a_id;
+        const thirdPlaceId = isWinnerA ? completedConsFinal.team_a_id : completedConsFinal.team_b_id;
+        if (thirdPlaceId && statsMap.has(thirdPlaceId)) {
+          (statsMap.get(thirdPlaceId)! as any).isThirdPlace = true;
+        }
+      }
+
       const list = Array.from(statsMap.values()).sort((a, b) => {
         if (a.isChampion) return -1;
         if (b.isChampion) return 1;
         if (a.isRunnerUp) return -1;
         if (b.isRunnerUp) return 1;
+        if ((a as any).isThirdPlace) return -1;
+        if ((b as any).isThirdPlace) return 1;
         if (a.highestRound !== b.highestRound) return b.highestRound - a.highestRound;
         if (a.wins !== b.wins) return b.wins - a.wins;
         const diffA = a.pointsFor - a.pointsAgainst;
@@ -264,6 +283,7 @@ export function PlayerTournamentDetailsView({
         let statusLabel: string | undefined;
         if (item.isChampion) statusLabel = 'Champion 🏆';
         else if (item.isRunnerUp) statusLabel = 'Runner-Up 🥈';
+        else if ((item as any).isThirdPlace) statusLabel = '3rd Place 🥉';
         else if (item.highestRound >= 2) statusLabel = 'Semifinalist';
         else if (item.losses > 0) statusLabel = 'Eliminated';
 

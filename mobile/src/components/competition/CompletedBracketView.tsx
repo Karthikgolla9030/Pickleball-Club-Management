@@ -67,6 +67,7 @@ import {
 } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
+import { getBracketType, isConsolationMatch, isLosersMatch } from '@/utils/bracketLogic';
 import type { Match, Tournament } from '@/types';
 
 interface CompletedBracketViewProps {
@@ -147,6 +148,22 @@ export function CompletedBracketView({
     { banner_image_url: tournament.banner_image_url, format: tournament.format },
     clubBranding
   );
+
+  const bracketType = useMemo(
+    () => getBracketType(tournament, matches),
+    [tournament, matches]
+  );
+  const mainMatches = useMemo(
+    () => matches.filter((m) => !isConsolationMatch(m) && !isLosersMatch(m)),
+    [matches]
+  );
+  const consolationMatches = useMemo(
+    () => matches.filter((m) => isConsolationMatch(m)),
+    [matches]
+  );
+  const showConsolationTab =
+    bracketType === 'single_elimination_consolation' || consolationMatches.length > 0;
+  const isDoubleElimination = bracketType === 'double_elimination';
 
   // Refresh handler
   const handleInternalRefresh = async () => {
@@ -681,63 +698,119 @@ export function CompletedBracketView({
         {/* ═══════════════════════════════════════════════════════════ */}
         {activeTab === 'bracket' && (
           <View style={styles.tabContent}>
-            {/* Sub-tabs: Main Bracket / Consolation */}
-            <View style={styles.bracketSubNavRow}>
-              <TouchableOpacity
-                style={[
-                  styles.bracketSubPill,
-                  bracketSubTab === 'main' && styles.bracketSubPillActive,
-                ]}
-                onPress={() => setBracketSubTab('main')}
-              >
-                <AppText
-                  variant="caption"
-                  bold
+            {/* Show Sub-tabs: Main Bracket / Consolation only if consolation is configured */}
+            {showConsolationTab && !isDoubleElimination && (
+              <View style={styles.bracketSubNavRow}>
+                <TouchableOpacity
                   style={[
-                    styles.bracketSubPillText,
-                    bracketSubTab === 'main' && styles.bracketSubPillTextActive,
+                    styles.bracketSubPill,
+                    bracketSubTab === 'main' && styles.bracketSubPillActive,
                   ]}
+                  onPress={() => setBracketSubTab('main')}
                 >
-                  Main Bracket
-                </AppText>
-              </TouchableOpacity>
+                  <AppText
+                    variant="caption"
+                    bold
+                    style={[
+                      styles.bracketSubPillText,
+                      bracketSubTab === 'main' && styles.bracketSubPillTextActive,
+                    ]}
+                  >
+                    Main Bracket
+                  </AppText>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.bracketSubPill,
-                  bracketSubTab === 'consolation' && styles.bracketSubPillActive,
-                ]}
-                onPress={() => setBracketSubTab('consolation')}
-              >
-                <AppText
-                  variant="caption"
-                  bold
+                <TouchableOpacity
                   style={[
-                    styles.bracketSubPillText,
-                    bracketSubTab === 'consolation' && styles.bracketSubPillTextActive,
+                    styles.bracketSubPill,
+                    bracketSubTab === 'consolation' && styles.bracketSubPillActive,
                   ]}
+                  onPress={() => setBracketSubTab('consolation')}
                 >
-                  Consolation
-                </AppText>
-              </TouchableOpacity>
-            </View>
+                  <AppText
+                    variant="caption"
+                    bold
+                    style={[
+                      styles.bracketSubPillText,
+                      bracketSubTab === 'consolation' && styles.bracketSubPillTextActive,
+                    ]}
+                  >
+                    Consolation
+                  </AppText>
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* Bracket Tree Container Card */}
-            {matches.length === 0 ? (
+            {isDoubleElimination ? (
+              matches.length === 0 ? (
+                <Card style={styles.card}>
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <Users size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+                    <AppText variant="body" bold style={{ color: '#0F172A', marginBottom: 4 }}>
+                      No Bracket Matches Available
+                    </AppText>
+                    <AppText variant="caption" style={{ color: '#64748B', textAlign: 'center' }}>
+                      Double elimination bracket progression will appear once tournament matches are scheduled.
+                    </AppText>
+                  </View>
+                </Card>
+              ) : (
+                <Card style={styles.bracketTreeCard}>
+                  <ChampionshipBracketView matches={matches} isReadOnly={true} isConsolation={false} />
+                </Card>
+              )
+            ) : !showConsolationTab ? (
+              mainMatches.length === 0 ? (
+                <Card style={styles.card}>
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <Users size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+                    <AppText variant="body" bold style={{ color: '#0F172A', marginBottom: 4 }}>
+                      No Bracket Matches Available
+                    </AppText>
+                    <AppText variant="caption" style={{ color: '#64748B', textAlign: 'center' }}>
+                      Bracket match progression will appear once tournament matches are scheduled and completed.
+                    </AppText>
+                  </View>
+                </Card>
+              ) : (
+                <Card style={styles.bracketTreeCard}>
+                  <ChampionshipBracketView matches={mainMatches} isReadOnly={true} isConsolation={false} />
+                </Card>
+              )
+            ) : bracketSubTab === 'main' ? (
+              mainMatches.length === 0 ? (
+                <Card style={styles.card}>
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <Users size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
+                    <AppText variant="body" bold style={{ color: '#0F172A', marginBottom: 4 }}>
+                      No Main Bracket Matches Available
+                    </AppText>
+                    <AppText variant="caption" style={{ color: '#64748B', textAlign: 'center' }}>
+                      Main bracket matches will appear once tournament matches are scheduled.
+                    </AppText>
+                  </View>
+                </Card>
+              ) : (
+                <Card style={styles.bracketTreeCard}>
+                  <ChampionshipBracketView matches={mainMatches} isReadOnly={true} isConsolation={false} />
+                </Card>
+              )
+            ) : consolationMatches.length === 0 ? (
               <Card style={styles.card}>
                 <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                   <Users size={36} color="#94A3B8" style={{ marginBottom: 12 }} />
                   <AppText variant="body" bold style={{ color: '#0F172A', marginBottom: 4 }}>
-                    No Bracket Matches Available
+                    No Consolation Matches Yet
                   </AppText>
                   <AppText variant="caption" style={{ color: '#64748B', textAlign: 'center' }}>
-                    Bracket match progression will appear once tournament matches are scheduled and completed.
+                    Consolation matches will appear as eligible participants are eliminated from the Main Bracket.
                   </AppText>
                 </View>
               </Card>
             ) : (
               <Card style={styles.bracketTreeCard}>
-                <ChampionshipBracketView matches={matches} isReadOnly={true} />
+                <ChampionshipBracketView matches={consolationMatches} isReadOnly={true} isConsolation={true} />
               </Card>
             )}
           </View>

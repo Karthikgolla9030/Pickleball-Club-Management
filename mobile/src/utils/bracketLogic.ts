@@ -8,12 +8,94 @@
  * - BYE recognition: Clean separation of auto-resolved BYE matches vs real played matches.
  */
 
-import type { Match, BracketSummaryResponse } from '@/types';
+import type { Match, Tournament, BracketSummaryResponse } from '@/types';
 import type {
   BracketProgress,
   BracketRoundGroup,
   BracketScoreValidation,
 } from '@/types/bracket';
+
+export type ResolvedBracketType =
+  | 'single_elimination'
+  | 'single_elimination_consolation'
+  | 'double_elimination';
+
+/**
+ * Checks whether a match belongs to the Consolation bracket.
+ */
+export function isConsolationMatch(match: Match | null | undefined): boolean {
+  if (!match) return false;
+  if ((match as any).is_consolation) return true;
+  if ((match as any).bracket_type === 'consolation') return true;
+  const sec = (match.bracket_section || '').toLowerCase();
+  if (sec === 'consolation') return true;
+  const lbl = (match.label || '').toLowerCase();
+  if (lbl.includes('consolation') || lbl.includes('3rd place')) return true;
+  return false;
+}
+
+/**
+ * Checks whether a match belongs to the Losers bracket in Double Elimination.
+ */
+export function isLosersMatch(match: Match | null | undefined): boolean {
+  if (!match) return false;
+  const sec = (match.bracket_section || '').toLowerCase();
+  if (sec === 'losers') return true;
+  const lbl = (match.label || '').toLowerCase();
+  if (lbl.includes('losers') && !lbl.includes('consolation')) return true;
+  return false;
+}
+
+/**
+ * Checks whether a match belongs to the Finals section in Double Elimination.
+ */
+export function isFinalsMatch(match: Match | null | undefined): boolean {
+  if (!match) return false;
+  const sec = (match.bracket_section || '').toLowerCase();
+  if (sec === 'grand_final' || sec === 'reset_final') return true;
+  const lbl = (match.label || '').toLowerCase();
+  if (lbl.includes('grand final') || lbl.includes('reset final')) return true;
+  return false;
+}
+
+/**
+ * Accurately determines the bracket format from tournament configuration and matches.
+ */
+export function getBracketType(
+  tournament?: Tournament | null,
+  matches?: Match[] | null
+): ResolvedBracketType {
+  const fc = tournament?.format_configuration || {};
+  const rawType = String(
+    fc.bracket_type ||
+    fc.bracket_format ||
+    (tournament as any)?.bracket_type ||
+    (tournament as any)?.bracket_format ||
+    ''
+  ).toLowerCase();
+
+  if (rawType.includes('consolation')) {
+    return 'single_elimination_consolation';
+  }
+  if (rawType.includes('double')) {
+    return 'double_elimination';
+  }
+  if (rawType.includes('single')) {
+    return 'single_elimination';
+  }
+
+  // Fallback: inspect actual matches if config lacks explicit type
+  if (matches && matches.length > 0) {
+    if (matches.some((m) => isLosersMatch(m) || isFinalsMatch(m))) {
+      return 'double_elimination';
+    }
+    if (matches.some((m) => isConsolationMatch(m))) {
+      return 'single_elimination_consolation';
+    }
+  }
+
+  return 'single_elimination';
+}
 
 /**
  * Validates a pickleball score pair according to official competition rules:
@@ -226,12 +308,28 @@ export function getAdvancementRoute(match: Match): {
   let winnerBadge: string | null = null;
   let loserBadge: string | null = null;
 
+  const isConsolation = isConsolationMatch(match);
+
   if (match.bracket_section === 'grand_final') {
     winnerBadge = 'If WB Wins: 🏆 Champion';
     loserBadge = 'If LB Wins: 🔁 Reset Final (#15)';
   } else if (match.bracket_section === 'reset_final') {
     winnerBadge = 'Winner ➔ 🏆 Champion';
     loserBadge = 'Loser ➔ 🥈 Runner-Up';
+  } else if (isConsolation) {
+    if (match.winner_next_match_number) {
+      winnerBadge = `Winner ➔ Match #${match.winner_next_match_number}`;
+    } else {
+      winnerBadge = match.label?.toLowerCase().includes('3rd place')
+        ? 'Winner ➔ 🥉 3rd Place'
+        : 'Winner ➔ 🎖️ Consolation Winner';
+    }
+
+    if (match.loser_next_match_number) {
+      loserBadge = `Loser ➔ Match #${match.loser_next_match_number}`;
+    } else {
+      loserBadge = 'Loser ➔ ❌ Eliminated';
+    }
   } else {
     if (match.winner_next_match_number) {
       winnerBadge = `Winner ➔ Match #${match.winner_next_match_number}`;
@@ -242,6 +340,8 @@ export function getAdvancementRoute(match: Match): {
     if (match.loser_next_match_number) {
       loserBadge = `Loser ➔ Match #${match.loser_next_match_number}`;
     } else if (match.bracket_section === 'losers') {
+      loserBadge = 'Loser ➔ ❌ Eliminated';
+    } else {
       loserBadge = 'Loser ➔ ❌ Eliminated';
     }
   }
@@ -334,10 +434,13 @@ export function groupBracketMatchesBySection(
     const sec = (m.bracket_section || '').toLowerCase();
     const lbl = (m.label || '').toLowerCase();
 
-    if (sec === 'grand_final' || sec === 'reset_final' || lbl.includes('grand final')) {
+    if (sec === 'grand_final' || sec === 'reset_final' || lbl.includes('grand final') || lbl.includes('reset final')) {
       sectionMatches.finals.push(m);
-    } else if (sec === 'losers' || sec === 'consolation' || lbl.includes('losers') || lbl.includes('consolation')) {
+    } else if (sec === 'losers' || (lbl.includes('losers') && !lbl.includes('consolation'))) {
       sectionMatches.losers.push(m);
+    } else if (sec === 'consolation' || lbl.includes('consolation') || lbl.includes('3rd place')) {
+      // Consolation matches are isolated from double elimination losers bracket
+      continue;
     } else {
       sectionMatches.winners.push(m);
     }
@@ -436,12 +539,32 @@ export function groupBracketMatchesByRound(
       return posA - posB;
     });
 
-    const completedCount = roundMatches.filter((m) => m.status === 'completed').length;
+    const completedCount = roundMatches.filter(
+      (m) => m.status === 'completed' || m.status === 'cancelled'
+    ).length;
     const totalCount = roundMatches.length;
+
+    let roundName = '';
+    const hasConsolation = roundMatches.some(isConsolationMatch);
+    if (hasConsolation) {
+      if (roundMatches.some((m) => m.label?.toLowerCase().includes('3rd place'))) {
+        roundName = '3rd Place Playoff';
+      } else if (roundMatches[0]?.label) {
+        roundName = roundMatches[0].label.replace(/\s+\d+$/, '');
+      } else if (roundNumber >= totalRounds) {
+        roundName = 'Consolation Final';
+      } else if (roundNumber === totalRounds - 1) {
+        roundName = 'Consolation Semifinals';
+      } else {
+        roundName = `Consolation Round ${roundNumber}`;
+      }
+    } else {
+      roundName = roundMatches[0]?.label || getBracketRoundName(roundNumber, totalRounds);
+    }
 
     return {
       roundNumber,
-      roundName: getBracketRoundName(roundNumber, totalRounds),
+      roundName,
       matches: roundMatches,
       completedCount,
       totalCount,

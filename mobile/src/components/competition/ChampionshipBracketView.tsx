@@ -19,29 +19,38 @@ import {
   getFeederPlaceholder,
   getResetFinalStatus,
   getBracketRoundName,
+  isConsolationMatch,
 } from '@/utils/bracketLogic';
 
 interface ChampionshipBracketViewProps {
   matches: Match[];
   onScoreMatch?: (match: Match) => void;
   isReadOnly?: boolean;
+  isConsolation?: boolean;
 }
 
 export function ChampionshipBracketView({
   matches,
   onScoreMatch,
   isReadOnly = false,
+  isConsolation = false,
 }: ChampionshipBracketViewProps) {
-  // Detect double elimination
+  // Check if viewing consolation matches
+  const isConsolationView =
+    Boolean(isConsolation) ||
+    (matches.length > 0 && matches.every(isConsolationMatch));
+
+  // Detect double elimination (never true if explicitly viewing consolation matches)
   const isDoubleElimination = useMemo(
     () =>
+      !isConsolationView &&
       matches.some(
         (m) =>
           m.bracket_section === 'losers' ||
           m.bracket_section === 'grand_final' ||
           m.bracket_section === 'reset_final'
       ),
-    [matches]
+    [matches, isConsolationView]
   );
 
   const [activeSection, setActiveSection] = useState<'winners' | 'losers' | 'finals' | 'all'>('winners');
@@ -74,7 +83,7 @@ export function ChampionshipBracketView({
     return sectionGroups[activeSection] || [];
   }, [isDoubleElimination, activeSection, sectionGroups, matches]);
 
-  // Determine champion legitimately
+  // Determine champion / consolation winner legitimately
   const champion = useMemo(() => {
     if (isDoubleElimination) {
       const resetMatch = matches.find((m) => m.bracket_section === 'reset_final');
@@ -93,20 +102,28 @@ export function ChampionshipBracketView({
       }
       return null;
     } else {
-      // Single elimination: final round match
-      const finalMatch = matches.find((m) => m.next_match_id === null && m.bracket_round !== null);
+      // Find final round match
+      const candidateMatches = isConsolationView
+        ? matches.filter(isConsolationMatch)
+        : matches.filter((m) => !isConsolationMatch(m));
+
+      const finalMatch = candidateMatches.find(
+        (m) => m.next_match_id === null && m.bracket_round !== null
+      );
       if (finalMatch && finalMatch.status === 'completed' && finalMatch.winner_team) {
         return finalMatch.winner_team;
       }
       return null;
     }
-  }, [matches, isDoubleElimination]);
+  }, [matches, isDoubleElimination, isConsolationView]);
 
   if (matches.length === 0) {
     return (
       <Card style={styles.emptyCard}>
         <AppText variant="body" color="secondary" style={styles.centerText}>
-          Championship bracket matches will appear here once the bracket is generated.
+          {isConsolationView
+            ? 'Consolation matches will appear as eligible participants are eliminated from the Main Bracket.'
+            : 'Championship bracket matches will appear here once the bracket is generated.'}
         </AppText>
       </Card>
     );
@@ -116,16 +133,26 @@ export function ChampionshipBracketView({
     <View style={styles.container}>
       {/* ─── Champion Trophy Banner ────────────────────────────────────────── */}
       {champion ? (
-        <Card style={styles.championCard}>
-          <AppText variant="heading2" style={styles.trophyIcon}>🏆</AppText>
-          <AppText variant="caption" color="tertiary" style={styles.championTag}>
-            TOURNAMENT CHAMPION
+        <Card style={[styles.championCard, isConsolationView && styles.consolationWinnerCard]}>
+          <AppText variant="heading2" style={styles.trophyIcon}>
+            {isConsolationView ? '🎖️' : '🏆'}
+          </AppText>
+          <AppText
+            variant="caption"
+            color="tertiary"
+            style={[styles.championTag, isConsolationView && styles.consolationTag]}
+          >
+            {isConsolationView ? 'CONSOLATION WINNER' : 'TOURNAMENT CHAMPION'}
           </AppText>
           <AppText variant="heading1" style={styles.championName}>
             {champion.name}
           </AppText>
           {champion.seed ? (
-            <Badge label={`#${champion.seed} Seed`} variant="warning" size="sm" />
+            <Badge
+              label={`#${champion.seed} Seed`}
+              variant={isConsolationView ? 'default' : 'warning'}
+              size="sm"
+            />
           ) : null}
         </Card>
       ) : null}
@@ -379,6 +406,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1],
     marginBottom: Spacing[2],
   },
+  consolationWinnerCard: {
+    backgroundColor: 'rgba(15, 118, 110, 0.08)',
+    borderColor: 'rgba(15, 118, 110, 0.35)',
+  },
   trophyIcon: {
     fontSize: 36,
   },
@@ -386,6 +417,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     fontWeight: Typography.weight.bold,
     color: Colors.status.warning,
+  },
+  consolationTag: {
+    letterSpacing: 1.5,
+    fontWeight: Typography.weight.bold,
+    color: '#0F766E',
   },
   championName: {
     fontWeight: Typography.weight.bold,

@@ -32,6 +32,7 @@ import {
   isMatchBye,
   isMatchReady,
   isMatchWaiting,
+  isConsolationMatch,
 } from '@/utils/bracketLogic';
 import { getCourtDisplayLabel } from '@/utils';
 
@@ -106,7 +107,13 @@ export function BracketViewTab({
     [matches]
   );
 
+  const hasConsolation = useMemo(
+    () => matches.some((m) => isConsolationMatch(m)),
+    [matches]
+  );
+
   const [activeSection, setActiveSection] = useState<'winners' | 'losers' | 'finals' | 'all'>('winners');
+  const [bracketSectionTab, setBracketSectionTab] = useState<'main' | 'consolation'>('main');
   const [viewMode, setViewMode] = useState<'round' | 'tree'>('round');
   const [selectedRoundIndex, setSelectedRoundIndex] = useState<number>(0);
 
@@ -129,9 +136,18 @@ export function BracketViewTab({
     };
   }, [matches]);
 
+  const activeMatchesForDisplay = useMemo(() => {
+    if (isDoubleElimination) return matches;
+    if (!hasConsolation) return matches;
+    if (bracketSectionTab === 'consolation') {
+      return matches.filter((m) => isConsolationMatch(m));
+    }
+    return matches.filter((m) => !isConsolationMatch(m));
+  }, [matches, isDoubleElimination, hasConsolation, bracketSectionTab]);
+
   const displayedGroups = useMemo(() => {
     if (!isDoubleElimination) {
-      return groupBracketMatchesByRound(matches);
+      return groupBracketMatchesByRound(activeMatchesForDisplay);
     }
     if (activeSection === 'all') {
       const flattened: BracketRoundGroup[] = [];
@@ -141,7 +157,7 @@ export function BracketViewTab({
       return flattened;
     }
     return sectionGroups[activeSection] || [];
-  }, [isDoubleElimination, activeSection, sectionGroups, matches]);
+  }, [isDoubleElimination, activeSection, sectionGroups, activeMatchesForDisplay]);
 
   const safeRoundIndex = useMemo(() => {
     if (displayedGroups.length === 0) return 0;
@@ -612,7 +628,48 @@ export function BracketViewTab({
           </TouchableOpacity>
         </View>
 
-        {/* Section Navigation Tabs for Double Elimination */}
+        {/* Section Navigation Tabs for Single Elimination with Consolation */}
+        {!isDoubleElimination && hasConsolation && (
+          <View style={styles.sectionNavWrapper}>
+            <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
+              <TouchableOpacity
+                style={[styles.sectionPill, bracketSectionTab === 'main' && styles.sectionPillActive]}
+                onPress={() => {
+                  setBracketSectionTab('main');
+                  setSelectedRoundIndex(0);
+                }}
+                activeOpacity={0.7}
+              >
+                <AppText
+                  style={[
+                    styles.sectionPillText,
+                    bracketSectionTab === 'main' && styles.sectionPillTextActive,
+                  ]}
+                >
+                  Main Bracket ({matches.filter((m) => !isConsolationMatch(m)).length})
+                </AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sectionPill, bracketSectionTab === 'consolation' && styles.sectionPillActive]}
+                onPress={() => {
+                  setBracketSectionTab('consolation');
+                  setSelectedRoundIndex(0);
+                }}
+                activeOpacity={0.7}
+              >
+                <AppText
+                  style={[
+                    styles.sectionPillText,
+                    bracketSectionTab === 'consolation' && styles.sectionPillTextActive,
+                  ]}
+                >
+                  Consolation ({matches.filter(isConsolationMatch).length})
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
         {isDoubleElimination && (
           <View style={styles.sectionNavWrapper}>
             <ScrollView

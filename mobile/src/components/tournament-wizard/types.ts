@@ -144,5 +144,6 @@ export const BRACKET_BYE_OPTIONS = [
 
 export const BRACKET_TYPE_OPTIONS = [
   'Single Elimination',
+  'Single Elimination with Consolation',
   'Double Elimination',
 ] as const;
