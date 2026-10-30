@@ -405,7 +405,10 @@ export function PlayerTournamentDetailsView({
 
   return (
     <View style={[styles.screenWrapper, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
-      {/* ─── Scrollable Body: Header scrolls naturally, Tab Bar remains sticky ─── */}
+      {/* ─── Fixed Header: Stays at the top while scrolling ─── */}
+      <PlayerTournamentHeader tournament={tournament} onBack={onBack} />
+
+      {/* ─── Scrollable Body: Banner scrolls naturally, Tab Bar remains sticky ─── */}
       <ScrollView
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
@@ -419,9 +422,8 @@ export function PlayerTournamentDetailsView({
           />
         }
       >
-        {/* ─── Child 0: Natural-Scrolling Tournament Header & Hero Banner ─── */}
+        {/* ─── Child 0: Natural-Scrolling Tournament Hero Banner ─── */}
         <View style={styles.scrollHeaderWrapper}>
-          <PlayerTournamentHeader tournament={tournament} onBack={onBack} />
           <PlayerTournamentBanner
             tournament={tournament}
             registeredCount={teams.length > 0 ? teams.length : registrations.length}

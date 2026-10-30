@@ -800,6 +800,38 @@ export default function ClubLeagueDetailsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
+      {/* ─── FIXED TOP BAR (Back button, Centered Title, 3-Dot Menu) ─── */}
+      <View style={styles.fixedTopBar}>
+        <View style={styles.headerTopRow}>
+          {/* Back button */}
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
+          </TouchableOpacity>
+
+          {/* Centered League Title */}
+          <View style={styles.headerTitleWrap}>
+            <AppText style={styles.headerLeagueName} numberOfLines={1}>
+              {league.name}
+            </AppText>
+          </View>
+
+          {/* 3-Dot Overflow Menu */}
+          <TouchableOpacity
+            style={styles.headerMenuButton}
+            onPress={() => setIsOverflowOpen(true)}
+            accessibilityLabel="League options"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <ScrollView
         style={styles.mainScrollView}
         contentContainerStyle={styles.mainScrollContent}
@@ -816,35 +848,6 @@ export default function ClubLeagueDetailsScreen() {
         {/* ─── INDEX 0: NATURAL-SCROLLING HEADER & CARDS ─── */}
         <View style={styles.scrollHeaderWrapper}>
           <View style={styles.headerContainer}>
-            <View style={styles.headerTopRow}>
-              {/* Back button */}
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => router.back()}
-                accessibilityLabel="Go back"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <ArrowLeft size={22} color="#111827" strokeWidth={2.4} />
-              </TouchableOpacity>
-
-              {/* Centered League Title */}
-              <View style={styles.headerTitleWrap}>
-                <AppText style={styles.headerLeagueName} numberOfLines={1}>
-                  {league.name}
-                </AppText>
-              </View>
-
-              {/* 3-Dot Overflow Menu */}
-              <TouchableOpacity
-                style={styles.headerMenuButton}
-                onPress={() => setIsOverflowOpen(true)}
-                accessibilityLabel="League options"
-                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              >
-                <MoreVertical size={22} color="#1F2937" strokeWidth={2} />
-              </TouchableOpacity>
-            </View>
-
             {/* Status Pill below title */}
             <View style={styles.headerStatusWrap}>
               <View
@@ -2443,9 +2446,16 @@ const styles = StyleSheet.create({
   // ─── Compact Header Styles ───
   headerContainer: {
     backgroundColor: '#FFFFFF',
+    paddingTop: 8,
     paddingBottom: 6,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  fixedTopBar: {
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    zIndex: 20,
   },
   headerTopRow: {
     flexDirection: 'row',
