@@ -1,26 +1,34 @@
 /**
  * Aught2 Pickleball — PlayerLeagueTeamsTab
  *
- * Standardized Players / Teams tab for Player League Details:
- * - Dynamic tab behavior: Singles -> 'Players', Doubles -> 'Teams'
- * - Summary Card (registered count vs capacity, category, registration type)
- * - Section heading with category badge (e.g. 'Players (8)' with 'SINGLES' badge)
- * - Format information banner
- * - Search bar
- * - Standardized player/team cards with seed badge, name, avg rating, status, and members list
+ * Compact, pixel-perfect Players / Teams table matching Club Owner League Management:
+ * - Card with white surface, #E5ECE8 border, and rounded corners (12px)
+ * - Heading: "Teams (N)" or "Players (N)"
+ * - Table Header: # | Team/Player Name | Players | Avg Skill Level
+ * - Rows: #, Team/Player Name + subtitle, Player count, Skill level blue pill, Chevron >
+ * - Tap row to view roster member modal
  */
 
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, TextInput, View } from 'react-native';
-import { Search, Star, UserCheck, Users } from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
+import { ChevronRight, Search, Users, X } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import { Card } from '@/components/Card';
 import type { LeagueStandingRow, LeagueSummary, LeagueTeam } from '@/types';
 
 export interface LeagueParticipantMember {
   id: string;
   name: string;
+  email?: string;
   rating: string;
 }
 
@@ -47,6 +55,7 @@ export function PlayerLeagueTeamsTab({
   isLoading = false,
 }: PlayerLeagueTeamsTabProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEntry, setSelectedEntry] = useState<LeagueParticipantEntry | null>(null);
 
   const isSingles =
     (league.team_size ?? 2) === 1 ||
@@ -55,12 +64,12 @@ export function PlayerLeagueTeamsTab({
   const entries = useMemo<LeagueParticipantEntry[]>(() => {
     if (teams && teams.length > 0) {
       return teams.map((team, index) => {
-        let avgRating = '4.00';
+        let avgRating = '3.5';
         if (team.avg_skill_level != null) {
-          avgRating = Number(team.avg_skill_level).toFixed(2);
+          avgRating = Number(team.avg_skill_level).toFixed(1);
         } else if (team.members && team.members.length > 0) {
-          const sum = team.members.reduce((acc, m) => acc + (m.skill_rating ?? 4.0), 0);
-          avgRating = (sum / team.members.length).toFixed(2);
+          const sum = team.members.reduce((acc, m) => acc + (m.skill_rating ?? 3.5), 0);
+          avgRating = (sum / team.members.length).toFixed(1);
         }
 
         const membersList: LeagueParticipantMember[] =
@@ -68,7 +77,8 @@ export function PlayerLeagueTeamsTab({
             ? team.members.map((m) => ({
                 id: m.id,
                 name: m.display_name || m.user?.full_name || 'Player',
-                rating: (m.skill_rating ?? 4.0).toFixed(1),
+                email: m.user?.email,
+                rating: (m.skill_rating ?? 3.5).toFixed(1),
               }))
             : [
                 {
@@ -96,13 +106,13 @@ export function PlayerLeagueTeamsTab({
             ? row.members.map((mName: string, i: number) => ({
                 id: `${row.team_id}-${i}`,
                 name: mName,
-                rating: '4.0',
+                rating: '3.5',
               }))
             : [
                 {
                   id: row.team_id,
                   name: row.team_name,
-                  rating: '4.0',
+                  rating: '3.5',
                 },
               ];
 
@@ -110,7 +120,7 @@ export function PlayerLeagueTeamsTab({
           id: row.team_id,
           name: row.team_name,
           seed: row.rank ?? index + 1,
-          avgRating: '4.00',
+          avgRating: '3.5',
           status: 'Confirmed',
           members: membersList,
         };
@@ -131,228 +141,182 @@ export function PlayerLeagueTeamsTab({
   }, [entries, searchQuery]);
 
   const totalCount = entries.length;
-  const capacity = league.max_teams || 12;
-  const categoryLabel = isSingles ? 'SINGLES' : 'DOUBLES';
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Registration Summary Card ─── */}
-      <Card style={styles.summaryCard}>
-        <View style={styles.summaryRow}>
-          <AppText variant="caption" style={styles.summaryLabel}>
-            Registered {isSingles ? 'players' : 'teams'}:
-          </AppText>
-          <AppText variant="bodySmall" bold style={styles.summaryValue}>
-            {totalCount} / {capacity}
-          </AppText>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <AppText variant="caption" style={styles.summaryLabel}>
-            Competition category:
-          </AppText>
-          <AppText variant="bodySmall" bold style={styles.summaryValue}>
-            {league.category || (isSingles ? 'Singles' : 'Doubles')}
-          </AppText>
-        </View>
-
-        <View style={styles.summaryRow}>
-          <AppText variant="caption" style={styles.summaryLabel}>
-            Registration type:
-          </AppText>
-          <AppText variant="bodySmall" bold style={styles.summaryValue}>
-            {isSingles ? 'Singles individual' : 'Fixed Team (Doubles)'}
-          </AppText>
-        </View>
-      </Card>
-
-      {/* ─── 2. Section Heading with Category Badge ─── */}
-      <View style={styles.headingRow}>
-        <AppText variant="heading2" bold style={styles.headingTitle}>
-          {isSingles ? 'Players' : 'Teams'} ({totalCount})
-        </AppText>
-
-        <View style={styles.categoryBadge}>
-          <AppText variant="caption" bold style={styles.categoryBadgeText}>
-            {categoryLabel}
-          </AppText>
-        </View>
-      </View>
-
-      {/* ─── 3. Format Information Banner ─── */}
-      <View style={styles.formatInfoCard}>
-        <Users size={18} color="#0284C7" style={{ marginTop: 2 }} />
-        <View style={styles.formatInfoTextWrap}>
-          <AppText variant="bodySmall" bold style={styles.formatInfoTitle}>
-            {isSingles ? 'Singles Format' : 'Doubles Team Format'}
-          </AppText>
-          <AppText variant="caption" style={styles.formatInfoDesc}>
-            {isSingles
-              ? 'Each entry consists of 1 player who competes individually for all rounds. Every player will play every other player across the regular season.'
-              : 'Each entry consists of a team of 2 registered players who compete together for all scheduled weekly fixtures.'}
-          </AppText>
-        </View>
-      </View>
-
-      {/* ─── 4. Search Filter ─── */}
-      <View style={styles.searchContainer}>
-        <Search size={16} color="#94A3B8" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={`Search ${isSingles ? 'players' : 'teams'}...`}
-          placeholderTextColor="#94A3B8"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
-
-      {/* ─── 5. Player / Team Cards List ─── */}
-      {isLoading && entries.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#065F46" />
-          <AppText style={styles.loadingText}>
-            Loading {isSingles ? 'players' : 'teams'}...
-          </AppText>
-        </View>
-      ) : filteredEntries.length === 0 ? (
-        <Card style={styles.emptyCard}>
-          <UserCheck size={28} color="#94A3B8" />
-          <AppText variant="body" bold style={styles.emptyTitle}>
-            No {isSingles ? 'players' : 'teams'} found
-          </AppText>
-          <AppText variant="caption" style={styles.emptySubtitle}>
-            {searchQuery
-              ? 'Try matching a different name'
-              : `No confirmed ${isSingles ? 'players' : 'teams'} registered yet`}
-          </AppText>
-        </Card>
-      ) : (
-        <View style={styles.entriesList}>
-          {filteredEntries.map((entry) => (
-            <Card key={entry.id} style={styles.playerCard}>
-              {/* Top Header of Card */}
-              <View style={styles.cardTopRow}>
-                <View style={styles.seedBadge}>
-                  <AppText variant="caption" bold style={styles.seedBadgeText}>
-                    #{entry.seed}
-                  </AppText>
-                </View>
-
-                <AppText variant="body" bold style={styles.playerName} numberOfLines={1}>
-                  {entry.name}
-                </AppText>
-
-                <View style={styles.ratingBadge}>
-                  <Star size={12} color="#D97706" fill="#D97706" style={{ marginRight: 3 }} />
-                  <AppText variant="caption" bold style={styles.ratingText}>
-                    {entry.avgRating} avg
-                  </AppText>
-                </View>
-
-                <View style={styles.statusBadge}>
-                  <AppText variant="caption" bold style={styles.statusText}>
-                    {entry.status}
-                  </AppText>
-                </View>
-              </View>
-
-              {/* Members Inner Sub-Card */}
-              <View style={styles.membersSubCard}>
-                {entry.members.map((member) => (
-                  <View key={member.id} style={styles.memberLine}>
-                    <View style={styles.memberDot} />
-                    <AppText variant="bodySmall" style={styles.memberName} numberOfLines={1}>
-                      {member.name}
-                    </AppText>
-                    <View style={styles.memberRatingPill}>
-                      <AppText variant="caption" bold style={styles.memberRatingText}>
-                        {member.rating}
-                      </AppText>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            </Card>
-          ))}
+      {/* ─── Search input (if list is non-empty) ─── */}
+      {entries.length > 5 && (
+        <View style={styles.searchContainer}>
+          <Search size={15} color="#9CA3AF" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={`Search ${isSingles ? 'players' : 'teams'}...`}
+            placeholderTextColor="#9CA3AF"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       )}
+
+      {/* ─── Compact Teams/Players Table Card ─── */}
+      <View style={styles.teamsCard}>
+        {/* Card Header */}
+        <View style={styles.teamsHeaderRow}>
+          <AppText style={styles.teamsTitle}>
+            {isSingles ? 'Players' : 'Teams'} ({totalCount})
+          </AppText>
+        </View>
+
+        {/* Table Header Row */}
+        <View style={styles.teamsTableHeader}>
+          <AppText style={styles.thNum}>#</AppText>
+          <AppText style={styles.thTeamName}>
+            {isSingles ? 'Player Name' : 'Team Name'}
+          </AppText>
+          <AppText style={styles.thPlayers}>Players</AppText>
+          <AppText style={styles.thAvgSkill}>Avg Skill Level</AppText>
+          <View style={styles.thChevronSpacer} />
+        </View>
+
+        {/* Rows */}
+        {isLoading && entries.length === 0 ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="small" color="#176B57" />
+            <AppText style={styles.loadingText}>
+              Loading {isSingles ? 'players' : 'teams'}...
+            </AppText>
+          </View>
+        ) : filteredEntries.length === 0 ? (
+          <View style={styles.emptyTeamsBox}>
+            <AppText style={styles.emptyTeamsTitle}>
+              No {isSingles ? 'Players' : 'Teams'} Registered Yet
+            </AppText>
+            <AppText style={styles.emptyTeamsSubtitle}>
+              {searchQuery
+                ? 'Try matching a different name'
+                : `Confirmed ${isSingles ? 'players' : 'teams'} will appear here once registered.`}
+            </AppText>
+          </View>
+        ) : (
+          filteredEntries.map((entry, index) => {
+            const playerCount = entry.members.length || 1;
+            const subtitle = isSingles
+              ? '1 player'
+              : playerCount === 1
+              ? '1 player'
+              : `${playerCount} players`;
+
+            return (
+              <TouchableOpacity
+                key={entry.id}
+                style={[
+                  styles.teamRow,
+                  index === filteredEntries.length - 1 && styles.teamRowLast,
+                ]}
+                onPress={() => setSelectedEntry(entry)}
+                activeOpacity={0.7}
+              >
+                {/* # Number */}
+                <AppText style={styles.tdNum}>{index + 1}</AppText>
+
+                {/* Team/Player Name + Subtitle */}
+                <View style={styles.tdTeamCol}>
+                  <AppText style={styles.tdTeamName} numberOfLines={1}>
+                    {entry.name}
+                  </AppText>
+                  <AppText style={styles.tdTeamSubtitle}>{subtitle}</AppText>
+                </View>
+
+                {/* Players Count */}
+                <View style={styles.tdPlayersCol}>
+                  <AppText style={styles.tdPlayersCount}>{playerCount}</AppText>
+                </View>
+
+                {/* Avg Skill Level Blue Pill */}
+                <View style={styles.tdSkillCol}>
+                  <View style={styles.skillPillBlue}>
+                    <AppText style={styles.skillPillTextBlue}>
+                      {Number(entry.avgRating).toFixed(1)}
+                    </AppText>
+                  </View>
+                </View>
+
+                {/* Chevron > */}
+                <ChevronRight size={18} color="#9CA3AF" />
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </View>
+
+      {/* ─── Detail Modal on Row Tap ─── */}
+      <Modal
+        visible={Boolean(selectedEntry)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedEntry(null)}
+      >
+        <TouchableWithoutFeedback onPress={() => setSelectedEntry(null)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                {/* Modal Header */}
+                <View style={styles.modalHeader}>
+                  <View style={{ flex: 1 }}>
+                    <AppText style={styles.modalTitle} numberOfLines={1}>
+                      {selectedEntry?.name}
+                    </AppText>
+                    <AppText style={styles.modalSubtitle}>
+                      Average Skill Level: {Number(selectedEntry?.avgRating || 3.5).toFixed(1)}
+                    </AppText>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setSelectedEntry(null)}
+                    style={styles.modalCloseBtn}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={20} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Members list */}
+                <View style={styles.rosterContainer}>
+                  <AppText style={styles.rosterSectionTitle}>
+                    {isSingles ? 'Player Details' : 'Roster Members'}
+                  </AppText>
+                  <ScrollView style={{ maxHeight: 240 }}>
+                    {selectedEntry?.members.map((member) => (
+                      <View key={member.id} style={styles.rosterMemberRow}>
+                        <View style={styles.memberAvatar}>
+                          <Users size={16} color="#064E3B" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <AppText style={styles.memberName}>{member.name}</AppText>
+                          {member.email ? (
+                            <AppText style={styles.memberEmail}>{member.email}</AppText>
+                          ) : null}
+                        </View>
+                        <View style={styles.memberRatingBadge}>
+                          <AppText style={styles.memberRatingText}>
+                            Rating: {Number(member.rating).toFixed(1)}
+                          </AppText>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
-  },
-  summaryCard: {
-    padding: 14,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 8,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  summaryLabel: {
-    color: '#64748B',
-    fontSize: 12,
-  },
-  summaryValue: {
-    color: '#0F172A',
-    fontSize: 13,
-  },
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  headingTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#1D4ED8',
-    letterSpacing: 0.5,
-  },
-  formatInfoCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 10,
-    padding: 12,
-  },
-  formatInfoTextWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  formatInfoTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0369A1',
-  },
-  formatInfoDesc: {
-    fontSize: 11.5,
-    color: '#0284C7',
-    lineHeight: 16,
   },
   searchContainer: {
     flexDirection: 'row',
@@ -360,145 +324,235 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E5ECE8',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#0F172A',
+    color: '#111827',
     padding: 0,
   },
-  loadingContainer: {
-    paddingVertical: 24,
+  teamsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    overflow: 'hidden',
+  },
+  teamsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 10,
+  },
+  teamsTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  teamsTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#E5ECE8',
+  },
+  thNum: {
+    width: 28,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  thTeamName: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6B7280',
+    paddingLeft: 4,
+  },
+  thPlayers: {
+    width: 55,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  thAvgSkill: {
+    width: 95,
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#6B7280',
+    textAlign: 'center',
+  },
+  thChevronSpacer: {
+    width: 18,
+  },
+  teamRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  teamRowLast: {
+    borderBottomWidth: 0,
+  },
+  tdNum: {
+    width: 28,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tdTeamCol: {
+    flex: 1,
+    paddingLeft: 4,
+    paddingRight: 8,
+  },
+  tdTeamName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tdTeamSubtitle: {
+    fontSize: 12.5,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  tdPlayersCol: {
+    width: 55,
+    alignItems: 'center',
+  },
+  tdPlayersCount: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tdSkillCol: {
+    width: 95,
+    alignItems: 'center',
+  },
+  skillPillBlue: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  skillPillTextBlue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  loadingBox: {
+    padding: 24,
     alignItems: 'center',
     gap: 8,
   },
   loadingText: {
-    fontSize: 12,
-    color: '#64748B',
+    fontSize: 13,
+    color: '#6B7280',
   },
-  emptyCard: {
+  emptyTeamsBox: {
     padding: 24,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
+    gap: 4,
   },
-  emptyTitle: {
+  emptyTeamsTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 4,
+    color: '#111827',
   },
-  emptySubtitle: {
+  emptyTeamsSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#6B7280',
     textAlign: 'center',
   },
-  entriesList: {
-    gap: 10,
-  },
-  playerCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    gap: 10,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  seedBadge: {
-    backgroundColor: '#065F46',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  seedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  playerName: {
+  modalOverlay: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    padding: 20,
   },
-  ratingBadge: {
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    elevation: 5,
+  },
+  modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  ratingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#92400E',
-  },
-  statusBadge: {
-    backgroundColor: '#DCFCE7',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 999,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  statusText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  membersSubCard: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 8,
-    gap: 6,
-  },
-  memberLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  memberDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0D9488',
-    marginRight: 6,
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  modalSubtitle: {
+    fontSize: 12.5,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  rosterContainer: {
+    marginTop: 12,
+  },
+  rosterSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  rosterMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F9FAFB',
+    gap: 10,
+  },
+  memberAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   memberName: {
-    flex: 1,
-    fontSize: 12.5,
-    color: '#334155',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
   },
-  memberRatingPill: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+  memberEmail: {
+    fontSize: 11.5,
+    color: '#6B7280',
+  },
+  memberRatingBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
   memberRatingText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#374151',
   },
 });
