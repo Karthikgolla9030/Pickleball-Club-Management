@@ -2,9 +2,9 @@
  * Aught2 Pickleball — PlayerTournamentOverviewTab
  *
  * Standardized Overview & Rules page across all 4 formats:
- * - Card 1: Tournament Summary (compact bracketed metadata + description)
- * - Card 2: Competition Details (standardized 2-column grid with format-specific details)
- * - Card 3: Schedule & Venue (dates, registration window, venue, courts)
+ * - Card 1: Tournament Summary (clean, single-line dynamic summary without brackets or duplication)
+ * - Card 2: Competition Details (balanced 2-column grid layout across rows with format-specific details)
+ * - Card 3: Schedule & Venue (standardized 2-column layout matching Competition Details)
  * - Card 4: Game Rules & Scoring (game format, target score, tiebreakers, competition notes)
  */
 
@@ -39,6 +39,7 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const format = tournament.format || 'round_robin';
   const isSingles = parsedConfig.isSingles;
+  const fc = (tournament.format_configuration || {}) as any;
 
   // Format label
   const formatLabel = useMemo(() => {
@@ -57,7 +58,6 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
 
   // Elimination type for Bracket tournaments
   const eliminationType = useMemo(() => {
-    const fc = tournament.format_configuration as any;
     const raw =
       fc?.bracket_type ||
       fc?.bracket_format ||
@@ -67,41 +67,80 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
       return raw.trim();
     }
     return 'Single Elimination';
-  }, [tournament]);
+  }, [fc, tournament]);
 
-  // Summary bracketed string: e.g. [Singles • Skill: 3.5–4.5 • Any • Age: 20–30 • Fee: $55/player]
-  const summaryMetaString = useMemo(() => {
+  // Clean structured summary string: Singles · Skill 3.5–4.5 · Any Gender · Age 20–30 · $65/player
+  const summaryString = useMemo(() => {
     const parts: string[] = [];
 
     // Division / Category
-    parts.push(parsedConfig.category || (isSingles ? 'Singles' : 'Doubles'));
+    const category = parsedConfig.category || (isSingles ? 'Singles' : 'Doubles');
+    if (category) parts.push(category);
 
     // Skill
-    if (parsedConfig.skillLevelDisplay) {
-      parts.push(`Skill: ${parsedConfig.skillLevelDisplay}`);
-    } else if (parsedConfig.skillLevel) {
-      parts.push(`Skill: ${parsedConfig.skillLevel}`);
+    const skill = parsedConfig.skillLevelDisplay || parsedConfig.skillLevel;
+    if (skill && skill !== 'All Levels' && skill !== 'Open') {
+      const cleanSkill = skill.replace(/^skill:\s*/i, '');
+      parts.push(`Skill ${cleanSkill}`);
+    } else if (skill) {
+      parts.push('All Skill Levels');
     }
 
-    // Gender
-    if (parsedConfig.genderEligibility) {
-      parts.push(parsedConfig.genderEligibility);
+    // Gender Eligibility
+    const gender = parsedConfig.genderEligibility;
+    if (gender) {
+      if (gender.toLowerCase() === 'any') {
+        parts.push('Any Gender');
+      } else {
+        parts.push(gender);
+      }
     }
 
-    // Age
-    if (parsedConfig.ageRestrictionText && parsedConfig.ageRestrictionText !== 'All Ages') {
-      parts.push(`Age: ${parsedConfig.ageRestrictionText}`);
+    // Age Limits
+    const age = parsedConfig.ageRestrictionText;
+    if (age && age !== 'All Ages') {
+      const cleanAge = age.replace(/^age:\s*/i, '');
+      parts.push(`Age ${cleanAge}`);
     }
 
     // Entry Fee
-    if (parsedConfig.entryFeeDisplay) {
-      parts.push(`Fee: ${parsedConfig.entryFeeDisplay}`);
-    } else if (parsedConfig.entryFee != null && parsedConfig.entryFee > 0) {
-      parts.push(`Fee: $${parsedConfig.entryFee}/player`);
+    if (parsedConfig.entryFee != null && parsedConfig.entryFee > 0) {
+      parts.push(`$${parsedConfig.entryFee}/player`);
+    } else if (parsedConfig.entryFeeDisplay && !parsedConfig.entryFeeDisplay.toLowerCase().includes('free')) {
+      const cleanFee = parsedConfig.entryFeeDisplay.replace(/^fee:\s*/i, '');
+      parts.push(cleanFee.includes('/player') ? cleanFee : `${cleanFee}/player`);
     }
 
-    return `[${parts.join(' • ')}]`;
+    return parts.join(' · ');
   }, [parsedConfig, isSingles]);
+
+  // Sanitize and extract real prose description if provided, avoiding duplicate metadata
+  const cleanDescription = useMemo(() => {
+    if (!tournament.description) return null;
+    let desc = tournament.description.trim();
+
+    // Strip bracketed metadata e.g. [Singles • Skill: 3.5–4.5 • Any • Age: 20–30 • Fee: $65/player]
+    desc = desc.replace(/\[\s*(?:singles|doubles)?\s*[\s\S]*?fee:[^\]]*\]/gi, '').trim();
+    // Strip any leading bracketed token [ ... ]
+    desc = desc.replace(/^\[[^\]]+\]\s*/, '').trim();
+
+    // If remaining text is merely metadata fields serialized into plain text
+    const isMetadataOnly =
+      /(?:singles|doubles)/i.test(desc) &&
+      /skill/i.test(desc) &&
+      /(?:fee|\$)/i.test(desc) &&
+      desc.length < 130 &&
+      !desc.includes('\n');
+    if (isMetadataOnly) return null;
+
+    // If identical to summaryString
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (summaryString && normalize(desc) === normalize(summaryString)) {
+      return null;
+    }
+
+    return desc.length > 0 ? desc : null;
+  }, [tournament.description, summaryString]);
 
   // Scoring rules
   const scoringFormat = useMemo(() => {
@@ -131,12 +170,14 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
 
   // Assigned courts
   const courtsInfo = useMemo(() => {
-    const fc = tournament.format_configuration as any;
     if (fc?.assigned_courts && Array.isArray(fc.assigned_courts) && fc.assigned_courts.length > 0) {
       return `${fc.assigned_courts.length} Courts Assigned`;
     }
+    if (fc?.courts_count && Number(fc.courts_count) > 0) {
+      return `${fc.courts_count} Courts Dedicated`;
+    }
     return 'Dedicated Pickleball Courts';
-  }, [tournament.format_configuration]);
+  }, [fc]);
 
   return (
     <View style={styles.container}>
@@ -151,19 +192,17 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
           </AppText>
         </View>
 
-        <AppText variant="bodySmall" bold style={styles.summaryMetaText}>
-          {summaryMetaString}
-        </AppText>
+        <View style={styles.summaryBox}>
+          <AppText variant="bodySmall" bold style={styles.summaryText}>
+            {summaryString}
+          </AppText>
+        </View>
 
-        {tournament.description ? (
+        {cleanDescription ? (
           <AppText variant="bodySmall" style={styles.descriptionText}>
-            {tournament.description}
+            {cleanDescription}
           </AppText>
-        ) : (
-          <AppText variant="bodySmall" style={styles.descriptionText}>
-            Welcome to {tournament.name}. Review all competition specifications, game rules, and schedules below.
-          </AppText>
-        )}
+        ) : null}
       </Card>
 
       {/* ─── 2. Competition Details ─── */}
@@ -177,140 +216,200 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
           </AppText>
         </View>
 
-        <View style={styles.twoColumnGrid}>
-          {/* Column 1 */}
-          <View style={styles.column}>
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Tag size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Format
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {formatLabel}
-              </AppText>
-            </View>
-
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Users size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Registration Type
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {isSingles ? 'Individual (Singles)' : 'Fixed Team (Doubles)'}
-              </AppText>
-            </View>
-
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <UserCheck size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Gender Eligibility
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {parsedConfig.genderEligibility || 'Any'}
-              </AppText>
-            </View>
-
-            {format === 'pool_play' && (
+        <View style={styles.gridContainer}>
+          {/* Row 1: Format | Division */}
+          <View style={styles.gridRow}>
+            <View style={styles.gridColLeft}>
               <View style={styles.item}>
                 <View style={styles.labelRow}>
-                  <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
+                  <Tag size={14} color="#065F46" style={styles.rowIcon} />
                   <AppText variant="caption" style={styles.label}>
-                    Pools Config
+                    Format
                   </AppText>
                 </View>
                 <AppText variant="bodySmall" bold style={styles.value}>
-                  2 Pools (Pool A & Pool B)
+                  {formatLabel}
                 </AppText>
               </View>
-            )}
+            </View>
 
-            {format === 'bracket' && (
+            <View style={styles.gridColRight}>
               <View style={styles.item}>
                 <View style={styles.labelRow}>
                   <Trophy size={14} color="#065F46" style={styles.rowIcon} />
                   <AppText variant="caption" style={styles.label}>
-                    Elimination Type
+                    Division
                   </AppText>
                 </View>
                 <AppText variant="bodySmall" bold style={styles.value}>
-                  {eliminationType}
+                  {parsedConfig.category || (isSingles ? 'Singles' : 'Doubles')}
                 </AppText>
               </View>
-            )}
+            </View>
           </View>
 
-          {/* Column 2 */}
-          <View style={styles.column}>
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Trophy size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Division
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {parsedConfig.category || (isSingles ? 'Singles' : 'Doubles')}
-              </AppText>
-            </View>
-
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Activity size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Skill Requirement
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {parsedConfig.skillLevelDisplay || parsedConfig.skillLevel || 'Open / All Levels'}
-              </AppText>
-            </View>
-
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Calendar size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Age Limits
-                </AppText>
-              </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {parsedConfig.ageRestrictionText || 'All Ages'}
-              </AppText>
-            </View>
-
-            {format === 'pool_play' && (
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Trophy size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Advancement
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  Top 2 Advance to Semis
-                </AppText>
-              </View>
-            )}
-
-            {format === 'scramble' && (
+          {/* Row 2: Registration Type | Skill Requirement */}
+          <View style={styles.gridRow}>
+            <View style={styles.gridColLeft}>
               <View style={styles.item}>
                 <View style={styles.labelRow}>
                   <Users size={14} color="#065F46" style={styles.rowIcon} />
                   <AppText variant="caption" style={styles.label}>
-                    Rotation
+                    Registration Type
                   </AppText>
                 </View>
                 <AppText variant="bodySmall" bold style={styles.value}>
-                  Dynamic Partner Switch
+                  {format === 'scramble'
+                    ? 'Individual (Scramble)'
+                    : isSingles
+                    ? 'Individual (Singles)'
+                    : 'Fixed Team (Doubles)'}
                 </AppText>
               </View>
-            )}
+            </View>
+
+            <View style={styles.gridColRight}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <Activity size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Skill Requirement
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {parsedConfig.skillLevelDisplay || parsedConfig.skillLevel || 'Open / All Levels'}
+                </AppText>
+              </View>
+            </View>
           </View>
+
+          {/* Row 3: Gender Eligibility | Age Limits */}
+          <View style={styles.gridRow}>
+            <View style={styles.gridColLeft}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <UserCheck size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Gender Eligibility
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {parsedConfig.genderEligibility || 'Any'}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.gridColRight}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <Calendar size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Age Limits
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {parsedConfig.ageRestrictionText || 'All Ages'}
+                </AppText>
+              </View>
+            </View>
+          </View>
+
+          {/* Row 4: Format-Specific Configurations */}
+          {format === 'bracket' && (
+            <View style={styles.gridRow}>
+              <View style={styles.gridColLeft}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <Trophy size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Elimination Type
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    {eliminationType}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.gridColRight}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <Activity size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Seeding Method
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    {fc?.seeding_method || 'Rating Seeding'}
+                  </AppText>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {format === 'pool_play' && (
+            <View style={styles.gridRow}>
+              <View style={styles.gridColLeft}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Pools Config
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    {fc?.pool_count || 2} Pools ({fc?.teams_per_pool || 4} teams/pool)
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.gridColRight}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <Trophy size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Advancement
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    Top {fc?.qualifiers_per_pool || 2} Advance to Championship
+                  </AppText>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {format === 'scramble' && (
+            <View style={styles.gridRow}>
+              <View style={styles.gridColLeft}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <Users size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Rotation Rule
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    {fc?.rotation_rule || 'Dynamic Partner Switch'}
+                  </AppText>
+                </View>
+              </View>
+
+              <View style={styles.gridColRight}>
+                <View style={styles.item}>
+                  <View style={styles.labelRow}>
+                    <Activity size={14} color="#065F46" style={styles.rowIcon} />
+                    <AppText variant="caption" style={styles.label}>
+                      Leaderboard Metric
+                    </AppText>
+                  </View>
+                  <AppText variant="bodySmall" bold style={styles.value}>
+                    {fc?.leaderboard_metric || 'Win % • Point Differential'}
+                  </AppText>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </Card>
 
@@ -325,58 +424,68 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
           </AppText>
         </View>
 
-        <View style={styles.twoColumnGrid}>
-          <View style={styles.column}>
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Calendar size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Event Dates
+        <View style={styles.gridContainer}>
+          {/* Row 1: Event Dates | Registration Deadline */}
+          <View style={styles.gridRow}>
+            <View style={styles.gridColLeft}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <Calendar size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Event Dates
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {formatDate(tournament.start_date)} – {formatDate(tournament.end_date)}
                 </AppText>
               </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {formatDate(tournament.start_date)} – {formatDate(tournament.end_date)}
-              </AppText>
             </View>
 
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <MapPin size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Location
+            <View style={styles.gridColRight}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <Clock size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Registration Deadline
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {tournament.registration_close_at
+                    ? formatDate(tournament.registration_close_at)
+                    : formatDate(tournament.start_date)}
                 </AppText>
               </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {tournament.location_name || tournament.club_name || 'Club Courts'}
-              </AppText>
             </View>
           </View>
 
-          <View style={styles.column}>
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <Clock size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Registration Deadline
+          {/* Row 2: Location | Courts */}
+          <View style={styles.gridRow}>
+            <View style={styles.gridColLeft}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <MapPin size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Location
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {tournament.location_name || tournament.club_name || 'Main Courts'}
                 </AppText>
               </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {tournament.registration_close_at
-                  ? formatDate(tournament.registration_close_at)
-                  : formatDate(tournament.start_date)}
-              </AppText>
             </View>
 
-            <View style={styles.item}>
-              <View style={styles.labelRow}>
-                <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
-                <AppText variant="caption" style={styles.label}>
-                  Courts
+            <View style={styles.gridColRight}>
+              <View style={styles.item}>
+                <View style={styles.labelRow}>
+                  <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
+                  <AppText variant="caption" style={styles.label}>
+                    Courts
+                  </AppText>
+                </View>
+                <AppText variant="bodySmall" bold style={styles.value}>
+                  {courtsInfo}
                 </AppText>
               </View>
-              <AppText variant="bodySmall" bold style={styles.value}>
-                {courtsInfo}
-              </AppText>
             </View>
           </View>
         </View>
@@ -464,7 +573,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 12,
+    gap: 14,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -484,27 +593,42 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F172A',
   },
-  summaryMetaText: {
+  summaryBox: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+  },
+  summaryText: {
     fontSize: 13,
     color: '#065F46',
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    lineHeight: 18,
+    fontWeight: '700',
+    lineHeight: 20,
   },
   descriptionText: {
     fontSize: 13,
     color: '#475569',
     lineHeight: 20,
+    marginTop: 2,
   },
-  twoColumnGrid: {
-    flexDirection: 'row',
+  gridContainer: {
     gap: 16,
   },
-  column: {
+  gridRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  gridColLeft: {
     flex: 1,
-    gap: 12,
+    minWidth: 0,
+  },
+  gridColRight: {
+    flex: 1,
+    minWidth: 0,
+    paddingLeft: 8,
   },
   item: {
     gap: 2,
