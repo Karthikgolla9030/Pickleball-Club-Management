@@ -103,6 +103,10 @@ export function TournamentTeamCard({
       ? styles.statusTextDefault
       : styles.statusTextSuccess;
 
+  const showMembersBox =
+    members.length > 0 &&
+    (teamSize > 1 || Boolean(onEditMemberRating) || Boolean(onSwapMember) || (p1Name !== name && p1Name !== 'Player'));
+
   const CardWrapper = selectable && onToggleSelect ? TouchableOpacity : View;
 
   return (
@@ -149,7 +153,9 @@ export function TournamentTeamCard({
         <View style={styles.headerRight}>
           {formattedAvg && (
             <View style={styles.ratingBadge}>
-              <AppText style={styles.ratingText}>⭐ {formattedAvg} avg</AppText>
+              <AppText style={styles.ratingText}>
+                {teamSize === 1 ? `⭐ ${formattedAvg}` : `⭐ ${formattedAvg} avg`}
+              </AppText>
             </View>
           )}
 
@@ -177,7 +183,7 @@ export function TournamentTeamCard({
       </View>
 
       {/* ─── Members Box: Consistent styling across all formats ────────────── */}
-      {members.length > 0 && (
+      {showMembersBox && (
         <View style={styles.partnersBox}>
           {/* Member 1 */}
           <View style={styles.partnerRow}>

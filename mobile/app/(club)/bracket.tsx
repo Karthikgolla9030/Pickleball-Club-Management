@@ -454,8 +454,8 @@ export default function BracketWorkspaceScreen() {
   };
 
   const tournamentConfig = parseTournamentConfig(tournament);
-  const teamSize = tournamentConfig.teamSize;
-  const isSingles = teamSize === 1;
+  const isSingles = tournamentConfig.isSingles || tournamentConfig.teamSize === 1;
+  const teamSize = isSingles ? 1 : 2;
 
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {

@@ -428,8 +428,8 @@ export default function RoundRobinWorkspaceScreen() {
   };
 
   const tournamentConfig = parseTournamentConfig(tournament);
-  const teamSize = tournamentConfig.teamSize;
-  const isSingles = teamSize === 1;
+  const isSingles = tournamentConfig.isSingles || tournamentConfig.teamSize === 1;
+  const teamSize = isSingles ? 1 : 2;
   const totalRegisteredPlayers = teamSize > 1
     ? (teams.reduce((sum, t) => sum + (t.members?.length || teamSize), 0) || (teams.length * teamSize))
     : (tournament?.participant_count ?? teams.length);

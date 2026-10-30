@@ -38,6 +38,7 @@ import {
 } from '@/hooks';
 import type { Tournament } from '@/types';
 import { isConsolationMatch } from '@/utils/bracketLogic';
+import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 import { PlayerTournamentHeader } from './PlayerTournamentHeader';
 import { PlayerTournamentBanner } from './PlayerTournamentBanner';
@@ -323,6 +324,16 @@ export function PlayerTournamentDetailsView({
   };
 
   // ─── 2. Define Format-Specific Tabs ───
+  const tournamentConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+  const isSingles = useMemo(() => {
+    if (format === 'scramble') return true;
+    if (tournamentConfig.teamSize > 1) return false;
+    if (tournamentConfig.teamSize === 1) return true;
+    return tournamentConfig.isSingles;
+  }, [format, tournamentConfig]);
+
+  const entrantLabel = isSingles ? 'Players' : 'Teams';
+
   const tabs: TabItem[] = useMemo(() => {
     const entrantCount = teams.length > 0 ? teams.length : registrations.length;
     const matchCount = activeMatches.length;
@@ -331,7 +342,7 @@ export function PlayerTournamentDetailsView({
       case 'bracket':
         return [
           { key: 'overview', label: 'Overview & Rules' },
-          { key: 'players', label: 'Players', count: entrantCount },
+          { key: 'players', label: entrantLabel, count: entrantCount },
           { key: 'bracket', label: 'Bracket' },
           { key: 'matches', label: 'Matches', count: matchCount },
           { key: 'standings', label: 'Standings' },
@@ -341,7 +352,7 @@ export function PlayerTournamentDetailsView({
       case 'pool_play':
         return [
           { key: 'overview', label: 'Overview & Rules' },
-          { key: 'players', label: 'Players', count: entrantCount },
+          { key: 'players', label: entrantLabel, count: entrantCount },
           { key: 'pools', label: 'Pools & Standings' },
           { key: 'championship', label: 'Championship Bracket' },
           { key: 'matches', label: 'Matches', count: matchCount },
@@ -362,18 +373,19 @@ export function PlayerTournamentDetailsView({
       default:
         return [
           { key: 'overview', label: 'Overview & Rules' },
-          { key: 'players', label: 'Players', count: entrantCount },
+          { key: 'players', label: entrantLabel, count: entrantCount },
           { key: 'matches', label: 'Matches', count: matchCount },
           { key: 'standings', label: 'Standings' },
           { key: 'results', label: 'Results' },
         ];
     }
-  }, [format, teams.length, registrations.length, activeMatches.length]);
+  }, [format, entrantLabel, teams.length, registrations.length, activeMatches.length]);
 
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   // Ensure activeTab is valid for current format
   const currentTab = useMemo(() => {
+    if (activeTab === 'teams') return 'players';
     const exists = tabs.some((t) => t.key === activeTab);
     return exists ? activeTab : 'overview';
   }, [tabs, activeTab]);

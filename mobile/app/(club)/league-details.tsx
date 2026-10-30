@@ -1050,15 +1050,17 @@ export default function ClubLeagueDetailsScreen() {
               {/* Team Rows */}
               {isTeamsLoading ? (
                 <View style={{ padding: Spacing[6] }}>
-                  <LoadingState message="Loading teams..." />
+                  <LoadingState message={isSingles ? "Loading players..." : "Loading teams..."} />
                 </View>
               ) : !teams || teams.length === 0 ? (
                 <View style={styles.emptyTeamsBox}>
-                  <AppText style={styles.emptyTeamsTitle}>No Teams Registered Yet</AppText>
+                  <AppText style={styles.emptyTeamsTitle}>
+                    {isSingles ? 'No Players Registered Yet' : 'No Teams Registered Yet'}
+                  </AppText>
                   <AppText style={styles.emptyTeamsSubtitle}>
                     {league.status === 'draft' || league.status === 'registration_open'
-                      ? 'Add teams or wait for player registration.'
-                      : 'No teams entered for this league.'}
+                      ? (isSingles ? 'Add players or wait for player registration.' : 'Add teams or wait for player registration.')
+                      : (isSingles ? 'No players entered for this league.' : 'No teams entered for this league.')}
                   </AppText>
                 </View>
               ) : (
@@ -1086,7 +1088,9 @@ export default function ClubLeagueDetailsScreen() {
                         </AppText>
                         {!isSingles && (
                           <AppText style={styles.tdTeamSubtitle}>
-                            {playerCount === 1 ? '1 player' : `${playerCount} players`}
+                            {team.members && team.members.length > 0
+                              ? team.members.map((m) => m.display_name || m.user?.full_name || m.user?.display_name || 'Player').join(' & ')
+                              : (playerCount === 1 ? '1 player' : `${playerCount} players`)}
                           </AppText>
                         )}
                       </View>
@@ -2073,11 +2077,11 @@ export default function ClubLeagueDetailsScreen() {
       <ModalSheet
         visible={Boolean(selectedTeam)}
         onClose={() => setSelectedTeam(null)}
-        title={selectedTeam?.name || 'Team Details'}
-        subtitle={`Average Skill Level: ${(selectedTeam?.avg_skill_level ?? 3.5).toFixed(1)}`}
+        title={selectedTeam?.name || (isSingles ? 'Player Details' : 'Team Details')}
+        subtitle={isSingles ? `Skill Level: ${(selectedTeam?.avg_skill_level ?? 3.5).toFixed(1)}` : `Average Skill Level: ${(selectedTeam?.avg_skill_level ?? 3.5).toFixed(1)}`}
       >
         <View style={styles.teamDetailsContainer}>
-          <AppText style={styles.rosterSectionTitle}>Roster Members</AppText>
+          <AppText style={styles.rosterSectionTitle}>{isSingles ? 'Player Profile' : 'Roster Members'}</AppText>
           {selectedTeam?.members && selectedTeam.members.length > 0 ? (
             selectedTeam.members.map((member) => (
               <View key={member.id} style={styles.rosterMemberRow}>

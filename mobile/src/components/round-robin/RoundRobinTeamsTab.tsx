@@ -158,7 +158,7 @@ export function RoundRobinTeamsTab({
         subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
         badgeLabel={isDoubles ? 'DOUBLES' : 'SINGLES'}
         badgeVariant="blue"
-        actionLabel={canModifyTeams ? (isDoubles ? 'Add team' : 'Add player') : undefined}
+        actionLabel={canModifyTeams ? (isDoubles ? 'Add Team' : 'Add Player') : undefined}
         onActionPress={onAddTeamPress}
       />
 
@@ -180,12 +180,12 @@ export function RoundRobinTeamsTab({
             <UserPlus size={30} color="#94A3B8" />
           </View>
           <AppText style={styles.emptyHeading}>
-            {teamSize === 1 ? 'No players registered yet' : 'No teams registered yet'}
+            {isDoubles ? 'No teams registered yet' : 'No players registered yet'}
           </AppText>
           <AppText style={styles.emptySubtitle}>
-            {teamSize === 1
-              ? 'Players will appear here as they register for this tournament.'
-              : 'Teams will appear here as players register and form pairs.'}
+            {isDoubles
+              ? 'Teams will appear here as players register and form pairs.'
+              : 'Players will appear here as they register for this tournament.'}
           </AppText>
 
           {canModifyTeams && (
@@ -196,7 +196,7 @@ export function RoundRobinTeamsTab({
             >
               <UserPlus size={16} color="#FFFFFF" />
               <AppText style={styles.addPlayerBtnText}>
-                {teamSize === 1 ? 'Add player' : 'Add team'}
+                {isDoubles ? 'Add Team' : 'Add Player'}
               </AppText>
             </TouchableOpacity>
           )}
@@ -215,7 +215,7 @@ export function RoundRobinTeamsTab({
                 seed={displaySeed}
                 avgRating={avgRating}
                 members={team.members}
-                teamSize={teamSize}
+                teamSize={effectiveTeamSize}
                 statusLabel="Confirmed"
                 canDelete={canModifyTeams && !matchesExist}
                 onDelete={() => handleDeleteConfirm(team.id, team.name)}

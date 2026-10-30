@@ -280,7 +280,9 @@ export function TeamsPoolsTab({
               <Badge label={`Avg ${pool.avgTeamRating.toFixed(2)}`} variant="info" />
             </View>
             <AppText variant="caption" color="secondary">
-              {pool.teamsCount} Teams • {pool.playerCount} Players
+              {isSingles
+                ? `${pool.teamsCount} Players`
+                : `${pool.teamsCount} Teams • ${pool.playerCount} Players`}
             </AppText>
           </View>
 

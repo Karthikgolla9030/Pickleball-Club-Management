@@ -34,7 +34,12 @@ export function PlayerTournamentPlayersTab({
   const [searchQuery, setSearchQuery] = useState('');
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const format = tournament.format || 'round_robin';
-  const isSingles = parsedConfig.isSingles;
+  const isSingles = useMemo(() => {
+    if (format === 'scramble') return true;
+    if (parsedConfig.teamSize > 1) return false;
+    if (parsedConfig.teamSize === 1) return true;
+    return parsedConfig.isSingles;
+  }, [format, parsedConfig]);
 
   // Registered entities:
   // If teams are present, use teams. Otherwise construct entries from registrations.
@@ -135,7 +140,7 @@ export function PlayerTournamentPlayersTab({
             Registration type:
           </AppText>
           <AppText variant="bodySmall" bold style={styles.summaryValue}>
-            {isSingles ? 'Singles individual' : 'Team registration'}
+            {isSingles ? 'Singles individual' : 'Fixed partner team'}
           </AppText>
         </View>
       </Card>
@@ -177,7 +182,9 @@ export function PlayerTournamentPlayersTab({
               Bracket Generated — Rosters Locked
             </AppText>
             <AppText variant="caption" style={styles.lockNoticeDesc}>
-              Players cannot be modified while the bracket is active.
+              {isSingles
+                ? 'Players cannot be modified while the bracket is active.'
+                : 'Teams and partner assignments cannot be modified while the bracket is active.'}
             </AppText>
           </View>
         </View>
@@ -203,7 +210,7 @@ export function PlayerTournamentPlayersTab({
             No {isSingles ? 'players' : 'teams'} found
           </AppText>
           <AppText variant="caption" style={styles.emptySubtitle}>
-            {searchQuery ? 'Try matching a different name' : 'No confirmed entrants yet'}
+            {searchQuery ? 'Try matching a different name' : `No confirmed ${isSingles ? 'players' : 'teams'} yet`}
           </AppText>
         </Card>
       ) : (
@@ -225,7 +232,7 @@ export function PlayerTournamentPlayersTab({
                 <View style={styles.ratingBadge}>
                   <Star size={12} color="#D97706" fill="#D97706" style={{ marginRight: 3 }} />
                   <AppText variant="caption" bold style={styles.ratingText}>
-                    {entry.avgRating} avg
+                    {entry.avgRating} {isSingles ? 'rating' : 'avg'}
                   </AppText>
                 </View>
 
@@ -236,22 +243,24 @@ export function PlayerTournamentPlayersTab({
                 </View>
               </View>
 
-              {/* Members Inner Sub-Card */}
-              <View style={styles.membersSubCard}>
-                {entry.members.map((member) => (
-                  <View key={member.id} style={styles.memberLine}>
-                    <View style={styles.memberDot} />
-                    <AppText variant="bodySmall" style={styles.memberName} numberOfLines={1}>
-                      {member.name}
-                    </AppText>
-                    <View style={styles.memberRatingPill}>
-                      <AppText variant="caption" bold style={styles.memberRatingText}>
-                        {member.rating}
+              {/* Members Inner Sub-Card: Only shown for Doubles with both partners/players shown */}
+              {!isSingles && entry.members && entry.members.length > 0 && (
+                <View style={styles.membersSubCard}>
+                  {entry.members.map((member) => (
+                    <View key={member.id} style={styles.memberLine}>
+                      <View style={styles.memberDot} />
+                      <AppText variant="bodySmall" style={styles.memberName} numberOfLines={1}>
+                        {member.name}
                       </AppText>
+                      <View style={styles.memberRatingPill}>
+                        <AppText variant="caption" bold style={styles.memberRatingText}>
+                          {member.rating}
+                        </AppText>
+                      </View>
                     </View>
-                  </View>
-                ))}
-              </View>
+                  ))}
+                </View>
+              )}
             </Card>
           ))}
         </View>
