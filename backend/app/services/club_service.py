@@ -6,11 +6,13 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta, timezone
 from decimal import Decimal
+import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.security import hash_password
 from app.models.booking import Booking, BookingStatus
@@ -19,9 +21,9 @@ from app.models.club_membership import ClubMembership, ClubRole
 from app.models.club_membership_request import ClubMembershipRequest, MembershipRequestStatus
 from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
 from app.models.tournament import Tournament, TournamentStatus
-from app.models.event import Event, EventStatus
+from app.models.event import Event, EventRegistration, EventRegistrationStatus, EventStatus
 from app.models.league import League, LeagueStatus
-from app.models.lesson import Lesson, LessonStatus
+from app.models.lesson import Lesson, LessonRegistration, LessonRegistrationStatus, LessonStatus
 from app.models.payment import Payment, PaymentStatus
 from app.permissions import Permission, has_permission
 from app.repositories.club_custom_role_repository import ClubCustomRoleRepository
@@ -62,6 +64,8 @@ from app.schemas.club_membership import (
     ClubMembershipDetailResponse,
     MemberResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _build_member_response(m: ClubMembership) -> MemberResponse:
@@ -725,6 +729,7 @@ class ClubService:
                         LeagueStatus.REGISTRATION_OPEN,
                         LeagueStatus.REGISTRATION_CLOSED,
                         LeagueStatus.IN_PROGRESS,
+                        LeagueStatus.PLAYOFFS,
                     ]),
                 )
             )
@@ -756,34 +761,22 @@ class ClubService:
 
         # Today's active or next upcoming schedule item
         today_item = None
-        event_res = await self.db.execute(
-            select(Event)
-            .where(
-                Event.club_id == club_id,
-                Event.status == EventStatus.PUBLISHED,
-                Event.end_at >= now,
+        try:
+            event_res = await self.db.execute(
+                select(Event)
+                .where(
+                    Event.club_id == club_id,
+                    Event.status == EventStatus.PUBLISHED,
+                    Event.end_at >= now,
+                )
+                .order_by(Event.start_at.asc())
+                .limit(1)
             )
-            .order_by(Event.start_at.asc())
-            .limit(1)
-        )
-        first_event = event_res.scalar_one_or_none()
-        if first_event:
-            status_label = "Happening Now" if first_event.start_at <= now <= first_event.end_at else "Upcoming"
-            today_item = DashboardTodayScheduleItem(
-                id=first_event.id,
-                title=first_event.title,
-                item_type="event",
-                status=first_event.status.value,
-                status_label=status_label,
-                start_at=first_event.start_at,
-                end_at=first_event.end_at,
-                location=first_event.location,
-                capacity=first_event.capacity,
-                registered_count=first_event.registered_count,
-            )
-        else:
+            first_event = event_res.scalar_one_or_none()
+
             lesson_res = await self.db.execute(
                 select(Lesson)
+                .options(selectinload(Lesson.court))
                 .where(
                     Lesson.club_id == club_id,
                     Lesson.status == LessonStatus.PUBLISHED,
@@ -793,7 +786,63 @@ class ClubService:
                 .limit(1)
             )
             first_lesson = lesson_res.scalar_one_or_none()
-            if first_lesson:
+
+            # Pick whichever upcoming/active item starts earlier
+            target_item_type: str | None = None
+            if first_event and first_lesson:
+                if first_event.start_at <= first_lesson.start_at:
+                    target_item_type = "event"
+                else:
+                    target_item_type = "lesson"
+            elif first_event:
+                target_item_type = "event"
+            elif first_lesson:
+                target_item_type = "lesson"
+
+            if target_item_type == "event" and first_event:
+                event_reg_count = (
+                    await self.db.scalar(
+                        select(func.count(EventRegistration.id)).where(
+                            EventRegistration.event_id == first_event.id,
+                            EventRegistration.status.in_([
+                                EventRegistrationStatus.REGISTERED,
+                                EventRegistrationStatus.ATTENDED,
+                                EventRegistrationStatus.NO_SHOW,
+                            ]),
+                        )
+                    )
+                ) or 0
+                status_label = "Happening Now" if first_event.start_at <= now <= first_event.end_at else "Upcoming"
+                today_item = DashboardTodayScheduleItem(
+                    id=first_event.id,
+                    title=first_event.title,
+                    item_type="event",
+                    status=first_event.status.value,
+                    status_label=status_label,
+                    start_at=first_event.start_at,
+                    end_at=first_event.end_at,
+                    location=first_event.location,
+                    capacity=first_event.capacity,
+                    registered_count=event_reg_count,
+                )
+            elif target_item_type == "lesson" and first_lesson:
+                lesson_reg_count = (
+                    await self.db.scalar(
+                        select(func.count(LessonRegistration.id)).where(
+                            LessonRegistration.lesson_id == first_lesson.id,
+                            LessonRegistration.status.in_([
+                                LessonRegistrationStatus.REGISTERED,
+                                LessonRegistrationStatus.ATTENDED,
+                                LessonRegistrationStatus.NO_SHOW,
+                            ]),
+                        )
+                    )
+                ) or 0
+                court_name = (
+                    (first_lesson.court.display_name or first_lesson.court.name)
+                    if first_lesson.court
+                    else None
+                )
                 status_label = "Happening Now" if first_lesson.start_at <= now <= first_lesson.end_at else "Upcoming"
                 today_item = DashboardTodayScheduleItem(
                     id=first_lesson.id,
@@ -803,10 +852,18 @@ class ClubService:
                     status_label=status_label,
                     start_at=first_lesson.start_at,
                     end_at=first_lesson.end_at,
-                    location=first_lesson.location,
+                    location=court_name,
                     capacity=first_lesson.capacity,
-                    registered_count=first_lesson.registered_count,
+                    registered_count=lesson_reg_count,
                 )
+        except Exception as exc:
+            logger.warning(
+                "Failed to compute dashboard today_item for club %s: %s",
+                club_id,
+                exc,
+                exc_info=True,
+            )
+            today_item = None
 
         events_lessons_summary = DashboardEventsLessonsSummary(
             upcoming_events=upcoming_events,
@@ -817,44 +874,53 @@ class ClubService:
         # 5. Payments (strictly permission-checked: Owner & Manager only)
         payments_summary = None
         if has_permission(caller_role, Permission.MANAGE_PAYMENTS):
-            pending_count = (
-                await self.db.scalar(
-                    select(func.count(Payment.id)).where(
-                        Payment.club_id == club_id,
-                        Payment.status == PaymentStatus.PENDING,
+            try:
+                pending_count = (
+                    await self.db.scalar(
+                        select(func.count(Payment.id)).where(
+                            Payment.club_id == club_id,
+                            Payment.status == PaymentStatus.PENDING,
+                        )
                     )
-                )
-            ) or 0
-            pending_amount = (
-                await self.db.scalar(
-                    select(func.coalesce(func.sum(Payment.amount), 0)).where(
-                        Payment.club_id == club_id,
-                        Payment.status == PaymentStatus.PENDING,
+                ) or 0
+                pending_amount = (
+                    await self.db.scalar(
+                        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                            Payment.club_id == club_id,
+                            Payment.status == PaymentStatus.PENDING,
+                        )
                     )
-                )
-            ) or Decimal("0.00")
-            succeeded_count = (
-                await self.db.scalar(
-                    select(func.count(Payment.id)).where(
-                        Payment.club_id == club_id,
-                        Payment.status == PaymentStatus.SUCCEEDED,
+                ) or Decimal("0.00")
+                succeeded_count = (
+                    await self.db.scalar(
+                        select(func.count(Payment.id)).where(
+                            Payment.club_id == club_id,
+                            Payment.status == PaymentStatus.SUCCEEDED,
+                        )
                     )
-                )
-            ) or 0
-            total_revenue = (
-                await self.db.scalar(
-                    select(func.coalesce(func.sum(Payment.amount), 0)).where(
-                        Payment.club_id == club_id,
-                        Payment.status == PaymentStatus.SUCCEEDED,
+                ) or 0
+                total_revenue = (
+                    await self.db.scalar(
+                        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                            Payment.club_id == club_id,
+                            Payment.status == PaymentStatus.SUCCEEDED,
+                        )
                     )
+                ) or Decimal("0.00")
+                payments_summary = DashboardPaymentsSummary(
+                    pending_count=pending_count,
+                    pending_amount=Decimal(str(pending_amount)),
+                    succeeded_count=succeeded_count,
+                    total_revenue=Decimal(str(total_revenue)),
                 )
-            ) or Decimal("0.00")
-            payments_summary = DashboardPaymentsSummary(
-                pending_count=pending_count,
-                pending_amount=Decimal(str(pending_amount)),
-                succeeded_count=succeeded_count,
-                total_revenue=Decimal(str(total_revenue)),
-            )
+            except Exception as exc:
+                logger.warning(
+                    "Failed to compute dashboard payments summary for club %s: %s",
+                    club_id,
+                    exc,
+                    exc_info=True,
+                )
+                payments_summary = DashboardPaymentsSummary()
 
         # 6. Staff
         total_staff = (
