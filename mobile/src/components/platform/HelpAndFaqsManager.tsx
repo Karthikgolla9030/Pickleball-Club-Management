@@ -2,11 +2,15 @@
  * Aught2 Pickleball — Help & FAQs Management Screen Component
  *
  * Dedicated administrative interface for managing:
- * - FAQs (Create, Edit, Delete, Publish/Unpublish toggle, Audience filter)
+ * - FAQs (Create, Edit, Delete, Toggle Publish/Unpublish, Audience filter)
  * - Help Articles (Create, Edit, Delete, Preview modal, Markdown content)
  * - Help Categories (Audience classification, display ordering, topic management)
  *
- * Clean, compact, professional Platform Admin design without oversized buttons or clutter.
+ * Redesigned using the shared Platform Admin legal design system:
+ * - Standard LegalPageHeader with compact typography and back navigation
+ * - Standard LegalFilterToolbar with search, audience filter, and status filter
+ * - Standard LegalRecordCard with clean hierarchy and compact action buttons
+ * - Zero oversized buttons, zero horizontal overflow, mobile-first responsiveness
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -26,19 +30,15 @@ import {
 import { useRouter } from 'expo-router';
 import {
   AlertCircle,
-  ArrowLeft,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Edit2,
   Eye,
   FileText,
-  Filter,
   Folder,
   HelpCircle,
   Plus,
-  RefreshCw,
-  Search,
   Trash2,
   X,
 } from 'lucide-react-native';
@@ -50,18 +50,29 @@ import {
   HelpCategoryItem,
   platformLegalApi,
 } from '@/services/api';
-import { Colors, Radius, Spacing, Typography } from '@/theme';
+
+import {
+  LegalAudienceBadge,
+  LegalEmptyState,
+  LegalFilterToolbar,
+  LegalPageHeader,
+  LegalPreviewModal,
+  LegalRecordCard,
+  LegalStatusBadge,
+} from './legal/LegalSharedComponents';
 
 type HelpSubTab = 'faqs' | 'articles' | 'categories';
 type AudienceFilter = 'all' | 'player' | 'club';
+type StatusFilter = 'all' | 'published' | 'draft';
 
 export function HelpAndFaqsManager() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isNarrow = width < 480;
 
   const [activeTab, setActiveTab] = useState<HelpSubTab>('faqs');
   const [audienceFilter, setAudienceFilter] = useState<AudienceFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Data states
@@ -74,7 +85,7 @@ export function HelpAndFaqsManager() {
   const [faqs, setFaqs] = useState<FAQItem[]>([]);
   const [articles, setArticles] = useState<HelpArticleItem[]>([]);
 
-  // Expanded FAQ IDs for accordion reading
+  // Accordion expanded FAQs
   const [expandedFaqIds, setExpandedFaqIds] = useState<Record<string, boolean>>({});
 
   // Modals
@@ -129,15 +140,19 @@ export function HelpAndFaqsManager() {
         audienceFilter === 'all' ||
         faq.target_audience === audienceFilter ||
         faq.target_audience === 'all';
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'published' && faq.is_published) ||
+        (statusFilter === 'draft' && !faq.is_published);
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         faq.question.toLowerCase().includes(q) ||
         faq.answer.toLowerCase().includes(q) ||
         (faq.category_name && faq.category_name.toLowerCase().includes(q));
-      return matchesAudience && matchesSearch;
+      return matchesAudience && matchesStatus && matchesSearch;
     });
-  }, [faqs, audienceFilter, searchQuery]);
+  }, [faqs, audienceFilter, statusFilter, searchQuery]);
 
   // Filtered Articles
   const filteredArticles = useMemo(() => {
@@ -146,15 +161,19 @@ export function HelpAndFaqsManager() {
         audienceFilter === 'all' ||
         art.target_audience === audienceFilter ||
         art.target_audience === 'all';
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'published' && art.is_published) ||
+        (statusFilter === 'draft' && !art.is_published);
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         art.title.toLowerCase().includes(q) ||
         art.content.toLowerCase().includes(q) ||
         (art.category_name && art.category_name.toLowerCase().includes(q));
-      return matchesAudience && matchesSearch;
+      return matchesAudience && matchesStatus && matchesSearch;
     });
-  }, [articles, audienceFilter, searchQuery]);
+  }, [articles, audienceFilter, statusFilter, searchQuery]);
 
   // Filtered Categories
   const filteredCategories = useMemo(() => {
@@ -180,7 +199,9 @@ export function HelpAndFaqsManager() {
         is_published: !faq.is_published,
       });
       setFaqs((prev) => prev.map((f) => (f.id === faq.id ? updated : f)));
-      setSuccessMsg(`FAQ "${faq.question.slice(0, 30)}..." ${updated.is_published ? 'published' : 'hidden'}.`);
+      setSuccessMsg(
+        `FAQ "${faq.question.slice(0, 30)}..." ${updated.is_published ? 'published' : 'hidden'}.`
+      );
     } catch (err: any) {
       setError(err?.response?.data?.detail || err?.message || 'Failed to update FAQ status');
     }
@@ -193,7 +214,9 @@ export function HelpAndFaqsManager() {
         is_published: !art.is_published,
       });
       setArticles((prev) => prev.map((a) => (a.id === art.id ? updated : a)));
-      setSuccessMsg(`Article "${art.title.slice(0, 30)}..." ${updated.is_published ? 'published' : 'hidden'}.`);
+      setSuccessMsg(
+        `Article "${art.title.slice(0, 30)}..." ${updated.is_published ? 'published' : 'hidden'}.`
+      );
     } catch (err: any) {
       setError(err?.response?.data?.detail || err?.message || 'Failed to update article status');
     }
@@ -405,84 +428,69 @@ export function HelpAndFaqsManager() {
     }
   };
 
+  const currentTabActionLabel =
+    activeTab === 'faqs' ? 'Add FAQ' : activeTab === 'articles' ? 'Add Article' : 'Add Category';
+
+  const handleOpenCreateModal = () => {
+    clearAlerts();
+    if (activeTab === 'faqs') {
+      setEditingFaq({
+        question: '',
+        answer: '',
+        target_audience: 'all',
+        is_published: true,
+        display_order: faqs.length,
+      });
+      setFaqModalOpen(true);
+    } else if (activeTab === 'articles') {
+      setEditingArticle({
+        title: '',
+        slug: '',
+        content: '',
+        target_audience: 'all',
+        is_published: true,
+        display_order: articles.length,
+      });
+      setArticleEditorTab('write');
+      setArticleModalOpen(true);
+    } else {
+      setEditingCategory({
+        name: '',
+        slug: '',
+        description: '',
+        target_audience: 'all',
+        is_published: true,
+        display_order: categories.length,
+      });
+      setCategoryModalOpen(true);
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* ─── Top Navigation & Standard Page Header ──────────────────────── */}
-      <View style={styles.headerBlock}>
-        <TouchableOpacity
-          style={styles.backLinkRow}
-          onPress={() => router.push('/platform/settings' as any)}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={16} color="#0F172A" strokeWidth={2.4} />
-          <AppText style={styles.backLinkText}>Back to Settings</AppText>
-        </TouchableOpacity>
+      {/* ─── Standard Shared Page Header ───────────────────────────────── */}
+      <LegalPageHeader
+        title="Help & FAQs"
+        subtitle="Manage frequently asked questions and support articles across player and club portals."
+        icon={HelpCircle}
+        onBack={() => router.push('/platform/settings' as any)}
+        primaryAction={{
+          label: currentTabActionLabel,
+          icon: Plus,
+          onPress: handleOpenCreateModal,
+        }}
+      />
 
-        <View style={styles.headingRow}>
-          <View style={styles.headingTextCol}>
-            <AppText style={styles.screenTitle}>Help & FAQs Management</AppText>
-            <AppText style={styles.screenSubtitle}>
-              Create and manage customer help articles, FAQs, and support topics across player and club portals.
-            </AppText>
-          </View>
-
-          {/* Primary Action Button */}
-          <TouchableOpacity
-            style={styles.primaryActionBtn}
-            onPress={() => {
-              clearAlerts();
-              if (activeTab === 'faqs') {
-                setEditingFaq({
-                  question: '',
-                  answer: '',
-                  target_audience: 'all',
-                  is_published: true,
-                  display_order: faqs.length,
-                });
-                setFaqModalOpen(true);
-              } else if (activeTab === 'articles') {
-                setEditingArticle({
-                  title: '',
-                  slug: '',
-                  content: '',
-                  target_audience: 'all',
-                  is_published: true,
-                  display_order: articles.length,
-                });
-                setArticleEditorTab('write');
-                setArticleModalOpen(true);
-              } else {
-                setEditingCategory({
-                  name: '',
-                  slug: '',
-                  description: '',
-                  target_audience: 'all',
-                  is_published: true,
-                  display_order: categories.length,
-                });
-                setCategoryModalOpen(true);
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <Plus size={16} color="#FFFFFF" strokeWidth={2.5} />
-            <AppText style={styles.primaryActionBtnText}>
-              {activeTab === 'faqs' ? 'Add FAQ' : activeTab === 'articles' ? 'Add Article' : 'Add Category'}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* ─── Alerts ──────────────────────────────────────────────────────── */}
+      {/* ─── Status Alerts ─────────────────────────────────────────────── */}
       {error && (
         <View style={styles.alertError}>
-          <AlertCircle size={16} color="#DC2626" />
+          <AlertCircle size={15} color="#DC2626" />
           <AppText style={styles.alertErrorText}>{error}</AppText>
-          <TouchableOpacity onPress={clearAlerts}>
+          <TouchableOpacity onPress={clearAlerts} style={styles.alertDismissBtn}>
             <X size={14} color="#DC2626" />
           </TouchableOpacity>
         </View>
@@ -490,24 +498,26 @@ export function HelpAndFaqsManager() {
 
       {successMsg && (
         <View style={styles.alertSuccess}>
-          <CheckCircle2 size={16} color="#15803D" />
+          <CheckCircle2 size={15} color="#15803D" />
           <AppText style={styles.alertSuccessText}>{successMsg}</AppText>
-          <TouchableOpacity onPress={clearAlerts}>
+          <TouchableOpacity onPress={clearAlerts} style={styles.alertDismissBtn}>
             <X size={14} color="#15803D" />
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ─── Compact Internal Sub-Tabs ───────────────────────────────────── */}
-      <View style={styles.subTabsContainer}>
-        <View style={styles.subTabsSegment}>
+      {/* ─── Compact Internal Tabs ──────────────────────────────────────── */}
+      <View style={styles.tabsRow}>
+        <View style={styles.tabSegmentBar}>
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'faqs' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('faqs')}
             activeOpacity={0.8}
           >
-            <HelpCircle size={15} color={activeTab === 'faqs' ? '#0F172A' : '#64748B'} />
-            <AppText style={[styles.segmentBtnText, activeTab === 'faqs' && styles.segmentBtnTextActive]}>
+            <HelpCircle size={14} color={activeTab === 'faqs' ? '#0F172A' : '#64748B'} />
+            <AppText
+              style={[styles.segmentBtnText, activeTab === 'faqs' && styles.segmentBtnTextActive]}
+            >
               FAQs ({faqs.length})
             </AppText>
           </TouchableOpacity>
@@ -517,8 +527,13 @@ export function HelpAndFaqsManager() {
             onPress={() => setActiveTab('articles')}
             activeOpacity={0.8}
           >
-            <FileText size={15} color={activeTab === 'articles' ? '#0F172A' : '#64748B'} />
-            <AppText style={[styles.segmentBtnText, activeTab === 'articles' && styles.segmentBtnTextActive]}>
+            <FileText size={14} color={activeTab === 'articles' ? '#0F172A' : '#64748B'} />
+            <AppText
+              style={[
+                styles.segmentBtnText,
+                activeTab === 'articles' && styles.segmentBtnTextActive,
+              ]}
+            >
               Articles ({articles.length})
             </AppText>
           </TouchableOpacity>
@@ -528,62 +543,33 @@ export function HelpAndFaqsManager() {
             onPress={() => setActiveTab('categories')}
             activeOpacity={0.8}
           >
-            <Folder size={15} color={activeTab === 'categories' ? '#0F172A' : '#64748B'} />
-            <AppText style={[styles.segmentBtnText, activeTab === 'categories' && styles.segmentBtnTextActive]}>
+            <Folder size={14} color={activeTab === 'categories' ? '#0F172A' : '#64748B'} />
+            <AppText
+              style={[
+                styles.segmentBtnText,
+                activeTab === 'categories' && styles.segmentBtnTextActive,
+              ]}
+            >
               Categories ({categories.length})
             </AppText>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={styles.refreshBtn}
-          onPress={() => loadData(true)}
-          disabled={isRefreshing}
-          activeOpacity={0.7}
-        >
-          <RefreshCw size={14} color="#475569" />
-          {!isMobile && <AppText style={styles.refreshBtnText}>Refresh</AppText>}
-        </TouchableOpacity>
       </View>
 
-      {/* ─── Filter & Search Bar ─────────────────────────────────────────── */}
-      <View style={styles.filterBar}>
-        <View style={styles.searchWrapper}>
-          <Search size={15} color="#94A3B8" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder={`Search ${activeTab}...`}
-            placeholderTextColor="#94A3B8"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <X size={14} color="#94A3B8" />
-            </TouchableOpacity>
-          )}
-        </View>
+      {/* ─── Standardized Content Toolbar ───────────────────────────────── */}
+      <LegalFilterToolbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder={`Search ${activeTab}...`}
+        audienceFilter={audienceFilter}
+        onAudienceChange={setAudienceFilter}
+        statusFilter={activeTab !== 'categories' ? statusFilter : undefined}
+        onStatusChange={activeTab !== 'categories' ? setStatusFilter : undefined}
+        onRefresh={() => loadData(true)}
+        isRefreshing={isRefreshing}
+      />
 
-        <View style={styles.audienceChipsGroup}>
-          {(['all', 'player', 'club'] as AudienceFilter[]).map((aud) => {
-            const isSel = audienceFilter === aud;
-            return (
-              <TouchableOpacity
-                key={aud}
-                style={[styles.audienceChip, isSel && styles.audienceChipActive]}
-                onPress={() => setAudienceFilter(aud)}
-                activeOpacity={0.7}
-              >
-                <AppText style={[styles.audienceChipText, isSel && styles.audienceChipTextActive]}>
-                  {aud === 'all' ? 'All' : aud === 'player' ? 'Players' : 'Clubs'}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ─── Main Content Views ──────────────────────────────────────────── */}
+      {/* ─── Main Content Area ──────────────────────────────────────────── */}
       {isLoading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color="#15803D" />
@@ -591,325 +577,155 @@ export function HelpAndFaqsManager() {
         </View>
       ) : activeTab === 'faqs' ? (
         /* ──── FAQs List ──── */
-        <View style={styles.listSection}>
+        <View style={styles.cardsList}>
           {filteredFaqs.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <HelpCircle size={32} color="#94A3B8" />
-              <AppText style={styles.emptyTitle}>No FAQs found</AppText>
-              <AppText style={styles.emptyDesc}>
-                {searchQuery || audienceFilter !== 'all'
-                  ? 'No questions match your current filters.'
-                  : 'Start building your knowledge base by creating your first FAQ.'}
-              </AppText>
-              <TouchableOpacity
-                style={styles.emptyActionBtn}
-                onPress={() => {
-                  setEditingFaq({
-                    question: '',
-                    answer: '',
-                    target_audience: 'all',
-                    is_published: true,
-                    display_order: faqs.length,
-                  });
-                  setFaqModalOpen(true);
-                }}
-              >
-                <Plus size={14} color="#15803D" />
-                <AppText style={styles.emptyActionText}>Add New FAQ</AppText>
-              </TouchableOpacity>
-            </View>
+            <LegalEmptyState
+              icon={HelpCircle}
+              title="No FAQs found"
+              description={
+                searchQuery || audienceFilter !== 'all' || statusFilter !== 'all'
+                  ? 'No questions match your current search or filters.'
+                  : 'Start building your knowledge base by adding your first FAQ.'
+              }
+              actionLabel="Add FAQ"
+              onAction={handleOpenCreateModal}
+            />
           ) : (
             filteredFaqs.map((faq) => {
               const isExpanded = Boolean(expandedFaqIds[faq.id]);
               return (
-                <View key={faq.id} style={styles.recordCard}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.badgeRow}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          faq.is_published ? styles.statusBadgeGreen : styles.statusBadgeAmber,
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.statusBadgeText,
-                            faq.is_published ? styles.statusBadgeTextGreen : styles.statusBadgeTextAmber,
-                          ]}
-                        >
-                          {faq.is_published ? 'Published' : 'Hidden'}
-                        </AppText>
-                      </View>
-
-                      {faq.category_name && (
-                        <View style={styles.categoryChip}>
-                          <AppText style={styles.categoryChipText}>{faq.category_name}</AppText>
-                        </View>
-                      )}
-
-                      <View style={styles.audienceTag}>
-                        <AppText style={styles.audienceTagText}>
-                          {faq.target_audience === 'player'
-                            ? 'Player Only'
-                            : faq.target_audience === 'club'
-                            ? 'Club Only'
-                            : 'All Audiences'}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Card Actions */}
-                    <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        style={styles.iconActionBtn}
-                        onPress={() => toggleFaqPublish(faq)}
-                        accessibilityLabel={faq.is_published ? 'Unpublish' : 'Publish'}
-                      >
-                        <Eye size={15} color={faq.is_published ? '#15803D' : '#94A3B8'} />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.iconActionBtn}
-                        onPress={() => {
-                          setEditingFaq({ ...faq });
-                          setFaqModalOpen(true);
-                        }}
-                      >
-                        <Edit2 size={15} color="#0F172A" />
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.iconActionBtn}
-                        onPress={() => handleDeleteFaq(faq.id, faq.question)}
-                      >
-                        <Trash2 size={15} color="#DC2626" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.faqQuestionRow}
-                    onPress={() =>
-                      setExpandedFaqIds((prev) => ({ ...prev, [faq.id]: !prev[faq.id] }))
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <AppText style={styles.faqQuestionText}>{faq.question}</AppText>
-                    {isExpanded ? (
-                      <ChevronUp size={16} color="#64748B" />
-                    ) : (
-                      <ChevronDown size={16} color="#64748B" />
-                    )}
-                  </TouchableOpacity>
-
-                  {isExpanded ? (
-                    <View style={styles.faqAnswerExpanded}>
-                      <AppText style={styles.faqAnswerText}>{faq.answer}</AppText>
-                    </View>
-                  ) : (
-                    <AppText style={styles.faqAnswerExcerpt} numberOfLines={2}>
-                      {faq.answer}
-                    </AppText>
-                  )}
-                </View>
+                <LegalRecordCard
+                  key={faq.id}
+                  title={faq.question}
+                  status={faq.is_published ? 'published' : 'draft'}
+                  categoryName={faq.category_name}
+                  audience={faq.target_audience}
+                  excerpt={faq.answer}
+                  metaInfo={`Order: ${faq.display_order ?? 0}`}
+                  isExpanded={isExpanded}
+                  onPressTitle={() =>
+                    setExpandedFaqIds((p) => ({ ...p, [faq.id]: !p[faq.id] }))
+                  }
+                  actions={[
+                    {
+                      label: faq.is_published ? 'Unpublish' : 'Publish',
+                      icon: Eye,
+                      onPress: () => toggleFaqPublish(faq),
+                      variant: faq.is_published ? 'primary' : 'default',
+                    },
+                    {
+                      label: 'Edit',
+                      icon: Edit2,
+                      onPress: () => {
+                        setEditingFaq({ ...faq });
+                        setFaqModalOpen(true);
+                      },
+                    },
+                    {
+                      label: 'Delete',
+                      icon: Trash2,
+                      onPress: () => handleDeleteFaq(faq.id, faq.question),
+                      variant: 'danger',
+                    },
+                  ]}
+                />
               );
             })
           )}
         </View>
       ) : activeTab === 'articles' ? (
         /* ──── Articles List ──── */
-        <View style={styles.listSection}>
+        <View style={styles.cardsList}>
           {filteredArticles.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <FileText size={32} color="#94A3B8" />
-              <AppText style={styles.emptyTitle}>No Help Articles</AppText>
-              <AppText style={styles.emptyDesc}>
-                {searchQuery || audienceFilter !== 'all'
+            <LegalEmptyState
+              icon={FileText}
+              title="No Help Articles found"
+              description={
+                searchQuery || audienceFilter !== 'all' || statusFilter !== 'all'
                   ? 'No articles match your search or filter criteria.'
-                  : 'Write comprehensive support guides and documentation articles for users.'}
-              </AppText>
-              <TouchableOpacity
-                style={styles.emptyActionBtn}
-                onPress={() => {
-                  setEditingArticle({
-                    title: '',
-                    slug: '',
-                    content: '',
-                    target_audience: 'all',
-                    is_published: true,
-                    display_order: articles.length,
-                  });
-                  setArticleEditorTab('write');
-                  setArticleModalOpen(true);
-                }}
-              >
-                <Plus size={14} color="#15803D" />
-                <AppText style={styles.emptyActionText}>Add New Article</AppText>
-              </TouchableOpacity>
-            </View>
+                  : 'Write comprehensive support guides and documentation articles for users.'
+              }
+              actionLabel="Add Article"
+              onAction={handleOpenCreateModal}
+            />
           ) : (
             filteredArticles.map((art) => (
-              <View key={art.id} style={styles.recordCard}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.badgeRow}>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        art.is_published ? styles.statusBadgeGreen : styles.statusBadgeAmber,
-                      ]}
-                    >
-                      <AppText
-                        style={[
-                          styles.statusBadgeText,
-                          art.is_published ? styles.statusBadgeTextGreen : styles.statusBadgeTextAmber,
-                        ]}
-                      >
-                        {art.is_published ? 'Published' : 'Hidden'}
-                      </AppText>
-                    </View>
-
-                    {art.category_name && (
-                      <View style={styles.categoryChip}>
-                        <AppText style={styles.categoryChipText}>{art.category_name}</AppText>
-                      </View>
-                    )}
-
-                    <View style={styles.audienceTag}>
-                      <AppText style={styles.audienceTagText}>
-                        {art.target_audience === 'player'
-                          ? 'Player Only'
-                          : art.target_audience === 'club'
-                          ? 'Club Only'
-                          : 'All Audiences'}
-                      </AppText>
-                    </View>
-                  </View>
-
-                  {/* Actions */}
-                  <View style={styles.cardActionsRow}>
-                    <TouchableOpacity
-                      style={styles.iconActionBtn}
-                      onPress={() => setPreviewArticle(art)}
-                      accessibilityLabel="Preview Article"
-                    >
-                      <Eye size={15} color="#2563EB" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.iconActionBtn}
-                      onPress={() => {
-                        setEditingArticle({ ...art });
-                        setArticleEditorTab('write');
-                        setArticleModalOpen(true);
-                      }}
-                    >
-                      <Edit2 size={15} color="#0F172A" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.iconActionBtn}
-                      onPress={() => handleDeleteArticle(art.id, art.title)}
-                    >
-                      <Trash2 size={15} color="#DC2626" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <AppText style={styles.articleTitleText}>{art.title}</AppText>
-                {art.slug ? <AppText style={styles.slugText}>/help/articles/{art.slug}</AppText> : null}
-
-                <AppText style={styles.articleExcerptText} numberOfLines={2}>
-                  {art.content.replace(/[#*`_]/g, '')}
-                </AppText>
-              </View>
+              <LegalRecordCard
+                key={art.id}
+                title={art.title}
+                status={art.is_published ? 'published' : 'draft'}
+                categoryName={art.category_name}
+                audience={art.target_audience}
+                excerpt={art.content.replace(/[#*`_]/g, '')}
+                metaInfo={art.slug ? `/help/articles/${art.slug}` : undefined}
+                actions={[
+                  {
+                    label: 'Preview',
+                    icon: Eye,
+                    onPress: () => setPreviewArticle(art),
+                    variant: 'primary',
+                  },
+                  {
+                    label: 'Edit',
+                    icon: Edit2,
+                    onPress: () => {
+                      setEditingArticle({ ...art });
+                      setArticleEditorTab('write');
+                      setArticleModalOpen(true);
+                    },
+                  },
+                  {
+                    label: 'Delete',
+                    icon: Trash2,
+                    onPress: () => handleDeleteArticle(art.id, art.title),
+                    variant: 'danger',
+                  },
+                ]}
+              />
             ))
           )}
         </View>
       ) : (
         /* ──── Categories List ──── */
-        <View style={styles.listSection}>
+        <View style={styles.cardsList}>
           {filteredCategories.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Folder size={32} color="#94A3B8" />
-              <AppText style={styles.emptyTitle}>No Categories</AppText>
-              <AppText style={styles.emptyDesc}>
-                Create categories to organize FAQs and Articles into logical support sections.
-              </AppText>
-              <TouchableOpacity
-                style={styles.emptyActionBtn}
-                onPress={() => {
-                  setEditingCategory({
-                    name: '',
-                    slug: '',
-                    description: '',
-                    target_audience: 'all',
-                    is_published: true,
-                    display_order: categories.length,
-                  });
-                  setCategoryModalOpen(true);
-                }}
-              >
-                <Plus size={14} color="#15803D" />
-                <AppText style={styles.emptyActionText}>Add Category</AppText>
-              </TouchableOpacity>
-            </View>
+            <LegalEmptyState
+              icon={Folder}
+              title="No Categories found"
+              description="Create categories to organize FAQs and articles into logical support topics."
+              actionLabel="Add Category"
+              onAction={handleOpenCreateModal}
+            />
           ) : (
-            <View style={styles.categoriesGrid}>
-              {filteredCategories.map((cat) => {
-                const faqsCount = faqs.filter((f) => f.category_id === cat.id).length;
-                const articlesCount = articles.filter((a) => a.category_id === cat.id).length;
-                return (
-                  <View key={cat.id} style={styles.categoryCard}>
-                    <View style={styles.cardHeaderRow}>
-                      <View style={styles.categoryIconWrap}>
-                        <Folder size={18} color="#15803D" />
-                      </View>
-                      <View style={styles.cardActionsRow}>
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => {
-                            setEditingCategory({ ...cat });
-                            setCategoryModalOpen(true);
-                          }}
-                        >
-                          <Edit2 size={14} color="#0F172A" />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => handleDeleteCategory(cat.id, cat.name)}
-                        >
-                          <Trash2 size={14} color="#DC2626" />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <AppText style={styles.catNameText}>{cat.name}</AppText>
-                    {cat.description ? (
-                      <AppText style={styles.catDescText} numberOfLines={2}>
-                        {cat.description}
-                      </AppText>
-                    ) : null}
-
-                    <View style={styles.catFooterRow}>
-                      <View style={styles.catStatsRow}>
-                        <AppText style={styles.catStatText}>{faqsCount} FAQs</AppText>
-                        <AppText style={styles.catStatDot}>•</AppText>
-                        <AppText style={styles.catStatText}>{articlesCount} Articles</AppText>
-                      </View>
-                      <View style={styles.audienceTag}>
-                        <AppText style={styles.audienceTagText}>
-                          {cat.target_audience === 'player'
-                            ? 'Players'
-                            : cat.target_audience === 'club'
-                            ? 'Clubs'
-                            : 'All'}
-                        </AppText>
-                      </View>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
+            filteredCategories.map((cat) => {
+              const faqsCount = faqs.filter((f) => f.category_id === cat.id).length;
+              const articlesCount = articles.filter((a) => a.category_id === cat.id).length;
+              return (
+                <LegalRecordCard
+                  key={cat.id}
+                  title={cat.name}
+                  audience={cat.target_audience}
+                  excerpt={cat.description || undefined}
+                  metaInfo={`${faqsCount} FAQs • ${articlesCount} Articles • Order: ${cat.display_order ?? 0}`}
+                  actions={[
+                    {
+                      label: 'Edit',
+                      icon: Edit2,
+                      onPress: () => {
+                        setEditingCategory({ ...cat });
+                        setCategoryModalOpen(true);
+                      },
+                    },
+                    {
+                      label: 'Delete',
+                      icon: Trash2,
+                      onPress: () => handleDeleteCategory(cat.id, cat.name),
+                      variant: 'danger',
+                    },
+                  ]}
+                />
+              );
+            })
           )}
         </View>
       )}
@@ -1127,7 +943,7 @@ export function HelpAndFaqsManager() {
               </View>
 
               <View style={styles.formField}>
-                <AppText style={styles.fieldLabel}>Category & Audience</AppText>
+                <AppText style={styles.fieldLabel}>Category</AppText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
                   {categories.map((c) => {
                     const sel = editingArticle?.category_id === c.id;
@@ -1148,23 +964,33 @@ export function HelpAndFaqsManager() {
                 </ScrollView>
               </View>
 
-              {/* Editor Write / Preview Tabs */}
+              {/* Editor Tabs: Write / Preview */}
               <View style={styles.editorTabsRow}>
                 <View style={styles.editorTabButtons}>
                   <TouchableOpacity
                     style={[styles.editorTabBtn, articleEditorTab === 'write' && styles.editorTabBtnActive]}
                     onPress={() => setArticleEditorTab('write')}
                   >
-                    <AppText style={[styles.editorTabText, articleEditorTab === 'write' && styles.editorTabTextActive]}>
-                      Write
+                    <AppText
+                      style={[
+                        styles.editorTabText,
+                        articleEditorTab === 'write' && styles.editorTabTextActive,
+                      ]}
+                    >
+                      Write Content
                     </AppText>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.editorTabBtn, articleEditorTab === 'preview' && styles.editorTabBtnActive]}
                     onPress={() => setArticleEditorTab('preview')}
                   >
-                    <AppText style={[styles.editorTabText, articleEditorTab === 'preview' && styles.editorTabTextActive]}>
-                      Preview
+                    <AppText
+                      style={[
+                        styles.editorTabText,
+                        articleEditorTab === 'preview' && styles.editorTabTextActive,
+                      ]}
+                    >
+                      Formatted Preview
                     </AppText>
                   </TouchableOpacity>
                 </View>
@@ -1183,7 +1009,9 @@ export function HelpAndFaqsManager() {
                 </View>
               ) : (
                 <View style={styles.articlePreviewBox}>
-                  <AppText style={styles.previewTitle}>{editingArticle?.title || 'Untitled Article'}</AppText>
+                  <AppText style={styles.previewTitle}>
+                    {editingArticle?.title || 'Untitled Article'}
+                  </AppText>
                   <AppText style={styles.previewContent}>
                     {editingArticle?.content || 'No content written yet.'}
                   </AppText>
@@ -1233,43 +1061,18 @@ export function HelpAndFaqsManager() {
         </View>
       </Modal>
 
-      {/* ─── MODAL: ARTICLE PREVIEW VIEWER ────────────────────────────────── */}
-      <Modal visible={Boolean(previewArticle)} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, styles.modalCardLarge]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleCol}>
-                <AppText style={styles.modalTitle}>{previewArticle?.title}</AppText>
-                <AppText style={styles.modalSubtitle}>
-                  {previewArticle?.category_name ? `${previewArticle.category_name} • ` : ''}
-                  Audience: {previewArticle?.target_audience ?? 'all'}
-                </AppText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setPreviewArticle(null)}
-                style={styles.modalCloseBtn}
-              >
-                <X size={18} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalScrollBody} showsVerticalScrollIndicator={false}>
-              <View style={styles.articlePreviewBox}>
-                <AppText style={styles.previewContent}>{previewArticle?.content}</AppText>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.modalSubmitBtn}
-                onPress={() => setPreviewArticle(null)}
-              >
-                <AppText style={styles.modalSubmitText}>Close Preview</AppText>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* ─── MODAL: ARTICLE PREVIEW VIEWER (Using Shared Preview Modal) ──── */}
+      <LegalPreviewModal
+        visible={Boolean(previewArticle)}
+        title={previewArticle?.title}
+        subtitle={
+          previewArticle?.category_name
+            ? `${previewArticle.category_name} • Audience: ${previewArticle.target_audience}`
+            : `Audience: ${previewArticle?.target_audience ?? 'all'}`
+        }
+        content={previewArticle?.content}
+        onClose={() => setPreviewArticle(null)}
+      />
 
       {/* ─── MODAL: ADD / EDIT CATEGORY ───────────────────────────────────── */}
       <Modal visible={categoryModalOpen} transparent animationType="fade">
@@ -1392,69 +1195,11 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 90,
     maxWidth: 960,
     width: '100%',
     alignSelf: 'center',
-  },
-
-  // ─── Header Block ─────────────────────────────────────────────────────────
-  headerBlock: {
-    marginBottom: 16,
-  },
-  backLinkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-  },
-  backLinkText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  headingRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  headingTextCol: {
-    flex: 1,
-    minWidth: 260,
-  },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    letterSpacing: -0.4,
-  },
-  screenSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  primaryActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#15803D',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-    }),
-  },
-  primaryActionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 
   // ─── Alerts ───────────────────────────────────────────────────────────────
@@ -1466,13 +1211,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#FECACA',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   alertErrorText: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#DC2626',
     fontWeight: '600',
   },
@@ -1484,49 +1229,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#BBF7D0',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 8,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   alertSuccessText: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#15803D',
     fontWeight: '600',
   },
+  alertDismissBtn: {
+    padding: 2,
+  },
 
-  // ─── Sub Tabs ─────────────────────────────────────────────────────────────
-  subTabsContainer: {
+  // ─── Tabs Row ─────────────────────────────────────────────────────────────
+  tabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  subTabsSegment: {
+  tabSegmentBar: {
     flexDirection: 'row',
     backgroundColor: '#E2E8F0',
-    padding: 3,
-    borderRadius: 9,
-    gap: 3,
+    padding: 2,
+    borderRadius: 8,
+    gap: 2,
   },
   segmentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 7,
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   segmentBtnActive: {
     backgroundColor: '#FFFFFF',
     ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.06)' },
+      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
       default: { elevation: 1 },
     }),
   },
   segmentBtnText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -1534,317 +1280,22 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontWeight: '700',
   },
-  refreshBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-  },
-  refreshBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
 
-  // ─── Filter Bar ───────────────────────────────────────────────────────────
-  filterBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-    flexWrap: 'wrap',
-  },
-  searchWrapper: {
-    flex: 1,
-    minWidth: 200,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 38,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0F172A',
-    height: '100%',
-  },
-  audienceChipsGroup: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  audienceChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 7,
-  },
-  audienceChipActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
-  },
-  audienceChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  audienceChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  // ─── Records List ─────────────────────────────────────────────────────────
+  // ─── Cards List ───────────────────────────────────────────────────────────
   loadingWrap: {
     paddingVertical: 40,
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#64748B',
   },
-  listSection: {
+  cardsList: {
     gap: 10,
   },
-  recordCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 14,
-    ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.03)' },
-    }),
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 8,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  statusBadgeGreen: {
-    backgroundColor: '#DCFCE7',
-  },
-  statusBadgeAmber: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusBadgeTextGreen: {
-    color: '#15803D',
-  },
-  statusBadgeTextAmber: {
-    color: '#D97706',
-  },
-  categoryChip: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  categoryChipText: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  audienceTag: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 5,
-  },
-  audienceTagText: {
-    fontSize: 11,
-    color: '#2563EB',
-    fontWeight: '600',
-  },
-  cardActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  iconActionBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faqQuestionRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 2,
-  },
-  faqQuestionText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    flex: 1,
-    lineHeight: 20,
-  },
-  faqAnswerExcerpt: {
-    fontSize: 12.5,
-    color: '#64748B',
-    marginTop: 6,
-    lineHeight: 18,
-  },
-  faqAnswerExpanded: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  faqAnswerText: {
-    fontSize: 13,
-    color: '#334155',
-    lineHeight: 20,
-  },
-  articleTitleText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    lineHeight: 20,
-  },
-  slugText: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    marginTop: 2,
-    fontFamily: Platform.select({ ios: 'Courier', default: 'monospace' }),
-  },
-  articleExcerptText: {
-    fontSize: 12.5,
-    color: '#64748B',
-    marginTop: 6,
-    lineHeight: 18,
-  },
 
-  // ─── Categories Grid ──────────────────────────────────────────────────────
-  categoriesGrid: {
-    gap: 10,
-  },
-  categoryCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 14,
-  },
-  categoryIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 7,
-    backgroundColor: '#EAF8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  catNameText: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 8,
-  },
-  catDescText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  catFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  catStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  catStatText: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  catStatDot: {
-    fontSize: 11.5,
-    color: '#CBD5E1',
-  },
-
-  // ─── Empty State ──────────────────────────────────────────────────────────
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginTop: 4,
-  },
-  emptyDesc: {
-    fontSize: 12.5,
-    color: '#64748B',
-    textAlign: 'center',
-    maxWidth: 360,
-    lineHeight: 18,
-  },
-  emptyActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    backgroundColor: '#EAF8F0',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 7,
-  },
-  emptyActionText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-
-  // ─── Modal Styles ─────────────────────────────────────────────────────────
+  // ─── Modals ───────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
@@ -1894,13 +1345,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   formField: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   fieldLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 6,
+    marginBottom: 5,
   },
   textInput: {
     backgroundColor: '#F8FAFC',
@@ -1908,32 +1359,32 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     borderRadius: 8,
     paddingHorizontal: 12,
-    height: 40,
+    height: 38,
     fontSize: 13,
     color: '#0F172A',
   },
   textArea: {
-    height: 90,
-    paddingTop: 10,
+    height: 80,
+    paddingTop: 8,
     textAlignVertical: 'top',
   },
   textAreaLarge: {
-    height: 200,
-    paddingTop: 10,
+    height: 180,
+    paddingTop: 8,
     textAlignVertical: 'top',
     fontFamily: Platform.select({ ios: 'Courier', default: 'monospace' }),
-    fontSize: 12.5,
+    fontSize: 12,
   },
   chipsScroll: {
     flexDirection: 'row',
   },
   rowChoices: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   choiceChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 6,
     backgroundColor: '#F1F5F9',
     marginRight: 6,
@@ -1954,46 +1405,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    marginBottom: 8,
+    paddingVertical: 6,
+    marginBottom: 6,
   },
   switchTextCol: {
     flex: 1,
     paddingRight: 12,
   },
   switchTitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0F172A',
   },
   switchDesc: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
-    marginTop: 2,
+    marginTop: 1,
   },
   editorTabsRow: {
     marginBottom: 8,
   },
   editorTabButtons: {
     flexDirection: 'row',
-    gap: 6,
+    backgroundColor: '#E2E8F0',
+    padding: 2,
+    borderRadius: 7,
+    gap: 2,
+    alignSelf: 'flex-start',
   },
   editorTabBtn: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 5,
-    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
   },
   editorTabBtnActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
   },
   editorTabText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#64748B',
   },
   editorTabTextActive: {
-    color: '#FFFFFF',
+    color: '#0F172A',
     fontWeight: '700',
   },
   articlePreviewBox: {
@@ -2001,54 +1455,53 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    padding: 14,
+    padding: 12,
     minHeight: 120,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   previewTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   previewContent: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#334155',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   modalActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 10,
-    padding: 14,
+    gap: 8,
+    padding: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   modalCancelBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
   modalCancelText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '600',
     color: '#475569',
   },
   modalSubmitBtn: {
     backgroundColor: '#15803D',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 7,
-    minWidth: 90,
+    minWidth: 80,
     alignItems: 'center',
   },
   modalSubmitText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
 });
-
