@@ -43,6 +43,7 @@ import {
   RefreshCw,
   Send,
   Shield,
+  ShieldCheck,
   X,
 } from 'lucide-react-native';
 
@@ -388,6 +389,25 @@ export function LegalDocumentManager({ documentType, onBack }: LegalDocumentMana
         </View>
       ) : (
         <View style={styles.cardsStack}>
+          {/* Club Agreement Compliance Banner */}
+          {documentType === 'club_agreement' && (
+            <View style={styles.agreementInfoBanner}>
+              <View style={styles.agreementIconWrap}>
+                <ShieldCheck size={16} color="#15803D" strokeWidth={2.4} />
+              </View>
+              <View style={styles.agreementInfoTextCol}>
+                <AppText style={styles.agreementInfoTitle}>
+                  Club Registration Agreement Enforcement
+                </AppText>
+                <AppText style={styles.agreementInfoDesc}>
+                  Facility operators are required to review and accept this agreement during club
+                  registration. Acceptance records, timestamps, and accepted versions are permanently
+                  logged for regulatory audit trails.
+                </AppText>
+              </View>
+            </View>
+          )}
+
           {/* ─── 1. ACTIVE PUBLISHED VERSION CARD ──────────────────────────── */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
@@ -649,10 +669,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAF9',
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 90,
-    maxWidth: 960,
+    paddingHorizontal: 0,
+    paddingTop: 4,
+    paddingBottom: 80,
+    maxWidth: 780,
     width: '100%',
     alignSelf: 'center',
   },
@@ -711,6 +731,43 @@ const styles = StyleSheet.create({
   // ─── Card Stack ───────────────────────────────────────────────────────────
   cardsStack: {
     gap: 12,
+  },
+  agreementInfoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#15803D',
+    borderRadius: 8,
+    padding: 10,
+    gap: 8,
+    marginBottom: 2,
+  },
+  agreementIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  agreementInfoTextCol: {
+    flex: 1,
+  },
+  agreementInfoTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  agreementInfoDesc: {
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 15,
   },
   card: {
     backgroundColor: '#FFFFFF',

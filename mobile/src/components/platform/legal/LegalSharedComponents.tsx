@@ -30,7 +30,9 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Eye,
   FileText,
@@ -75,9 +77,6 @@ export function LegalPageHeader({
   primaryAction,
   secondaryAction,
 }: LegalPageHeaderProps) {
-  const { width } = useWindowDimensions();
-  const isNarrow = width < 480;
-
   return (
     <View style={styles.headerContainer}>
       {/* Back to Settings Link */}
@@ -85,18 +84,19 @@ export function LegalPageHeader({
         style={styles.backButtonRow}
         onPress={onBack}
         activeOpacity={0.7}
+        accessibilityLabel="Back to Settings"
       >
-        <ArrowLeft size={15} color="#0F172A" strokeWidth={2.4} />
+        <ArrowLeft size={14} color="#0F172A" strokeWidth={2.4} />
         <AppText style={styles.backButtonText}>Back to Settings</AppText>
       </TouchableOpacity>
 
       {/* Main Header Content */}
-      <View style={[styles.headerContentRow, isNarrow && styles.headerContentRowNarrow]}>
+      <View style={styles.headerContentRow}>
         <View style={styles.headerTextGroup}>
           <View style={styles.titleRow}>
             {HeaderIcon && (
               <View style={styles.headerIconTile}>
-                <HeaderIcon size={18} color="#15803D" strokeWidth={2.2} />
+                <HeaderIcon size={16} color="#15803D" strokeWidth={2.2} />
               </View>
             )}
             <AppText style={styles.headerTitle} numberOfLines={2}>
@@ -106,47 +106,51 @@ export function LegalPageHeader({
           <AppText style={styles.headerSubtitle}>{subtitle}</AppText>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.headerActionsGroup}>
-          {secondaryAction && (
-            <TouchableOpacity
-              style={styles.btnSecondary}
-              onPress={secondaryAction.onPress}
-              disabled={secondaryAction.disabled}
-              activeOpacity={0.7}
-            >
-              {secondaryAction.icon && (
-                <secondaryAction.icon size={14} color="#0F172A" strokeWidth={2} />
-              )}
-              <AppText style={styles.btnSecondaryText}>{secondaryAction.label}</AppText>
-            </TouchableOpacity>
-          )}
+        {/* Action Buttons Group */}
+        {(primaryAction || secondaryAction) && (
+          <View style={styles.headerActionsGroup}>
+            {secondaryAction && (
+              <TouchableOpacity
+                style={styles.btnSecondary}
+                onPress={secondaryAction.onPress}
+                disabled={secondaryAction.disabled}
+                activeOpacity={0.7}
+                accessibilityLabel={secondaryAction.label}
+              >
+                {secondaryAction.icon && (
+                  <secondaryAction.icon size={13} color="#0F172A" strokeWidth={2} />
+                )}
+                <AppText style={styles.btnSecondaryText}>{secondaryAction.label}</AppText>
+              </TouchableOpacity>
+            )}
 
-          {primaryAction && (
-            <TouchableOpacity
-              style={[
-                styles.btnPrimary,
-                primaryAction.disabled && styles.btnDisabled,
-              ]}
-              onPress={primaryAction.onPress}
-              disabled={primaryAction.disabled || primaryAction.loading}
-              activeOpacity={0.8}
-            >
-              {primaryAction.loading ? (
-                <ActivityIndicator size="small" color="#FFFFFF" />
-              ) : (
-                <>
-                  {primaryAction.icon ? (
-                    <primaryAction.icon size={15} color="#FFFFFF" strokeWidth={2.4} />
-                  ) : (
-                    <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
-                  )}
-                  <AppText style={styles.btnPrimaryText}>{primaryAction.label}</AppText>
-                </>
-              )}
-            </TouchableOpacity>
-          )}
-        </View>
+            {primaryAction && (
+              <TouchableOpacity
+                style={[
+                  styles.btnPrimary,
+                  primaryAction.disabled && styles.btnDisabled,
+                ]}
+                onPress={primaryAction.onPress}
+                disabled={primaryAction.disabled || primaryAction.loading}
+                activeOpacity={0.8}
+                accessibilityLabel={primaryAction.label}
+              >
+                {primaryAction.loading ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    {primaryAction.icon ? (
+                      <primaryAction.icon size={14} color="#FFFFFF" strokeWidth={2.4} />
+                    ) : (
+                      <Plus size={14} color="#FFFFFF" strokeWidth={2.4} />
+                    )}
+                    <AppText style={styles.btnPrimaryText}>{primaryAction.label}</AppText>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
     </View>
   );
@@ -177,9 +181,9 @@ export function LegalStatusBadge({ status, size = 'sm' }: LegalStatusBadgeProps)
       ]}
     >
       {isPublished ? (
-        <CheckCircle2 size={size === 'md' ? 13 : 11} color="#15803D" strokeWidth={2.4} />
+        <CheckCircle2 size={size === 'md' ? 12 : 10} color="#15803D" strokeWidth={2.4} />
       ) : isDraft ? (
-        <Clock size={size === 'md' ? 13 : 11} color="#D97706" strokeWidth={2.4} />
+        <Clock size={size === 'md' ? 12 : 10} color="#D97706" strokeWidth={2.4} />
       ) : null}
       <AppText
         style={[
@@ -243,74 +247,31 @@ export function LegalFilterToolbar({
 }: LegalFilterToolbarProps) {
   return (
     <View style={styles.toolbarContainer}>
-      {/* Search Bar */}
-      <View style={styles.searchBar}>
-        <Search size={15} color="#94A3B8" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder={searchPlaceholder}
-          placeholderTextColor="#94A3B8"
-          value={searchQuery}
-          onChangeText={onSearchChange}
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => onSearchChange('')} style={styles.searchClearBtn}>
-            <X size={14} color="#94A3B8" />
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* Search Input Row with optional refresh */}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
+          <Search size={14} color="#94A3B8" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder={searchPlaceholder}
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={onSearchChange}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => onSearchChange('')} style={styles.searchClearBtn}>
+              <X size={13} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Filter Row */}
-      <View style={styles.filterPillsRow}>
-        {/* Audience filter */}
-        {onAudienceChange && (
-          <View style={styles.pillsGroup}>
-            {(['all', 'player', 'club'] as const).map((aud) => {
-              const isSel = (audienceFilter || 'all') === aud;
-              return (
-                <TouchableOpacity
-                  key={aud}
-                  style={[styles.pillBtn, isSel && styles.pillBtnActive]}
-                  onPress={() => onAudienceChange(aud)}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={[styles.pillBtnText, isSel && styles.pillBtnTextActive]}>
-                    {aud === 'all' ? 'All' : aud === 'player' ? 'Players' : 'Clubs'}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Status filter */}
-        {onStatusChange && (
-          <View style={styles.pillsGroup}>
-            {(['all', 'published', 'draft'] as const).map((st) => {
-              const isSel = (statusFilter || 'all') === st;
-              return (
-                <TouchableOpacity
-                  key={st}
-                  style={[styles.pillBtn, isSel && styles.pillBtnActive]}
-                  onPress={() => onStatusChange(st)}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={[styles.pillBtnText, isSel && styles.pillBtnTextActive]}>
-                    {st === 'all' ? 'All Status' : st === 'published' ? 'Published' : 'Draft'}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        {/* Refresh button */}
         {onRefresh && (
           <TouchableOpacity
             style={styles.refreshBtn}
             onPress={onRefresh}
             disabled={isRefreshing}
             activeOpacity={0.7}
+            accessibilityLabel="Refresh records"
           >
             <RefreshCw
               size={13}
@@ -320,6 +281,53 @@ export function LegalFilterToolbar({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Filter Pills Row */}
+      {(onAudienceChange || onStatusChange) && (
+        <View style={styles.filterPillsRow}>
+          {/* Audience Filter Pills */}
+          {onAudienceChange && (
+            <View style={styles.pillsGroup}>
+              {(['all', 'player', 'club'] as const).map((aud) => {
+                const isSel = (audienceFilter || 'all') === aud;
+                return (
+                  <TouchableOpacity
+                    key={aud}
+                    style={[styles.pillBtn, isSel && styles.pillBtnActive]}
+                    onPress={() => onAudienceChange(aud)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText style={[styles.pillBtnText, isSel && styles.pillBtnTextActive]}>
+                      {aud === 'all' ? 'All' : aud === 'player' ? 'Players' : 'Clubs'}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Status Filter Pills */}
+          {onStatusChange && (
+            <View style={styles.pillsGroup}>
+              {(['all', 'published', 'draft'] as const).map((st) => {
+                const isSel = (statusFilter || 'all') === st;
+                return (
+                  <TouchableOpacity
+                    key={st}
+                    style={[styles.pillBtn, isSel && styles.pillBtnActive]}
+                    onPress={() => onStatusChange(st)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText style={[styles.pillBtnText, isSel && styles.pillBtnTextActive]}>
+                      {st === 'all' ? 'All Status' : st === 'published' ? 'Published' : 'Draft'}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
     </View>
   );
 }
@@ -358,10 +366,10 @@ export function LegalRecordCard({
 }: LegalRecordCardProps) {
   return (
     <View style={styles.recordCard}>
-      {/* Top Header Row */}
+      {/* 1. Header Metadata Row */}
       <View style={styles.cardHeaderRow}>
         <View style={styles.cardBadgesGroup}>
-          {status && <LegalStatusBadge status={status} />}
+          {status && <LegalStatusBadge status={status} size="sm" />}
           {categoryName && (
             <View style={styles.categoryChip}>
               <AppText style={styles.categoryChipText}>{categoryName}</AppText>
@@ -370,47 +378,29 @@ export function LegalRecordCard({
           {audience && <LegalAudienceBadge audience={audience} />}
         </View>
 
-        {/* Quick Action Buttons */}
-        <View style={styles.cardHeaderActions}>
-          {actions.map((act, idx) => {
-            const IconC = act.icon;
-            const isDanger = act.variant === 'danger';
-            const isPrimary = act.variant === 'primary';
-            return (
-              <TouchableOpacity
-                key={idx}
-                style={[
-                  styles.cardActionIconBtn,
-                  isDanger && styles.cardActionDanger,
-                  isPrimary && styles.cardActionPrimary,
-                ]}
-                onPress={act.onPress}
-                activeOpacity={0.7}
-                accessibilityLabel={act.label}
-              >
-                {IconC && (
-                  <IconC
-                    size={14}
-                    color={isDanger ? '#DC2626' : isPrimary ? '#15803D' : '#334155'}
-                    strokeWidth={2}
-                  />
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {metaInfo && (
+          <View style={styles.cardMetaWrap}>
+            <AppText style={styles.cardMetaText}>{metaInfo}</AppText>
+          </View>
+        )}
       </View>
 
-      {/* Title */}
+      {/* 2. Title / Question */}
       {onPressTitle ? (
-        <TouchableOpacity onPress={onPressTitle} activeOpacity={0.7} style={styles.cardTitleWrap}>
+        <TouchableOpacity
+          onPress={onPressTitle}
+          activeOpacity={0.7}
+          style={styles.cardTitleWrap}
+        >
           <AppText style={styles.cardTitleText}>{title}</AppText>
         </TouchableOpacity>
       ) : (
-        <AppText style={styles.cardTitleText}>{title}</AppText>
+        <View style={styles.cardTitleWrap}>
+          <AppText style={styles.cardTitleText}>{title}</AppText>
+        </View>
       )}
 
-      {/* Content Preview */}
+      {/* 3. Content Excerpt */}
       {excerpt ? (
         <AppText
           style={styles.cardExcerptText}
@@ -420,12 +410,61 @@ export function LegalRecordCard({
         </AppText>
       ) : null}
 
-      {/* Meta Footer */}
-      {metaInfo ? (
-        <View style={styles.cardFooterRow}>
-          <AppText style={styles.cardMetaText}>{metaInfo}</AppText>
+      {/* 4. Footer Actions Row */}
+      <View style={styles.cardFooterActionsRow}>
+        {onPressTitle ? (
+          <TouchableOpacity
+            style={styles.cardExpandToggleBtn}
+            onPress={onPressTitle}
+            activeOpacity={0.7}
+          >
+            <Eye size={12} color="#15803D" strokeWidth={2} />
+            <AppText style={styles.cardExpandToggleText}>
+              {isExpanded ? 'Collapse' : 'View Content'}
+            </AppText>
+          </TouchableOpacity>
+        ) : (
+          <View />
+        )}
+
+        <View style={styles.cardActionButtonsRow}>
+          {actions.map((act, idx) => {
+            const IconC = act.icon;
+            const isDanger = act.variant === 'danger';
+            const isPrimary = act.variant === 'primary';
+            return (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.cardActionBtn,
+                  isDanger && styles.cardActionBtnDanger,
+                  isPrimary && styles.cardActionBtnPrimary,
+                ]}
+                onPress={act.onPress}
+                activeOpacity={0.7}
+                accessibilityLabel={act.label}
+              >
+                {IconC && (
+                  <IconC
+                    size={12}
+                    color={isDanger ? '#DC2626' : isPrimary ? '#15803D' : '#334155'}
+                    strokeWidth={2}
+                  />
+                )}
+                <AppText
+                  style={[
+                    styles.cardActionBtnText,
+                    isDanger && styles.cardActionBtnTextDanger,
+                    isPrimary && styles.cardActionBtnTextPrimary,
+                  ]}
+                >
+                  {act.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      ) : null}
+      </View>
     </View>
   );
 }
@@ -448,13 +487,13 @@ export function LegalEmptyState({
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconCircle}>
-        <IconComponent size={26} color="#94A3B8" />
+        <IconComponent size={22} color="#94A3B8" />
       </View>
       <AppText style={styles.emptyTitle}>{title}</AppText>
       <AppText style={styles.emptyDescription}>{description}</AppText>
       {actionLabel && onAction && (
         <TouchableOpacity style={styles.emptyButton} onPress={onAction} activeOpacity={0.8}>
-          <Plus size={14} color="#15803D" strokeWidth={2.4} />
+          <Plus size={13} color="#15803D" strokeWidth={2.4} />
           <AppText style={styles.emptyButtonText}>{actionLabel}</AppText>
         </TouchableOpacity>
       )}
@@ -488,8 +527,8 @@ export function LegalPreviewModal({
               </AppText>
               {subtitle && <AppText style={styles.previewHeaderSubtitle}>{subtitle}</AppText>}
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn}>
-              <X size={18} color="#64748B" />
+            <TouchableOpacity onPress={onClose} style={styles.modalCloseBtn} accessibilityLabel="Close">
+              <X size={16} color="#64748B" />
             </TouchableOpacity>
           </View>
 
@@ -535,7 +574,7 @@ export function LegalPublishConfirmModal({
         <View style={styles.confirmModalCard}>
           <View style={styles.confirmHeader}>
             <View style={styles.confirmIconWrap}>
-              <Send size={18} color="#15803D" strokeWidth={2.4} />
+              <Send size={16} color="#15803D" strokeWidth={2.4} />
             </View>
             <View style={styles.confirmTitleCol}>
               <AppText style={styles.confirmTitle}>Publish Version {versionString}</AppText>
@@ -543,14 +582,14 @@ export function LegalPublishConfirmModal({
                 Make this the active legal document platform-wide
               </AppText>
             </View>
-            <TouchableOpacity onPress={onCancel} style={styles.modalCloseBtn}>
-              <X size={18} color="#64748B" />
+            <TouchableOpacity onPress={onCancel} style={styles.modalCloseBtn} accessibilityLabel="Close">
+              <X size={16} color="#64748B" />
             </TouchableOpacity>
           </View>
 
           <View style={styles.confirmBody}>
             <View style={styles.confirmWarningBox}>
-              <AlertTriangle size={16} color="#D97706" />
+              <AlertTriangle size={15} color="#D97706" />
               <AppText style={styles.confirmWarningText}>
                 Publishing Version {versionString} will immediately replace the current active
                 version and archive it.
@@ -604,14 +643,14 @@ export function LegalPublishConfirmModal({
 const styles = StyleSheet.create({
   // ─── Header ───────────────────────────────────────────────────────────────
   headerContainer: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   backButtonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 4,
-    marginBottom: 8,
+    paddingVertical: 3,
+    marginBottom: 6,
     alignSelf: 'flex-start',
   },
   backButtonText: {
@@ -621,27 +660,23 @@ const styles = StyleSheet.create({
   },
   headerContentRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerContentRowNarrow: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
     gap: 10,
+    flexWrap: 'wrap',
   },
   headerTextGroup: {
     flex: 1,
-    minWidth: 0,
+    minWidth: 200,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   headerIconTile: {
-    width: 28,
-    height: 28,
+    width: 26,
+    height: 26,
     borderRadius: 6,
     backgroundColor: '#EAF8F0',
     alignItems: 'center',
@@ -649,22 +684,22 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,
     flexShrink: 1,
   },
   headerSubtitle: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#64748B',
-    marginTop: 3,
-    lineHeight: 17,
+    marginTop: 2,
+    lineHeight: 16,
   },
   headerActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     flexShrink: 0,
   },
 
@@ -673,17 +708,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    height: 36,
-    paddingHorizontal: 13,
-    borderRadius: 8,
+    gap: 5,
+    height: 32,
+    paddingHorizontal: 11,
+    borderRadius: 6,
     backgroundColor: '#15803D',
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-    }),
   },
   btnPrimaryText: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -692,18 +724,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
-    height: 36,
-    paddingHorizontal: 11,
-    borderRadius: 8,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 6,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    ...Platform.select({
-      web: { cursor: 'pointer' },
-    }),
   },
   btnSecondaryText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#0F172A',
   },
@@ -718,15 +747,15 @@ const styles = StyleSheet.create({
   badgeBase: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
+    gap: 3.5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   badgeMedium: {
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
   },
   badgePublished: {
     backgroundColor: '#DCFCE7',
@@ -738,11 +767,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   badgeTextMedium: {
-    fontSize: 11.5,
+    fontSize: 11,
   },
   badgeTextPublished: {
     color: '#15803D',
@@ -755,79 +784,89 @@ const styles = StyleSheet.create({
   },
   categoryChip: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   categoryChipText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#475569',
   },
   audienceBadge: {
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   audienceBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '600',
     color: '#2563EB',
   },
 
   // ─── Toolbar ──────────────────────────────────────────────────────────────
   toolbarContainer: {
-    gap: 8,
-    marginBottom: 12,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    height: 36,
+    padding: 8,
     gap: 8,
+    marginBottom: 10,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    height: 34,
+    gap: 6,
   },
   searchInput: {
     flex: 1,
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#0F172A',
     height: '100%',
   },
   searchClearBtn: {
-    padding: 3,
+    padding: 2,
   },
   filterPillsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   pillsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    flexWrap: 'wrap',
+    gap: 4,
   },
   pillBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   pillBtnActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: '#1E6F43',
+    borderColor: '#1E6F43',
   },
   pillBtnText: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -836,10 +875,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   refreshBtn: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
@@ -854,8 +893,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 13,
+    borderRadius: 9,
+    padding: 12,
     gap: 6,
     ...Platform.select({
       web: { boxShadow: '0 1px 2px rgba(0,0,0,0.03)' },
@@ -866,38 +905,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
+    gap: 6,
   },
   cardBadgesGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     flexWrap: 'wrap',
     flex: 1,
   },
-  cardHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+  cardMetaWrap: {
     flexShrink: 0,
   },
-  cardActionIconBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardActionPrimary: {
-    backgroundColor: '#EAF8F0',
-    borderColor: '#BBF7D0',
-  },
-  cardActionDanger: {
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+  cardMetaText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
   cardTitleWrap: {
     marginTop: 2,
@@ -909,34 +932,77 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   cardExcerptText: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 16.5,
   },
-  cardFooterRow: {
+  cardFooterActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 6,
+    paddingTop: 8,
+    marginTop: 2,
     borderTopWidth: 1,
     borderTopColor: '#F8FAFC',
-    marginTop: 2,
+    gap: 6,
   },
-  cardMetaText: {
-    fontSize: 11,
-    color: '#94A3B8',
+  cardExpandToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+  },
+  cardExpandToggleText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#15803D',
+  },
+  cardActionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cardActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  cardActionBtnPrimary: {
+    backgroundColor: '#EAF8F0',
+    borderColor: '#BBF7D0',
+  },
+  cardActionBtnDanger: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  cardActionBtnText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  cardActionBtnTextPrimary: {
+    color: '#15803D',
+  },
+  cardActionBtnTextDanger: {
+    color: '#DC2626',
   },
 
   // ─── Empty State ──────────────────────────────────────────────────────────
   emptyContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   emptyIconCircle: {
     width: 44,
@@ -945,29 +1011,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   emptyTitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
+    marginBottom: 4,
   },
   emptyDescription: {
     fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    maxWidth: 340,
-    lineHeight: 17,
+    maxWidth: 320,
+    lineHeight: 16,
+    marginBottom: 12,
   },
   emptyButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: '#EAF8F0',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 7,
-    marginTop: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
   emptyButtonText: {
     fontSize: 12,
@@ -975,7 +1044,7 @@ const styles = StyleSheet.create({
     color: '#15803D',
   },
 
-  // ─── Modals ───────────────────────────────────────────────────────────────
+  // ─── Preview Modal ────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.55)',
@@ -985,19 +1054,17 @@ const styles = StyleSheet.create({
   },
   previewModalCard: {
     width: '100%',
-    maxWidth: 720,
-    maxHeight: '88%',
+    maxWidth: 680,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    ...Platform.select({
-      web: { boxShadow: '0 10px 25px rgba(0,0,0,0.12)' },
-    }),
+    borderRadius: 12,
+    maxHeight: '88%',
+    overflow: 'hidden',
   },
   previewModalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
@@ -1006,12 +1073,12 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   previewHeaderTitle: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: '800',
     color: '#0F172A',
   },
   previewHeaderSubtitle: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
   },
@@ -1019,11 +1086,11 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   previewModalBody: {
-    padding: 16,
+    padding: 14,
   },
   previewBodyText: {
     fontSize: 13,
-    color: '#334155',
+    color: '#1E293B',
     lineHeight: 20,
   },
   previewModalFooter: {
@@ -1033,38 +1100,35 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
 
-  // ─── Confirm Modal ────────────────────────────────────────────────────────
+  // ─── Confirm Publish Modal ────────────────────────────────────────────────
   confirmModalCard: {
     width: '100%',
     maxWidth: 480,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    ...Platform.select({
-      web: { boxShadow: '0 10px 25px rgba(0,0,0,0.12)' },
-    }),
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   confirmHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    padding: 16,
+    padding: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
   confirmIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 7,
+    width: 32,
+    height: 32,
+    borderRadius: 6,
     backgroundColor: '#EAF8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   confirmTitleCol: {
     flex: 1,
   },
   confirmTitle: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#0F172A',
   },
@@ -1074,36 +1138,34 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   confirmBody: {
-    padding: 16,
-    gap: 8,
+    padding: 14,
+    gap: 10,
   },
   confirmWarningBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
-    borderColor: '#FCD34D',
+    borderColor: '#FDE68A',
+    borderRadius: 8,
     padding: 10,
-    borderRadius: 7,
-    marginBottom: 6,
   },
   confirmWarningText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#92400E',
-    lineHeight: 17,
+    lineHeight: 16,
   },
   confirmSummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAFC',
+    paddingVertical: 3,
   },
   confirmSummaryLabel: {
     fontSize: 12,
-    color: '#64748B',
+    fontWeight: '600',
+    color: '#475569',
   },
   confirmSummaryValue: {
     fontSize: 12,
@@ -1112,12 +1174,10 @@ const styles = StyleSheet.create({
   },
   confirmActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 8,
-    padding: 14,
+    padding: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
 });
-
