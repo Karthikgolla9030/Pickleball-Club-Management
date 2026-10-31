@@ -1,19 +1,19 @@
 /**
  * Aught2 Pickleball — Platform Admin → Home Page Banners
  *
- * Dedicated Platform Admin interface for managing global home page banners:
+ * Compact, unified, and professional management interface for global home page banners:
  * 1. Owner Home Page Banner: Main hero banner displayed on the Club Owner Dashboard.
  * 2. Player Home Page Banner: Main global hero banner displayed on the Player App Home page.
  *
- * Exact visual match to the reference design:
- * - Back to Settings navigation link
- * - "Home Banners" page heading & subtitle
- * - Global Platform Home Banners information card with green left-accent
- * - Audience selector cards: "Owner Home Page" vs "Player Home Page"
- * - Live Preview Card with 16:9 aspect ratio, dark overlay, dynamic text,
- *   BUILT-IN FALLBACK / ACTIVE status badge, Current Banner Image row,
- *   "Upload Image" and "Restore Default" action buttons, and image guidelines strip.
- * - Collapsible "Banner Text & CTA Configuration" accordion preserving all backend fields.
+ * Clean, compact design aligned with the Platform Admin portal:
+ * - Proper page margins matching Platform Admin settings without double padding
+ * - Compact segmented-control for "Owner Home Page" vs "Player Home Page" (subtitles removed)
+ * - Compact Global Platform Home Banners information card
+ * - Live Preview card with responsive 16:9 aspect ratio, status badges, and actual saved banner
+ * - Compact Current Banner Image row with non-overlapping status badge
+ * - Consistently sized, compact action buttons (Upload Image & Restore Default)
+ * - Concise Image Guidelines box
+ * - Preserved and compact expandable "Banner Text & Link Settings" accordion
  */
 
 import React, { useEffect, useState } from 'react';
@@ -22,12 +22,10 @@ import {
   Alert,
   ImageBackground,
   Platform,
-  ScrollView,
   StyleSheet,
   Switch,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -53,7 +51,7 @@ import {
 
 import { AppText, PlatformShell } from '@/components';
 import { usePlatformBanners, usePlatformBannerMutations } from '@/hooks';
-import { Radius, Shadows, Spacing } from '@/theme';
+import { Radius, Shadows } from '@/theme';
 import type { PlatformBanner } from '@/types';
 import { BUILTIN_FALLBACKS, resolveMediaUrl } from '@/utils';
 
@@ -61,7 +59,6 @@ type BannerKey = 'owner_home' | 'player_home';
 
 export default function PlatformBannersScreen() {
   const router = useRouter();
-  const { width: windowWidth } = useWindowDimensions();
 
   const { banners, isLoading, refetch } = usePlatformBanners();
   const { updateBanner, uploadBannerImage, resetBanner } = usePlatformBannerMutations();
@@ -106,7 +103,7 @@ export default function PlatformBannersScreen() {
 
   const showStatus = (type: 'success' | 'error', text: string) => {
     setStatusMessage({ type, text });
-    setTimeout(() => setStatusMessage(null), 5000);
+    setTimeout(() => setStatusMessage(null), 4500);
   };
 
   const currentBanner: PlatformBanner | undefined = banners[activeTab];
@@ -150,7 +147,7 @@ export default function PlatformBannersScreen() {
           await refetch();
           showStatus(
             'success',
-            `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner image uploaded and updated successfully!`
+            `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner uploaded successfully!`
           );
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Image upload failed.';
@@ -207,9 +204,9 @@ export default function PlatformBannersScreen() {
   const handleResetBanner = () => {
     Alert.alert(
       `Restore Default ${isOwnerTab ? 'Owner' : 'Player'} Banner`,
-      `Are you sure you want to restore the platform's default built-in court hero for the ${
-        isOwnerTab ? 'Club Owner Home Dashboard' : 'Player App Home page'
-      }? Custom uploaded image will be cleared.`,
+      `Are you sure you want to restore the platform default banner for the ${
+        isOwnerTab ? 'Club Owner Dashboard' : 'Player App Home page'
+      }? Custom uploaded image will be removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -233,7 +230,7 @@ export default function PlatformBannersScreen() {
     );
   };
 
-  // ─── Live Preview Calculations ─────────────────────────────────────────────
+  // ─── Actual Saved Banner Preview Calculations ──────────────────────────────
   const previewImage = currentBanner?.image_url
     ? { uri: resolveMediaUrl(currentBanner.image_url) }
     : isOwnerTab
@@ -241,16 +238,20 @@ export default function PlatformBannersScreen() {
     : BUILTIN_FALLBACKS.tournamentGeneric;
 
   const previewTitle = isOwnerTab
-    ? ownerTitle || 'Aught2 Pickleball'
-    : playerTitle || 'Aught2 Pickleball';
+    ? ownerTitle || currentBanner?.title || 'Aught2 Pickleball'
+    : playerTitle || currentBanner?.title || 'Aught2 Pickleball';
 
   const previewSubtitle = isOwnerTab
-    ? ownerSubtitle || 'Great courts. Active members.\nA healthier, happier community.'
-    : playerSubtitle || 'Find open courts, discover tournaments, and join leagues near you.';
+    ? ownerSubtitle ||
+      currentBanner?.subtitle ||
+      'Great courts. Active members.\nA healthier, happier community.'
+    : playerSubtitle ||
+      currentBanner?.subtitle ||
+      'Find open courts, discover tournaments, and join leagues near you.';
 
   const previewCta = isOwnerTab
-    ? ownerCtaText || 'Book a Court'
-    : playerCtaText || 'Find Courts';
+    ? ownerCtaText || currentBanner?.cta_text || 'Book a Court'
+    : playerCtaText || currentBanner?.cta_text || 'Find Courts';
 
   return (
     <PlatformShell
@@ -260,18 +261,18 @@ export default function PlatformBannersScreen() {
       scrollable
     >
       <View style={styles.container}>
-        {/* ── 1. Back to Settings Navigation ── */}
+        {/* ── 1. Back to Settings Link ── */}
         <TouchableOpacity
           style={styles.backButtonRow}
           onPress={() => router.push('/platform/settings' as any)}
           activeOpacity={0.7}
           accessibilityLabel="Back to Settings"
         >
-          <ArrowLeft size={16} color="#0F172A" strokeWidth={2.4} />
+          <ArrowLeft size={14} color="#0F172A" strokeWidth={2.4} />
           <AppText style={styles.backButtonText}>Back to Settings</AppText>
         </TouchableOpacity>
 
-        {/* ── 2. Page Header ── */}
+        {/* ── 2. Compact Page Heading ── */}
         <View style={styles.headerSection}>
           <AppText style={styles.screenTitle}>Home Banners</AppText>
           <AppText style={styles.screenSubtitle}>
@@ -279,7 +280,7 @@ export default function PlatformBannersScreen() {
           </AppText>
         </View>
 
-        {/* ── 3. Status Alert (if active) ── */}
+        {/* ── Status Message Alert ── */}
         {statusMessage && (
           <View
             style={[
@@ -288,9 +289,9 @@ export default function PlatformBannersScreen() {
             ]}
           >
             {statusMessage.type === 'success' ? (
-              <CheckCircle2 size={16} color="#15803D" />
+              <CheckCircle2 size={15} color="#15803D" />
             ) : (
-              <AlertCircle size={16} color="#B91C1C" />
+              <AlertCircle size={15} color="#B91C1C" />
             )}
             <AppText
               style={[
@@ -303,103 +304,83 @@ export default function PlatformBannersScreen() {
           </View>
         )}
 
-        {/* ── 4. Global Platform Home Banners Information Card ── */}
+        {/* ── 3. Compact Global Platform Home Banners Information Card ── */}
         <View style={styles.infoCard}>
-          <View style={styles.infoCardAccent} />
-          <View style={styles.infoCardBody}>
-            <View style={styles.infoIconWrap}>
-              <ImageIcon size={22} color="#15803D" strokeWidth={2} />
-            </View>
-            <View style={styles.infoTextCol}>
-              <AppText style={styles.infoTitle}>Global Platform Home Banners</AppText>
-              <AppText style={styles.infoDesc}>
-                Platform Admin is the single source of truth for home banners across all clubs. Changes
-                made here immediately apply platform-wide to the Club Owner Dashboard and Player App Home
-                page.
-              </AppText>
-            </View>
+          <View style={styles.infoIconWrap}>
+            <ImageIcon size={18} color="#15803D" strokeWidth={2.2} />
+          </View>
+          <View style={styles.infoTextCol}>
+            <AppText style={styles.infoTitle}>Global Platform Home Banners</AppText>
+            <AppText style={styles.infoDesc}>
+              Platform Admin is the single source of truth for home banners across all clubs. Changes made
+              here immediately apply platform-wide to the Club Owner Dashboard and Player App Home page.
+            </AppText>
           </View>
         </View>
 
-        {/* ── 5. Banner Audience Selector ── */}
-        <View style={styles.audienceSelectorRow}>
-          {/* Owner Home Page Tab */}
+        {/* ── 4. Compact Segmented Audience Selector (Single Label Each) ── */}
+        <View style={styles.audienceSelectorContainer}>
           <TouchableOpacity
             style={[
-              styles.audienceCard,
-              activeTab === 'owner_home' ? styles.audienceCardActive : styles.audienceCardInactive,
+              styles.audienceSegment,
+              activeTab === 'owner_home'
+                ? styles.audienceSegmentActive
+                : styles.audienceSegmentInactive,
             ]}
             onPress={() => setActiveTab('owner_home')}
             activeOpacity={0.8}
             accessibilityLabel="Owner Home Page"
           >
             <Users
-              size={20}
-              color={activeTab === 'owner_home' ? '#FFFFFF' : '#64748B'}
+              size={15}
+              color={activeTab === 'owner_home' ? '#FFFFFF' : '#475569'}
               strokeWidth={2}
             />
-            <View style={styles.audienceTextCol}>
-              <AppText
-                style={[
-                  styles.audienceTitle,
-                  activeTab === 'owner_home' ? styles.audienceTitleActive : styles.audienceTitleInactive,
-                ]}
-              >
-                Owner Home Page
-              </AppText>
-              <AppText
-                style={[
-                  styles.audienceSubtitle,
-                  activeTab === 'owner_home' ? styles.audienceSubtitleActive : styles.audienceSubtitleInactive,
-                ]}
-              >
-                Club Owner Dashboard
-              </AppText>
-            </View>
+            <AppText
+              style={[
+                styles.audienceSegmentText,
+                activeTab === 'owner_home' && styles.audienceSegmentTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              Owner Home Page
+            </AppText>
           </TouchableOpacity>
 
-          {/* Player Home Page Tab */}
           <TouchableOpacity
             style={[
-              styles.audienceCard,
-              activeTab === 'player_home' ? styles.audienceCardActive : styles.audienceCardInactive,
+              styles.audienceSegment,
+              activeTab === 'player_home'
+                ? styles.audienceSegmentActive
+                : styles.audienceSegmentInactive,
             ]}
             onPress={() => setActiveTab('player_home')}
             activeOpacity={0.8}
             accessibilityLabel="Player Home Page"
           >
             <Smartphone
-              size={20}
-              color={activeTab === 'player_home' ? '#FFFFFF' : '#64748B'}
+              size={15}
+              color={activeTab === 'player_home' ? '#FFFFFF' : '#475569'}
               strokeWidth={2}
             />
-            <View style={styles.audienceTextCol}>
-              <AppText
-                style={[
-                  styles.audienceTitle,
-                  activeTab === 'player_home' ? styles.audienceTitleActive : styles.audienceTitleInactive,
-                ]}
-              >
-                Player Home Page
-              </AppText>
-              <AppText
-                style={[
-                  styles.audienceSubtitle,
-                  activeTab === 'player_home' ? styles.audienceSubtitleActive : styles.audienceSubtitleInactive,
-                ]}
-              >
-                Player App Home
-              </AppText>
-            </View>
+            <AppText
+              style={[
+                styles.audienceSegmentText,
+                activeTab === 'player_home' && styles.audienceSegmentTextActive,
+              ]}
+              numberOfLines={1}
+            >
+              Player Home Page
+            </AppText>
           </TouchableOpacity>
         </View>
 
-        {/* ── 6. Live Preview Card ── */}
+        {/* ── 5. Compact Live Preview Card ── */}
         <View style={styles.previewCard}>
           {/* Card Header Row */}
           <View style={styles.previewHeaderRow}>
             <View style={styles.previewTitleRow}>
-              <Eye size={18} color="#15803D" strokeWidth={2.2} />
+              <Eye size={16} color="#15803D" strokeWidth={2.2} />
               <AppText style={styles.previewTitle}>Live Preview</AppText>
             </View>
             <View style={styles.previewBadgePill}>
@@ -410,14 +391,14 @@ export default function PlatformBannersScreen() {
             </View>
           </View>
 
-          {/* Explanatory Subtitle */}
+          {/* Audience Subtitle */}
           <AppText style={styles.previewSubtitle}>
             {isOwnerTab
               ? 'This is how the banner will appear on the Club Owner Dashboard.'
               : 'This is how the banner will appear on the Player App Home page.'}
           </AppText>
 
-          {/* 16:9 Image Preview Box */}
+          {/* 16:9 Aspect Ratio Banner Container */}
           <View style={styles.imagePreviewWrapper}>
             <ImageBackground
               source={previewImage}
@@ -425,7 +406,7 @@ export default function PlatformBannersScreen() {
               imageStyle={styles.heroImageBgInner}
               resizeMode="cover"
             >
-              {/* Dark Translucent Overlay */}
+              {/* Dark Overlay */}
               <View style={styles.heroOverlay} />
 
               {/* Overlaid Banner Content */}
@@ -435,7 +416,7 @@ export default function PlatformBannersScreen() {
                   <AppText style={styles.heroHeading} numberOfLines={2}>
                     {previewTitle}
                   </AppText>
-                  <AppText style={styles.heroSupportingText} numberOfLines={3}>
+                  <AppText style={styles.heroSupportingText} numberOfLines={2}>
                     {previewSubtitle}
                   </AppText>
                 </View>
@@ -443,7 +424,7 @@ export default function PlatformBannersScreen() {
                 <View style={styles.heroBottomRow}>
                   <View style={styles.heroCtaPill}>
                     <AppText style={styles.heroCtaText}>{previewCta}</AppText>
-                    <ArrowRight size={13} color="#0F172A" strokeWidth={2.5} />
+                    <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
                   </View>
 
                   {isOwnerTab && (
@@ -470,21 +451,36 @@ export default function PlatformBannersScreen() {
           <View style={styles.currentBannerRow}>
             <View style={styles.currentBannerLeft}>
               <View style={styles.currentBannerIconWrap}>
-                <ImagePlus size={18} color="#15803D" strokeWidth={2} />
+                <ImagePlus size={15} color="#15803D" strokeWidth={2} />
               </View>
               <View style={styles.currentBannerTextCol}>
                 <AppText style={styles.currentBannerTitle}>Current Banner Image</AppText>
-                <AppText style={styles.currentBannerDesc}>
+                <AppText style={styles.currentBannerDesc} numberOfLines={2}>
                   {isOwnerTab
                     ? 'This image is currently being used on all club owner home pages.'
                     : 'This image is currently being used on all player home pages.'}
                 </AppText>
               </View>
             </View>
-            <View style={styles.currentBannerStatusPill}>
-              <View style={styles.currentBannerStatusDot} />
-              <AppText style={styles.currentBannerStatusText}>
-                {isCustomImage ? 'Active' : 'Active'}
+            <View
+              style={[
+                styles.currentBannerStatusPill,
+                !isCustomImage && styles.currentBannerStatusPillFallback,
+              ]}
+            >
+              <View
+                style={[
+                  styles.currentBannerStatusDot,
+                  !isCustomImage && styles.currentBannerStatusDotFallback,
+                ]}
+              />
+              <AppText
+                style={[
+                  styles.currentBannerStatusText,
+                  !isCustomImage && styles.currentBannerStatusTextFallback,
+                ]}
+              >
+                {isCustomImage ? 'Active' : 'Built-in Fallback'}
               </AppText>
             </View>
           </View>
@@ -498,7 +494,7 @@ export default function PlatformBannersScreen() {
               activeOpacity={0.85}
               accessibilityLabel="Upload Image"
             >
-              <Upload size={16} color="#FFFFFF" strokeWidth={2.2} />
+              <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
               <AppText style={styles.btnUploadText}>Upload Image</AppText>
             </TouchableOpacity>
 
@@ -509,14 +505,14 @@ export default function PlatformBannersScreen() {
               activeOpacity={0.8}
               accessibilityLabel="Restore Default"
             >
-              <RotateCcw size={15} color="#0F172A" strokeWidth={2} />
+              <RotateCcw size={13.5} color="#0F172A" strokeWidth={2} />
               <AppText style={styles.btnRestoreText}>Restore Default</AppText>
             </TouchableOpacity>
           </View>
 
-          {/* Image Guidelines Strip */}
+          {/* Image Guidelines Box */}
           <View style={styles.guidelinesBox}>
-            <Info size={16} color="#64748B" strokeWidth={2} style={styles.guidelinesIcon} />
+            <Info size={14} color="#64748B" strokeWidth={2} style={styles.guidelinesIcon} />
             <View style={styles.guidelinesTextCol}>
               <AppText style={styles.guidelinesText}>
                 Recommended size: 1600 × 900 (16:9). Supports JPG, PNG, WebP.
@@ -530,7 +526,7 @@ export default function PlatformBannersScreen() {
           </View>
         </View>
 
-        {/* ── 7. Collapsible Banner Text & Link Settings ── */}
+        {/* ── 6. Compact Banner Text & Link Settings (Collapsible) ── */}
         <View style={styles.textSettingsContainer}>
           <TouchableOpacity
             style={styles.textSettingsHeader}
@@ -539,22 +535,22 @@ export default function PlatformBannersScreen() {
             accessibilityLabel="Toggle Banner Text Settings"
           >
             <View style={styles.textSettingsHeaderLeft}>
-              <Sliders size={16} color="#15803D" strokeWidth={2} />
+              <Sliders size={14} color="#15803D" strokeWidth={2} />
               <AppText style={styles.textSettingsHeaderTitle}>
                 Banner Text & Link Settings (Optional)
               </AppText>
             </View>
             {showTextSettings ? (
-              <ChevronUp size={18} color="#64748B" strokeWidth={2} />
+              <ChevronUp size={16} color="#64748B" strokeWidth={2} />
             ) : (
-              <ChevronDown size={18} color="#64748B" strokeWidth={2} />
+              <ChevronDown size={16} color="#64748B" strokeWidth={2} />
             )}
           </TouchableOpacity>
 
           {showTextSettings && (
             <View style={styles.textSettingsBody}>
               <AppText style={styles.textSettingsHint}>
-                Optionally customize the overlaid title, promotional text, and CTA destination for{' '}
+                Optionally customize the headline title, supporting text, and button link for{' '}
                 {isOwnerTab ? 'club owners' : 'players'}.
               </AppText>
 
@@ -564,7 +560,7 @@ export default function PlatformBannersScreen() {
                 style={styles.textInput}
                 value={isOwnerTab ? ownerTitle : playerTitle}
                 onChangeText={isOwnerTab ? setOwnerTitle : setPlayerTitle}
-                placeholder={isOwnerTab ? 'Aught2 Pickleball' : 'Aught2 Pickleball'}
+                placeholder="Aught2 Pickleball"
                 placeholderTextColor="#94A3B8"
               />
 
@@ -628,7 +624,7 @@ export default function PlatformBannersScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <>
-                    <Save size={16} color="#FFFFFF" strokeWidth={2.2} />
+                    <Save size={14} color="#FFFFFF" strokeWidth={2.2} />
                     <AppText style={styles.btnSaveText}>Save Banner Configuration</AppText>
                   </>
                 )}
@@ -643,53 +639,51 @@ export default function PlatformBannersScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 96,
-    maxWidth: 820,
+    paddingBottom: 80, // Natural clearance for bottom navigation without extra blank space
     width: '100%',
+    maxWidth: 720,
     alignSelf: 'center',
   },
 
-  // 1. Back to Settings link
+  // 1. Back to Settings Navigation
   backButtonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 8,
+    paddingVertical: 4,
     marginBottom: 4,
     alignSelf: 'flex-start',
   },
   backButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0F172A',
   },
 
-  // 2. Page Header
+  // 2. Compact Page Heading
   headerSection: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   screenTitle: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.4,
-    marginBottom: 4,
+    letterSpacing: -0.3,
+    marginBottom: 2,
   },
   screenSubtitle: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#64748B',
-    lineHeight: 19,
+    lineHeight: 17,
   },
 
   // Status Alerts
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 14,
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
     gap: 8,
   },
   statusBannerSuccess: {
@@ -703,7 +697,7 @@ const styles = StyleSheet.create({
     borderColor: '#FCA5A5',
   },
   statusBannerText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '500',
     flex: 1,
   },
@@ -714,200 +708,202 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
   },
 
-  // 3. Global Platform Home Banners Info Card
+  // 3. Compact Global Platform Home Banners Info Card
   infoCard: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    borderRadius: 14,
-    overflow: 'hidden',
-    marginBottom: 14,
-  },
-  infoCardAccent: {
-    width: 4,
-    backgroundColor: '#15803D',
-  },
-  infoCardBody: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 14,
-    gap: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#15803D',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    gap: 10,
   },
   infoIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 7,
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
+    flexShrink: 0,
+    marginTop: 1,
   },
   infoTextCol: {
     flex: 1,
+    minWidth: 0,
   },
   infoTitle: {
-    fontSize: 14.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
-    marginBottom: 3,
+    marginBottom: 2,
   },
   infoDesc: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 16,
   },
 
-  // 4. Banner Audience Selector
-  audienceSelectorRow: {
+  // 4. Compact Segmented Audience Selector
+  audienceSelectorContainer: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 16,
-  },
-  audienceCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    gap: 10,
-  },
-  audienceCardActive: {
-    backgroundColor: '#1E6F43',
-    borderWidth: 1,
-    borderColor: '#1E6F43',
-    ...Shadows.sm,
-  },
-  audienceCardInactive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 3,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  audienceTextCol: {
+  audienceSegment: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    gap: 6,
   },
-  audienceTitle: {
-    fontSize: 13.5,
+  audienceSegmentActive: {
+    backgroundColor: '#1E6F43',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+      },
+      default: {
+        elevation: 1,
+      },
+    }),
+  },
+  audienceSegmentInactive: {
+    backgroundColor: 'transparent',
+  },
+  audienceSegmentText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  audienceSegmentTextActive: {
+    color: '#FFFFFF',
     fontWeight: '700',
   },
-  audienceTitleActive: {
-    color: '#FFFFFF',
-  },
-  audienceTitleInactive: {
-    color: '#0F172A',
-  },
-  audienceSubtitle: {
-    fontSize: 11.5,
-    marginTop: 1,
-  },
-  audienceSubtitleActive: {
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  audienceSubtitleInactive: {
-    color: '#64748B',
-  },
 
-  // 5. Live Preview Card
+  // 5. Compact Live Preview Card
   previewCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    ...Shadows.sm,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+      },
+      default: {
+        elevation: 1,
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
+      },
+    }),
   },
   previewHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   previewTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   previewTitle: {
-    fontSize: 15.5,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F172A',
   },
   previewBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: '#EAF8F0',
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 10,
   },
   previewBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#15803D',
   },
   previewBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
   previewSubtitle: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#64748B',
-    marginBottom: 12,
+    marginBottom: 10,
+    lineHeight: 15,
   },
 
   // 16:9 Image Preview Box
   imagePreviewWrapper: {
     width: '100%',
     aspectRatio: 16 / 9,
-    borderRadius: 12,
+    maxHeight: 240,
+    borderRadius: 8,
     overflow: 'hidden',
     position: 'relative',
-    backgroundColor: '#1E293B',
+    backgroundColor: '#0F172A',
   },
   heroImageBg: {
     width: '100%',
     height: '100%',
   },
   heroImageBgInner: {
-    borderRadius: 12,
+    borderRadius: 8,
   },
   heroOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
   },
   heroContentInner: {
     flex: 1,
-    padding: 14,
+    padding: 12,
     justifyContent: 'space-between',
   },
   heroUpperBlock: {
-    gap: 3,
+    gap: 2,
   },
   heroTag: {
-    fontSize: 10.5,
+    fontSize: 9.5,
     fontWeight: '800',
-    letterSpacing: 1.1,
+    letterSpacing: 0.8,
     color: '#FFFFFF',
     opacity: 0.9,
   },
   heroHeading: {
-    fontSize: 21,
+    fontSize: 18,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 25,
+    lineHeight: 22,
     marginTop: 1,
   },
   heroSupportingText: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     color: '#F1F5F9',
-    lineHeight: 15,
+    lineHeight: 14,
     marginTop: 2,
     maxWidth: '85%',
   },
@@ -920,14 +916,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
     ...Shadows.sm,
   },
   heroCtaText: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -935,11 +931,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   scriptLine: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontStyle: 'italic',
     color: '#FFFFFF',
     opacity: 0.9,
-    lineHeight: 13,
+    lineHeight: 12,
   },
   uploadingOverlay: {
     ...StyleSheet.absoluteFill,
@@ -949,12 +945,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   uploadingText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#FFFFFF',
   },
 
-  // Current Banner Row
+  // Current Banner Information Row
   currentBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -962,94 +958,110 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#F1F5F9',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 12,
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    marginTop: 10,
+    gap: 8,
   },
   currentBannerLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    minWidth: 0,
   },
   currentBannerIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 6,
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   currentBannerTextCol: {
     flex: 1,
+    minWidth: 0,
   },
   currentBannerTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
   },
   currentBannerDesc: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     color: '#64748B',
-    marginTop: 1,
+    lineHeight: 14,
   },
   currentBannerStatusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 10,
+    flexShrink: 0,
+  },
+  currentBannerStatusPillFallback: {
+    backgroundColor: '#F1F5F9',
   },
   currentBannerStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#15803D',
   },
+  currentBannerStatusDotFallback: {
+    backgroundColor: '#64748B',
+  },
   currentBannerStatusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     color: '#15803D',
+  },
+  currentBannerStatusTextFallback: {
+    color: '#475569',
   },
 
   // Action Buttons
   actionsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
+    gap: 8,
+    marginTop: 10,
   },
   btnUpload: {
     flex: 1,
-    height: 42,
+    height: 38,
     backgroundColor: '#1E6F43',
-    borderRadius: 8,
+    borderRadius: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 8,
   },
   btnUploadText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#FFFFFF',
   },
   btnRestore: {
     flex: 1,
-    height: 42,
+    height: 38,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 8,
+    borderRadius: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    paddingHorizontal: 8,
   },
   btnRestoreText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#0F172A',
   },
@@ -1058,100 +1070,104 @@ const styles = StyleSheet.create({
   guidelinesBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 14,
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 8,
+    marginTop: 10,
   },
   guidelinesIcon: {
     marginTop: 1,
+    flexShrink: 0,
   },
   guidelinesTextCol: {
     flex: 1,
-    gap: 2,
+    gap: 1,
+    minWidth: 0,
   },
   guidelinesText: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
-    lineHeight: 16,
+    lineHeight: 14.5,
   },
 
-  // 6. Optional Collapsible Text Settings
+  // 6. Compact Collapsible Text Settings
   textSettingsContainer: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
+    borderRadius: 10,
     overflow: 'hidden',
-    marginTop: 2,
+    marginBottom: 16,
   },
   textSettingsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   textSettingsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   textSettingsHeaderTitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#334155',
   },
   textSettingsBody: {
-    paddingHorizontal: 14,
-    paddingBottom: 16,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   textSettingsHint: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
-    marginVertical: 10,
-    lineHeight: 16,
+    marginVertical: 8,
+    lineHeight: 15,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#334155',
-    marginBottom: 4,
-    marginTop: 10,
+    marginBottom: 3,
+    marginTop: 8,
   },
   textInput: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12.5,
     color: '#0F172A',
   },
   textArea: {
-    minHeight: 65,
+    minHeight: 56,
     textAlignVertical: 'top',
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
-    marginTop: 12,
+    paddingVertical: 8,
+    marginTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   switchTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#1E293B',
   },
   switchSubtitle: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#64748B',
   },
   btnSave: {
@@ -1159,13 +1175,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#1E6F43',
-    borderRadius: 8,
-    paddingVertical: 10,
-    marginTop: 14,
-    gap: 8,
+    borderRadius: 6,
+    paddingVertical: 8,
+    marginTop: 10,
+    gap: 6,
   },
   btnSaveText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
