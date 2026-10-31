@@ -6,7 +6,7 @@
  * - Search across all support content
  * - Expandable FAQ accordion & Article Reader Modal
  * - Integrated Support Ticket tracking & submission via RequesterSupportSection
- * - Quick links to Player Terms of Service & Privacy Policy
+ * - Quick links to Player Terms of Service & Privacy Policy matching Profile setting cards
  */
 import React, { useEffect, useState, useMemo } from 'react';
 import {
@@ -67,7 +67,7 @@ export default function PlayerHelpSupportScreen() {
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/(player)/' as any);
+      router.replace('/(player)/profile' as any);
     }
   };
 
@@ -131,49 +131,49 @@ export default function PlayerHelpSupportScreen() {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={handleBack}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Go back"
+          accessibilityLabel="Go back to Profile"
           accessibilityRole="button"
         >
-          <ArrowLeft size={22} color="#0F2922" strokeWidth={2.3} />
+          <ArrowLeft size={20} color="#0F2922" strokeWidth={2.2} />
         </TouchableOpacity>
         <AppText style={styles.headerTitle}>Help & Support</AppText>
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Main Tab Switcher */}
-      <View style={styles.tabBar}>
+      {/* Segmented Control: FAQs & Guides vs Support Tickets */}
+      <View style={styles.segmentedContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'faqs' && styles.tabButtonActive]}
+          style={[styles.segmentBtn, activeTab === 'faqs' && styles.segmentBtnActive]}
           onPress={() => setActiveTab('faqs')}
           activeOpacity={0.8}
         >
           <HelpCircle
-            size={18}
-            color={activeTab === 'faqs' ? Colors.brand.primary : Colors.text.secondary}
+            size={15}
+            color={activeTab === 'faqs' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabText, activeTab === 'faqs' && styles.tabTextActive]}>
+          <AppText style={[styles.segmentText, activeTab === 'faqs' && styles.segmentTextActive]}>
             FAQs & Guides
           </AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'tickets' && styles.tabButtonActive]}
+          style={[styles.segmentBtn, activeTab === 'tickets' && styles.segmentBtnActive]}
           onPress={() => setActiveTab('tickets')}
           activeOpacity={0.8}
         >
           <MessageSquare
-            size={18}
-            color={activeTab === 'tickets' ? Colors.brand.primary : Colors.text.secondary}
+            size={15}
+            color={activeTab === 'tickets' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabText, activeTab === 'tickets' && styles.tabTextActive]}>
+          <AppText style={[styles.segmentText, activeTab === 'tickets' && styles.segmentTextActive]}>
             Support Tickets
           </AppText>
         </TouchableOpacity>
@@ -187,44 +187,47 @@ export default function PlayerHelpSupportScreen() {
       ) : (
         <ScrollView
           style={styles.scrollArea}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Quick Ticket Submission CTA Banner */}
-          <View style={styles.ctaBanner}>
-            <View style={styles.ctaIconWrap}>
-              <LifeBuoy size={24} color={Colors.brand.primary} />
+          {/* Direct Assistance Compact Info Section */}
+          <View style={styles.assistanceCard}>
+            <View style={styles.assistanceIconWrap}>
+              <LifeBuoy size={18} color="#114D3F" strokeWidth={2.2} />
             </View>
-            <View style={styles.ctaTextWrap}>
-              <AppText style={styles.ctaTitle}>Need Direct Assistance?</AppText>
-              <AppText style={styles.ctaSubtitle}>
+            <View style={styles.assistanceTextWrap}>
+              <AppText style={styles.assistanceTitle}>Need Direct Assistance?</AppText>
+              <AppText style={styles.assistanceSubtitle}>
                 Our support team is here to help with your account, bookings, and payments.
               </AppText>
             </View>
             <TouchableOpacity
-              style={styles.ctaButton}
+              style={styles.assistanceBtn}
               onPress={() => setActiveTab('tickets')}
               activeOpacity={0.8}
             >
-              <AppText style={styles.ctaButtonText}>Get Help</AppText>
+              <AppText style={styles.assistanceBtnText}>Get Help</AppText>
             </TouchableOpacity>
           </View>
 
           {/* Search Box */}
           <View style={styles.searchContainer}>
-            <Search size={18} color={Colors.text.secondary} style={styles.searchIcon} />
+            <Search size={16} color="#64748B" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search questions, articles, topics..."
-              placeholderTextColor={Colors.text.secondary}
+              placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={setSearchQuery}
               returnKeyType="search"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={18} color={Colors.text.secondary} />
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <X size={16} color="#64748B" />
               </TouchableOpacity>
             )}
           </View>
@@ -275,14 +278,14 @@ export default function PlayerHelpSupportScreen() {
 
           {isLoading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator size="small" color={Colors.brand.primary} />
+              <ActivityIndicator size="small" color="#114D3F" />
               <AppText style={styles.loadingText}>Loading support content...</AppText>
             </View>
           ) : (
             <>
               {/* Frequently Asked Questions */}
               <View style={styles.sectionHeader}>
-                <HelpCircle size={18} color={Colors.brand.primary} />
+                <HelpCircle size={16} color="#114D3F" strokeWidth={2.2} />
                 <AppText style={styles.sectionTitle}>Frequently Asked Questions</AppText>
                 <Badge variant="default" label={String(filteredFaqs.length)} />
               </View>
@@ -306,9 +309,9 @@ export default function PlayerHelpSupportScreen() {
                         >
                           <AppText style={styles.faqQuestion}>{faq.question}</AppText>
                           {isExpanded ? (
-                            <ChevronDown size={20} color={Colors.brand.primary} />
+                            <ChevronDown size={18} color="#114D3F" strokeWidth={2.2} />
                           ) : (
-                            <ChevronRight size={20} color={Colors.text.secondary} />
+                            <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
                           )}
                         </TouchableOpacity>
                         {isExpanded && (
@@ -328,8 +331,8 @@ export default function PlayerHelpSupportScreen() {
               )}
 
               {/* Help Articles & Guides */}
-              <View style={[styles.sectionHeader, { marginTop: Spacing[6] }]}>
-                <BookOpen size={18} color={Colors.brand.primary} />
+              <View style={[styles.sectionHeader, { marginTop: 22 }]}>
+                <BookOpen size={16} color="#114D3F" strokeWidth={2.2} />
                 <AppText style={styles.sectionTitle}>Help Articles & Guides</AppText>
                 <Badge variant="default" label={String(filteredArticles.length)} />
               </View>
@@ -351,7 +354,7 @@ export default function PlayerHelpSupportScreen() {
                     >
                       <View style={styles.articleCardHeader}>
                         <AppText style={styles.articleTitle}>{article.title}</AppText>
-                        <ChevronRight size={18} color={Colors.text.secondary} />
+                        <ChevronRight size={16} color="#94A3B8" />
                       </View>
                       <AppText style={styles.articleSnippet} numberOfLines={2}>
                         {article.content.replace(/#|\*|_|`/g, '').slice(0, 140)}...
@@ -360,41 +363,49 @@ export default function PlayerHelpSupportScreen() {
                         {article.category_name && (
                           <Badge variant="success" label={article.category_name} />
                         )}
-                        <AppText style={styles.readArticleLink}>Read guide</AppText>
+                        <AppText style={styles.readArticleLink}>Read guide →</AppText>
                       </View>
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
-              {/* Legal & Policy Quick Links */}
+              {/* Legal & Policy Quick Links (Styled exactly like Profile rows) */}
               <View style={styles.legalSection}>
                 <AppText style={styles.legalHeading}>Legal & Policies</AppText>
-                <View style={styles.legalGrid}>
+                <View style={styles.legalList}>
                   <TouchableOpacity
-                    style={styles.legalCard}
+                    style={styles.legalSettingCard}
                     onPress={() => router.push('/legal/player_terms' as any)}
                     activeOpacity={0.7}
                   >
-                    <FileText size={20} color={Colors.brand.primary} />
-                    <View style={styles.legalCardText}>
-                      <AppText style={styles.legalCardTitle}>Terms of Service</AppText>
-                      <AppText style={styles.legalCardSub}>Player platform agreement</AppText>
+                    <View style={styles.legalIconCircle}>
+                      <FileText size={20} color="#114D3F" strokeWidth={2} />
                     </View>
-                    <ChevronRight size={16} color={Colors.text.secondary} />
+                    <View style={styles.legalTextColumn}>
+                      <AppText style={styles.legalSettingTitle}>Terms of Service</AppText>
+                      <AppText style={styles.legalSettingSub}>
+                        Player terms, rules & policies
+                      </AppText>
+                    </View>
+                    <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.legalCard}
+                    style={styles.legalSettingCard}
                     onPress={() => router.push('/legal/privacy_policy' as any)}
                     activeOpacity={0.7}
                   >
-                    <Shield size={20} color={Colors.brand.primary} />
-                    <View style={styles.legalCardText}>
-                      <AppText style={styles.legalCardTitle}>Privacy Policy</AppText>
-                      <AppText style={styles.legalCardSub}>How your data is protected</AppText>
+                    <View style={styles.legalIconCircle}>
+                      <Shield size={20} color="#114D3F" strokeWidth={2} />
                     </View>
-                    <ChevronRight size={16} color={Colors.text.secondary} />
+                    <View style={styles.legalTextColumn}>
+                      <AppText style={styles.legalSettingTitle}>Privacy Policy</AppText>
+                      <AppText style={styles.legalSettingSub}>
+                        Data protection & user rights
+                      </AppText>
+                    </View>
+                    <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -412,29 +423,34 @@ export default function PlayerHelpSupportScreen() {
       >
         {selectedArticle && (
           <View style={styles.modalContainer}>
-            <View style={[styles.modalHeader, { paddingTop: insets.top + 8 }]}>
+            <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
                 onPress={() => setSelectedArticle(null)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={22} color={Colors.text.primary} />
+                <X size={20} color="#0F2922" />
               </TouchableOpacity>
               <AppText style={styles.modalHeaderTitle} numberOfLines={1}>
                 {selectedArticle.title}
               </AppText>
-              <View style={{ width: 32 }} />
+              <View style={{ width: 36 }} />
             </View>
 
             <ScrollView
               style={styles.modalScroll}
               contentContainerStyle={[styles.modalContent, { paddingBottom: insets.bottom + 40 }]}
+              showsVerticalScrollIndicator={false}
             >
               {selectedArticle.category_name && (
-                <Badge variant="success" label={selectedArticle.category_name} />
+                <View style={styles.modalBadge}>
+                  <Badge variant="success" label={selectedArticle.category_name} />
+                </View>
               )}
               <AppText style={styles.modalArticleTitle}>{selectedArticle.title}</AppText>
-              <AppText style={styles.modalArticleBody}>{selectedArticle.content}</AppText>
+              <AppText style={styles.modalArticleBody}>
+                {selectedArticle.content.replace(/#|\*|_|`/g, '')}
+              </AppText>
             </ScrollView>
           </View>
         )}
@@ -446,324 +462,348 @@ export default function PlayerHelpSupportScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F7F9F8',
+    backgroundColor: '#F8FAF9',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[2],
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E2E8F0',
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: Radius.full,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
+    backgroundColor: '#F1F5F9',
   },
   headerTitle: {
-    fontSize: Typography.size.lg,
-    fontWeight: Typography.weight.bold,
+    fontSize: 17,
+    fontWeight: '700',
     color: '#0F2922',
   },
   headerSpacer: {
-    width: 38,
+    width: 36,
   },
-  tabBar: {
+  segmentedContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: Spacing[4],
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 12,
   },
-  tabButton: {
+  segmentBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing[3],
-    gap: Spacing[1],
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
   },
-  tabButtonActive: {
-    borderBottomColor: Colors.brand.primary,
+  segmentBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  tabText: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
-    color: Colors.text.secondary,
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
   },
-  tabTextActive: {
-    fontWeight: Typography.weight.bold,
-    color: Colors.brand.primary,
+  segmentTextActive: {
+    color: '#114D3F',
+    fontWeight: '700',
   },
   ticketsContainer: {
     flex: 1,
+    paddingHorizontal: 16,
   },
   scrollArea: {
     flex: 1,
   },
   scrollContent: {
-    padding: Spacing[4],
+    paddingHorizontal: 16,
   },
-  ctaBanner: {
+  assistanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F0FDF4',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    marginBottom: Spacing[4],
-    gap: Spacing[3],
+    borderColor: '#BBF7D0',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+    gap: 10,
   },
-  ctaIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
-    backgroundColor: '#D1FAE5',
+  assistanceIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaTextWrap: {
+  assistanceTextWrap: {
     flex: 1,
   },
-  ctaTitle: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
-    color: '#065F46',
+  assistanceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#166534',
   },
-  ctaSubtitle: {
-    fontSize: Typography.size.xs,
-    color: '#047857',
-    marginTop: 2,
+  assistanceSubtitle: {
+    fontSize: 11,
+    color: '#15803D',
+    marginTop: 1,
+    lineHeight: 15,
   },
-  ctaButton: {
-    backgroundColor: Colors.brand.primary,
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[1] + 2,
-    borderRadius: Radius.md,
+  assistanceBtn: {
+    backgroundColor: '#114D3F',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
-  ctaButtonText: {
+  assistanceBtnText: {
     color: '#FFFFFF',
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
+    fontSize: 12,
+    fontWeight: '700',
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing[3],
-    height: 44,
-    marginBottom: Spacing[4],
+    borderColor: '#E8EDEA',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+    marginBottom: 12,
   },
   searchIcon: {
-    marginRight: Spacing[2],
+    marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    fontSize: Typography.size.sm,
-    color: Colors.text.primary,
+    fontSize: 13,
+    color: '#0F2922',
   },
   categoriesSection: {
-    marginBottom: Spacing[4],
+    marginBottom: 14,
   },
   categoryPills: {
     flexDirection: 'row',
-    gap: Spacing[2],
+    gap: 8,
   },
   categoryPill: {
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[1] + 2,
+    paddingHorizontal: 12,
+    height: 32,
     borderRadius: Radius.full,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E8EDEA',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryPillActive: {
-    backgroundColor: Colors.brand.primary,
-    borderColor: Colors.brand.primary,
+    backgroundColor: '#114D3F',
+    borderColor: '#114D3F',
   },
   categoryPillText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    fontWeight: Typography.weight.medium,
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   categoryPillTextActive: {
     color: '#FFFFFF',
-    fontWeight: Typography.weight.bold,
+    fontWeight: '700',
   },
   loadingBox: {
-    paddingVertical: Spacing[8],
+    paddingVertical: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing[2],
+    gap: 8,
   },
   loadingText: {
-    fontSize: Typography.size.sm,
-    color: Colors.text.secondary,
+    fontSize: 13,
+    color: '#64748B',
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
-    marginBottom: Spacing[2],
+    gap: 6,
+    marginBottom: 10,
   },
   sectionTitle: {
-    fontSize: Typography.size.base,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F2922',
     flex: 1,
   },
-  countBadge: {
-    backgroundColor: '#E2E8F0',
-  },
   emptyCard: {
-    padding: Spacing[4],
+    padding: 16,
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: Spacing[4],
+    borderColor: '#E8EDEA',
+    marginBottom: 14,
   },
   emptyCardText: {
-    fontSize: Typography.size.sm,
-    color: Colors.text.secondary,
+    fontSize: 13,
+    color: '#64748B',
     textAlign: 'center',
   },
   faqsList: {
-    gap: Spacing[2],
+    gap: 8,
   },
   faqItem: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E8EDEA',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   faqHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: Spacing[3],
+    padding: 13,
   },
   faqQuestion: {
     flex: 1,
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.text.primary,
-    marginRight: Spacing[2],
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F2922',
+    marginRight: 8,
+    lineHeight: 19,
   },
   faqBody: {
-    paddingHorizontal: Spacing[3],
-    paddingBottom: Spacing[3],
+    paddingHorizontal: 13,
+    paddingBottom: 13,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },
   faqAnswer: {
-    fontSize: Typography.size.sm,
-    color: '#475569',
+    fontSize: 13,
+    color: '#334155',
     lineHeight: 20,
-    marginTop: Spacing[2],
+    marginTop: 8,
   },
   faqFooter: {
-    marginTop: Spacing[2],
+    marginTop: 8,
     flexDirection: 'row',
   },
-  faqCatBadge: {
-    alignSelf: 'flex-start',
-  },
   articlesList: {
-    gap: Spacing[3],
+    gap: 10,
   },
   articleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E8EDEA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   articleCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[1],
+    marginBottom: 4,
   },
   articleTitle: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F2922',
     flex: 1,
-    marginRight: Spacing[2],
+    marginRight: 8,
   },
   articleSnippet: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.secondary,
-    lineHeight: 18,
-    marginBottom: Spacing[2],
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+    marginBottom: 8,
   },
   articleMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  articleBadge: {
-    alignSelf: 'flex-start',
-  },
   readArticleLink: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.semibold,
-    color: Colors.brand.primary,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#114D3F',
   },
   legalSection: {
-    marginTop: Spacing[6],
-    paddingTop: Spacing[3],
+    marginTop: 24,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E8EDEA',
   },
   legalHeading: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    color: Colors.text.secondary,
+    color: '#64748B',
     letterSpacing: 0.8,
-    marginBottom: Spacing[2],
+    marginBottom: 10,
   },
-  legalGrid: {
-    flexDirection: 'row',
-    gap: Spacing[3],
+  legalList: {
+    gap: 8,
   },
-  legalCard: {
-    flex: 1,
+  legalSettingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+    padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    padding: Spacing[2],
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: Spacing[2],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  legalCardText: {
+  legalIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  legalTextColumn: {
     flex: 1,
   },
-  legalCardTitle: {
-    fontSize: Typography.size.xs,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+  legalSettingTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F2922',
   },
-  legalCardSub: {
-    fontSize: 10,
-    color: Colors.text.secondary,
+  legalSettingSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
   },
   modalContainer: {
     flex: 1,
@@ -773,43 +813,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[2],
+    paddingHorizontal: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
   modalCloseBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalHeaderTitle: {
     flex: 1,
     textAlign: 'center',
-    fontSize: Typography.size.base,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F2922',
   },
   modalScroll: {
     flex: 1,
   },
   modalContent: {
-    padding: Spacing[4],
+    padding: 16,
   },
   modalBadge: {
     alignSelf: 'flex-start',
-    marginBottom: Spacing[2],
+    marginBottom: 8,
   },
   modalArticleTitle: {
-    fontSize: Typography.size.xl,
-    fontWeight: Typography.weight.bold,
-    color: Colors.text.primary,
-    marginBottom: Spacing[3],
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F2922',
+    marginBottom: 12,
   },
   modalArticleBody: {
-    fontSize: Typography.size.base,
+    fontSize: 14,
     color: '#334155',
-    lineHeight: 24,
+    lineHeight: 22,
   },
 });

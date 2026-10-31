@@ -1,11 +1,11 @@
 /**
  * Aught2 Pickleball — Centralized Legal Document Reader
  *
- * Dedicated document-viewer for Club & Player legal policies:
- * - /legal/club_terms (Club & Facility Terms of Service)
- * - /legal/privacy_policy (Privacy Policy)
- * - /legal/club_agreement (Club/Facility Operating Agreement)
+ * Dedicated document-viewer for Player & Club legal policies:
  * - /legal/player_terms (Player Terms of Service)
+ * - /legal/privacy_policy (Privacy Policy)
+ * - /legal/club_terms (Club & Facility Terms of Service)
+ * - /legal/club_agreement (Club/Facility Operating Agreement)
  */
 import React, { useEffect, useState } from 'react';
 import {
@@ -27,9 +27,9 @@ import {
   Check,
   CheckCircle2,
   Clock,
-  Copy,
   FileCheck,
   FileText,
+  Info,
   Share2,
   ShieldAlert,
   ShieldCheck,
@@ -37,8 +37,6 @@ import {
 
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
-import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
 import { EmptyState, ErrorState } from '@/components/StateViews';
 import {
   LegalAcceptanceItem,
@@ -72,6 +70,150 @@ function formatDateTime(dateStr?: string | null): string {
   });
 }
 
+// ─── Inline Markdown Formatter ───────────────────────────────────────────────
+function renderInlineFormatting(text: string, keyPrefix: string = 'inline'): React.ReactNode {
+  if (!text) return null;
+
+  // Matches **bold** or *italic*
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let tokenIdx = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(text.slice(lastIndex, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith('**') && token.endsWith('**')) {
+      const boldContent = token.slice(2, -2);
+      elements.push(
+        <AppText key={`${keyPrefix}-b-${tokenIdx++}`} style={styles.boldText}>
+          {boldContent}
+        </AppText>
+      );
+    } else if (token.startsWith('*') && token.endsWith('*')) {
+      const italicContent = token.slice(1, -1);
+      elements.push(
+        <AppText key={`${keyPrefix}-i-${tokenIdx++}`} style={styles.italicText}>
+          {italicContent}
+        </AppText>
+      );
+    }
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex));
+  }
+
+  return elements.length > 0 ? elements : text;
+}
+
+// ─── Block Markdown Parser ───────────────────────────────────────────────────
+interface ParsedBlock {
+  type: 'h1' | 'h2' | 'h3' | 'divider' | 'bullet_list' | 'submeta' | 'paragraph' | 'footnote';
+  text?: string;
+  items?: string[];
+}
+
+function parseMarkdownDocument(rawMarkdown: string): ParsedBlock[] {
+  const blocks: ParsedBlock[] = [];
+  const lines = rawMarkdown.replace(/\r\n/g, '\n').split('\n');
+
+  let currentBullets: string[] = [];
+  let currentParagraphLines: string[] = [];
+
+  const flushBullets = () => {
+    if (currentBullets.length > 0) {
+      blocks.push({ type: 'bullet_list', items: [...currentBullets] });
+      currentBullets = [];
+    }
+  };
+
+  const flushParagraph = () => {
+    if (currentParagraphLines.length > 0) {
+      const fullText = currentParagraphLines.join(' ').trim();
+      if (fullText) {
+        if (fullText.startsWith('*') && fullText.endsWith('*') && !fullText.startsWith('**')) {
+          blocks.push({ type: 'footnote', text: fullText.slice(1, -1) });
+        } else {
+          blocks.push({ type: 'paragraph', text: fullText });
+        }
+      }
+      currentParagraphLines = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flushBullets();
+      flushParagraph();
+      continue;
+    }
+
+    if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
+      flushBullets();
+      flushParagraph();
+      blocks.push({ type: 'divider' });
+      continue;
+    }
+
+    if (trimmed.startsWith('# ')) {
+      flushBullets();
+      flushParagraph();
+      blocks.push({ type: 'h1', text: trimmed.slice(2).trim() });
+      continue;
+    }
+
+    if (trimmed.startsWith('## ')) {
+      flushBullets();
+      flushParagraph();
+      blocks.push({ type: 'h2', text: trimmed.slice(3).trim() });
+      continue;
+    }
+
+    if (trimmed.startsWith('### ')) {
+      flushBullets();
+      flushParagraph();
+      blocks.push({ type: 'h3', text: trimmed.slice(4).trim() });
+      continue;
+    }
+
+    // Bullet items starting with - or *
+    if (/^[-*]\s+/.test(trimmed)) {
+      flushParagraph();
+      currentBullets.push(trimmed.replace(/^[-*]\s+/, '').trim());
+      continue;
+    }
+
+    // If we were accumulating bullets and hit non-bullet text, flush bullets
+    flushBullets();
+
+    // Check for inline version / effective date subheader
+    if (
+      trimmed.startsWith('**Version') ||
+      (trimmed.startsWith('**') && trimmed.includes('Effective Date'))
+    ) {
+      flushParagraph();
+      blocks.push({ type: 'submeta', text: trimmed });
+      continue;
+    }
+
+    currentParagraphLines.push(trimmed);
+  }
+
+  flushBullets();
+  flushParagraph();
+
+  return blocks;
+}
+
+// ─── Legal Document Screen Component ─────────────────────────────────────────
 export default function LegalDocumentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -82,6 +224,7 @@ export default function LegalDocumentScreen() {
 
   const user = useAuthStore((s) => s.user);
   const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [document, setDocument] = useState<LegalDocumentVersionItem | null>(null);
@@ -116,7 +259,7 @@ export default function LegalDocumentScreen() {
         if (isMounted) setIsLoading(false);
       });
 
-    // If authenticated, check acceptance status
+    // Check user's acceptance status if signed in
     if (isAuthenticated) {
       legalApi
         .getMyAcceptances()
@@ -139,8 +282,10 @@ export default function LegalDocumentScreen() {
   const handleBack = () => {
     if (router.canGoBack()) {
       router.back();
+    } else if (activePortal === 'club' || activeMembership) {
+      router.replace('/(club)/profile' as any);
     } else {
-      router.replace('/' as any);
+      router.replace('/(player)/profile' as any);
     }
   };
 
@@ -164,12 +309,12 @@ export default function LegalDocumentScreen() {
         document_type: documentType,
         version_id: document.id,
         club_id: activeMembership?.club_id || null,
-        source: 'club_portal',
+        source: activePortal === 'club' ? 'club_portal' : 'player_portal',
       });
       setAcceptance(res);
       Alert.alert(
         'Agreement Accepted',
-        'The Club/Facility Operating Agreement has been officially accepted and recorded.'
+        'The document has been officially accepted and recorded.'
       );
     } catch (err: any) {
       const msg =
@@ -183,17 +328,18 @@ export default function LegalDocumentScreen() {
   };
 
   const isFacilityAgreement = documentType === 'club_agreement';
+  const parsedBlocks = document?.content ? parseMarkdownDocument(document.content) : [];
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
+      {/* Consistent Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) + 4 }]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={handleBack}
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityLabel="Go back"
+          accessibilityLabel="Go back to Profile"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color="#0F2922" strokeWidth={2.2} />
@@ -247,7 +393,7 @@ export default function LegalDocumentScreen() {
           style={styles.scrollView}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(insets.bottom, 20) + 95 },
+            { paddingBottom: Math.max(insets.bottom, 20) + 100 },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -271,12 +417,12 @@ export default function LegalDocumentScreen() {
             </View>
           )}
 
-          {/* Document Metadata Card */}
+          {/* Standardized Document Information Card */}
           <View style={styles.metaCard}>
             <View style={styles.metaRow}>
               <View style={styles.docTypeBadge}>
                 <ShieldCheck size={14} color="#18794E" strokeWidth={2.2} />
-                <AppText style={styles.docTypeBadgeText}>Official Platform Policy</AppText>
+                <AppText style={styles.docTypeBadgeText}>Official Policy</AppText>
               </View>
               <View style={styles.versionBadge}>
                 <AppText style={styles.versionBadgeText}>Version {document.version}</AppText>
@@ -297,7 +443,7 @@ export default function LegalDocumentScreen() {
               <View style={styles.dateCol}>
                 <View style={styles.dateItem}>
                   <Clock size={13} color="#64748B" />
-                  <AppText style={styles.dateLabel}>Published Status:</AppText>
+                  <AppText style={styles.dateLabel}>Publication Status:</AppText>
                 </View>
                 <AppText style={styles.dateValueActive}>Active & In Effect</AppText>
               </View>
@@ -311,7 +457,7 @@ export default function LegalDocumentScreen() {
             ) : null}
           </View>
 
-          {/* Acceptance Status / Action Banner (for Club Agreement) */}
+          {/* Acceptance Status Banner (when applicable) */}
           {isFacilityAgreement && (
             acceptance ? (
               <View style={styles.acceptanceActiveCard}>
@@ -360,61 +506,79 @@ export default function LegalDocumentScreen() {
             ) : null
           )}
 
-          {/* Formatted Content Body */}
+          {/* Document Content with Complete Markdown Formatting */}
           <View style={styles.contentBody}>
-            {document.content.split('\n\n').map((paragraph, idx) => {
-              const trimmed = paragraph.trim();
-              if (!trimmed) return null;
+            {parsedBlocks.map((block, idx) => {
+              switch (block.type) {
+                case 'h1':
+                  return (
+                    <AppText key={idx} style={styles.h1}>
+                      {block.text}
+                    </AppText>
+                  );
 
-              if (trimmed.startsWith('# ')) {
-                return (
-                  <AppText key={idx} style={styles.h1}>
-                    {trimmed.replace('# ', '')}
-                  </AppText>
-                );
-              }
-              if (trimmed.startsWith('## ')) {
-                return (
-                  <View key={idx} style={styles.sectionHeaderWrap}>
-                    <AppText style={styles.h2}>{trimmed.replace('## ', '')}</AppText>
-                  </View>
-                );
-              }
-              if (trimmed.startsWith('### ')) {
-                return (
-                  <View key={idx} style={styles.sectionHeaderWrap}>
-                    <AppText style={styles.h3}>{trimmed.replace('### ', '')}</AppText>
-                  </View>
-                );
-              }
-              if (trimmed.startsWith('---')) {
-                return <View key={idx} style={styles.divider} />;
-              }
+                case 'submeta':
+                  return (
+                    <View key={idx} style={styles.submetaRow}>
+                      <AppText style={styles.submetaText}>
+                        {renderInlineFormatting(block.text || '', `sm-${idx}`)}
+                      </AppText>
+                    </View>
+                  );
 
-              // Check for bullet lists
-              if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
-                const items = trimmed.split('\n');
-                return (
-                  <View key={idx} style={styles.bulletList}>
-                    {items.map((it, itemIdx) => {
-                      const cleanIt = it.replace(/^[-*]\s+/, '').trim();
-                      if (!cleanIt) return null;
-                      return (
+                case 'h2':
+                  return (
+                    <View key={idx} style={styles.h2Wrap}>
+                      <AppText style={styles.h2}>
+                        {renderInlineFormatting(block.text || '', `h2-${idx}`)}
+                      </AppText>
+                    </View>
+                  );
+
+                case 'h3':
+                  return (
+                    <View key={idx} style={styles.h3Wrap}>
+                      <AppText style={styles.h3}>
+                        {renderInlineFormatting(block.text || '', `h3-${idx}`)}
+                      </AppText>
+                    </View>
+                  );
+
+                case 'divider':
+                  return <View key={idx} style={styles.divider} />;
+
+                case 'bullet_list':
+                  return (
+                    <View key={idx} style={styles.bulletList}>
+                      {block.items?.map((item, itemIdx) => (
                         <View key={itemIdx} style={styles.bulletRow}>
                           <View style={styles.bulletDot} />
-                          <AppText style={styles.bulletText}>{cleanIt}</AppText>
+                          <AppText style={styles.bulletText}>
+                            {renderInlineFormatting(item, `b-${idx}-${itemIdx}`)}
+                          </AppText>
                         </View>
-                      );
-                    })}
-                  </View>
-                );
-              }
+                      ))}
+                    </View>
+                  );
 
-              return (
-                <AppText key={idx} style={styles.paragraph}>
-                  {trimmed}
-                </AppText>
-              );
+                case 'footnote':
+                  return (
+                    <View key={idx} style={styles.footnoteBox}>
+                      <Info size={14} color="#64748B" style={styles.footnoteIcon} />
+                      <AppText style={styles.footnoteText}>
+                        {renderInlineFormatting(block.text || '', `fn-${idx}`)}
+                      </AppText>
+                    </View>
+                  );
+
+                case 'paragraph':
+                default:
+                  return (
+                    <AppText key={idx} style={styles.paragraph}>
+                      {renderInlineFormatting(block.text || '', `p-${idx}`)}
+                    </AppText>
+                  );
+              }
             })}
           </View>
 
@@ -436,7 +600,7 @@ export default function LegalDocumentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8FAF9',
   },
   header: {
     flexDirection: 'row',
@@ -500,10 +664,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E8EDEA',
     marginBottom: 12,
     gap: 10,
   },
@@ -541,11 +705,16 @@ const styles = StyleSheet.create({
   },
   metaCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginBottom: 14,
+    borderColor: '#E8EDEA',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   metaRow: {
     flexDirection: 'row',
@@ -556,7 +725,7 @@ const styles = StyleSheet.create({
   docTypeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E6F4EA',
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
@@ -565,7 +734,7 @@ const styles = StyleSheet.create({
   docTypeBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#18794E',
+    color: '#114D3F',
   },
   versionBadge: {
     backgroundColor: '#F1F5F9',
@@ -615,11 +784,11 @@ const styles = StyleSheet.create({
   },
   summaryBox: {
     marginTop: 10,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F8FAF9',
     padding: 10,
     borderRadius: 8,
     borderLeftWidth: 3,
-    borderLeftColor: '#18794E',
+    borderLeftColor: '#114D3F',
   },
   summaryLabel: {
     fontSize: 11,
@@ -638,9 +807,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderColor: '#BBF7D0',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 12,
     gap: 10,
   },
   acceptanceActiveIconWrap: {
@@ -669,9 +838,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB',
     borderColor: '#FDE68A',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 14,
+    marginBottom: 12,
     gap: 8,
   },
   acceptancePendingHeader: {
@@ -707,42 +876,68 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E8EDEA',
     marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   h1: {
     fontSize: 17,
     fontWeight: '800',
     color: '#0F2922',
+    marginBottom: 6,
+    lineHeight: 23,
+  },
+  submetaRow: {
     marginBottom: 10,
+  },
+  submetaText: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  h2Wrap: {
+    marginTop: 16,
+    marginBottom: 6,
   },
   h2: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F2922',
   },
-  sectionHeaderWrap: {
+  h3Wrap: {
     marginTop: 14,
     marginBottom: 6,
   },
   h3: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#114D3F',
+    color: '#0F2922',
   },
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E8EDEA',
     marginVertical: 12,
   },
   paragraph: {
     fontSize: 13,
-    lineHeight: 21,
+    lineHeight: 22,
     color: '#334155',
     marginBottom: 10,
+  },
+  boldText: {
+    fontWeight: '700',
+    color: '#0F2922',
+  },
+  italicText: {
+    fontStyle: 'italic',
+    color: '#475569',
   },
   bulletList: {
     marginBottom: 10,
@@ -763,8 +958,28 @@ const styles = StyleSheet.create({
   bulletText: {
     flex: 1,
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 21,
     color: '#334155',
+  },
+  footnoteBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAF9',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+  },
+  footnoteIcon: {
+    marginTop: 1,
+  },
+  footnoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
   },
   footerNotice: {
     flexDirection: 'row',
