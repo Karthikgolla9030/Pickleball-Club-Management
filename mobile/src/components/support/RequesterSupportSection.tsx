@@ -270,20 +270,20 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
 
   return (
     <View style={styles.container}>
-      {/* Tab Switcher: My Tickets vs Submit a Ticket */}
+      {/* Segmented Tab Switcher: My Tickets vs New Ticket */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabItem, activeSubTab === 'tickets' && styles.tabItemActive]}
           onPress={() => setActiveSubTab('tickets')}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <MessageSquare
-            size={16}
+            size={15}
             color={activeSubTab === 'tickets' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
           <AppText style={[styles.tabItemText, activeSubTab === 'tickets' && styles.tabItemTextActive]}>
-            My Support Tickets ({tickets.length})
+            My Tickets {tickets.length > 0 ? `(${tickets.length})` : ''}
           </AppText>
         </TouchableOpacity>
 
@@ -294,162 +294,178 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
             setFormError(null);
             setFormSuccess(null);
           }}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <PlusCircle
-            size={16}
+            size={15}
             color={activeSubTab === 'submit' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
           <AppText style={[styles.tabItemText, activeSubTab === 'submit' && styles.tabItemTextActive]}>
-            Submit a Ticket
+            New Ticket
           </AppText>
         </TouchableOpacity>
       </View>
 
       {/* SUB-VIEW 1: SUBMIT A TICKET */}
       {activeSubTab === 'submit' && (
-        <Card style={styles.formCard}>
-          <View style={styles.formHeader}>
-            <LifeBuoy size={20} color="#114D3F" />
-            <AppText style={styles.formTitle}>Submit a Support Ticket</AppText>
-          </View>
-          <AppText variant="caption" color="secondary" style={styles.formSubtitle}>
-            Our platform administration team reviews tickets during standard operations.
-          </AppText>
-
-          {formError && (
-            <View style={styles.alertError}>
-              <AlertCircle size={16} color="#DC2626" />
-              <AppText style={styles.alertErrorText}>{formError}</AppText>
+        <ScrollView
+          style={styles.subviewScrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Card style={styles.formCard}>
+            <View style={styles.formHeader}>
+              <LifeBuoy size={20} color="#114D3F" />
+              <AppText style={styles.formTitle}>Submit a Support Ticket</AppText>
             </View>
-          )}
+            <AppText variant="caption" color="secondary" style={styles.formSubtitle}>
+              Our platform administration team reviews tickets during standard operations.
+            </AppText>
 
-          {formSuccess && (
-            <View style={styles.alertSuccess}>
-              <CheckCircle2 size={16} color="#18794E" />
-              <AppText style={styles.alertSuccessText}>{formSuccess}</AppText>
-            </View>
-          )}
-
-          {/* Subject Field */}
-          <View style={styles.fieldGroup}>
-            <AppText style={styles.fieldLabel}>Subject *</AppText>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Brief summary of your inquiry or issue..."
-              placeholderTextColor="#94A3B8"
-              value={subject}
-              onChangeText={setSubject}
-              editable={!isSubmitting}
-            />
-          </View>
-
-          {/* Category Field */}
-          <View style={styles.fieldGroup}>
-            <AppText style={styles.fieldLabel}>Category</AppText>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.key}
-                  style={[styles.chip, category === cat.key && styles.chipActive]}
-                  onPress={() => setCategory(cat.key)}
-                >
-                  <AppText style={[styles.chipText, category === cat.key && styles.chipTextActive]}>
-                    {cat.label}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Priority Field */}
-          <View style={styles.fieldGroup}>
-            <AppText style={styles.fieldLabel}>Priority</AppText>
-            <View style={styles.chipsRow}>
-              {priorities.map((pri) => (
-                <TouchableOpacity
-                  key={pri.key}
-                  style={[styles.chip, priority === pri.key && styles.chipActive]}
-                  onPress={() => setPriority(pri.key)}
-                >
-                  <AppText style={[styles.chipText, priority === pri.key && styles.chipTextActive]}>
-                    {pri.label}
-                  </AppText>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Related Club Field */}
-          {mode === 'club' ? (
-            <View style={styles.fieldGroup}>
-              <AppText style={styles.fieldLabel}>Club Facility Scope</AppText>
-              <View style={styles.clubContextBadge}>
-                <Building2 size={14} color={Colors.brand.primary} />
-                <AppText style={styles.clubContextBadgeText}>
-                  {defaultClubId ? 'Linked to your active club facility' : 'Club Operations'}
-                </AppText>
+            {formError && (
+              <View style={styles.alertError}>
+                <AlertCircle size={16} color="#DC2626" />
+                <AppText style={styles.alertErrorText}>{formError}</AppText>
               </View>
-            </View>
-          ) : (
+            )}
+
+            {formSuccess && (
+              <View style={styles.alertSuccess}>
+                <CheckCircle2 size={16} color="#18794E" />
+                <AppText style={styles.alertSuccessText}>{formSuccess}</AppText>
+              </View>
+            )}
+
+            {/* Subject Field */}
             <View style={styles.fieldGroup}>
-              <AppText style={styles.fieldLabel}>Related Club (Optional)</AppText>
+              <AppText style={styles.fieldLabel}>Subject *</AppText>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Brief summary of your inquiry or issue..."
+                placeholderTextColor="#94A3B8"
+                value={subject}
+                onChangeText={setSubject}
+                editable={!isSubmitting}
+              />
+            </View>
+
+            {/* Category Field */}
+            <View style={styles.fieldGroup}>
+              <AppText style={styles.fieldLabel}>Category</AppText>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
-                <TouchableOpacity
-                  style={[styles.chip, selectedClubId === null && styles.chipActive]}
-                  onPress={() => setSelectedClubId(null)}
-                >
-                  <AppText style={[styles.chipText, selectedClubId === null && styles.chipTextActive]}>
-                    None / General
-                  </AppText>
-                </TouchableOpacity>
-                {clubsList.map((c) => (
+                {categories.map((cat) => (
                   <TouchableOpacity
-                    key={c.id}
-                    style={[styles.chip, selectedClubId === c.id && styles.chipActive]}
-                    onPress={() => setSelectedClubId(c.id)}
+                    key={cat.key}
+                    style={[styles.chip, category === cat.key && styles.chipActive]}
+                    onPress={() => setCategory(cat.key)}
                   >
-                    <AppText style={[styles.chipText, selectedClubId === c.id && styles.chipTextActive]}>
-                      {c.name}
+                    <AppText style={[styles.chipText, category === cat.key && styles.chipTextActive]}>
+                      {cat.label}
                     </AppText>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             </View>
-          )}
 
-          {/* Description Field */}
-          <View style={styles.fieldGroup}>
-            <AppText style={styles.fieldLabel}>Description *</AppText>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Describe your issue or question in detail. Include dates, court numbers, or error messages if applicable..."
-              placeholderTextColor="#94A3B8"
-              multiline
-              numberOfLines={4}
-              value={description}
-              onChangeText={setDescription}
-              editable={!isSubmitting}
+            {/* Priority Field */}
+            <View style={styles.fieldGroup}>
+              <AppText style={styles.fieldLabel}>Priority</AppText>
+              <View style={styles.chipsRow}>
+                {priorities.map((pri) => (
+                  <TouchableOpacity
+                    key={pri.key}
+                    style={[styles.chip, priority === pri.key && styles.chipActive]}
+                    onPress={() => setPriority(pri.key)}
+                  >
+                    <AppText style={[styles.chipText, priority === pri.key && styles.chipTextActive]}>
+                      {pri.label}
+                    </AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Related Club Field */}
+            {mode === 'club' ? (
+              <View style={styles.fieldGroup}>
+                <AppText style={styles.fieldLabel}>Club Facility Scope</AppText>
+                <View style={styles.clubContextBadge}>
+                  <Building2 size={14} color={Colors.brand.primary} />
+                  <AppText style={styles.clubContextBadgeText}>
+                    {defaultClubId ? 'Linked to your active club facility' : 'Club Operations'}
+                  </AppText>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.fieldGroup}>
+                <AppText style={styles.fieldLabel}>Related Club (Optional)</AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                  <TouchableOpacity
+                    style={[styles.chip, selectedClubId === null && styles.chipActive]}
+                    onPress={() => setSelectedClubId(null)}
+                  >
+                    <AppText style={[styles.chipText, selectedClubId === null && styles.chipTextActive]}>
+                      None / General
+                    </AppText>
+                  </TouchableOpacity>
+                  {clubsList.map((c) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[styles.chip, selectedClubId === c.id && styles.chipActive]}
+                      onPress={() => setSelectedClubId(c.id)}
+                    >
+                      <AppText style={[styles.chipText, selectedClubId === c.id && styles.chipTextActive]}>
+                        {c.name}
+                      </AppText>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Description Field */}
+            <View style={styles.fieldGroup}>
+              <AppText style={styles.fieldLabel}>Description *</AppText>
+              <TextInput
+                style={[styles.textInput, styles.textArea]}
+                placeholder="Describe your issue or question in detail. Include dates, court numbers, or error messages if applicable..."
+                placeholderTextColor="#94A3B8"
+                multiline
+                numberOfLines={4}
+                value={description}
+                onChangeText={setDescription}
+                editable={!isSubmitting}
+              />
+            </View>
+
+            <Button
+              label={isSubmitting ? 'Submitting Ticket...' : 'Submit Support Ticket'}
+              variant="primary"
+              leftIcon={<Send size={16} color="#FFFFFF" />}
+              loading={isSubmitting}
+              disabled={isSubmitting}
+              onPress={handleSubmitTicket}
             />
-          </View>
-
-          <Button
-            label={isSubmitting ? 'Submitting Ticket...' : 'Submit Support Ticket'}
-            variant="primary"
-            leftIcon={<Send size={16} color="#FFFFFF" />}
-            loading={isSubmitting}
-            disabled={isSubmitting}
-            onPress={handleSubmitTicket}
-          />
-        </Card>
+          </Card>
+        </ScrollView>
       )}
 
       {/* SUB-VIEW 2: MY TICKETS LIST */}
       {activeSubTab === 'tickets' && (
-        <View style={styles.ticketsContainer}>
+        <ScrollView
+          style={styles.subviewScrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Status Filter Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusFilterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.statusFilterBar}
+            contentContainerStyle={styles.statusFilterContent}
+          >
             {[
               { key: 'all', label: 'All' },
               { key: 'open', label: 'Open' },
@@ -482,10 +498,27 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
               </AppText>
             </View>
           ) : ticketError ? (
-            <View style={styles.alertError}>
-              <AlertCircle size={16} color="#DC2626" />
-              <AppText style={styles.alertErrorText}>{ticketError}</AppText>
-            </View>
+            <Card style={styles.errorCard}>
+              <View style={styles.errorHeader}>
+                <AlertCircle size={20} color="#DC2626" />
+                <AppText style={styles.errorTitle}>Unable to Load Tickets</AppText>
+              </View>
+              <AppText style={styles.errorMessage}>
+                {ticketError.toLowerCase().includes('dataerror') ||
+                ticketError.toLowerCase().includes('sql') ||
+                ticketError.toLowerCase().includes('psycopg')
+                  ? 'A temporary system issue occurred while loading your support tickets. Please tap retry below.'
+                  : ticketError}
+              </AppText>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => fetchMyTickets(false)}
+                activeOpacity={0.7}
+              >
+                <RefreshCw size={14} color="#FFFFFF" />
+                <AppText style={styles.retryBtnText}>Retry</AppText>
+              </TouchableOpacity>
+            </Card>
           ) : tickets.length === 0 ? (
             <Card style={styles.emptyCard}>
               <LifeBuoy size={36} color="#94A3B8" />
@@ -493,7 +526,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
               <AppText variant="caption" color="secondary" style={styles.emptySubtitle}>
                 {statusFilter !== 'all'
                   ? 'No tickets match the selected status filter.'
-                  : 'You have not submitted any support tickets yet. Need help? Tap "Submit a Ticket" above.'}
+                  : 'You have not submitted any support tickets yet. Need help? Tap "New Ticket" above.'}
               </AppText>
             </Card>
           ) : (
@@ -556,7 +589,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
               })}
             </View>
           )}
-        </View>
+        </ScrollView>
       )}
 
       {/* TICKET CONVERSATION MODAL */}
@@ -717,31 +750,38 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
 
 const styles = StyleSheet.create({
   container: {
-    gap: 16,
+    flex: 1,
+  },
+  subviewScrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 110,
+    gap: 12,
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: '#EAEFEA',
-    borderRadius: Radius.lg,
-    padding: 4,
-    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 12,
   },
   tabItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: Radius.md,
+    paddingVertical: 8,
+    borderRadius: 8,
     gap: 6,
   },
   tabItemActive: {
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 2,
-    elevation: 1,
+    elevation: 2,
   },
   tabItemText: {
     fontSize: 13,
@@ -749,7 +789,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabItemTextActive: {
-    color: Colors.brand.primary,
+    color: '#114D3F',
     fontWeight: '700',
   },
   formCard: {
@@ -864,29 +904,73 @@ const styles = StyleSheet.create({
   },
   statusFilterBar: {
     flexDirection: 'row',
+    marginBottom: 4,
+  },
+  statusFilterContent: {
+    paddingRight: 16,
+    gap: 6,
   },
   statusPill: {
-    height: 34,
-    paddingHorizontal: 14,
+    height: 32,
+    paddingHorizontal: 12,
     borderRadius: Radius.full,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginRight: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   statusPillActive: {
-    backgroundColor: Colors.brand.primary,
-    borderColor: Colors.brand.primary,
+    backgroundColor: '#114D3F',
+    borderColor: '#114D3F',
   },
   statusPillText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#475569',
+    color: '#64748B',
   },
   statusPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  errorCard: {
+    padding: 16,
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+    borderWidth: 1,
+    borderRadius: 14,
+    gap: 8,
+    alignItems: 'flex-start',
+  },
+  errorHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  errorMessage: {
+    fontSize: 13,
+    color: '#B91C1C',
+    lineHeight: 18,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#114D3F',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   centerBox: {
     padding: 30,

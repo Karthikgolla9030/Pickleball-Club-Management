@@ -157,34 +157,34 @@ export default function ClubHelpSupportScreen() {
         <View style={styles.headerSpacer} />
       </View>
 
-      {/* Main Tab Switcher */}
-      <View style={styles.tabBar}>
+      {/* Segmented Control: Knowledge Base vs Support Tickets */}
+      <View style={styles.segmentedContainer}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'faqs' && styles.tabButtonActive]}
+          style={[styles.segmentBtn, activeTab === 'faqs' && styles.segmentBtnActive]}
           onPress={() => setActiveTab('faqs')}
           activeOpacity={0.8}
         >
-          <HelpCircle
-            size={18}
-            color={activeTab === 'faqs' ? Colors.brand.primary : Colors.text.secondary}
+          <BookOpen
+            size={15}
+            color={activeTab === 'faqs' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabText, activeTab === 'faqs' && styles.tabTextActive]}>
-            Club Knowledge Base
+          <AppText style={[styles.segmentText, activeTab === 'faqs' && styles.segmentTextActive]}>
+            Knowledge Base
           </AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === 'tickets' && styles.tabButtonActive]}
+          style={[styles.segmentBtn, activeTab === 'tickets' && styles.segmentBtnActive]}
           onPress={() => setActiveTab('tickets')}
           activeOpacity={0.8}
         >
           <MessageSquare
-            size={18}
-            color={activeTab === 'tickets' ? Colors.brand.primary : Colors.text.secondary}
+            size={15}
+            color={activeTab === 'tickets' ? '#114D3F' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabText, activeTab === 'tickets' && styles.tabTextActive]}>
+          <AppText style={[styles.segmentText, activeTab === 'tickets' && styles.segmentTextActive]}>
             Support Tickets
           </AppText>
         </TouchableOpacity>
@@ -201,7 +201,7 @@ export default function ClubHelpSupportScreen() {
       ) : (
         <ScrollView
           style={styles.scrollArea}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -509,37 +509,44 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 38,
   },
-  tabBar: {
+  segmentedContainer: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: Spacing[4],
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    marginHorizontal: Spacing[4],
+    marginTop: 12,
+    marginBottom: 12,
   },
-  tabButton: {
+  segmentBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing[3],
-    gap: Spacing[1],
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
   },
-  tabButtonActive: {
-    borderBottomColor: Colors.brand.primary,
+  segmentBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  tabText: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
-    color: Colors.text.secondary,
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
   },
-  tabTextActive: {
-    fontWeight: Typography.weight.bold,
-    color: Colors.brand.primary,
+  segmentTextActive: {
+    color: '#114D3F',
+    fontWeight: '700',
   },
   ticketsContainer: {
     flex: 1,
+    paddingHorizontal: Spacing[4],
   },
   scrollArea: {
     flex: 1,

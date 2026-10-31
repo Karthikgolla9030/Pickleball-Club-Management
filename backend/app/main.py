@@ -246,7 +246,17 @@ def create_app() -> FastAPI:
         """
         logger.exception("Unhandled exception on %s %s: %s", request.method, request.url, exc)
         headers = _build_cors_headers(request)
-        detail = f"Internal server error: {type(exc).__name__}: {str(exc)}"
+        
+        # Sanitize sensitive database errors and internal tracebacks
+        from sqlalchemy.exc import SQLAlchemyError
+        if not settings.is_development:
+            detail = "An internal server error occurred while processing the request. Please try again later."
+        elif isinstance(exc, SQLAlchemyError):
+            detail = f"Database error ({type(exc).__name__}). Please contact platform support if this persists."
+        else:
+            first_line = str(exc).splitlines()[0] if str(exc) else type(exc).__name__
+            detail = f"Internal server error: {type(exc).__name__}: {first_line}"
+
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={"detail": detail},

@@ -183,16 +183,13 @@ class NotificationService:
         staff_roles = [
             ClubRole.CLUB_OWNER,
             ClubRole.CLUB_MANAGER,
-            "club_owner",
-            "club_manager",
-            "owner",
-            "manager",
+            ClubRole.TOURNAMENT_DIRECTOR,
+            ClubRole.STAFF_MEMBER,
         ]
         staff_res = await self.db.execute(
             select(ClubMembership.user_id).where(
                 ClubMembership.club_id == club_id,
                 ClubMembership.is_active == True,
-                # Owner and manager roles are considered staff
                 ClubMembership.role.in_(staff_roles),
             )
         )

@@ -123,18 +123,12 @@ class SupportTicketService:
         self.db = db
 
     async def _is_club_staff(self, user_id: UUID, club_id: UUID) -> bool:
-        """Check if user has an active club staff role (owner, manager, or tournament director)."""
+        """Check if user has an active club staff role (owner, manager, tournament director, or staff member)."""
         staff_roles = [
             ClubRole.CLUB_OWNER,
             ClubRole.CLUB_MANAGER,
             ClubRole.TOURNAMENT_DIRECTOR,
             ClubRole.STAFF_MEMBER,
-            "club_owner",
-            "club_manager",
-            "tournament_director",
-            "staff_member",
-            "owner",
-            "manager",
         ]
         stmt = select(ClubMembership).where(
             ClubMembership.user_id == user_id,
