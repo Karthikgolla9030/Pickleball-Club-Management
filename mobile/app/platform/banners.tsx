@@ -32,7 +32,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import {
   AlertCircle,
-  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   ChevronDown,
@@ -261,18 +260,7 @@ export default function PlatformBannersScreen() {
       scrollable
     >
       <View style={styles.container}>
-        {/* ── 1. Back to Settings Link ── */}
-        <TouchableOpacity
-          style={styles.backButtonRow}
-          onPress={() => router.push('/platform/settings' as any)}
-          activeOpacity={0.7}
-          accessibilityLabel="Back to Settings"
-        >
-          <ArrowLeft size={14} color="#0F172A" strokeWidth={2.4} />
-          <AppText style={styles.backButtonText}>Back to Settings</AppText>
-        </TouchableOpacity>
-
-        {/* ── 2. Compact Page Heading ── */}
+        {/* ── Page Heading ── */}
         <View style={styles.headerSection}>
           <AppText style={styles.screenTitle}>Home Banners</AppText>
           <AppText style={styles.screenSubtitle}>
@@ -645,24 +633,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
 
-  // 1. Back to Settings Navigation
-  backButtonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 4,
-    marginBottom: 4,
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-
-  // 2. Compact Page Heading
+  // Page Heading
   headerSection: {
-    marginBottom: 12,
+    paddingTop: 4,
+    marginBottom: 14,
   },
   screenTitle: {
     fontSize: 22,
