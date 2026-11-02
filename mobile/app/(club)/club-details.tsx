@@ -39,6 +39,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  FileText,
   Globe,
   Image as ImageIcon,
   Info,
@@ -55,6 +56,7 @@ import {
   Sparkles,
   Trash2,
   Trophy,
+  Upload,
   X,
 } from 'lucide-react-native';
 
@@ -901,7 +903,7 @@ export default function ClubDetailsScreen() {
                 {/* Top Editing Status Banner */}
                 <View style={styles.editingBanner}>
                   <View style={styles.editingBannerLeft}>
-                    <Pencil size={16} color="#176B57" />
+                    <Pencil size={15} color="#176B57" strokeWidth={2.2} />
                     <AppText style={styles.editingBannerTitle}>Editing Club Profile</AppText>
                   </View>
                   <View style={styles.editingBannerActions}>
@@ -909,6 +911,7 @@ export default function ClubDetailsScreen() {
                       style={styles.editingBannerCancelBtn}
                       onPress={handleCancelEdit}
                       disabled={isUpdating}
+                      activeOpacity={0.7}
                     >
                       <AppText style={styles.editingBannerCancelText}>Cancel</AppText>
                     </TouchableOpacity>
@@ -916,6 +919,7 @@ export default function ClubDetailsScreen() {
                       style={[styles.editingBannerSaveBtn, isUpdating && styles.saveBtnDisabled]}
                       onPress={handleSaveChanges}
                       disabled={isUpdating}
+                      activeOpacity={0.8}
                     >
                       {isUpdating ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
@@ -926,180 +930,214 @@ export default function ClubDetailsScreen() {
                   </View>
                 </View>
 
-                {/* SECTION A: CLUB INFORMATION */}
+                {/* 1. CLUB INFORMATION CARD */}
                 <Card style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={styles.sectionIconBadge}>
-                    <Building2 size={18} color="#176B57" />
-                  </View>
-                  <View style={styles.sectionTitleBlock}>
-                    <AppText style={styles.sectionTitle}>Club Information</AppText>
-                    <AppText style={styles.sectionSubtitle}>
-                      Branding, public description, and contact info
-                    </AppText>
-                  </View>
-                </View>
-
-                {/* Logo Uploader */}
-                <View style={styles.logoSection}>
-                  <View style={styles.logoContainer}>
-                    {currentLogoUri && !logoError ? (
-                      <Image
-                        source={{ uri: currentLogoUri }}
-                        style={styles.logoImage}
-                        resizeMode="contain"
-                        onError={() => setLogoError(true)}
-                      />
-                    ) : (
-                      <View style={styles.logoFallback}>
-                        <Building2 size={36} color="#176B57" />
-                      </View>
-                    )}
-                    {isOwner && (
-                      <TouchableOpacity
-                        style={styles.logoChangeButton}
-                        onPress={handlePickLogo}
-                        activeOpacity={0.8}
-                        disabled={isUploadingLogo}
-                        accessibilityLabel="Upload Club Logo"
-                      >
-                        {isUploadingLogo ? (
-                          <ActivityIndicator size="small" color="#FFFFFF" />
-                        ) : (
-                          <Camera size={14} color="#FFFFFF" />
-                        )}
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                  <View style={styles.logoInfoTextWrapper}>
-                    <View style={styles.logoTitleRow}>
-                      <AppText style={styles.logoTitle}>Club Logo</AppText>
-                      <Badge
-                        label={currentLogoUri ? 'Custom Club Logo' : 'Default Icon'}
-                        variant={currentLogoUri ? 'success' : 'default'}
-                      />
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Building2 size={16} color="#176B57" />
                     </View>
-                    <AppText style={styles.logoHelpText}>
-                      PNG, JPG, or WEBP. Max 5MB. Displayed on public discovery and player dashboards.
-                    </AppText>
-                    {isOwner && (
-                      <View style={styles.logoActionLinksRow}>
-                        <TouchableOpacity
-                          onPress={handlePickLogo}
-                          disabled={isUploadingLogo}
-                          style={styles.logoActionLink}
-                        >
-                          <AppText style={styles.logoActionLinkText}>
-                            {isUploadingLogo ? 'Uploading logo...' : currentLogoUri ? 'Replace logo' : 'Choose image'}
-                          </AppText>
-                        </TouchableOpacity>
-
-                        {currentLogoUri && (
-                          <TouchableOpacity
-                            onPress={handleRemoveLogo}
-                            disabled={isUploadingLogo}
-                            style={styles.logoActionLinkSecondary}
-                          >
-                            <AppText style={styles.logoActionLinkTextDanger}>Reset to default</AppText>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Player-Facing Club Cover / Banner Uploader */}
-                <View style={styles.coverUploadSection}>
-                  <View style={styles.coverUploadHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <AppText style={styles.coverUploadTitle}>Player-Facing Club Cover / Banner</AppText>
-                      <AppText style={styles.coverUploadHelpText}>
-                        Displayed when players open this club's details in the Player App. Recommended 16:9 landscape photo.
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Club Information</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Branding, public description, and contact info
                       </AppText>
                     </View>
-                    <Badge
-                      label={currentCoverUri ? 'Custom Club Cover' : 'Built-in Fallback'}
-                      variant={currentCoverUri ? 'success' : 'default'}
-                    />
                   </View>
 
-                  <View style={styles.coverPreviewContainer}>
-                    <Image
-                      source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
-                      style={styles.coverPreviewImg}
-                      resizeMode="cover"
-                    />
-                    {isUploadingCover && (
-                      <View style={styles.coverUploadOverlay}>
-                        <ActivityIndicator size="small" color="#FFFFFF" />
-                        <AppText style={styles.coverUploadOverlayText}>Saving cover banner...</AppText>
+                  {/* Club Logo Section */}
+                  <View style={styles.editLogoRow}>
+                    <View style={styles.editLogoContainer}>
+                      <View style={styles.editLogoCircle}>
+                        {currentLogoUri && !logoError ? (
+                          <Image
+                            source={{ uri: currentLogoUri }}
+                            style={styles.editLogoImg}
+                            resizeMode="contain"
+                            onError={() => setLogoError(true)}
+                          />
+                        ) : (
+                          <Building2 size={26} color="#176B57" />
+                        )}
                       </View>
-                    )}
-                  </View>
-
-                  {isOwner && (
-                    <View style={styles.coverActionButtonsRow}>
-                      <TouchableOpacity
-                        style={styles.coverUploadBtn}
-                        onPress={handlePickCover}
-                        disabled={isUploadingCover}
-                        activeOpacity={0.8}
-                      >
-                        <Camera size={14} color="#FFFFFF" />
-                        <AppText style={styles.coverUploadBtnText}>
-                          {currentCoverUri ? 'Replace Cover Banner' : 'Upload Cover Banner'}
-                        </AppText>
-                      </TouchableOpacity>
-
-                      {currentCoverUri && (
+                      {isOwner && (
                         <TouchableOpacity
-                          style={styles.coverRemoveBtn}
-                          onPress={handleRemoveCover}
-                          disabled={isUploadingCover}
+                          style={styles.editCameraCircle}
+                          onPress={handlePickLogo}
+                          disabled={isUploadingLogo}
                           activeOpacity={0.8}
+                          accessibilityLabel="Upload Club Logo"
                         >
-                          <RotateCcw size={14} color="#DC2626" />
-                          <AppText style={styles.coverRemoveBtnText}>Reset to Default</AppText>
+                          {isUploadingLogo ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <Camera size={11} color="#FFFFFF" strokeWidth={2.5} />
+                          )}
                         </TouchableOpacity>
                       )}
                     </View>
-                  )}
-                </View>
 
-                {/* Club Name */}
-                <FormField
-                  label="Club Name"
-                  required
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="e.g. Metro Pickleball Club"
-                  error={validationErrors.name}
-                  editable={isOwner}
-                />
+                    <View style={styles.editLogoInfoCol}>
+                      <View style={styles.editBadgeTitleRow}>
+                        <AppText style={styles.editSubHeading}>Club Logo</AppText>
+                        <View style={styles.pillBadgeSuccess}>
+                          <AppText style={styles.pillBadgeSuccessText}>
+                            {currentLogoUri ? 'Custom club logo' : 'Default icon'}
+                          </AppText>
+                        </View>
+                      </View>
+                      <AppText style={styles.editHelpText}>
+                        PNG, JPG, or WEBP. Max 5MB.
+                      </AppText>
+                      {isOwner && (
+                        <View style={styles.editLinkActionsRow}>
+                          <TouchableOpacity
+                            onPress={handlePickLogo}
+                            disabled={isUploadingLogo}
+                            activeOpacity={0.7}
+                          >
+                            <AppText style={styles.editActionLinkPrimary}>
+                              {isUploadingLogo ? 'Uploading logo...' : currentLogoUri ? 'Replace logo' : 'Choose image'}
+                            </AppText>
+                          </TouchableOpacity>
+                          {currentLogoUri && (
+                            <>
+                              <AppText style={styles.editActionDivider}>|</AppText>
+                              <TouchableOpacity
+                                onPress={handleRemoveLogo}
+                                disabled={isUploadingLogo}
+                                activeOpacity={0.7}
+                              >
+                                <AppText style={styles.editActionLinkDanger}>
+                                  Reset to default
+                                </AppText>
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
 
-                {/* Tagline / Short Description */}
-                <FormField
-                  label="Short Tagline"
-                  value={shortDescription}
-                  onChangeText={setShortDescription}
-                  placeholder="e.g. Premier indoor pickleball in Charlotte"
-                  hint="A punchy one-liner shown on banners and search results."
-                  editable={isOwner}
-                />
+                  {/* Inner Divider */}
+                  <View style={styles.cardInnerDivider} />
 
-                {/* Full Description */}
-                <FormField
-                  label="About the Club"
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="Tell players about your facility, programs, tournaments, and community..."
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  editable={isOwner}
-                />
+                  {/* Player-Facing Club Cover / Banner */}
+                  <View style={styles.editCoverBlock}>
+                    <View style={styles.editBadgeTitleRow}>
+                      <AppText style={styles.editSubHeading}>Player-Facing Club Cover</AppText>
+                      <View style={styles.pillBadgeSuccess}>
+                        <AppText style={styles.pillBadgeSuccessText}>
+                          {currentCoverUri ? 'Custom cover' : 'Default cover'}
+                        </AppText>
+                      </View>
+                    </View>
+                    <AppText style={styles.editHelpText}>
+                      Displayed when players open this club's details in the Player App.
+                    </AppText>
+                    <AppText style={styles.editHelpText}>
+                      Recommended 16:9 landscape photo.
+                    </AppText>
 
-                <FormRow stackOnMobile={true}>
+                    <View style={styles.editCoverPreviewRow}>
+                      <View style={styles.editCoverPreviewBox}>
+                        <Image
+                          source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
+                          style={styles.editCoverImg}
+                          resizeMode="cover"
+                        />
+                        {isUploadingCover && (
+                          <View style={styles.coverUploadOverlay}>
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
+
+                      {isOwner && (
+                        <TouchableOpacity
+                          style={styles.uploadCoverOutlineBtn}
+                          onPress={handlePickCover}
+                          disabled={isUploadingCover}
+                          activeOpacity={0.8}
+                        >
+                          <Upload size={14} color="#176B57" strokeWidth={2.2} />
+                          <AppText style={styles.uploadCoverOutlineBtnText}>
+                            {isUploadingCover ? 'Uploading...' : currentCoverUri ? 'Replace cover' : 'Upload cover'}
+                          </AppText>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+
+                {/* 2. BASIC DETAILS CARD */}
+                <Card style={styles.sectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <FileText size={16} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Basic Details</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Core information about your club
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <FormField
+                    label="Club Name"
+                    required
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="e.g. Pickleball Club"
+                    error={validationErrors.name}
+                    editable={isOwner}
+                  />
+
+                  <FormField
+                    label="Short Tagline"
+                    value={shortDescription}
+                    onChangeText={setShortDescription}
+                    placeholder="e.g. Premier indoor and outdoor pickleball"
+                    hint="A punchy one-liner shown on banners and search results."
+                    editable={isOwner}
+                  />
+
+                  <FormField
+                    label="About the Club"
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder="Tell players about your facility, programs, tournaments, and community..."
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                    editable={isOwner}
+                  />
+
+                  <FormField
+                    label="Established Year"
+                    value={establishedYear}
+                    onChangeText={setEstablishedYear}
+                    placeholder="e.g. 2026"
+                    keyboardType="number-pad"
+                    error={validationErrors.establishedYear}
+                    editable={isOwner}
+                  />
+                </Card>
+
+                {/* 3. CONTACT INFORMATION CARD */}
+                <Card style={styles.sectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Mail size={16} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Contact Information</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Public contact channels for player inquiries
+                      </AppText>
+                    </View>
+                  </View>
+
                   <FormField
                     label="Contact Email"
                     value={contactEmail}
@@ -1110,15 +1148,14 @@ export default function ClubDetailsScreen() {
                     error={validationErrors.contactEmail}
                     editable={isOwner}
                   />
+
                   <InternationalPhoneInput
                     label="Contact Phone"
                     value={contactPhone}
                     onChangeText={setContactPhone}
                     disabled={!isOwner}
                   />
-                </FormRow>
 
-                <FormRow stackOnMobile={true}>
                   <FormField
                     label="Public Website"
                     value={website}
@@ -1129,252 +1166,242 @@ export default function ClubDetailsScreen() {
                     error={validationErrors.website}
                     editable={isOwner}
                   />
-                  <FormField
-                    label="Established Year"
-                    value={establishedYear}
-                    onChangeText={setEstablishedYear}
-                    placeholder="e.g. 2023"
-                    keyboardType="number-pad"
-                    error={validationErrors.establishedYear}
-                    editable={isOwner}
-                  />
-                </FormRow>
-              </Card>
+                </Card>
 
-              {/* SECTION B: LOCATION INFORMATION */}
-              <Card style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={styles.sectionIconBadge}>
-                    <MapPin size={18} color="#176B57" />
-                  </View>
-                  <View style={styles.sectionTitleBlock}>
-                    <AppText style={styles.sectionTitle}>Location & Address</AppText>
-                    <AppText style={styles.sectionSubtitle}>
-                      Physical facility address for player GPS and navigation
-                    </AppText>
-                  </View>
-                </View>
-
-                <FormField
-                  label="Address Line 1"
-                  value={addressLine1}
-                  onChangeText={setAddressLine1}
-                  placeholder="e.g. 1000 Pickleball Way"
-                  editable={isOwner}
-                />
-
-                <FormField
-                  label="Address Line 2 (Optional)"
-                  value={addressLine2}
-                  onChangeText={setAddressLine2}
-                  placeholder="e.g. Suite 200, Building B"
-                  editable={isOwner}
-                />
-
-                <FormRow breakpoint={440}>
-                  <FormField
-                    label="City"
-                    value={city}
-                    onChangeText={setCity}
-                    placeholder="e.g. Charlotte"
-                    editable={isOwner}
-                  />
-                  <FormField
-                    label="State / Province"
-                    value={state}
-                    onChangeText={setState}
-                    placeholder="e.g. NC"
-                    editable={isOwner}
-                  />
-                </FormRow>
-
-                <FormRow breakpoint={440}>
-                  <FormField
-                    label="Postal / ZIP Code"
-                    value={postalCode}
-                    onChangeText={setPostalCode}
-                    placeholder="e.g. 28202"
-                    editable={isOwner}
-                  />
-                  <FormField
-                    label="Country"
-                    value={country}
-                    onChangeText={setCountry}
-                    placeholder="e.g. United States"
-                    editable={isOwner}
-                  />
-                </FormRow>
-              </Card>
-
-              {/* SECTION C: OPERATING & FACILITIES */}
-              <Card style={styles.sectionCard}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={styles.sectionIconBadge}>
-                    <Clock size={18} color="#176B57" />
-                  </View>
-                  <View style={styles.sectionTitleBlock}>
-                    <AppText style={styles.sectionTitle}>Operating Hours & Schedule</AppText>
-                    <AppText style={styles.sectionSubtitle}>
-                      Weekly schedule, club timezone, and facilities summary
-                    </AppText>
-                  </View>
-                </View>
-
-                {/* Operating Days Pills */}
-                <View style={styles.fieldBlock}>
-                  <AppText style={styles.fieldLabel}>Operating Days</AppText>
-                  <View style={styles.daysRow}>
-                    {DAYS_OF_WEEK.map((day) => {
-                      const isSelected = selectedDays.includes(day.key);
-                      return (
-                        <TouchableOpacity
-                          key={day.key}
-                          style={[
-                            styles.dayPill,
-                            isSelected && styles.dayPillSelected,
-                            !isOwner && styles.dayPillDisabled,
-                          ]}
-                          onPress={() => toggleDay(day.key)}
-                          activeOpacity={0.7}
-                        >
-                          <AppText
-                            style={[
-                              styles.dayPillText,
-                              isSelected && styles.dayPillTextSelected,
-                            ]}
-                          >
-                            {day.label}
-                          </AppText>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-
-                <FormRow stackOnMobile={false}>
-                  <TimePickerInput
-                    label="Opening Time"
-                    value={openingTime}
-                    onChange={setOpeningTime}
-                    error={validationErrors.openingTime}
-                    disabled={!isOwner}
-                    includeSeconds={false}
-                  />
-                  <TimePickerInput
-                    label="Closing Time"
-                    value={closingTime}
-                    onChange={setClosingTime}
-                    error={validationErrors.closingTime}
-                    disabled={!isOwner}
-                    includeSeconds={false}
-                  />
-                </FormRow>
-
-                {/* Timezone Selector */}
-                <View style={styles.fieldBlock}>
-                  <AppText style={styles.fieldLabel}>Club Timezone</AppText>
-                  {isOwner ? (
-                    <TouchableOpacity
-                      style={styles.selectTrigger}
-                      onPress={() => setShowTzPicker(!showTzPicker)}
-                      activeOpacity={0.8}
-                    >
-                      <AppText style={styles.selectTriggerText}>
-                        {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label || timezone}
-                      </AppText>
-                      <Globe size={16} color="#667776" />
-                    </TouchableOpacity>
-                  ) : (
-                    <View style={styles.selectTriggerDisabled}>
-                      <AppText style={styles.selectTriggerTextDisabled}>
-                        {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label || timezone}
+                {/* 4. LOCATION & ADDRESS CARD */}
+                <Card style={styles.sectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <MapPin size={16} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Location & Address</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Physical facility address for player GPS and navigation
                       </AppText>
                     </View>
-                  )}
+                  </View>
 
-                  {showTzPicker && isOwner && (
-                    <View style={styles.dropdownList}>
-                      {TIMEZONE_OPTIONS.map((opt) => (
-                        <TouchableOpacity
-                          key={opt.value}
-                          style={[
-                            styles.dropdownItem,
-                            opt.value === timezone && styles.dropdownItemSelected,
-                          ]}
-                          onPress={() => {
-                            setTimezone(opt.value);
-                            setShowTzPicker(false);
-                          }}
-                        >
-                          <AppText
-                            style={[
-                              styles.dropdownItemText,
-                              opt.value === timezone && styles.dropdownItemTextSelected,
-                            ]}
-                          >
-                            {opt.label}
-                          </AppText>
-                          {opt.value === timezone && (
-                            <Check size={16} color="#176B57" strokeWidth={2.5} />
-                          )}
-                        </TouchableOpacity>
-                      ))}
+                  <FormField
+                    label="Address Line 1"
+                    value={addressLine1}
+                    onChangeText={setAddressLine1}
+                    placeholder="e.g. 1000 Pickleball Way"
+                    editable={isOwner}
+                  />
+
+                  <FormField
+                    label="Address Line 2 (Optional)"
+                    value={addressLine2}
+                    onChangeText={setAddressLine2}
+                    placeholder="e.g. Suite 200, Building B"
+                    editable={isOwner}
+                  />
+
+                  <FormRow breakpoint={440}>
+                    <FormField
+                      label="City"
+                      value={city}
+                      onChangeText={setCity}
+                      placeholder="e.g. Charlotte"
+                      editable={isOwner}
+                    />
+                    <FormField
+                      label="State / Province"
+                      value={state}
+                      onChangeText={setState}
+                      placeholder="e.g. NC"
+                      editable={isOwner}
+                    />
+                  </FormRow>
+
+                  <FormRow breakpoint={440}>
+                    <FormField
+                      label="Postal / ZIP Code"
+                      value={postalCode}
+                      onChangeText={setPostalCode}
+                      placeholder="e.g. 28202"
+                      editable={isOwner}
+                    />
+                    <FormField
+                      label="Country"
+                      value={country}
+                      onChangeText={setCountry}
+                      placeholder="e.g. United States"
+                      editable={isOwner}
+                    />
+                  </FormRow>
+                </Card>
+
+                {/* 5. OPERATING INFORMATION CARD */}
+                <Card style={styles.sectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Clock size={16} color="#176B57" />
                     </View>
-                  )}
-                </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Operating Hours & Schedule</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Weekly schedule, club timezone, and facilities summary
+                      </AppText>
+                    </View>
+                  </View>
 
-                {/* Facilities & Amenities Summary */}
-                <FormField
-                  label="Facilities & Amenities Summary"
-                  value={facilitiesSummary}
-                  onChangeText={setFacilitiesSummary}
-                  placeholder="e.g. 8 dedicated championship courts, LED lighting, Pro Shop, locker rooms, ball machine"
-                  multiline
-                  numberOfLines={3}
-                  textAlignVertical="top"
-                  editable={isOwner}
-                />
+                  {/* Operating Days */}
+                  <View style={styles.fieldBlock}>
+                    <AppText style={styles.fieldLabel}>Operating Days</AppText>
+                    <View style={styles.daysRow}>
+                      {DAYS_OF_WEEK.map((day) => {
+                        const isSelected = selectedDays.includes(day.key);
+                        return (
+                          <TouchableOpacity
+                            key={day.key}
+                            style={[
+                              styles.dayPill,
+                              isSelected && styles.dayPillSelected,
+                              !isOwner && styles.dayPillDisabled,
+                            ]}
+                            onPress={() => toggleDay(day.key)}
+                            activeOpacity={0.7}
+                          >
+                            <AppText
+                              style={[
+                                styles.dayPillText,
+                                isSelected && styles.dayPillTextSelected,
+                              ]}
+                            >
+                              {day.label}
+                            </AppText>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
 
-                {/* Holiday & Closure Information */}
-                <FormField
-                  label="Holiday & Special Closures"
-                  value={holidayClosureNotes}
-                  onChangeText={setHolidayClosureNotes}
-                  placeholder="e.g. Closed Thanksgiving Day and Christmas Day. Reduced hours on New Year's Eve."
-                  multiline
-                  numberOfLines={2}
-                  textAlignVertical="top"
-                  editable={isOwner}
-                />
-              </Card>
+                  <FormRow stackOnMobile={false}>
+                    <TimePickerInput
+                      label="Opening Time"
+                      value={openingTime}
+                      onChange={setOpeningTime}
+                      error={validationErrors.openingTime}
+                      disabled={!isOwner}
+                      includeSeconds={false}
+                    />
+                    <TimePickerInput
+                      label="Closing Time"
+                      value={closingTime}
+                      onChange={setClosingTime}
+                      error={validationErrors.closingTime}
+                      disabled={!isOwner}
+                      includeSeconds={false}
+                    />
+                  </FormRow>
 
-              {/* ACTION BUTTONS (Owner only) */}
-              {isOwner && (
-                <View style={styles.actionButtonsRow}>
-                  <TouchableOpacity
-                    style={styles.cancelBtn}
-                    onPress={handleCancelEdit}
-                    disabled={isUpdating}
-                  >
-                    <AppText style={styles.cancelBtnText}>Cancel</AppText>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.saveBtn, isUpdating && styles.saveBtnDisabled]}
-                    onPress={handleSaveChanges}
-                    disabled={isUpdating}
-                  >
-                    {isUpdating ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
+                  {/* Timezone Selector */}
+                  <View style={styles.fieldBlock}>
+                    <AppText style={styles.fieldLabel}>Club Timezone</AppText>
+                    {isOwner ? (
+                      <TouchableOpacity
+                        style={styles.selectTrigger}
+                        onPress={() => setShowTzPicker(!showTzPicker)}
+                        activeOpacity={0.8}
+                      >
+                        <AppText style={styles.selectTriggerText}>
+                          {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label || timezone}
+                        </AppText>
+                        <Globe size={16} color="#667776" />
+                      </TouchableOpacity>
                     ) : (
-                      <>
-                        <Save size={18} color="#FFFFFF" strokeWidth={2} />
-                        <AppText style={styles.saveBtnText}>Save Changes</AppText>
-                      </>
+                      <View style={styles.selectTriggerDisabled}>
+                        <AppText style={styles.selectTriggerTextDisabled}>
+                          {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label || timezone}
+                        </AppText>
+                      </View>
                     )}
-                  </TouchableOpacity>
-                </View>
-              )}
+
+                    {showTzPicker && isOwner && (
+                      <View style={styles.dropdownList}>
+                        {TIMEZONE_OPTIONS.map((opt) => (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[
+                              styles.dropdownItem,
+                              opt.value === timezone && styles.dropdownItemSelected,
+                            ]}
+                            onPress={() => {
+                              setTimezone(opt.value);
+                              setShowTzPicker(false);
+                            }}
+                          >
+                            <AppText
+                              style={[
+                                styles.dropdownItemText,
+                                opt.value === timezone && styles.dropdownItemTextSelected,
+                              ]}
+                            >
+                              {opt.label}
+                            </AppText>
+                            {opt.value === timezone && (
+                              <Check size={16} color="#176B57" strokeWidth={2.5} />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Facilities & Amenities Summary */}
+                  <FormField
+                    label="Facilities & Amenities Summary"
+                    value={facilitiesSummary}
+                    onChangeText={setFacilitiesSummary}
+                    placeholder="e.g. 8 dedicated championship courts, LED lighting, Pro Shop, locker rooms, ball machine"
+                    multiline
+                    numberOfLines={3}
+                    textAlignVertical="top"
+                    editable={isOwner}
+                  />
+
+                  {/* Holiday & Closure Information */}
+                  <FormField
+                    label="Holiday & Special Closures"
+                    value={holidayClosureNotes}
+                    onChangeText={setHolidayClosureNotes}
+                    placeholder="e.g. Closed Thanksgiving Day and Christmas Day. Reduced hours on New Year's Eve."
+                    multiline
+                    numberOfLines={2}
+                    textAlignVertical="top"
+                    editable={isOwner}
+                  />
+                </Card>
+
+                {/* ACTION BUTTONS (Owner only) */}
+                {isOwner && (
+                  <View style={styles.actionButtonsRow}>
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={handleCancelEdit}
+                      disabled={isUpdating}
+                    >
+                      <AppText style={styles.cancelBtnText}>Cancel</AppText>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.saveBtn, isUpdating && styles.saveBtnDisabled]}
+                      onPress={handleSaveChanges}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Save size={16} color="#FFFFFF" strokeWidth={2} />
+                          <AppText style={styles.saveBtnText}>Save Changes</AppText>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                )}
             </View>
             )
           ) : (
@@ -2615,5 +2642,153 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#DC2626',
+  },
+
+  // Edit Mode Specific Styles (Exact reference matching)
+  editLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3.5],
+    marginTop: Spacing[2],
+  },
+  editLogoContainer: {
+    position: 'relative',
+    width: 62,
+    height: 62,
+  },
+  editLogoCircle: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  editLogoImg: {
+    width: '100%',
+    height: '100%',
+  },
+  editCameraCircle: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#176B57',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 1.5,
+    elevation: 2,
+  },
+  editLogoInfoCol: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  editBadgeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    flexWrap: 'wrap',
+    marginBottom: 3,
+  },
+  editSubHeading: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  pillBadgeSuccess: {
+    backgroundColor: '#E5F6EC',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  pillBadgeSuccessText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  editHelpText: {
+    fontSize: 12,
+    color: '#667776',
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+  editLinkActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginTop: 4,
+  },
+  editActionLinkPrimary: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  editActionDivider: {
+    fontSize: 12,
+    color: '#A0B4AC',
+    marginHorizontal: 1,
+  },
+  editActionLinkDanger: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  cardInnerDivider: {
+    height: 1,
+    backgroundColor: '#EEF3F0',
+    marginVertical: Spacing[3.5],
+  },
+  editCoverBlock: {
+    width: '100%',
+  },
+  editCoverPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+    marginTop: Spacing[2.5],
+  },
+  editCoverPreviewBox: {
+    flex: 1.25,
+    height: 72,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#D4E5DE',
+    position: 'relative',
+  },
+  editCoverImg: {
+    width: '100%',
+    height: '100%',
+  },
+  uploadCoverOutlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2],
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#176B57',
+    backgroundColor: '#FFFFFF',
+    minHeight: 38,
+  },
+  uploadCoverOutlineBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#176B57',
   },
 });
