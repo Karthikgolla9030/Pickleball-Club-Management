@@ -2,7 +2,7 @@
  * Aught2 Pickleball — Club Branding & Visual Assets Management Component
  *
  * Implements centralized default image management for Club Owners/Managers:
- * - Group 1: Owner Home Dashboard Banner (preview, upload, replace, reset)
+ * - Group 1: Official Club Logo & Player-Facing Cover Banner (preview, upload, replace, reset)
  * - Group 2: Tournament Default Banners for supported formats:
  *            - Round Robin
  *            - Scramble
@@ -576,7 +576,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         <View style={styles.groupHeaderTextCol}>
           <AppText style={styles.groupTitle}>Group 1: Club Identity & Core Banners</AppText>
           <AppText style={styles.groupSubtitle}>
-            Core club branding assets displayed across platform navigation, the player mobile app, and owner dashboards.
+            Core club branding assets displayed across platform navigation and the player mobile app.
           </AppText>
         </View>
       </View>
@@ -612,23 +612,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
           handleUploadAsset('cover_image_url', 'club_cover', 'Player-Facing Cover Banner', [16, 9])
         }
         onReset={() => handleResetAsset('cover_image_url', 'Player-Facing Cover Banner')}
-      />
-
-      {/* Owner Dashboard Welcome Banner */}
-      <BrandingAssetCard
-        title="Owner Home Dashboard Banner"
-        categoryTag="DASHBOARD HERO"
-        assetKind="banner"
-        recommendedSize="1920 × 1080 px (16:9) • JPG or PNG"
-        description="Custom welcome hero graphic displayed across the top of your club management home dashboard."
-        currentUrl={branding?.owner_banner_url}
-        fallbackSource={BUILTIN_FALLBACKS.ownerBanner}
-        uploading={uploadingField === 'owner_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('owner_banner_url', 'owner_banner', 'Owner Dashboard Banner', [16, 9])
-        }
-        onReset={() => handleResetAsset('owner_banner_url', 'Owner Dashboard Banner')}
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
