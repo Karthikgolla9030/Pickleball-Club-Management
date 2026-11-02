@@ -81,6 +81,7 @@ const styles = StyleSheet.create({
   },
   colLayout: {
     flexDirection: 'column',
+    width: '100%',
   },
   col: {
     minWidth: 0,
@@ -90,7 +91,6 @@ const styles = StyleSheet.create({
   },
   fullWidthCol: {
     width: '100%',
-    flex: 0,
   },
 });
 

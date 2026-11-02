@@ -1083,45 +1083,53 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <FormField
-                    label="Club Name"
-                    required
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="e.g. Pickleball Club"
-                    error={validationErrors.name}
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Club Name"
+                      required
+                      value={name}
+                      onChangeText={setName}
+                      placeholder="e.g. Pickleball Club"
+                      error={validationErrors.name}
+                      editable={isOwner}
+                    />
+                  </View>
 
-                  <FormField
-                    label="Short Tagline"
-                    value={shortDescription}
-                    onChangeText={setShortDescription}
-                    placeholder="e.g. Premier indoor and outdoor pickleball"
-                    hint="A punchy one-liner shown on banners and search results."
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Short Tagline"
+                      value={shortDescription}
+                      onChangeText={setShortDescription}
+                      placeholder="e.g. Premier indoor and outdoor pickleball"
+                      hint="A punchy one-liner shown on banners and search results."
+                      editable={isOwner}
+                    />
+                  </View>
 
-                  <FormField
-                    label="About the Club"
-                    value={description}
-                    onChangeText={setDescription}
-                    placeholder="Tell players about your facility, programs, tournaments, and community..."
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="About the Club"
+                      value={description}
+                      onChangeText={setDescription}
+                      placeholder="Tell players about your facility, programs, tournaments, and community..."
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                      editable={isOwner}
+                    />
+                  </View>
 
-                  <FormField
-                    label="Established Year"
-                    value={establishedYear}
-                    onChangeText={setEstablishedYear}
-                    placeholder="e.g. 2026"
-                    keyboardType="number-pad"
-                    error={validationErrors.establishedYear}
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Established Year"
+                      value={establishedYear}
+                      onChangeText={setEstablishedYear}
+                      placeholder="e.g. 2026"
+                      keyboardType="number-pad"
+                      error={validationErrors.establishedYear}
+                      editable={isOwner}
+                    />
+                  </View>
                 </Card>
 
                 {/* 3. CONTACT INFORMATION CARD */}
@@ -1138,34 +1146,40 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <FormField
-                    label="Contact Email"
-                    value={contactEmail}
-                    onChangeText={setContactEmail}
-                    placeholder="info@club.com"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    error={validationErrors.contactEmail}
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Contact Email"
+                      value={contactEmail}
+                      onChangeText={setContactEmail}
+                      placeholder="info@club.com"
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      error={validationErrors.contactEmail}
+                      editable={isOwner}
+                    />
+                  </View>
 
-                  <InternationalPhoneInput
-                    label="Contact Phone"
-                    value={contactPhone}
-                    onChangeText={setContactPhone}
-                    disabled={!isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <InternationalPhoneInput
+                      label="Contact Phone"
+                      value={contactPhone}
+                      onChangeText={setContactPhone}
+                      disabled={!isOwner}
+                    />
+                  </View>
 
-                  <FormField
-                    label="Public Website"
-                    value={website}
-                    onChangeText={setWebsite}
-                    placeholder="https://example.com"
-                    keyboardType="url"
-                    autoCapitalize="none"
-                    error={validationErrors.website}
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Public Website"
+                      value={website}
+                      onChangeText={setWebsite}
+                      placeholder="https://example.com"
+                      keyboardType="url"
+                      autoCapitalize="none"
+                      error={validationErrors.website}
+                      editable={isOwner}
+                    />
+                  </View>
                 </Card>
 
                 {/* 4. LOCATION & ADDRESS CARD */}
@@ -1182,54 +1196,70 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <FormField
-                    label="Address Line 1"
-                    value={addressLine1}
-                    onChangeText={setAddressLine1}
-                    placeholder="e.g. 1000 Pickleball Way"
-                    editable={isOwner}
-                  />
-
-                  <FormField
-                    label="Address Line 2 (Optional)"
-                    value={addressLine2}
-                    onChangeText={setAddressLine2}
-                    placeholder="e.g. Suite 200, Building B"
-                    editable={isOwner}
-                  />
-
-                  <FormRow breakpoint={440}>
+                  {/* 1. Address Line 1 */}
+                  <View style={styles.fieldWrapper}>
                     <FormField
-                      label="City"
-                      value={city}
-                      onChangeText={setCity}
-                      placeholder="e.g. Charlotte"
+                      label="Address Line 1"
+                      value={addressLine1}
+                      onChangeText={setAddressLine1}
+                      placeholder="e.g. 1000 Pickleball Way"
                       editable={isOwner}
                     />
+                  </View>
+
+                  {/* 2. Address Line 2 (Optional) */}
+                  <View style={styles.fieldWrapper}>
                     <FormField
-                      label="State / Province"
-                      value={state}
-                      onChangeText={setState}
-                      placeholder="e.g. NC"
+                      label="Address Line 2 (Optional)"
+                      value={addressLine2}
+                      onChangeText={setAddressLine2}
+                      placeholder="e.g. Suite 200, Building B"
                       editable={isOwner}
                     />
+                  </View>
+
+                  {/* 3 & 4. City & State / Province (Single column on mobile < 600px, 2 columns on tablet/desktop) */}
+                  <FormRow breakpoint={600} gap={Spacing[3]}>
+                    <View style={styles.fieldWrapper}>
+                      <FormField
+                        label="City"
+                        value={city}
+                        onChangeText={setCity}
+                        placeholder="e.g. Charlotte"
+                        editable={isOwner}
+                      />
+                    </View>
+                    <View style={styles.fieldWrapper}>
+                      <FormField
+                        label="State / Province"
+                        value={state}
+                        onChangeText={setState}
+                        placeholder="e.g. NC"
+                        editable={isOwner}
+                      />
+                    </View>
                   </FormRow>
 
-                  <FormRow breakpoint={440}>
-                    <FormField
-                      label="Postal / ZIP Code"
-                      value={postalCode}
-                      onChangeText={setPostalCode}
-                      placeholder="e.g. 28202"
-                      editable={isOwner}
-                    />
-                    <FormField
-                      label="Country"
-                      value={country}
-                      onChangeText={setCountry}
-                      placeholder="e.g. United States"
-                      editable={isOwner}
-                    />
+                  {/* 5 & 6. Postal / ZIP Code & Country (Single column on mobile < 600px, 2 columns on tablet/desktop) */}
+                  <FormRow breakpoint={600} gap={Spacing[3]}>
+                    <View style={styles.fieldWrapper}>
+                      <FormField
+                        label="Postal / ZIP Code"
+                        value={postalCode}
+                        onChangeText={setPostalCode}
+                        placeholder="e.g. 28202"
+                        editable={isOwner}
+                      />
+                    </View>
+                    <View style={styles.fieldWrapper}>
+                      <FormField
+                        label="Country"
+                        value={country}
+                        onChangeText={setCountry}
+                        placeholder="e.g. United States"
+                        editable={isOwner}
+                      />
+                    </View>
                   </FormRow>
                 </Card>
 
@@ -1351,28 +1381,32 @@ export default function ClubDetailsScreen() {
                   </View>
 
                   {/* Facilities & Amenities Summary */}
-                  <FormField
-                    label="Facilities & Amenities Summary"
-                    value={facilitiesSummary}
-                    onChangeText={setFacilitiesSummary}
-                    placeholder="e.g. 8 dedicated championship courts, LED lighting, Pro Shop, locker rooms, ball machine"
-                    multiline
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Facilities & Amenities Summary"
+                      value={facilitiesSummary}
+                      onChangeText={setFacilitiesSummary}
+                      placeholder="e.g. 8 dedicated championship courts, LED lighting, Pro Shop, locker rooms, ball machine"
+                      multiline
+                      numberOfLines={3}
+                      textAlignVertical="top"
+                      editable={isOwner}
+                    />
+                  </View>
 
                   {/* Holiday & Closure Information */}
-                  <FormField
-                    label="Holiday & Special Closures"
-                    value={holidayClosureNotes}
-                    onChangeText={setHolidayClosureNotes}
-                    placeholder="e.g. Closed Thanksgiving Day and Christmas Day. Reduced hours on New Year's Eve."
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                    editable={isOwner}
-                  />
+                  <View style={styles.fieldWrapper}>
+                    <FormField
+                      label="Holiday & Special Closures"
+                      value={holidayClosureNotes}
+                      onChangeText={setHolidayClosureNotes}
+                      placeholder="e.g. Closed Thanksgiving Day and Christmas Day. Reduced hours on New Year's Eve."
+                      multiline
+                      numberOfLines={2}
+                      textAlignVertical="top"
+                      editable={isOwner}
+                    />
+                  </View>
                 </Card>
 
                 {/* ACTION BUTTONS (Owner only) */}
@@ -1788,6 +1822,9 @@ const styles = StyleSheet.create({
   },
   fieldBlock: {
     gap: Spacing[1.5],
+  },
+  fieldWrapper: {
+    width: '100%',
   },
   fieldLabel: {
     fontSize: 13.5,
