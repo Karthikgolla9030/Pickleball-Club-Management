@@ -1229,6 +1229,7 @@ class PaymentService:
                         lesson_id=lesson_id,
                         user_id=payment.player_id,
                         notes=meta.get("notes"),
+                        skip_payment_creation=True,
                     )
                     booking_or_reg.update({
                         "lesson_id": str(lesson_id),

@@ -122,8 +122,23 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['lessons'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
-        if (clubId) {
-          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+        const targetLessonId = (event.data as any)?.lesson_id || (event.data as any)?.id;
+        const eventClubId = (event as any)?.club_id || (event.data as any)?.club_id || clubId;
+        if (eventClubId) {
+          const cId = String(eventClubId);
+          queryClient.invalidateQueries({ queryKey: ['clubs', cId, 'lessons'] });
+          if (targetLessonId) {
+            const lId = String(targetLessonId);
+            queryClient.invalidateQueries({ queryKey: ['clubs', cId, 'lessons', lId] });
+            queryClient.invalidateQueries({
+              queryKey: ['clubs', cId, 'lessons', lId, 'registrations'],
+            });
+          }
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['clubs'] });
+        }
+        if (targetLessonId) {
+          queryClient.invalidateQueries({ queryKey: ['player', 'lessons', String(targetLessonId)] });
         }
       }
 

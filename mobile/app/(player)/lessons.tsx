@@ -24,7 +24,7 @@
  *   - Interactive registration confirmation modal with live server validation
  */
 
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -38,7 +38,8 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
   Award,
@@ -130,6 +131,7 @@ type TabKey = 'discover' | 'my_registrations';
 
 export default function PlayerLessonsScreen() {
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, clubName } = useActiveClub();
   const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
@@ -153,6 +155,14 @@ export default function PlayerLessonsScreen() {
     refetch: refetchMyLessons,
   } = useMyLessons();
 
+  // Auto-refresh when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refetchDiscover();
+      refetchMyLessons();
+    }, [refetchDiscover, refetchMyLessons])
+  );
+
   // Selected lesson for detail / registration modal
   const [selectedLesson, setSelectedLesson] = useState<PlayerLessonDetail | null>(null);
   const [registeringLesson, setRegisteringLesson] = useState<PlayerLessonDetail | null>(null);
@@ -162,14 +172,14 @@ export default function PlayerLessonsScreen() {
   // Register mutation
   const registerMutation = usePlayerRegisterLesson(
     registeringLesson?.id || '',
-    clubId || undefined
+    registeringLesson?.club_id || effectiveClubId || undefined
   );
 
   // Cancel mutation
   const [cancellingLessonId, setCancellingLessonId] = useState<string | null>(null);
   const cancelMutation = usePlayerCancelLessonRegistration(
-    cancellingLessonId || '',
-    clubId || undefined
+    undefined,
+    registeringLesson?.club_id || effectiveClubId || undefined
   );
 
   const handleOpenRegister = (lesson: PlayerLessonDetail) => {
@@ -185,6 +195,8 @@ export default function PlayerLessonsScreen() {
     if (!registeringLesson) return;
     try {
       await registerMutation.mutateAsync({
+        lessonId: registeringLesson.id,
+        clubId: registeringLesson.club_id || effectiveClubId,
         notes: registrationNotes.trim() || undefined,
       });
       const registeredTitle = registeringLesson.title;
@@ -216,9 +228,17 @@ export default function PlayerLessonsScreen() {
           onPress: async () => {
             setCancellingLessonId(lessonId);
             try {
-              await cancelMutation.mutateAsync();
+              await cancelMutation.mutateAsync(lessonId);
               refetchDiscover();
               refetchMyLessons();
+            queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+            if (effectiveClubId) {
+              queryClient.invalidateQueries({
+                queryKey: ['clubs', effectiveClubId, 'lessons'],
+              });
+            } else {
+              queryClient.invalidateQueries({ queryKey: ['clubs'] });
+            }
               Alert.alert('Registration Cancelled', `Your registration for "${title}" has been cancelled.`);
             } catch (err: any) {
               Alert.alert('Error', err.message || 'Failed to cancel registration.');
@@ -544,6 +564,14 @@ export default function PlayerLessonsScreen() {
             onRefresh={() => {
               refetchDiscover();
               refetchMyLessons();
+            queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+            if (effectiveClubId) {
+              queryClient.invalidateQueries({
+                queryKey: ['clubs', effectiveClubId, 'lessons'],
+              });
+            } else {
+              queryClient.invalidateQueries({ queryKey: ['clubs'] });
+            }
             }}
             colors={['#0D3E33']}
             tintColor="#0D3E33"
@@ -873,6 +901,14 @@ export default function PlayerLessonsScreen() {
             setSelectedLesson(null);
             refetchDiscover();
             refetchMyLessons();
+            queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+            if (effectiveClubId) {
+              queryClient.invalidateQueries({
+                queryKey: ['clubs', effectiveClubId, 'lessons'],
+              });
+            } else {
+              queryClient.invalidateQueries({ queryKey: ['clubs'] });
+            }
           }}
         />
       )}

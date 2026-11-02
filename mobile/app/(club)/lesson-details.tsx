@@ -16,7 +16,7 @@
  *   - Lifecycle management actions: Publish, Complete, Cancel
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -28,7 +28,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import {
   Calendar,
   CheckCircle2,
@@ -155,6 +155,16 @@ export default function LessonDetailsScreen() {
     isLoading: isLoadingRegistrations,
     refetch: refetchRegistrations,
   } = useLessonRegistrations(clubId, lessonId);
+
+  // Auto-refresh when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      if (clubId && lessonId) {
+        refetch();
+        refetchRegistrations();
+      }
+    }, [clubId, lessonId, refetch, refetchRegistrations])
+  );
 
   // Lifecycle mutations
   const publishMutation = usePublishClubLesson(clubId);

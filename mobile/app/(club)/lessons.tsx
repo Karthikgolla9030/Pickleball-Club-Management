@@ -18,7 +18,7 @@
  *   - Lesson Type configuration: List, Add, Edit, Deactivate, Reactivate
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -36,7 +36,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import {
@@ -226,6 +226,17 @@ export default function ClubLessonsScreen() {
     error: errorLessonTypes,
     refetch: refetchLessonTypes,
   } = useClubLessonTypes(activeClubId ?? '');
+
+  // Auto-refresh when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      if (activeClubId) {
+        refetchLessons();
+        refetchCoaches();
+        refetchLessonTypes();
+      }
+    }, [activeClubId, refetchLessons, refetchCoaches, refetchLessonTypes])
+  );
 
   const { data: courts } = useClubCourts(activeClubId ?? '', 'active');
 

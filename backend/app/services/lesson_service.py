@@ -472,7 +472,17 @@ class LessonService:
             created_by_user_id=created_by_user_id,
             status=LessonStatus.DRAFT,
         )
-        return await self._to_lesson_detail_response(lesson)
+        resp = await self._to_lesson_detail_response(lesson)
+        try:
+            await dispatch_event(
+                event_type=EventType.LESSON_UPDATED,
+                data={"lesson_id": str(lesson.id), "title": lesson.title, "status": lesson.status.value},
+                club_id=club_id,
+            )
+            await self.db.commit()
+        except Exception:
+            pass
+        return resp
 
     async def get_lesson(self, lesson_id: UUID, club_id: UUID) -> LessonDetailResponse:
         lesson = await self.lesson_repo.get_by_id(lesson_id, club_id=club_id)
@@ -779,6 +789,7 @@ class LessonService:
         user_id: UUID,
         notes: str | None = None,
         is_staff: bool = False,
+        skip_payment_creation: bool = False,
     ) -> LessonRegistrationResponse:
         # Use get_for_update to lock lesson row and serialize capacity check
         lesson = await self.lesson_repo.get_for_update(lesson_id)
@@ -823,10 +834,37 @@ class LessonService:
         # 3. Eligibility Check: Active ClubPlayerMembership required
         membership = await self.cpm_repo.get_by_user_and_club(user_id, lesson.club_id)
         if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Active club player membership is required to register for lessons",
-            )
+            if is_staff:
+                if not membership:
+                    membership = await self.cpm_repo.create(
+                        user_id=user_id,
+                        club_id=lesson.club_id,
+                        status=PlayerMembershipStatus.ACTIVE,
+                    )
+                    await self.db.flush()
+                elif membership.status != PlayerMembershipStatus.ACTIVE:
+                    membership.status = PlayerMembershipStatus.ACTIVE
+                    await self.db.flush()
+            else:
+                from app.repositories.club_membership_repository import ClubMembershipRepository
+                club_mem_repo = ClubMembershipRepository(self.db)
+                staff_mem = await club_mem_repo.get_by_user_and_club(user_id, lesson.club_id)
+                if staff_mem and staff_mem.is_active:
+                    if not membership:
+                        membership = await self.cpm_repo.create(
+                            user_id=user_id,
+                            club_id=lesson.club_id,
+                            status=PlayerMembershipStatus.ACTIVE,
+                        )
+                        await self.db.flush()
+                    elif membership.status != PlayerMembershipStatus.ACTIVE:
+                        membership.status = PlayerMembershipStatus.ACTIVE
+                        await self.db.flush()
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Active club player membership is required to register for lessons",
+                    )
 
         # 4. Duplicate Active Registration Check
         existing = await self.registration_repo.get_active_registration_for_user(lesson_id, user_id)
@@ -852,29 +890,37 @@ class LessonService:
         )
         resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
 
-        # Record canonical payment if lesson has a price
-        if lesson.price and lesson.price > Decimal("0"):
+        # Record canonical payment if lesson has a price and payment creation is not skipped
+        if not skip_payment_creation and lesson.price and lesson.price > Decimal("0"):
             from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
             from app.repositories.payment_repository import PaymentRepository
             try:
-                pay_repo = PaymentRepository(self.db)
-                reference = await pay_repo.generate_reference()
-                now_dt = datetime.now(timezone.utc)
-                payment = Payment(
-                    reference=reference,
-                    club_id=lesson.club_id,
-                    player_id=user_id,
-                    lesson_id=lesson.id,
-                    amount=Decimal(str(lesson.price)),
-                    currency=lesson.currency or "USD",
-                    status=PaymentStatus.SUCCEEDED,
-                    purpose=PaymentPurpose.LESSON,
-                    payment_method=PaymentMethod.ONLINE,
-                    paid_at=now_dt,
-                    notes=f"Lesson registration: {lesson.title}",
-                    created_by_user_id=user_id,
+                from sqlalchemy import select
+                stmt = select(Payment).where(
+                    Payment.lesson_id == lesson_id,
+                    Payment.player_id == user_id,
+                    Payment.status == PaymentStatus.SUCCEEDED,
                 )
-                await pay_repo.create(payment)
+                existing_pmt = (await self.db.execute(stmt)).scalars().first()
+                if not existing_pmt:
+                    pay_repo = PaymentRepository(self.db)
+                    reference = await pay_repo.generate_reference()
+                    now_dt = datetime.now(timezone.utc)
+                    payment = Payment(
+                        reference=reference,
+                        club_id=lesson.club_id,
+                        player_id=user_id,
+                        lesson_id=lesson.id,
+                        amount=Decimal(str(lesson.price)),
+                        currency=lesson.currency or "USD",
+                        status=PaymentStatus.SUCCEEDED,
+                        purpose=PaymentPurpose.LESSON,
+                        payment_method=PaymentMethod.ONLINE,
+                        paid_at=now_dt,
+                        notes=f"Lesson registration: {lesson.title}",
+                        created_by_user_id=user_id,
+                    )
+                    await pay_repo.create(payment)
             except Exception:
                 pass
 
@@ -1055,7 +1101,25 @@ class LessonService:
         else:
             registration.attended_at = None
         registration = await self.registration_repo.update(registration)
-        return self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
+        resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
+        try:
+            active_count = await self.registration_repo.count_active_by_lesson(lesson_id)
+            await dispatch_event(
+                event_type=EventType.LESSON_UPDATED,
+                data={
+                    "lesson_id": str(lesson.id),
+                    "registration_id": str(registration.id),
+                    "user_id": str(registration.user_id),
+                    "status": registration.status.value,
+                    "participant_count": active_count,
+                },
+                club_id=club_id,
+                user_id=registration.user_id,
+            )
+            await self.db.commit()
+        except Exception:
+            pass
+        return resp
 
     async def list_registrations(
         self,
@@ -1125,6 +1189,12 @@ class LessonService:
         # Check eligibility
         membership = await self.cpm_repo.get_by_user_and_club(user_id, lesson.club_id)
         is_eligible = membership is not None and membership.status == PlayerMembershipStatus.ACTIVE
+        if not is_eligible:
+            from app.repositories.club_membership_repository import ClubMembershipRepository
+            club_mem_repo = ClubMembershipRepository(self.db)
+            staff_mem = await club_mem_repo.get_by_user_and_club(user_id, lesson.club_id)
+            if staff_mem and staff_mem.is_active:
+                is_eligible = True
         eligibility_reason = None if is_eligible else "Requires active club player membership"
 
         return PlayerLessonDetailResponse(

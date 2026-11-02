@@ -196,6 +196,8 @@ export function useCreateClubLesson(clubId: string) {
     mutationFn: (payload: CreateLessonPayload) => lessonApi.createClubLesson(clubId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
     },
   });
 }
@@ -210,6 +212,11 @@ export function useUpdateClubLesson(clubId: string) {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, variables.lessonId),
       });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(variables.lessonId),
+      });
     },
   });
 }
@@ -222,6 +229,11 @@ export function usePublishClubLesson(clubId: string) {
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
+      });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId),
       });
     },
   });
@@ -236,6 +248,15 @@ export function useCancelClubLesson(clubId: string) {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
+      queryClient.invalidateQueries({
+        queryKey: ['clubs', clubId, 'lessons', lessonId, 'registrations'],
+      });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId),
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -249,6 +270,12 @@ export function useCompleteClubLesson(clubId: string) {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId),
+      });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -280,6 +307,10 @@ export function useStaffRegisterLessonPlayer(clubId: string, lessonId: string) {
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -297,6 +328,10 @@ export function useStaffCancelLessonRegistration(clubId: string, lessonId: strin
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId) });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -319,6 +354,8 @@ export function useStaffMarkLessonAttendance(clubId: string, lessonId: string) {
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -336,6 +373,8 @@ export function useStaffResetLessonAttendance(clubId: string, lessonId: string) 
         queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(clubId, lessonId),
       });
       queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
     },
   });
 }
@@ -347,7 +386,7 @@ export function useDiscoverLessons(clubId: string) {
     queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId),
     queryFn: () => lessonApi.discoverLessons(clubId),
     enabled: !!clubId,
-    staleTime: 60 * 1000,
+    staleTime: 15 * 1000,
   });
 }
 
@@ -355,7 +394,7 @@ export function useMyLessons() {
   return useQuery({
     queryKey: QUERY_KEYS.PLAYER_MY_LESSONS(),
     queryFn: () => lessonApi.getMyLessons(),
-    staleTime: 60 * 1000,
+    staleTime: 15 * 1000,
   });
 }
 
@@ -367,38 +406,92 @@ export function usePlayerLessonDetail(lessonId: string) {
   });
 }
 
-export function usePlayerRegisterLesson(lessonId: string, clubId?: string) {
+export function usePlayerRegisterLesson(defaultLessonId?: string, defaultClubId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (payload?: PlayerRegisterLessonPayload) =>
-      lessonApi.playerRegisterLesson(lessonId, payload),
-    onSuccess: () => {
+    mutationFn: (
+      payloadOrConfig?:
+        | PlayerRegisterLessonPayload
+        | (PlayerRegisterLessonPayload & { lessonId?: string; clubId?: string })
+    ) => {
+      const targetLessonId =
+        (payloadOrConfig as any)?.lessonId || defaultLessonId;
+      if (!targetLessonId) {
+        throw new Error('Lesson ID is required to register');
+      }
+      const apiPayload =
+        payloadOrConfig && 'notes' in payloadOrConfig
+          ? { notes: payloadOrConfig.notes }
+          : undefined;
+      return lessonApi.playerRegisterLesson(targetLessonId, apiPayload);
+    },
+    onSuccess: (_, variables) => {
+      const targetLessonId =
+        (variables as any)?.lessonId || defaultLessonId;
+      const targetClubId =
+        (variables as any)?.clubId || defaultClubId;
+
       queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId),
-      });
-      if (clubId) {
+      if (targetLessonId) {
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId),
+          queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(targetLessonId),
         });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
+      if (targetClubId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(targetClubId),
+        });
+        queryClient.invalidateQueries({ queryKey: ['clubs', targetClubId, 'lessons'] });
+        if (targetLessonId) {
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(targetClubId, targetLessonId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: ['clubs', targetClubId, 'lessons', targetLessonId, 'registrations'],
+          });
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
       }
     },
   });
 }
 
-export function usePlayerCancelLessonRegistration(lessonId: string, clubId?: string) {
+export function usePlayerCancelLessonRegistration(defaultLessonId?: string, defaultClubId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => lessonApi.playerCancelLessonRegistration(lessonId),
-    onSuccess: () => {
+    mutationFn: (overrideLessonId?: string) => {
+      const targetLessonId = overrideLessonId || defaultLessonId;
+      if (!targetLessonId) {
+        throw new Error('Lesson ID is required to cancel registration');
+      }
+      return lessonApi.playerCancelLessonRegistration(targetLessonId);
+    },
+    onSuccess: (_, overrideLessonId) => {
+      const targetLessonId = overrideLessonId || defaultLessonId;
       queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(lessonId),
-      });
-      if (clubId) {
+      if (targetLessonId) {
         queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(clubId),
+          queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(targetLessonId),
         });
+      }
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_MY_LESSONS() });
+      if (defaultClubId) {
+        queryClient.invalidateQueries({
+          queryKey: QUERY_KEYS.PLAYER_DISCOVER_LESSONS(defaultClubId),
+        });
+        queryClient.invalidateQueries({ queryKey: ['clubs', defaultClubId, 'lessons'] });
+        if (targetLessonId) {
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEYS.CLUB_LESSON_DETAIL(defaultClubId, targetLessonId),
+          });
+          queryClient.invalidateQueries({
+            queryKey: ['clubs', defaultClubId, 'lessons', targetLessonId, 'registrations'],
+          });
+        }
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
       }
     },
   });
