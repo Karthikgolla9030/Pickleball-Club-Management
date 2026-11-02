@@ -559,29 +559,21 @@ export default function ClubDetailsScreen() {
         borderless
       />
 
-      {/* Responsive Segmented Tabs: Profile vs Branding & Assets vs Player Preview */}
+      {/* Horizontal Segmented Control: Profile | Branding | Preview */}
       <View style={styles.tabsContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tabsScrollContent}
-          style={styles.tabsScrollView}
-        >
+        <View style={styles.segmentedControlTrack}>
           {[
-            {
-              key: 'edit',
-              label: isOwner ? (isEditing ? 'Editing Profile' : 'Profile') : 'Profile',
-            },
-            { key: 'branding', label: 'Branding & Assets' },
-            { key: 'preview', label: 'Player Preview' },
+            { key: 'edit', label: 'Profile' },
+            { key: 'branding', label: 'Branding' },
+            { key: 'preview', label: 'Preview' },
           ].map((tab) => {
             const isSelected = activeTab === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
                 style={[
-                  styles.customTabItem,
-                  isSelected && styles.customTabItemSelected,
+                  styles.segmentedTabItem,
+                  isSelected && styles.segmentedTabItemSelected,
                 ]}
                 onPress={() => setActiveTab(tab.key as any)}
                 activeOpacity={0.8}
@@ -589,8 +581,8 @@ export default function ClubDetailsScreen() {
                 <AppText
                   numberOfLines={1}
                   style={[
-                    styles.customTabText,
-                    isSelected && styles.customTabTextSelected,
+                    styles.segmentedTabText,
+                    isSelected && styles.segmentedTabTextSelected,
                   ]}
                 >
                   {tab.label}
@@ -598,7 +590,7 @@ export default function ClubDetailsScreen() {
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
+        </View>
       </View>
 
       {/* Non-owner notification banner */}
@@ -1636,38 +1628,33 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing[3],
     backgroundColor: '#F4F8F5',
   },
-  tabsScrollView: {
-    flexGrow: 0,
-  },
-  tabsScrollContent: {
+  segmentedControlTrack: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E2EAE6',
     borderRadius: Radius.full,
     padding: 3,
-    minWidth: '100%',
-    justifyContent: 'space-between',
+    width: '100%',
   },
-  customTabItem: {
+  segmentedTabItem: {
     flex: 1,
-    minWidth: 106,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    height: 38,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: Spacing[1],
   },
-  customTabItemSelected: {
+  segmentedTabItemSelected: {
     backgroundColor: '#176B57',
     ...Shadows.sm,
   },
-  customTabText: {
+  segmentedTabText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#49635E',
     textAlign: 'center',
   },
-  customTabTextSelected: {
+  segmentedTabTextSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
