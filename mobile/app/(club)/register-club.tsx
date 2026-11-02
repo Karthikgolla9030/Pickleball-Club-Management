@@ -36,6 +36,7 @@ import {
   Button,
   Card,
   FormField,
+  FormRow,
   InternationalPhoneInput,
   TimePickerInput,
   Screen,
@@ -338,43 +339,35 @@ export default function RegisterClubScreen() {
               placeholder="Suite 100"
             />
 
-            <View style={styles.rowTwo}>
-              <View style={styles.halfCol}>
-                <FormField
-                  label="City"
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Austin"
-                />
-              </View>
-              <View style={styles.halfCol}>
-                <FormField
-                  label="State / Province"
-                  value={state}
-                  onChangeText={setState}
-                  placeholder="TX"
-                />
-              </View>
-            </View>
+            <FormRow breakpoint={440}>
+              <FormField
+                label="City"
+                value={city}
+                onChangeText={setCity}
+                placeholder="Austin"
+              />
+              <FormField
+                label="State / Province"
+                value={state}
+                onChangeText={setState}
+                placeholder="TX"
+              />
+            </FormRow>
 
-            <View style={styles.rowTwo}>
-              <View style={styles.halfCol}>
-                <FormField
-                  label="Postal Code"
-                  value={postalCode}
-                  onChangeText={setPostalCode}
-                  placeholder="78701"
-                />
-              </View>
-              <View style={styles.halfCol}>
-                <FormField
-                  label="Country"
-                  value={country}
-                  onChangeText={setCountry}
-                  placeholder="United States"
-                />
-              </View>
-            </View>
+            <FormRow breakpoint={440}>
+              <FormField
+                label="Postal Code"
+                value={postalCode}
+                onChangeText={setPostalCode}
+                placeholder="78701"
+              />
+              <FormField
+                label="Country"
+                value={country}
+                onChangeText={setCountry}
+                placeholder="United States"
+              />
+            </FormRow>
           </Card>
 
           {/* Section 4: Operating Hours */}
@@ -393,24 +386,20 @@ export default function RegisterClubScreen() {
               placeholder="Monday - Sunday"
             />
 
-            <View style={styles.rowTwo}>
-              <View style={styles.halfCol}>
-                <TimePickerInput
-                  label="Opening Time"
-                  value={openingTime}
-                  onChange={setOpeningTime}
-                  includeSeconds={true}
-                />
-              </View>
-              <View style={styles.halfCol}>
-                <TimePickerInput
-                  label="Closing Time"
-                  value={closingTime}
-                  onChange={setClosingTime}
-                  includeSeconds={true}
-                />
-              </View>
-            </View>
+            <FormRow stackOnMobile={false}>
+              <TimePickerInput
+                label="Opening Time"
+                value={openingTime}
+                onChange={setOpeningTime}
+                includeSeconds={true}
+              />
+              <TimePickerInput
+                label="Closing Time"
+                value={closingTime}
+                onChange={setClosingTime}
+                includeSeconds={true}
+              />
+            </FormRow>
 
             <FormField
               label="Timezone"

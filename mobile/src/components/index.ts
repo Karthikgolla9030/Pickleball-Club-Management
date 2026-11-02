@@ -16,6 +16,8 @@ export { SegmentedTabs } from './SegmentedTabs';
 export { FilterChips } from './FilterChips';
 export { ModalSheet } from './ModalSheet';
 export { FormField, InfoRow, InfoGrid } from './FormField';
+export { FormRow } from './FormRow';
+export type { FormRowProps } from './FormRow';
 export { AppHeader } from './AppHeader';
 export { AppDrawer } from './AppDrawer';
 export { AppBottomNav } from './AppBottomNav';

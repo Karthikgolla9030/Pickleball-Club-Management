@@ -389,9 +389,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1.5],
   },
   label: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary,
+    letterSpacing: 0.1,
   },
   inputRow: {
     flexDirection: 'row',
@@ -401,7 +402,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.surface.border,
-    paddingHorizontal: Spacing[2],
+    paddingHorizontal: Spacing[2.5],
     overflow: 'hidden',
   },
   inputFocused: {
@@ -419,47 +420,52 @@ const styles = StyleSheet.create({
   countryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing[2],
+    paddingHorizontal: Spacing[1.5],
     height: '100%',
-    gap: 6,
+    gap: 4,
   },
   flagText: {
-    fontSize: 20,
+    fontSize: 17,
   },
   dialCodeText: {
-    fontSize: Typography.size.base,
-    fontWeight: Typography.weight.semibold,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary,
   },
   chevronIcon: {
-    marginLeft: 2,
+    marginLeft: 1,
   },
   divider: {
     width: 1,
-    height: 24,
+    height: 22,
     backgroundColor: Colors.surface.border,
-    marginHorizontal: Spacing[1],
+    marginHorizontal: 4,
   },
   textInput: {
     flex: 1,
     height: '100%',
     paddingHorizontal: Spacing[2],
-    fontSize: Typography.size.base,
+    fontSize: 14,
     color: Colors.text.primary,
+    minWidth: 0,
     ...(Platform.OS === 'web'
       ? ({ outlineStyle: 'none', boxSizing: 'border-box' } as any)
       : {}),
   },
   clearButton: {
-    padding: Spacing[2],
+    padding: Spacing[1.5],
   },
   errorText: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.status.error,
+    lineHeight: 16,
+    marginTop: 2,
   },
   hintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+    marginTop: 2,
   },
 
   // Modal Styles

@@ -66,6 +66,7 @@ import {
   EmptyState,
   ErrorState,
   FormField,
+  FormRow,
   LoadingState,
   Screen,
   SegmentedTabs,
@@ -76,7 +77,7 @@ import {
 import { API_ENDPOINTS } from '@/constants';
 import { useActiveClub, useClubBranding, useClubDetails, useUpdateClubBranding } from '@/hooks';
 import { clubAssetsApi } from '@/services/api';
-import { Colors, Radius, Shadows, Spacing } from '@/theme';
+import { Colors, Dimensions, Radius, Shadows, Spacing } from '@/theme';
 import type { UpdateClubPayload } from '@/types';
 import { BUILTIN_FALLBACKS, resolveClubCover, resolveMediaUrl } from '@/utils';
 
@@ -1137,54 +1138,46 @@ export default function ClubDetailsScreen() {
                   editable={isOwner}
                 />
 
-                <View style={styles.rowTwoCols}>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="Contact Email"
-                      value={contactEmail}
-                      onChangeText={setContactEmail}
-                      placeholder="info@club.com"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      error={validationErrors.contactEmail}
-                      editable={isOwner}
-                    />
-                  </View>
-                  <View style={styles.halfCol}>
-                    <InternationalPhoneInput
-                      label="Contact Phone"
-                      value={contactPhone}
-                      onChangeText={setContactPhone}
-                      disabled={!isOwner}
-                    />
-                  </View>
-                </View>
+                <FormRow stackOnMobile={true}>
+                  <FormField
+                    label="Contact Email"
+                    value={contactEmail}
+                    onChangeText={setContactEmail}
+                    placeholder="info@club.com"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    error={validationErrors.contactEmail}
+                    editable={isOwner}
+                  />
+                  <InternationalPhoneInput
+                    label="Contact Phone"
+                    value={contactPhone}
+                    onChangeText={setContactPhone}
+                    disabled={!isOwner}
+                  />
+                </FormRow>
 
-                <View style={styles.rowTwoCols}>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="Public Website"
-                      value={website}
-                      onChangeText={setWebsite}
-                      placeholder="https://example.com"
-                      keyboardType="url"
-                      autoCapitalize="none"
-                      error={validationErrors.website}
-                      editable={isOwner}
-                    />
-                  </View>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="Established Year"
-                      value={establishedYear}
-                      onChangeText={setEstablishedYear}
-                      placeholder="e.g. 2023"
-                      keyboardType="number-pad"
-                      error={validationErrors.establishedYear}
-                      editable={isOwner}
-                    />
-                  </View>
-                </View>
+                <FormRow stackOnMobile={true}>
+                  <FormField
+                    label="Public Website"
+                    value={website}
+                    onChangeText={setWebsite}
+                    placeholder="https://example.com"
+                    keyboardType="url"
+                    autoCapitalize="none"
+                    error={validationErrors.website}
+                    editable={isOwner}
+                  />
+                  <FormField
+                    label="Established Year"
+                    value={establishedYear}
+                    onChangeText={setEstablishedYear}
+                    placeholder="e.g. 2023"
+                    keyboardType="number-pad"
+                    error={validationErrors.establishedYear}
+                    editable={isOwner}
+                  />
+                </FormRow>
               </Card>
 
               {/* SECTION B: LOCATION INFORMATION */}
@@ -1217,47 +1210,39 @@ export default function ClubDetailsScreen() {
                   editable={isOwner}
                 />
 
-                <View style={styles.rowTwoCols}>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="City"
-                      value={city}
-                      onChangeText={setCity}
-                      placeholder="e.g. Charlotte"
-                      editable={isOwner}
-                    />
-                  </View>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="State / Province"
-                      value={state}
-                      onChangeText={setState}
-                      placeholder="e.g. NC"
-                      editable={isOwner}
-                    />
-                  </View>
-                </View>
+                <FormRow breakpoint={440}>
+                  <FormField
+                    label="City"
+                    value={city}
+                    onChangeText={setCity}
+                    placeholder="e.g. Charlotte"
+                    editable={isOwner}
+                  />
+                  <FormField
+                    label="State / Province"
+                    value={state}
+                    onChangeText={setState}
+                    placeholder="e.g. NC"
+                    editable={isOwner}
+                  />
+                </FormRow>
 
-                <View style={styles.rowTwoCols}>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="Postal / ZIP Code"
-                      value={postalCode}
-                      onChangeText={setPostalCode}
-                      placeholder="e.g. 28202"
-                      editable={isOwner}
-                    />
-                  </View>
-                  <View style={styles.halfCol}>
-                    <FormField
-                      label="Country"
-                      value={country}
-                      onChangeText={setCountry}
-                      placeholder="e.g. United States"
-                      editable={isOwner}
-                    />
-                  </View>
-                </View>
+                <FormRow breakpoint={440}>
+                  <FormField
+                    label="Postal / ZIP Code"
+                    value={postalCode}
+                    onChangeText={setPostalCode}
+                    placeholder="e.g. 28202"
+                    editable={isOwner}
+                  />
+                  <FormField
+                    label="Country"
+                    value={country}
+                    onChangeText={setCountry}
+                    placeholder="e.g. United States"
+                    editable={isOwner}
+                  />
+                </FormRow>
               </Card>
 
               {/* SECTION C: OPERATING & FACILITIES */}
@@ -1305,28 +1290,24 @@ export default function ClubDetailsScreen() {
                   </View>
                 </View>
 
-                <View style={styles.rowTwoCols}>
-                  <View style={styles.halfCol}>
-                    <TimePickerInput
-                      label="Opening Time"
-                      value={openingTime}
-                      onChange={setOpeningTime}
-                      error={validationErrors.openingTime}
-                      disabled={!isOwner}
-                      includeSeconds={false}
-                    />
-                  </View>
-                  <View style={styles.halfCol}>
-                    <TimePickerInput
-                      label="Closing Time"
-                      value={closingTime}
-                      onChange={setClosingTime}
-                      error={validationErrors.closingTime}
-                      disabled={!isOwner}
-                      includeSeconds={false}
-                    />
-                  </View>
-                </View>
+                <FormRow stackOnMobile={false}>
+                  <TimePickerInput
+                    label="Opening Time"
+                    value={openingTime}
+                    onChange={setOpeningTime}
+                    error={validationErrors.openingTime}
+                    disabled={!isOwner}
+                    includeSeconds={false}
+                  />
+                  <TimePickerInput
+                    label="Closing Time"
+                    value={closingTime}
+                    onChange={setClosingTime}
+                    error={validationErrors.closingTime}
+                    disabled={!isOwner}
+                    includeSeconds={false}
+                  />
+                </FormRow>
 
                 {/* Timezone Selector */}
                 <View style={styles.fieldBlock}>
@@ -1821,9 +1802,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1.5],
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#2A4540',
+    letterSpacing: 0.1,
   },
   daysRow: {
     flexDirection: 'row',
@@ -1860,17 +1842,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAF9',
     borderWidth: 1,
     borderColor: '#D4E5DE',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
+    minHeight: Dimensions.inputHeight,
     paddingHorizontal: Spacing[3.5],
-    paddingVertical: Spacing[3],
+    paddingVertical: Spacing[2.5],
   },
   selectTriggerDisabled: {
     backgroundColor: '#F0F4F2',
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
+    minHeight: Dimensions.inputHeight,
     paddingHorizontal: Spacing[3.5],
-    paddingVertical: Spacing[3],
+    paddingVertical: Spacing[2.5],
   },
   selectTriggerText: {
     fontSize: 14,

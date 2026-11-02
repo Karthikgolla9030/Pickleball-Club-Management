@@ -390,9 +390,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1.5],
   },
   label: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.semibold,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary,
+    letterSpacing: 0.1,
   },
   inputRow: {
     flexDirection: 'row',
@@ -430,16 +431,16 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   valueText: {
-    fontSize: Typography.size.base,
-    fontWeight: Typography.weight.semibold,
+    fontSize: 14,
+    fontWeight: '600',
     color: Colors.text.primary,
   },
   valueSubtitle: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.text.secondary,
   },
   placeholderText: {
-    fontSize: Typography.size.base,
+    fontSize: 14,
     color: Colors.text.tertiary,
   },
   trailingIcon: {
@@ -452,8 +453,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   errorText: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.status.error,
+    lineHeight: 16,
     flex: 1,
   },
   retryBtn: {
@@ -466,13 +468,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.brand.primaryLight,
   },
   retryText: {
-    fontSize: Typography.size.xs,
+    fontSize: 11,
     fontWeight: Typography.weight.semibold,
     color: Colors.brand.primary,
   },
   hintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
     marginTop: 2,
   },
 

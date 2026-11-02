@@ -404,9 +404,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1.5],
   },
   label: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary,
+    letterSpacing: 0.1,
   },
   inputRow: {
     flexDirection: 'row',
@@ -416,7 +417,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.surface.border,
-    paddingHorizontal: Spacing[4],
+    paddingHorizontal: Spacing[3.5],
     overflow: 'hidden',
   },
   inputFocused: {
@@ -436,22 +437,28 @@ const styles = StyleSheet.create({
   },
   valueText: {
     flex: 1,
-    fontSize: Typography.size.base,
+    fontSize: 14,
     color: Colors.text.primary,
+    fontWeight: Typography.weight.medium,
   },
   placeholderText: {
+    fontSize: 14,
     color: Colors.text.tertiary,
   },
   clearBtn: {
     padding: Spacing[1],
   },
   errorText: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.status.error,
+    lineHeight: 16,
+    marginTop: 2,
   },
   hintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+    marginTop: 2,
   },
 
   // Modal Styles

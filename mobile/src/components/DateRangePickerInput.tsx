@@ -130,9 +130,10 @@ const styles = StyleSheet.create({
     gap: Spacing[1.5],
   },
   sectionLabel: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary,
+    letterSpacing: 0.1,
   },
   inputsRow: {
     flexDirection: 'row',
@@ -144,13 +145,18 @@ const styles = StyleSheet.create({
   },
   fieldCol: {
     flex: 1,
+    minWidth: 0,
   },
   errorText: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.status.error,
+    lineHeight: 16,
+    marginTop: 2,
   },
   hintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+    marginTop: 2,
   },
 });

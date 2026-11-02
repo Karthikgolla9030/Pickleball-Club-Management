@@ -62,20 +62,22 @@ export function Input({ label, error, hint, style, testID, multiline, ...props }
 const styles = StyleSheet.create({
   container: { gap: Spacing[1.5] },
   label: {
-    fontSize: Typography.size.sm,
-    fontWeight: Typography.weight.medium,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: Colors.text.primary, // near-black label
+    letterSpacing: 0.1,
   },
   input: {
-    height: Dimensions.inputHeight,
+    height: Dimensions.inputHeight,          // 48px
     backgroundColor: Colors.surface.default, // white
     borderRadius: Radius.lg,                 // 12px
     borderWidth: 1,
     borderColor: Colors.surface.border,      // #E5E7EB
-    paddingHorizontal: Spacing[4],           // 16px horizontal
+    paddingHorizontal: Spacing[3.5],         // 14px horizontal
     paddingVertical: Platform.OS === 'web' ? 0 : Spacing[2.5],
-    fontSize: Typography.size.base,
+    fontSize: 14,
     color: Colors.text.primary,
+    minWidth: 0,
     overflow: 'hidden',
     ...(Platform.OS === 'web'
       ? ({ outlineStyle: 'none', boxSizing: 'border-box' } as any)
@@ -83,9 +85,11 @@ const styles = StyleSheet.create({
   },
   inputMultiline: {
     height: undefined,
-    minHeight: Dimensions.inputHeight * 2,
-    paddingTop: Spacing[3],
-    paddingVertical: Spacing[3],
+    minHeight: 96,
+    paddingTop: Spacing[2.5],
+    paddingBottom: Spacing[2.5],
+    paddingHorizontal: Spacing[3.5],
+    lineHeight: 20,
   },
   inputFocused: {
     borderColor: Colors.brand.primary,       // #1B6B45 on focus
@@ -96,13 +100,15 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   errorText: {
-    fontSize: Typography.size.xs,
+    fontSize: 12,
     color: Colors.status.error,
     lineHeight: 16,
+    marginTop: 2,
   },
   hintText: {
-    fontSize: Typography.size.xs,
-    color: Colors.text.tertiary,
+    fontSize: 12,
+    color: Colors.text.secondary,
     lineHeight: 16,
+    marginTop: 2,
   },
 });
