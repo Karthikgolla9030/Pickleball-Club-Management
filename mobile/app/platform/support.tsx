@@ -1205,13 +1205,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAF9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   originTabActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
   },
   originTabText: {
     fontSize: 12,

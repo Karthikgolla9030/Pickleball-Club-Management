@@ -514,7 +514,7 @@ export function HelpAndFaqsManager() {
             onPress={() => setActiveTab('faqs')}
             activeOpacity={0.8}
           >
-            <HelpCircle size={14} color={activeTab === 'faqs' ? '#0F172A' : '#64748B'} />
+            <HelpCircle size={14} color={activeTab === 'faqs' ? '#FFFFFF' : '#64748B'} />
             <AppText
               style={[styles.segmentBtnText, activeTab === 'faqs' && styles.segmentBtnTextActive]}
             >
@@ -527,7 +527,7 @@ export function HelpAndFaqsManager() {
             onPress={() => setActiveTab('articles')}
             activeOpacity={0.8}
           >
-            <FileText size={14} color={activeTab === 'articles' ? '#0F172A' : '#64748B'} />
+            <FileText size={14} color={activeTab === 'articles' ? '#FFFFFF' : '#64748B'} />
             <AppText
               style={[
                 styles.segmentBtnText,
@@ -543,7 +543,7 @@ export function HelpAndFaqsManager() {
             onPress={() => setActiveTab('categories')}
             activeOpacity={0.8}
           >
-            <Folder size={14} color={activeTab === 'categories' ? '#0F172A' : '#64748B'} />
+            <Folder size={14} color={activeTab === 'categories' ? '#FFFFFF' : '#64748B'} />
             <AppText
               style={[
                 styles.segmentBtnText,
@@ -1269,9 +1269,9 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   segmentBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#15803D',
     ...Platform.select({
-      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.05)' },
+      web: { boxShadow: '0 1px 2px rgba(0,0,0,0.08)' },
       default: { elevation: 1 },
     }),
   },
@@ -1281,7 +1281,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   segmentBtnTextActive: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
 
@@ -1394,7 +1394,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   choiceChipActive: {
-    backgroundColor: '#0F172A',
+    backgroundColor: '#15803D',
   },
   choiceChipText: {
     fontSize: 11.5,
@@ -1443,7 +1443,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   editorTabBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#15803D',
   },
   editorTabText: {
     fontSize: 11.5,
@@ -1451,7 +1451,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   editorTabTextActive: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   articlePreviewBox: {

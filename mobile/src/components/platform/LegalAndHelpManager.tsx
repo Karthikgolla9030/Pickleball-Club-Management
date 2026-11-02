@@ -1167,8 +1167,8 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
   },
   topTabBtnActive: {
-    backgroundColor: '#0F172A',
-    borderColor: '#0F172A',
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
   },
   topTabBtnText: {
     fontSize: Typography.size.xs,
@@ -1233,7 +1233,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   subTabBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#15803D',
   },
   subTabBtnText: {
     fontSize: Typography.size.xs,
@@ -1241,14 +1241,14 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   subTabBtnTextActive: {
-    color: '#0F172A',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.brand.primary,
+    backgroundColor: '#15803D',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: Radius.md,

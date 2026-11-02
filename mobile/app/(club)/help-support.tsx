@@ -166,7 +166,7 @@ export default function ClubHelpSupportScreen() {
         >
           <BookOpen
             size={15}
-            color={activeTab === 'faqs' ? '#114D3F' : '#64748B'}
+            color={activeTab === 'faqs' ? '#FFFFFF' : '#64748B'}
             strokeWidth={2}
           />
           <AppText style={[styles.segmentText, activeTab === 'faqs' && styles.segmentTextActive]}>
@@ -181,7 +181,7 @@ export default function ClubHelpSupportScreen() {
         >
           <MessageSquare
             size={15}
-            color={activeTab === 'tickets' ? '#114D3F' : '#64748B'}
+            color={activeTab === 'tickets' ? '#FFFFFF' : '#64748B'}
             strokeWidth={2}
           />
           <AppText style={[styles.segmentText, activeTab === 'tickets' && styles.segmentTextActive]}>
@@ -528,7 +528,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   segmentBtnActive: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -541,7 +542,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   segmentTextActive: {
-    color: '#114D3F',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   ticketsContainer: {
@@ -627,7 +628,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[3],
     paddingVertical: Spacing[1] + 2,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAF9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },

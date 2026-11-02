@@ -58,6 +58,7 @@ interface RequesterSupportSectionProps {
 }
 
 export function RequesterSupportSection({ defaultClubId, mode = 'player' }: RequesterSupportSectionProps) {
+  const isClub = mode === 'club';
   const [activeSubTab, setActiveSubTab] = useState<'tickets' | 'submit'>('tickets');
 
   // Tickets List State
@@ -273,22 +274,33 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
       {/* Segmented Tab Switcher: My Tickets vs New Ticket */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tabItem, activeSubTab === 'tickets' && styles.tabItemActive]}
+          style={[
+            styles.tabItem,
+            activeSubTab === 'tickets' && (isClub ? styles.tabItemActiveClub : styles.tabItemActivePlayer),
+          ]}
           onPress={() => setActiveSubTab('tickets')}
           activeOpacity={0.8}
         >
           <MessageSquare
             size={15}
-            color={activeSubTab === 'tickets' ? '#114D3F' : '#64748B'}
+            color={activeSubTab === 'tickets' ? '#FFFFFF' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabItemText, activeSubTab === 'tickets' && styles.tabItemTextActive]}>
+          <AppText
+            style={[
+              styles.tabItemText,
+              activeSubTab === 'tickets' && styles.tabItemTextActive,
+            ]}
+          >
             My Tickets {tickets.length > 0 ? `(${tickets.length})` : ''}
           </AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabItem, activeSubTab === 'submit' && styles.tabItemActive]}
+          style={[
+            styles.tabItem,
+            activeSubTab === 'submit' && (isClub ? styles.tabItemActiveClub : styles.tabItemActivePlayer),
+          ]}
           onPress={() => {
             setActiveSubTab('submit');
             setFormError(null);
@@ -298,10 +310,15 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
         >
           <PlusCircle
             size={15}
-            color={activeSubTab === 'submit' ? '#114D3F' : '#64748B'}
+            color={activeSubTab === 'submit' ? '#FFFFFF' : '#64748B'}
             strokeWidth={2}
           />
-          <AppText style={[styles.tabItemText, activeSubTab === 'submit' && styles.tabItemTextActive]}>
+          <AppText
+            style={[
+              styles.tabItemText,
+              activeSubTab === 'submit' && styles.tabItemTextActive,
+            ]}
+          >
             New Ticket
           </AppText>
         </TouchableOpacity>
@@ -358,7 +375,10 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                 {categories.map((cat) => (
                   <TouchableOpacity
                     key={cat.key}
-                    style={[styles.chip, category === cat.key && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      category === cat.key && (isClub ? styles.chipActiveClub : styles.chipActivePlayer),
+                    ]}
                     onPress={() => setCategory(cat.key)}
                   >
                     <AppText style={[styles.chipText, category === cat.key && styles.chipTextActive]}>
@@ -376,7 +396,10 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                 {priorities.map((pri) => (
                   <TouchableOpacity
                     key={pri.key}
-                    style={[styles.chip, priority === pri.key && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      priority === pri.key && (isClub ? styles.chipActiveClub : styles.chipActivePlayer),
+                    ]}
                     onPress={() => setPriority(pri.key)}
                   >
                     <AppText style={[styles.chipText, priority === pri.key && styles.chipTextActive]}>
@@ -403,7 +426,10 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                 <AppText style={styles.fieldLabel}>Related Club (Optional)</AppText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
                   <TouchableOpacity
-                    style={[styles.chip, selectedClubId === null && styles.chipActive]}
+                    style={[
+                      styles.chip,
+                      selectedClubId === null && (isClub ? styles.chipActiveClub : styles.chipActivePlayer),
+                    ]}
                     onPress={() => setSelectedClubId(null)}
                   >
                     <AppText style={[styles.chipText, selectedClubId === null && styles.chipTextActive]}>
@@ -413,7 +439,10 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                   {clubsList.map((c) => (
                     <TouchableOpacity
                       key={c.id}
-                      style={[styles.chip, selectedClubId === c.id && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        selectedClubId === c.id && (isClub ? styles.chipActiveClub : styles.chipActivePlayer),
+                      ]}
                       onPress={() => setSelectedClubId(c.id)}
                     >
                       <AppText style={[styles.chipText, selectedClubId === c.id && styles.chipTextActive]}>
@@ -479,7 +508,10 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
               return (
                 <TouchableOpacity
                   key={tab.key}
-                  style={[styles.statusPill, isActive && styles.statusPillActive]}
+                  style={[
+                    styles.statusPill,
+                    isActive && (isClub ? styles.statusPillActiveClub : styles.statusPillActivePlayer),
+                  ]}
                   onPress={() => setStatusFilter(tab.key)}
                 >
                   <AppText style={[styles.statusPillText, isActive && styles.statusPillTextActive]}>
@@ -511,7 +543,7 @@ export function RequesterSupportSection({ defaultClubId, mode = 'player' }: Requ
                   : ticketError}
               </AppText>
               <TouchableOpacity
-                style={styles.retryBtn}
+                style={[styles.retryBtn, isClub ? styles.retryBtnClub : styles.retryBtnPlayer]}
                 onPress={() => fetchMyTickets(false)}
                 activeOpacity={0.7}
               >
@@ -775,11 +807,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     gap: 6,
   },
-  tabItemActive: {
-    backgroundColor: '#FFFFFF',
+  tabItemActivePlayer: {
+    backgroundColor: '#114D3F',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  tabItemActiveClub: {
+    backgroundColor: '#176B57',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
@@ -789,7 +829,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   tabItemTextActive: {
-    color: '#114D3F',
+    color: '#FFFFFF',
     fontWeight: '700',
   },
   formCard: {
@@ -887,9 +927,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  chipActive: {
-    backgroundColor: Colors.brand.primary,
-    borderColor: Colors.brand.primary,
+  chipActivePlayer: {
+    backgroundColor: '#114D3F',
+    borderColor: '#114D3F',
+  },
+  chipActiveClub: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   chipText: {
     fontSize: 12,
@@ -898,6 +942,7 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   ticketsContainer: {
     gap: 12,
@@ -914,15 +959,19 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: 12,
     borderRadius: Radius.full,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAF9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statusPillActive: {
+  statusPillActivePlayer: {
     backgroundColor: '#114D3F',
     borderColor: '#114D3F',
+  },
+  statusPillActiveClub: {
+    backgroundColor: '#176B57',
+    borderColor: '#176B57',
   },
   statusPillText: {
     fontSize: 12,
@@ -961,11 +1010,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#114D3F',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
     marginTop: 4,
+  },
+  retryBtnPlayer: {
+    backgroundColor: '#114D3F',
+  },
+  retryBtnClub: {
+    backgroundColor: '#176B57',
   },
   retryBtnText: {
     color: '#FFFFFF',
