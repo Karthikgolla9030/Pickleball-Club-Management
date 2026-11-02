@@ -42,6 +42,7 @@ import {
   Globe,
   Image as ImageIcon,
   Info,
+  Link2,
   Lock,
   Mail,
   MapPin,
@@ -522,6 +523,27 @@ export default function ClubDetailsScreen() {
   const currentLogoUri = getFullImageUrl(logoPreviewUri || club?.logo_url);
   const currentCoverUri = getFullImageUrl(coverPreviewUri || club?.cover_image_url || branding?.cover_image_url);
 
+  const formattedAddress = useMemo(() => {
+    const parts = [
+      addressLine1,
+      addressLine2,
+      city,
+      [state, postalCode].filter(Boolean).join(' '),
+      country,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(', ') : 'No address specified';
+  }, [addressLine1, addressLine2, city, state, postalCode, country]);
+
+  const locationPillText = useMemo(() => {
+    return [city, state].filter(Boolean).join(', ') || city || state || country || '';
+  }, [city, state, country]);
+
+  const timezoneLabel = useMemo(() => {
+    if (timezone === 'UTC') return 'UTC';
+    const found = TIMEZONE_OPTIONS.find((t) => t.value === timezone);
+    return found ? found.label.split('(')[0].trim() : timezone || 'UTC';
+  }, [timezone]);
+
   // Loading state
   if (isLoading && !club) {
     return (
@@ -638,79 +660,67 @@ export default function ClubDetailsScreen() {
           {activeTab === 'edit' ? (
             !isEditing ? (
               /* ═════════════════════════════════════════════════════════════════════════
-                 VIEW PROFILE MODE (Default)
+                 VIEW PROFILE MODE (Matches Reference Screenshot Exactly)
                  ═════════════════════════════════════════════════════════════════════════ */
               <View style={styles.viewModeWrapper}>
-                {/* 1. Club Hero Identity Card */}
-                <Card style={styles.heroProfileCard}>
-                  {/* Hero Cover Banner */}
-                  <View style={styles.heroCoverWrapper}>
-                    <Image
-                      source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
-                      style={styles.heroCoverImg}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.heroCoverOverlay} />
-                    <View style={styles.heroCoverBadge}>
-                      <CheckCircle2 size={12} color="#FFFFFF" />
-                      <AppText style={styles.heroCoverBadgeText}>Saved Profile</AppText>
-                    </View>
-                  </View>
-
-                  {/* Hero Body with overlapping logo and action */}
-                  <View style={styles.heroBody}>
-                    <View style={styles.heroTopRow}>
-                      <View style={styles.heroLogoWrapper}>
-                        {currentLogoUri && !logoError ? (
-                          <Image
-                            source={{ uri: currentLogoUri }}
-                            style={styles.heroLogoImg}
-                            resizeMode="contain"
-                            onError={() => setLogoError(true)}
-                          />
-                        ) : (
-                          <View style={styles.heroLogoFallback}>
-                            <Building2 size={32} color="#176B57" />
-                          </View>
-                        )}
-                      </View>
-
-                      {isOwner && (
-                        <TouchableOpacity
-                          style={styles.heroEditBtn}
-                          onPress={() => setIsEditing(true)}
-                          activeOpacity={0.8}
-                        >
-                          <Pencil size={13} color="#FFFFFF" strokeWidth={2.5} />
-                          <AppText style={styles.heroEditBtnText}>Edit Details</AppText>
-                        </TouchableOpacity>
+                {/* 1. Club Identity Card */}
+                <Card style={styles.identityCard}>
+                  <View style={styles.identityRow}>
+                    {/* Club Logo / Building Icon */}
+                    <View style={styles.identityLogoBox}>
+                      {currentLogoUri && !logoError ? (
+                        <Image
+                          source={{ uri: currentLogoUri }}
+                          style={styles.identityLogoImg}
+                          resizeMode="contain"
+                          onError={() => setLogoError(true)}
+                        />
+                      ) : (
+                        <Building2 size={26} color="#176B57" />
                       )}
                     </View>
 
-                    <View style={styles.heroIdentityTextCol}>
-                      <AppText style={styles.heroClubName}>{name || 'Unnamed Club'}</AppText>
+                    {/* Club Info Details */}
+                    <View style={styles.identityTextCol}>
+                      <AppText style={styles.identityName} numberOfLines={2}>
+                        {name || 'Pickleball Club'}
+                      </AppText>
                       {shortDescription ? (
-                        <AppText style={styles.heroTaglineText}>"{shortDescription}"</AppText>
+                        <AppText style={styles.identityTagline} numberOfLines={2}>
+                          "{shortDescription}"
+                        </AppText>
                       ) : null}
 
-                      <View style={styles.heroMetaRow}>
+                      <View style={styles.identityMetaRow}>
                         {establishedYear ? (
-                          <View style={styles.metaChip}>
+                          <View style={styles.identityPill}>
                             <Calendar size={12} color="#49635E" />
-                            <AppText style={styles.metaChipText}>Est. {establishedYear}</AppText>
+                            <AppText style={styles.identityPillText}>Est. {establishedYear}</AppText>
                           </View>
                         ) : null}
 
-                        {city || state ? (
-                          <View style={styles.metaChip}>
+                        {locationPillText ? (
+                          <View style={styles.identityPill}>
                             <MapPin size={12} color="#49635E" />
-                            <AppText style={styles.metaChipText}>
-                              {[city, state].filter(Boolean).join(', ')}
+                            <AppText style={styles.identityPillText} numberOfLines={1}>
+                              {locationPillText}
                             </AppText>
                           </View>
                         ) : null}
                       </View>
                     </View>
+
+                    {/* Edit Details Action */}
+                    {isOwner && (
+                      <TouchableOpacity
+                        style={styles.identityEditBtn}
+                        onPress={() => setIsEditing(true)}
+                        activeOpacity={0.75}
+                      >
+                        <Pencil size={12} color="#176B57" strokeWidth={2.2} />
+                        <AppText style={styles.identityEditBtnText}>Edit Details</AppText>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </Card>
 
@@ -718,7 +728,7 @@ export default function ClubDetailsScreen() {
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
-                      <Building2 size={18} color="#176B57" />
+                      <Building2 size={16} color="#176B57" />
                     </View>
                     <View style={styles.sectionTitleBlock}>
                       <AppText style={styles.sectionTitle}>About the Club</AppText>
@@ -728,26 +738,18 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <AppText style={styles.viewAboutText}>
-                    {description || 'No detailed description provided yet. Tap "Edit Details" to add an overview of your club, courts, and community.'}
-                  </AppText>
-
-                  {facilitiesSummary ? (
-                    <View style={styles.viewFacilitiesBox}>
-                      <View style={styles.viewFacilitiesHeader}>
-                        <Sparkles size={14} color="#176B57" />
-                        <AppText style={styles.viewFacilitiesLabel}>Facilities & Amenities</AppText>
-                      </View>
-                      <AppText style={styles.viewFacilitiesText}>{facilitiesSummary}</AppText>
-                    </View>
-                  ) : null}
+                  <View style={styles.cardContentBox}>
+                    <AppText style={styles.viewAboutText}>
+                      {description || '6 courts of indoor and outdoor, amenities based club'}
+                    </AppText>
+                  </View>
                 </Card>
 
                 {/* 3. Location & Address Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
-                      <MapPin size={18} color="#176B57" />
+                      <MapPin size={16} color="#176B57" />
                     </View>
                     <View style={styles.sectionTitleBlock}>
                       <AppText style={styles.sectionTitle}>Location & Address</AppText>
@@ -757,93 +759,60 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.viewLocationBlock}>
-                    {addressLine1 ? (
-                      <AppText style={styles.viewAddressText}>{addressLine1}</AppText>
-                    ) : null}
-                    {addressLine2 ? (
-                      <AppText style={styles.viewAddressSubText}>{addressLine2}</AppText>
-                    ) : null}
-                    <AppText style={styles.viewCityStateText}>
-                      {[city, state, postalCode].filter(Boolean).join(', ') || 'No address specified'}
-                    </AppText>
-                    <AppText style={styles.viewCountryText}>{country || 'United States'}</AppText>
+                  <View style={styles.cardContentBox}>
+                    <View style={styles.addressRow}>
+                      <MapPin size={16} color="#49635E" style={styles.addressRowIcon} />
+                      <AppText style={styles.addressRowText}>
+                        {formattedAddress}
+                      </AppText>
+                    </View>
                   </View>
                 </Card>
 
-                {/* 4. Operating Hours & Schedule Card */}
+                {/* 4. Operating Information Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
-                      <Clock size={18} color="#176B57" />
+                      <Clock size={16} color="#176B57" />
                     </View>
                     <View style={styles.sectionTitleBlock}>
-                      <AppText style={styles.sectionTitle}>Operating Hours & Schedule</AppText>
+                      <AppText style={styles.sectionTitle}>Operating Information</AppText>
                       <AppText style={styles.sectionSubtitle}>
-                        Weekly schedule, timezone, and facility summary
+                        Facility hours and timezone
                       </AppText>
                     </View>
                   </View>
 
-                  {/* Operating Days */}
-                  <View style={styles.viewFieldGroup}>
-                    <AppText style={styles.viewFieldLabel}>Operating Days</AppText>
-                    <View style={styles.daysRow}>
-                      {DAYS_OF_WEEK.map((day) => {
-                        const isSelected = selectedDays.includes(day.key);
-                        return (
-                          <View
-                            key={day.key}
-                            style={[
-                              styles.dayPillView,
-                              isSelected && styles.dayPillSelectedView,
-                            ]}
-                          >
-                            <AppText
-                              style={[
-                                styles.dayPillTextView,
-                                isSelected && styles.dayPillTextSelectedView,
-                              ]}
-                            >
-                              {day.label}
-                            </AppText>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </View>
-
-                  {/* Hours & Timezone */}
-                  <View style={styles.viewHoursRow}>
-                    <View style={styles.viewHoursCol}>
-                      <AppText style={styles.viewHoursLabel}>Facility Hours</AppText>
-                      <AppText style={styles.viewHoursValue}>
-                        {openingTime} – {closingTime}
+                  <View style={styles.cardContentBox}>
+                    {/* Facility Hours */}
+                    <View style={styles.tableRowBorder}>
+                      <View style={styles.tableRowLeft}>
+                        <Calendar size={16} color="#49635E" />
+                        <AppText style={styles.tableRowLabel}>Facility Hours</AppText>
+                      </View>
+                      <AppText style={styles.tableRowValue}>
+                        {openingTime && closingTime ? `${openingTime} – ${closingTime}` : '06:00 – 22:00'}
                       </AppText>
                     </View>
-                    <View style={styles.viewHoursCol}>
-                      <AppText style={styles.viewHoursLabel}>Club Timezone</AppText>
-                      <AppText style={styles.viewHoursValue}>
-                        {TIMEZONE_OPTIONS.find((t) => t.value === timezone)?.label.split('(')[0].trim() || timezone}
+
+                    {/* Club Timezone */}
+                    <View style={styles.tableRowLast}>
+                      <View style={styles.tableRowLeft}>
+                        <Globe size={16} color="#49635E" />
+                        <AppText style={styles.tableRowLabel}>Club Timezone</AppText>
+                      </View>
+                      <AppText style={styles.tableRowValue}>
+                        {timezoneLabel}
                       </AppText>
                     </View>
                   </View>
-
-                  {holidayClosureNotes ? (
-                    <View style={styles.viewClosureNotice}>
-                      <Info size={14} color="#9A6B00" />
-                      <AppText style={styles.viewClosureText}>
-                        {holidayClosureNotes}
-                      </AppText>
-                    </View>
-                  ) : null}
                 </Card>
 
                 {/* 5. Contact Information Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
-                      <Mail size={18} color="#176B57" />
+                      <Mail size={16} color="#176B57" />
                     </View>
                     <View style={styles.sectionTitleBlock}>
                       <AppText style={styles.sectionTitle}>Contact Information</AppText>
@@ -853,84 +822,76 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  <View style={styles.viewContactGrid}>
-                    {contactEmail ? (
-                      <TouchableOpacity
-                        style={styles.viewContactItem}
-                        onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.contactIconCircle}>
-                          <Mail size={15} color="#176B57" />
-                        </View>
-                        <View style={styles.contactTextContainer}>
-                          <AppText style={styles.viewContactLabel}>Email</AppText>
-                          <AppText style={styles.viewContactLink} numberOfLines={2}>
+                  <View style={styles.cardContentBox}>
+                    {/* Email */}
+                    <View style={styles.contactRowBorder}>
+                      <View style={styles.contactRowLeft}>
+                        <Mail size={16} color="#49635E" />
+                        <AppText style={styles.tableRowLabel}>Email</AppText>
+                      </View>
+                      {contactEmail ? (
+                        <TouchableOpacity
+                          style={styles.contactLinkTouch}
+                          onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={styles.contactLinkText} numberOfLines={1}>
                             {contactEmail}
                           </AppText>
-                        </View>
-                      </TouchableOpacity>
-                    ) : null}
+                          <ExternalLink size={13} color="#667776" style={styles.externalIcon} />
+                        </TouchableOpacity>
+                      ) : (
+                        <AppText style={styles.tableRowMuted}>Not provided</AppText>
+                      )}
+                    </View>
 
-                    {contactPhone ? (
-                      <TouchableOpacity
-                        style={styles.viewContactItem}
-                        onPress={() => Linking.openURL(`tel:${contactPhone}`)}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.contactIconCircle}>
-                          <Phone size={15} color="#176B57" />
-                        </View>
-                        <View style={styles.contactTextContainer}>
-                          <AppText style={styles.viewContactLabel}>Phone</AppText>
-                          <AppText style={styles.viewContactLink} numberOfLines={1}>
+                    {/* Phone */}
+                    <View style={styles.contactRowBorder}>
+                      <View style={styles.contactRowLeft}>
+                        <Phone size={16} color="#49635E" />
+                        <AppText style={styles.tableRowLabel}>Phone</AppText>
+                      </View>
+                      {contactPhone ? (
+                        <TouchableOpacity
+                          style={styles.contactPhoneTouch}
+                          onPress={() => Linking.openURL(`tel:${contactPhone}`)}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={styles.tableRowValue}>
                             {contactPhone}
                           </AppText>
-                        </View>
-                      </TouchableOpacity>
-                    ) : null}
+                        </TouchableOpacity>
+                      ) : (
+                        <AppText style={styles.tableRowMuted}>Not provided</AppText>
+                      )}
+                    </View>
 
-                    {website ? (
-                      <TouchableOpacity
-                        style={styles.viewContactItem}
-                        onPress={() => {
-                          const url = website.startsWith('http') ? website : `https://${website}`;
-                          Linking.openURL(url);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.contactIconCircle}>
-                          <Globe size={15} color="#176B57" />
-                        </View>
-                        <View style={styles.contactTextContainer}>
-                          <View style={styles.websiteLabelRow}>
-                            <AppText style={styles.viewContactLabel}>Website</AppText>
-                            <ExternalLink size={11} color="#176B57" />
-                          </View>
-                          <AppText style={styles.viewContactLink} numberOfLines={2}>
+                    {/* Website */}
+                    <View style={styles.contactRowLast}>
+                      <View style={styles.contactRowLeft}>
+                        <Link2 size={16} color="#49635E" />
+                        <AppText style={styles.tableRowLabel}>Website</AppText>
+                      </View>
+                      {website ? (
+                        <TouchableOpacity
+                          style={styles.contactLinkTouch}
+                          onPress={() => {
+                            const u = website.startsWith('http') ? website : `https://${website}`;
+                            Linking.openURL(u);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={styles.contactLinkText} numberOfLines={1}>
                             {website}
                           </AppText>
-                        </View>
-                      </TouchableOpacity>
-                    ) : null}
-
-                    {!contactEmail && !contactPhone && !website ? (
-                      <AppText style={styles.emptyNoticeText}>No contact information provided yet.</AppText>
-                    ) : null}
+                          <ExternalLink size={13} color="#667776" style={styles.externalIcon} />
+                        </TouchableOpacity>
+                      ) : (
+                        <AppText style={styles.tableRowMuted}>Not provided</AppText>
+                      )}
+                    </View>
                   </View>
                 </Card>
-
-                {/* Bottom Edit Action Button */}
-                {isOwner && (
-                  <TouchableOpacity
-                    style={styles.bottomEditBtn}
-                    onPress={() => setIsEditing(true)}
-                    activeOpacity={0.85}
-                  >
-                    <Pencil size={18} color="#FFFFFF" strokeWidth={2.5} />
-                    <AppText style={styles.bottomEditBtnText}>Edit Club Details</AppText>
-                  </TouchableOpacity>
-                )}
               </View>
             ) : (
               /* ═════════════════════════════════════════════════════════════════════════
@@ -2251,324 +2212,212 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // ─── View Profile Mode Styles ───
+  // ─── View Profile Mode Styles (Matches Reference Screenshot) ───
   viewModeWrapper: {
-    gap: Spacing[4],
+    gap: Spacing[3],
   },
-  heroProfileCard: {
+  identityCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    overflow: 'hidden',
+    padding: Spacing[3.5],
     borderWidth: 1,
     borderColor: '#E2EAE6',
     ...Shadows.sm,
   },
-  heroCoverWrapper: {
-    position: 'relative',
-    width: '100%',
-    height: 140,
-    backgroundColor: '#E5F6EC',
-  },
-  heroCoverImg: {
-    width: '100%',
-    height: '100%',
-  },
-  heroCoverOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(16, 43, 42, 0.25)',
-  },
-  heroCoverBadge: {
-    position: 'absolute',
-    top: Spacing[3],
-    right: Spacing[3],
+  identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
+    gap: 12,
   },
-  heroCoverBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  heroBody: {
-    paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[4],
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: -32,
-    marginBottom: Spacing[3],
-  },
-  heroLogoWrapper: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+  identityLogoBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.md,
   },
-  heroLogoImg: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+  identityLogoImg: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
   },
-  heroLogoFallback: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: '#E5F6EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  heroEditBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#176B57',
-    paddingHorizontal: Spacing[3.5],
-    paddingVertical: Spacing[2],
-    borderRadius: Radius.full,
-    ...Shadows.sm,
-  },
-  heroEditBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  heroIdentityTextCol: {
+  identityTextCol: {
+    flex: 1,
+    minWidth: 0,
     gap: 3,
   },
-  heroClubName: {
-    fontSize: 20,
-    fontWeight: '800',
+  identityName: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#102B2A',
     letterSpacing: -0.2,
   },
-  heroTaglineText: {
-    fontSize: 13,
+  identityTagline: {
+    fontSize: 12.5,
     fontStyle: 'italic',
-    color: '#49635E',
-    lineHeight: 18,
+    color: '#667776',
+    lineHeight: 16,
   },
-  heroMetaRow: {
+  identityMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
-    marginTop: Spacing[1.5],
+    gap: 6,
     flexWrap: 'wrap',
+    marginTop: 2,
   },
-  metaChip: {
+  identityPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#F0F5F2',
+    backgroundColor: '#F0F4F2',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: Radius.full,
   },
-  metaChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#335049',
+  identityPillText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#49635E',
   },
+  identityEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1.2,
+    borderColor: '#176B57',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.lg,
+    backgroundColor: '#FFFFFF',
+    alignSelf: 'center',
+  },
+  identityEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+
+  // Standard Section Cards
   viewSectionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    padding: Spacing[4],
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[3.5],
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    gap: Spacing[3.5],
+    gap: Spacing[3],
     ...Shadows.sm,
   },
+  cardContentBox: {
+    paddingTop: 2,
+  },
   viewAboutText: {
-    fontSize: 13,
-    color: '#334155',
+    fontSize: 13.5,
+    color: '#102B2A',
     lineHeight: 20,
   },
-  viewFacilitiesBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing[3],
-    gap: 4,
-    marginTop: Spacing[1],
-  },
-  viewFacilitiesHeader: {
+
+  // Address
+  addressRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    alignItems: 'flex-start',
+    gap: 10,
   },
-  viewFacilitiesLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#176B57',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  addressRowIcon: {
+    marginTop: 2,
+    flexShrink: 0,
   },
-  viewClosureNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    backgroundColor: '#FFFBEB',
-    padding: Spacing[2.5],
-    borderRadius: Radius.sm,
-    marginTop: 4,
-  },
-  viewClosureText: {
+  addressRowText: {
     flex: 1,
-    fontSize: 12,
-    color: '#92400E',
+    fontSize: 13.5,
+    color: '#102B2A',
+    lineHeight: 20,
   },
-  viewContactGrid: {
-    gap: Spacing[3],
-  },
-  viewContactItem: {
+
+  // Table rows (Operating & Contact)
+  tableRowBorder: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[3],
-    paddingVertical: 2,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
   },
-  contactIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#E5F6EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contactTextContainer: {
-    flex: 1,
-    gap: 1,
-  },
-  websiteLabelRow: {
+  tableRowLast: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    paddingBottom: 2,
   },
-  viewContactLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
+  tableRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  viewContactLink: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#176B57',
-    textDecorationLine: 'underline',
-    lineHeight: 18,
+  tableRowLabel: {
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: '#102B2A',
   },
-  emptyNoticeText: {
-    fontSize: 13,
-    color: '#94A3B8',
+  tableRowValue: {
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: '#102B2A',
+  },
+  tableRowMuted: {
+    fontSize: 13.5,
+    color: '#8A9C96',
     fontStyle: 'italic',
   },
-  viewLocationBlock: {
-    gap: 3,
-    paddingVertical: Spacing[1],
-  },
-  viewAddressText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#102B2A',
-  },
-  viewAddressSubText: {
-    fontSize: 14,
-    color: '#49635E',
-  },
-  viewCityStateText: {
-    fontSize: 14,
-    color: '#2A4540',
-  },
-  viewCountryText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8A9C96',
-    marginTop: 2,
-  },
-  viewFieldGroup: {
-    gap: Spacing[2],
-  },
-  viewFieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#667776',
-  },
-  dayPillView: {
-    paddingHorizontal: Spacing[2.5],
-    paddingVertical: Spacing[1.5],
-    borderRadius: Radius.full,
-    backgroundColor: '#F0F4F2',
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-  },
-  dayPillSelectedView: {
-    backgroundColor: '#E5F6EC',
-    borderColor: '#176B57',
-  },
-  dayPillTextView: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#8A9C96',
-  },
-  dayPillTextSelectedView: {
-    fontWeight: '700',
-    color: '#176B57',
-  },
-  viewHoursRow: {
-    flexDirection: 'row',
-    gap: Spacing[3],
-    paddingVertical: Spacing[1],
-  },
-  viewHoursCol: {
-    flex: 1,
-    backgroundColor: '#F8FAF9',
-    padding: Spacing[2.5],
-    borderRadius: Radius.md,
-    gap: 3,
-  },
-  viewHoursLabel: {
-    fontSize: 12,
-    color: '#667776',
-  },
-  viewHoursValue: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#102B2A',
-  },
-  viewFacilitiesText: {
-    fontSize: 13,
-    color: '#2A4540',
-    lineHeight: 19,
-  },
-  bottomEditBtn: {
+
+  // Contact rows
+  contactRowBorder: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing[2],
-    backgroundColor: '#176B57',
-    paddingVertical: Spacing[3.5],
-    borderRadius: Radius.lg,
-    ...Shadows.md,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F4F2',
   },
-  bottomEditBtnText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  contactRowLast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  contactRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: 86,
+    flexShrink: 0,
+  },
+  contactLinkTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    minWidth: 0,
+  },
+  contactPhoneTouch: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  contactLinkText: {
+    fontSize: 13.5,
+    fontWeight: '500',
+    color: '#176B57',
+    textDecorationLine: 'underline',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  externalIcon: {
+    flexShrink: 0,
   },
   editingBanner: {
     flexDirection: 'row',
