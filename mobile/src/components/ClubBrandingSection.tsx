@@ -34,6 +34,7 @@ import {
   ArrowDown,
   ArrowUp,
   Award,
+  Building2,
   Calendar,
   Camera,
   CheckCircle2,
@@ -76,11 +77,12 @@ interface BrandingAssetCardProps {
   title: string;
   categoryTag: string;
   description: string;
+  recommendedSize?: string;
   currentUrl?: string | null;
-  fallbackSource: any;
+  fallbackSource?: any;
   uploading: boolean;
   isOwner: boolean;
-  assetKind?: 'banner' | 'picture';
+  assetKind?: 'banner' | 'picture' | 'logo';
   onUpload: () => void;
   onReset: () => void;
 }
@@ -89,6 +91,7 @@ function BrandingAssetCard({
   title,
   categoryTag,
   description,
+  recommendedSize,
   currentUrl,
   fallbackSource,
   uploading,
@@ -98,7 +101,8 @@ function BrandingAssetCard({
   onReset,
 }: BrandingAssetCardProps) {
   const isCustom = Boolean(currentUrl);
-  const noun = assetKind === 'picture' ? 'Picture' : 'Banner';
+  const isLogo = assetKind === 'logo';
+  const noun = isLogo ? 'Logo' : assetKind === 'picture' ? 'Picture' : 'Banner';
 
   return (
     <Card style={styles.assetCard}>
@@ -118,13 +122,35 @@ function BrandingAssetCard({
 
       <AppText style={styles.assetCardDesc}>{description}</AppText>
 
+      {/* Recommended Size Note */}
+      {recommendedSize ? (
+        <View style={styles.recommendedSizeRow}>
+          <ImageIcon size={12} color="#64748B" />
+          <AppText style={styles.recommendedSizeText}>
+            Recommended: {recommendedSize}
+          </AppText>
+        </View>
+      ) : null}
+
       {/* Image Preview Box */}
-      <View style={styles.assetPreviewWrapper}>
-        <Image
-          source={currentUrl ? { uri: resolveMediaUrl(currentUrl) } : fallbackSource}
-          style={styles.assetPreviewImage}
-          resizeMode="cover"
-        />
+      <View style={isLogo ? styles.assetLogoPreviewWrapper : styles.assetPreviewWrapper}>
+        {currentUrl ? (
+          <Image
+            source={{ uri: resolveMediaUrl(currentUrl) }}
+            style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
+            resizeMode={isLogo ? 'contain' : 'cover'}
+          />
+        ) : fallbackSource ? (
+          <Image
+            source={fallbackSource}
+            style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
+            resizeMode={isLogo ? 'contain' : 'cover'}
+          />
+        ) : (
+          <View style={styles.assetLogoFallback}>
+            <Building2 size={36} color="#176B57" />
+          </View>
+        )}
         {uploading && (
           <View style={styles.assetUploadOverlay}>
             <ActivityIndicator size="small" color="#FFFFFF" />
@@ -144,7 +170,7 @@ function BrandingAssetCard({
           >
             <Camera size={14} color="#FFFFFF" />
             <AppText style={styles.assetBtnPrimaryText}>
-              {isCustom ? `Replace Default ${noun}` : `Upload Default ${noun}`}
+              {isCustom ? `Replace ${noun}` : `Upload ${noun}`}
             </AppText>
           </TouchableOpacity>
 
@@ -541,14 +567,79 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       )}
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 1: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
+          GROUP 1: CLUB IDENTITY & CORE BANNERS
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={styles.groupHeader}>
+        <View style={styles.groupIconWrapper}>
+          <Building2 size={18} color="#176B57" />
+        </View>
+        <View style={styles.groupHeaderTextCol}>
+          <AppText style={styles.groupTitle}>Group 1: Club Identity & Core Banners</AppText>
+          <AppText style={styles.groupSubtitle}>
+            Core club branding assets displayed across platform navigation, the player mobile app, and owner dashboards.
+          </AppText>
+        </View>
+      </View>
+
+      {/* Official Club Logo */}
+      <BrandingAssetCard
+        title="Official Club Logo"
+        categoryTag="PRIMARY LOGO"
+        assetKind="logo"
+        recommendedSize="512 × 512 px (1:1) • PNG or JPG"
+        description="Official club logo displayed on your profile card, headers, player search, and booking confirmations."
+        currentUrl={branding?.logo_url}
+        uploading={uploadingField === 'logo_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('logo_url', 'club_logo', 'Club Logo', [1, 1])
+        }
+        onReset={() => handleResetAsset('logo_url', 'Club Logo')}
+      />
+
+      {/* Player-Facing Club Cover Banner */}
+      <BrandingAssetCard
+        title="Player-Facing Cover Banner"
+        categoryTag="PUBLIC COVER"
+        assetKind="banner"
+        recommendedSize="1920 × 1080 px (16:9) • JPG or PNG"
+        description="Prominent hero banner displayed at the top of your club details in the Player App and discover directories."
+        currentUrl={branding?.cover_image_url}
+        fallbackSource={BUILTIN_FALLBACKS.clubCover}
+        uploading={uploadingField === 'cover_image_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('cover_image_url', 'club_cover', 'Player-Facing Cover Banner', [16, 9])
+        }
+        onReset={() => handleResetAsset('cover_image_url', 'Player-Facing Cover Banner')}
+      />
+
+      {/* Owner Dashboard Welcome Banner */}
+      <BrandingAssetCard
+        title="Owner Home Dashboard Banner"
+        categoryTag="DASHBOARD HERO"
+        assetKind="banner"
+        recommendedSize="1920 × 1080 px (16:9) • JPG or PNG"
+        description="Custom welcome hero graphic displayed across the top of your club management home dashboard."
+        currentUrl={branding?.owner_banner_url}
+        fallbackSource={BUILTIN_FALLBACKS.ownerBanner}
+        uploading={uploadingField === 'owner_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset('owner_banner_url', 'owner_banner', 'Owner Dashboard Banner', [16, 9])
+        }
+        onReset={() => handleResetAsset('owner_banner_url', 'Owner Dashboard Banner')}
+      />
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          GROUP 2: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
+          ══════════════════════════════════════════════════════════════════════ */}
+      <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Trophy size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 1: Tournament Default Banners</AppText>
+          <AppText style={styles.groupTitle}>Group 2: Tournament Default Banners</AppText>
           <AppText style={styles.groupSubtitle}>
             Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default.
           </AppText>
@@ -559,6 +650,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       <BrandingAssetCard
         title="Round Robin Default Banner"
         categoryTag="ROUND ROBIN"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Round Robin tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_round_robin_url}
         fallbackSource={BUILTIN_FALLBACKS.tournamentRoundRobin}
@@ -580,6 +672,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       <BrandingAssetCard
         title="Scramble Default Banner"
         categoryTag="SCRAMBLE"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Scramble tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_scramble_url}
         fallbackSource={BUILTIN_FALLBACKS.tournamentScramble}
@@ -601,6 +694,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       <BrandingAssetCard
         title="Pool Play Default Banner"
         categoryTag="POOL PLAY"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Pool Play tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_pool_play_url}
         fallbackSource={BUILTIN_FALLBACKS.tournamentPoolPlay}
@@ -622,6 +716,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       <BrandingAssetCard
         title="Bracket Play / Championship Bracket Default"
         categoryTag="BRACKET PLAY"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all single/double elimination bracket tournaments in this club."
         currentUrl={branding?.default_tournament_bracket_url}
         fallbackSource={BUILTIN_FALLBACKS.tournamentBracket}
@@ -640,14 +735,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 2: LEAGUE DEFAULT PICTURES
+          GROUP 3: LEAGUE DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Award size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 2: League Default Pictures</AppText>
+          <AppText style={styles.groupTitle}>Group 3: League Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
             Default picture displayed on league cards and league details when no custom picture is provided.
           </AppText>
@@ -658,6 +753,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         title="League Default Picture"
         categoryTag="LEAGUES"
         assetKind="picture"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on league cards and league details when no custom picture is provided."
         currentUrl={branding?.default_league_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.league}
@@ -670,14 +766,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 3: EVENT DEFAULT PICTURES
+          GROUP 4: EVENT DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <Calendar size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 3: Event Default Pictures</AppText>
+          <AppText style={styles.groupTitle}>Group 4: Event Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
             Default picture displayed on event cards and event details when no custom picture is provided.
           </AppText>
@@ -688,6 +784,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         title="Event Default Picture"
         categoryTag="EVENTS"
         assetKind="picture"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on event cards and event details when no custom picture is provided."
         currentUrl={branding?.default_event_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.event}
@@ -700,14 +797,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 4: LESSON & COACHING DEFAULT PICTURES
+          GROUP 5: LESSON & COACHING DEFAULT PICTURES
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 28 }]}>
         <View style={styles.groupIconWrapper}>
           <GraduationCap size={18} color="#176B57" />
         </View>
         <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 4: Lesson & Coaching Default Pictures</AppText>
+          <AppText style={styles.groupTitle}>Group 5: Lesson & Coaching Default Pictures</AppText>
           <AppText style={styles.groupSubtitle}>
             Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided.
           </AppText>
@@ -718,6 +815,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         title="Lesson & Coaching Default Picture"
         categoryTag="COACHING"
         assetKind="picture"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided."
         currentUrl={branding?.default_lesson_banner_url}
         fallbackSource={BUILTIN_FALLBACKS.lesson}
@@ -730,7 +828,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       />
 
       {/* ══════════════════════════════════════════════════════════════════════
-          CLUB PROMOTIONAL ADS
+          GROUP 6: CLUB PROMOTIONAL ADS
           ══════════════════════════════════════════════════════════════════════ */}
       <View style={[styles.groupHeader, { marginTop: 32 }]}>
         <View style={styles.groupIconWrapper}>
@@ -739,7 +837,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         <View style={styles.groupHeaderTextCol}>
           <View style={styles.headerWithAction}>
             <View style={{ flex: 1 }}>
-              <AppText style={styles.groupTitle}>Club Promotional Ads</AppText>
+              <AppText style={styles.groupTitle}>Group 6: Club Promotional Ads</AppText>
               <AppText style={styles.groupSubtitle}>
                 Manage promotional advertisements displayed for your club in the Player App. Eligible active ads are also featured on the universal Player Home carousel.
               </AppText>
@@ -1219,7 +1317,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     lineHeight: 17,
-    marginBottom: Spacing[3],
+    marginBottom: Spacing[2],
+  },
+  recommendedSizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: Spacing[2.5],
+  },
+  recommendedSizeText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  assetLogoPreviewWrapper: {
+    position: 'relative',
+    width: 96,
+    height: 96,
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  assetLogoPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  assetLogoFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   assetPreviewWrapper: {
     position: 'relative',

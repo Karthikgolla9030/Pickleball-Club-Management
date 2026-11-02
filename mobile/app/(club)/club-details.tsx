@@ -37,6 +37,7 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  ExternalLink,
   Eye,
   Globe,
   Image as ImageIcon,
@@ -52,6 +53,7 @@ import {
   ShieldAlert,
   Sparkles,
   Trash2,
+  Trophy,
   X,
 } from 'lucide-react-native';
 
@@ -557,17 +559,46 @@ export default function ClubDetailsScreen() {
         borderless
       />
 
-      {/* Tabs: Profile vs Branding vs Player Preview */}
+      {/* Responsive Segmented Tabs: Profile vs Branding & Assets vs Player Preview */}
       <View style={styles.tabsContainer}>
-        <SegmentedTabs
-          tabs={[
-            { key: 'edit', label: isOwner ? (isEditing ? 'Editing Profile' : 'Profile') : 'Club Profile' },
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabsScrollContent}
+          style={styles.tabsScrollView}
+        >
+          {[
+            {
+              key: 'edit',
+              label: isOwner ? (isEditing ? 'Editing Profile' : 'Profile') : 'Profile',
+            },
             { key: 'branding', label: 'Branding & Assets' },
             { key: 'preview', label: 'Player Preview' },
-          ]}
-          activeTab={activeTab}
-          onTabChange={(tab) => setActiveTab(tab as any)}
-        />
+          ].map((tab) => {
+            const isSelected = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.customTabItem,
+                  isSelected && styles.customTabItemSelected,
+                ]}
+                onPress={() => setActiveTab(tab.key as any)}
+                activeOpacity={0.8}
+              >
+                <AppText
+                  numberOfLines={1}
+                  style={[
+                    styles.customTabText,
+                    isSelected && styles.customTabTextSelected,
+                  ]}
+                >
+                  {tab.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Non-owner notification banner */}
@@ -617,129 +648,109 @@ export default function ClubDetailsScreen() {
                  VIEW PROFILE MODE (Default)
                  ═════════════════════════════════════════════════════════════════════════ */
               <View style={styles.viewModeWrapper}>
-                {/* Top Banner with Edit Button */}
-                <View style={styles.viewModeBanner}>
-                  <View style={styles.viewModeBannerLeft}>
-                    <View style={styles.savedBadge}>
-                      <CheckCircle2 size={14} color="#15803D" />
-                      <AppText style={styles.savedBadgeText}>Saved Profile</AppText>
+                {/* 1. Club Hero Identity Card */}
+                <Card style={styles.heroProfileCard}>
+                  {/* Hero Cover Banner */}
+                  <View style={styles.heroCoverWrapper}>
+                    <Image
+                      source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
+                      style={styles.heroCoverImg}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.heroCoverOverlay} />
+                    <View style={styles.heroCoverBadge}>
+                      <CheckCircle2 size={12} color="#FFFFFF" />
+                      <AppText style={styles.heroCoverBadgeText}>Saved Profile</AppText>
                     </View>
-                    <AppText style={styles.viewModeBannerSubtitle}>
-                      Current club settings visible to players
-                    </AppText>
                   </View>
-                  {isOwner && (
-                    <TouchableOpacity
-                      style={styles.editModeToggleBtn}
-                      onPress={() => setIsEditing(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Pencil size={15} color="#FFFFFF" strokeWidth={2.5} />
-                      <AppText style={styles.editModeToggleBtnText}>Edit Details</AppText>
-                    </TouchableOpacity>
-                  )}
-                </View>
 
-                {/* View Section 1: Club Information */}
+                  {/* Hero Body with overlapping logo and action */}
+                  <View style={styles.heroBody}>
+                    <View style={styles.heroTopRow}>
+                      <View style={styles.heroLogoWrapper}>
+                        {currentLogoUri && !logoError ? (
+                          <Image
+                            source={{ uri: currentLogoUri }}
+                            style={styles.heroLogoImg}
+                            resizeMode="contain"
+                            onError={() => setLogoError(true)}
+                          />
+                        ) : (
+                          <View style={styles.heroLogoFallback}>
+                            <Building2 size={32} color="#176B57" />
+                          </View>
+                        )}
+                      </View>
+
+                      {isOwner && (
+                        <TouchableOpacity
+                          style={styles.heroEditBtn}
+                          onPress={() => setIsEditing(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Pencil size={13} color="#FFFFFF" strokeWidth={2.5} />
+                          <AppText style={styles.heroEditBtnText}>Edit Details</AppText>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <View style={styles.heroIdentityTextCol}>
+                      <AppText style={styles.heroClubName}>{name || 'Unnamed Club'}</AppText>
+                      {shortDescription ? (
+                        <AppText style={styles.heroTaglineText}>"{shortDescription}"</AppText>
+                      ) : null}
+
+                      <View style={styles.heroMetaRow}>
+                        {establishedYear ? (
+                          <View style={styles.metaChip}>
+                            <Calendar size={12} color="#49635E" />
+                            <AppText style={styles.metaChipText}>Est. {establishedYear}</AppText>
+                          </View>
+                        ) : null}
+
+                        {city || state ? (
+                          <View style={styles.metaChip}>
+                            <MapPin size={12} color="#49635E" />
+                            <AppText style={styles.metaChipText}>
+                              {[city, state].filter(Boolean).join(', ')}
+                            </AppText>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                </Card>
+
+                {/* 2. About the Club Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
                       <Building2 size={18} color="#176B57" />
                     </View>
                     <View style={styles.sectionTitleBlock}>
-                      <AppText style={styles.sectionTitle}>Club Information</AppText>
+                      <AppText style={styles.sectionTitle}>About the Club</AppText>
                       <AppText style={styles.sectionSubtitle}>
-                        Public identity and contact information
+                        Facility overview and public description
                       </AppText>
                     </View>
                   </View>
 
-                  {/* Logo and Identity */}
-                  <View style={styles.viewIdentityRow}>
-                    <View style={styles.viewLogoBox}>
-                      {currentLogoUri && !logoError ? (
-                        <Image
-                          source={{ uri: currentLogoUri }}
-                          style={styles.viewLogoImg}
-                          resizeMode="contain"
-                          onError={() => setLogoError(true)}
-                        />
-                      ) : (
-                        <View style={styles.viewLogoFallback}>
-                          <Building2 size={32} color="#176B57" />
-                        </View>
-                      )}
-                    </View>
-                    <View style={styles.viewIdentityText}>
-                      <AppText style={styles.viewClubName}>{name || 'Unnamed Club'}</AppText>
-                      {shortDescription ? (
-                        <AppText style={styles.viewTaglineText}>"{shortDescription}"</AppText>
-                      ) : null}
-                      {establishedYear ? (
-                        <AppText style={styles.viewEstText}>Est. {establishedYear}</AppText>
-                      ) : null}
-                    </View>
-                  </View>
+                  <AppText style={styles.viewAboutText}>
+                    {description || 'No detailed description provided yet. Tap "Edit Details" to add an overview of your club, courts, and community.'}
+                  </AppText>
 
-                  {/* Player-Facing Club Cover Banner Preview */}
-                  <View style={styles.viewCoverSection}>
-                    <View style={styles.viewCoverHeader}>
-                      <View style={{ flex: 1 }}>
-                        <AppText style={styles.viewCoverTitle}>Player-Facing Club Cover</AppText>
-                        <AppText style={styles.viewCoverSubtitle}>
-                          Displayed on your club profile when players browse or view details in the Player App.
-                        </AppText>
+                  {facilitiesSummary ? (
+                    <View style={styles.viewFacilitiesBox}>
+                      <View style={styles.viewFacilitiesHeader}>
+                        <Sparkles size={14} color="#176B57" />
+                        <AppText style={styles.viewFacilitiesLabel}>Facilities & Amenities</AppText>
                       </View>
-                      <Badge
-                        label={currentCoverUri ? 'Custom Club Cover' : 'Built-in Fallback'}
-                        variant={currentCoverUri ? 'success' : 'default'}
-                      />
-                    </View>
-                    <View style={styles.viewCoverPreviewWrapper}>
-                      <Image
-                        source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
-                        style={styles.viewCoverImg}
-                        resizeMode="cover"
-                      />
-                    </View>
-                  </View>
-
-                  {description ? (
-                    <View style={styles.viewDescBox}>
-                      <AppText style={styles.viewDescLabel}>About</AppText>
-                      <AppText style={styles.viewDescText}>{description}</AppText>
+                      <AppText style={styles.viewFacilitiesText}>{facilitiesSummary}</AppText>
                     </View>
                   ) : null}
-
-                  {/* Contact grid */}
-                  <View style={styles.viewContactGrid}>
-                    {contactEmail ? (
-                      <View style={styles.viewContactItem}>
-                        <Mail size={15} color="#176B57" />
-                        <AppText style={styles.viewContactLabel}>Email:</AppText>
-                        <AppText style={styles.viewContactValue}>{contactEmail}</AppText>
-                      </View>
-                    ) : null}
-                    {contactPhone ? (
-                      <View style={styles.viewContactItem}>
-                        <Phone size={15} color="#176B57" />
-                        <AppText style={styles.viewContactLabel}>Phone:</AppText>
-                        <AppText style={styles.viewContactValue}>{contactPhone}</AppText>
-                      </View>
-                    ) : null}
-                    {website ? (
-                      <View style={styles.viewContactItem}>
-                        <Globe size={15} color="#176B57" />
-                        <AppText style={styles.viewContactLabel}>Website:</AppText>
-                        <TouchableOpacity onPress={() => Linking.openURL(website)}>
-                          <AppText style={styles.viewContactLink}>{website}</AppText>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
                 </Card>
 
-                {/* View Section 2: Location & Address */}
+                {/* 3. Location & Address Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
@@ -767,7 +778,7 @@ export default function ClubDetailsScreen() {
                   </View>
                 </Card>
 
-                {/* View Section 3: Operating Hours & Schedule */}
+                {/* 4. Operating Hours & Schedule Card */}
                 <Card style={styles.viewSectionCard}>
                   <View style={styles.sectionHeaderRow}>
                     <View style={styles.sectionIconBadge}>
@@ -825,21 +836,95 @@ export default function ClubDetailsScreen() {
                     </View>
                   </View>
 
-                  {facilitiesSummary ? (
-                    <View style={styles.viewFieldGroup}>
-                      <AppText style={styles.viewFieldLabel}>Facilities & Amenities</AppText>
-                      <AppText style={styles.viewFacilitiesText}>{facilitiesSummary}</AppText>
-                    </View>
-                  ) : null}
-
                   {holidayClosureNotes ? (
-                    <View style={styles.previewClosureNotice}>
+                    <View style={styles.viewClosureNotice}>
                       <Info size={14} color="#9A6B00" />
-                      <AppText style={styles.previewClosureText}>
+                      <AppText style={styles.viewClosureText}>
                         {holidayClosureNotes}
                       </AppText>
                     </View>
                   ) : null}
+                </Card>
+
+                {/* 5. Contact Information Card */}
+                <Card style={styles.viewSectionCard}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={styles.sectionIconBadge}>
+                      <Mail size={18} color="#176B57" />
+                    </View>
+                    <View style={styles.sectionTitleBlock}>
+                      <AppText style={styles.sectionTitle}>Contact Information</AppText>
+                      <AppText style={styles.sectionSubtitle}>
+                        Public contact channels for player inquiries
+                      </AppText>
+                    </View>
+                  </View>
+
+                  <View style={styles.viewContactGrid}>
+                    {contactEmail ? (
+                      <TouchableOpacity
+                        style={styles.viewContactItem}
+                        onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.contactIconCircle}>
+                          <Mail size={15} color="#176B57" />
+                        </View>
+                        <View style={styles.contactTextContainer}>
+                          <AppText style={styles.viewContactLabel}>Email</AppText>
+                          <AppText style={styles.viewContactLink} numberOfLines={2}>
+                            {contactEmail}
+                          </AppText>
+                        </View>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {contactPhone ? (
+                      <TouchableOpacity
+                        style={styles.viewContactItem}
+                        onPress={() => Linking.openURL(`tel:${contactPhone}`)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.contactIconCircle}>
+                          <Phone size={15} color="#176B57" />
+                        </View>
+                        <View style={styles.contactTextContainer}>
+                          <AppText style={styles.viewContactLabel}>Phone</AppText>
+                          <AppText style={styles.viewContactLink} numberOfLines={1}>
+                            {contactPhone}
+                          </AppText>
+                        </View>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {website ? (
+                      <TouchableOpacity
+                        style={styles.viewContactItem}
+                        onPress={() => {
+                          const url = website.startsWith('http') ? website : `https://${website}`;
+                          Linking.openURL(url);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.contactIconCircle}>
+                          <Globe size={15} color="#176B57" />
+                        </View>
+                        <View style={styles.contactTextContainer}>
+                          <View style={styles.websiteLabelRow}>
+                            <AppText style={styles.viewContactLabel}>Website</AppText>
+                            <ExternalLink size={11} color="#176B57" />
+                          </View>
+                          <AppText style={styles.viewContactLink} numberOfLines={2}>
+                            {website}
+                          </AppText>
+                        </View>
+                      </TouchableOpacity>
+                    ) : null}
+
+                    {!contactEmail && !contactPhone && !website ? (
+                      <AppText style={styles.emptyNoticeText}>No contact information provided yet.</AppText>
+                    ) : null}
+                  </View>
                 </Card>
 
                 {/* Bottom Edit Action Button */}
@@ -1360,174 +1445,174 @@ export default function ClubDetailsScreen() {
             )
           ) : (
             /* ═════════════════════════════════════════════════════════════════════════
-               PLAYER PREVIEW TAB
+               PLAYER PREVIEW TAB (Framed Mobile Phone Mockup)
                ═════════════════════════════════════════════════════════════════════════ */
             <View style={styles.previewWrapper}>
               <View style={styles.previewModeBanner}>
                 <Eye size={16} color="#176B57" />
                 <AppText style={styles.previewModeText}>
-                  Player Live Preview: This is exactly what enrolled and visiting players see.
+                  Player Live Preview: This phone mockup shows how players experience your club in the mobile app.
                 </AppText>
               </View>
 
-              {/* Hero Banner Card */}
-              <Card style={styles.previewHeroCard}>
-                <View style={styles.previewHeroHeader}>
-                  <View style={styles.previewLogoBox}>
-                    {currentLogoUri ? (
+              {/* Realistic Phone Bezel Frame */}
+              <View style={styles.phoneMockupFrame}>
+                {/* Phone Notch / Speaker */}
+                <View style={styles.phoneSpeaker} />
+
+                {/* Mock Player App Header */}
+                <View style={styles.mockPlayerHeader}>
+                  <View style={styles.mockBackPill}>
+                    <ArrowLeft size={14} color="#1E293B" />
+                  </View>
+                  <AppText style={styles.mockHeaderTitle}>Club Profile</AppText>
+                  <View style={styles.mockSharePill}>
+                    <Globe size={14} color="#64748B" />
+                  </View>
+                </View>
+
+                {/* Player Hero Section */}
+                <View style={styles.mockHeroSection}>
+                  <Image
+                    source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
+                    style={styles.mockHeroCover}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.mockHeroCoverOverlay} />
+
+                  {/* Club Logo Overlay */}
+                  <View style={styles.mockLogoWrapper}>
+                    {currentLogoUri && !logoError ? (
                       <Image
                         source={{ uri: currentLogoUri }}
-                        style={styles.previewLogoImg}
-                        resizeMode="cover"
+                        style={styles.mockLogoImg}
+                        resizeMode="contain"
                       />
                     ) : (
-                      <Building2 size={32} color="#176B57" />
+                      <View style={styles.mockLogoFallback}>
+                        <Building2 size={24} color="#176B57" />
+                      </View>
                     )}
                   </View>
-                  <View style={styles.previewTitleBlock}>
-                    <AppText style={styles.previewClubName}>
+                </View>
+
+                {/* Mock Phone Body */}
+                <View style={styles.mockBody}>
+                  {/* Title & Verified Row */}
+                  <View style={styles.mockTitleRow}>
+                    <AppText style={styles.mockClubName}>
                       {name || 'Pickleball Club'}
                     </AppText>
-                    {city || state ? (
-                      <View style={styles.previewCityRow}>
-                        <MapPin size={13} color="#667776" />
-                        <AppText style={styles.previewCityText}>
-                          {[city, state].filter(Boolean).join(', ')}
+                    <View style={styles.mockVerifiedBadge}>
+                      <CheckCircle2 size={12} color="#15803D" />
+                      <AppText style={styles.mockVerifiedText}>Verified</AppText>
+                    </View>
+                  </View>
+
+                  {/* Location & Tagline */}
+                  {city || state ? (
+                    <View style={styles.mockLocationRow}>
+                      <MapPin size={12} color="#64748B" />
+                      <AppText style={styles.mockLocationText}>
+                        {[city, state].filter(Boolean).join(', ')}
+                        {establishedYear ? ` • Est. ${establishedYear}` : ''}
+                      </AppText>
+                    </View>
+                  ) : null}
+
+                  {shortDescription ? (
+                    <AppText style={styles.mockTagline}>"{shortDescription}"</AppText>
+                  ) : null}
+
+                  {/* Quick Player Action Buttons */}
+                  <View style={styles.mockActionBtnsRow}>
+                    <View style={styles.mockActionBtnPrimary}>
+                      <Calendar size={13} color="#FFFFFF" />
+                      <AppText style={styles.mockActionBtnPrimaryText}>Book Court</AppText>
+                    </View>
+                    <View style={styles.mockActionBtnSecondary}>
+                      <Trophy size={13} color="#176B57" />
+                      <AppText style={styles.mockActionBtnSecondaryText}>Events</AppText>
+                    </View>
+                  </View>
+
+                  {/* Mock Section: About */}
+                  <View style={styles.mockSectionBox}>
+                    <AppText style={styles.mockSectionHeading}>About</AppText>
+                    <AppText style={styles.mockSectionBody} numberOfLines={4}>
+                      {description || 'Welcome to our pickleball club! We offer premier courts, competitive leagues, tournaments, and social events for players of all levels.'}
+                    </AppText>
+                  </View>
+
+                  {/* Mock Section: Location & Schedule */}
+                  <View style={styles.mockSectionBox}>
+                    <AppText style={styles.mockSectionHeading}>Location & Schedule</AppText>
+                    <View style={styles.mockDetailRow}>
+                      <MapPin size={13} color="#176B57" />
+                      <AppText style={styles.mockDetailText} numberOfLines={2}>
+                        {[addressLine1, addressLine2, city, state, postalCode].filter(Boolean).join(', ') || 'Address not listed'}
+                      </AppText>
+                    </View>
+                    <View style={styles.mockDetailRow}>
+                      <Clock size={13} color="#176B57" />
+                      <AppText style={styles.mockDetailText}>
+                        {selectedDays.length === 7 ? 'Daily' : selectedDays.join(', ')} • {openingTime} – {closingTime}
+                      </AppText>
+                    </View>
+                    {facilitiesSummary ? (
+                      <View style={styles.mockDetailRow}>
+                        <Sparkles size={13} color="#176B57" />
+                        <AppText style={styles.mockDetailText} numberOfLines={2}>
+                          {facilitiesSummary}
                         </AppText>
                       </View>
                     ) : null}
-                    {establishedYear ? (
-                      <AppText style={styles.previewEstText}>
-                        Est. {establishedYear}
-                      </AppText>
-                    ) : null}
-                  </View>
-                </View>
-
-                {shortDescription ? (
-                  <View style={styles.previewTaglineBox}>
-                    <AppText style={styles.previewTaglineText}>
-                      "{shortDescription}"
-                    </AppText>
-                  </View>
-                ) : null}
-              </Card>
-
-              {/* About Card */}
-              {description ? (
-                <Card style={styles.previewSectionCard}>
-                  <AppText style={styles.previewCardTitle}>About {name || 'the Club'}</AppText>
-                  <AppText style={styles.previewBodyText}>{description}</AppText>
-                </Card>
-              ) : null}
-
-              {/* Location Card */}
-              {(addressLine1 || city || state || postalCode) ? (
-                <Card style={styles.previewSectionCard}>
-                  <View style={styles.previewHeaderRow}>
-                    <MapPin size={18} color="#176B57" />
-                    <AppText style={styles.previewCardTitle}>Location & Directions</AppText>
-                  </View>
-                  <View style={styles.previewAddressBlock}>
-                    {addressLine1 ? (
-                      <AppText style={styles.previewAddressLine}>{addressLine1}</AppText>
-                    ) : null}
-                    {addressLine2 ? (
-                      <AppText style={styles.previewAddressLine}>{addressLine2}</AppText>
-                    ) : null}
-                    <AppText style={styles.previewAddressLine}>
-                      {[city, state, postalCode].filter(Boolean).join(' ')}
-                    </AppText>
-                    {country ? (
-                      <AppText style={styles.previewAddressCountry}>{country}</AppText>
-                    ) : null}
-                  </View>
-                </Card>
-              ) : null}
-
-              {/* Operating Hours Card */}
-              <Card style={styles.previewSectionCard}>
-                <View style={styles.previewHeaderRow}>
-                  <Clock size={18} color="#176B57" />
-                  <AppText style={styles.previewCardTitle}>Operating Hours</AppText>
-                </View>
-
-                <View style={styles.previewHoursRow}>
-                  <AppText style={styles.previewHoursLabel}>Days Open:</AppText>
-                  <AppText style={styles.previewHoursValue}>
-                    {selectedDays.length === 7
-                      ? '7 Days a Week (Mon – Sun)'
-                      : selectedDays.join(', ')}
-                  </AppText>
-                </View>
-
-                <View style={styles.previewHoursRow}>
-                  <AppText style={styles.previewHoursLabel}>Facility Hours:</AppText>
-                  <AppText style={styles.previewHoursValue}>
-                    {openingTime} – {closingTime} ({timezone.split('/')[1] || timezone})
-                  </AppText>
-                </View>
-
-                {holidayClosureNotes ? (
-                  <View style={styles.previewClosureNotice}>
-                    <Info size={14} color="#9A6B00" />
-                    <AppText style={styles.previewClosureText}>
-                      {holidayClosureNotes}
-                    </AppText>
-                  </View>
-                ) : null}
-              </Card>
-
-              {/* Facilities Card */}
-              {facilitiesSummary ? (
-                <Card style={styles.previewSectionCard}>
-                  <View style={styles.previewHeaderRow}>
-                    <Sparkles size={18} color="#176B57" />
-                    <AppText style={styles.previewCardTitle}>Facilities & Amenities</AppText>
-                  </View>
-                  <AppText style={styles.previewBodyText}>{facilitiesSummary}</AppText>
-                </Card>
-              ) : null}
-
-              {/* Contact Card */}
-              {(contactEmail || contactPhone || website) ? (
-                <Card style={styles.previewSectionCard}>
-                  <View style={styles.previewHeaderRow}>
-                    <Phone size={18} color="#176B57" />
-                    <AppText style={styles.previewCardTitle}>Contact & Connect</AppText>
                   </View>
 
-                  {contactEmail ? (
-                    <TouchableOpacity
-                      style={styles.previewContactItem}
-                      onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
-                    >
-                      <Mail size={16} color="#176B57" />
-                      <AppText style={styles.previewContactLink}>{contactEmail}</AppText>
-                    </TouchableOpacity>
+                  {/* Mock Section: Contact Club */}
+                  {(contactEmail || contactPhone || website) ? (
+                    <View style={styles.mockSectionBox}>
+                      <AppText style={styles.mockSectionHeading}>Contact Club</AppText>
+                      {contactEmail ? (
+                        <TouchableOpacity
+                          style={styles.mockContactRow}
+                          onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
+                          activeOpacity={0.7}
+                        >
+                          <Mail size={13} color="#176B57" />
+                          <AppText style={styles.mockContactLink} numberOfLines={1}>{contactEmail}</AppText>
+                        </TouchableOpacity>
+                      ) : null}
+                      {contactPhone ? (
+                        <TouchableOpacity
+                          style={styles.mockContactRow}
+                          onPress={() => Linking.openURL(`tel:${contactPhone}`)}
+                          activeOpacity={0.7}
+                        >
+                          <Phone size={13} color="#176B57" />
+                          <AppText style={styles.mockContactLink} numberOfLines={1}>{contactPhone}</AppText>
+                        </TouchableOpacity>
+                      ) : null}
+                      {website ? (
+                        <TouchableOpacity
+                          style={styles.mockContactRow}
+                          onPress={() => {
+                            const url = website.startsWith('http') ? website : `https://${website}`;
+                            Linking.openURL(url);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Globe size={13} color="#176B57" />
+                          <AppText style={styles.mockContactLink} numberOfLines={1}>{website}</AppText>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
                   ) : null}
+                </View>
 
-                  {contactPhone ? (
-                    <TouchableOpacity
-                      style={styles.previewContactItem}
-                      onPress={() => Linking.openURL(`tel:${contactPhone}`)}
-                    >
-                      <Phone size={16} color="#176B57" />
-                      <AppText style={styles.previewContactLink}>{contactPhone}</AppText>
-                    </TouchableOpacity>
-                  ) : null}
-
-                  {website ? (
-                    <TouchableOpacity
-                      style={styles.previewContactItem}
-                      onPress={() => Linking.openURL(website)}
-                    >
-                      <Globe size={16} color="#176B57" />
-                      <AppText style={styles.previewContactLink}>{website}</AppText>
-                    </TouchableOpacity>
-                  ) : null}
-                </Card>
-              ) : null}
+                {/* Phone Bottom Home Bar */}
+                <View style={styles.phoneHomeBar} />
+              </View>
             </View>
           )}
         </ScrollView>
@@ -1547,9 +1632,44 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[2],
+    paddingTop: Spacing[1],
     paddingBottom: Spacing[3],
     backgroundColor: '#F4F8F5',
+  },
+  tabsScrollView: {
+    flexGrow: 0,
+  },
+  tabsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E2EAE6',
+    borderRadius: Radius.full,
+    padding: 3,
+    minWidth: '100%',
+    justifyContent: 'space-between',
+  },
+  customTabItem: {
+    flex: 1,
+    minWidth: 106,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customTabItemSelected: {
+    backgroundColor: '#176B57',
+    ...Shadows.sm,
+  },
+  customTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#49635E',
+    textAlign: 'center',
+  },
+  customTabTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   roleNoticeBanner: {
     flexDirection: 'row',
@@ -1930,138 +2050,369 @@ const styles = StyleSheet.create({
     color: '#2A4540',
     lineHeight: 18,
   },
-  previewSectionCard: {
+  // ─── Player Preview Phone Mockup Styles ───
+  phoneMockupFrame: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    gap: Spacing[2.5],
-    ...Shadows.sm,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+    ...Shadows.md,
   },
-  previewHeaderRow: {
+  phoneSpeaker: {
+    width: 60,
+    height: 4,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  mockPlayerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing[3.5],
+    paddingBottom: Spacing[2],
   },
-  previewCardTitle: {
-    fontSize: 15,
+  mockBackPill: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mockHeaderTitle: {
+    fontSize: 13,
     fontWeight: '700',
-    color: '#102B2A',
+    color: '#0F172A',
   },
-  previewBodyText: {
-    fontSize: 13,
-    color: '#49635E',
-    lineHeight: 20,
-  },
-  previewAddressBlock: {
-    gap: 2,
-  },
-  previewAddressLine: {
-    fontSize: 14,
-    color: '#2A4540',
-  },
-  previewAddressCountry: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#667776',
-    marginTop: 2,
-  },
-  previewHoursRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  mockSharePill: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 4,
   },
-  previewHoursLabel: {
-    fontSize: 13,
-    color: '#667776',
+  mockHeroSection: {
+    position: 'relative',
+    width: '100%',
+    height: 130,
+    backgroundColor: '#0F172A',
   },
-  previewHoursValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#102B2A',
+  mockHeroCover: {
+    width: '100%',
+    height: '100%',
   },
-  previewClosureNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    backgroundColor: '#FFFBEB',
-    padding: Spacing[2.5],
-    borderRadius: Radius.sm,
-    marginTop: 4,
+  mockHeroCoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.3)',
   },
-  previewClosureText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#92400E',
-  },
-  previewContactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[3],
-    paddingVertical: 4,
-  },
-  previewContactLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#176B57',
-    textDecorationLine: 'underline',
-  },
-  // View Mode & Edit Toggle Styles
-  viewModeWrapper: {
-    gap: Spacing[4],
-  },
-  viewModeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  mockLogoWrapper: {
+    position: 'absolute',
+    bottom: -22,
+    left: Spacing[4],
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    paddingHorizontal: Spacing[4],
-    paddingVertical: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
     ...Shadows.sm,
   },
-  viewModeBannerLeft: {
-    gap: 3,
-    flex: 1,
+  mockLogoImg: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  savedBadge: {
+  mockLogoFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mockBody: {
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[6],
+    paddingBottom: Spacing[4],
+    gap: Spacing[3],
+  },
+  mockTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
-    alignSelf: 'flex-start',
+    justifyContent: 'space-between',
+    gap: Spacing[2],
   },
-  savedBadgeText: {
-    fontSize: 12,
+  mockClubName: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  mockVerifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.full,
+  },
+  mockVerifiedText: {
+    fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
   },
-  viewModeBannerSubtitle: {
-    fontSize: 12,
-    color: '#667776',
-    marginTop: 2,
+  mockLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
-  editModeToggleBtn: {
+  mockLocationText: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  mockTagline: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#475569',
+    lineHeight: 16,
+  },
+  mockActionBtnsRow: {
+    flexDirection: 'row',
+    gap: Spacing[2],
+    marginVertical: Spacing[1],
+  },
+  mockActionBtnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#176B57',
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+  },
+  mockActionBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  mockActionBtnSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#E5F6EC',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+  },
+  mockActionBtnSecondaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  mockSectionBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[3],
+    gap: 4,
+  },
+  mockSectionHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  mockSectionBody: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+  },
+  mockDetailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingVertical: 2,
+  },
+  mockDetailText: {
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  mockContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  mockContactLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#176B57',
+    textDecorationLine: 'underline',
+    flex: 1,
+  },
+  phoneHomeBar: {
+    width: 100,
+    height: 4,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+
+  // ─── View Profile Mode Styles ───
+  viewModeWrapper: {
+    gap: Spacing[4],
+  },
+  heroProfileCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2EAE6',
+    ...Shadows.sm,
+  },
+  heroCoverWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: 140,
+    backgroundColor: '#E5F6EC',
+  },
+  heroCoverImg: {
+    width: '100%',
+    height: '100%',
+  },
+  heroCoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(16, 43, 42, 0.25)',
+  },
+  heroCoverBadge: {
+    position: 'absolute',
+    top: Spacing[3],
+    right: Spacing[3],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  heroCoverBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  heroBody: {
+    paddingHorizontal: Spacing[4],
+    paddingBottom: Spacing[4],
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: -32,
+    marginBottom: Spacing[3],
+  },
+  heroLogoWrapper: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.md,
+  },
+  heroLogoImg: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+  },
+  heroLogoFallback: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: '#176B57',
     paddingHorizontal: Spacing[3.5],
     paddingVertical: Spacing[2],
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
     ...Shadows.sm,
   },
-  editModeToggleBtnText: {
-    fontSize: 13,
+  heroEditBtnText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  heroIdentityTextCol: {
+    gap: 3,
+  },
+  heroClubName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#102B2A',
+    letterSpacing: -0.2,
+  },
+  heroTaglineText: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    color: '#49635E',
+    lineHeight: 18,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginTop: Spacing[1.5],
+    flexWrap: 'wrap',
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F0F5F2',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  metaChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#335049',
   },
   viewSectionCard: {
     backgroundColor: '#FFFFFF',
@@ -2072,100 +2423,88 @@ const styles = StyleSheet.create({
     gap: Spacing[3.5],
     ...Shadows.sm,
   },
-  viewIdentityRow: {
+  viewAboutText: {
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 20,
+  },
+  viewFacilitiesBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[3],
+    gap: 4,
+    marginTop: Spacing[1],
+  },
+  viewFacilitiesHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[3.5],
-    paddingVertical: Spacing[1],
+    gap: 5,
   },
-  viewLogoBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#F0F5F2',
-    borderWidth: 2,
-    borderColor: '#D4E5DE',
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  viewLogoImg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-  },
-  viewLogoFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#E5F6EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  viewIdentityText: {
-    flex: 1,
-    gap: 2,
-  },
-  viewClubName: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#102B2A',
-  },
-  viewTaglineText: {
-    fontSize: 13,
-    fontStyle: 'italic',
-    color: '#2A4540',
-  },
-  viewEstText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8A9C96',
-  },
-  viewDescBox: {
-    backgroundColor: '#F8FAF9',
-    padding: Spacing[3],
-    borderRadius: Radius.md,
-    gap: 4,
-  },
-  viewDescLabel: {
+  viewFacilitiesLabel: {
     fontSize: 12,
     fontWeight: '700',
     color: '#176B57',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  viewDescText: {
-    fontSize: 13,
-    color: '#2A4540',
-    lineHeight: 19,
+  viewClosureNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    backgroundColor: '#FFFBEB',
+    padding: Spacing[2.5],
+    borderRadius: Radius.sm,
+    marginTop: 4,
+  },
+  viewClosureText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#92400E',
   },
   viewContactGrid: {
-    gap: Spacing[2],
-    paddingTop: Spacing[1],
-    borderTopWidth: 1,
-    borderTopColor: '#F0F4F2',
+    gap: Spacing[3],
   },
   viewContactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    gap: Spacing[3],
+    paddingVertical: 2,
+  },
+  contactIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#E5F6EC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactTextContainer: {
+    flex: 1,
+    gap: 1,
+  },
+  websiteLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   viewContactLabel: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '600',
-    color: '#667776',
-    width: 65,
-  },
-  viewContactValue: {
-    fontSize: 13,
-    color: '#102B2A',
-    flex: 1,
+    color: '#64748B',
   },
   viewContactLink: {
     fontSize: 13,
     fontWeight: '600',
     color: '#176B57',
     textDecorationLine: 'underline',
+    lineHeight: 18,
+  },
+  emptyNoticeText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
   },
   viewLocationBlock: {
     gap: 3,
