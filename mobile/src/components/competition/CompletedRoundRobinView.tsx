@@ -312,11 +312,13 @@ export function CompletedRoundRobinView({
       >
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
-          <Image
-            source={bannerSource}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {bannerSource ? (
+            <Image
+              source={bannerSource}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : null}
           {/* Dark green translucent overlay for legibility */}
           <View style={styles.heroOverlay} />
 

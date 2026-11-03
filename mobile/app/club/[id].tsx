@@ -56,9 +56,6 @@ import { useAuthStore } from '@/store';
 import { isPlatformAdminEmail } from '@/constants';
 import type { Club, MembershipPlan, PlayerCourt } from '@/types';
 
-const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
-const DEFAULT_LOGO = require('../../assets/pickleball_logo_primary.png');
-
 function formatOperatingHours(openingTime?: string | null, closingTime?: string | null): string {
   if (!openingTime || !closingTime) return '6:00 AM - 10:00 PM';
   const formatTime = (t: string) => {
@@ -237,32 +234,30 @@ export default function StandalonePublicClubScreen() {
       >
         {/* ─── Hero Banner Card ────────────────────────────────────────────── */}
         <View style={styles.heroCard}>
-          <Image
-            source={
-              !bannerError && club.cover_image_url
-                ? { uri: resolveMediaUrl(club.cover_image_url) }
-                : DEFAULT_BANNER
-            }
-            style={styles.heroBannerImage}
-            resizeMode="cover"
-            onError={() => setBannerError(true)}
-          />
+          {!bannerError && club.cover_image_url ? (
+            <Image
+              source={{ uri: resolveMediaUrl(club.cover_image_url) }}
+              style={styles.heroBannerImage}
+              resizeMode="cover"
+              onError={() => setBannerError(true)}
+            />
+          ) : null}
           <View style={styles.heroOverlay} />
 
           <View style={styles.heroContent}>
             {/* Logo and Status Badge */}
             <View style={styles.heroTopRow}>
               <View style={styles.clubLogoWrap}>
-                <Image
-                  source={
-                    !logoError && club.logo_url
-                      ? { uri: resolveMediaUrl(club.logo_url) }
-                      : DEFAULT_LOGO
-                  }
-                  style={styles.clubLogo}
-                  resizeMode="contain"
-                  onError={() => setLogoError(true)}
-                />
+                {!logoError && club.logo_url ? (
+                  <Image
+                    source={{ uri: resolveMediaUrl(club.logo_url) }}
+                    style={styles.clubLogo}
+                    resizeMode="contain"
+                    onError={() => setLogoError(true)}
+                  />
+                ) : (
+                  <Building2 size={32} color="#15803D" strokeWidth={1.8} />
+                )}
               </View>
 
               <View

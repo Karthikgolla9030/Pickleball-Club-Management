@@ -70,17 +70,7 @@ import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Club, MembershipPlan, PlayerCourt } from '@/types';
 
-// ─── Default & Fallback Assets ───────────────────────────────────────────────
-
-const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
-
-const COURT_FALLBACKS = [
-  require('../../assets/courts/court_1.jpg'),
-  require('../../assets/courts/court_2.jpg'),
-  require('../../assets/courts/court_3.jpg'),
-  require('../../assets/courts/court_4.jpg'),
-  require('../../assets/courts/court_5.jpg'),
-];
+// ─── Operating Hours Helper ─────────────────────────────────────────────────
 
 function formatOperatingHours(openingTime?: string | null, closingTime?: string | null): string {
   if (!openingTime || !closingTime) return '6:00 AM - 10:00 PM';
@@ -315,7 +305,7 @@ export default function PublicClubDetailScreen() {
   const isPending = existingRequest?.status === 'pending';
   const logoUri = club.logo_url ? resolveMediaUrl(club.logo_url) : null;
   const bannerUri = club.cover_image_url ? resolveMediaUrl(club.cover_image_url) : null;
-  const bannerSource = bannerUri && !bannerError ? { uri: bannerUri } : DEFAULT_BANNER;
+  const bannerSource = bannerUri && !bannerError ? { uri: bannerUri } : null;
 
   const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Tirupati, AP';
   const hoursText = formatOperatingHours(club.opening_time, club.closing_time);
@@ -387,13 +377,15 @@ export default function PublicClubDetailScreen() {
         <View style={styles.contentContainer}>
           {/* ─── B. Club Hero Banner ───────────────────────────────────────── */}
           <View style={styles.heroBanner}>
-            <Image
-              source={bannerSource}
-              style={styles.heroBackgroundImage}
-              resizeMode="cover"
-              onError={() => setBannerError(true)}
-            />
-            {/* Dark-Green Gradient Overlay: photo clearly visible above, dark green below */}
+            {bannerSource ? (
+              <Image
+                source={bannerSource}
+                style={styles.heroBackgroundImage}
+                resizeMode="cover"
+                onError={() => setBannerError(true)}
+              />
+            ) : null}
+            {/* Dark-Green Gradient Overlay */}
             <View style={styles.heroOverlay} />
 
             {/* Hero Information Row positioned at bottom */}
@@ -575,7 +567,6 @@ export default function PublicClubDetailScreen() {
                     court.price_per_hour == null || Number(court.price_per_hour) === 0;
                   const hasPhoto = Boolean(court.photo_url && !courtImageErrors[court.id]);
                   const courtImageUri = hasPhoto ? resolveMediaUrl(court.photo_url) : null;
-                  const courtFallback = COURT_FALLBACKS[index % COURT_FALLBACKS.length];
 
                   return (
                     <View
@@ -587,17 +578,23 @@ export default function PublicClubDetailScreen() {
                     >
                       {/* Court Thumbnail */}
                       <View style={styles.courtThumbWrapper}>
-                        <Image
-                          key={`${court.id}-${court.photo_url || 'default'}-${hasPhoto ? 'ok' : 'fallback'}`}
-                          source={courtImageUri ? { uri: courtImageUri } : courtFallback}
-                          style={styles.courtThumbImage}
-                          resizeMode="cover"
-                          onError={() => {
-                            if (court.id) {
-                              setCourtImageErrors((prev) => ({ ...prev, [court.id]: true }));
-                            }
-                          }}
-                        />
+                        {courtImageUri ? (
+                          <Image
+                            key={`${court.id}-${court.photo_url || 'custom'}`}
+                            source={{ uri: courtImageUri }}
+                            style={styles.courtThumbImage}
+                            resizeMode="cover"
+                            onError={() => {
+                              if (court.id) {
+                                setCourtImageErrors((prev) => ({ ...prev, [court.id]: true }));
+                              }
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.courtThumbFallback}>
+                            <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
+                          </View>
+                        )}
                       </View>
 
                       {/* Court Info */}
@@ -1527,6 +1524,13 @@ const styles = StyleSheet.create({
   courtThumbImage: {
     width: '100%',
     height: '100%',
+  },
+  courtThumbFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E8F5EE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   courtInfoCol: {
     flex: 1,

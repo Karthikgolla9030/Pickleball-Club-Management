@@ -20,7 +20,8 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Image as ImageIcon, RotateCcw } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, RotateCcw, Trophy
+} from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
@@ -159,11 +160,18 @@ export function Step1BasicDetails({
         </AppText>
 
         <View style={styles.bannerPreviewContainer}>
-          <Image
-            source={resolvedBannerSource}
-            style={styles.bannerPreviewImage}
-            resizeMode="cover"
-          />
+          {resolvedBannerSource ? (
+            <Image
+              source={resolvedBannerSource}
+              style={styles.bannerPreviewImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.bannerEmptyPlaceholder}>
+              <Trophy size={28} color="#94A3B8" />
+              <AppText style={styles.bannerEmptyText}>No banner configured (optional)</AppText>
+            </View>
+          )}
           {isUploading && (
             <View style={styles.bannerUploadingOverlay}>
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -289,13 +297,31 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   bannerPreviewContainer: {
-    height: 120,
-    borderRadius: Radius.sm,
+    width: '100%',
+    height: 160,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface.default,
-    position: 'relative',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  bannerEmptyPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: Radius.md,
+  },
+  bannerEmptyText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   bannerPreviewImage: {
     width: '100%',

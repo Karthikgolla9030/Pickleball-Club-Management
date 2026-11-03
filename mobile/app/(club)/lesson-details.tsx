@@ -45,6 +45,7 @@ import {
   Users,
   UserX,
   XCircle,
+  GraduationCap,
 } from 'lucide-react-native';
 
 import {
@@ -515,7 +516,13 @@ export default function LessonDetailsScreen() {
       >
         {/* 2. LESSON HERO COVER IMAGE */}
         <View style={styles.heroCard}>
-          <Image source={cardImg} style={styles.heroImage} resizeMode="cover" />
+          {cardImg ? (
+            <Image source={cardImg} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.heroFallback}>
+              <GraduationCap size={36} color="#477364" strokeWidth={1.8} />
+            </View>
+          )}
 
           {/* Status Badge Overlay */}
           <View style={[styles.statusOverlayBadge, { backgroundColor: statusStyle.bg }]}>
@@ -889,6 +896,13 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  heroFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0E2822',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statusOverlayBadge: {
     position: 'absolute',

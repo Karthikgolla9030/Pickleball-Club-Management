@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Image as ImageIcon, RotateCcw } from 'lucide-react-native';
+import { Camera, Image as ImageIcon, RotateCcw, Award
+} from 'lucide-react-native';
 import { AppText } from './AppText';
 import { Badge } from './Badge';
 import { Button } from './Button';
@@ -344,15 +345,26 @@ export function CreateLeagueModal({
                 </AppText>
 
                 <View style={styles.bannerPreviewContainer}>
-                  <Image
-                    source={
-                      bannerImageUrl
-                        ? { uri: resolveMediaUrl(bannerImageUrl) }
-                        : resolveLeagueBanner(null, clubBranding)
+                  {(() => {
+                    const previewSource = bannerImageUrl
+                      ? { uri: resolveMediaUrl(bannerImageUrl) }
+                      : resolveLeagueBanner(null, clubBranding);
+                    if (previewSource) {
+                      return (
+                        <Image
+                          source={previewSource}
+                          style={styles.bannerPreviewImage}
+                          resizeMode="cover"
+                        />
+                      );
                     }
-                    style={styles.bannerPreviewImage}
-                    resizeMode="cover"
-                  />
+                    return (
+                      <View style={styles.bannerEmptyPlaceholder}>
+                        <Award size={28} color="#94A3B8" />
+                        <AppText style={styles.bannerEmptyText}>No image configured (optional)</AppText>
+                      </View>
+                    );
+                  })()}
                   {isUploadingBanner && (
                     <View style={styles.bannerUploadingOverlay}>
                       <ActivityIndicator size="small" color="#FFFFFF" />
@@ -795,13 +807,31 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   bannerPreviewContainer: {
-    height: 120,
-    borderRadius: Radius.sm,
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface.default,
-    position: 'relative',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  bannerEmptyPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: Radius.md,
+  },
+  bannerEmptyText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   bannerPreviewImage: {
     width: '100%',

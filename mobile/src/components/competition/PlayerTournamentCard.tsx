@@ -350,11 +350,13 @@ export function PlayerTournamentCard({
     >
       {/* ─── Top Banner Area (Image + Status Badge + Format Badge + Favorite) ─── */}
       <View style={styles.bannerContainer}>
-        <Image
-          source={imageSource}
-          style={styles.bannerImage}
-          resizeMode="cover"
-        />
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.bannerImage}
+            resizeMode="cover"
+          />
+        ) : null}
 
         {/* Subtle Dark Scrim Overlays for High Contrast Readability */}
         <View style={styles.bannerScrimTop} pointerEvents="none" />

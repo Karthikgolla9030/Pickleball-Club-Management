@@ -57,6 +57,7 @@ import {
   UserPlus,
   Users,
   X,
+  GraduationCap,
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
@@ -334,7 +335,13 @@ export default function PlayerLessonsScreen() {
           activeOpacity={0.85}
         >
           {/* Left: Thumbnail Image */}
-          <Image source={thumbnail} style={styles.thumbnail} />
+          {thumbnail ? (
+            <Image source={thumbnail} style={styles.thumbnail} />
+          ) : (
+            <View style={styles.thumbnailFallback}>
+              <GraduationCap size={28} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
 
           {/* Right: Info */}
           <View style={styles.cardRightCol}>
@@ -462,7 +469,13 @@ export default function PlayerLessonsScreen() {
       <View key={item.id} style={styles.lessonCard}>
         <View style={styles.cardHeaderArea}>
           {/* Left: Thumbnail Image */}
-          <Image source={thumbnail} style={styles.thumbnail} />
+          {thumbnail ? (
+            <Image source={thumbnail} style={styles.thumbnail} />
+          ) : (
+            <View style={styles.thumbnailFallback}>
+              <GraduationCap size={28} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
 
           {/* Right: Info */}
           <View style={styles.cardRightCol}>
@@ -584,7 +597,7 @@ export default function PlayerLessonsScreen() {
           imageSource={
             clubBranding?.default_lesson_banner_url
               ? { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) }
-              : require('../../assets/lessons/hero_lessons_photo.jpg')
+              : null
           }
         />
 
@@ -1023,6 +1036,14 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 12,
     resizeMode: 'cover',
+  },
+  thumbnailFallback: {
+    width: 96,
+    height: 96,
+    borderRadius: 12,
+    backgroundColor: '#E6ECE8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardRightCol: {
     flex: 1,

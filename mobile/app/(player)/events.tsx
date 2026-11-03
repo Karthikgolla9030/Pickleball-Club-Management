@@ -369,7 +369,13 @@ export default function PlayerEventsScreen() {
       >
         {/* Left Image with Date Badge Overlay */}
         <View style={styles.cardImageWrapper}>
-          <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          {imageSource ? (
+            <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.cardImageFallback}>
+              <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
           <View style={styles.dateBadgeOverlay}>
             <AppText style={styles.dateBadgeMonth}>{month}</AppText>
             <AppText style={styles.dateBadgeDay}>{day}</AppText>
@@ -448,7 +454,13 @@ export default function PlayerEventsScreen() {
         activeOpacity={0.88}
       >
         <View style={styles.cardImageWrapper}>
-          <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          {imageSource ? (
+            <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.cardImageFallback}>
+              <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
           <View style={styles.dateBadgeOverlay}>
             <AppText style={styles.dateBadgeMonth}>{month}</AppText>
             <AppText style={styles.dateBadgeDay}>{day}</AppText>
@@ -542,7 +554,7 @@ export default function PlayerEventsScreen() {
           imageSource={
             clubBranding?.default_event_banner_url
               ? { uri: resolveMediaUrl(clubBranding.default_event_banner_url) }
-              : require('../../assets/events/hero_events_photo.jpg')
+              : null
           }
         />
 
@@ -984,6 +996,13 @@ const styles = StyleSheet.create({
   cardImage: {
     width: '100%',
     height: '100%',
+  },
+  cardImageFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateBadgeOverlay: {
     position: 'absolute',

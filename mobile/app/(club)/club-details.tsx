@@ -358,11 +358,11 @@ export default function ClubDetailsScreen() {
       setLogoPreviewUri(null);
       await refetch();
       await refetchBranding();
-      setSaveSuccessMsg('Club logo reset to default icon.');
+      setSaveSuccessMsg('Club logo removed.');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to reset logo.';
-      Alert.alert('Reset Failed', msg);
+      const msg = err instanceof Error ? err.message : 'Unable to remove logo.';
+      Alert.alert('Remove Failed', msg);
     }
   };
 
@@ -437,11 +437,11 @@ export default function ClubDetailsScreen() {
       setCoverPreviewUri(null);
       await refetch();
       await refetchBranding();
-      setSaveSuccessMsg('Club cover banner reset to platform fallback.');
+      setSaveSuccessMsg('Club cover banner removed.');
       setTimeout(() => setSaveSuccessMsg(null), 3000);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unable to reset cover banner.';
-      Alert.alert('Reset Failed', msg);
+      const msg = err instanceof Error ? err.message : 'Unable to remove cover banner.';
+      Alert.alert('Remove Failed', msg);
     } finally {
       setIsUploadingCover(false);
     }
@@ -1009,7 +1009,7 @@ export default function ClubDetailsScreen() {
                                 activeOpacity={0.7}
                               >
                                 <AppText style={styles.editActionLinkDanger}>
-                                  Reset to default
+                                  Remove logo
                                 </AppText>
                               </TouchableOpacity>
                             </>
@@ -1026,9 +1026,9 @@ export default function ClubDetailsScreen() {
                   <View style={styles.editCoverBlock}>
                     <View style={styles.editBadgeTitleRow}>
                       <AppText style={styles.editSubHeading}>Player-Facing Club Cover</AppText>
-                      <View style={styles.pillBadgeSuccess}>
-                        <AppText style={styles.pillBadgeSuccessText}>
-                          {currentCoverUri ? 'Custom cover' : 'Default cover'}
+                      <View style={currentCoverUri ? styles.pillBadgeSuccess : styles.pillBadgeDefault}>
+                        <AppText style={currentCoverUri ? styles.pillBadgeSuccessText : styles.pillBadgeDefaultText}>
+                          {currentCoverUri ? 'Custom cover' : 'No cover (Optional)'}
                         </AppText>
                       </View>
                     </View>
@@ -1041,11 +1041,18 @@ export default function ClubDetailsScreen() {
 
                     <View style={styles.editCoverPreviewRow}>
                       <View style={styles.editCoverPreviewBox}>
-                        <Image
-                          source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
-                          style={styles.editCoverImg}
-                          resizeMode="cover"
-                        />
+                        {currentCoverUri ? (
+                          <Image
+                            source={{ uri: currentCoverUri }}
+                            style={styles.editCoverImg}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.editCoverEmptyBox}>
+                            <ImageIcon size={22} color="#94A3B8" />
+                            <AppText style={styles.editCoverEmptyText}>No cover photo configured</AppText>
+                          </View>
+                        )}
                         {isUploadingCover && (
                           <View style={styles.coverUploadOverlay}>
                             <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1054,17 +1061,31 @@ export default function ClubDetailsScreen() {
                       </View>
 
                       {isOwner && (
-                        <TouchableOpacity
-                          style={styles.uploadCoverOutlineBtn}
-                          onPress={handlePickCover}
-                          disabled={isUploadingCover}
-                          activeOpacity={0.8}
-                        >
-                          <Upload size={14} color="#176B57" strokeWidth={2.2} />
-                          <AppText style={styles.uploadCoverOutlineBtnText}>
-                            {isUploadingCover ? 'Uploading...' : currentCoverUri ? 'Replace cover' : 'Upload cover'}
-                          </AppText>
-                        </TouchableOpacity>
+                        <View style={styles.coverActionButtonsCol}>
+                          <TouchableOpacity
+                            style={styles.uploadCoverOutlineBtn}
+                            onPress={handlePickCover}
+                            disabled={isUploadingCover}
+                            activeOpacity={0.8}
+                          >
+                            <Upload size={14} color="#176B57" strokeWidth={2.2} />
+                            <AppText style={styles.uploadCoverOutlineBtnText}>
+                              {isUploadingCover ? 'Uploading...' : currentCoverUri ? 'Replace cover' : 'Upload cover'}
+                            </AppText>
+                          </TouchableOpacity>
+
+                          {Boolean(currentCoverUri) && (
+                            <TouchableOpacity
+                              style={styles.removeCoverOutlineBtn}
+                              onPress={handleRemoveCover}
+                              disabled={isUploadingCover}
+                              activeOpacity={0.8}
+                            >
+                              <Trash2 size={13} color="#DC2626" strokeWidth={2.2} />
+                              <AppText style={styles.removeCoverOutlineBtnText}>Remove</AppText>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       )}
                     </View>
                   </View>
@@ -2466,5 +2487,56 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '600',
     color: '#176B57',
+  },
+  pillBadgeDefault: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
+  },
+  pillBadgeDefaultText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  editCoverEmptyBox: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: Radius.md,
+  },
+  editCoverEmptyText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  coverActionButtonsCol: {
+    flexDirection: 'column',
+    gap: 6,
+    justifyContent: 'center',
+  },
+  removeCoverOutlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  removeCoverOutlineBtnText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#DC2626',
   },
 });

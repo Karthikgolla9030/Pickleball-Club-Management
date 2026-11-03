@@ -79,9 +79,6 @@ import {
 import { Radius, Spacing } from '@/theme';
 import { resolveMediaUrl } from '@/utils';
 
-const DEFAULT_BANNER = require('../../assets/explore_banner.jpg');
-const DEFAULT_LOGO = require('../../assets/pickleball_logo_primary.png');
-
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 function formatRegistrationDate(dateStr?: string | null): string {
@@ -748,29 +745,27 @@ export default function PlatformClubsScreen() {
 
               {/* Hero Banner Card */}
               <View style={styles.previewHeroCard}>
-                <Image
-                  source={
-                    previewClub.cover_image_url
-                      ? { uri: resolveMediaUrl(previewClub.cover_image_url) }
-                      : DEFAULT_BANNER
-                  }
-                  style={styles.previewHeroImage}
-                  resizeMode="cover"
-                />
+                {previewClub.cover_image_url ? (
+                    <Image
+                      source={{ uri: resolveMediaUrl(previewClub.cover_image_url) }}
+                      style={styles.previewHeroImage}
+                      resizeMode="cover"
+                    />
+                  ) : null}
                 <View style={styles.previewHeroOverlay} />
 
                 <View style={styles.previewHeroContent}>
                   <View style={styles.previewTopRow}>
                     <View style={styles.previewLogoWrap}>
-                      <Image
-                        source={
-                          previewClub.logo_url
-                            ? { uri: resolveMediaUrl(previewClub.logo_url) }
-                            : DEFAULT_LOGO
-                        }
-                        style={styles.previewLogo}
-                        resizeMode="contain"
-                      />
+                      {previewClub.logo_url ? (
+                          <Image
+                            source={{ uri: resolveMediaUrl(previewClub.logo_url) }}
+                            style={styles.previewLogo}
+                            resizeMode="contain"
+                          />
+                        ) : (
+                          <Building2 size={26} color="#15803D" strokeWidth={1.8} />
+                        )}
                     </View>
 
                     <View

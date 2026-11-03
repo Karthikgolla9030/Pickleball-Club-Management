@@ -331,15 +331,13 @@ export default function PlayerHomeScreen() {
         <View style={styles.heroSection}>
           <View style={styles.heroCard}>
             {/* Banner Image */}
-            <Image
-              source={
-                playerBanner?.image_url
-                  ? { uri: resolveMediaUrl(playerBanner.image_url) }
-                  : BUILTIN_FALLBACKS.tournamentGeneric
-              }
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
+            {playerBanner?.image_url ? (
+              <Image
+                source={{ uri: resolveMediaUrl(playerBanner.image_url) }}
+                style={styles.heroImage}
+                resizeMode="cover"
+              />
+            ) : null}
             {/* Soft overlay ensuring high contrast readability */}
             <View style={styles.heroGradientOverlay} />
 
@@ -516,21 +514,31 @@ export default function PlayerHomeScreen() {
               accessibilityRole="button"
             >
               {/* Event Thumbnail */}
-              <Image
-                source={
-                  upcomingEvent.isTournament
-                    ? resolveTournamentBanner(
-                        { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format },
-                        clubBranding
-                      )
-                    : resolveEventCover(
-                        { cover_image_url: upcomingEvent.imageUrl },
-                        clubBranding
-                      )
+              {(() => {
+                const imgSource = upcomingEvent.isTournament
+                  ? resolveTournamentBanner(
+                      { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format },
+                      clubBranding
+                    )
+                  : resolveEventCover(
+                      { cover_image_url: upcomingEvent.imageUrl },
+                      clubBranding
+                    );
+                if (imgSource) {
+                  return (
+                    <Image
+                      source={imgSource}
+                      style={styles.eventThumbnail}
+                      resizeMode="cover"
+                    />
+                  );
                 }
-                style={styles.eventThumbnail}
-                resizeMode="cover"
-              />
+                return (
+                  <View style={styles.eventThumbnailFallback}>
+                    <Calendar size={24} color="#176B57" strokeWidth={1.8} />
+                  </View>
+                );
+              })()}
 
               {/* Event Content */}
               <View style={styles.eventContentCol}>
@@ -1006,6 +1014,14 @@ const styles = StyleSheet.create({
     width: 98,
     height: 80,
     borderRadius: 12,
+  },
+  eventThumbnailFallback: {
+    width: 98,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#E8F5EE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   eventContentCol: {
     flex: 1,

@@ -44,6 +44,7 @@ import {
   Save,
   Sliders,
   Smartphone,
+  Trash2,
   Upload,
   Users,
 } from 'lucide-react-native';
@@ -199,17 +200,17 @@ export default function PlatformBannersScreen() {
     }
   };
 
-  // ─── Reset to Built-in Fallback ────────────────────────────────────────────
+  // ─── Reset / Remove Banner Image ──────────────────────────────────────────
   const handleResetBanner = () => {
     Alert.alert(
-      `Restore Default ${isOwnerTab ? 'Owner' : 'Player'} Banner`,
-      `Are you sure you want to restore the platform default banner for the ${
+      `Remove ${isOwnerTab ? 'Owner' : 'Player'} Banner Image`,
+      `Are you sure you want to remove the banner image for the ${
         isOwnerTab ? 'Club Owner Dashboard' : 'Player App Home page'
       }? Custom uploaded image will be removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Restore Default',
+          text: 'Remove Image',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -217,10 +218,10 @@ export default function PlatformBannersScreen() {
               await refetch();
               showStatus(
                 'success',
-                `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner restored to platform default.`
+                `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner image removed.`
               );
             } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Reset failed';
+              const msg = err instanceof Error ? err.message : 'Remove failed';
               showStatus('error', msg);
             }
           },
@@ -232,9 +233,7 @@ export default function PlatformBannersScreen() {
   // ─── Actual Saved Banner Preview Calculations ──────────────────────────────
   const previewImage = currentBanner?.image_url
     ? { uri: resolveMediaUrl(currentBanner.image_url) }
-    : isOwnerTab
-    ? BUILTIN_FALLBACKS.ownerBanner
-    : BUILTIN_FALLBACKS.tournamentGeneric;
+    : null;
 
   const previewTitle = isOwnerTab
     ? ownerTitle || currentBanner?.title || 'Aught2 Pickleball'
@@ -372,9 +371,9 @@ export default function PlatformBannersScreen() {
               <AppText style={styles.previewTitle}>Live Preview</AppText>
             </View>
             <View style={styles.previewBadgePill}>
-              <View style={styles.previewBadgeDot} />
-              <AppText style={styles.previewBadgeText}>
-                {isCustomImage ? 'ACTIVE' : 'BUILT-IN FALLBACK'}
+              <View style={[styles.previewBadgeDot, !previewImage && { backgroundColor: '#64748B' }]} />
+              <AppText style={[styles.previewBadgeText, !previewImage && { color: '#64748B' }]}>
+                {previewImage ? 'ACTIVE' : 'NOT CONFIGURED (OPTIONAL)'}
               </AppText>
             </View>
           </View>
@@ -388,43 +387,74 @@ export default function PlatformBannersScreen() {
 
           {/* 16:9 Aspect Ratio Banner Container */}
           <View style={styles.imagePreviewWrapper}>
-            <ImageBackground
-              source={previewImage}
-              style={styles.heroImageBg}
-              imageStyle={styles.heroImageBgInner}
-              resizeMode="cover"
-            >
-              {/* Dark Overlay */}
-              <View style={styles.heroOverlay} />
+            {previewImage ? (
+              <ImageBackground
+                source={previewImage}
+                style={styles.heroImageBg}
+                imageStyle={styles.heroImageBgInner}
+                resizeMode="cover"
+              >
+                {/* Dark Overlay */}
+                <View style={styles.heroOverlay} />
 
-              {/* Overlaid Banner Content */}
-              <View style={styles.heroContentInner}>
-                <View style={styles.heroUpperBlock}>
-                  <AppText style={styles.heroTag}>WELCOME TO</AppText>
-                  <AppText style={styles.heroHeading} numberOfLines={2}>
-                    {previewTitle}
-                  </AppText>
-                  <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                    {previewSubtitle}
-                  </AppText>
-                </View>
-
-                <View style={styles.heroBottomRow}>
-                  <View style={styles.heroCtaPill}>
-                    <AppText style={styles.heroCtaText}>{previewCta}</AppText>
-                    <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
+                {/* Overlaid Banner Content */}
+                <View style={styles.heroContentInner}>
+                  <View style={styles.heroUpperBlock}>
+                    <AppText style={styles.heroTag}>WELCOME TO</AppText>
+                    <AppText style={styles.heroHeading} numberOfLines={2}>
+                      {previewTitle}
+                    </AppText>
+                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
+                      {previewSubtitle}
+                    </AppText>
                   </View>
 
-                  {isOwnerTab && (
-                    <View style={styles.heroScriptMotto}>
-                      <AppText style={styles.scriptLine}>Play</AppText>
-                      <AppText style={styles.scriptLine}>Grow</AppText>
-                      <AppText style={styles.scriptLine}>Together</AppText>
+                  <View style={styles.heroBottomRow}>
+                    <View style={styles.heroCtaPill}>
+                      <AppText style={styles.heroCtaText}>{previewCta}</AppText>
+                      <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
                     </View>
-                  )}
+
+                    {isOwnerTab && (
+                      <View style={styles.heroScriptMotto}>
+                        <AppText style={styles.scriptLine}>Play</AppText>
+                        <AppText style={styles.scriptLine}>Grow</AppText>
+                        <AppText style={styles.scriptLine}>Together</AppText>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </ImageBackground>
+            ) : (
+              <View style={[styles.heroImageBg, { backgroundColor: '#0A2B23' }]}>
+                <View style={styles.heroContentInner}>
+                  <View style={styles.heroUpperBlock}>
+                    <AppText style={styles.heroTag}>WELCOME TO</AppText>
+                    <AppText style={styles.heroHeading} numberOfLines={2}>
+                      {previewTitle}
+                    </AppText>
+                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
+                      {previewSubtitle}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.heroBottomRow}>
+                    <View style={styles.heroCtaPill}>
+                      <AppText style={styles.heroCtaText}>{previewCta}</AppText>
+                      <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
+                    </View>
+
+                    {isOwnerTab && (
+                      <View style={styles.heroScriptMotto}>
+                        <AppText style={styles.scriptLine}>Play</AppText>
+                        <AppText style={styles.scriptLine}>Grow</AppText>
+                        <AppText style={styles.scriptLine}>Together</AppText>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
-            </ImageBackground>
+            )}
 
             {/* Upload Spinner Overlay */}
             {isUploading && (
@@ -468,7 +498,7 @@ export default function PlatformBannersScreen() {
                   !isCustomImage && styles.currentBannerStatusTextFallback,
                 ]}
               >
-                {isCustomImage ? 'Active' : 'Built-in Fallback'}
+                {isCustomImage ? 'Active' : 'Not Configured (Optional)'}
               </AppText>
             </View>
           </View>
@@ -483,19 +513,23 @@ export default function PlatformBannersScreen() {
               accessibilityLabel="Upload Image"
             >
               <Upload size={14} color="#FFFFFF" strokeWidth={2.2} />
-              <AppText style={styles.btnUploadText}>Upload Image</AppText>
+              <AppText style={styles.btnUploadText}>
+                {isCustomImage ? 'Replace Image' : 'Upload Image'}
+              </AppText>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.btnRestore}
-              onPress={handleResetBanner}
-              disabled={isUploading}
-              activeOpacity={0.8}
-              accessibilityLabel="Restore Default"
-            >
-              <RotateCcw size={13.5} color="#0F172A" strokeWidth={2} />
-              <AppText style={styles.btnRestoreText}>Restore Default</AppText>
-            </TouchableOpacity>
+            {isCustomImage ? (
+              <TouchableOpacity
+                style={styles.btnRestore}
+                onPress={handleResetBanner}
+                disabled={isUploading}
+                activeOpacity={0.8}
+                accessibilityLabel="Remove Image"
+              >
+                <Trash2 size={13.5} color="#DC2626" strokeWidth={2} />
+                <AppText style={[styles.btnRestoreText, { color: '#DC2626' }]}>Remove Image</AppText>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {/* Image Guidelines Box */}

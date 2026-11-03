@@ -36,7 +36,7 @@ export interface BannerSlide {
 
 interface PlayerHeroBannerProps {
   slides: BannerSlide[];
-  imageSource: any;
+  imageSource?: any | null;
   onCtaPress?: () => void;
   style?: any;
 }
@@ -68,12 +68,14 @@ export function PlayerHeroBanner({
   return (
     <View style={[styles.container, style]}>
       {/* ─── Background Photo ─── */}
-      <Image
-        source={imageSource}
-        style={styles.bannerImage}
-        resizeMode="cover"
-        accessibilityLabel={`${currentSlide.tag} banner photo`}
-      />
+      {imageSource ? (
+        <Image
+          source={imageSource}
+          style={styles.bannerImage}
+          resizeMode="cover"
+          accessibilityLabel={`${currentSlide.tag} banner photo`}
+        />
+      ) : null}
 
       {/* ─── Dark Forest Green Layer: Directional Gradient / Left Shade ─── */}
       <View

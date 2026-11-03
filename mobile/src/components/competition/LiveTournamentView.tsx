@@ -465,7 +465,9 @@ export function LiveTournamentView({
       >
         {/* ─── Shared Tournament Banner ─── */}
         <View style={styles.heroCard}>
-          <Image source={bannerImage} style={styles.heroBannerImage} resizeMode="cover" />
+          {bannerImage ? (
+            <Image source={bannerImage} style={styles.heroBannerImage} resizeMode="cover" />
+          ) : null}
           <View style={styles.heroOverlay} />
 
           <View style={styles.heroContent}>

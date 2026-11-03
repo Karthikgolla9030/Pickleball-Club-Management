@@ -372,11 +372,13 @@ export function CompletedBracketView({
       >
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
-          <Image
-            source={bannerSource}
-            style={styles.heroImage}
-            resizeMode="cover"
-          />
+          {bannerSource ? (
+            <Image
+              source={bannerSource}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          ) : null}
           <View style={styles.heroOverlay} />
 
           <View style={styles.heroInner}>

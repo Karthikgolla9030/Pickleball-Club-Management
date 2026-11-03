@@ -172,7 +172,9 @@ export function TournamentCard({
       {/* ─── Top: Hero Banner (Clean, consistent across all formats) ───────── */}
       <View style={styles.heroBanner}>
         {/* Background Image: object-fit cover, zero gaps */}
-        <Image source={banner} style={styles.bannerImage} resizeMode="cover" />
+        {banner ? (
+          <Image source={banner} style={styles.bannerImage} resizeMode="cover" />
+        ) : null}
 
         {/* Subtle Darkening Overlay for text contrast across all court images */}
         <View style={styles.darkScrim} />

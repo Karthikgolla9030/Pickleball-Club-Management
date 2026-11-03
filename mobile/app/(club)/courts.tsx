@@ -97,27 +97,11 @@ import type {
 } from '@/types';
 
 // ─── Image Assets ─────────────────────────────────────────────────────────────
-const COURT_IMAGES = [
-  require('../../assets/courts/court_1.jpg'),
-  require('../../assets/courts/court_2.jpg'),
-  require('../../assets/courts/court_3.jpg'),
-  require('../../assets/courts/court_4.jpg'),
-  require('../../assets/courts/court_5.jpg'),
-];
-
-function getCourtThumbnail(court: Court, index: number, hasError: boolean = false) {
-  // 1. Entity-level custom image
+function getCourtThumbnail(court: Court, _index: number, hasError: boolean = false) {
   if (court.photo_url && !hasError) {
     return { uri: resolveMediaUrl(court.photo_url) };
   }
-  // 2. Platform neutral court fallback (never club banner or logo)
-  if (court.court_number && court.court_number >= 1 && court.court_number <= COURT_IMAGES.length) {
-    return COURT_IMAGES[court.court_number - 1];
-  }
-  if (court.indoor_outdoor === 'outdoor') {
-    return index % 2 === 0 ? COURT_IMAGES[1] : COURT_IMAGES[3];
-  }
-  return COURT_IMAGES[index % COURT_IMAGES.length];
+  return null;
 }
 
 function getCourtLocation(court: Court, index: number): string {
@@ -1109,16 +1093,22 @@ export default function ClubCourtsScreen() {
                     <View style={styles.courtCard}>
                       {/* Left: Thumbnail with overlaid badge */}
                       <View style={styles.thumbnailContainer}>
-                        <Image
-                          key={`${item.id}-${item.photo_url || 'none'}-${hasPhotoError ? 'err' : 'ok'}`}
-                          source={thumbnailSource}
-                          style={styles.thumbnail}
-                          onError={() => {
-                            if (item.id && !hasPhotoError) {
-                              setCourtImageErrors((prev) => ({ ...prev, [item.id]: true }));
-                            }
-                          }}
-                        />
+                        {thumbnailSource ? (
+                          <Image
+                            key={`${item.id}-${item.photo_url || 'none'}-${hasPhotoError ? 'err' : 'ok'}`}
+                            source={thumbnailSource}
+                            style={styles.thumbnail}
+                            onError={() => {
+                              if (item.id && !hasPhotoError) {
+                                setCourtImageErrors((prev) => ({ ...prev, [item.id]: true }));
+                              }
+                            }}
+                          />
+                        ) : (
+                          <View style={styles.thumbnailFallback}>
+                            <Layers size={24} color="#18794E" strokeWidth={1.8} />
+                          </View>
+                        )}
                         <View style={styles.courtBadgeOverlay}>
                           <AppText style={styles.courtBadgeText}>{courtNumberText}</AppText>
                         </View>
@@ -2383,7 +2373,13 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+  },
+  thumbnailFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   courtBadgeOverlay: {
     position: 'absolute',

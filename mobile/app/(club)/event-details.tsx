@@ -535,7 +535,13 @@ export default function EventDetailsScreen() {
       >
         {/* 2. EVENT HERO COVER IMAGE */}
         <View style={styles.heroCard}>
-          <Image source={cardImg} style={styles.heroImage} resizeMode="cover" />
+          {cardImg ? (
+            <Image source={cardImg} style={styles.heroImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.heroFallback}>
+              <Calendar size={36} color="#477364" strokeWidth={1.8} />
+            </View>
+          )}
 
           {/* Date Overlay Badge */}
           <View style={styles.dateOverlayBadge}>
@@ -899,6 +905,13 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  heroFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0E2822',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateOverlayBadge: {
     position: 'absolute',

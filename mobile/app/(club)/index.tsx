@@ -69,7 +69,7 @@ import {
   useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
-import { formatCurrency } from '@/utils';
+import { formatCurrency, resolveMediaUrl } from '@/utils';
 
 export default function ClubHomeScreen() {
   const router = useRouter();
@@ -121,6 +121,7 @@ export default function ClubHomeScreen() {
       status: raw.status_label || (raw.status === 'published' ? 'Happening Now' : 'Upcoming'),
       time: timeStr,
       courts: raw.location || 'Club Courts',
+      imageUrl: ((raw as any)?.cover_image_url || (raw as any)?.image_url || null) as string | null,
       capacity: raw.capacity
         ? `${raw.registered_count ?? 0} / ${raw.capacity}`
         : `${raw.registered_count ?? 0} registered`,
@@ -345,11 +346,17 @@ export default function ClubHomeScreen() {
             accessibilityLabel={`Event: ${todayItem.title}`}
           >
             {/* Event thumbnail photo */}
-            <Image
-              source={require('../../assets/events/clinic_thumbnail.jpg')}
-              style={styles.scheduleThumb}
-              resizeMode="cover"
-            />
+            {todayItem?.imageUrl ? (
+              <Image
+                source={{ uri: resolveMediaUrl(todayItem.imageUrl) }}
+                style={styles.scheduleThumb}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.scheduleThumbFallback}>
+                <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+              </View>
+            )}
 
             <View style={styles.scheduleContent}>
               <AppText style={styles.scheduleTitle} numberOfLines={1}>
@@ -719,9 +726,17 @@ const styles = StyleSheet.create({
     elevation: 1.5,
   },
   scheduleThumb: {
-    width: 62,
-    height: 58,
-    borderRadius: 10,
+    width: 68,
+    height: 68,
+    borderRadius: 12,
+  },
+  scheduleThumbFallback: {
+    width: 68,
+    height: 68,
+    borderRadius: 12,
+    backgroundColor: '#E5F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scheduleContent: {
     flex: 1,

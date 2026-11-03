@@ -34,6 +34,7 @@ import {
   MoreVertical,
   Trophy,
   Users,
+  Award,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -42,13 +43,6 @@ import type { ClubBranding, LeagueStatus, LeagueSummary } from '@/types';
 import { formatDate } from '@/utils/formatters';
 import { resolveMediaUrl } from '@/utils';
 import { resolveLeagueBanner } from '@/utils/imageResolution';
-
-const LEAGUE_CARD_IMAGES: ImageSourcePropType[] = [
-  require('../../../assets/leagues/card1.jpg'),
-  require('../../../assets/leagues/card2.jpg'),
-  require('../../../assets/leagues/card3.jpg'),
-  require('../../../assets/leagues/card1_crop.jpg'),
-];
 
 export interface LeagueCardProps {
   league: LeagueSummary;
@@ -211,7 +205,13 @@ export function LeagueCard({
       <View style={styles.contentRow}>
         {/* Left Column: Sports Thumbnail */}
         <View style={styles.imageWrapper}>
-          <Image source={imgSource} style={styles.thumbnail} resizeMode="cover" />
+          {imgSource ? (
+            <Image source={imgSource} style={styles.thumbnail} resizeMode="cover" />
+          ) : (
+            <View style={styles.thumbnailFallback}>
+              <Award size={24} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
         </View>
 
         {/* Right Column: Information & Actions */}
@@ -439,6 +439,13 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  thumbnailFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E8F5EE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   detailsColumn: {
     flex: 1,

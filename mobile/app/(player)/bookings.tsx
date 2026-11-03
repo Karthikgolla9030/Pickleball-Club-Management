@@ -31,6 +31,7 @@ import {
   MapPin,
   Menu,
   ChevronRight,
+  LayoutGrid,
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, BookingDetailsModal } from '@/components';
@@ -41,14 +42,6 @@ import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Booking } from '@/types';
 
 type FilterTab = 'upcoming' | 'past' | 'cancelled';
-
-const COURT_IMAGES = [
-  require('../../assets/courts/court_1.jpg'),
-  require('../../assets/courts/court_2.jpg'),
-  require('../../assets/courts/court_3.jpg'),
-  require('../../assets/courts/court_4.jpg'),
-  require('../../assets/courts/court_5.jpg'),
-];
 
 export default function PlayerBookingsScreen() {
   const insets = useSafeAreaInsets();
@@ -170,18 +163,11 @@ export default function PlayerBookingsScreen() {
     }
   };
 
-  const getCourtImage = (booking: Booking, index: number) => {
-    // 1. Entity-level custom image
+  const getCourtImage = (booking: Booking, _index: number) => {
     if (booking.court?.photo_url && !courtImageErrors[booking.id]) {
       return { uri: resolveMediaUrl(booking.court.photo_url) };
     }
-    // 2. Platform neutral court fallback (never club banner or logo)
-    const courtName = booking.court?.display_name || booking.court?.name || '';
-    if (courtName.includes('2')) return COURT_IMAGES[1];
-    if (courtName.includes('3')) return COURT_IMAGES[2];
-    if (courtName.includes('4')) return COURT_IMAGES[3];
-    if (courtName.includes('5')) return COURT_IMAGES[4];
-    return COURT_IMAGES[index % COURT_IMAGES.length];
+    return null;
   };
 
   const handleCardPress = (booking: Booking) => {
@@ -269,16 +255,22 @@ export default function PlayerBookingsScreen() {
         activeOpacity={0.88}
       >
         {/* Left Image Thumbnail */}
-        <Image
-          key={`${booking.id}-${booking.court?.photo_url || 'default'}`}
-          source={courtImage}
-          style={styles.courtThumbnail}
-          onError={() => {
-            if (booking.id && !courtImageErrors[booking.id]) {
-              setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
-            }
-          }}
-        />
+        {courtImage ? (
+          <Image
+            key={`${booking.id}-${booking.court?.photo_url || 'custom'}`}
+            source={courtImage}
+            style={styles.courtThumbnail}
+            onError={() => {
+              if (booking.id && !courtImageErrors[booking.id]) {
+                setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
+              }
+            }}
+          />
+        ) : (
+          <View style={styles.courtThumbnailFallback}>
+            <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
+          </View>
+        )}
 
         {/* Details */}
         <View style={styles.pastCardDetails}>
@@ -342,16 +334,22 @@ export default function PlayerBookingsScreen() {
         onPress={() => handleCardPress(booking)}
         activeOpacity={0.88}
       >
-        <Image
-          key={`${booking.id}-${booking.court?.photo_url || 'default'}`}
-          source={courtImage}
-          style={styles.courtThumbnail}
-          onError={() => {
-            if (booking.id && !courtImageErrors[booking.id]) {
-              setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
-            }
-          }}
-        />
+        {courtImage ? (
+          <Image
+            key={`${booking.id}-${booking.court?.photo_url || 'custom'}`}
+            source={courtImage}
+            style={styles.courtThumbnail}
+            onError={() => {
+              if (booking.id && !courtImageErrors[booking.id]) {
+                setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
+              }
+            }}
+          />
+        ) : (
+          <View style={styles.courtThumbnailFallback}>
+            <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
+          </View>
+        )}
 
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
@@ -820,10 +818,17 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   courtThumbnail: {
-    width: 86,
-    height: 76,
-    borderRadius: 10,
-    backgroundColor: '#E2E8F0',
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+  },
+  courtThumbnailFallback: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: '#E8F5EE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pastCardDetails: {
     flex: 1,

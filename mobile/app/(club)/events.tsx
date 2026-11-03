@@ -60,6 +60,7 @@ import {
   usePublishClubEvent,
 } from '@/hooks';
 import { resolveEventCover } from '@/utils/imageResolution';
+import { resolveMediaUrl } from '@/utils';
 import {
   EVENT_STATUS_LABELS,
   EVENT_TYPE_LABELS,
@@ -200,7 +201,13 @@ function CompactEventCard({
       <View style={styles.cardContent}>
         {/* Left Thumbnail with Date Badge */}
         <View style={styles.imageContainer}>
-          <Image source={cardImg} style={styles.thumbnail} resizeMode="cover" />
+          {cardImg ? (
+            <Image source={cardImg} style={styles.thumbnail} resizeMode="cover" />
+          ) : (
+            <View style={styles.thumbnailFallback}>
+              <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
           <View style={styles.dateBadge}>
             <AppText style={styles.dateMonth}>{thumbnailDate.month}</AppText>
             <AppText style={styles.dateDay}>{thumbnailDate.day}</AppText>
@@ -401,15 +408,13 @@ export default function ClubEventsScreen() {
     <>
       {/* 1. HERO BANNER */}
       <View style={styles.heroContainer}>
-        <Image
-          source={
-            clubBranding?.default_event_banner_url
-              ? { uri: clubBranding.default_event_banner_url }
-              : require('../../assets/events/hero_decor.jpg')
-          }
-          style={styles.heroDecorImage}
-          resizeMode="cover"
-        />
+        {clubBranding?.default_event_banner_url ? (
+          <Image
+            source={{ uri: resolveMediaUrl(clubBranding.default_event_banner_url) }}
+            style={styles.heroDecorImage}
+            resizeMode="cover"
+          />
+        ) : null}
         <View style={styles.heroTextContainer}>
           <AppText style={styles.heroTag}>CLUB EVENTS</AppText>
           <AppText style={styles.heroTitle}>More Than a Game</AppText>
@@ -799,6 +804,13 @@ const styles = StyleSheet.create({
   thumbnail: {
     width: '100%',
     height: '100%',
+  },
+  thumbnailFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E5F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateBadge: {
     position: 'absolute',

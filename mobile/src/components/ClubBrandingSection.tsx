@@ -79,7 +79,6 @@ interface BrandingAssetCardProps {
   description: string;
   recommendedSize?: string;
   currentUrl?: string | null;
-  fallbackSource?: any;
   uploading: boolean;
   isOwner: boolean;
   assetKind?: 'banner' | 'picture' | 'logo';
@@ -93,7 +92,6 @@ function BrandingAssetCard({
   description,
   recommendedSize,
   currentUrl,
-  fallbackSource,
   uploading,
   isOwner,
   assetKind = 'banner',
@@ -115,7 +113,7 @@ function BrandingAssetCard({
           <AppText style={styles.assetCardTitle}>{title}</AppText>
         </View>
         <Badge
-          label={isCustom ? 'Custom Club Default' : 'Built-in Fallback'}
+          label={isCustom ? 'Configured' : 'Not Configured (Optional)'}
           variant={isCustom ? 'success' : 'default'}
         />
       </View>
@@ -140,15 +138,15 @@ function BrandingAssetCard({
             style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
             resizeMode={isLogo ? 'contain' : 'cover'}
           />
-        ) : fallbackSource ? (
-          <Image
-            source={fallbackSource}
-            style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
-            resizeMode={isLogo ? 'contain' : 'cover'}
-          />
-        ) : (
+        ) : isLogo ? (
           <View style={styles.assetLogoFallback}>
-            <Building2 size={36} color="#176B57" />
+            <Building2 size={32} color="#94A3B8" />
+            <AppText style={styles.assetEmptySubtext}>No logo configured</AppText>
+          </View>
+        ) : (
+          <View style={styles.assetEmptyPlaceholder}>
+            <ImageIcon size={26} color="#94A3B8" />
+            <AppText style={styles.assetEmptyText}>No {noun.toLowerCase()} configured (optional)</AppText>
           </View>
         )}
         {uploading && (
@@ -181,8 +179,8 @@ function BrandingAssetCard({
               disabled={uploading}
               activeOpacity={0.8}
             >
-              <RotateCcw size={14} color="#DC2626" />
-              <AppText style={styles.assetBtnResetText}>Reset to Built-in Fallback</AppText>
+              <Trash2 size={14} color="#DC2626" />
+              <AppText style={styles.assetBtnResetText}>Remove {noun}</AppText>
             </TouchableOpacity>
           )}
         </View>
@@ -341,12 +339,12 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
     if (!isOwner) return;
 
     Alert.alert(
-      `Reset ${resetLabel}`,
-      `Are you sure you want to restore the application's built-in fallback for ${resetLabel}?`,
+      `Remove ${resetLabel}`,
+      `Are you sure you want to remove the custom image for ${resetLabel}? The club will have no default image configured for this item.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Reset to Default',
+          text: 'Remove Image',
           style: 'destructive',
           onPress: async () => {
             setUploadingField(fieldName);
@@ -355,11 +353,11 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 [fieldName]: null,
               });
               await refetchBranding();
-              showStatus('success', `${resetLabel} restored to platform default.`);
+              showStatus('success', `${resetLabel} image removed.`);
             } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Reset failed';
+              const msg = err instanceof Error ? err.message : 'Remove failed';
               showStatus('error', msg);
-              Alert.alert('Reset Failed', msg);
+              Alert.alert('Remove Failed', msg);
             } finally {
               setUploadingField(null);
             }
@@ -605,7 +603,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1920 × 1080 px (16:9) • JPG or PNG"
         description="Prominent hero banner displayed at the top of your club details in the Player App and discover directories."
         currentUrl={branding?.cover_image_url}
-        fallbackSource={BUILTIN_FALLBACKS.clubCover}
         uploading={uploadingField === 'cover_image_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -636,7 +633,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Round Robin tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_round_robin_url}
-        fallbackSource={BUILTIN_FALLBACKS.tournamentRoundRobin}
         uploading={uploadingField === 'default_tournament_round_robin_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -658,7 +654,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Scramble tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_scramble_url}
-        fallbackSource={BUILTIN_FALLBACKS.tournamentScramble}
         uploading={uploadingField === 'default_tournament_scramble_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -680,7 +675,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Pool Play tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_pool_play_url}
-        fallbackSource={BUILTIN_FALLBACKS.tournamentPoolPlay}
         uploading={uploadingField === 'default_tournament_pool_play_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -702,7 +696,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all single/double elimination bracket tournaments in this club."
         currentUrl={branding?.default_tournament_bracket_url}
-        fallbackSource={BUILTIN_FALLBACKS.tournamentBracket}
         uploading={uploadingField === 'default_tournament_bracket_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -739,7 +732,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on league cards and league details when no custom picture is provided."
         currentUrl={branding?.default_league_banner_url}
-        fallbackSource={BUILTIN_FALLBACKS.league}
         uploading={uploadingField === 'default_league_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -770,7 +762,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on event cards and event details when no custom picture is provided."
         currentUrl={branding?.default_event_banner_url}
-        fallbackSource={BUILTIN_FALLBACKS.event}
         uploading={uploadingField === 'default_event_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -801,7 +792,6 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided."
         currentUrl={branding?.default_lesson_banner_url}
-        fallbackSource={BUILTIN_FALLBACKS.lesson}
         uploading={uploadingField === 'default_lesson_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -1017,15 +1007,18 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 
               {showPlayerPreview && (
                 <View style={styles.playerPreviewCard}>
-                  <Image
-                    source={
-                      slideFormImageUrl
-                        ? { uri: resolveMediaUrl(slideFormImageUrl) }
-                        : BUILTIN_FALLBACKS.tournamentRoundRobin
-                    }
-                    style={styles.playerPreviewImage}
-                    resizeMode="cover"
-                  />
+                  {slideFormImageUrl ? (
+                    <Image
+                      source={{ uri: resolveMediaUrl(slideFormImageUrl) }}
+                      style={styles.playerPreviewImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.playerPreviewEmpty}>
+                      <ImageIcon size={24} color="#94A3B8" />
+                      <AppText style={styles.playerPreviewEmptyText}>No image selected (optional)</AppText>
+                    </View>
+                  )}
                   <View style={styles.playerPreviewContent}>
                     {slideFormTag ? (
                       <View style={styles.playerPreviewBadge}>
@@ -1332,9 +1325,47 @@ const styles = StyleSheet.create({
   assetLogoFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#E5F6EC',
+    backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: Spacing[2],
+  },
+  assetEmptyPlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[1.5],
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    borderRadius: Radius.md,
+  },
+  assetEmptyText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  assetEmptySubtext: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  playerPreviewEmpty: {
+    width: '100%',
+    height: 120,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: Spacing[1.5],
+  },
+  playerPreviewEmptyText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   assetPreviewWrapper: {
     position: 'relative',

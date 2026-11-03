@@ -1,40 +1,55 @@
 /**
- * Aught2 Pickleball — Image Resolution & Fallback Engine
+ * Aught2 Pickleball — Image Resolution & Synchronization Engine
  *
- * Implements strict 3-tier image resolution across the entire application:
- * 1. Activity-specific custom image (if uploaded)
- * 2. Club-specific category/format default (if configured in Branding & Assets)
- * 3. Built-in platform fallback asset
+ * Implements strict hierarchical image resolution across all three portals:
+ * 1. Club Side – Club Details, Branding, Preview, and activity management
+ * 2. Player Side – Discovery, Club Details, and activity listings
+ * 3. Platform Admin – Global banners (Owner Home, Player Home)
  *
- * Separation of concerns:
- * - Club Logo: public identity, displayed in avatar/badge areas
- * - Player-Facing Club Cover: displayed on Player App club detail page
- * - Owner Home Banner: displayed on Owner Dashboard welcome section
- * - Activity Defaults: tournament format banners, league banner, event cover, lesson image
+ * Strict Rules:
+ * - Images are 100% OPTIONAL: A picture appears ONLY when an actual image has been uploaded or configured.
+ * - When no image is configured, resolve functions return `null`.
+ * - NO fake photos, NO generic stock placeholders, NO hardcoded built-in fallback pictures.
+ * - Source of Truth: Club Details (Profile & Branding) and Platform Admin Banners.
+ * - Correct Priority:
+ *     Club Item: (1) Item custom image -> (2) Club default in Branding -> (3) null
+ *     Platform Banner: Platform Admin configured image -> null
  */
 
 import { ImageSourcePropType } from 'react-native';
 import type { ClubBranding } from '@/types';
 import { resolveMediaUrl } from './media';
 
-export const BUILTIN_FALLBACKS = {
-  ownerBanner: require('../../assets/events/pickleball_hero.jpg'),
-  tournamentRoundRobin: require('../../assets/tournaments/card_round_robin.jpg'),
-  tournamentScramble: require('../../assets/tournaments/banner2.jpg'),
-  tournamentPoolPlay: require('../../assets/tournaments/card_pool_play.jpg'),
-  tournamentBracket: require('../../assets/tournaments/card_bracket.jpg'),
-  tournamentGeneric: require('../../assets/tournaments/hero_discover_banner.jpg'),
-  league: require('../../assets/leagues/card1.jpg'),
-  event: require('../../assets/events/pickleball_hero.jpg'),
-  lesson: require('../../assets/lessons/card1.jpg'),
-  clubCover: require('../../assets/events/pickleball_hero.jpg'),
+// Deprecated empty fallbacks object preserved for interface backward compatibility (always null)
+export const BUILTIN_FALLBACKS: Record<string, null> = {
+  ownerBanner: null,
+  tournamentRoundRobin: null,
+  tournamentScramble: null,
+  tournamentPoolPlay: null,
+  tournamentBracket: null,
+  tournamentGeneric: null,
+  league: null,
+  event: null,
+  lesson: null,
+  clubCover: null,
 };
 
 /**
- * Resolves the tournament banner following:
- * 1. tournament.banner_image_url
- * 2. club format default (round_robin, scramble, pool_play, bracket)
- * 3. format built-in fallback
+ * Checks if a resolved image source is configured and non-empty.
+ */
+export function hasConfiguredImage(source: ImageSourcePropType | null | undefined): boolean {
+  if (!source) return false;
+  if (typeof source === 'object' && 'uri' in (source as any)) {
+    return Boolean((source as any).uri);
+  }
+  return true;
+}
+
+/**
+ * Resolves the tournament banner following strict priority:
+ * 1. tournament.banner_image_url (custom item image)
+ * 2. club format default configured in Club Details -> Branding
+ * 3. null (no fake or stock photo)
  */
 export function resolveTournamentBanner(
   tournament?: {
@@ -42,7 +57,7 @@ export function resolveTournamentBanner(
     format?: string | null;
   } | null,
   clubBranding?: ClubBranding | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   if (tournament?.banner_image_url) {
     return { uri: resolveMediaUrl(tournament.banner_image_url) };
   }
@@ -53,78 +68,67 @@ export function resolveTournamentBanner(
     if (clubBranding?.default_tournament_round_robin_url) {
       return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
     }
-    return BUILTIN_FALLBACKS.tournamentRoundRobin;
+    return null;
   }
 
   if (fmt === 'scramble') {
     if (clubBranding?.default_tournament_scramble_url) {
       return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
     }
-    return BUILTIN_FALLBACKS.tournamentScramble;
+    return null;
   }
 
   if (fmt === 'pool_play') {
     if (clubBranding?.default_tournament_pool_play_url) {
       return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
     }
-    return BUILTIN_FALLBACKS.tournamentPoolPlay;
+    return null;
   }
 
   if (fmt === 'bracket') {
     if (clubBranding?.default_tournament_bracket_url) {
       return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
     }
-    return BUILTIN_FALLBACKS.tournamentBracket;
+    return null;
   }
 
-  return BUILTIN_FALLBACKS.tournamentGeneric;
+  return null;
 }
 
 /**
  * Resolves a format-specific tournament default banner for a club.
+ * Returns null if not configured in club branding.
  */
 export function resolveTournamentFormatDefault(
   format: 'round_robin' | 'scramble' | 'pool_play' | 'bracket' | string,
   clubBranding?: ClubBranding | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   const fmt = format.toLowerCase().trim();
-  if (fmt === 'round_robin') {
-    if (clubBranding?.default_tournament_round_robin_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
-    }
-    return BUILTIN_FALLBACKS.tournamentRoundRobin;
+  if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
   }
-  if (fmt === 'scramble') {
-    if (clubBranding?.default_tournament_scramble_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
-    }
-    return BUILTIN_FALLBACKS.tournamentScramble;
+  if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
   }
-  if (fmt === 'pool_play') {
-    if (clubBranding?.default_tournament_pool_play_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
-    }
-    return BUILTIN_FALLBACKS.tournamentPoolPlay;
+  if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
   }
-  if (fmt === 'bracket') {
-    if (clubBranding?.default_tournament_bracket_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
-    }
-    return BUILTIN_FALLBACKS.tournamentBracket;
+  if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
   }
-  return BUILTIN_FALLBACKS.tournamentGeneric;
+  return null;
 }
 
 /**
- * Resolves a league picture following:
- * 1. league.banner_image_url (custom activity picture)
- * 2. club default_league_banner_url (club category default picture)
- * 3. built-in league fallback picture
+ * Resolves a league picture following strict priority:
+ * 1. league.banner_image_url (custom item image)
+ * 2. club default_league_banner_url (configured in Club Details -> Branding)
+ * 3. null (no stock picture)
  */
 export function resolveLeaguePicture(
   league?: { banner_image_url?: string | null } | string | null,
   clubBranding?: ClubBranding | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   const customUrl = typeof league === 'string' ? league : league?.banner_image_url;
   if (customUrl) {
     return { uri: resolveMediaUrl(customUrl) };
@@ -132,21 +136,21 @@ export function resolveLeaguePicture(
   if (clubBranding?.default_league_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_league_banner_url) };
   }
-  return BUILTIN_FALLBACKS.league;
+  return null;
 }
 
 export const resolveLeagueBanner = resolveLeaguePicture;
 
 /**
- * Resolves an event picture following:
- * 1. event.cover_image_url (custom activity picture)
- * 2. club default_event_banner_url (club category default picture)
- * 3. built-in event fallback picture
+ * Resolves an event picture following strict priority:
+ * 1. event.cover_image_url (custom item image)
+ * 2. club default_event_banner_url (configured in Club Details -> Branding)
+ * 3. null (no stock picture)
  */
 export function resolveEventPicture(
   event?: { cover_image_url?: string | null } | string | null,
   clubBranding?: ClubBranding | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   const customUrl = typeof event === 'string' ? event : event?.cover_image_url;
   if (customUrl) {
     return { uri: resolveMediaUrl(customUrl) };
@@ -154,17 +158,17 @@ export function resolveEventPicture(
   if (clubBranding?.default_event_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_event_banner_url) };
   }
-  return BUILTIN_FALLBACKS.event;
+  return null;
 }
 
 export const resolveEventCover = resolveEventPicture;
 
 /**
- * Resolves a lesson/coaching picture following:
- * 1. lesson.image_url (custom activity picture)
+ * Resolves a lesson/coaching picture following strict priority:
+ * 1. lesson.image_url (custom session image)
  * 2. lesson.lesson_type?.image_url (lesson template picture)
- * 3. club default_lesson_banner_url (club category default picture)
- * 4. built-in lesson fallback picture
+ * 3. club default_lesson_banner_url (configured in Club Details -> Branding)
+ * 4. null (no stock picture)
  */
 export function resolveLessonPicture(
   lesson?: {
@@ -172,7 +176,7 @@ export function resolveLessonPicture(
     lesson_type?: { image_url?: string | null } | null;
   } | string | null,
   clubBranding?: ClubBranding | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   if (typeof lesson === 'string') {
     if (lesson) return { uri: resolveMediaUrl(lesson) };
   } else if (lesson?.image_url) {
@@ -183,7 +187,7 @@ export function resolveLessonPicture(
   if (clubBranding?.default_lesson_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) };
   }
-  return BUILTIN_FALLBACKS.lesson;
+  return null;
 }
 
 export const resolveLessonImage = resolveLessonPicture;
@@ -192,31 +196,59 @@ export const resolveTournamentPicture = resolveTournamentBanner;
 
 /**
  * Resolves the owner home dashboard welcome card banner:
- * 1. platformBanner.image_url (Global Platform Admin configured banner)
- * 2. built-in owner banner fallback
+ * 1. platformBanner.image_url (Platform Admin configured banner)
+ * 2. null (no fake stock photo)
  */
 export function resolveOwnerBanner(
   platformBannerOrBranding?: { image_url?: string | null; owner_banner_url?: string | null } | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   if (platformBannerOrBranding?.image_url) {
     return { uri: resolveMediaUrl(platformBannerOrBranding.image_url) };
   }
   if (platformBannerOrBranding?.owner_banner_url) {
     return { uri: resolveMediaUrl(platformBannerOrBranding.owner_banner_url) };
   }
-  return BUILTIN_FALLBACKS.ownerBanner;
+  return null;
+}
+
+/**
+ * Resolves the player home page hero banner:
+ * 1. platformBanner.image_url (Platform Admin configured banner)
+ * 2. null (no fake stock photo)
+ */
+export function resolvePlayerBanner(
+  platformBanner?: { image_url?: string | null } | null
+): ImageSourcePropType | null {
+  if (platformBanner?.image_url) {
+    return { uri: resolveMediaUrl(platformBanner.image_url) };
+  }
+  return null;
 }
 
 /**
  * Resolves the public player-facing club cover banner:
- * 1. club.cover_image_url
- * 2. built-in club cover fallback
+ * 1. clubOrBranding.cover_image_url
+ * 2. null (no fake stock photo)
  */
 export function resolveClubCover(
   clubOrBranding?: { cover_image_url?: string | null } | null
-): ImageSourcePropType {
+): ImageSourcePropType | null {
   if (clubOrBranding?.cover_image_url) {
     return { uri: resolveMediaUrl(clubOrBranding.cover_image_url) };
   }
-  return BUILTIN_FALLBACKS.clubCover;
+  return null;
+}
+
+/**
+ * Resolves the official club logo:
+ * 1. clubOrBranding.logo_url
+ * 2. null (no fake stock photo)
+ */
+export function resolveClubLogo(
+  clubOrBranding?: { logo_url?: string | null } | null
+): ImageSourcePropType | null {
+  if (clubOrBranding?.logo_url) {
+    return { uri: resolveMediaUrl(clubOrBranding.logo_url) };
+  }
+  return null;
 }

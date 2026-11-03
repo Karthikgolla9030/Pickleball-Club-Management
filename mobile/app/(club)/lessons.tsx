@@ -938,7 +938,13 @@ export default function ClubLessonsScreen() {
       >
         {/* Top Section */}
         <View style={styles.cardTopRow}>
-          <Image source={cardImg} style={styles.cardThumbnail} resizeMode="cover" />
+          {cardImg ? (
+            <Image source={cardImg} style={styles.cardThumbnail} resizeMode="cover" />
+          ) : (
+            <View style={styles.cardThumbnailFallback}>
+              <GraduationCap size={28} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
 
           <View style={styles.cardMain}>
             <View style={styles.cardTopMeta}>
@@ -1400,15 +1406,26 @@ export default function ClubLessonsScreen() {
             </AppText>
 
             <View style={styles.formAssetPreviewContainer}>
-              <Image
-                source={
-                  lessonImageUrl
-                    ? { uri: resolveMediaUrl(lessonImageUrl) }
-                    : resolveLessonImage(null, clubBranding)
+              {(() => {
+                const previewSource = lessonImageUrl
+                  ? { uri: resolveMediaUrl(lessonImageUrl) }
+                  : resolveLessonImage(null, clubBranding);
+                if (previewSource) {
+                  return (
+                    <Image
+                      source={previewSource}
+                      style={styles.formAssetPreviewImage}
+                      resizeMode="cover"
+                    />
+                  );
                 }
-                style={styles.formAssetPreviewImage}
-                resizeMode="cover"
-              />
+                return (
+                  <View style={styles.formAssetEmptyPlaceholder}>
+                    <GraduationCap size={28} color="#94A3B8" />
+                    <AppText style={styles.formAssetEmptyText}>No image configured (optional)</AppText>
+                  </View>
+                );
+              })()}
               {isUploadingLessonImage && (
                 <View style={styles.formAssetUploadingOverlay}>
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1922,6 +1939,31 @@ const styles = StyleSheet.create({
     height: 88,
     borderRadius: 12,
     backgroundColor: '#E5F5EC',
+  },
+  cardThumbnailFallback: {
+    width: 88,
+    height: 88,
+    borderRadius: 12,
+    backgroundColor: '#E5F5EC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  formAssetEmptyPlaceholder: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  formAssetEmptyText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
   },
   cardMain: {
     flex: 1,

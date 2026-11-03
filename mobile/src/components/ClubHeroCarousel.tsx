@@ -37,7 +37,7 @@ export const DEFAULT_HERO_SLIDES: HeroBannerSlide[] = [
     ctaText: 'Book a Court',
     route: '/(club)/bookings',
     scriptLines: ['Same', 'Game', 'Bigger', 'Community'],
-    image: require('../../assets/events/pickleball_hero.jpg'),
+    image: null,
   },
   {
     id: 'tournaments',
@@ -47,7 +47,7 @@ export const DEFAULT_HERO_SLIDES: HeroBannerSlide[] = [
     ctaText: 'View Tournaments',
     route: '/(club)/tournaments',
     scriptLines: ['Serve', 'Rally', 'Score', 'Win'],
-    image: require('../../assets/tournaments/hero_discover_banner.jpg'),
+    image: null,
   },
   {
     id: 'memberships',
@@ -57,7 +57,7 @@ export const DEFAULT_HERO_SLIDES: HeroBannerSlide[] = [
     ctaText: 'Explore Plans',
     route: '/(club)/memberships',
     scriptLines: ['Passion', 'Power', 'Pure', 'Fun'],
-    image: require('../../assets/profile_hero_bg.jpg'),
+    image: null,
   },
 ];
 
@@ -236,60 +236,106 @@ export function ClubHeroCarousel({
                 ({ scrollSnapAlign: 'start', WebkitScrollSnapAlign: 'start' } as any),
             ]}
           >
-            <ImageBackground
-              source={slide.image}
-              style={styles.heroCard}
-              imageStyle={styles.heroCardImage}
-            >
-              {/* Dark green overlay for high-contrast typography */}
-              <View style={styles.heroOverlay} />
+            {slide.image ? (
+              <ImageBackground
+                source={slide.image}
+                style={styles.heroCard}
+                imageStyle={styles.heroCardImage}
+              >
+                {/* Dark green overlay for high-contrast typography */}
+                <View style={styles.heroOverlay} />
 
-              <View style={styles.heroInner}>
-                {/* 1. Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
-                <View style={styles.heroUpperBlock}>
-                  <AppText style={styles.heroTagText}>{slide.tag}</AppText>
-                  <AppText
-                    style={styles.heroHeading}
-                    numberOfLines={2}
-                  >
-                    {slide.title}
-                  </AppText>
-                  <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                    {slide.supportingText}
-                  </AppText>
-                </View>
-
-                {/* 2. Flexible spacing to keep CTA near the bottom */}
-                <View style={styles.heroSpacer} />
-
-                {/* 3. Lower portion: CTA button on the left, Decorative Script Motto on the right */}
-                <View style={styles.heroBottomRow}>
-                  <TouchableOpacity
-                    style={styles.heroCtaButton}
-                    onPress={() => router.push(slide.route as any)}
-                    activeOpacity={0.88}
-                    accessibilityLabel={slide.ctaText}
-                    accessibilityRole="button"
-                  >
-                    <AppText style={styles.heroCtaText} numberOfLines={1}>
-                      {slide.ctaText}
+                <View style={styles.heroInner}>
+                  {/* 1. Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
+                  <View style={styles.heroUpperBlock}>
+                    <AppText style={styles.heroTagText}>{slide.tag}</AppText>
+                    <AppText
+                      style={styles.heroHeading}
+                      numberOfLines={2}
+                    >
+                      {slide.title}
                     </AppText>
-                    <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
-                  </TouchableOpacity>
+                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
+                      {slide.supportingText}
+                    </AppText>
+                  </View>
 
-                  {/* Decorative Script Motto (Right side) */}
-                  {slide.scriptLines && slide.scriptLines.length > 0 && (
-                    <View style={styles.heroScriptMotto}>
-                      {slide.scriptLines.map((line, lIdx) => (
-                        <AppText key={lIdx} style={styles.scriptLine}>
-                          {line}
-                        </AppText>
-                      ))}
-                    </View>
-                  )}
+                  {/* 2. Flexible spacing to keep CTA near the bottom */}
+                  <View style={styles.heroSpacer} />
+
+                  {/* 3. Lower portion: CTA button on the left, Decorative Script Motto on the right */}
+                  <View style={styles.heroBottomRow}>
+                    <TouchableOpacity
+                      style={styles.heroCtaButton}
+                      onPress={() => router.push(slide.route as any)}
+                      activeOpacity={0.88}
+                      accessibilityLabel={slide.ctaText}
+                      accessibilityRole="button"
+                    >
+                      <AppText style={styles.heroCtaText} numberOfLines={1}>
+                        {slide.ctaText}
+                      </AppText>
+                      <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
+                    </TouchableOpacity>
+
+                    {/* Decorative Script Motto (Right side) */}
+                    {slide.scriptLines && slide.scriptLines.length > 0 && (
+                      <View style={styles.heroScriptMotto}>
+                        {slide.scriptLines.map((line, lIdx) => (
+                          <AppText key={lIdx} style={styles.scriptLine}>
+                            {line}
+                          </AppText>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </ImageBackground>
+            ) : (
+              <View style={[styles.heroCard, { backgroundColor: '#0A2B23' }]}>
+                <View style={styles.heroInner}>
+                  <View style={styles.heroUpperBlock}>
+                    <AppText style={styles.heroTagText}>{slide.tag}</AppText>
+                    <AppText
+                      style={styles.heroHeading}
+                      numberOfLines={2}
+                    >
+                      {slide.title}
+                    </AppText>
+                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
+                      {slide.supportingText}
+                    </AppText>
+                  </View>
+
+                  <View style={styles.heroSpacer} />
+
+                  <View style={styles.heroBottomRow}>
+                    <TouchableOpacity
+                      style={styles.heroCtaButton}
+                      onPress={() => router.push(slide.route as any)}
+                      activeOpacity={0.88}
+                      accessibilityLabel={slide.ctaText}
+                      accessibilityRole="button"
+                    >
+                      <AppText style={styles.heroCtaText} numberOfLines={1}>
+                        {slide.ctaText}
+                      </AppText>
+                      <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
+                    </TouchableOpacity>
+
+                    {slide.scriptLines && slide.scriptLines.length > 0 && (
+                      <View style={styles.heroScriptMotto}>
+                        {slide.scriptLines.map((line, lIdx) => (
+                          <AppText key={lIdx} style={styles.scriptLine}>
+                            {line}
+                          </AppText>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
-            </ImageBackground>
+            )}
           </View>
         ))}
       </ScrollView>
