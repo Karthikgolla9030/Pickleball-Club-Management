@@ -59,5 +59,7 @@ export { PromotionalAdsCarousel } from './PromotionalAdsCarousel';
 export * from './checkout';
 export * from './events';
 export * from './lessons';
+export { PlayerClubDetailsPreview } from './PlayerClubDetailsPreview';
+export type { PlayerClubDetailsPreviewProps } from './PlayerClubDetailsPreview';
 
 

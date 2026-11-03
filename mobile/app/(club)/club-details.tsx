@@ -76,6 +76,7 @@ import {
   ClubBrandingSection,
   InternationalPhoneInput,
   TimePickerInput,
+  PlayerClubDetailsPreview,
 } from '@/components';
 import { API_ENDPOINTS } from '@/constants';
 import { useActiveClub, useClubBranding, useClubDetails, useUpdateClubBranding } from '@/hooks';
@@ -1450,164 +1451,31 @@ export default function ClubDetailsScreen() {
                 </AppText>
               </View>
 
-              {/* Realistic Phone Bezel Frame */}
-              <View style={styles.phoneMockupFrame}>
-                {/* Phone Notch / Speaker */}
-                <View style={styles.phoneSpeaker} />
-
-                {/* Mock Player App Header */}
-                <View style={styles.mockPlayerHeader}>
-                  <View style={styles.mockBackPill}>
-                    <ArrowLeft size={14} color="#1E293B" />
-                  </View>
-                  <AppText style={styles.mockHeaderTitle}>Club Profile</AppText>
-                  <View style={styles.mockSharePill}>
-                    <Globe size={14} color="#64748B" />
-                  </View>
-                </View>
-
-                {/* Player Hero Section */}
-                <View style={styles.mockHeroSection}>
-                  <Image
-                    source={currentCoverUri ? { uri: currentCoverUri } : BUILTIN_FALLBACKS.clubCover}
-                    style={styles.mockHeroCover}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.mockHeroCoverOverlay} />
-
-                  {/* Club Logo Overlay */}
-                  <View style={styles.mockLogoWrapper}>
-                    {currentLogoUri && !logoError ? (
-                      <Image
-                        source={{ uri: currentLogoUri }}
-                        style={styles.mockLogoImg}
-                        resizeMode="contain"
-                      />
-                    ) : (
-                      <View style={styles.mockLogoFallback}>
-                        <Building2 size={24} color="#176B57" />
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                {/* Mock Phone Body */}
-                <View style={styles.mockBody}>
-                  {/* Title & Verified Row */}
-                  <View style={styles.mockTitleRow}>
-                    <AppText style={styles.mockClubName}>
-                      {name || 'Pickleball Club'}
-                    </AppText>
-                    <View style={styles.mockVerifiedBadge}>
-                      <CheckCircle2 size={12} color="#15803D" />
-                      <AppText style={styles.mockVerifiedText}>Verified</AppText>
-                    </View>
-                  </View>
-
-                  {/* Location & Tagline */}
-                  {city || state ? (
-                    <View style={styles.mockLocationRow}>
-                      <MapPin size={12} color="#64748B" />
-                      <AppText style={styles.mockLocationText}>
-                        {[city, state].filter(Boolean).join(', ')}
-                        {establishedYear ? ` • Est. ${establishedYear}` : ''}
-                      </AppText>
-                    </View>
-                  ) : null}
-
-                  {shortDescription ? (
-                    <AppText style={styles.mockTagline}>"{shortDescription}"</AppText>
-                  ) : null}
-
-                  {/* Quick Player Action Buttons */}
-                  <View style={styles.mockActionBtnsRow}>
-                    <View style={styles.mockActionBtnPrimary}>
-                      <Calendar size={13} color="#FFFFFF" />
-                      <AppText style={styles.mockActionBtnPrimaryText}>Book Court</AppText>
-                    </View>
-                    <View style={styles.mockActionBtnSecondary}>
-                      <Trophy size={13} color="#176B57" />
-                      <AppText style={styles.mockActionBtnSecondaryText}>Events</AppText>
-                    </View>
-                  </View>
-
-                  {/* Mock Section: About */}
-                  <View style={styles.mockSectionBox}>
-                    <AppText style={styles.mockSectionHeading}>About</AppText>
-                    <AppText style={styles.mockSectionBody} numberOfLines={4}>
-                      {description || 'Welcome to our pickleball club! We offer premier courts, competitive leagues, tournaments, and social events for players of all levels.'}
-                    </AppText>
-                  </View>
-
-                  {/* Mock Section: Location & Schedule */}
-                  <View style={styles.mockSectionBox}>
-                    <AppText style={styles.mockSectionHeading}>Location & Schedule</AppText>
-                    <View style={styles.mockDetailRow}>
-                      <MapPin size={13} color="#176B57" />
-                      <AppText style={styles.mockDetailText} numberOfLines={2}>
-                        {[addressLine1, addressLine2, city, state, postalCode].filter(Boolean).join(', ') || 'Address not listed'}
-                      </AppText>
-                    </View>
-                    <View style={styles.mockDetailRow}>
-                      <Clock size={13} color="#176B57" />
-                      <AppText style={styles.mockDetailText}>
-                        {selectedDays.length === 7 ? 'Daily' : selectedDays.join(', ')} • {openingTime} – {closingTime}
-                      </AppText>
-                    </View>
-                    {facilitiesSummary ? (
-                      <View style={styles.mockDetailRow}>
-                        <Sparkles size={13} color="#176B57" />
-                        <AppText style={styles.mockDetailText} numberOfLines={2}>
-                          {facilitiesSummary}
-                        </AppText>
-                      </View>
-                    ) : null}
-                  </View>
-
-                  {/* Mock Section: Contact Club */}
-                  {(contactEmail || contactPhone || website) ? (
-                    <View style={styles.mockSectionBox}>
-                      <AppText style={styles.mockSectionHeading}>Contact Club</AppText>
-                      {contactEmail ? (
-                        <TouchableOpacity
-                          style={styles.mockContactRow}
-                          onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
-                          activeOpacity={0.7}
-                        >
-                          <Mail size={13} color="#176B57" />
-                          <AppText style={styles.mockContactLink} numberOfLines={1}>{contactEmail}</AppText>
-                        </TouchableOpacity>
-                      ) : null}
-                      {contactPhone ? (
-                        <TouchableOpacity
-                          style={styles.mockContactRow}
-                          onPress={() => Linking.openURL(`tel:${contactPhone}`)}
-                          activeOpacity={0.7}
-                        >
-                          <Phone size={13} color="#176B57" />
-                          <AppText style={styles.mockContactLink} numberOfLines={1}>{contactPhone}</AppText>
-                        </TouchableOpacity>
-                      ) : null}
-                      {website ? (
-                        <TouchableOpacity
-                          style={styles.mockContactRow}
-                          onPress={() => {
-                            const url = website.startsWith('http') ? website : `https://${website}`;
-                            Linking.openURL(url);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Globe size={13} color="#176B57" />
-                          <AppText style={styles.mockContactLink} numberOfLines={1}>{website}</AppText>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  ) : null}
-                </View>
-
-                {/* Phone Bottom Home Bar */}
-                <View style={styles.phoneHomeBar} />
-              </View>
+              {/* Faithful Player Side Live Preview in Phone Frame */}
+              <PlayerClubDetailsPreview
+                clubId={clubId}
+                club={club}
+                name={name}
+                shortDescription={shortDescription}
+                description={description}
+                contactEmail={contactEmail}
+                contactPhone={contactPhone}
+                website={website}
+                establishedYear={establishedYear}
+                addressLine1={addressLine1}
+                addressLine2={addressLine2}
+                city={city}
+                state={state}
+                postalCode={postalCode}
+                country={country}
+                selectedDays={selectedDays}
+                openingTime={openingTime}
+                closingTime={closingTime}
+                timezone={timezone}
+                facilitiesSummary={facilitiesSummary}
+                logoUri={currentLogoUri}
+                coverUri={currentCoverUri}
+              />
             </View>
           )}
         </ScrollView>
@@ -2045,235 +1913,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: '#2A4540',
     lineHeight: 18,
-  },
-  // ─── Player Preview Phone Mockup Styles ───
-  phoneMockupFrame: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
-    overflow: 'hidden',
-    ...Shadows.md,
-  },
-  phoneSpeaker: {
-    width: 60,
-    height: 4,
-    backgroundColor: '#CBD5E1',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  mockPlayerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing[3.5],
-    paddingBottom: Spacing[2],
-  },
-  mockBackPill: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mockHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  mockSharePill: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#F1F5F9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mockHeroSection: {
-    position: 'relative',
-    width: '100%',
-    height: 130,
-    backgroundColor: '#0F172A',
-  },
-  mockHeroCover: {
-    width: '100%',
-    height: '100%',
-  },
-  mockHeroCoverOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.3)',
-  },
-  mockLogoWrapper: {
-    position: 'absolute',
-    bottom: -22,
-    left: Spacing[4],
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.sm,
-  },
-  mockLogoImg: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-  },
-  mockLogoFallback: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E5F6EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mockBody: {
-    paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[6],
-    paddingBottom: Spacing[4],
-    gap: Spacing[3],
-  },
-  mockTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing[2],
-  },
-  mockClubName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0F172A',
-    flex: 1,
-  },
-  mockVerifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  mockVerifiedText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#15803D',
-  },
-  mockLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  mockLocationText: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  mockTagline: {
-    fontSize: 12,
-    fontStyle: 'italic',
-    color: '#475569',
-    lineHeight: 16,
-  },
-  mockActionBtnsRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-    marginVertical: Spacing[1],
-  },
-  mockActionBtnPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#176B57',
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-  },
-  mockActionBtnPrimaryText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  mockActionBtnSecondary: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-    backgroundColor: '#E5F6EC',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    paddingVertical: 8,
-    borderRadius: Radius.md,
-  },
-  mockActionBtnSecondaryText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#176B57',
-  },
-  mockSectionBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing[3],
-    gap: 4,
-  },
-  mockSectionHeading: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  mockSectionBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 17,
-  },
-  mockDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  mockDetailText: {
-    fontSize: 12,
-    color: '#334155',
-    flex: 1,
-  },
-  mockContactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 2,
-  },
-  mockContactLink: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#176B57',
-    textDecorationLine: 'underline',
-    flex: 1,
-  },
-  phoneHomeBar: {
-    width: 100,
-    height: 4,
-    backgroundColor: '#CBD5E1',
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: 8,
   },
 
   // ─── View Profile Mode Styles (Matches Reference Screenshot) ───
