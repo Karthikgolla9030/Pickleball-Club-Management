@@ -290,3 +290,130 @@ export function validateOperatingTimeRange(
   };
 }
 
+/**
+ * Constructs an ISO 8601 UTC timestamp string from separate local date (YYYY-MM-DD)
+ * and local time (HH:MM or HH:MM:SS) strings.
+ * Preserves the literal wall-clock date and time in the user's local timezone.
+ */
+export function buildIsoFromLocalParts(dateStr: string, timeStr?: string | null): string {
+  if (!dateStr || !dateStr.trim()) return '';
+  const dateParts = dateStr.trim().split('-').map(Number);
+  if (dateParts.length < 3 || dateParts.some(isNaN)) return '';
+  const [y, m, d] = dateParts;
+
+  const cleanTime = (timeStr || '09:00:00').trim();
+  const timeParts = cleanTime.split(':').map(Number);
+  const hour = !isNaN(timeParts[0]) ? timeParts[0] : 9;
+  const min = timeParts[1] !== undefined && !isNaN(timeParts[1]) ? timeParts[1] : 0;
+  const sec = timeParts[2] !== undefined && !isNaN(timeParts[2]) ? timeParts[2] : 0;
+
+  const localDate = new Date(y, m - 1, d, hour, min, sec);
+  if (isNaN(localDate.getTime())) return '';
+  return localDate.toISOString();
+}
+
+/**
+ * Parses an ISO 8601 timestamp string into its local wall-clock components:
+ * - datePart: "YYYY-MM-DD"
+ * - timePart: "HH:MM:SS" (24-hour)
+ * - time12: "hh:mm A" (12-hour formatted, e.g. "09:00 AM")
+ * - isSet: boolean (true if input was a valid non-empty ISO string)
+ */
+export function parseIsoToLocalParts(
+  isoStr?: string | null,
+  fallbackTime = '09:00:00'
+): {
+  datePart: string;
+  timePart: string;
+  time12: string;
+  isSet: boolean;
+} {
+  const cleanFallback = fallbackTime.length === 5 ? `${fallbackTime}:00` : fallbackTime;
+
+  if (!isoStr || !isoStr.trim()) {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+
+    const parts = cleanFallback.split(':').map(Number);
+    let h12 = (parts[0] || 0) % 12;
+    if (h12 === 0) h12 = 12;
+    const ampm = (parts[0] || 0) >= 12 ? 'PM' : 'AM';
+    const h12Str = String(h12).padStart(2, '0');
+    const minStr = String(parts[1] || 0).padStart(2, '0');
+
+    return {
+      datePart: `${y}-${m}-${d}`,
+      timePart: cleanFallback,
+      time12: `${h12Str}:${minStr} ${ampm}`,
+      isSet: false,
+    };
+  }
+
+  try {
+    const d = new Date(isoStr);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const h24 = d.getHours();
+      const min = String(d.getMinutes()).padStart(2, '0');
+      const sec = String(d.getSeconds()).padStart(2, '0');
+
+      const ampm = h24 >= 12 ? 'PM' : 'AM';
+      let h12 = h24 % 12;
+      if (h12 === 0) h12 = 12;
+      const h12Str = String(h12).padStart(2, '0');
+
+      return {
+        datePart: `${y}-${m}-${day}`,
+        timePart: `${String(h24).padStart(2, '0')}:${min}:${sec}`,
+        time12: `${h12Str}:${min} ${ampm}`,
+        isSet: true,
+      };
+    }
+  } catch {
+    // fallback
+  }
+
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+
+  return {
+    datePart: `${y}-${m}-${d}`,
+    timePart: cleanFallback,
+    time12: '09:00 AM',
+    isSet: false,
+  };
+}
+
+/**
+ * Formats an ISO timestamp for display in DateTimePicker inputs: "MMM D, YYYY • hh:mm A"
+ */
+export function formatDateTimeDisplay(isoStr?: string | null): string {
+  if (!isoStr || !isoStr.trim()) return '';
+  try {
+    const d = new Date(isoStr);
+    if (!isNaN(d.getTime())) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthStr = months[d.getMonth()];
+      const day = d.getDate();
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      if (hours === 0) hours = 12;
+      const hStr = String(hours).padStart(2, '0');
+      return `${monthStr} ${day}, ${year} • ${hStr}:${minutes} ${ampm}`;
+    }
+  } catch {
+    // fallback
+  }
+  return isoStr;
+}
+
+

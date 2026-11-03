@@ -131,7 +131,7 @@ import {
   type LessonType,
   type UpdateLessonPayload,
 } from '@/types';
-import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { formatCurrency, resolveMediaUrl, parseIsoToLocalParts } from '@/utils';
 import { resolveLessonImage } from '@/utils/imageResolution';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
@@ -326,7 +326,47 @@ export default function ClubLessonsScreen() {
       if (!lessonTitle && !editingLesson) {
         setLessonTitle(selected.name);
       }
+      // If start_at is already set but end_at is not, auto-calculate end_at from duration
+      if (lessonStartAt && !lessonEndAt && selected.duration_minutes && selected.duration_minutes > 0) {
+        const startDate = new Date(lessonStartAt);
+        if (!isNaN(startDate.getTime())) {
+          const proposedEnd = new Date(startDate.getTime() + selected.duration_minutes * 60 * 1000);
+          setLessonEndAt(proposedEnd.toISOString());
+        }
+      }
     }
+  };
+
+  // Schedule real-time validation error
+  const scheduleValidationError = useMemo(() => {
+    if (!lessonStartAt || !lessonEndAt) return null;
+    const start = new Date(lessonStartAt).getTime();
+    const end = new Date(lessonEndAt).getTime();
+    if (isNaN(start) || isNaN(end)) return null;
+    if (end <= start) {
+      return 'End date and time must be strictly later than start date and time.';
+    }
+    return null;
+  }, [lessonStartAt, lessonEndAt]);
+
+  const handleStartAtChange = (newStartIso: string) => {
+    setLessonStartAt(newStartIso);
+    if (!newStartIso) return;
+    if (!lessonEndAt) {
+      const selectedType = lessonTypes?.find((lt) => lt.id === lessonTypeId);
+      const durationMin = selectedType?.duration_minutes && selectedType.duration_minutes > 0
+        ? selectedType.duration_minutes
+        : 60;
+      const startDate = new Date(newStartIso);
+      if (!isNaN(startDate.getTime())) {
+        const proposedEnd = new Date(startDate.getTime() + durationMin * 60 * 1000);
+        setLessonEndAt(proposedEnd.toISOString());
+      }
+    }
+  };
+
+  const handleEndAtChange = (newEndIso: string) => {
+    setLessonEndAt(newEndIso);
   };
 
   const handleInitDefaultLessonTypes = async () => {
@@ -459,7 +499,17 @@ export default function ClubLessonsScreen() {
       return;
     }
     if (!lessonStartAt.trim() || !lessonEndAt.trim()) {
-      Alert.alert('Validation Error', 'Start and end datetimes are required in ISO format (YYYY-MM-DDTHH:MM:SSZ).');
+      Alert.alert('Validation Error', 'Start date & time and end date & time are required.');
+      return;
+    }
+    const startMillis = new Date(lessonStartAt).getTime();
+    const endMillis = new Date(lessonEndAt).getTime();
+    if (isNaN(startMillis) || isNaN(endMillis)) {
+      Alert.alert('Validation Error', 'Please select a valid start and end date & time.');
+      return;
+    }
+    if (endMillis <= startMillis) {
+      Alert.alert('Validation Error', 'End date & time must be strictly later than start date & time.');
       return;
     }
 
@@ -1553,7 +1603,9 @@ export default function ClubLessonsScreen() {
             label="Start Date & Time"
             placeholder="Select lesson start"
             value={lessonStartAt}
-            onChangeDateTime={setLessonStartAt}
+            onChangeDateTime={handleStartAtChange}
+            onChange={handleStartAtChange}
+            defaultTime="09:00:00"
             required
           />
 
@@ -1561,7 +1613,11 @@ export default function ClubLessonsScreen() {
             label="End Date & Time"
             placeholder="Select lesson end"
             value={lessonEndAt}
-            onChangeDateTime={setLessonEndAt}
+            onChangeDateTime={handleEndAtChange}
+            onChange={handleEndAtChange}
+            defaultTime="10:00:00"
+            minDate={lessonStartAt ? parseIsoToLocalParts(lessonStartAt).datePart : undefined}
+            error={scheduleValidationError || undefined}
             required
           />
 

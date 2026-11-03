@@ -3,13 +3,15 @@
  *
  * Provides:
  * - Native touchable input with Calendar & Clock styling
- * - Formatted date & time display (e.g. "Oct 1, 2026 • 10:00 AM")
+ * - Real-time state updates on selection: updates parent state immediately
+ * - Formatted date & time display (e.g. "Nov 4, 2026 • 10:00 AM") without timezone drift
  * - 2-step modal: Select Date -> Select Time
- * - Outputs ISO 8601 string (e.g. "2026-10-01T10:00:00Z")
+ * - Full synchronization between form state, modal state, and API payload
+ * - Clean validation and error display
  * - Matches theme and styling of FormField & Input
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Modal,
   StyleSheet,
@@ -22,10 +24,15 @@ import {
 import { Calendar, ChevronDown, Clock, X } from 'lucide-react-native';
 
 import { Colors, Dimensions, Radius, Spacing, Typography } from '@/theme';
+import {
+  buildIsoFromLocalParts,
+  formatDateTimeDisplay,
+  parseIsoToLocalParts,
+} from '@/utils/timeUtils';
 import { DatePickerInput } from './DatePickerInput';
 import { TimePickerInput } from './TimePickerInput';
 
-interface DateTimePickerInputProps {
+export interface DateTimePickerInputProps {
   label?: string;
   value?: string | null; // ISO string e.g. "2026-10-01T10:00:00Z"
   onChange?: (isoString: string) => void;
@@ -38,6 +45,7 @@ interface DateTimePickerInputProps {
   allowClear?: boolean;
   minDate?: string; // YYYY-MM-DD
   maxDate?: string; // YYYY-MM-DD
+  defaultTime?: string; // e.g. "09:00:00"
   testID?: string;
   containerStyle?: ViewStyle;
 }
@@ -55,83 +63,111 @@ export function DateTimePickerInput({
   allowClear = true,
   minDate,
   maxDate,
+  defaultTime = '09:00:00',
   testID,
   containerStyle,
 }: DateTimePickerInputProps) {
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Parse existing ISO value into date (YYYY-MM-DD) and time (HH:MM:SS)
-  const { initialDate, initialTime } = useMemo(() => {
-    if (!value || !value.trim()) {
-      const today = new Date().toISOString().split('T')[0];
-      return { initialDate: today, initialTime: '10:00:00' };
-    }
-    try {
-      const d = new Date(value);
-      if (!isNaN(d.getTime())) {
-        const offset = d.getTimezoneOffset() * 60000;
-        const localIso = new Date(d.getTime() - offset).toISOString();
-        const datePart = localIso.split('T')[0];
-        const timePart = localIso.split('T')[1].slice(0, 8);
-        return { initialDate: datePart, initialTime: timePart };
-      }
-    } catch {
-      // Fallback
-    }
-    return { initialDate: '', initialTime: '10:00:00' };
-  }, [value]);
+  // Synchronize internal working state with external value
+  const parsed = useMemo(
+    () => parseIsoToLocalParts(value, defaultTime),
+    [value, defaultTime]
+  );
 
-  const [selectedDate, setSelectedDate] = useState<string>(initialDate);
-  const [selectedTime, setSelectedTime] = useState<string>(initialTime);
+  const [selectedDate, setSelectedDate] = useState<string>(parsed.datePart);
+  const [selectedTime, setSelectedTime] = useState<string>(parsed.timePart);
 
+  // Keep internal modal state fully in sync with external value prop
+  useEffect(() => {
+    setSelectedDate(parsed.datePart);
+    setSelectedTime(parsed.timePart);
+  }, [parsed]);
+
+  // Formatted display text on the main input row (e.g. "Nov 4, 2026 • 10:00 AM")
   const displayText = useMemo(() => {
-    if (!value || !value.trim()) return '';
-    try {
-      const d = new Date(value);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-      }
-    } catch {
-      // Fallback
-    }
-    return value;
+    return formatDateTimeDisplay(value);
   }, [value]);
 
   const displayLabel = label ? (required ? `${label} *` : label) : undefined;
 
+  const triggerChange = (val: string) => {
+    onChange?.(val);
+    onChangeDateTime?.(val);
+  };
+
   const handleOpen = () => {
     if (disabled) return;
-    setSelectedDate(initialDate);
-    setSelectedTime(initialTime);
+    const current = parseIsoToLocalParts(value, defaultTime);
+    setSelectedDate(current.datePart);
+    setSelectedTime(current.timePart);
     setModalVisible(true);
   };
 
-  const handleConfirm = () => {
-    if (!selectedDate) {
-      setModalVisible(false);
-      return;
+  // Immediate update when user selects a date
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    if (newDate) {
+      const updatedIso = buildIsoFromLocalParts(newDate, selectedTime || defaultTime);
+      if (updatedIso) {
+        triggerChange(updatedIso);
+      }
     }
-    const timePart = selectedTime || '09:00:00';
-    const combined = `${selectedDate}T${timePart}Z`;
-    const triggerChange = (val: string) => {
-      onChange?.(val);
-      onChangeDateTime?.(val);
-    };
-    triggerChange(combined);
+  };
+
+  // Immediate update when user selects a time
+  const handleTimeChange = (newTime: string) => {
+    const canonicalTime = newTime.length === 5 ? `${newTime}:00` : newTime;
+    setSelectedTime(canonicalTime);
+    if (selectedDate) {
+      const updatedIso = buildIsoFromLocalParts(selectedDate, canonicalTime);
+      if (updatedIso) {
+        triggerChange(updatedIso);
+      }
+    }
+  };
+
+  const handleConfirm = () => {
+    if (selectedDate) {
+      const finalIso = buildIsoFromLocalParts(selectedDate, selectedTime || defaultTime);
+      if (finalIso) {
+        triggerChange(finalIso);
+      }
+    }
     setModalVisible(false);
   };
 
   const handleClear = () => {
-    onChange?.('');
-    onChangeDateTime?.('');
+    triggerChange('');
+    const fresh = parseIsoToLocalParts('', defaultTime);
+    setSelectedDate(fresh.datePart);
+    setSelectedTime(fresh.timePart);
     setModalVisible(false);
   };
+
+  // Live preview inside the modal header
+  const modalSubtitleText = useMemo(() => {
+    if (!selectedDate) return '';
+    try {
+      const [y, m, d] = selectedDate.split('-').map(Number);
+      const dateObj = new Date(y, m - 1, d);
+      const dateStr = dateObj.toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const parts = (selectedTime || defaultTime).split(':').map(Number);
+      let hours = parts[0] || 0;
+      const minutes = String(parts[1] || 0).padStart(2, '0');
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      if (hours === 0) hours = 12;
+      const hStr = String(hours).padStart(2, '0');
+      return `${dateStr} at ${hStr}:${minutes} ${ampm}`;
+    } catch {
+      return `${selectedDate} at ${selectedTime.slice(0, 5)}`;
+    }
+  }, [selectedDate, selectedTime, defaultTime]);
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -191,10 +227,8 @@ export function DateTimePickerInput({
                 <View style={styles.modalHeader}>
                   <View>
                     <Text style={styles.modalTitle}>{label || 'Select Date & Time'}</Text>
-                    {selectedDate ? (
-                      <Text style={styles.modalSubtitle}>
-                        {selectedDate} at {selectedTime.slice(0, 5)}
-                      </Text>
+                    {modalSubtitleText ? (
+                      <Text style={styles.modalSubtitle}>{modalSubtitleText}</Text>
                     ) : null}
                   </View>
                   <TouchableOpacity
@@ -211,7 +245,8 @@ export function DateTimePickerInput({
                   <DatePickerInput
                     label="Date"
                     value={selectedDate}
-                    onChangeDate={(d) => setSelectedDate(d)}
+                    onChangeDate={handleDateChange}
+                    onChange={handleDateChange}
                     minDate={minDate}
                     maxDate={maxDate}
                     required
@@ -223,7 +258,8 @@ export function DateTimePickerInput({
                   <TimePickerInput
                     label="Time"
                     value={selectedTime}
-                    onChangeTime={(t) => setSelectedTime(t)}
+                    onChangeTime={handleTimeChange}
+                    onChange={handleTimeChange}
                     includeSeconds
                     required
                   />
