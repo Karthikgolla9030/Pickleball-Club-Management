@@ -17,21 +17,25 @@
  */
 
 import { ImageSourcePropType } from 'react-native';
-import type { ClubBranding } from '@/types';
+import type { ClubBranding, PlatformBanner } from '@/types';
 import { resolveMediaUrl } from './media';
 
-// Deprecated empty fallbacks object preserved for interface backward compatibility (always null)
-export const BUILTIN_FALLBACKS: Record<string, null> = {
+// Deliberate built-in fallback assets for content categories where defaults are mandated.
+// Club identity (logo, cover) and courts strictly have NO fallback (null).
+export const BUILTIN_FALLBACKS: Record<string, ImageSourcePropType | null> = {
   ownerBanner: null,
-  tournamentRoundRobin: null,
-  tournamentScramble: null,
-  tournamentPoolPlay: null,
-  tournamentBracket: null,
-  tournamentGeneric: null,
-  league: null,
-  event: null,
-  lesson: null,
+  playerBanner: null,
+  tournamentRoundRobin: require('../../assets/tournaments/card_round_robin.jpg'),
+  tournamentScramble: require('../../assets/tournaments/banner2.jpg'),
+  tournamentPoolPlay: require('../../assets/tournaments/card_pool_play.jpg'),
+  tournamentBracket: require('../../assets/tournaments/card_bracket.jpg'),
+  tournamentGeneric: require('../../assets/tournaments/hero_discover_banner.jpg'),
+  league: require('../../assets/leagues/hero_banner.jpg'),
+  event: require('../../assets/events/hero_events_photo.jpg'),
+  lesson: require('../../assets/lessons/hero_lessons_photo.jpg'),
   clubCover: null,
+  clubLogo: null,
+  court: null,
 };
 
 /**
@@ -49,14 +53,16 @@ export function hasConfiguredImage(source: ImageSourcePropType | null | undefine
  * Resolves the tournament banner following strict priority:
  * 1. tournament.banner_image_url (custom item image)
  * 2. club format default configured in Club Details -> Branding
- * 3. null (no fake or stock photo)
+ * 3. platform admin format default in Platform Banners
+ * 4. deliberate built-in format fallback
  */
 export function resolveTournamentBanner(
   tournament?: {
     banner_image_url?: string | null;
     format?: string | null;
   } | null,
-  clubBranding?: ClubBranding | null
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
 ): ImageSourcePropType | null {
   if (tournament?.banner_image_url) {
     return { uri: resolveMediaUrl(tournament.banner_image_url) };
@@ -64,46 +70,7 @@ export function resolveTournamentBanner(
 
   const fmt = (tournament?.format || '').toLowerCase().trim();
 
-  if (fmt === 'round_robin') {
-    if (clubBranding?.default_tournament_round_robin_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
-    }
-    return null;
-  }
-
-  if (fmt === 'scramble') {
-    if (clubBranding?.default_tournament_scramble_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
-    }
-    return null;
-  }
-
-  if (fmt === 'pool_play') {
-    if (clubBranding?.default_tournament_pool_play_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
-    }
-    return null;
-  }
-
-  if (fmt === 'bracket') {
-    if (clubBranding?.default_tournament_bracket_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
-    }
-    return null;
-  }
-
-  return null;
-}
-
-/**
- * Resolves a format-specific tournament default banner for a club.
- * Returns null if not configured in club branding.
- */
-export function resolveTournamentFormatDefault(
-  format: 'round_robin' | 'scramble' | 'pool_play' | 'bracket' | string,
-  clubBranding?: ClubBranding | null
-): ImageSourcePropType | null {
-  const fmt = format.toLowerCase().trim();
+  // 1. Club-specific default
   if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url) {
     return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
   }
@@ -116,18 +83,89 @@ export function resolveTournamentFormatDefault(
   if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url) {
     return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
   }
-  return null;
+
+  // 2. Platform Admin default
+  if (fmt === 'round_robin' && platformBanners?.default_tournament_round_robin?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_tournament_round_robin.image_url) };
+  }
+  if (fmt === 'scramble' && platformBanners?.default_tournament_scramble?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_tournament_scramble.image_url) };
+  }
+  if (fmt === 'pool_play' && platformBanners?.default_tournament_pool_play?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_tournament_pool_play.image_url) };
+  }
+  if (fmt === 'bracket' && platformBanners?.default_tournament_bracket?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_tournament_bracket.image_url) };
+  }
+
+  // 3. Format-specific deliberate fallback
+  if (fmt === 'round_robin') return BUILTIN_FALLBACKS.tournamentRoundRobin;
+  if (fmt === 'scramble') return BUILTIN_FALLBACKS.tournamentScramble;
+  if (fmt === 'pool_play') return BUILTIN_FALLBACKS.tournamentPoolPlay;
+  if (fmt === 'bracket') return BUILTIN_FALLBACKS.tournamentBracket;
+
+  return BUILTIN_FALLBACKS.tournamentGeneric;
+}
+
+/**
+ * Resolves a format-specific tournament default banner.
+ */
+export function resolveTournamentFormatDefault(
+  format: 'round_robin' | 'scramble' | 'pool_play' | 'bracket' | string,
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
+): ImageSourcePropType | null {
+  const fmt = format.toLowerCase().trim();
+  if (fmt === 'round_robin') {
+    if (clubBranding?.default_tournament_round_robin_url) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
+    }
+    if (platformBanners?.default_tournament_round_robin?.image_url) {
+      return { uri: resolveMediaUrl(platformBanners.default_tournament_round_robin.image_url) };
+    }
+    return BUILTIN_FALLBACKS.tournamentRoundRobin;
+  }
+  if (fmt === 'scramble') {
+    if (clubBranding?.default_tournament_scramble_url) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
+    }
+    if (platformBanners?.default_tournament_scramble?.image_url) {
+      return { uri: resolveMediaUrl(platformBanners.default_tournament_scramble.image_url) };
+    }
+    return BUILTIN_FALLBACKS.tournamentScramble;
+  }
+  if (fmt === 'pool_play') {
+    if (clubBranding?.default_tournament_pool_play_url) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
+    }
+    if (platformBanners?.default_tournament_pool_play?.image_url) {
+      return { uri: resolveMediaUrl(platformBanners.default_tournament_pool_play.image_url) };
+    }
+    return BUILTIN_FALLBACKS.tournamentPoolPlay;
+  }
+  if (fmt === 'bracket') {
+    if (clubBranding?.default_tournament_bracket_url) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
+    }
+    if (platformBanners?.default_tournament_bracket?.image_url) {
+      return { uri: resolveMediaUrl(platformBanners.default_tournament_bracket.image_url) };
+    }
+    return BUILTIN_FALLBACKS.tournamentBracket;
+  }
+  return BUILTIN_FALLBACKS.tournamentGeneric;
 }
 
 /**
  * Resolves a league picture following strict priority:
  * 1. league.banner_image_url (custom item image)
  * 2. club default_league_banner_url (configured in Club Details -> Branding)
- * 3. null (no stock picture)
+ * 3. platform default_league_banner (configured in Platform Admin Banners)
+ * 4. deliberate built-in fallback
  */
 export function resolveLeaguePicture(
   league?: { banner_image_url?: string | null } | string | null,
-  clubBranding?: ClubBranding | null
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
 ): ImageSourcePropType | null {
   const customUrl = typeof league === 'string' ? league : league?.banner_image_url;
   if (customUrl) {
@@ -136,7 +174,10 @@ export function resolveLeaguePicture(
   if (clubBranding?.default_league_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_league_banner_url) };
   }
-  return null;
+  if (platformBanners?.default_league_banner?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_league_banner.image_url) };
+  }
+  return BUILTIN_FALLBACKS.league;
 }
 
 export const resolveLeagueBanner = resolveLeaguePicture;
@@ -145,11 +186,13 @@ export const resolveLeagueBanner = resolveLeaguePicture;
  * Resolves an event picture following strict priority:
  * 1. event.cover_image_url (custom item image)
  * 2. club default_event_banner_url (configured in Club Details -> Branding)
- * 3. null (no stock picture)
+ * 3. platform default_event_banner (configured in Platform Admin Banners)
+ * 4. deliberate built-in fallback
  */
 export function resolveEventPicture(
   event?: { cover_image_url?: string | null } | string | null,
-  clubBranding?: ClubBranding | null
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
 ): ImageSourcePropType | null {
   const customUrl = typeof event === 'string' ? event : event?.cover_image_url;
   if (customUrl) {
@@ -158,7 +201,10 @@ export function resolveEventPicture(
   if (clubBranding?.default_event_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_event_banner_url) };
   }
-  return null;
+  if (platformBanners?.default_event_banner?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_event_banner.image_url) };
+  }
+  return BUILTIN_FALLBACKS.event;
 }
 
 export const resolveEventCover = resolveEventPicture;
@@ -168,14 +214,16 @@ export const resolveEventCover = resolveEventPicture;
  * 1. lesson.image_url (custom session image)
  * 2. lesson.lesson_type?.image_url (lesson template picture)
  * 3. club default_lesson_banner_url (configured in Club Details -> Branding)
- * 4. null (no stock picture)
+ * 4. platform default_lesson_banner (configured in Platform Admin Banners)
+ * 5. deliberate built-in fallback
  */
 export function resolveLessonPicture(
   lesson?: {
     image_url?: string | null;
     lesson_type?: { image_url?: string | null } | null;
   } | string | null,
-  clubBranding?: ClubBranding | null
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
 ): ImageSourcePropType | null {
   if (typeof lesson === 'string') {
     if (lesson) return { uri: resolveMediaUrl(lesson) };
@@ -187,7 +235,10 @@ export function resolveLessonPicture(
   if (clubBranding?.default_lesson_banner_url) {
     return { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) };
   }
-  return null;
+  if (platformBanners?.default_lesson_banner?.image_url) {
+    return { uri: resolveMediaUrl(platformBanners.default_lesson_banner.image_url) };
+  }
+  return BUILTIN_FALLBACKS.lesson;
 }
 
 export const resolveLessonImage = resolveLessonPicture;

@@ -1,27 +1,30 @@
 /**
- * Aught2 Pickleball — Platform Admin → Home Page Banners
+ * Aught2 Pickleball — Platform Admin → Home Page Banners & Centralized Defaults
  *
- * Compact, unified, and professional management interface for global home page banners:
- * 1. Owner Home Page Banner: Main hero banner displayed on the Club Owner Dashboard.
- * 2. Player Home Page Banner: Main global hero banner displayed on the Player App Home page.
+ * Professional, unified management interface for:
+ * 1. Home Page Banners (Club Side Home, Player Side Home)
+ * 2. Tournament Default Banners (Round Robin, Pool Play, Scramble, Bracket)
+ * 3. Activity Default Banners (Events, Lessons & Coaching, Leagues)
  *
- * Clean, compact design aligned with the Platform Admin portal:
- * - Proper page margins matching Platform Admin settings without double padding
- * - Compact segmented-control for "Owner Home Page" vs "Player Home Page" (subtitles removed)
- * - Compact Global Platform Home Banners information card
- * - Live Preview card with responsive 16:9 aspect ratio, status badges, and actual saved banner
- * - Compact Current Banner Image row with non-overlapping status badge
- * - Consistently sized, compact action buttons (Upload Image & Restore Default)
- * - Concise Image Guidelines box
- * - Preserved and compact expandable "Banner Text & Link Settings" accordion
+ * Features:
+ * - Segmented category selector (Home Banners, Tournaments, Activities)
+ * - Sub-pill selector for each format/category item
+ * - Responsive 16:9 Live Preview showing custom uploaded asset or deliberate built-in fallback
+ * - Upload/replace image via MediaStorageService
+ * - Reset to built-in fallback (removes custom image)
+ * - Expandable Banner Text & Link Settings accordion
+ * - Instant query invalidation synchronizing across all portals
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ImageBackground,
+  ImageSourcePropType,
   Platform,
+  ScrollView,
   StyleSheet,
   Switch,
   TextInput,
@@ -33,29 +36,187 @@ import { useRouter } from 'expo-router';
 import {
   AlertCircle,
   ArrowRight,
+  Award,
+  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Eye,
+  GraduationCap,
   Image as ImageIcon,
   ImagePlus,
   Info,
+  Layers,
   RotateCcw,
   Save,
   Sliders,
   Smartphone,
   Trash2,
+  Trophy,
   Upload,
   Users,
 } from 'lucide-react-native';
 
 import { AppText, PlatformShell } from '@/components';
-import { usePlatformBanners, usePlatformBannerMutations } from '@/hooks';
-import { Radius, Shadows } from '@/theme';
+import {
+  usePlatformBanners,
+  usePlatformBannerMutations,
+  type PlatformBannerType,
+} from '@/hooks';
 import type { PlatformBanner } from '@/types';
 import { BUILTIN_FALLBACKS, resolveMediaUrl } from '@/utils';
 
-type BannerKey = 'owner_home' | 'player_home';
+export type PlatformBannerCategory = 'home' | 'tournament' | 'activity';
+
+export interface BannerItemConfig {
+  key: PlatformBannerType;
+  title: string;
+  category: PlatformBannerCategory;
+  categoryLabel: string;
+  badgeLabel: string;
+  description: string;
+  aspectRatio?: [number, number];
+  recommendedSize: string;
+  defaultTitle: string;
+  defaultSubtitle: string;
+  defaultCtaText: string;
+  defaultCtaDestination: string;
+  builtinFallback: ImageSourcePropType | null;
+}
+
+const BANNER_CONFIGS: BannerItemConfig[] = [
+  // ─── 1. Home Page Banners ────────────────────────────────────────────────
+  {
+    key: 'owner_home',
+    title: 'Club Side Home Banner',
+    category: 'home',
+    categoryLabel: 'Home Banners',
+    badgeLabel: 'Club Dashboard',
+    description: 'Main hero welcome banner displayed on the Club Owner Dashboard.',
+    recommendedSize: '1600 × 900 (16:9)',
+    defaultTitle: 'Welcome to Aught2 Pickleball',
+    defaultSubtitle: 'Great courts. Active members. A healthier, happier community.',
+    defaultCtaText: 'Book a Court',
+    defaultCtaDestination: '/(club)/bookings',
+    builtinFallback: null,
+  },
+  {
+    key: 'player_home',
+    title: 'Player Side Home Banner',
+    category: 'home',
+    categoryLabel: 'Home Banners',
+    badgeLabel: 'Player Home',
+    description: 'Main hero welcome banner displayed on the Player App Home page.',
+    recommendedSize: '1600 × 900 (16:9)',
+    defaultTitle: 'Welcome to Pickleball',
+    defaultSubtitle: 'Ready to play, compete and make the most of your game?',
+    defaultCtaText: 'Find a Court',
+    defaultCtaDestination: '/(player)/book-court-club',
+    builtinFallback: null,
+  },
+
+  // ─── 2. Tournament Defaults ──────────────────────────────────────────────
+  {
+    key: 'default_tournament_round_robin',
+    title: 'Round Robin Default Banner',
+    category: 'tournament',
+    categoryLabel: 'Tournaments',
+    badgeLabel: 'Round Robin',
+    description: 'Default banner for Round Robin tournaments when no custom banner is uploaded.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Round Robin Tournament',
+    defaultSubtitle: 'Official Round Robin Competition',
+    defaultCtaText: 'Explore Tournaments',
+    defaultCtaDestination: '/(player)/tournaments',
+    builtinFallback: BUILTIN_FALLBACKS.tournamentRoundRobin,
+  },
+  {
+    key: 'default_tournament_pool_play',
+    title: 'Pool Play Default Banner',
+    category: 'tournament',
+    categoryLabel: 'Tournaments',
+    badgeLabel: 'Pool Play',
+    description: 'Default banner for Pool Play tournaments when no custom banner is uploaded.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Pool Play Tournament',
+    defaultSubtitle: 'Official Pool Play Competition',
+    defaultCtaText: 'Explore Tournaments',
+    defaultCtaDestination: '/(player)/tournaments',
+    builtinFallback: BUILTIN_FALLBACKS.tournamentPoolPlay,
+  },
+  {
+    key: 'default_tournament_scramble',
+    title: 'Scramble Default Banner',
+    category: 'tournament',
+    categoryLabel: 'Tournaments',
+    badgeLabel: 'Scramble',
+    description: 'Default banner for Scramble tournaments when no custom banner is uploaded.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Scramble Tournament',
+    defaultSubtitle: 'Official Scramble Competition',
+    defaultCtaText: 'Explore Tournaments',
+    defaultCtaDestination: '/(player)/tournaments',
+    builtinFallback: BUILTIN_FALLBACKS.tournamentScramble,
+  },
+  {
+    key: 'default_tournament_bracket',
+    title: 'Bracket Play Default Banner',
+    category: 'tournament',
+    categoryLabel: 'Tournaments',
+    badgeLabel: 'Bracket Play',
+    description: 'Default banner for Bracket (Single & Double Elimination) tournaments without custom images.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Bracket Tournament',
+    defaultSubtitle: 'Single and Double Elimination',
+    defaultCtaText: 'Explore Tournaments',
+    defaultCtaDestination: '/(player)/tournaments',
+    builtinFallback: BUILTIN_FALLBACKS.tournamentBracket,
+  },
+
+  // ─── 3. Activity Defaults ────────────────────────────────────────────────
+  {
+    key: 'default_event_banner',
+    title: 'Event Default Banner',
+    category: 'activity',
+    categoryLabel: 'Activities',
+    badgeLabel: 'Events',
+    description: 'Default cover image for club events (socials, clinics, community days).',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Club Event',
+    defaultSubtitle: 'Socials, clinics, and community events',
+    defaultCtaText: 'View Events',
+    defaultCtaDestination: '/(player)/events',
+    builtinFallback: BUILTIN_FALLBACKS.event,
+  },
+  {
+    key: 'default_lesson_banner',
+    title: 'Lessons & Coaching Default Banner',
+    category: 'activity',
+    categoryLabel: 'Activities',
+    badgeLabel: 'Lessons',
+    description: 'Default banner for coaching sessions and group clinics without custom session photos.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Lessons & Coaching',
+    defaultSubtitle: 'Group clinics and private coaching sessions',
+    defaultCtaText: 'Find Lessons',
+    defaultCtaDestination: '/(player)/lessons',
+    builtinFallback: BUILTIN_FALLBACKS.lesson,
+  },
+  {
+    key: 'default_league_banner',
+    title: 'League Default Banner',
+    category: 'activity',
+    categoryLabel: 'Activities',
+    badgeLabel: 'Leagues',
+    description: 'Default banner for competitive league seasons and ladders.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'League Competition',
+    defaultSubtitle: 'Competitive league seasons and ladders',
+    defaultCtaText: 'Join League',
+    defaultCtaDestination: '/(player)/leagues',
+    builtinFallback: BUILTIN_FALLBACKS.league,
+  },
+];
 
 export default function PlatformBannersScreen() {
   const router = useRouter();
@@ -63,51 +224,64 @@ export default function PlatformBannersScreen() {
   const { banners, isLoading, refetch } = usePlatformBanners();
   const { updateBanner, uploadBannerImage, resetBanner } = usePlatformBannerMutations();
 
-  const [activeTab, setActiveTab] = useState<BannerKey>('owner_home');
+  const [activeCategory, setActiveCategory] = useState<PlatformBannerCategory>('home');
+  const [activeBannerKey, setActiveBannerKey] = useState<PlatformBannerType>('owner_home');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showTextSettings, setShowTextSettings] = useState(false);
 
-  // Form states per banner
-  const [ownerTitle, setOwnerTitle] = useState('');
-  const [ownerSubtitle, setOwnerSubtitle] = useState('');
-  const [ownerCtaText, setOwnerCtaText] = useState('');
-  const [ownerCtaDestination, setOwnerCtaDestination] = useState('');
-  const [ownerIsActive, setOwnerIsActive] = useState(true);
-
-  const [playerTitle, setPlayerTitle] = useState('');
-  const [playerSubtitle, setPlayerSubtitle] = useState('');
-  const [playerCtaText, setPlayerCtaText] = useState('');
-  const [playerCtaDestination, setPlayerCtaDestination] = useState('');
-  const [playerIsActive, setPlayerIsActive] = useState(true);
+  // Form states for currently selected banner
+  const [formTitle, setFormTitle] = useState('');
+  const [formSubtitle, setFormSubtitle] = useState('');
+  const [formCtaText, setFormCtaText] = useState('');
+  const [formCtaDestination, setFormCtaDestination] = useState('');
+  const [formIsActive, setFormIsActive] = useState(true);
 
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Synchronize form states when backend data arrives
+  // Filter items belonging to current category
+  const categoryItems = useMemo(
+    () => BANNER_CONFIGS.filter((item) => item.category === activeCategory),
+    [activeCategory]
+  );
+
+  const currentItemConfig = useMemo(
+    () => BANNER_CONFIGS.find((item) => item.key === activeBannerKey) || BANNER_CONFIGS[0],
+    [activeBannerKey]
+  );
+
+  // Ensure active banner belongs to selected category when category switches
   useEffect(() => {
-    if (banners.owner_home) {
-      setOwnerTitle(banners.owner_home.title || '');
-      setOwnerSubtitle(banners.owner_home.subtitle || '');
-      setOwnerCtaText(banners.owner_home.cta_text || '');
-      setOwnerCtaDestination(banners.owner_home.cta_destination || '');
-      setOwnerIsActive(banners.owner_home.is_active ?? true);
+    const valid = categoryItems.some((item) => item.key === activeBannerKey);
+    if (!valid && categoryItems.length > 0) {
+      setActiveBannerKey(categoryItems[0].key);
     }
-    if (banners.player_home) {
-      setPlayerTitle(banners.player_home.title || '');
-      setPlayerSubtitle(banners.player_home.subtitle || '');
-      setPlayerCtaText(banners.player_home.cta_text || '');
-      setPlayerCtaDestination(banners.player_home.cta_destination || '');
-      setPlayerIsActive(banners.player_home.is_active ?? true);
+  }, [activeCategory, categoryItems, activeBannerKey]);
+
+  // Synchronize form states when selected banner data arrives or active item changes
+  useEffect(() => {
+    const banner = banners[activeBannerKey];
+    if (banner) {
+      setFormTitle(banner.title || currentItemConfig.defaultTitle);
+      setFormSubtitle(banner.subtitle || currentItemConfig.defaultSubtitle);
+      setFormCtaText(banner.cta_text || currentItemConfig.defaultCtaText);
+      setFormCtaDestination(banner.cta_destination || currentItemConfig.defaultCtaDestination);
+      setFormIsActive(banner.is_active ?? true);
+    } else {
+      setFormTitle(currentItemConfig.defaultTitle);
+      setFormSubtitle(currentItemConfig.defaultSubtitle);
+      setFormCtaText(currentItemConfig.defaultCtaText);
+      setFormCtaDestination(currentItemConfig.defaultCtaDestination);
+      setFormIsActive(true);
     }
-  }, [banners]);
+  }, [banners, activeBannerKey, currentItemConfig]);
 
   const showStatus = (type: 'success' | 'error', text: string) => {
     setStatusMessage({ type, text });
     setTimeout(() => setStatusMessage(null), 4500);
   };
 
-  const currentBanner: PlatformBanner | undefined = banners[activeTab];
-  const isOwnerTab = activeTab === 'owner_home';
+  const currentBanner: PlatformBanner | undefined = banners[activeBannerKey];
   const isCustomImage = Boolean(currentBanner?.image_url);
 
   // ─── Image Picker & Upload ──────────────────────────────────────────────────
@@ -124,7 +298,7 @@ export default function PlatformBannersScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
-        aspect: [16, 9],
+        aspect: currentItemConfig.aspectRatio,
         quality: 0.88,
       });
 
@@ -132,12 +306,12 @@ export default function PlatformBannersScreen() {
         const asset = result.assets[0];
         const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
         const ext = mime.includes('png') ? 'png' : 'jpg';
-        const fileName = `${activeTab}_banner_${Date.now()}.${ext}`;
+        const fileName = `${activeBannerKey}_${Date.now()}.${ext}`;
 
         setIsUploading(true);
         try {
           await uploadBannerImage.mutateAsync({
-            type: activeTab,
+            type: activeBannerKey,
             fileInput: {
               uri: asset.uri,
               name: fileName,
@@ -145,10 +319,7 @@ export default function PlatformBannersScreen() {
             },
           });
           await refetch();
-          showStatus(
-            'success',
-            `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner uploaded successfully!`
-          );
+          showStatus('success', `${currentItemConfig.title} updated successfully!`);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Image upload failed.';
           showStatus('error', msg);
@@ -166,31 +337,20 @@ export default function PlatformBannersScreen() {
   const handleSaveSettings = async () => {
     setIsSaving(true);
     try {
-      const payload = isOwnerTab
-        ? {
-            title: ownerTitle.trim() || null,
-            subtitle: ownerSubtitle.trim() || null,
-            cta_text: ownerCtaText.trim() || null,
-            cta_destination: ownerCtaDestination.trim() || null,
-            is_active: ownerIsActive,
-          }
-        : {
-            title: playerTitle.trim() || null,
-            subtitle: playerSubtitle.trim() || null,
-            cta_text: playerCtaText.trim() || null,
-            cta_destination: playerCtaDestination.trim() || null,
-            is_active: playerIsActive,
-          };
+      const payload = {
+        title: formTitle.trim() || null,
+        subtitle: formSubtitle.trim() || null,
+        cta_text: formCtaText.trim() || null,
+        cta_destination: formCtaDestination.trim() || null,
+        is_active: formIsActive,
+      };
 
       await updateBanner.mutateAsync({
-        type: activeTab,
+        type: activeBannerKey,
         payload,
       });
       await refetch();
-      showStatus(
-        'success',
-        `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner configuration saved successfully!`
-      );
+      showStatus('success', `${currentItemConfig.title} configuration saved successfully!`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to save banner settings.';
       showStatus('error', msg);
@@ -203,25 +363,20 @@ export default function PlatformBannersScreen() {
   // ─── Reset / Remove Banner Image ──────────────────────────────────────────
   const handleResetBanner = () => {
     Alert.alert(
-      `Remove ${isOwnerTab ? 'Owner' : 'Player'} Banner Image`,
-      `Are you sure you want to remove the banner image for the ${
-        isOwnerTab ? 'Club Owner Dashboard' : 'Player App Home page'
-      }? Custom uploaded image will be removed.`,
+      `Restore Default for ${currentItemConfig.title}`,
+      `Are you sure you want to restore the built-in default for ${currentItemConfig.title}? The custom uploaded image will be removed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Remove Image',
+          text: 'Restore Default',
           style: 'destructive',
           onPress: async () => {
             try {
-              await resetBanner.mutateAsync(activeTab);
+              await resetBanner.mutateAsync(activeBannerKey);
               await refetch();
-              showStatus(
-                'success',
-                `${isOwnerTab ? 'Owner' : 'Player'} Home Page Banner image removed.`
-              );
+              showStatus('success', `${currentItemConfig.title} reset to built-in default.`);
             } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Remove failed';
+              const msg = err instanceof Error ? err.message : 'Reset failed';
               showStatus('error', msg);
             }
           },
@@ -230,26 +385,13 @@ export default function PlatformBannersScreen() {
     );
   };
 
-  // ─── Actual Saved Banner Preview Calculations ──────────────────────────────
-  const previewImage = currentBanner?.image_url
-    ? { uri: resolveMediaUrl(currentBanner.image_url) }
-    : null;
-
-  const previewTitle = isOwnerTab
-    ? ownerTitle || currentBanner?.title || 'Aught2 Pickleball'
-    : playerTitle || currentBanner?.title || 'Aught2 Pickleball';
-
-  const previewSubtitle = isOwnerTab
-    ? ownerSubtitle ||
-      currentBanner?.subtitle ||
-      'Great courts. Active members.\nA healthier, happier community.'
-    : playerSubtitle ||
-      currentBanner?.subtitle ||
-      'Find open courts, discover tournaments, and join leagues near you.';
-
-  const previewCta = isOwnerTab
-    ? ownerCtaText || currentBanner?.cta_text || 'Book a Court'
-    : playerCtaText || currentBanner?.cta_text || 'Find Courts';
+  // ─── Preview Image Resolution ──────────────────────────────────────────────
+  const previewImageSource: ImageSourcePropType | null = useMemo(() => {
+    if (currentBanner?.image_url) {
+      return { uri: resolveMediaUrl(currentBanner.image_url) };
+    }
+    return currentItemConfig.builtinFallback;
+  }, [currentBanner?.image_url, currentItemConfig.builtinFallback]);
 
   return (
     <PlatformShell
@@ -261,9 +403,9 @@ export default function PlatformBannersScreen() {
       <View style={styles.container}>
         {/* ── Page Heading ── */}
         <View style={styles.headerSection}>
-          <AppText style={styles.screenTitle}>Home Banners</AppText>
+          <AppText style={styles.screenTitle}>Banners & Image Defaults</AppText>
           <AppText style={styles.screenSubtitle}>
-            Manage global home banners for club owners and players
+            Manage global home banners, tournament format defaults, and category banners
           </AppText>
         </View>
 
@@ -291,166 +433,169 @@ export default function PlatformBannersScreen() {
           </View>
         )}
 
-        {/* ── 3. Compact Global Platform Home Banners Information Card ── */}
+        {/* ── Information Card ── */}
         <View style={styles.infoCard}>
           <View style={styles.infoIconWrap}>
             <ImageIcon size={18} color="#15803D" strokeWidth={2.2} />
           </View>
           <View style={styles.infoTextCol}>
-            <AppText style={styles.infoTitle}>Global Platform Home Banners</AppText>
+            <AppText style={styles.infoTitle}>Centralized Defaults & Global Banners</AppText>
             <AppText style={styles.infoDesc}>
-              Platform Admin is the single source of truth for home banners across all clubs. Changes made
-              here immediately apply platform-wide to the Club Owner Dashboard and Player App Home page.
+              Platform defaults provide the baseline fallback for tournaments, events, and activities across all
+              clubs whenever a club or item has not uploaded a custom photo.
             </AppText>
           </View>
         </View>
 
-        {/* ── 4. Compact Segmented Audience Selector (Single Label Each) ── */}
-        <View style={styles.audienceSelectorContainer}>
-          <TouchableOpacity
-            style={[
-              styles.audienceSegment,
-              activeTab === 'owner_home'
-                ? styles.audienceSegmentActive
-                : styles.audienceSegmentInactive,
-            ]}
-            onPress={() => setActiveTab('owner_home')}
-            activeOpacity={0.8}
-            accessibilityLabel="Owner Home Page"
-          >
-            <Users
-              size={15}
-              color={activeTab === 'owner_home' ? '#FFFFFF' : '#475569'}
-              strokeWidth={2}
-            />
-            <AppText
-              style={[
-                styles.audienceSegmentText,
-                activeTab === 'owner_home' && styles.audienceSegmentTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Owner Home Page
-            </AppText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.audienceSegment,
-              activeTab === 'player_home'
-                ? styles.audienceSegmentActive
-                : styles.audienceSegmentInactive,
-            ]}
-            onPress={() => setActiveTab('player_home')}
-            activeOpacity={0.8}
-            accessibilityLabel="Player Home Page"
-          >
-            <Smartphone
-              size={15}
-              color={activeTab === 'player_home' ? '#FFFFFF' : '#475569'}
-              strokeWidth={2}
-            />
-            <AppText
-              style={[
-                styles.audienceSegmentText,
-                activeTab === 'player_home' && styles.audienceSegmentTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              Player Home Page
-            </AppText>
-          </TouchableOpacity>
+        {/* ── 1. Top Category Selector ── */}
+        <View style={styles.categoryTabsTrack}>
+          {[
+            { key: 'home' as const, label: 'Home Banners', icon: Smartphone },
+            { key: 'tournament' as const, label: 'Tournament Defaults', icon: Trophy },
+            { key: 'activity' as const, label: 'Activity Defaults', icon: Calendar },
+          ].map((cat) => {
+            const isSelected = activeCategory === cat.key;
+            const IconComp = cat.icon;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                style={[styles.categoryTab, isSelected && styles.categoryTabActive]}
+                onPress={() => setActiveCategory(cat.key)}
+                activeOpacity={0.8}
+              >
+                <IconComp
+                  size={14}
+                  color={isSelected ? '#15803D' : '#64748B'}
+                  strokeWidth={2.2}
+                />
+                <AppText
+                  style={[styles.categoryTabText, isSelected && styles.categoryTabTextActive]}
+                  numberOfLines={1}
+                >
+                  {cat.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* ── 5. Compact Live Preview Card ── */}
+        {/* ── 2. Sub-Pill Selector for Selected Category ── */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.subPillsScroll}
+        >
+          {categoryItems.map((item) => {
+            const isSelected = activeBannerKey === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[styles.subPill, isSelected && styles.subPillActive]}
+                onPress={() => setActiveBannerKey(item.key)}
+                activeOpacity={0.8}
+              >
+                <AppText
+                  style={[styles.subPillText, isSelected && styles.subPillTextActive]}
+                >
+                  {item.badgeLabel}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* ── 3. Live Preview Card ── */}
         <View style={styles.previewCard}>
           {/* Card Header Row */}
           <View style={styles.previewHeaderRow}>
             <View style={styles.previewTitleRow}>
               <Eye size={16} color="#15803D" strokeWidth={2.2} />
-              <AppText style={styles.previewTitle}>Live Preview</AppText>
+              <AppText style={styles.previewTitle}>{currentItemConfig.title}</AppText>
             </View>
-            <View style={styles.previewBadgePill}>
-              <View style={[styles.previewBadgeDot, !previewImage && { backgroundColor: '#64748B' }]} />
-              <AppText style={[styles.previewBadgeText, !previewImage && { color: '#64748B' }]}>
-                {previewImage ? 'ACTIVE' : 'NOT CONFIGURED (OPTIONAL)'}
+            <View
+              style={[
+                styles.previewBadgePill,
+                !isCustomImage && styles.previewBadgePillFallback,
+              ]}
+            >
+              <View
+                style={[
+                  styles.previewBadgeDot,
+                  !isCustomImage && styles.previewBadgeDotFallback,
+                ]}
+              />
+              <AppText
+                style={[
+                  styles.previewBadgeText,
+                  !isCustomImage && styles.previewBadgeTextFallback,
+                ]}
+              >
+                {isCustomImage
+                  ? 'CUSTOM CONFIGURED'
+                  : currentItemConfig.builtinFallback
+                  ? 'BUILT-IN DEFAULT'
+                  : 'OPTIONAL (NO DEFAULT)'}
               </AppText>
             </View>
           </View>
 
-          {/* Audience Subtitle */}
-          <AppText style={styles.previewSubtitle}>
-            {isOwnerTab
-              ? 'This is how the banner will appear on the Club Owner Dashboard.'
-              : 'This is how the banner will appear on the Player App Home page.'}
-          </AppText>
+          {/* Description */}
+          <AppText style={styles.previewSubtitle}>{currentItemConfig.description}</AppText>
 
           {/* 16:9 Aspect Ratio Banner Container */}
           <View style={styles.imagePreviewWrapper}>
-            {previewImage ? (
+            {previewImageSource ? (
               <ImageBackground
-                source={previewImage}
+                source={previewImageSource}
                 style={styles.heroImageBg}
                 imageStyle={styles.heroImageBgInner}
                 resizeMode="cover"
               >
-                {/* Dark Overlay */}
+                {/* Subtle contrast overlay */}
                 <View style={styles.heroOverlay} />
 
                 {/* Overlaid Banner Content */}
                 <View style={styles.heroContentInner}>
                   <View style={styles.heroUpperBlock}>
-                    <AppText style={styles.heroTag}>WELCOME TO</AppText>
+                    <AppText style={styles.heroTag}>{currentItemConfig.badgeLabel.toUpperCase()}</AppText>
                     <AppText style={styles.heroHeading} numberOfLines={2}>
-                      {previewTitle}
+                      {formTitle || currentItemConfig.defaultTitle}
                     </AppText>
                     <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                      {previewSubtitle}
+                      {formSubtitle || currentItemConfig.defaultSubtitle}
                     </AppText>
                   </View>
 
                   <View style={styles.heroBottomRow}>
                     <View style={styles.heroCtaPill}>
-                      <AppText style={styles.heroCtaText}>{previewCta}</AppText>
+                      <AppText style={styles.heroCtaText}>
+                        {formCtaText || currentItemConfig.defaultCtaText}
+                      </AppText>
                       <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
                     </View>
-
-                    {isOwnerTab && (
-                      <View style={styles.heroScriptMotto}>
-                        <AppText style={styles.scriptLine}>Play</AppText>
-                        <AppText style={styles.scriptLine}>Grow</AppText>
-                        <AppText style={styles.scriptLine}>Together</AppText>
-                      </View>
-                    )}
                   </View>
                 </View>
               </ImageBackground>
             ) : (
-              <View style={[styles.heroImageBg, { backgroundColor: '#0A2B23' }]}>
+              <View style={[styles.heroImageBg, { backgroundColor: '#0B332B' }]}>
                 <View style={styles.heroContentInner}>
                   <View style={styles.heroUpperBlock}>
-                    <AppText style={styles.heroTag}>WELCOME TO</AppText>
+                    <AppText style={styles.heroTag}>{currentItemConfig.badgeLabel.toUpperCase()}</AppText>
                     <AppText style={styles.heroHeading} numberOfLines={2}>
-                      {previewTitle}
+                      {formTitle || currentItemConfig.defaultTitle}
                     </AppText>
                     <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                      {previewSubtitle}
+                      {formSubtitle || currentItemConfig.defaultSubtitle}
                     </AppText>
                   </View>
 
                   <View style={styles.heroBottomRow}>
                     <View style={styles.heroCtaPill}>
-                      <AppText style={styles.heroCtaText}>{previewCta}</AppText>
+                      <AppText style={styles.heroCtaText}>
+                        {formCtaText || currentItemConfig.defaultCtaText}
+                      </AppText>
                       <ArrowRight size={12} color="#0F172A" strokeWidth={2.5} />
                     </View>
-
-                    {isOwnerTab && (
-                      <View style={styles.heroScriptMotto}>
-                        <AppText style={styles.scriptLine}>Play</AppText>
-                        <AppText style={styles.scriptLine}>Grow</AppText>
-                        <AppText style={styles.scriptLine}>Together</AppText>
-                      </View>
-                    )}
                   </View>
                 </View>
               </View>
@@ -465,41 +610,22 @@ export default function PlatformBannersScreen() {
             )}
           </View>
 
-          {/* Current Banner Information Row */}
+          {/* Current Banner Status Info */}
           <View style={styles.currentBannerRow}>
             <View style={styles.currentBannerLeft}>
               <View style={styles.currentBannerIconWrap}>
                 <ImagePlus size={15} color="#15803D" strokeWidth={2} />
               </View>
               <View style={styles.currentBannerTextCol}>
-                <AppText style={styles.currentBannerTitle}>Current Banner Image</AppText>
+                <AppText style={styles.currentBannerTitle}>Current Image Status</AppText>
                 <AppText style={styles.currentBannerDesc} numberOfLines={2}>
-                  {isOwnerTab
-                    ? 'This image is currently being used on all club owner home pages.'
-                    : 'This image is currently being used on all player home pages.'}
+                  {isCustomImage
+                    ? 'Custom image uploaded. This image is active platform-wide.'
+                    : currentItemConfig.builtinFallback
+                    ? 'Using deliberate built-in platform default asset.'
+                    : 'No custom image configured. Clean neutral UI fallback is active.'}
                 </AppText>
               </View>
-            </View>
-            <View
-              style={[
-                styles.currentBannerStatusPill,
-                !isCustomImage && styles.currentBannerStatusPillFallback,
-              ]}
-            >
-              <View
-                style={[
-                  styles.currentBannerStatusDot,
-                  !isCustomImage && styles.currentBannerStatusDotFallback,
-                ]}
-              />
-              <AppText
-                style={[
-                  styles.currentBannerStatusText,
-                  !isCustomImage && styles.currentBannerStatusTextFallback,
-                ]}
-              >
-                {isCustomImage ? 'Active' : 'Not Configured (Optional)'}
-              </AppText>
             </View>
           </View>
 
@@ -524,10 +650,12 @@ export default function PlatformBannersScreen() {
                 onPress={handleResetBanner}
                 disabled={isUploading}
                 activeOpacity={0.8}
-                accessibilityLabel="Remove Image"
+                accessibilityLabel="Restore Built-in Default"
               >
                 <Trash2 size={13.5} color="#DC2626" strokeWidth={2} />
-                <AppText style={[styles.btnRestoreText, { color: '#DC2626' }]}>Remove Image</AppText>
+                <AppText style={[styles.btnRestoreText, { color: '#DC2626' }]}>
+                  Restore Default
+                </AppText>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -537,18 +665,16 @@ export default function PlatformBannersScreen() {
             <Info size={14} color="#64748B" strokeWidth={2} style={styles.guidelinesIcon} />
             <View style={styles.guidelinesTextCol}>
               <AppText style={styles.guidelinesText}>
-                Recommended size: 1600 × 900 (16:9). Supports JPG, PNG, WebP.
+                Recommended size: {currentItemConfig.recommendedSize}. Supports JPG, PNG, WebP.
               </AppText>
               <AppText style={styles.guidelinesText}>
-                {isOwnerTab
-                  ? 'Changes will apply to all club owner dashboards immediately.'
-                  : 'Changes will apply to all player app home pages immediately.'}
+                Saved changes automatically synchronize across Player Side, Club Side, and Platform Admin.
               </AppText>
             </View>
           </View>
         </View>
 
-        {/* ── 6. Compact Banner Text & Link Settings (Collapsible) ── */}
+        {/* ── 4. Banner Text & Link Settings (Collapsible) ── */}
         <View style={styles.textSettingsContainer}>
           <TouchableOpacity
             style={styles.textSettingsHeader}
@@ -573,16 +699,16 @@ export default function PlatformBannersScreen() {
             <View style={styles.textSettingsBody}>
               <AppText style={styles.textSettingsHint}>
                 Optionally customize the headline title, supporting text, and button link for{' '}
-                {isOwnerTab ? 'club owners' : 'players'}.
+                {currentItemConfig.title.toLowerCase()}.
               </AppText>
 
               {/* Title */}
               <AppText style={styles.inputLabel}>Headline Title</AppText>
               <TextInput
                 style={styles.textInput}
-                value={isOwnerTab ? ownerTitle : playerTitle}
-                onChangeText={isOwnerTab ? setOwnerTitle : setPlayerTitle}
-                placeholder="Aught2 Pickleball"
+                value={formTitle}
+                onChangeText={setFormTitle}
+                placeholder={currentItemConfig.defaultTitle}
                 placeholderTextColor="#94A3B8"
               />
 
@@ -590,9 +716,9 @@ export default function PlatformBannersScreen() {
               <AppText style={styles.inputLabel}>Subtitle / Supporting Text</AppText>
               <TextInput
                 style={[styles.textInput, styles.textArea]}
-                value={isOwnerTab ? ownerSubtitle : playerSubtitle}
-                onChangeText={isOwnerTab ? setOwnerSubtitle : setPlayerSubtitle}
-                placeholder="Great courts. Active members. A healthier, happier community."
+                value={formSubtitle}
+                onChangeText={setFormSubtitle}
+                placeholder={currentItemConfig.defaultSubtitle}
                 placeholderTextColor="#94A3B8"
                 multiline
                 numberOfLines={3}
@@ -602,9 +728,9 @@ export default function PlatformBannersScreen() {
               <AppText style={styles.inputLabel}>CTA Button Label</AppText>
               <TextInput
                 style={styles.textInput}
-                value={isOwnerTab ? ownerCtaText : playerCtaText}
-                onChangeText={isOwnerTab ? setOwnerCtaText : setPlayerCtaText}
-                placeholder={isOwnerTab ? 'Book a Court' : 'Find Courts'}
+                value={formCtaText}
+                onChangeText={setFormCtaText}
+                placeholder={currentItemConfig.defaultCtaText}
                 placeholderTextColor="#94A3B8"
               />
 
@@ -612,9 +738,9 @@ export default function PlatformBannersScreen() {
               <AppText style={styles.inputLabel}>CTA Destination Route</AppText>
               <TextInput
                 style={styles.textInput}
-                value={isOwnerTab ? ownerCtaDestination : playerCtaDestination}
-                onChangeText={isOwnerTab ? setOwnerCtaDestination : setPlayerCtaDestination}
-                placeholder={isOwnerTab ? '/(club)/bookings' : '/(player)/tournaments'}
+                value={formCtaDestination}
+                onChangeText={setFormCtaDestination}
+                placeholder={currentItemConfig.defaultCtaDestination}
                 placeholderTextColor="#94A3B8"
               />
 
@@ -623,14 +749,14 @@ export default function PlatformBannersScreen() {
                 <View style={{ flex: 1 }}>
                   <AppText style={styles.switchTitle}>Enable Banner</AppText>
                   <AppText style={styles.switchSubtitle}>
-                    When enabled, this banner is displayed to {isOwnerTab ? 'club owners' : 'players'}.
+                    When enabled, this banner configuration is active.
                   </AppText>
                 </View>
                 <Switch
-                  value={isOwnerTab ? ownerIsActive : playerIsActive}
-                  onValueChange={isOwnerTab ? setOwnerIsActive : setPlayerIsActive}
+                  value={formIsActive}
+                  onValueChange={setFormIsActive}
                   trackColor={{ false: '#CBD5E1', true: '#86EFAC' }}
-                  thumbColor={(isOwnerTab ? ownerIsActive : playerIsActive) ? '#15803D' : '#FFFFFF'}
+                  thumbColor={formIsActive ? '#15803D' : '#FFFFFF'}
                 />
               </View>
 
@@ -647,7 +773,7 @@ export default function PlatformBannersScreen() {
                 ) : (
                   <>
                     <Save size={14} color="#FFFFFF" strokeWidth={2.2} />
-                    <AppText style={styles.btnSaveText}>Save Banner Configuration</AppText>
+                    <AppText style={styles.btnSaveText}>Save Configuration</AppText>
                   </>
                 )}
               </TouchableOpacity>
@@ -661,7 +787,7 @@ export default function PlatformBannersScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingBottom: 80, // Natural clearance for bottom navigation without extra blank space
+    paddingBottom: 80,
     width: '100%',
     maxWidth: 720,
     alignSelf: 'center',
@@ -716,7 +842,7 @@ const styles = StyleSheet.create({
     color: '#B91C1C',
   },
 
-  // 3. Compact Global Platform Home Banners Info Card
+  // Info Card
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -727,7 +853,7 @@ const styles = StyleSheet.create({
     borderLeftColor: '#15803D',
     borderRadius: 10,
     padding: 10,
-    marginBottom: 12,
+    marginBottom: 14,
     gap: 10,
   },
   infoIconWrap: {
@@ -752,80 +878,94 @@ const styles = StyleSheet.create({
   },
   infoDesc: {
     fontSize: 11.5,
-    color: '#475569',
+    color: '#334155',
     lineHeight: 16,
   },
 
-  // 4. Compact Segmented Audience Selector
-  audienceSelectorContainer: {
+  // Category Tabs Track
+  categoryTabsTrack: {
     flexDirection: 'row',
     backgroundColor: '#F1F5F9',
-    borderRadius: 8,
+    borderRadius: 10,
     padding: 3,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    gap: 4,
   },
-  audienceSegment: {
+  categoryTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 7,
     gap: 6,
   },
-  audienceSegmentActive: {
-    backgroundColor: '#1E6F43',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-      },
-      default: {
-        elevation: 1,
-      },
-    }),
+  categoryTabActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  audienceSegmentInactive: {
-    backgroundColor: 'transparent',
+  categoryTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
   },
-  audienceSegmentText: {
-    fontSize: 12.5,
+  categoryTabTextActive: {
+    color: '#15803D',
+    fontWeight: '700',
+  },
+
+  // Sub-Pills Scroll
+  subPillsScroll: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 14,
+  },
+  subPill: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  subPillActive: {
+    backgroundColor: '#15803D',
+    borderColor: '#15803D',
+  },
+  subPillText: {
+    fontSize: 12,
     fontWeight: '600',
     color: '#475569',
   },
-  audienceSegmentTextActive: {
+  subPillTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
 
-  // 5. Compact Live Preview Card
+  // Preview Card
   previewCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
-      },
-      default: {
-        elevation: 1,
-        shadowColor: '#000000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 2,
-      },
-    }),
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   previewHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 2,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   previewTitleRow: {
     flexDirection: 'row',
@@ -833,30 +973,39 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   previewTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: '#0F172A',
   },
   previewBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#EAF8F0',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 10,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 5,
+  },
+  previewBadgePillFallback: {
+    backgroundColor: '#F1F5F9',
   },
   previewBadgeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#15803D',
+  },
+  previewBadgeDotFallback: {
+    backgroundColor: '#64748B',
   },
   previewBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
     letterSpacing: 0.4,
+  },
+  previewBadgeTextFallback: {
+    color: '#64748B',
   },
   previewSubtitle: {
     fontSize: 11.5,
@@ -865,60 +1014,65 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
 
-  // 16:9 Image Preview Box
+  // 16:9 Aspect Ratio Container
   imagePreviewWrapper: {
     width: '100%',
     aspectRatio: 16 / 9,
-    maxHeight: 240,
-    borderRadius: 8,
+    borderRadius: 12,
     overflow: 'hidden',
-    position: 'relative',
     backgroundColor: '#0F172A',
+    position: 'relative',
+    marginBottom: 12,
   },
   heroImageBg: {
     width: '100%',
     height: '100%',
   },
   heroImageBgInner: {
-    borderRadius: 8,
+    borderRadius: 12,
   },
   heroOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
   },
   heroContentInner: {
     flex: 1,
-    padding: 12,
+    padding: 16,
     justifyContent: 'space-between',
   },
   heroUpperBlock: {
-    gap: 2,
+    maxWidth: '85%',
   },
   heroTag: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 0.8,
-    color: '#FFFFFF',
-    opacity: 0.9,
+    color: '#86EFAC',
+    letterSpacing: 1,
+    marginBottom: 3,
   },
   heroHeading: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 22,
-    marginTop: 1,
+    lineHeight: 23,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   heroSupportingText: {
-    fontSize: 10.5,
-    color: '#F1F5F9',
-    lineHeight: 14,
-    marginTop: 2,
-    maxWidth: '85%',
+    fontSize: 11.5,
+    color: '#E2E8F0',
+    lineHeight: 15,
   },
   heroBottomRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
   },
   heroCtaPill: {
     flexDirection: 'row',
@@ -926,71 +1080,58 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 16,
+    borderRadius: 14,
     gap: 4,
-    ...Shadows.sm,
   },
   heroCtaText: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#0F172A',
   },
-  heroScriptMotto: {
-    alignItems: 'flex-end',
-  },
-  scriptLine: {
-    fontSize: 9.5,
-    fontStyle: 'italic',
-    color: '#FFFFFF',
-    opacity: 0.9,
-    lineHeight: 12,
-  },
+
   uploadingOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    justifyContent: 'center',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   uploadingText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+    fontSize: 12,
     color: '#FFFFFF',
+    fontWeight: '600',
   },
 
-  // Current Banner Information Row
+  // Current Banner Status Info
   currentBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    borderRadius: 8,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    marginTop: 10,
-    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 10,
   },
   currentBannerLeft: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minWidth: 0,
+    flex: 1,
   },
   currentBannerIconWrap: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   currentBannerTextCol: {
     flex: 1,
-    minWidth: 0,
   },
   currentBannerTitle: {
     fontSize: 12,
@@ -998,199 +1139,160 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   currentBannerDesc: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: '#64748B',
-    lineHeight: 14,
-  },
-  currentBannerStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 10,
-    flexShrink: 0,
-  },
-  currentBannerStatusPillFallback: {
-    backgroundColor: '#F1F5F9',
-  },
-  currentBannerStatusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#15803D',
-  },
-  currentBannerStatusDotFallback: {
-    backgroundColor: '#64748B',
-  },
-  currentBannerStatusText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#15803D',
-  },
-  currentBannerStatusTextFallback: {
-    color: '#475569',
   },
 
   // Action Buttons
   actionsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 10,
+    marginBottom: 10,
   },
   btnUpload: {
     flex: 1,
-    height: 38,
-    backgroundColor: '#1E6F43',
-    borderRadius: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#15803D',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
     gap: 6,
-    paddingHorizontal: 8,
   },
   btnUploadText: {
-    fontSize: 12.5,
-    fontWeight: '600',
     color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   btnRestore: {
-    flex: 1,
-    height: 38,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 5,
   },
   btnRestoreText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#0F172A',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
-  // Image Guidelines
+  // Guidelines Box
   guidelinesBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
     backgroundColor: '#F8FAFC',
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderRadius: 8,
     padding: 8,
-    marginTop: 10,
+    gap: 8,
   },
   guidelinesIcon: {
     marginTop: 1,
-    flexShrink: 0,
   },
   guidelinesTextCol: {
     flex: 1,
-    gap: 1,
-    minWidth: 0,
   },
   guidelinesText: {
     fontSize: 11,
     color: '#64748B',
-    lineHeight: 14.5,
+    lineHeight: 15,
   },
 
-  // 6. Compact Collapsible Text Settings
+  // Collapsible Text Settings
   textSettingsContainer: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 10,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   textSettingsHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: '#F8FAFC',
   },
   textSettingsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
   },
   textSettingsHeaderTitle: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   textSettingsBody: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
+    padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: '#E2E8F0',
   },
   textSettingsHint: {
     fontSize: 11.5,
     color: '#64748B',
-    marginVertical: 8,
-    lineHeight: 15,
+    marginBottom: 12,
+    lineHeight: 16,
   },
   inputLabel: {
     fontSize: 11.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#334155',
-    marginBottom: 3,
-    marginTop: 8,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   textInput: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 12.5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
     color: '#0F172A',
+    marginBottom: 10,
   },
   textArea: {
-    minHeight: 56,
+    minHeight: 64,
     textAlignVertical: 'top',
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    marginTop: 8,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
+    marginBottom: 12,
   },
   switchTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1E293B',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   switchSubtitle: {
-    fontSize: 10.5,
+    fontSize: 11.5,
     color: '#64748B',
   },
   btnSave: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1E6F43',
-    borderRadius: 6,
-    paddingVertical: 8,
-    marginTop: 10,
+    backgroundColor: '#15803D',
+    paddingVertical: 10,
+    borderRadius: 8,
     gap: 6,
   },
   btnSaveText: {
-    fontSize: 12.5,
-    fontWeight: '700',
     color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

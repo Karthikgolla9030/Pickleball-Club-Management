@@ -67,6 +67,7 @@ import {
   useClubBranding,
   useDiscoverLessons,
   useMyLessons,
+  usePlatformBanners,
   usePlayerCancelLessonRegistration,
   usePlayerRegisterLesson,
 } from '@/hooks';
@@ -92,9 +93,10 @@ function getLessonThumbnail(
   _title: string,
   _index: number,
   customImageUrl?: string | null,
-  clubBranding?: any
+  clubBranding?: any,
+  platformBanners?: any
 ) {
-  return resolveLessonImage({ image_url: customImageUrl }, clubBranding);
+  return resolveLessonImage({ image_url: customImageUrl }, clubBranding, platformBanners);
 }
 
 // ─── Date Formatter ──────────────────────────────────────────────────────────
@@ -139,6 +141,7 @@ export default function PlayerLessonsScreen() {
   const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
   const effectiveClubId = paramClubId || clubId || '';
   const { data: clubBranding } = useClubBranding(effectiveClubId);
+  const { banners: platformBanners } = usePlatformBanners();
 
   const [activeTab, setActiveTab] = useState<TabKey>('discover');
 
@@ -317,7 +320,7 @@ export default function PlayerLessonsScreen() {
   );
 
   const renderDiscoverCard = (item: PlayerLessonDetail, index: number) => {
-    const thumbnail = resolveLessonImage(item, clubBranding);
+    const thumbnail = resolveLessonImage(item, clubBranding, platformBanners);
     const myReg = item.my_registration || getPlayerRegistration(item.id);
     const isRegistered = !!myReg;
     const availableSpots = item.available_spots ?? 0;
@@ -445,7 +448,7 @@ export default function PlayerLessonsScreen() {
   };
 
   const renderRegistrationCard = (item: LessonRegistration, _index: number) => {
-    const thumbnail = resolveLessonImage({ image_url: item.lesson_image_url }, clubBranding);
+    const thumbnail = resolveLessonImage({ image_url: item.lesson_image_url }, clubBranding, platformBanners);
     const isRegistered = item.status === 'registered';
     const isAttended = item.status === 'attended';
     const isCancelled = item.status === 'cancelled';

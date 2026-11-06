@@ -28,9 +28,9 @@ export const platformBannersApi = {
   },
 
   /**
-   * Retrieve a specific platform banner by type ('owner_home' | 'player_home').
+   * Retrieve a specific platform banner by type.
    */
-  getBanner(bannerType: 'owner_home' | 'player_home'): Promise<PlatformBanner> {
+  getBanner(bannerType: string): Promise<PlatformBanner> {
     return apiClient.get<PlatformBanner>(API_ENDPOINTS.PLATFORM_BANNER_DETAIL(bannerType), false);
   },
 
@@ -38,7 +38,7 @@ export const platformBannersApi = {
    * Update banner title, subtitle, CTA text, CTA destination, or is_active (Platform Owner only).
    */
   updateBanner(
-    bannerType: 'owner_home' | 'player_home',
+    bannerType: string,
     payload: UpdatePlatformBannerPayload
   ): Promise<PlatformBanner> {
     return apiClient.put<PlatformBanner>(API_ENDPOINTS.PLATFORM_BANNER_DETAIL(bannerType), payload, true);
@@ -48,7 +48,7 @@ export const platformBannersApi = {
    * Upload and set a new image for the specified platform banner (Platform Owner only).
    */
   async uploadBannerImage(
-    bannerType: 'owner_home' | 'player_home',
+    bannerType: string,
     fileInput: { uri: string; name?: string; type?: string; blob?: Blob }
   ): Promise<PlatformBanner> {
     const formData = new FormData();
@@ -87,7 +87,7 @@ export const platformBannersApi = {
   /**
    * Reset banner back to default built-in platform fallback (Platform Owner only).
    */
-  resetBanner(bannerType: 'owner_home' | 'player_home'): Promise<PlatformBanner> {
+  resetBanner(bannerType: string): Promise<PlatformBanner> {
     return apiClient.delete<PlatformBanner>(API_ENDPOINTS.PLATFORM_BANNER_DETAIL(bannerType), true);
   },
 };

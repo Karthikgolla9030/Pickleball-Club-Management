@@ -14,6 +14,18 @@ import { platformBannersApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type { PlatformBanner, UpdatePlatformBannerPayload } from '@/types';
 
+export type PlatformBannerType =
+  | 'owner_home'
+  | 'player_home'
+  | 'default_tournament_round_robin'
+  | 'default_tournament_scramble'
+  | 'default_tournament_pool_play'
+  | 'default_tournament_bracket'
+  | 'default_event_banner'
+  | 'default_lesson_banner'
+  | 'default_league_banner'
+  | string;
+
 export function usePlatformBanners() {
   const query = useQuery<Record<string, PlatformBanner>>({
     queryKey: QUERY_KEYS.PLATFORM_BANNERS,
@@ -31,7 +43,7 @@ export function usePlatformBanners() {
   };
 }
 
-export function usePlatformBanner(bannerType: 'owner_home' | 'player_home') {
+export function usePlatformBanner(bannerType: PlatformBannerType) {
   const query = useQuery<PlatformBanner | null>({
     queryKey: QUERY_KEYS.PLATFORM_BANNER(bannerType),
     queryFn: async () => {
@@ -54,7 +66,7 @@ export function usePlatformBanner(bannerType: 'owner_home' | 'player_home') {
   };
 }
 
-export function usePlatformBannerMutations(bannerType?: 'owner_home' | 'player_home') {
+export function usePlatformBannerMutations(bannerType?: PlatformBannerType) {
   const queryClient = useQueryClient();
 
   const invalidate = (type?: string) => {
@@ -69,7 +81,7 @@ export function usePlatformBannerMutations(bannerType?: 'owner_home' | 'player_h
       type,
       payload,
     }: {
-      type: 'owner_home' | 'player_home';
+      type: PlatformBannerType;
       payload: UpdatePlatformBannerPayload;
     }) => {
       return platformBannersApi.updateBanner(type, payload);
@@ -85,7 +97,7 @@ export function usePlatformBannerMutations(bannerType?: 'owner_home' | 'player_h
       type,
       fileInput,
     }: {
-      type: 'owner_home' | 'player_home';
+      type: PlatformBannerType;
       fileInput: { uri: string; name?: string; type?: string; blob?: Blob };
     }) => {
       return platformBannersApi.uploadBannerImage(type, fileInput);
@@ -97,7 +109,7 @@ export function usePlatformBannerMutations(bannerType?: 'owner_home' | 'player_h
   });
 
   const resetBanner = useMutation({
-    mutationFn: (type: 'owner_home' | 'player_home') => {
+    mutationFn: (type: PlatformBannerType) => {
       return platformBannersApi.resetBanner(type);
     },
     onSuccess: (data, vars) => {

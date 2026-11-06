@@ -46,6 +46,7 @@ import {
   useCancelEventRegistration,
   useDiscoverClubEvents,
   useMyEvents,
+  usePlatformBanners,
   useRegisterForEvent,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -72,6 +73,7 @@ export default function PlayerEventsScreen() {
   const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
   const effectiveClubId = paramClubId || clubId || '';
   const { data: clubBranding } = useClubBranding(effectiveClubId);
+  const { banners: platformBanners } = usePlatformBanners();
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [activeTab, setActiveTab] = useState<MainTab>('discover');
@@ -215,7 +217,7 @@ export default function PlayerEventsScreen() {
   };
 
   const getEventImage = (event: ClubEvent, _index: number) => {
-    return resolveEventCover(event, clubBranding);
+    return resolveEventCover(event, clubBranding, platformBanners);
   };
 
   // ─── Registration Handlers ─────────────────────────────────────────────────
@@ -431,7 +433,7 @@ export default function PlayerEventsScreen() {
     const eventDateStr = reg.event_start_at || reg.registered_at;
     const { month, day, weekday, formattedDate } = parseEventDate(eventDateStr);
     const matchingEvent = discoverEvents.find((e) => e.id === reg.event_id);
-    const imageSource = resolveEventCover(matchingEvent, clubBranding);
+    const imageSource = resolveEventCover(matchingEvent, clubBranding, platformBanners);
     const isCancelled = reg.status === 'cancelled';
     const isWaitlisted = reg.status === 'waitlisted';
 

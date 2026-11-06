@@ -28,7 +28,17 @@ from app.services.media_storage_service import MediaStorageService
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_BANNER_TYPES = {"owner_home", "player_home"}
+SUPPORTED_BANNER_TYPES = {
+    "owner_home",
+    "player_home",
+    "default_tournament_round_robin",
+    "default_tournament_scramble",
+    "default_tournament_pool_play",
+    "default_tournament_bracket",
+    "default_event_banner",
+    "default_lesson_banner",
+    "default_league_banner",
+}
 
 DEFAULT_BANNER_CONFIGS = {
     "owner_home": {
@@ -42,6 +52,48 @@ DEFAULT_BANNER_CONFIGS = {
         "subtitle": "Ready to play, compete and make the most of your game?",
         "cta_text": "Find a Court",
         "cta_destination": "/(player)/book-court-club",
+    },
+    "default_tournament_round_robin": {
+        "title": "Round Robin Tournament",
+        "subtitle": "Official Round Robin Competition",
+        "cta_text": "Explore Tournaments",
+        "cta_destination": "/(player)/tournaments",
+    },
+    "default_tournament_scramble": {
+        "title": "Scramble Tournament",
+        "subtitle": "Official Scramble Competition",
+        "cta_text": "Explore Tournaments",
+        "cta_destination": "/(player)/tournaments",
+    },
+    "default_tournament_pool_play": {
+        "title": "Pool Play Tournament",
+        "subtitle": "Official Pool Play Competition",
+        "cta_text": "Explore Tournaments",
+        "cta_destination": "/(player)/tournaments",
+    },
+    "default_tournament_bracket": {
+        "title": "Bracket Tournament",
+        "subtitle": "Single and Double Elimination",
+        "cta_text": "Explore Tournaments",
+        "cta_destination": "/(player)/tournaments",
+    },
+    "default_event_banner": {
+        "title": "Club Event",
+        "subtitle": "Socials, clinics, and community events",
+        "cta_text": "View Events",
+        "cta_destination": "/(player)/events",
+    },
+    "default_lesson_banner": {
+        "title": "Lessons & Coaching",
+        "subtitle": "Group clinics and private coaching sessions",
+        "cta_text": "Find Lessons",
+        "cta_destination": "/(player)/lessons",
+    },
+    "default_league_banner": {
+        "title": "League Competition",
+        "subtitle": "Competitive league seasons and ladders",
+        "cta_text": "Join League",
+        "cta_destination": "/(player)/leagues",
     },
 }
 
