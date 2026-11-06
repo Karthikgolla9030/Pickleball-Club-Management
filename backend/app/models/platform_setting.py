@@ -43,7 +43,7 @@ class PlatformSetting(Base):
     platform_name: Mapped[str] = mapped_column(
         String(64),
         nullable=False,
-        default="Aught2 Pickleball",
+        default="Pickleball",
     )
 
     platform_support_email: Mapped[str] = mapped_column(

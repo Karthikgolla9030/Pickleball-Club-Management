@@ -101,7 +101,7 @@ async def websocket_endpoint(
                 "type": "connection.established",
                 "user_id": str(user_id),
                 "clubs": club_ids,
-                "message": "Connected to Aught2 Pickleball real-time event stream",
+                "message": "Connected to real-time event stream",
             }
         )
     )

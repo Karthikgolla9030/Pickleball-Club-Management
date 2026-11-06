@@ -156,6 +156,19 @@ class MediaStorageService:
         clean_bytes = out_buffer.getvalue()
         return clean_bytes, ext, mime, width, height
 
+    async def get_max_upload_size_bytes(self) -> int:
+        """Fetch runtime max upload limit configured in PlatformSetting, falling back to core settings."""
+        try:
+            from app.models.platform_setting import PlatformSetting
+            stmt = select(PlatformSetting.max_upload_size_mb).limit(1)
+            res = await self.db.execute(stmt)
+            mb = res.scalar_one_or_none()
+            if mb is not None and mb > 0:
+                return mb * 1024 * 1024
+        except Exception:
+            pass
+        return self.settings.MAX_UPLOAD_SIZE_BYTES
+
     async def store_image(
         self,
         raw_bytes: bytes,
@@ -173,7 +186,11 @@ class MediaStorageService:
         Returns:
             (public_url, media_asset_record)
         """
-        clean_bytes, ext, mime, width, height = self.validate_and_process_image(raw_bytes)
+        max_bytes = await self.get_max_upload_size_bytes()
+        clean_bytes, ext, mime, width, height = self.validate_and_process_image(
+            raw_bytes,
+            max_size_bytes=max_bytes,
+        )
 
         safe_filename = f"{uuid.uuid4().hex}.{ext}"
 

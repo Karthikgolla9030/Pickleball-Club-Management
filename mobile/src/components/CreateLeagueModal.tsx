@@ -308,7 +308,7 @@ export function CreateLeagueModal({
 
               <Input
                 label="League Name *"
-                placeholder="e.g., Aught2 Premier Doubles"
+                placeholder="e.g., Premier Doubles League"
                 value={name}
                 onChangeText={setName}
                 autoFocus

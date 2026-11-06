@@ -20,6 +20,7 @@ import {
 import { ArrowLeft, MoreVertical, Share2 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
+import { usePlatformBranding } from '@/hooks';
 import type { Tournament } from '@/types';
 
 export interface PlayerTournamentHeaderProps {
@@ -37,6 +38,8 @@ export function PlayerTournamentHeader({
   onOptionsPress,
   style,
 }: PlayerTournamentHeaderProps) {
+  const { platformName } = usePlatformBranding();
+
   const handleShare = async () => {
     if (onShare) {
       onShare();
@@ -44,7 +47,7 @@ export function PlayerTournamentHeader({
     }
     try {
       await Share.share({
-        message: `Check out ${tournament.name} on Aught2 Pickleball!`,
+        message: `Check out ${tournament.name} on ${platformName || 'Pickleball'}!`,
         title: tournament.name,
       });
     } catch {

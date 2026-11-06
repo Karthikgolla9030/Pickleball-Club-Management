@@ -64,6 +64,7 @@ import {
   usePlayerStandings,
   usePlayerTeams,
   usePlayerTournamentRegistrations,
+  usePlatformBranding,
 } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { getCourtDisplayLabel } from '@/utils';
@@ -119,6 +120,7 @@ export function LiveTournamentView({
   isRefreshing = false,
 }: LiveTournamentViewProps) {
   const insets = useSafeAreaInsets();
+  const { platformName } = usePlatformBranding();
   const tournamentId = tournament.id;
   const format = tournament.format ?? 'round_robin';
 
@@ -389,7 +391,7 @@ export function LiveTournamentView({
     try {
       await Share.share({
         title: tournament.name,
-        message: `Watch ${tournament.name} live on Aught2 Pickleball!`,
+        message: `Watch ${tournament.name} live on ${platformName || 'Pickleball'}!`,
       });
     } catch {
       // Ignored

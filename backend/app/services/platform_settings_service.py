@@ -38,7 +38,7 @@ class PlatformSettingsService:
         setting = result.scalar_one_or_none()
         if not setting:
             setting = PlatformSetting(
-                platform_name="Aught2 Pickleball",
+                platform_name="Pickleball",
                 platform_support_email="support@pickleball.com",
                 allow_new_club_registrations=True,
                 allow_user_registrations=True,
@@ -46,6 +46,10 @@ class PlatformSettingsService:
                 max_upload_size_mb=5,
             )
             self.db.add(setting)
+            await self.db.commit()
+            await self.db.refresh(setting)
+        elif setting.platform_name == "Aught2 Pickleball":
+            setting.platform_name = "Pickleball"
             await self.db.commit()
             await self.db.refresh(setting)
         return setting
@@ -139,6 +143,26 @@ class PlatformSettingsService:
         setting.updated_by_id = admin_actor.id
         setting.updated_by_email = admin_actor.email
         self.db.add(setting)
+
+        # Synchronize default home banners if platform_name changed
+        if "platform_name" in changed_keys:
+            try:
+                from app.models.platform_banner import PlatformBanner
+                stmt = select(PlatformBanner).where(
+                    PlatformBanner.banner_type.in_(["owner_home", "player_home"])
+                )
+                b_res = await self.db.execute(stmt)
+                for banner in b_res.scalars().all():
+                    if (
+                        not banner.title
+                        or "Welcome to" in banner.title
+                        or "Aught2" in banner.title
+                    ):
+                        banner.title = f"Welcome to {setting.platform_name}"
+                        banner.updated_by_id = admin_actor.id
+                        self.db.add(banner)
+            except Exception as e:
+                logger.warning("Could not cascade platform_name update to platform_banners: %s", e)
 
         # Audit log event
         audit_reason = payload.reason or f"Updated platform settings: {', '.join(changed_keys)}"

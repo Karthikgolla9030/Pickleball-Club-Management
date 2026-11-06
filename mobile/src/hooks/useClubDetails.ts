@@ -57,10 +57,20 @@ export function useClubDetails(overrideClubId?: string | null) {
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['club-dashboard', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-tournaments', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-events', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-lessons', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-leagues', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
       queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['leagues'] });
     },
   });
 
@@ -97,10 +107,20 @@ export function useClubDetails(overrideClubId?: string | null) {
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['club-dashboard', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-tournaments', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-events', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-lessons', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-leagues', clubId] });
+        queryClient.invalidateQueries({ queryKey: ['clubs', clubId] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });
       queryClient.invalidateQueries({ queryKey: ['public-clubs-discovery'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['leagues'] });
     },
   });
 

@@ -23,6 +23,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
+  AlertTriangle,
   ArrowRight,
   Bell,
   Calendar,
@@ -136,7 +137,7 @@ export default function PlayerHomeScreen() {
 
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
-  const { platformName } = usePlatformBranding();
+  const { platformName, maintenanceMode } = usePlatformBranding();
   const { clubId, clubName } = useActiveClub();
   const { branding: clubBranding } = useClubBranding(clubId);
 
@@ -329,6 +330,19 @@ export default function PlayerHomeScreen() {
           />
         }
       >
+        {/* ─── 0. PLATFORM MAINTENANCE NOTICE ─────────────────────────────────── */}
+        {maintenanceMode && (
+          <View style={styles.maintenanceBanner}>
+            <AlertTriangle size={18} color="#B45309" strokeWidth={2.2} />
+            <View style={styles.maintenanceBannerTextCol}>
+              <AppText style={styles.maintenanceBannerTitle}>Platform Maintenance in Progress</AppText>
+              <AppText style={styles.maintenanceBannerSub}>
+                Scheduled infrastructure operations are underway. Some services may experience temporary delays.
+              </AppText>
+            </View>
+          </View>
+        )}
+
         {/* ─── 2. GLOBAL PLAYER HOME HERO SECTION (Platform Admin Managed) ────── */}
         <View style={styles.heroSection}>
           <View style={styles.heroCard}>
@@ -346,7 +360,7 @@ export default function PlayerHomeScreen() {
             {/* Content on Left */}
             <View style={styles.heroContent}>
               <AppText style={styles.heroTagline}>
-                {platformName ? platformName.toUpperCase() : 'WELCOME BACK'}
+                {platformName ? `WELCOME TO ${platformName.toUpperCase()}` : 'WELCOME TO PICKLEBALL'}
               </AppText>
               <AppText
                 style={styles.heroGreeting}
@@ -1179,5 +1193,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#526662',
     lineHeight: 16.5,
+  },
+  maintenanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  maintenanceBannerTextCol: {
+    flex: 1,
+  },
+  maintenanceBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  maintenanceBannerSub: {
+    fontSize: 11.5,
+    color: '#B45309',
+    lineHeight: 16,
   },
 });

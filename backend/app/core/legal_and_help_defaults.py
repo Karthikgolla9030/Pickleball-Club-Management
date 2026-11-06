@@ -11,10 +11,10 @@ DEFAULT_LEGAL_DOCUMENTS = [
         "target_audience": "player",
         "version": "1.0",
         "change_summary": "Initial baseline Player Terms of Service",
-        "content": """# Aught2 Pickleball — Player Terms of Service
+        "content": """# Pickleball — Player Terms of Service
 **Version 1.0** • *Effective Date: October 2026*
 
-Welcome to Aught2 Pickleball ("Platform"). These Player Terms of Service govern your access to and use of our mobile application, player profile, court reservations, tournaments, leagues, and related services.
+Welcome to Pickleball ("Platform"). These Player Terms of Service govern your access to and use of our mobile application, player profile, court reservations, tournaments, leagues, and related services.
 
 ---
 
@@ -56,10 +56,10 @@ Welcome to Aught2 Pickleball ("Platform"). These Player Terms of Service govern 
         "target_audience": "club",
         "version": "1.0",
         "change_summary": "Initial baseline Club & Facility Terms of Service",
-        "content": """# Aught2 Pickleball — Club & Facility Terms of Service
+        "content": """# Pickleball — Club & Facility Terms of Service
 **Version 1.0** • *Effective Date: October 2026*
 
-These Club & Facility Terms of Service govern the onboarding, administration, court management, booking operations, and commercial activities of club facilities utilizing the Aught2 Pickleball multi-tenant platform.
+These Club & Facility Terms of Service govern the onboarding, administration, court management, booking operations, and commercial activities of club facilities utilizing the Pickleball multi-tenant platform.
 
 ---
 
@@ -94,10 +94,10 @@ These Club & Facility Terms of Service govern the onboarding, administration, co
         "target_audience": "all",
         "version": "1.0",
         "change_summary": "Initial baseline Privacy Policy across Player, Club, and Platform Admin",
-        "content": """# Aught2 Pickleball — Privacy Policy
+        "content": """# Pickleball — Privacy Policy
 **Version 1.0** • *Effective Date: October 2026*
 
-At Aught2 Pickleball, we respect your privacy and are committed to protecting the personal data of players, club operators, and platform personnel.
+At Pickleball, we respect your privacy and are committed to protecting the personal data of players, club operators, and platform personnel.
 
 ---
 
@@ -135,7 +135,7 @@ At Aught2 Pickleball, we respect your privacy and are committed to protecting th
         "target_audience": "club",
         "version": "1.0",
         "change_summary": "Initial baseline Club/Facility Operating Agreement",
-        "content": """# Aught2 Pickleball — Club/Facility Operating Agreement
+        "content": """# Pickleball — Club/Facility Operating Agreement
 **Version 1.0** • *Effective Date: October 2026*
 
 This Club/Facility Operating Agreement ("Agreement") establishes the operating framework between the platform provider and approved pickleball club facilities.
@@ -318,7 +318,7 @@ DEFAULT_HELP_ARTICLES = [
         "display_order": 1,
         "content": """# Guide to Booking Courts & Reservations
 
-Reserving a pickleball court on Aught2 Pickleball is fast and automated:
+Reserving a pickleball court on Pickleball is fast and automated:
 
 ### 1. Selecting Date & Time
 1. Tap the **Courts** tab in the navigation bar.

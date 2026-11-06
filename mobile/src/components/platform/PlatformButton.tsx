@@ -180,7 +180,8 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
+    ...(Platform.OS === 'web' ? ({ cursor: 'not-allowed' } as any) : {}),
   },
 
   // ─── Sizes ────────────────────────────────────────────────────────────────

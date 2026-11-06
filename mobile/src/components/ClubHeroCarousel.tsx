@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
-import { useActiveClub, usePlatformBanner } from '@/hooks';
+import { useActiveClub, usePlatformBanner, usePlatformBranding } from '@/hooks';
 import { resolveMediaUrl, resolveOwnerBanner } from '@/utils';
 
 export interface HeroBannerSlide {
@@ -74,6 +74,7 @@ export function ClubHeroCarousel({
 }: ClubHeroCarouselProps = {}) {
   const router = useRouter();
   const { clubId: activeClubId, clubName: activeClubName } = useActiveClub();
+  const { platformName } = usePlatformBranding();
   const effectiveClubName = fallbackClubName ?? activeClubName;
 
   const { banner: platformBanner } = usePlatformBanner('owner_home');
@@ -89,10 +90,15 @@ export function ClubHeroCarousel({
   // Global Owner Home Banner configured by Platform Admin
   const slides = useMemo<HeroBannerSlide[]>(() => {
     const ownerBannerImage = resolveOwnerBanner(platformBanner);
+    const resolvedTitle =
+      platformBanner?.title && !platformBanner.title.includes('Aught2')
+        ? platformBanner.title
+        : `Welcome to ${platformName || 'Pickleball'}`;
+
     const ownerWelcomeSlide: HeroBannerSlide = {
       id: 'platform-owner-home-banner-slide',
-      tag: 'WELCOME TO',
-      title: effectiveClubName || 'Your Club',
+      tag: (platformName || 'Pickleball').toUpperCase(),
+      title: resolvedTitle,
       supportingText:
         platformBanner?.subtitle ||
         'Great courts. Active members.\nA healthier, happier community.',
@@ -103,7 +109,7 @@ export function ClubHeroCarousel({
     };
 
     return [ownerWelcomeSlide];
-  }, [platformBanner, effectiveClubName]);
+  }, [platformBanner, platformName, effectiveClubName]);
 
   // Keep scroll position aligned on container width changes
   useEffect(() => {

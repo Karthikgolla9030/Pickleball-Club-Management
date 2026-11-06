@@ -42,6 +42,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowRight,
   Bell,
   Calendar,
@@ -66,6 +67,7 @@ import {
   useActiveClub,
   useClubDashboard,
   usePermission,
+  usePlatformBranding,
   useUnreadNotificationCount,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
@@ -77,6 +79,7 @@ export default function ClubHomeScreen() {
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
   const { clubId, clubName } = useActiveClub();
+  const { platformName, maintenanceMode } = usePlatformBranding();
   const { canManagePayments } = usePermission();
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
 
@@ -195,6 +198,18 @@ export default function ClubHomeScreen() {
           />
         }
       >
+        {/* 0. PLATFORM MAINTENANCE NOTICE */}
+        {maintenanceMode && (
+          <View style={styles.maintenanceBanner}>
+            <AlertTriangle size={18} color="#B45309" strokeWidth={2.2} />
+            <View style={styles.maintenanceBannerTextCol}>
+              <AppText style={styles.maintenanceBannerTitle}>Platform Maintenance in Progress</AppText>
+              <AppText style={styles.maintenanceBannerSub}>
+                Scheduled infrastructure operations are underway. Some services may experience temporary delays.
+              </AppText>
+            </View>
+          </View>
+        )}
 
         {/* 2. WELCOME SECTION + LOCATION PILL */}
         <View style={styles.welcomeRow}>
@@ -914,5 +929,30 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#B45309',
     marginTop: 1,
+  },
+  maintenanceBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+  },
+  maintenanceBannerTextCol: {
+    flex: 1,
+  },
+  maintenanceBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 2,
+  },
+  maintenanceBannerSub: {
+    fontSize: 11.5,
+    color: '#B45309',
+    lineHeight: 16,
   },
 });

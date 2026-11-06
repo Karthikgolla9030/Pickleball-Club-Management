@@ -42,7 +42,7 @@ SUPPORTED_BANNER_TYPES = {
 
 DEFAULT_BANNER_CONFIGS = {
     "owner_home": {
-        "title": "Welcome to Aught2 Pickleball",
+        "title": "Welcome to Pickleball",
         "subtitle": "Great courts. Active members. A healthier, happier community.",
         "cta_text": "Book a Court",
         "cta_destination": "/(club)/bookings",
@@ -115,18 +115,30 @@ class PlatformBannerService:
         stmt = select(PlatformBanner).where(PlatformBanner.banner_type == clean_type)
         res = await self.db.execute(stmt)
         banner = res.scalar_one_or_none()
+        from app.services.platform_settings_service import PlatformSettingsService
+        try:
+            setting = await PlatformSettingsService(self.db).get_or_create_settings()
+            p_name = setting.platform_name
+        except Exception:
+            p_name = "Pickleball"
+
         if not banner:
             defaults = DEFAULT_BANNER_CONFIGS.get(clean_type, {})
+            title = f"Welcome to {p_name}" if clean_type in ("owner_home", "player_home") else defaults.get("title")
             banner = PlatformBanner(
                 banner_type=clean_type,
                 image_url=None,
-                title=defaults.get("title"),
+                title=title,
                 subtitle=defaults.get("subtitle"),
                 cta_text=defaults.get("cta_text"),
                 cta_destination=defaults.get("cta_destination"),
                 is_active=True,
             )
             self.db.add(banner)
+            await self.db.commit()
+            await self.db.refresh(banner)
+        elif clean_type in ("owner_home", "player_home") and banner.title and "Aught2" in banner.title:
+            banner.title = f"Welcome to {p_name}"
             await self.db.commit()
             await self.db.refresh(banner)
         return banner
@@ -140,6 +152,9 @@ class PlatformBannerService:
             p_name = "Pickleball"
         resp = PlatformBannerResponse.model_validate(banner)
         resp.platform_name = p_name
+        if banner.banner_type in ("owner_home", "player_home"):
+            if not resp.title or "Aught2" in resp.title or resp.title.startswith("Welcome to "):
+                resp.title = f"Welcome to {p_name}"
         return resp
 
     async def get_all_banners(self) -> dict[str, PlatformBannerResponse]:
@@ -222,7 +237,17 @@ class PlatformBannerService:
         defaults = DEFAULT_BANNER_CONFIGS.get(banner.banner_type, {})
 
         banner.image_url = None
-        banner.title = defaults.get("title")
+        from app.services.platform_settings_service import PlatformSettingsService
+        try:
+            setting = await PlatformSettingsService(self.db).get_or_create_settings()
+            p_name = setting.platform_name
+        except Exception:
+            p_name = "Pickleball"
+
+        if banner.banner_type in ("owner_home", "player_home"):
+            banner.title = f"Welcome to {p_name}"
+        else:
+            banner.title = defaults.get("title")
         banner.subtitle = defaults.get("subtitle")
         banner.cta_text = defaults.get("cta_text")
         banner.cta_destination = defaults.get("cta_destination")

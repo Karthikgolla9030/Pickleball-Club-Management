@@ -94,7 +94,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     badgeLabel: 'Club Dashboard',
     description: 'Main hero welcome banner displayed on the Club Owner Dashboard.',
     recommendedSize: '1600 × 900 (16:9)',
-    defaultTitle: 'Welcome to Aught2 Pickleball',
+    defaultTitle: 'Welcome to Pickleball',
     defaultSubtitle: 'Great courts. Active members. A healthier, happier community.',
     defaultCtaText: 'Book a Court',
     defaultCtaDestination: '/(club)/bookings',

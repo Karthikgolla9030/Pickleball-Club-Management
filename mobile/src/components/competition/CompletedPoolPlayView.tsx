@@ -72,6 +72,7 @@ import {
   usePlayerPoolStandings,
   usePlayerChampionshipMatches,
   useClubBranding,
+  usePlatformBranding,
 } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, PoolStandingRow, Tournament } from '@/types';
@@ -108,6 +109,7 @@ export function CompletedPoolPlayView({
   isRefreshing = false,
 }: CompletedPoolPlayViewProps) {
   const insets = useSafeAreaInsets();
+  const { platformName } = usePlatformBranding();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [matchFilter, setMatchFilter] = useState<MatchFilterType>('all');
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
@@ -274,7 +276,7 @@ export function CompletedPoolPlayView({
     try {
       await Share.share({
         title: tournament.name,
-        message: `Check out the completed ${tournament.name} on Aught2 Pickleball! Champion: ${finalResults.champion?.name || 'TBD'}`,
+        message: `Check out the completed ${tournament.name} on ${platformName || 'Pickleball'}! Champion: ${finalResults.champion?.name || 'TBD'}`,
       });
     } catch {
       // Ignore share dismissal

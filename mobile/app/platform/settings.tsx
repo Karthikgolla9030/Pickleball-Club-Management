@@ -105,7 +105,7 @@ export default function PlatformSettingsScreen() {
   const [readOnlyConfig, setReadOnlyConfig] = useState<PlatformReadOnlyConfig | null>(null);
 
   // Form Draft State
-  const [platformName, setPlatformName] = useState('Aught2 Pickleball');
+  const [platformName, setPlatformName] = useState('Pickleball');
   const [supportEmail, setSupportEmail] = useState('support@pickleball.com');
   const [allowClubReg, setAllowClubReg] = useState(true);
   const [allowUserReg, setAllowUserReg] = useState(true);
@@ -153,15 +153,47 @@ export default function PlatformSettingsScreen() {
   }, [fetchSettings]);
 
   // Compute dirty state
-  const hasChanges = Boolean(
-    runtimeSettings &&
-      (platformName.trim() !== runtimeSettings.platform_name ||
-        supportEmail.trim().toLowerCase() !== runtimeSettings.platform_support_email.toLowerCase() ||
-        allowClubReg !== runtimeSettings.allow_new_club_registrations ||
-        allowUserReg !== runtimeSettings.allow_user_registrations ||
-        maintenanceMode !== runtimeSettings.maintenance_mode ||
-        maxUploadMb !== runtimeSettings.max_upload_size_mb)
+  const isPlatformNameDirty = Boolean(
+    runtimeSettings && platformName.trim() !== runtimeSettings.platform_name
   );
+  const isSupportEmailDirty = Boolean(
+    runtimeSettings && supportEmail.trim().toLowerCase() !== runtimeSettings.platform_support_email.toLowerCase()
+  );
+  const isClubRegDirty = Boolean(
+    runtimeSettings && allowClubReg !== runtimeSettings.allow_new_club_registrations
+  );
+  const isUserRegDirty = Boolean(
+    runtimeSettings && allowUserReg !== runtimeSettings.allow_user_registrations
+  );
+  const isMaintenanceDirty = Boolean(
+    runtimeSettings && maintenanceMode !== runtimeSettings.maintenance_mode
+  );
+  const isMaxUploadDirty = Boolean(
+    runtimeSettings && maxUploadMb !== runtimeSettings.max_upload_size_mb
+  );
+
+  const hasChanges = Boolean(
+    isPlatformNameDirty ||
+      isSupportEmailDirty ||
+      isClubRegDirty ||
+      isUserRegDirty ||
+      isMaintenanceDirty ||
+      isMaxUploadDirty
+  );
+
+  // Real-time validation for Platform Display Name
+  const platformNameError = (() => {
+    if (!platformName || platformName.trim().length === 0) {
+      return 'Platform name cannot be empty or whitespace only.';
+    }
+    if (platformName.trim().length < 2) {
+      return 'Platform name must be at least 2 characters.';
+    }
+    if (platformName.trim().length > 64) {
+      return 'Platform name must not exceed 64 characters.';
+    }
+    return null;
+  })();
 
   // Check if consequential changes are being made (e.g. pausing registrations or enabling maintenance)
   const isConsequential = Boolean(
@@ -187,8 +219,8 @@ export default function PlatformSettingsScreen() {
     setSuccessMsg(null);
 
     // Client-side validations
-    if (platformName.trim().length < 2) {
-      setError('Platform name must be at least 2 characters.');
+    if (platformNameError) {
+      setError(platformNameError);
       return;
     }
     if (!supportEmail.trim().includes('@')) {
@@ -223,9 +255,11 @@ export default function PlatformSettingsScreen() {
       const updated = await platformApplicationsApi.updateSettings(payload);
       setRuntimeSettings(updated.runtime_settings);
       setReadOnlyConfig(updated.read_only_config);
-      setSuccessMsg('Platform settings updated successfully and logged in audit trail.');
+      setSuccessMsg('Platform settings updated successfully and synchronized across all portals.');
       queryClient.invalidateQueries({ queryKey: ['platform', 'branding'] });
       queryClient.invalidateQueries({ queryKey: ['platform', 'banners'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['platform-branding'] });
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to update platform settings';
       setError(msg);
@@ -506,6 +540,16 @@ export default function PlatformSettingsScreen() {
                 </View>
               )}
 
+              {/* Unsaved Changes Warning Banner */}
+              {hasChanges && (
+                <View style={styles.unsavedWarningBanner}>
+                  <AlertCircle size={17} color="#D97706" />
+                  <AppText style={styles.unsavedWarningText}>
+                    You have unsaved changes. Review your updates and click Save Settings below to apply them.
+                  </AppText>
+                </View>
+              )}
+
               {/* SECTION 1: PUBLIC REGISTRATION GATES */}
               <View style={styles.sectionHeaderRow}>
                 <View style={styles.sectionIconTileGreen}>
@@ -593,11 +637,42 @@ export default function PlatformSettingsScreen() {
               {/* Card 1: Platform Display Name */}
               <View style={styles.card}>
                 <View style={styles.fieldHeaderRow}>
-                  <AppText style={styles.settingLabel}>Platform Display Name</AppText>
+                  <View style={styles.fieldTitleRow}>
+                    <AppText style={styles.settingLabel}>Platform Display Name</AppText>
+                    <View
+                      style={[
+                        styles.fieldStatusPill,
+                        isPlatformNameDirty ? styles.fieldStatusPillUnsaved : styles.fieldStatusPillSaved,
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.fieldStatusPillText,
+                          isPlatformNameDirty ? styles.fieldStatusPillTextUnsaved : styles.fieldStatusPillTextSaved,
+                        ]}
+                      >
+                        {isPlatformNameDirty ? 'UNSAVED' : 'SAVED'}
+                      </AppText>
+                    </View>
+                  </View>
                   <AppText style={styles.fieldHelperTop}>Max 64 chars</AppText>
                 </View>
-                <View style={styles.inputWrapper}>
-                  <Tag size={17} color="#64748B" style={styles.inputIcon} />
+
+                {/* Saved Baseline Display */}
+                <AppText style={styles.fieldBaselineText}>
+                  Active runtime brand:{' '}
+                  <AppText style={styles.fieldBaselineBold}>
+                    {runtimeSettings?.platform_name || 'Pickleball'}
+                  </AppText>
+                </AppText>
+
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    platformNameError ? styles.inputWrapperError : null,
+                  ]}
+                >
+                  <Tag size={17} color={platformNameError ? '#DC2626' : '#64748B'} style={styles.inputIcon} />
                   <TextInput
                     style={styles.textInput}
                     value={platformName}
@@ -605,18 +680,63 @@ export default function PlatformSettingsScreen() {
                     placeholder="e.g. Pickleball"
                     placeholderTextColor="#94A3B8"
                     maxLength={64}
+                    autoCapitalize="words"
                   />
                 </View>
+
+                {/* Inline Validation Feedback */}
+                {platformNameError ? (
+                  <AppText style={styles.fieldErrorMessage}>{platformNameError}</AppText>
+                ) : null}
+
                 <AppText style={styles.fieldDescription}>
-                  Global title displayed in client navigation headers, emails, and platform notices.
+                  Global product title displayed across all portals in navigation headers, home welcome banners, emails, and platform notices.
                 </AppText>
+
+                {/* Quick reset action for Platform Name if dirty */}
+                {isPlatformNameDirty && runtimeSettings && (
+                  <View style={styles.fieldQuickActionsRow}>
+                    <TouchableOpacity
+                      style={styles.fieldResetBtn}
+                      onPress={() => setPlatformName(runtimeSettings.platform_name)}
+                      activeOpacity={0.7}
+                    >
+                      <AppText style={styles.fieldResetBtnText}>Reset to Saved</AppText>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               {/* Card 2: Global Support Contact Email */}
               <View style={styles.card}>
                 <View style={styles.fieldHeaderRow}>
-                  <AppText style={styles.settingLabel}>Global Support Contact Email</AppText>
+                  <View style={styles.fieldTitleRow}>
+                    <AppText style={styles.settingLabel}>Global Support Contact Email</AppText>
+                    <View
+                      style={[
+                        styles.fieldStatusPill,
+                        isSupportEmailDirty ? styles.fieldStatusPillUnsaved : styles.fieldStatusPillSaved,
+                      ]}
+                    >
+                      <AppText
+                        style={[
+                          styles.fieldStatusPillText,
+                          isSupportEmailDirty ? styles.fieldStatusPillTextUnsaved : styles.fieldStatusPillTextSaved,
+                        ]}
+                      >
+                        {isSupportEmailDirty ? 'UNSAVED' : 'SAVED'}
+                      </AppText>
+                    </View>
+                  </View>
                 </View>
+
+                <AppText style={styles.fieldBaselineText}>
+                  Active support address:{' '}
+                  <AppText style={styles.fieldBaselineBold}>
+                    {runtimeSettings?.platform_support_email || 'support@pickleball.com'}
+                  </AppText>
+                </AppText>
+
                 <View style={styles.inputWrapper}>
                   <Mail size={17} color="#64748B" style={styles.inputIcon} />
                   <TextInput
@@ -632,6 +752,18 @@ export default function PlatformSettingsScreen() {
                 <AppText style={styles.fieldDescription}>
                   Official contact address routed to the platform support queue and email footers.
                 </AppText>
+
+                {isSupportEmailDirty && runtimeSettings && (
+                  <View style={styles.fieldQuickActionsRow}>
+                    <TouchableOpacity
+                      style={styles.fieldResetBtn}
+                      onPress={() => setSupportEmail(runtimeSettings.platform_support_email)}
+                      activeOpacity={0.7}
+                    >
+                      <AppText style={styles.fieldResetBtnText}>Reset to Saved</AppText>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
 
               {/* Card 3: Maximum Media Upload Limit */}
@@ -1214,6 +1346,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  fieldTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fieldStatusPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  fieldStatusPillUnsaved: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  fieldStatusPillSaved: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fieldStatusPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  fieldStatusPillTextUnsaved: {
+    color: '#D97706',
+  },
+  fieldStatusPillTextSaved: {
+    color: '#64748B',
+  },
+  fieldBaselineText: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+  fieldBaselineBold: {
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  fieldQuickActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+  },
+  fieldResetBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  fieldResetBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  fieldErrorMessage: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 2,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  unsavedWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  unsavedWarningText: {
+    fontSize: 12,
+    color: '#B45309',
+    flex: 1,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
   fieldHelperTop: {
     fontSize: 11,
     color: '#94A3B8',
@@ -1228,6 +1445,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     height: 42,
     marginBottom: 6,
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
   },
   inputIcon: {
     marginRight: 8,
