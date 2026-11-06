@@ -621,10 +621,31 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         <View style={styles.groupHeaderTextCol}>
           <AppText style={styles.groupTitle}>Group 2: Tournament Default Banners</AppText>
           <AppText style={styles.groupSubtitle}>
-            Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default.
+            Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default or general tournament default.
           </AppText>
         </View>
       </View>
+
+      {/* General Tournament Default */}
+      <BrandingAssetCard
+        title="General Tournament Default Banner"
+        categoryTag="ALL TOURNAMENTS"
+        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
+        description="Used as the fallback hero graphic for tournaments in this club when neither a custom tournament banner nor a format-specific default is uploaded."
+        currentUrl={branding?.default_tournament_banner_url}
+        uploading={uploadingField === 'default_tournament_banner_url'}
+        isOwner={isOwner}
+        onUpload={() =>
+          handleUploadAsset(
+            'default_tournament_banner_url',
+            'default_tournament_banner',
+            'General Tournament Default Banner'
+          )
+        }
+        onReset={() =>
+          handleResetAsset('default_tournament_banner_url', 'General Tournament Default Banner')
+        }
+      />
 
       {/* Round Robin Default */}
       <BrandingAssetCard

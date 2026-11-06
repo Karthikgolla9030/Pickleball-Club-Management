@@ -97,6 +97,21 @@ def _build_tournament_response(
             t_count = None
     club_name = t.club.name if getattr(t, "club", None) else None
     club_slug = t.club.slug if getattr(t, "club", None) else None
+    custom_banner = getattr(t, "banner_image_url", None)
+    resolved_banner = custom_banner
+    if not resolved_banner and getattr(t, "club", None):
+        fmt = (t.format.value if hasattr(t.format, "value") else str(t.format or "")).lower()
+        if fmt == "round_robin" and t.club.default_tournament_round_robin_url:
+            resolved_banner = t.club.default_tournament_round_robin_url
+        elif fmt == "scramble" and t.club.default_tournament_scramble_url:
+            resolved_banner = t.club.default_tournament_scramble_url
+        elif fmt == "pool_play" and t.club.default_tournament_pool_play_url:
+            resolved_banner = t.club.default_tournament_pool_play_url
+        elif fmt == "bracket" and t.club.default_tournament_bracket_url:
+            resolved_banner = t.club.default_tournament_bracket_url
+        elif t.club.default_tournament_banner_url:
+            resolved_banner = t.club.default_tournament_banner_url
+
     return TournamentResponse(
         id=t.id,
         club_id=t.club_id,
@@ -105,7 +120,8 @@ def _build_tournament_response(
         created_by_user_id=t.created_by_user_id,
         name=t.name,
         description=t.description,
-        banner_image_url=getattr(t, "banner_image_url", None),
+        banner_image_url=custom_banner,
+        resolved_banner_url=resolved_banner,
         status=t.status,
         status_label=t.status.display_label,
         format=t.format,

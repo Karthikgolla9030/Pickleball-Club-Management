@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_BANNER_TYPES = {
     "owner_home",
     "player_home",
+    "default_tournament_banner",
     "default_tournament_round_robin",
     "default_tournament_scramble",
     "default_tournament_pool_play",
@@ -52,6 +53,12 @@ DEFAULT_BANNER_CONFIGS = {
         "subtitle": "Ready to play, compete and make the most of your game?",
         "cta_text": "Find a Court",
         "cta_destination": "/(player)/book-court-club",
+    },
+    "default_tournament_banner": {
+        "title": "Tournaments",
+        "subtitle": "Official tournament competitions and championships",
+        "cta_text": "Explore Tournaments",
+        "cta_destination": "/(player)/tournaments",
     },
     "default_tournament_round_robin": {
         "title": "Round Robin Tournament",

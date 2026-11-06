@@ -86,6 +86,7 @@ class EventResponse(BaseModel):
     title: str
     description: str | None = None
     cover_image_url: str | None = None
+    resolved_cover_image_url: str | None = None
     event_type: EventType
     event_type_label: str
     status: EventStatus

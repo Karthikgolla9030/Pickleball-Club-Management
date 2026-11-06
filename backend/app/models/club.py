@@ -33,6 +33,7 @@ class Club(Base):
     logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     cover_image_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     owner_banner_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    default_tournament_banner_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     default_tournament_round_robin_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     default_tournament_scramble_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     default_tournament_pool_play_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)

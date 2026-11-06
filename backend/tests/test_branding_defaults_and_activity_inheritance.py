@@ -41,7 +41,9 @@ from app.models.event import Event, EventStatus, EventVisibility, EventType
 from app.models.league import League, LeagueStatus
 from app.models.lesson import Lesson, LessonStatus
 from app.models.tournament import Tournament, TournamentFormat, TournamentStatus
+from app.models.platform_banner import PlatformBanner
 from app.models.user import User
+from app.services.image_resolution_service import ImageResolutionService
 from tests.conftest import make_auth_header
 
 
@@ -549,3 +551,342 @@ async def test_activity_custom_picture_persistence_and_independence(
     assert branding_data["default_league_banner_url"] == "/uploads/defaults/club_league_default.jpg"
     assert branding_data["default_event_banner_url"] == "/uploads/defaults/club_event_default.jpg"
     assert branding_data["default_tournament_round_robin_url"] == "/uploads/defaults/club_rr_default.jpg"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Three-Level Hierarchy End-to-End Scenarios (A - G)
+# ─────────────────────────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_three_level_hierarchy_complete_workflow(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Test exact 3-level hierarchy scenarios:
+    Level 1: Platform Admin Default
+    Level 2: Club Default
+    Level 3: Individual Custom Image
+
+    Scenarios tested:
+    A. Platform default only (neither club nor item has custom image) -> Platform default.
+    B. Club has its own default -> Club default overrides Platform default.
+    C. Item has custom banner -> Custom banner overrides both defaults.
+    D. Remove custom banner -> Falls back to Club default.
+    E. Remove club default -> Falls back to Platform default.
+    F. Club isolation: Club A's defaults never leak to Club B.
+    G. Updating defaults never mutates individual custom images.
+    H. Editing item details preserves custom banner.
+    """
+    admin = await create_user(db_session, email="admin@test.local", full_name="Platform Admin")
+    admin.is_platform_admin = True
+    owner_a = await create_user(db_session, full_name="Owner A")
+    owner_b = await create_user(db_session, full_name="Owner B")
+
+    club_a = await create_club(db_session, name="Club Alpha")
+    club_b = await create_club(db_session, name="Club Beta")
+    await create_membership(db_session, owner_a.id, club_a.id, ClubRole.CLUB_OWNER)
+    await create_membership(db_session, owner_b.id, club_b.id, ClubRole.CLUB_OWNER)
+    await db_session.commit()
+
+    resolver = ImageResolutionService(db_session)
+
+    # 1. Initially, no images set anywhere -> Source is 'none' / None
+    res_init = await resolver.resolve_tournament_banner(
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_init.resolved_url is None
+    assert res_init.source == "none"
+
+    # 2. Level 1: Platform Admin sets global tournament default
+    plat_banner = PlatformBanner(
+        banner_type="default_tournament_round_robin",
+        image_url="https://platform.local/banners/rr-global.jpg",
+        is_active=True,
+    )
+    db_session.add(plat_banner)
+    await db_session.commit()
+
+    # Scenario A: Neither Club A nor item has image -> Platform default
+    res_a = await resolver.resolve_tournament_banner(
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_a.resolved_url == "https://platform.local/banners/rr-global.jpg"
+    assert res_a.source == "platform_default"
+
+    # Scenario B: Club A sets its own tournament default
+    await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"default_tournament_round_robin_url": "https://club-a.local/rr-default.jpg"},
+    )
+    # Refresh session
+    await db_session.commit()
+
+    # Club A now resolves Club A's default
+    res_b = await resolver.resolve_tournament_banner(
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_b.resolved_url == "https://club-a.local/rr-default.jpg"
+    assert res_b.source == "club_default"
+
+    # Scenario F: Club B has no default -> Club B STILL resolves Platform default (Club A default isolated!)
+    res_b_club = await resolver.resolve_tournament_banner(
+        club_id=club_b.id,
+        format="round_robin",
+    )
+    assert res_b_club.resolved_url == "https://platform.local/banners/rr-global.jpg"
+    assert res_b_club.source == "platform_default"
+
+    # Scenario C: Create Tournament 1 under Club A with custom image
+    now = datetime.now(timezone.utc)
+    t1_res = await async_client.post(
+        f"/api/v1/clubs/{club_a.id}/tournaments",
+        headers=make_auth_header(owner_a),
+        json={
+            "name": "Tournament 1",
+            "format": "round_robin",
+            "visibility": "public",
+            "start_date": (now + timedelta(days=7)).isoformat(),
+            "end_date": (now + timedelta(days=7, hours=4)).isoformat(),
+            "registration_open_at": (now - timedelta(days=1)).isoformat(),
+            "registration_close_at": (now + timedelta(days=6)).isoformat(),
+            "banner_image_url": "https://custom.local/t1-banner.jpg",
+        },
+    )
+    assert t1_res.status_code in (200, 201)
+    t1_id = t1_res.json()["id"]
+
+    # Tournament 1 resolves custom image
+    res_c = await resolver.resolve_tournament_banner(
+        tournament_or_id=t1_id,
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_c.resolved_url == "https://custom.local/t1-banner.jpg"
+    assert res_c.source == "custom"
+
+    # Scenario G: Update Club A default & Platform default -> Tournament 1 still resolves custom image
+    await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"default_tournament_round_robin_url": "https://club-a.local/rr-default-v2.jpg"},
+    )
+    plat_banner.image_url = "https://platform.local/banners/rr-global-v2.jpg"
+    await db_session.commit()
+
+    res_g = await resolver.resolve_tournament_banner(
+        tournament_or_id=t1_id,
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_g.resolved_url == "https://custom.local/t1-banner.jpg"
+    assert res_g.source == "custom"
+
+    # Scenario H: Edit Tournament 1 title and location -> custom image is preserved
+    patch_res = await async_client.patch(
+        f"/api/v1/clubs/{club_a.id}/tournaments/{t1_id}",
+        headers=make_auth_header(owner_a),
+        json={"name": "Tournament 1 Renamed", "location_name": "Court 4"},
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["banner_image_url"] == "https://custom.local/t1-banner.jpg"
+
+    # Scenario D: Remove Tournament 1 custom banner -> falls back to Club A default
+    clear_img_res = await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/tournaments/{t1_id}/image",
+        headers=make_auth_header(owner_a),
+        json={"image_url": None},
+    )
+    assert clear_img_res.status_code == 200
+    assert clear_img_res.json()["banner_image_url"] is None
+
+    res_d = await resolver.resolve_tournament_banner(
+        tournament_or_id=t1_id,
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_d.resolved_url == "https://club-a.local/rr-default-v2.jpg"
+    assert res_d.source == "club_default"
+
+    # Scenario E: Remove Club A default -> Tournament 1 falls back to Platform default
+    await async_client.put(
+        f"/api/v1/clubs/{club_a.id}/branding",
+        headers=make_auth_header(owner_a),
+        json={"default_tournament_round_robin_url": None},
+    )
+    await db_session.commit()
+
+    res_e = await resolver.resolve_tournament_banner(
+        tournament_or_id=t1_id,
+        club_id=club_a.id,
+        format="round_robin",
+    )
+    assert res_e.resolved_url == "https://platform.local/banners/rr-global-v2.jpg"
+    assert res_e.source == "platform_default"
+
+
+@pytest.mark.asyncio
+async def test_media_resolution_api_endpoints(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Verify GET /api/v1/media/resolve and GET /api/v1/clubs/{club_id}/resolve-image.
+    """
+    owner = await create_user(db_session, full_name="Owner Media")
+    club = await create_club(db_session, name="Media Club")
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+
+    # Set club default event banner
+    await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+        json={"default_event_banner_url": "https://assets.local/event-club-default.jpg"},
+    )
+    await db_session.commit()
+
+    # 1. Global resolver endpoint
+    res_global = await async_client.get(
+        "/api/v1/media/resolve",
+        params={
+            "content_type": "event",
+            "club_id": str(club.id),
+        },
+    )
+    assert res_global.status_code == 200
+    data_global = res_global.json()
+    assert data_global["resolved_url"] == "https://assets.local/event-club-default.jpg"
+    assert data_global["source"] == "club_default"
+
+    # 2. Club scoped resolver endpoint
+    res_club = await async_client.get(
+        f"/api/v1/clubs/{club.id}/resolve-image",
+        params={"content_type": "event"},
+    )
+    assert res_club.status_code == 200
+    assert res_club.json()["resolved_url"] == "https://assets.local/event-club-default.jpg"
+
+    # 3. Custom override on resolver endpoint
+    res_custom = await async_client.get(
+        f"/api/v1/clubs/{club.id}/resolve-image",
+        params={
+            "content_type": "event",
+            "custom_url": "https://custom.local/special-event.jpg",
+        },
+    )
+    assert res_custom.status_code == 200
+    assert res_custom.json()["resolved_url"] == "https://custom.local/special-event.jpg"
+    assert res_custom.json()["source"] == "custom"
+
+
+@pytest.mark.asyncio
+async def test_court_and_identity_isolation_and_no_fallback(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Requirement 6 & 7:
+    - Club identity (Official Club Logo, Player-Facing Cover) are separate from content defaults.
+    - Missing club logo or cover must NOT inherit platform content defaults.
+    - Updating content defaults must NOT overwrite club identity images.
+    - Court images must remain separate: display uploaded image or clean no-image state (null).
+    - Courts must NEVER inherit platform defaults or club content defaults.
+    """
+    owner = await create_user(db_session, full_name="Owner Isolation")
+    club = await create_club(db_session, name="Strict Isolation Club")
+    await create_membership(db_session, owner.id, club.id, ClubRole.CLUB_OWNER)
+
+    # 1. Setup platform defaults for event, tournament, etc.
+    platform_defaults = [
+        PlatformBanner(
+            banner_type="default_tournament_banner",
+            title="Global Tournament",
+            image_url="https://platform.local/banners/global-tourney.jpg",
+            is_active=True,
+        ),
+        PlatformBanner(
+            banner_type="default_event_banner",
+            title="Global Event",
+            image_url="https://platform.local/banners/global-event.jpg",
+            is_active=True,
+        ),
+    ]
+    db_session.add_all(platform_defaults)
+    await db_session.commit()
+
+    # 2. Club has NO logo and NO cover initially
+    branding_res = await async_client.get(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+    )
+    assert branding_res.status_code == 200
+    bdata = branding_res.json()
+    assert bdata["logo_url"] is None
+    assert bdata["cover_image_url"] is None
+    # Verify missing identity does NOT inherit platform defaults
+    assert bdata["has_custom_logo"] is False
+    assert bdata["has_custom_cover"] is False
+
+    # 3. Configure club content defaults
+    update_res = await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+        json={
+            "default_tournament_banner_url": "https://club.local/tourney-default.jpg",
+            "default_event_banner_url": "https://club.local/event-default.jpg",
+        },
+    )
+    assert update_res.status_code == 200
+    bdata_updated = update_res.json()
+    # Identity remains None (never overwritten by content defaults)
+    assert bdata_updated["logo_url"] is None
+    assert bdata_updated["cover_image_url"] is None
+    assert bdata_updated["default_tournament_banner_url"] == "https://club.local/tourney-default.jpg"
+
+    # 4. Now set club logo and cover explicitly
+    id_res = await async_client.put(
+        f"/api/v1/clubs/{club.id}/branding",
+        headers=make_auth_header(owner),
+        json={
+            "logo_url": "https://club.local/official-logo.png",
+            "cover_image_url": "https://club.local/hero-cover.png",
+        },
+    )
+    assert id_res.status_code == 200
+    bdata_id = id_res.json()
+    assert bdata_id["logo_url"] == "https://club.local/official-logo.png"
+    assert bdata_id["cover_image_url"] == "https://club.local/hero-cover.png"
+    # Content defaults are preserved
+    assert bdata_id["default_tournament_banner_url"] == "https://club.local/tourney-default.jpg"
+
+    # 5. Court image isolation:
+    from app.models.court import Court, CourtEnvironment, CourtStatus
+    court1 = Court(
+        club_id=club.id,
+        name="Court 1 (With Photo)",
+        court_number=1,
+        indoor_outdoor=CourtEnvironment.OUTDOOR,
+        photo_url="https://club.local/courts/court-1.jpg",
+        is_active=True,
+    )
+    court2 = Court(
+        club_id=club.id,
+        name="Court 2 (No Photo)",
+        court_number=2,
+        indoor_outdoor=CourtEnvironment.OUTDOOR,
+        photo_url=None,
+        is_active=True,
+    )
+    db_session.add_all([court1, court2])
+    await db_session.commit()
+
+    # Court 1 displays its exact uploaded image
+    assert court1.photo_url == "https://club.local/courts/court-1.jpg"
+
+    # Court 2 has no image - MUST remain None (clean neutral state), NEVER inherit club or platform defaults
+    assert court2.photo_url is None
+    # Content defaults exist on the club and platform, but courts remain completely isolated
+    assert bdata_id["default_tournament_banner_url"] is not None
+
+

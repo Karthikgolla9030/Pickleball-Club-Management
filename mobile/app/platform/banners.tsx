@@ -117,6 +117,20 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
 
   // ─── 2. Tournament Defaults ──────────────────────────────────────────────
   {
+    key: 'default_tournament_banner',
+    title: 'General Tournament Default Banner',
+    category: 'tournament',
+    categoryLabel: 'Tournaments',
+    badgeLabel: 'General Tournament',
+    description: 'Global fallback banner for tournaments when neither a custom banner nor a format-specific default is configured.',
+    recommendedSize: '1200 × 675 (16:9)',
+    defaultTitle: 'Tournament Competition',
+    defaultSubtitle: 'Official Club Tournament',
+    defaultCtaText: 'Explore Tournaments',
+    defaultCtaDestination: '/(player)/tournaments',
+    builtinFallback: BUILTIN_FALLBACKS.tournamentGeneric,
+  },
+  {
     key: 'default_tournament_round_robin',
     title: 'Round Robin Default Banner',
     category: 'tournament',

@@ -62,8 +62,13 @@ from app.schemas.league import LeagueResponse
 from app.schemas.lesson import LessonResponse, LessonTypeResponse
 from app.schemas.tournament import TournamentResponse
 from app.services.club_asset_service import ClubAssetService
+from app.services.image_resolution_service import (
+    ImageResolutionService,
+    ResolvedImageResult,
+)
 
 router = APIRouter(prefix="/clubs/{club_id}", tags=["Club Visual Assets & Branding"])
+media_router = APIRouter(prefix="/media", tags=["Centralized Media & Image Resolution"])
 
 
 # ─── Club Branding ────────────────────────────────────────────────────────────
@@ -482,3 +487,52 @@ async def update_lesson_type_image(
         image_url=payload.image_url,
     )
     return LessonTypeResponse.model_validate(lt)
+
+
+# ─── Centralized Image Resolution Endpoints ───────────────────────────────────
+
+@router.get(
+    "/resolve-image",
+    response_model=ResolvedImageResult,
+    summary="Resolve image in 3-level hierarchy for this club",
+    description="Resolves custom item -> club default -> platform default -> neutral no-image.",
+)
+async def resolve_club_content_image(
+    club_id: UUID,
+    content_type: str = Query(..., description="tournament, event, league, or lesson"),
+    item_id: UUID | None = Query(None),
+    format: str | None = Query(None),
+    custom_url: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> ResolvedImageResult:
+    return await ImageResolutionService(db).resolve_image(
+        content_type=content_type,
+        item_id=item_id,
+        club_id=club_id,
+        format=format,
+        custom_url=custom_url,
+    )
+
+
+@media_router.get(
+    "/resolve",
+    response_model=ResolvedImageResult,
+    summary="Global 3-level image resolver",
+    description="Resolves content image across Priority 1: Custom -> Priority 2: Club Default -> Priority 3: Platform Default -> Fallback: None.",
+)
+async def resolve_content_image_global(
+    content_type: str = Query(..., description="tournament, event, league, or lesson"),
+    item_id: UUID | None = Query(None),
+    club_id: UUID | None = Query(None),
+    format: str | None = Query(None),
+    custom_url: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> ResolvedImageResult:
+    return await ImageResolutionService(db).resolve_image(
+        content_type=content_type,
+        item_id=item_id,
+        club_id=club_id,
+        format=format,
+        custom_url=custom_url,
+    )
+

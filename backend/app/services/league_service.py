@@ -170,6 +170,9 @@ class LeagueService:
 
         club_name = league.club.name if getattr(league, "club", None) else None
         club_slug = league.club.slug if getattr(league, "club", None) else None
+        resolved_banner = league.banner_image_url
+        if not resolved_banner and getattr(league, "club", None) and getattr(league.club, "default_league_banner_url", None):
+            resolved_banner = league.club.default_league_banner_url
 
         return LeagueResponse(
             id=league.id,
@@ -179,6 +182,7 @@ class LeagueService:
             name=league.name,
             description=league.description,
             banner_image_url=league.banner_image_url,
+            resolved_banner_url=resolved_banner,
             status=league.status,
             status_display=league.status.display_label,
             number_of_weeks=league.number_of_weeks,

@@ -193,6 +193,7 @@ class LessonResponse(BaseModel):
     title: str
     description: str | None = None
     image_url: str | None = None
+    resolved_image_url: str | None = None
     start_at: datetime
     end_at: datetime
     capacity: int | None = None

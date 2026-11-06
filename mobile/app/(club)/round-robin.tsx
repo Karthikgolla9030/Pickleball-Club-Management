@@ -669,6 +669,8 @@ export default function RoundRobinWorkspaceScreen() {
           {activeTab === 'settings' && (
             <TournamentSettingsTab
               tournament={tournament ?? null}
+              onRefresh={refetchTournament}
+              canManage={canManage}
             />
           )}
           </View>

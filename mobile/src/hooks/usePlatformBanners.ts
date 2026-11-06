@@ -17,6 +17,7 @@ import type { PlatformBanner, UpdatePlatformBannerPayload } from '@/types';
 export type PlatformBannerType =
   | 'owner_home'
   | 'player_home'
+  | 'default_tournament_banner'
   | 'default_tournament_round_robin'
   | 'default_tournament_scramble'
   | 'default_tournament_pool_play'

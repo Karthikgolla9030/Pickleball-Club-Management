@@ -829,12 +829,17 @@ class EventService:
             except Exception:
                 pass
 
+        resolved_cover = event.cover_image_url
+        if not resolved_cover and getattr(event, "club", None) and getattr(event.club, "default_event_banner_url", None):
+            resolved_cover = event.club.default_event_banner_url
+
         return EventDetailResponse(
             id=event.id,
             club_id=event.club_id,
             title=event.title,
             description=event.description,
             cover_image_url=event.cover_image_url,
+            resolved_cover_image_url=resolved_cover,
             event_type=event.event_type,
             event_type_label=event.event_type.value.capitalize(),
             status=event.status,

@@ -75,6 +75,7 @@ export interface ClubBranding {
   logo_url: string | null;
   cover_image_url: string | null;
   owner_banner_url?: string | null;
+  default_tournament_banner_url?: string | null;
   default_tournament_round_robin_url?: string | null;
   default_tournament_scramble_url?: string | null;
   default_tournament_pool_play_url?: string | null;
@@ -85,6 +86,7 @@ export interface ClubBranding {
   has_custom_logo: boolean;
   has_custom_cover: boolean;
   has_custom_owner_banner?: boolean;
+  has_custom_tournament_banner?: boolean;
   has_custom_tournament_round_robin?: boolean;
   has_custom_tournament_scramble?: boolean;
   has_custom_tournament_pool_play?: boolean;
@@ -98,6 +100,7 @@ export interface UpdateClubBrandingPayload {
   logo_url?: string | null;
   cover_image_url?: string | null;
   owner_banner_url?: string | null;
+  default_tournament_banner_url?: string | null;
   default_tournament_round_robin_url?: string | null;
   default_tournament_scramble_url?: string | null;
   default_tournament_pool_play_url?: string | null;
@@ -778,6 +781,7 @@ export interface Tournament {
   name: string;
   description: string | null;
   banner_image_url?: string | null;
+  resolved_banner_url?: string | null;
   status: TournamentStatus;
   status_label: string;
   format: TournamentFormat;
@@ -818,6 +822,7 @@ export interface TournamentDiscoveryItem {
   name: string;
   description: string | null;
   banner_image_url?: string | null;
+  resolved_banner_url?: string | null;
   status: TournamentStatus;
   status_label: string;
   format: TournamentFormat;
@@ -1282,6 +1287,7 @@ export interface LeagueSummary {
   name: string;
   description: string | null;
   banner_image_url?: string | null;
+  resolved_banner_url?: string | null;
   status: LeagueStatus;
   status_display: string;
   number_of_weeks: number;
@@ -2151,6 +2157,7 @@ export interface ClubEvent {
   title: string;
   description: string | null;
   cover_image_url?: string | null;
+  resolved_cover_image_url?: string | null;
   event_type: EventType;
   event_type_label: string;
   status: EventStatus;
@@ -2293,6 +2300,7 @@ export interface LessonType {
   name: string;
   description: string | null;
   image_url?: string | null;
+  resolved_image_url?: string | null;
   duration_minutes: number;
   default_capacity: number | null;
   default_price: number | string;
@@ -2312,6 +2320,7 @@ export interface ClubLesson {
   title: string;
   description: string | null;
   image_url?: string | null;
+  resolved_image_url?: string | null;
   start_at: string;
   end_at: string;
   capacity: number | null;

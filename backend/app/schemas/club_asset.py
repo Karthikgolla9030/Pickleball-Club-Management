@@ -16,6 +16,7 @@ class ClubBrandingResponse(BaseModel):
     logo_url: str | None = None
     cover_image_url: str | None = None
     owner_banner_url: str | None = None
+    default_tournament_banner_url: str | None = None
     default_tournament_round_robin_url: str | None = None
     default_tournament_scramble_url: str | None = None
     default_tournament_pool_play_url: str | None = None
@@ -27,6 +28,7 @@ class ClubBrandingResponse(BaseModel):
     has_custom_logo: bool = False
     has_custom_cover: bool = False
     has_custom_owner_banner: bool = False
+    has_custom_tournament_banner: bool = False
     has_custom_tournament_round_robin: bool = False
     has_custom_tournament_scramble: bool = False
     has_custom_tournament_pool_play: bool = False
@@ -43,6 +45,7 @@ class ClubBrandingUpdateRequest(BaseModel):
     logo_url: str | None = Field(None, max_length=1000)
     cover_image_url: str | None = Field(None, max_length=1000)
     owner_banner_url: str | None = Field(None, max_length=1000)
+    default_tournament_banner_url: str | None = Field(None, max_length=1000)
     default_tournament_round_robin_url: str | None = Field(None, max_length=1000)
     default_tournament_scramble_url: str | None = Field(None, max_length=1000)
     default_tournament_pool_play_url: str | None = Field(None, max_length=1000)

@@ -60,4 +60,5 @@ export * from './useClubBranding';
 export * from './usePlatformBanners';
 export * from './usePlatformBranding';
 export * from './useUniversalPromotionalAds';
+export * from './useImageResolution';
 

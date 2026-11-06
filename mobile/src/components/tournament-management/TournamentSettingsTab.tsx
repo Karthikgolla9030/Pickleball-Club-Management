@@ -2,33 +2,68 @@
  * Aught2 Pickleball — TournamentSettingsTab
  *
  * Standardized Settings view across all tournament formats:
+ * - Tournament Hero Banner (Custom override & Inheritance management)
  * - Format & Structure
  * - Official Scoring Rules
  * - Standings & Tiebreaker Rules
  * - Participant Capacity & Eligibility
  */
 
-import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Award,
+  Camera,
   Layers,
+  RotateCcw,
   Target,
+  Trophy,
   Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
+import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
+import { useClubBranding } from '@/hooks/useClubBranding';
+import { usePlatformBanners } from '@/hooks/usePlatformBanners';
 import { getFormatDisplayLabel, normalizeTournamentFormat } from '@/navigation';
-import { Spacing } from '@/theme';
-import type { Tournament } from '@/types';
+import { clubAssetsApi } from '@/services/api/clubAssets';
+import { queryClient } from '@/services/queryClient';
+import { QUERY_KEYS } from '@/constants';
+import { Colors, Radius, Spacing } from '@/theme';
+import type { ClubBranding, Tournament } from '@/types';
+import { resolveTournamentBanner, resolveTournamentBannerDetails } from '@/utils/imageResolution';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 interface TournamentSettingsTabProps {
   tournament: Tournament | null;
+  clubBranding?: ClubBranding | null;
+  onRefresh?: () => void | Promise<unknown>;
+  canManage?: boolean;
 }
 
-export function TournamentSettingsTab({ tournament }: TournamentSettingsTabProps) {
+export function TournamentSettingsTab({
+  tournament,
+  clubBranding: passedClubBranding,
+  onRefresh,
+  canManage = true,
+}: TournamentSettingsTabProps) {
+  const clubId = tournament?.club_id;
+  const { branding: fetchedClubBranding } = useClubBranding(clubId);
+  const { banners: platformBanners } = usePlatformBanners();
+  const clubBranding = passedClubBranding ?? fetchedClubBranding;
+
+  const [isUploading, setIsUploading] = useState(false);
+
   const format = normalizeTournamentFormat(tournament?.format);
   const parsed = parseTournamentConfig(tournament);
   const scoringRules = (tournament?.scoring_rules as unknown as Record<string, unknown>) || {};
@@ -37,6 +72,10 @@ export function TournamentSettingsTab({ tournament }: TournamentSettingsTabProps
   const gameFormat = typeof scoringRules.game_format === 'string' ? scoringRules.game_format : 'Single game';
 
   const formatConfig = (tournament?.format_configuration as Record<string, unknown>) || {};
+
+  const isCustom = Boolean(tournament?.banner_image_url);
+  const bannerSource = resolveTournamentBanner(tournament, clubBranding, platformBanners);
+  const bannerDetails = resolveTournamentBannerDetails(tournament, clubBranding, platformBanners);
 
   // Tiebreaker rules based on format
   const tiebreakers = React.useMemo(() => {
@@ -65,8 +104,186 @@ export function TournamentSettingsTab({ tournament }: TournamentSettingsTabProps
     ];
   }, [format]);
 
+  const handlePickBanner = async () => {
+    if (!clubId || !tournament?.id) {
+      Alert.alert('Notice', 'Tournament details are not loaded.');
+      return;
+    }
+
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Needed', 'Please allow photo gallery access to upload a banner.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || (asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg');
+        const ext = mime.includes('png') ? 'png' : 'jpg';
+        const fileName = asset.fileName || `tournament_banner_${Date.now()}.${ext}`;
+
+        setIsUploading(true);
+        try {
+          const uploadRes = await clubAssetsApi.uploadClubMedia(
+            clubId,
+            { uri: asset.uri, name: fileName, type: mime },
+            'tournament_banner',
+            'tournament'
+          );
+
+          await clubAssetsApi.updateTournamentImage(clubId, tournament.id, uploadRes.public_url);
+
+          // Invalidate relevant queries so all views refresh immediately
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournament.id) });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+
+          if (onRefresh) {
+            await onRefresh();
+          }
+
+          Alert.alert('Success', 'Tournament banner updated successfully.');
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Banner upload failed.';
+          Alert.alert('Upload Failed', msg);
+        } finally {
+          setIsUploading(false);
+        }
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to open image picker.');
+    }
+  };
+
+  const handleResetBanner = () => {
+    if (!clubId || !tournament?.id) return;
+
+    Alert.alert(
+      'Reset Tournament Banner',
+      'Remove this custom banner? This tournament will automatically fall back to your club default or platform default banner.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset to Default',
+          style: 'destructive',
+          onPress: async () => {
+            setIsUploading(true);
+            try {
+              await clubAssetsApi.updateTournamentImage(clubId, tournament.id, null);
+
+              queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournament.id) });
+              queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+              queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+
+              if (onRefresh) {
+                await onRefresh();
+              }
+
+              Alert.alert('Reset Complete', 'Tournament banner reset to default.');
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Reset failed.';
+              Alert.alert('Reset Failed', msg);
+            } finally {
+              setIsUploading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const bannerBadgeLabel = isCustom
+    ? 'Custom Banner'
+    : bannerDetails.level === 'club_default'
+    ? 'Inheriting Club Default'
+    : bannerDetails.level === 'platform_default'
+    ? 'Inheriting Platform Default'
+    : 'No Banner Configured';
+
+  const bannerBadgeVariant = isCustom
+    ? 'success'
+    : bannerDetails.level === 'club_default'
+    ? 'info'
+    : 'default';
+
   return (
     <View style={styles.container}>
+      {/* ─── 0. Tournament Hero Banner ─────────────────────────────────────── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Camera size={18} color="#0F766E" />
+          <AppText style={styles.cardHeaderTitle}>Tournament Hero Banner</AppText>
+          <View style={{ flex: 1 }} />
+          <Badge label={bannerBadgeLabel} variant={bannerBadgeVariant} />
+        </View>
+
+        <AppText style={styles.bannerDesc}>
+          {isCustom
+            ? 'This custom banner is displayed specifically for this tournament. It does not overwrite any club or platform default banners.'
+            : bannerDetails.level === 'club_default'
+            ? `No custom banner selected. This tournament is automatically using your club's default ${(format || 'tournament').replace('_', ' ')} banner.`
+            : bannerDetails.level === 'platform_default'
+            ? 'No custom banner or club default selected. This tournament is using the global platform default banner.'
+            : 'No banner configured at any level. You can upload a custom banner specifically for this tournament.'}
+        </AppText>
+
+        <View style={styles.bannerPreviewContainer}>
+          {bannerSource ? (
+            <Image source={bannerSource} style={styles.bannerPreviewImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.bannerEmptyPlaceholder}>
+              <Trophy size={28} color="#94A3B8" />
+              <AppText style={styles.bannerEmptyText}>No banner configured (clean neutral state)</AppText>
+            </View>
+          )}
+
+          {isUploading && (
+            <View style={styles.bannerUploadingOverlay}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <AppText style={styles.bannerUploadingText}>Updating banner...</AppText>
+            </View>
+          )}
+        </View>
+
+        {canManage && (
+          <View style={styles.bannerActionsRow}>
+            <TouchableOpacity
+              style={styles.bannerActionBtn}
+              onPress={handlePickBanner}
+              disabled={isUploading}
+              activeOpacity={0.8}
+            >
+              <Camera size={14} color="#FFFFFF" />
+              <AppText style={styles.bannerActionBtnText}>
+                {isCustom ? 'Replace Custom Banner' : 'Upload Custom Banner'}
+              </AppText>
+            </TouchableOpacity>
+
+            {isCustom && (
+              <TouchableOpacity
+                style={styles.bannerResetBtn}
+                onPress={handleResetBanner}
+                disabled={isUploading}
+                activeOpacity={0.8}
+              >
+                <RotateCcw size={14} color="#64748B" />
+                <AppText style={styles.bannerResetBtnText}>Reset to Default</AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </Card>
+
       {/* ─── 1. Format & Structure ────────────────────────────────────────── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
@@ -277,6 +494,86 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  bannerDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  bannerPreviewContainer: {
+    width: '100%',
+    height: 160,
+    borderRadius: Radius.md,
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    position: 'relative',
+  },
+  bannerPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  bannerEmptyPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    padding: Spacing[4],
+  },
+  bannerEmptyText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  bannerUploadingOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bannerUploadingText: {
+    fontSize: 12,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  bannerActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    flexWrap: 'wrap',
+    marginTop: Spacing[1],
+  },
+  bannerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0F766E',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+  },
+  bannerActionBtnText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  bannerResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  bannerResetBtnText: {
+    fontSize: 13,
+    color: '#475569',
+    fontWeight: '600',
   },
   infoList: {
     gap: Spacing[2],

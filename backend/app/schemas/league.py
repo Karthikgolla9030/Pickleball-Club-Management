@@ -67,6 +67,7 @@ class LeagueResponse(BaseModel):
     name: str
     description: str | None
     banner_image_url: str | None = None
+    resolved_banner_url: str | None = None
     status: LeagueStatus
     status_display: str | None = None
     number_of_weeks: int

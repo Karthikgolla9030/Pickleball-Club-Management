@@ -684,6 +684,8 @@ export default function ScrambleWorkspaceScreen() {
             {activeTab === 'settings' && (
               <TournamentSettingsTab
                 tournament={tournament ?? null}
+                onRefresh={refetchTournament}
+                canManage={canManage}
               />
             )}
           </View>

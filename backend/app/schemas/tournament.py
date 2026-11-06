@@ -325,6 +325,7 @@ class TournamentResponse(BaseModel):
     name: str
     description: str | None = None
     banner_image_url: str | None = None
+    resolved_banner_url: str | None = None
     status: TournamentStatus
     status_label: str
     format: TournamentFormat
@@ -361,6 +362,7 @@ class TournamentDiscoveryResponse(BaseModel):
     name: str
     description: str | None = None
     banner_image_url: str | None = None
+    resolved_banner_url: str | None = None
     format: TournamentFormat
     format_label: str
     status: TournamentStatus

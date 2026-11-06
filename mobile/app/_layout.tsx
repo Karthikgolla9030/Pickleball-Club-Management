@@ -19,27 +19,19 @@ import { blurActiveElement } from '@/utils';
 import { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/services/queryClient';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore, registerLogoutHandler } from '@/store';
 import { isPlatformAdminEmail } from '@/constants';
 import { WebSocketProvider } from '@/context/WebSocketContext';
 import { PendingAcceptancesModal } from '@/components/legal/PendingAcceptancesModal';
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 10,   // 10 minutes
-    },
-    mutations: {
-      retry: 0,
-    },
-  },
-});
+import { usePlatformBanners } from '@/hooks/usePlatformBanners';
 
 function RootLayoutContent() {
+  // Prefetch and hydrate global platform banners
+  usePlatformBanners();
+
   const initialize = useAuthStore((s) => s.initialize);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);

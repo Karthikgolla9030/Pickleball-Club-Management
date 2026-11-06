@@ -1350,6 +1350,9 @@ class LessonService:
         court_name = lesson.court.name if lesson.court else None
         is_private = lesson.lesson_type.is_private if lesson.lesson_type else False
         duration_minutes = lesson.lesson_type.duration_minutes if lesson.lesson_type else 60
+        resolved_img = lesson.image_url or (lesson.lesson_type.image_url if getattr(lesson, "lesson_type", None) else None)
+        if not resolved_img and getattr(lesson, "club", None) and getattr(lesson.club, "default_lesson_banner_url", None):
+            resolved_img = lesson.club.default_lesson_banner_url
 
         return LessonResponse(
             id=lesson.id,
@@ -1360,6 +1363,7 @@ class LessonService:
             title=lesson.title,
             description=lesson.description,
             image_url=lesson.image_url,
+            resolved_image_url=resolved_img,
             start_at=lesson.start_at,
             end_at=lesson.end_at,
             capacity=lesson.capacity,
