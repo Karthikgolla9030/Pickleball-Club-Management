@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
   AlertTriangle,
@@ -88,6 +89,7 @@ type SettingsView = 'menu' | 'operational';
 
 export default function PlatformSettingsScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -222,6 +224,8 @@ export default function PlatformSettingsScreen() {
       setRuntimeSettings(updated.runtime_settings);
       setReadOnlyConfig(updated.read_only_config);
       setSuccessMsg('Platform settings updated successfully and logged in audit trail.');
+      queryClient.invalidateQueries({ queryKey: ['platform', 'branding'] });
+      queryClient.invalidateQueries({ queryKey: ['platform', 'banners'] });
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to update platform settings';
       setError(msg);

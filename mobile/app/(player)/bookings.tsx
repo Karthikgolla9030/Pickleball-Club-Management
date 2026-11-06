@@ -181,7 +181,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Pickleball Club';
+    const clubName = booking.club_name || 'Club';
     const venueText = `${courtName} • ${clubName}`;
 
     return (
@@ -243,7 +243,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Pickleball Club';
+    const clubName = booking.club_name || 'Club';
     const venueText = `${courtName} • ${clubName}`;
     const courtImage = getCourtImage(booking, index);
 
@@ -323,7 +323,7 @@ export default function PlayerBookingsScreen() {
     const timeRange = formatTimeRange(booking.start_at, booking.end_at);
     const courtName =
       booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Pickleball Club';
+    const clubName = booking.club_name || 'Club';
     const venueText = `${courtName} • ${clubName}`;
     const courtImage = getCourtImage(booking, index);
 

@@ -84,7 +84,7 @@ export function CheckoutModal({
   visible,
   onClose,
   clubId,
-  clubName = 'Pickleball Club',
+  clubName = 'Club',
   purpose,
   activityId,
   activityTitle,

@@ -119,7 +119,7 @@ export function Step1BasicDetails({
         </AppText>
         <View style={styles.clubNameRow}>
           <AppText variant="heading3" style={styles.clubName}>
-            {clubName || 'Pickleball Club'}
+            {clubName || 'Club'}
           </AppText>
           <Badge label="Active Club" variant="info" />
         </View>

@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clubsApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
+import { useAuthStore } from '@/store';
 import { useActiveClub } from './useActiveClub';
 import type { Club, UpdateClubPayload } from '@/types';
 
@@ -29,6 +30,27 @@ export function useClubDetails(overrideClubId?: string | null) {
       return clubsApi.updateClub(clubId, payload);
     },
     onSuccess: (updatedClub) => {
+      // Synchronize updated club name into auth store activeMembership & memberships
+      const currentActive = useAuthStore.getState().activeMembership;
+      if (currentActive && currentActive.club_id === updatedClub.id) {
+        useAuthStore.setState({
+          activeMembership: {
+            ...currentActive,
+            club_name: updatedClub.name,
+            club_slug: updatedClub.slug,
+          },
+        });
+      }
+      const currentMemberships = useAuthStore.getState().memberships;
+      if (currentMemberships.some((m) => m.club_id === updatedClub.id)) {
+        useAuthStore.setState({
+          memberships: currentMemberships.map((m) =>
+            m.club_id === updatedClub.id
+              ? { ...m, club_name: updatedClub.name, club_slug: updatedClub.slug }
+              : m
+          ),
+        });
+      }
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
@@ -48,6 +70,27 @@ export function useClubDetails(overrideClubId?: string | null) {
       return clubsApi.uploadClubLogo(clubId, imageData);
     },
     onSuccess: (updatedClub) => {
+      // Synchronize updated club name into auth store activeMembership & memberships
+      const currentActive = useAuthStore.getState().activeMembership;
+      if (currentActive && currentActive.club_id === updatedClub.id) {
+        useAuthStore.setState({
+          activeMembership: {
+            ...currentActive,
+            club_name: updatedClub.name,
+            club_slug: updatedClub.slug,
+          },
+        });
+      }
+      const currentMemberships = useAuthStore.getState().memberships;
+      if (currentMemberships.some((m) => m.club_id === updatedClub.id)) {
+        useAuthStore.setState({
+          memberships: currentMemberships.map((m) =>
+            m.club_id === updatedClub.id
+              ? { ...m, club_name: updatedClub.name, club_slug: updatedClub.slug }
+              : m
+          ),
+        });
+      }
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });

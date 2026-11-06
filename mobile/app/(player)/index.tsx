@@ -44,6 +44,7 @@ import {
   useClubBranding,
   useDiscoverClubEvents,
   usePlatformBanner,
+  usePlatformBranding,
   usePlayerActivity,
   usePlayerBookings,
   usePlayerProfile,
@@ -135,6 +136,7 @@ export default function PlayerHomeScreen() {
 
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
+  const { platformName } = usePlatformBranding();
   const { clubId, clubName } = useActiveClub();
   const { branding: clubBranding } = useClubBranding(clubId);
 
@@ -236,7 +238,7 @@ export default function PlayerHomeScreen() {
           id: e.id,
           title: e.title,
           startDate: e.start_at,
-          venue: e.location || clubName || 'Pickleball Club',
+          venue: e.club_name || e.location || clubName || 'Club Court',
           typeBadge: e.event_type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
           skillBadge: undefined,
           statusBadge: 'Registration Open',
@@ -344,13 +346,13 @@ export default function PlayerHomeScreen() {
             {/* Content on Left */}
             <View style={styles.heroContent}>
               <AppText style={styles.heroTagline}>
-                {playerBanner?.title ? 'AUGHT2 PICKLEBALL' : 'WELCOME BACK'}
+                {platformName ? platformName.toUpperCase() : 'WELCOME BACK'}
               </AppText>
               <AppText
                 style={styles.heroGreeting}
                 numberOfLines={2}
               >
-                {playerBanner?.title || `Hello,\n${displayName}`}
+                {`Hello,\n${displayName}`}
               </AppText>
               <AppText style={styles.heroDescription} numberOfLines={2}>
                 {playerBanner?.subtitle || 'Ready to play, compete and make the most of your game?'}
@@ -412,7 +414,7 @@ export default function PlayerHomeScreen() {
                 nextBooking.court?.display_name ||
                 'Court';
               const clubTitle =
-                nextBooking.club_name || clubName || 'Pickleball Club';
+                nextBooking.club_name || clubName || 'Club Court';
               const venueText = `${courtTitle} • ${clubTitle}`;
 
               return (

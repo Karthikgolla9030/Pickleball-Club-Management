@@ -216,7 +216,7 @@ function PlayerPaymentCard({
   const hasRefundAmount = payment.refunded_amount != null && Number(payment.refunded_amount) > 0;
 
   const serviceTitle = getServiceTitle(payment);
-  const clubName = payment.club_name || 'Pickleball Club';
+  const clubName = payment.club_name || 'Club';
 
   return (
     <TouchableOpacity activeOpacity={0.85} onPress={onPress}>

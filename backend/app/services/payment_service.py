@@ -34,6 +34,7 @@ from app.models.payment import (
     PaymentPurpose,
     PaymentStatus,
 )
+from app.models.lesson import LessonStatus
 from app.models.tournament import TournamentStatus
 from app.repositories.booking_repository import BookingRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
@@ -41,12 +42,13 @@ from app.repositories.club_repository import ClubRepository
 from app.repositories.court_repository import CourtRepository
 from app.repositories.event_repository import EventRepository
 from app.repositories.league_repository import LeagueRepository
-from app.repositories.lesson_repository import LessonRepository
+from app.repositories.lesson_repository import LessonRegistrationRepository, LessonRepository
 from app.repositories.member_subscription_repository import MemberSubscriptionRepository
 from app.repositories.membership_plan_repository import MembershipPlanRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.tournament_repository import TournamentRepository
 from app.repositories.user_repository import UserRepository
+from app.services.lesson_service import _ensure_utc
 from app.schemas.payment import (
     CheckoutInitiateRequest,
     CheckoutInitiateResponse,
@@ -102,6 +104,7 @@ class PaymentService:
         self.tournament_repo = TournamentRepository(db)
         self.event_repo = EventRepository(db)
         self.lesson_repo = LessonRepository(db)
+        self.lesson_reg_repo = LessonRegistrationRepository(db)
         self.league_repo = LeagueRepository(db)
         self.plan_repo = MembershipPlanRepository(db)
 
@@ -817,14 +820,48 @@ class PaymentService:
             lesson = await self.lesson_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
             if not lesson:
                 raise HTTPException(status_code=404, detail="Lesson not found in this club")
-            fee_raw = getattr(lesson, "price", None) or Decimal("50.00")
+
+            # 1. Lesson Status Check
+            if lesson.status != LessonStatus.PUBLISHED:
+                raise HTTPException(status_code=400, detail=f"Cannot register for a lesson in '{lesson.status.value}' status")
+
+            # 2. Registration Window Check
+            now_utc = datetime.now(timezone.utc)
+            opens_at = _ensure_utc(lesson.registration_opens_at)
+            closes_at = _ensure_utc(lesson.registration_closes_at)
+            start_at = _ensure_utc(lesson.start_at)
+            if opens_at and now_utc < opens_at:
+                raise HTTPException(status_code=400, detail="Registration is not open yet")
+            cutoff = closes_at or start_at
+            if cutoff and now_utc > cutoff:
+                raise HTTPException(status_code=400, detail="Registration has closed for this lesson")
+            if start_at and now_utc >= start_at:
+                raise HTTPException(status_code=400, detail="Cannot register for a lesson that has already started")
+
+            # 3. Duplicate Active Registration Check
+            existing_reg = await self.lesson_reg_repo.get_active_registration_for_user(lesson.id, user_id)
+            if existing_reg:
+                raise HTTPException(status_code=400, detail="User already has an active registration for this lesson")
+
+            # 4. Capacity Check
+            active_count = await self.lesson_reg_repo.count_active_by_lesson(lesson.id)
+            if lesson.capacity is not None and active_count >= lesson.capacity:
+                raise HTTPException(status_code=409, detail="Lesson is full")
+
+            fee_raw = getattr(lesson, "price", None) or Decimal("0.00")
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+
+            coach_display = "Head Coach"
+            if getattr(lesson, "coach", None) and getattr(lesson.coach, "name", None):
+                coach_display = lesson.coach.name
+            elif getattr(lesson, "coach_name", None):
+                coach_display = lesson.coach_name
 
             summary.update({
                 "title": f"Lesson: {lesson.title}",
                 "activity_name": lesson.title,
                 "lesson_id": str(lesson.id),
-                "coach": getattr(lesson, "coach_name", "Head Coach"),
+                "coach": coach_display,
             })
             meta_dict.update({
                 "lesson_id": str(lesson.id),
@@ -1038,11 +1075,48 @@ class PaymentService:
         # Idempotent response if already confirmed
         if payment.status == PaymentStatus.SUCCEEDED:
             full = await self.payment_repo.get_by_id(payment.id)
+            booking_or_reg: dict[str, Any] = {"reference": payment.reference, "status": "confirmed"}
+            if payment.purpose == PaymentPurpose.LESSON and payment.lesson_id:
+                existing_reg = await self.lesson_reg_repo.get_active_registration_for_user(
+                    payment.lesson_id, payment.player_id
+                )
+                if existing_reg:
+                    booking_or_reg.update({
+                        "lesson_id": str(payment.lesson_id),
+                        "registration_id": str(existing_reg.id),
+                        "status": existing_reg.status.value,
+                    })
+                else:
+                    # Reconciliation: fulfill missing registration for verified payment
+                    try:
+                        from app.services.lesson_service import LessonService
+                        meta_reconcile = {}
+                        if payment.notes and "[META]" in payment.notes:
+                            try:
+                                meta_reconcile = json.loads(payment.notes.split("[META]", 1)[1])
+                            except Exception:
+                                meta_reconcile = {}
+                        l_res = await LessonService(self.db).register_player(
+                            lesson_id=payment.lesson_id,
+                            user_id=payment.player_id,
+                            notes=meta_reconcile.get("notes"),
+                            skip_payment_creation=True,
+                        )
+                        await self.db.commit()
+                        booking_or_reg.update({
+                            "lesson_id": str(payment.lesson_id),
+                            "registration_id": str(l_res.id),
+                            "status": l_res.status.value,
+                        })
+                    except Exception as err:
+                        logger.error(f"Failed to reconcile lesson registration for succeeded payment {payment.id}: {err}")
+                        booking_or_reg["lesson_id"] = str(payment.lesson_id)
+
             return CheckoutVerifyResponse(
                 success=True,
                 payment=PlayerPaymentResponse.from_orm_model(full),
                 message="Payment already verified and confirmed.",
-                booking_or_registration={"reference": payment.reference, "status": "confirmed"},
+                booking_or_registration=booking_or_reg,
             )
 
         gateway = get_payment_gateway(payload.provider)
@@ -1237,8 +1311,31 @@ class PaymentService:
                         "status": l_res.status.value,
                     })
                 except Exception as e:
-                    logger.warning(f"Lesson auto-registration fulfillment: {e}")
-                    booking_or_reg["lesson_id"] = str(lesson_id)
+                    logger.error(f"Lesson auto-registration fulfillment error: {e}")
+                    err_msg = str(e).lower()
+                    if "full" in err_msg or "conflict" in err_msg or "capacity" in err_msg:
+                        payment.status = PaymentStatus.REFUNDED
+                        payment.refund_reason = "Lesson capacity reached during checkout. Automatic refund initiated."
+                        payment.refunded_at = now
+                        payment.refunded_amount = payment.amount
+                        await self.db.commit()
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Lesson capacity was reached during checkout. A full refund has been initiated.",
+                        )
+                    # Check if already registered
+                    existing = await self.lesson_reg_repo.get_active_registration_for_user(lesson_id, payment.player_id)
+                    if existing:
+                        booking_or_reg.update({
+                            "lesson_id": str(lesson_id),
+                            "registration_id": str(existing.id),
+                            "status": existing.status.value,
+                        })
+                    else:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Lesson registration failed: {str(e)}",
+                        )
 
         elif payment.purpose == PaymentPurpose.LEAGUE:
             league_id = payment.league_id or (UUID(meta["league_id"]) if "league_id" in meta else None)
@@ -1420,6 +1517,22 @@ class PaymentService:
                                     player_count=parsed_player_count,
                                 )
                                 payment.booking_id = booking.id
+
+                    elif payment.purpose == PaymentPurpose.LESSON and payment.lesson_id:
+                        existing_reg = await self.lesson_reg_repo.get_active_registration_for_user(
+                            payment.lesson_id, payment.player_id
+                        )
+                        if not existing_reg:
+                            try:
+                                from app.services.lesson_service import LessonService
+                                await LessonService(self.db).register_player(
+                                    lesson_id=payment.lesson_id,
+                                    user_id=payment.player_id,
+                                    notes=meta.get("notes"),
+                                    skip_payment_creation=True,
+                                )
+                            except Exception as e:
+                                logger.error(f"Webhook lesson auto-registration failed: {e}")
 
                     await self.db.commit()
 

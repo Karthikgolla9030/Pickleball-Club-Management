@@ -18,6 +18,7 @@ class PlatformBannerResponse(BaseModel):
     cta_text: str | None = None
     cta_destination: str | None = None
     is_active: bool = True
+    platform_name: str | None = None
     created_at: datetime
     updated_at: datetime
 

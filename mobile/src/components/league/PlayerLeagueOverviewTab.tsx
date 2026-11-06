@@ -352,7 +352,7 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
                   </AppText>
                 </View>
                 <AppText variant="bodySmall" bold style={styles.value}>
-                  {league.club_name || 'Pickleball Club'}
+                  {league.club_name || 'Club'}
                 </AppText>
               </View>
             </View>

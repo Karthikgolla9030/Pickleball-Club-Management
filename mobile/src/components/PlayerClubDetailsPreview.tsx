@@ -153,7 +153,7 @@ export function PlayerClubDetailsPreview({
   const { slides: promotionalSlides = [] } = useClubCarouselSlides(effectiveClubId, true);
 
   // Dynamic values with clean fallback priority
-  const displayName = (name || club?.name || 'Pickleball Club').trim();
+  const displayName = (name || club?.name || 'Club').trim();
   const displayCity = city || club?.city || '';
   const displayState = state || club?.state || '';
   const locationText = [displayCity, displayState].filter(Boolean).join(', ') || 'Austin, TX';

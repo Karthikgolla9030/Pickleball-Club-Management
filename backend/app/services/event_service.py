@@ -818,6 +818,17 @@ class EventService:
             closes_ok = (close_cutoff is None) or (now <= close_cutoff)
             is_open = opens_ok and closes_ok
 
+        club_name = None
+        if getattr(event, "club", None) and hasattr(event.club, "name"):
+            club_name = event.club.name
+        else:
+            try:
+                club = await self.club_repo.get_by_id(event.club_id)
+                if club:
+                    club_name = club.name
+            except Exception:
+                pass
+
         return EventDetailResponse(
             id=event.id,
             club_id=event.club_id,
@@ -833,6 +844,7 @@ class EventService:
             start_at=_ensure_utc(event.start_at),
             end_at=_ensure_utc(event.end_at),
             location=event.location,
+            club_name=club_name,
             capacity=event.capacity,
             registration_required=event.registration_required,
             registration_opens_at=_ensure_utc(event.registration_opens_at),

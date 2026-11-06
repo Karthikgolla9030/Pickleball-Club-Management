@@ -555,7 +555,7 @@ async def reset_attendance(
 
 @player_lessons_router.get(
     "/clubs/{club_id}/lessons/discover",
-    response_model=list[LessonResponse],
+    response_model=list[PlayerLessonDetailResponse],
     summary="Discover available club lessons",
 )
 async def discover_lessons(
@@ -568,7 +568,7 @@ async def discover_lessons(
     limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[LessonResponse]:
+) -> list[PlayerLessonDetailResponse]:
     service = LessonService(db)
     return await service.discover_lessons(
         club_id=club_id,

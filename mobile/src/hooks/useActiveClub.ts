@@ -7,9 +7,11 @@
  */
 
 import { useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '@/store';
+import { clubsApi } from '@/services/api';
+import { QUERY_KEYS } from '@/constants';
 import { usePlayerClubs } from './usePlayerClubs';
 import type { MembershipInfo } from '@/types';
 
@@ -35,6 +37,17 @@ export function useActiveClub() {
   const resolvedClubName = effectiveMembership?.club_name ?? playerPrimaryClub?.club_name ?? null;
   const resolvedClubSlug = effectiveMembership?.club_slug ?? playerPrimaryClub?.club_slug ?? null;
 
+  // Live query for active club details to keep club name synchronized in real-time
+  const { data: activeClubData } = useQuery({
+    queryKey: resolvedClubId ? QUERY_KEYS.CLUB_DETAIL(resolvedClubId) : ['clubs', 'none'],
+    queryFn: () => (resolvedClubId ? clubsApi.getClub(resolvedClubId) : null),
+    enabled: Boolean(resolvedClubId),
+    staleTime: 30 * 1000,
+  });
+
+  const liveClubName = activeClubData?.name ?? resolvedClubName;
+  const liveClubSlug = activeClubData?.slug ?? resolvedClubSlug;
+
   const switchClub = useCallback(
     (membership: MembershipInfo) => {
       setActiveMembership(membership);
@@ -47,8 +60,8 @@ export function useActiveClub() {
   return {
     activeMembership: effectiveMembership,
     clubId: resolvedClubId,
-    clubName: resolvedClubName,
-    clubSlug: resolvedClubSlug,
+    clubName: liveClubName,
+    clubSlug: liveClubSlug,
     role: effectiveMembership?.role ?? null,
     roleLabel: effectiveMembership?.role_label ?? null,
     isActive: effectiveMembership?.is_active ?? (playerPrimaryClub?.status === 'active'),

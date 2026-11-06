@@ -61,6 +61,7 @@ from app.schemas.support_ticket import (
     SupportTicketsListResponse,
 )
 from app.schemas.platform_setting import (
+    PlatformPublicBrandingResponse,
     PlatformSettingsResponse,
     PlatformSettingsUpdateRequest,
 )
@@ -1026,6 +1027,27 @@ async def update_platform_settings(
     return await PlatformSettingsService(db).update_platform_settings(
         admin_actor=current_platform_owner,
         payload=payload,
+    )
+
+
+# ─── Global Platform Public Branding ─────────────────────────────────────────
+
+@router.get(
+    "/branding",
+    response_model=PlatformPublicBrandingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get global platform branding",
+    description="Returns public platform branding parameters (platform_name, support_email) for all client apps.",
+)
+async def get_platform_branding(
+    db: AsyncSession = Depends(get_db),
+) -> PlatformPublicBrandingResponse:
+    """Retrieve global platform display branding (platform_name, support email)."""
+    setting = await PlatformSettingsService(db).get_or_create_settings()
+    return PlatformPublicBrandingResponse(
+        platform_name=setting.platform_name,
+        platform_support_email=setting.platform_support_email,
+        maintenance_mode=setting.maintenance_mode,
     )
 
 

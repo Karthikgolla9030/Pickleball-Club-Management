@@ -10,9 +10,16 @@ import { Platform } from 'react-native';
 import { API_ENDPOINTS } from '@/constants';
 import { prepareImageBlobForUpload } from '@/utils';
 import { apiClient } from './client';
-import type { PlatformBanner, UpdatePlatformBannerPayload } from '@/types';
+import type { PlatformBanner, PlatformPublicBranding, UpdatePlatformBannerPayload } from '@/types';
 
 export const platformBannersApi = {
+  /**
+   * Retrieve global platform public branding (platform_name, support_email).
+   */
+  getBranding(): Promise<PlatformPublicBranding> {
+    return apiClient.get<PlatformPublicBranding>('/api/v1/platform/branding', false);
+  },
+
   /**
    * Retrieve all platform banners (public read).
    */

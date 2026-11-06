@@ -79,6 +79,17 @@ class PlatformBannerService:
             await self.db.refresh(banner)
         return banner
 
+    async def _to_banner_response(self, banner: PlatformBanner) -> PlatformBannerResponse:
+        from app.services.platform_settings_service import PlatformSettingsService
+        try:
+            setting = await PlatformSettingsService(self.db).get_or_create_settings()
+            p_name = setting.platform_name
+        except Exception:
+            p_name = "Pickleball"
+        resp = PlatformBannerResponse.model_validate(banner)
+        resp.platform_name = p_name
+        return resp
+
     async def get_all_banners(self) -> dict[str, PlatformBannerResponse]:
         """Fetch all platform banners keyed by banner_type."""
         stmt = select(PlatformBanner)
@@ -90,17 +101,17 @@ class PlatformBannerService:
         result: dict[str, PlatformBannerResponse] = {}
         for b_type in sorted(SUPPORTED_BANNER_TYPES):
             if b_type in existing_types:
-                result[b_type] = PlatformBannerResponse.model_validate(existing_types[b_type])
+                result[b_type] = await self._to_banner_response(existing_types[b_type])
             else:
                 banner = await self.get_or_create_banner(b_type)
-                result[b_type] = PlatformBannerResponse.model_validate(banner)
+                result[b_type] = await self._to_banner_response(banner)
 
         return result
 
     async def get_banner(self, banner_type: str) -> PlatformBannerResponse:
         """Fetch a single platform banner."""
         banner = await self.get_or_create_banner(banner_type)
-        return PlatformBannerResponse.model_validate(banner)
+        return await self._to_banner_response(banner)
 
     async def update_banner(
         self,
@@ -120,7 +131,7 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return PlatformBannerResponse.model_validate(banner)
+        return await self._to_banner_response(banner)
 
     async def upload_banner_image(
         self,
@@ -147,7 +158,7 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return PlatformBannerResponse.model_validate(banner)
+        return await self._to_banner_response(banner)
 
     async def reset_banner(
         self,
@@ -169,4 +180,4 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return PlatformBannerResponse.model_validate(banner)
+        return await self._to_banner_response(banner)

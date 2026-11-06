@@ -58,6 +58,7 @@ import {
   Users,
   X,
   GraduationCap,
+  CreditCard,
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
@@ -203,8 +204,11 @@ export default function PlayerLessonsScreen() {
       const registeredTitle = registeringLesson.title;
       setRegisteringLesson(null);
       setRegistrationNotes('');
+      setActiveTab('my_registrations');
       refetchDiscover();
       refetchMyLessons();
+      queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
       Alert.alert(
         'Registration Confirmed!',
         `You have successfully registered for "${registeredTitle}". See you on the court!`
@@ -314,7 +318,7 @@ export default function PlayerLessonsScreen() {
 
   const renderDiscoverCard = (item: PlayerLessonDetail, index: number) => {
     const thumbnail = resolveLessonImage(item, clubBranding);
-    const myReg = getPlayerRegistration(item.id);
+    const myReg = item.my_registration || getPlayerRegistration(item.id);
     const isRegistered = !!myReg;
     const availableSpots = item.available_spots ?? 0;
     const isFull = availableSpots <= 0 && !isRegistered;
@@ -462,7 +466,7 @@ export default function PlayerLessonsScreen() {
       : { bg: '#FEE2E2', text: '#DC2626', dot: '#DC2626' };
 
     const scheduleText = item.lesson_start_at
-      ? formatLessonSchedule(item.lesson_start_at)
+      ? formatLessonSchedule(item.lesson_start_at, item.duration_minutes || 60)
       : 'Upcoming Clinic';
 
     return (
@@ -509,11 +513,39 @@ export default function PlayerLessonsScreen() {
 
             {/* Meta Rows */}
             <View style={styles.metaRowsContainer}>
-              {/* Session schedule */}
+              {/* Session schedule & duration */}
               <View style={styles.metaRow}>
                 <Calendar size={13} color="#647570" strokeWidth={1.8} />
                 <AppText style={styles.metaText} numberOfLines={1}>
                   {scheduleText}
+                </AppText>
+              </View>
+
+              {/* Court / Venue */}
+              <View style={styles.metaRow}>
+                <MapPin size={13} color="#647570" strokeWidth={1.8} />
+                <AppText style={styles.metaText}>
+                  {item.court_name || 'Club Courts'}
+                </AppText>
+              </View>
+
+              {/* Coach */}
+              {item.coach_name ? (
+                <View style={styles.metaRow}>
+                  <GraduationCap size={13} color="#647570" strokeWidth={1.8} />
+                  <AppText style={styles.metaText}>
+                    Coach: {item.coach_name}
+                  </AppText>
+                </View>
+              ) : null}
+
+              {/* Payment Details */}
+              <View style={styles.metaRow}>
+                <CreditCard size={13} color="#647570" strokeWidth={1.8} />
+                <AppText style={styles.metaText}>
+                  Payment: {Number(item.payment_amount) === 0 || item.payment_status === 'free'
+                    ? 'Free'
+                    : `${item.payment_status === 'succeeded' ? 'Paid' : (item.payment_status || 'Confirmed')} (${formatCurrency(Number(item.payment_amount || 0), item.currency || 'USD')})`}
                 </AppText>
               </View>
 
@@ -912,12 +944,17 @@ export default function PlayerLessonsScreen() {
           onSuccess={() => {
             setCheckoutLesson(null);
             setSelectedLesson(null);
+            setActiveTab('my_registrations');
             refetchDiscover();
             refetchMyLessons();
             queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
             if (effectiveClubId) {
               queryClient.invalidateQueries({
                 queryKey: ['clubs', effectiveClubId, 'lessons'],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ['clubs', effectiveClubId, 'payments'],
               });
             } else {
               queryClient.invalidateQueries({ queryKey: ['clubs'] });

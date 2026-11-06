@@ -19,6 +19,8 @@ import uuid
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club import Club
@@ -32,15 +34,18 @@ from app.models.lesson import (
     LessonStatus,
     LessonType,
 )
+from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
 from app.models.user import User
 from app.repositories.booking_repository import BookingRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
+from app.repositories.club_repository import ClubRepository
 from app.repositories.lesson_repository import (
     CoachRepository,
     LessonRegistrationRepository,
     LessonRepository,
     LessonTypeRepository,
 )
+from app.repositories.payment_repository import PaymentRepository
 from app.schemas.lesson import (
     CoachCreateRequest,
     CoachResponse,
@@ -81,6 +86,8 @@ class LessonService:
         self.registration_repo = LessonRegistrationRepository(db)
         self.booking_repo = BookingRepository(db)
         self.cpm_repo = ClubPlayerMembershipRepository(db)
+        self.club_repo = ClubRepository(db)
+        self.payment_repo = PaymentRepository(db)
 
     # ─── Coach Management ─────────────────────────────────────────────────────
 
@@ -834,7 +841,8 @@ class LessonService:
         # 3. Eligibility Check: Active ClubPlayerMembership required
         membership = await self.cpm_repo.get_by_user_and_club(user_id, lesson.club_id)
         if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
-            if is_staff:
+            if skip_payment_creation:
+                # Player has completed verified checkout payment; auto-enroll them in club player membership
                 if not membership:
                     membership = await self.cpm_repo.create(
                         user_id=user_id,
@@ -842,7 +850,18 @@ class LessonService:
                         status=PlayerMembershipStatus.ACTIVE,
                     )
                     await self.db.flush()
-                elif membership.status != PlayerMembershipStatus.ACTIVE:
+                else:
+                    membership.status = PlayerMembershipStatus.ACTIVE
+                    await self.db.flush()
+            elif is_staff:
+                if not membership:
+                    membership = await self.cpm_repo.create(
+                        user_id=user_id,
+                        club_id=lesson.club_id,
+                        status=PlayerMembershipStatus.ACTIVE,
+                    )
+                    await self.db.flush()
+                else:
                     membership.status = PlayerMembershipStatus.ACTIVE
                     await self.db.flush()
             else:
@@ -869,6 +888,14 @@ class LessonService:
         # 4. Duplicate Active Registration Check
         existing = await self.registration_repo.get_active_registration_for_user(lesson_id, user_id)
         if existing:
+            if skip_payment_creation:
+                stmt_pay = select(Payment).where(
+                    Payment.lesson_id == lesson_id,
+                    Payment.player_id == user_id,
+                    Payment.status == PaymentStatus.SUCCEEDED,
+                ).order_by(Payment.created_at.desc())
+                existing_pmt = (await self.db.execute(stmt_pay)).scalars().first()
+                return self._to_registration_response(existing, lesson=lesson, payment=existing_pmt)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User already has an active registration for this lesson",
@@ -888,14 +915,11 @@ class LessonService:
             notes=notes,
             status=LessonRegistrationStatus.REGISTERED,
         )
-        resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
 
+        pmt = None
         # Record canonical payment if lesson has a price and payment creation is not skipped
         if not skip_payment_creation and lesson.price and lesson.price > Decimal("0"):
-            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
-            from app.repositories.payment_repository import PaymentRepository
             try:
-                from sqlalchemy import select
                 stmt = select(Payment).where(
                     Payment.lesson_id == lesson_id,
                     Payment.player_id == user_id,
@@ -903,8 +927,7 @@ class LessonService:
                 )
                 existing_pmt = (await self.db.execute(stmt)).scalars().first()
                 if not existing_pmt:
-                    pay_repo = PaymentRepository(self.db)
-                    reference = await pay_repo.generate_reference()
+                    reference = await self.payment_repo.generate_reference()
                     now_dt = datetime.now(timezone.utc)
                     payment = Payment(
                         reference=reference,
@@ -920,9 +943,20 @@ class LessonService:
                         notes=f"Lesson registration: {lesson.title}",
                         created_by_user_id=user_id,
                     )
-                    await pay_repo.create(payment)
+                    pmt = await self.payment_repo.create(payment)
+                else:
+                    pmt = existing_pmt
             except Exception:
                 pass
+        else:
+            stmt_pay = select(Payment).where(
+                Payment.lesson_id == lesson_id,
+                Payment.player_id == user_id,
+                Payment.status == PaymentStatus.SUCCEEDED,
+            ).order_by(Payment.created_at.desc())
+            pmt = (await self.db.execute(stmt_pay)).scalars().first()
+
+        resp = self._to_registration_response(registration, lesson=lesson, payment=pmt)
 
         try:
             active_count = await self.registration_repo.count_active_by_lesson(lesson_id)
@@ -1024,7 +1058,7 @@ class LessonService:
             pmt.updated_at = now_dt
             await self.db.flush()
 
-        resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
+        resp = self._to_registration_response(registration, lesson=lesson, payment=pmt)
 
         try:
             active_count = await self.registration_repo.count_active_by_lesson(lesson_id)
@@ -1101,7 +1135,17 @@ class LessonService:
         else:
             registration.attended_at = None
         registration = await self.registration_repo.update(registration)
-        resp = self._to_registration_response(registration, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
+        pmt = None
+        try:
+            stmt_pay = select(Payment).where(
+                Payment.lesson_id == lesson_id,
+                Payment.player_id == registration.user_id,
+                Payment.status == PaymentStatus.SUCCEEDED,
+            ).order_by(Payment.created_at.desc())
+            pmt = (await self.db.execute(stmt_pay)).scalars().first()
+        except Exception:
+            pass
+        resp = self._to_registration_response(registration, lesson=lesson, payment=pmt)
         try:
             active_count = await self.registration_repo.count_active_by_lesson(lesson_id)
             await dispatch_event(
@@ -1151,7 +1195,7 @@ class LessonService:
         upcoming_only: bool = True,
         offset: int = 0,
         limit: int = 50,
-    ) -> list[LessonResponse]:
+    ) -> list[PlayerLessonDetailResponse]:
         # Check if player has membership to this club
         membership = await self.cpm_repo.get_by_user_and_club(user_id, club_id)
         is_member = membership is not None and membership.status == PlayerMembershipStatus.ACTIVE
@@ -1165,7 +1209,40 @@ class LessonService:
             offset=offset,
             limit=limit,
         )
-        return [await self._to_lesson_response(l) for l in lessons]
+
+        lesson_ids = [l.id for l in lessons]
+        user_regs_map: dict[UUID, LessonRegistration] = {}
+        if lesson_ids:
+            stmt_regs = (
+                select(LessonRegistration)
+                .where(
+                    LessonRegistration.lesson_id.in_(lesson_ids),
+                    LessonRegistration.user_id == user_id,
+                    LessonRegistration.status != LessonRegistrationStatus.CANCELLED,
+                )
+                .options(selectinload(LessonRegistration.user))
+            )
+            found_regs = (await self.db.execute(stmt_regs)).scalars().all()
+            for r in found_regs:
+                user_regs_map[r.lesson_id] = r
+
+        results: list[PlayerLessonDetailResponse] = []
+        for l in lessons:
+            base_resp = await self._to_lesson_response(l)
+            my_reg = user_regs_map.get(l.id)
+            reg_resp = None
+            if my_reg:
+                reg_resp = self._to_registration_response(my_reg, lesson=l, user=my_reg.user)
+            results.append(
+                PlayerLessonDetailResponse(
+                    **base_resp.model_dump(),
+                    my_registration=reg_resp,
+                    is_registered=(my_reg is not None),
+                    is_eligible=True,
+                    eligibility_reason=None if is_member else "Requires active club player membership",
+                )
+            )
+        return results
 
     async def get_player_lesson_detail(
         self,
@@ -1182,7 +1259,7 @@ class LessonService:
         base_resp = await self._to_lesson_response(lesson)
         my_reg = await self.registration_repo.get_active_registration_for_user(lesson_id, user_id)
         my_reg_resp = (
-            self._to_registration_response(my_reg, lesson_title=lesson.title, lesson_start_at=lesson.start_at)
+            self._to_registration_response(my_reg, lesson=lesson, user=my_reg.user)
             if my_reg else None
         )
 
@@ -1200,6 +1277,7 @@ class LessonService:
         return PlayerLessonDetailResponse(
             **base_resp.model_dump(),
             my_registration=my_reg_resp,
+            is_registered=(my_reg is not None),
             is_eligible=is_eligible,
             eligibility_reason=eligibility_reason,
         )
@@ -1219,11 +1297,26 @@ class LessonService:
             offset=offset,
             limit=limit,
         )
+        if not regs:
+            return []
+
+        lesson_ids = [r.lesson_id for r in regs]
+        stmt_pay = select(Payment).where(
+            Payment.lesson_id.in_(lesson_ids),
+            Payment.player_id == user_id,
+        ).order_by(Payment.created_at.desc())
+        all_pmts = (await self.db.execute(stmt_pay)).scalars().all()
+        pmt_map: dict[UUID, Payment] = {}
+        for p in all_pmts:
+            if p.lesson_id and p.lesson_id not in pmt_map:
+                pmt_map[p.lesson_id] = p
+
         return [
             self._to_registration_response(
                 r,
-                lesson_title=r.lesson.title if r.lesson else None,
-                lesson_start_at=r.lesson.start_at if r.lesson else None,
+                lesson=r.lesson,
+                user=r.user,
+                payment=pmt_map.get(r.lesson_id),
             )
             for r in regs
         ]
@@ -1301,16 +1394,62 @@ class LessonService:
     def _to_registration_response(
         self,
         reg: LessonRegistration,
+        lesson: Lesson | None = None,
         lesson_title: str | None = None,
         lesson_start_at: datetime | None = None,
+        user: User | None = None,
+        payment: Any | None = None,
     ) -> LessonRegistrationResponse:
+        u = user or getattr(reg, "user", None)
         user_name = None
         user_email = None
         user_full_name = None
-        if reg.user:
-            user_full_name = getattr(reg.user, "full_name", None)
-            user_name = user_full_name or reg.user.email
-            user_email = reg.user.email
+        if u:
+            user_full_name = getattr(u, "full_name", None)
+            user_name = user_full_name or getattr(u, "email", None)
+            user_email = getattr(u, "email", None)
+
+        target_lesson = lesson or getattr(reg, "lesson", None)
+        ltitle = getattr(target_lesson, "title", None) or lesson_title
+        lstart = getattr(target_lesson, "start_at", None) or lesson_start_at
+        limg = getattr(target_lesson, "image_url", None)
+
+        cname = None
+        if target_lesson and getattr(target_lesson, "coach", None):
+            cname = target_lesson.coach.name
+        elif target_lesson and getattr(target_lesson, "coach_name", None):
+            cname = target_lesson.coach_name
+
+        court_n = None
+        if target_lesson and getattr(target_lesson, "court", None):
+            court_n = target_lesson.court.name
+        elif target_lesson and getattr(target_lesson, "court_name", None):
+            court_n = target_lesson.court_name
+
+        dur = 60
+        if target_lesson and getattr(target_lesson, "lesson_type", None):
+            dur = target_lesson.lesson_type.duration_minutes
+        elif target_lesson and getattr(target_lesson, "duration_minutes", None):
+            dur = target_lesson.duration_minutes
+
+        pay_amt = None
+        pay_status = None
+        pay_ref = None
+        curr = getattr(target_lesson, "currency", "USD") or "USD"
+
+        if payment:
+            pay_amt = payment.amount
+            pay_status = payment.status.value if hasattr(payment.status, "value") else str(payment.status)
+            pay_ref = payment.reference
+            curr = payment.currency or curr
+        elif target_lesson:
+            l_price = getattr(target_lesson, "price", None)
+            if l_price is not None and Decimal(str(l_price)) == Decimal("0"):
+                pay_amt = Decimal("0.00")
+                pay_status = "free"
+            elif reg.status == LessonRegistrationStatus.REGISTERED:
+                pay_amt = Decimal(str(l_price or "0.00"))
+                pay_status = "succeeded"
 
         return LessonRegistrationResponse(
             id=reg.id,
@@ -1326,6 +1465,14 @@ class LessonService:
             user_name=user_name,
             user_full_name=user_full_name,
             user_email=user_email,
-            lesson_title=lesson_title,
-            lesson_start_at=lesson_start_at,
+            lesson_title=ltitle,
+            lesson_start_at=lstart,
+            duration_minutes=dur,
+            court_name=court_n,
+            coach_name=cname,
+            lesson_image_url=limg,
+            payment_amount=pay_amt,
+            payment_status=pay_status,
+            payment_reference=pay_ref,
+            currency=curr,
         )

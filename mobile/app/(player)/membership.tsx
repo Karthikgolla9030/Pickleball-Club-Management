@@ -519,7 +519,7 @@ export default function PlayerMembershipScreen() {
               <View style={styles.clubRow}>
                 <Building2 size={16} color="#104E3E" strokeWidth={2} />
                 <AppText style={styles.clubName}>
-                  {activeSubscription.club_name || clubName || 'Pickleball Club'}
+                  {activeSubscription.club_name || clubName || 'Club'}
                 </AppText>
               </View>
 
@@ -685,7 +685,7 @@ export default function PlayerMembershipScreen() {
           <View style={styles.modalInfoRow}>
             <AppText style={styles.modalInfoLabel}>Club Facility</AppText>
             <AppText style={styles.modalInfoValue}>
-              {activeSubscription?.club_name || clubName || 'Pickleball Club'}
+              {activeSubscription?.club_name || clubName || 'Club'}
             </AppText>
           </View>
 

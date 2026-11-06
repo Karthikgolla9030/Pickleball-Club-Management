@@ -252,9 +252,18 @@ class LessonRegistrationResponse(BaseModel):
     user_email: str | None = None
     lesson_title: str | None = None
     lesson_start_at: datetime | None = None
+    duration_minutes: int | None = 60
+    court_name: str | None = None
+    coach_name: str | None = None
+    lesson_image_url: str | None = None
+    payment_amount: Decimal | None = None
+    payment_status: str | None = None
+    payment_reference: str | None = None
+    currency: str = "USD"
 
 
 class PlayerLessonDetailResponse(LessonResponse):
     my_registration: LessonRegistrationResponse | None = None
     is_eligible: bool = True
     eligibility_reason: str | None = None
+    is_registered: bool = False

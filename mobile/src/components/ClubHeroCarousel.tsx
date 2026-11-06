@@ -92,7 +92,7 @@ export function ClubHeroCarousel({
     const ownerWelcomeSlide: HeroBannerSlide = {
       id: 'platform-owner-home-banner-slide',
       tag: 'WELCOME TO',
-      title: platformBanner?.title || effectiveClubName || 'Pickleball Club',
+      title: effectiveClubName || 'Your Club',
       supportingText:
         platformBanner?.subtitle ||
         'Great courts. Active members.\nA healthier, happier community.',
@@ -233,7 +233,7 @@ export function ClubHeroCarousel({
               styles.slideContainer,
               { width: cardWidth },
               Platform.OS === 'web' &&
-                ({ scrollSnapAlign: 'start', WebkitScrollSnapAlign: 'start' } as any),
+              ({ scrollSnapAlign: 'start', WebkitScrollSnapAlign: 'start' } as any),
             ]}
           >
             {slide.image ? (

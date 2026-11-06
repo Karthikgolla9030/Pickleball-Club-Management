@@ -58,5 +58,6 @@ export * from './usePlayerMembershipRequests';
 export * from './useAnalytics';
 export * from './useClubBranding';
 export * from './usePlatformBanners';
+export * from './usePlatformBranding';
 export * from './useUniversalPromotionalAds';
 

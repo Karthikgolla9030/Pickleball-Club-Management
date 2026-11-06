@@ -81,7 +81,7 @@ export function PromotionalAdsCarousel({
   }, [ads.length, cardWidth]);
 
   // If no ads exist and hideIfEmpty is enabled, return null gracefully (no fake ads)
-  if (!isLoading && ads.length === 0 && hideIfEmpty) {
+  if (ads.length === 0 && hideIfEmpty) {
     return null;
   }
 

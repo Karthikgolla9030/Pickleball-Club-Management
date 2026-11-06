@@ -124,6 +124,12 @@ export interface ClubCarouselSlide {
   updated_at?: string;
 }
 
+export interface PlatformPublicBranding {
+  platform_name: string;
+  platform_support_email: string;
+  maintenance_mode: boolean;
+}
+
 export interface PlatformBanner {
   id: string;
   banner_type: 'owner_home' | 'player_home' | string;
@@ -133,6 +139,7 @@ export interface PlatformBanner {
   cta_text?: string | null;
   cta_destination?: string | null;
   is_active: boolean;
+  platform_name?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -2140,6 +2147,7 @@ export const EVENT_REGISTRATION_STATUS_LABELS: Record<EventRegistrationStatus, s
 export interface ClubEvent {
   id: string;
   club_id: string;
+  club_name?: string | null;
   title: string;
   description: string | null;
   cover_image_url?: string | null;
@@ -2347,6 +2355,13 @@ export interface LessonRegistration {
   lesson_title: string | null;
   lesson_start_at: string | null;
   lesson_image_url?: string | null;
+  duration_minutes?: number | null;
+  court_name?: string | null;
+  coach_name?: string | null;
+  payment_amount?: number | string | null;
+  payment_status?: string | null;
+  payment_reference?: string | null;
+  currency?: string | null;
 }
 
 export interface PlayerLessonDetail extends ClubLesson {

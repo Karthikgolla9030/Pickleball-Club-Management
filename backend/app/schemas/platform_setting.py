@@ -16,6 +16,15 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
+class PlatformPublicBrandingResponse(BaseModel):
+    """Public platform branding configuration accessible to all portals."""
+    model_config = ConfigDict(from_attributes=True)
+
+    platform_name: str = Field(description="Display brand name for the platform")
+    platform_support_email: str = Field(description="Global support contact email")
+    maintenance_mode: bool = Field(default=False, description="Whether platform maintenance banner is displayed")
+
+
 class PlatformRuntimeSettings(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

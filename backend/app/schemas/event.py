@@ -95,6 +95,7 @@ class EventResponse(BaseModel):
     start_at: datetime
     end_at: datetime
     location: str | None = None
+    club_name: str | None = None
     capacity: int | None = None
     registration_required: bool
     registration_opens_at: datetime | None = None

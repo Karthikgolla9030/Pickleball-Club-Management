@@ -686,7 +686,7 @@ export default function ClubDetailsScreen() {
                     {/* Club Info Details */}
                     <View style={styles.identityTextCol}>
                       <AppText style={styles.identityName} numberOfLines={2}>
-                        {name || 'Pickleball Club'}
+                        {name || 'Club'}
                       </AppText>
                       {shortDescription ? (
                         <AppText style={styles.identityTagline} numberOfLines={2}>

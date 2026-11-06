@@ -53,7 +53,7 @@ import {
 
 import { AppText } from './AppText';
 import { useDrawerStore } from '@/navigation';
-import { useAuth, useActiveClub } from '@/hooks';
+import { useAuth, useActiveClub, usePlatformBranding } from '@/hooks';
 import { isPlatformAdminEmail } from '@/constants';
 
 interface NavItemConfig {
@@ -79,6 +79,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   const { user, memberships, logout, activePortal } = useAuth();
   const { role, activeMembership } = useActiveClub();
+  const { platformName } = usePlatformBranding();
 
   const isPlatformAdmin = Boolean(
     user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
@@ -480,7 +481,9 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         {/* Footer Branding */}
         <View style={styles.footerRow}>
           <View style={styles.footerBrandCol}>
-            <AppText style={styles.footerBrandTitle}>AUGHT2 PICKLEBALL</AppText>
+            <AppText style={styles.footerBrandTitle}>
+              {platformName ? platformName.toUpperCase() : 'PICKLEBALL'}
+            </AppText>
             <AppText style={styles.footerBrandMotto}>Play  •  Connect  •  Grow</AppText>
           </View>
           <AppText style={styles.footerVersion}>v1.0.0</AppText>
