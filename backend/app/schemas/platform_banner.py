@@ -13,6 +13,8 @@ class PlatformBannerResponse(BaseModel):
     id: UUID
     banner_type: str
     image_url: str | None = None
+    default_image_url: str | None = None
+    resolved_image_url: str | None = None
     title: str | None = None
     subtitle: str | None = None
     cta_text: str | None = None

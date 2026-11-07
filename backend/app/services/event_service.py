@@ -832,6 +832,9 @@ class EventService:
         resolved_cover = event.cover_image_url
         if not resolved_cover and getattr(event, "club", None) and getattr(event.club, "default_event_banner_url", None):
             resolved_cover = event.club.default_event_banner_url
+        if not resolved_cover:
+            from app.services.platform_banner_service import resolve_platform_default
+            resolved_cover = resolve_platform_default("default_event_banner")
 
         return EventDetailResponse(
             id=event.id,

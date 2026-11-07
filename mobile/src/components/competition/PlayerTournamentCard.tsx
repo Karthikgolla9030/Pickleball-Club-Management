@@ -47,6 +47,7 @@ import type { ClubBranding, TournamentDiscoveryItem, TournamentFormat } from '@/
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { useClubBranding } from '@/hooks';
 
 export interface PlayerTournamentCardProps {
   tournament: TournamentDiscoveryItem;
@@ -154,9 +155,12 @@ export function PlayerTournamentCard({
   const currentCount = tournament.teams_count ?? tournament.participant_count ?? 0;
   const isFull = maxCap > 0 && currentCount >= maxCap;
 
+  const { branding: fetchedClubBranding } = useClubBranding(clubBranding ? null : tournament.club_id);
+  const activeClubBranding = clubBranding || fetchedClubBranding;
+
   const imageSource = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
-    clubBranding
+    tournament,
+    activeClubBranding
   );
 
   // Status Badge rendered on the top-left of the banner image

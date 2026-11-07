@@ -1353,6 +1353,9 @@ class LessonService:
         resolved_img = lesson.image_url or (lesson.lesson_type.image_url if getattr(lesson, "lesson_type", None) else None)
         if not resolved_img and getattr(lesson, "club", None) and getattr(lesson.club, "default_lesson_banner_url", None):
             resolved_img = lesson.club.default_lesson_banner_url
+        if not resolved_img:
+            from app.services.platform_banner_service import resolve_platform_default
+            resolved_img = resolve_platform_default("default_lesson_banner")
 
         return LessonResponse(
             id=lesson.id,

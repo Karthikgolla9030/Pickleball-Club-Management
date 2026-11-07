@@ -145,7 +145,7 @@ export function CompletedBracketView({
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
   const bannerSource = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    tournament,
     clubBranding
   );
 

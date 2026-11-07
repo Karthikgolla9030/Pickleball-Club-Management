@@ -104,6 +104,39 @@ DEFAULT_BANNER_CONFIGS = {
     },
 }
 
+BUILTIN_BANNER_URLS: dict[str, str] = {
+    "default_tournament_banner": "/uploads/defaults/tournaments/hero_discover_banner.jpg",
+    "default_tournament_round_robin": "/uploads/defaults/tournaments/card_round_robin.jpg",
+    "default_tournament_scramble": "/uploads/defaults/tournaments/banner2.jpg",
+    "default_tournament_pool_play": "/uploads/defaults/tournaments/card_pool_play.jpg",
+    "default_tournament_bracket": "/uploads/defaults/tournaments/card_bracket.jpg",
+    "default_event_banner": "/uploads/defaults/events/hero_events_photo.jpg",
+    "default_lesson_banner": "/uploads/defaults/lessons/hero_lessons_photo.jpg",
+    "default_league_banner": "/uploads/defaults/leagues/hero_banner.jpg",
+}
+
+_PLATFORM_DEFAULTS_CACHE: dict[str, str | None] = {}
+
+
+def get_cached_platform_defaults() -> dict[str, str | None]:
+    global _PLATFORM_DEFAULTS_CACHE
+    if not _PLATFORM_DEFAULTS_CACHE:
+        _PLATFORM_DEFAULTS_CACHE = dict(BUILTIN_BANNER_URLS)
+    return _PLATFORM_DEFAULTS_CACHE
+
+
+def update_cached_platform_default(banner_type: str, image_url: str | None) -> None:
+    global _PLATFORM_DEFAULTS_CACHE
+    clean_type = banner_type.lower().strip()
+    resolved = image_url if (image_url and image_url.strip()) else BUILTIN_BANNER_URLS.get(clean_type)
+    _PLATFORM_DEFAULTS_CACHE[clean_type] = resolved
+
+
+def resolve_platform_default(banner_type: str) -> str | None:
+    cache = get_cached_platform_defaults()
+    clean_type = banner_type.lower().strip()
+    return cache.get(clean_type) or BUILTIN_BANNER_URLS.get(clean_type)
+
 
 class PlatformBannerService:
     def __init__(self, db: AsyncSession) -> None:
@@ -159,6 +192,9 @@ class PlatformBannerService:
             p_name = "Pickleball"
         resp = PlatformBannerResponse.model_validate(banner)
         resp.platform_name = p_name
+        builtin_url = BUILTIN_BANNER_URLS.get(banner.banner_type)
+        resp.default_image_url = builtin_url
+        resp.resolved_image_url = banner.image_url.strip() if (banner.image_url and banner.image_url.strip()) else builtin_url
         if banner.banner_type in ("owner_home", "player_home"):
             if not resp.title or "Aught2" in resp.title or resp.title.startswith("Welcome to "):
                 resp.title = f"Welcome to {p_name}"
@@ -175,17 +211,21 @@ class PlatformBannerService:
         result: dict[str, PlatformBannerResponse] = {}
         for b_type in sorted(SUPPORTED_BANNER_TYPES):
             if b_type in existing_types:
-                result[b_type] = await self._to_banner_response(existing_types[b_type])
+                banner_resp = await self._to_banner_response(existing_types[b_type])
             else:
                 banner = await self.get_or_create_banner(b_type)
-                result[b_type] = await self._to_banner_response(banner)
+                banner_resp = await self._to_banner_response(banner)
+            result[b_type] = banner_resp
+            update_cached_platform_default(b_type, banner_resp.image_url)
 
         return result
 
     async def get_banner(self, banner_type: str) -> PlatformBannerResponse:
         """Fetch a single platform banner."""
         banner = await self.get_or_create_banner(banner_type)
-        return await self._to_banner_response(banner)
+        resp = await self._to_banner_response(banner)
+        update_cached_platform_default(banner_type, resp.image_url)
+        return resp
 
     async def update_banner(
         self,
@@ -205,7 +245,9 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return await self._to_banner_response(banner)
+        resp = await self._to_banner_response(banner)
+        update_cached_platform_default(banner_type, resp.image_url)
+        return resp
 
     async def upload_banner_image(
         self,
@@ -232,7 +274,9 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return await self._to_banner_response(banner)
+        resp = await self._to_banner_response(banner)
+        update_cached_platform_default(banner_type, resp.image_url)
+        return resp
 
     async def reset_banner(
         self,
@@ -264,4 +308,6 @@ class PlatformBannerService:
 
         await self.db.commit()
         await self.db.refresh(banner)
-        return await self._to_banner_response(banner)
+        resp = await self._to_banner_response(banner)
+        update_cached_platform_default(banner_type, None)
+        return resp

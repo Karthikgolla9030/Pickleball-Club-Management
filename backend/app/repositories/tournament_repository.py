@@ -222,7 +222,7 @@ class TournamentRepository:
     async def update(self, tournament: Tournament, **fields) -> Tournament:
         """Update fields on an existing tournament."""
         for field, value in fields.items():
-            if value is not None:
+            if hasattr(tournament, field):
                 setattr(tournament, field, value)
 
         await self.db.flush()

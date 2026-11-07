@@ -148,7 +148,7 @@ export function LiveTournamentView({
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
   const bannerImage = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    tournament,
     clubBranding
   );
 

@@ -51,12 +51,20 @@ class ImageResolutionService:
     async def get_platform_banner_url(self, banner_type: str) -> str | None:
         """Fetch active platform default banner image URL by banner type."""
         clean_type = banner_type.lower().strip()
-        stmt = select(PlatformBanner.image_url).where(
+        stmt = select(PlatformBanner).where(
             PlatformBanner.banner_type == clean_type,
-            PlatformBanner.is_active.is_(True),
         )
         res = await self.db.execute(stmt)
-        return res.scalar_one_or_none()
+        banner = res.scalar_one_or_none()
+        if banner is not None:
+            if not banner.is_active:
+                return None
+            if banner.image_url and banner.image_url.strip():
+                return banner.image_url.strip()
+            # If active but custom image_url is not set, use Platform Admin built-in default
+            from app.services.platform_banner_service import resolve_platform_default
+            return resolve_platform_default(clean_type)
+        return None
 
     async def get_club_by_id(self, club_id: UUID | str) -> Club | None:
         """Fetch club record by ID."""

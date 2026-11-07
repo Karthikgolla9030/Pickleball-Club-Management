@@ -34,6 +34,7 @@ import type { ClubBranding, TournamentStatus } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { useClubBranding } from '@/hooks';
 
 export interface TournamentCardData {
   id: string;
@@ -154,9 +155,11 @@ export function TournamentCard({
 
   const statusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const formatBadge = getFormatBadgeStyle(tournament.format || '', tournament.format_label);
+  const { branding: fetchedClubBranding } = useClubBranding(clubBranding ? null : (tournament as any).club_id);
+  const activeClubBranding = clubBranding || fetchedClubBranding;
   const banner = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
-    clubBranding
+    tournament,
+    activeClubBranding
   );
   const parsed = parseTournamentConfig(tournament as any);
   const entryLabel = parsed?.capacity?.entryLabel ? `${parsed.capacity.entryLabel.toLowerCase()} ` : '';

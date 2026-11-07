@@ -149,8 +149,8 @@ export function resolveTournamentBanner(
     return { uri: resolveMediaUrl(tournament.resolved_banner_url) };
   }
 
-  // 5. Deliberate built-in fallback only if explicitly requested
-  if (options?.allowBuiltinFallback) {
+  // 5. Deliberate built-in fallback (Platform Admin Built-in Default)
+  if (options?.allowBuiltinFallback !== false) {
     if (fmt === 'round_robin') return BUILTIN_FALLBACKS.tournamentRoundRobin;
     if (fmt === 'scramble') return BUILTIN_FALLBACKS.tournamentScramble;
     if (fmt === 'pool_play') return BUILTIN_FALLBACKS.tournamentPoolPlay;
@@ -236,6 +236,25 @@ export function resolveTournamentBannerDetails(
     };
   }
 
+  const builtinSource =
+    fmt === 'round_robin'
+      ? BUILTIN_FALLBACKS.tournamentRoundRobin
+      : fmt === 'scramble'
+      ? BUILTIN_FALLBACKS.tournamentScramble
+      : fmt === 'pool_play'
+      ? BUILTIN_FALLBACKS.tournamentPoolPlay
+      : fmt === 'bracket'
+      ? BUILTIN_FALLBACKS.tournamentBracket
+      : BUILTIN_FALLBACKS.tournamentGeneric;
+
+  if (builtinSource) {
+    return {
+      source: builtinSource,
+      level: 'platform_default',
+      url: null,
+    };
+  }
+
   return {
     source: null,
     level: 'none',
@@ -268,7 +287,7 @@ export function resolveTournamentFormatDefault(
     if (activePlatformBanners?.default_tournament_banner?.image_url) {
       return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
     }
-    return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.tournamentRoundRobin : null;
+    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentRoundRobin : null;
   }
   if (fmt === 'scramble') {
     if (clubBranding?.default_tournament_scramble_url) {
@@ -283,7 +302,7 @@ export function resolveTournamentFormatDefault(
     if (activePlatformBanners?.default_tournament_banner?.image_url) {
       return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
     }
-    return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.tournamentScramble : null;
+    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentScramble : null;
   }
   if (fmt === 'pool_play') {
     if (clubBranding?.default_tournament_pool_play_url) {
@@ -298,7 +317,7 @@ export function resolveTournamentFormatDefault(
     if (activePlatformBanners?.default_tournament_banner?.image_url) {
       return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
     }
-    return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.tournamentPoolPlay : null;
+    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentPoolPlay : null;
   }
   if (fmt === 'bracket') {
     if (clubBranding?.default_tournament_bracket_url) {
@@ -311,9 +330,9 @@ export function resolveTournamentFormatDefault(
       return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
     }
     if (activePlatformBanners?.default_tournament_banner?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_bracket.image_url) };
     }
-    return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.tournamentBracket : null;
+    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentBracket : null;
   }
 
   // General tournament default
@@ -323,7 +342,7 @@ export function resolveTournamentFormatDefault(
   if (activePlatformBanners?.default_tournament_banner?.image_url) {
     return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
   }
-  return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.tournamentGeneric : null;
+  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentGeneric : null;
 }
 
 /**
@@ -355,7 +374,7 @@ export function resolveLeaguePicture(
   if (typeof league === 'object' && league?.resolved_banner_url) {
     return { uri: resolveMediaUrl(league.resolved_banner_url) };
   }
-  return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.league : null;
+  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.league : null;
 }
 
 export const resolveLeagueBanner = resolveLeaguePicture;
@@ -366,7 +385,7 @@ export const resolveLeagueBanner = resolveLeaguePicture;
  * 2. club default_event_banner_url (configured in Club Details -> Branding)
  * 3. platform default_event_banner (configured in Platform Admin Banners)
  * 4. backend pre-resolved fallback
- * 5. deliberate built-in fallback (if options.allowBuiltinFallback)
+ * 5. deliberate built-in fallback (Platform Admin Built-in Default)
  * 6. null (clean neutral no-image state)
  */
 export function resolveEventPicture(
@@ -389,7 +408,7 @@ export function resolveEventPicture(
   if (typeof event === 'object' && event?.resolved_cover_image_url) {
     return { uri: resolveMediaUrl(event.resolved_cover_image_url) };
   }
-  return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.event : null;
+  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.event : null;
 }
 
 export const resolveEventCover = resolveEventPicture;
@@ -401,7 +420,7 @@ export const resolveEventCover = resolveEventPicture;
  * 3. club default_lesson_banner_url (configured in Club Details -> Branding)
  * 4. platform default_lesson_banner (configured in Platform Admin Banners)
  * 5. backend pre-resolved fallback
- * 6. deliberate built-in fallback (if options.allowBuiltinFallback)
+ * 6. deliberate built-in fallback (Platform Admin Built-in Default)
  * 7. null (clean neutral no-image state)
  */
 export function resolveLessonPicture(
@@ -431,7 +450,7 @@ export function resolveLessonPicture(
   if (typeof lesson === 'object' && lesson?.resolved_image_url) {
     return { uri: resolveMediaUrl(lesson.resolved_image_url) };
   }
-  return options?.allowBuiltinFallback ? BUILTIN_FALLBACKS.lesson : null;
+  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.lesson : null;
 }
 
 export const resolveLessonImage = resolveLessonPicture;

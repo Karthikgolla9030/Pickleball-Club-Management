@@ -99,8 +99,10 @@ def _build_tournament_response(
     club_slug = t.club.slug if getattr(t, "club", None) else None
     custom_banner = getattr(t, "banner_image_url", None)
     resolved_banner = custom_banner
+    fmt = (t.format.value if hasattr(t.format, "value") else str(t.format or "")).lower()
+
+    # Priority 2: Club Format Default -> Club General Default
     if not resolved_banner and getattr(t, "club", None):
-        fmt = (t.format.value if hasattr(t.format, "value") else str(t.format or "")).lower()
         if fmt == "round_robin" and t.club.default_tournament_round_robin_url:
             resolved_banner = t.club.default_tournament_round_robin_url
         elif fmt == "scramble" and t.club.default_tournament_scramble_url:
@@ -111,6 +113,21 @@ def _build_tournament_response(
             resolved_banner = t.club.default_tournament_bracket_url
         elif t.club.default_tournament_banner_url:
             resolved_banner = t.club.default_tournament_banner_url
+
+    # Priority 3: Platform Admin Global Default (Format-specific -> General Tournament Default)
+    if not resolved_banner:
+        from app.services.platform_banner_service import resolve_platform_default
+        if fmt == "round_robin":
+            resolved_banner = resolve_platform_default("default_tournament_round_robin")
+        elif fmt == "scramble":
+            resolved_banner = resolve_platform_default("default_tournament_scramble")
+        elif fmt == "pool_play":
+            resolved_banner = resolve_platform_default("default_tournament_pool_play")
+        elif fmt == "bracket":
+            resolved_banner = resolve_platform_default("default_tournament_bracket")
+
+        if not resolved_banner:
+            resolved_banner = resolve_platform_default("default_tournament_banner")
 
     return TournamentResponse(
         id=t.id,

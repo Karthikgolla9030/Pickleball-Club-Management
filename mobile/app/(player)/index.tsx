@@ -533,11 +533,11 @@ export default function PlayerHomeScreen() {
               {(() => {
                 const imgSource = upcomingEvent.isTournament
                   ? resolveTournamentBanner(
-                      { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format },
+                      { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format, resolved_banner_url: (upcomingEvent as any).resolved_banner_url },
                       clubBranding
                     )
                   : resolveEventCover(
-                      { cover_image_url: upcomingEvent.imageUrl },
+                      { cover_image_url: upcomingEvent.imageUrl, resolved_cover_image_url: (upcomingEvent as any).resolved_cover_image_url },
                       clubBranding
                     );
                 if (imgSource) {

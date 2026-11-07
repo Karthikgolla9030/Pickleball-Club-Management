@@ -173,6 +173,9 @@ class LeagueService:
         resolved_banner = league.banner_image_url
         if not resolved_banner and getattr(league, "club", None) and getattr(league.club, "default_league_banner_url", None):
             resolved_banner = league.club.default_league_banner_url
+        if not resolved_banner:
+            from app.services.platform_banner_service import resolve_platform_default
+            resolved_banner = resolve_platform_default("default_league_banner")
 
         return LeagueResponse(
             id=league.id,

@@ -46,6 +46,7 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
       logo_url?: string | null;
       cover_image_url?: string | null;
       owner_banner_url?: string | null;
+      default_tournament_banner_url?: string | null;
       default_tournament_round_robin_url?: string | null;
       default_tournament_scramble_url?: string | null;
       default_tournament_pool_play_url?: string | null;
@@ -65,6 +66,7 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
       if (logo !== undefined) updateData.logo_url = logo;
       if (cover !== undefined) updateData.cover_image_url = cover;
       if (payload.owner_banner_url !== undefined) updateData.owner_banner_url = payload.owner_banner_url;
+      if (payload.default_tournament_banner_url !== undefined) updateData.default_tournament_banner_url = payload.default_tournament_banner_url;
       if (payload.default_tournament_round_robin_url !== undefined) updateData.default_tournament_round_robin_url = payload.default_tournament_round_robin_url;
       if (payload.default_tournament_scramble_url !== undefined) updateData.default_tournament_scramble_url = payload.default_tournament_scramble_url;
       if (payload.default_tournament_pool_play_url !== undefined) updateData.default_tournament_pool_play_url = payload.default_tournament_pool_play_url;
@@ -83,6 +85,14 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(targetClubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', targetClubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(targetClubId) });
+        queryClient.invalidateQueries({ queryKey: ['club-tournaments', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+        queryClient.invalidateQueries({ queryKey: ['club-leagues', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['leagues'] });
+        queryClient.invalidateQueries({ queryKey: ['club-events', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['events'] });
+        queryClient.invalidateQueries({ queryKey: ['club-lessons', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['lessons'] });
       }
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUBS });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUBS });

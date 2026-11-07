@@ -104,7 +104,7 @@ export function UpcomingTournamentPreviewView({
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
   const bannerImage = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
+    tournament,
     clubBranding
   );
 

@@ -137,6 +137,17 @@ async def _ensure_platform_admin_exists() -> None:
         logger.warning("Platform administrator auto-provisioning skipped: %s", exc)
 
 
+async def _ensure_platform_banners_exist() -> None:
+    """Ensure platform default banners exist in durable storage and initialize cache."""
+    try:
+        from app.core.database import AsyncSessionLocal
+        from app.services.platform_banner_service import PlatformBannerService
+        async with AsyncSessionLocal() as session:
+            await PlatformBannerService(session).get_all_banners()
+    except Exception as exc:
+        logger.warning("Platform banners auto-seeding skipped: %s", exc)
+
+
 # ─── Lifespan ────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -156,6 +167,7 @@ async def lifespan(app: FastAPI):
         # Apply database migrations in a worker thread so the async event loop is not blocked
         await asyncio.to_thread(_run_db_migrations)
         await _ensure_platform_admin_exists()
+        await _ensure_platform_banners_exist()
 
     yield
     logger.info("Shutting down %s", settings.APP_NAME)
@@ -195,7 +207,7 @@ def create_app() -> FastAPI:
             allow_headers=["*"],
         )
 
-    # ─── Static Files for Uploads ─────────────────────────────────────────────
+    # ─── Static Files for Uploads and Defaults ─────────────────────────────────
     import os
     from fastapi.staticfiles import StaticFiles
 
@@ -216,9 +228,15 @@ def create_app() -> FastAPI:
         "slides",
         "lesson-image",
         "general",
+        "platform_banners",
+        "defaults",
     ):
         os.makedirs(os.path.join(uploads_dir, category_dir), exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+    static_dir = os.path.join(backend_dir, "static")
+    os.makedirs(static_dir, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     # ─── Routers ──────────────────────────────────────────────────────────────
     app.include_router(api_router)
