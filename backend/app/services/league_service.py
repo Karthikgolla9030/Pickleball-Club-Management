@@ -168,11 +168,17 @@ class LeagueService:
             if champ:
                 champion_team_dict = {"id": str(champ.id), "name": champ.name}
 
-        club_name = league.club.name if getattr(league, "club", None) else None
-        club_slug = league.club.slug if getattr(league, "club", None) else None
-        resolved_banner = league.banner_image_url
-        if not resolved_banner and getattr(league, "club", None) and getattr(league.club, "default_league_banner_url", None):
-            resolved_banner = league.club.default_league_banner_url
+        club = getattr(league, "club", None)
+        club_name = club.name if club else None
+        club_slug = club.slug if club else None
+        custom_banner = league.banner_image_url.strip() if (league.banner_image_url and league.banner_image_url.strip()) else None
+        resolved_banner = custom_banner
+
+        # Priority 2: Club default
+        if not resolved_banner and club and getattr(club, "default_league_banner_url", None):
+            resolved_banner = club.default_league_banner_url.strip()
+
+        # Priority 3: Platform default
         if not resolved_banner:
             from app.services.platform_banner_service import resolve_platform_default
             resolved_banner = resolve_platform_default("default_league_banner")

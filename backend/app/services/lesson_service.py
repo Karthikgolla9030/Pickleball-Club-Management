@@ -1350,9 +1350,17 @@ class LessonService:
         court_name = lesson.court.name if lesson.court else None
         is_private = lesson.lesson_type.is_private if lesson.lesson_type else False
         duration_minutes = lesson.lesson_type.duration_minutes if lesson.lesson_type else 60
-        resolved_img = lesson.image_url or (lesson.lesson_type.image_url if getattr(lesson, "lesson_type", None) else None)
-        if not resolved_img and getattr(lesson, "club", None) and getattr(lesson.club, "default_lesson_banner_url", None):
-            resolved_img = lesson.club.default_lesson_banner_url
+        club = getattr(lesson, "club", None)
+        custom_img = lesson.image_url.strip() if (lesson.image_url and lesson.image_url.strip()) else None
+        if not custom_img and getattr(lesson, "lesson_type", None) and lesson.lesson_type.image_url:
+            custom_img = lesson.lesson_type.image_url.strip()
+
+        resolved_img = custom_img
+        # Priority 2: Club default
+        if not resolved_img and club and getattr(club, "default_lesson_banner_url", None):
+            resolved_img = club.default_lesson_banner_url.strip()
+
+        # Priority 3: Platform default
         if not resolved_img:
             from app.services.platform_banner_service import resolve_platform_default
             resolved_img = resolve_platform_default("default_lesson_banner")

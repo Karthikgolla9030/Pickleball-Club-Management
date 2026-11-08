@@ -111,6 +111,7 @@ import {
   useUpdateCoach,
   useUpdateClubLesson,
   useUpdateLessonType,
+  usePlatformBanners,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { clubAssetsApi } from '@/services/api/clubAssets';
@@ -181,8 +182,12 @@ function formatLessonDateTime(startIso: string, endIso: string) {
   }
 }
 
-function getLessonCardImage(item: ClubLesson, clubBranding?: ClubBranding | null) {
-  return resolveLessonImage(item, clubBranding);
+function getLessonCardImage(
+  item: ClubLesson,
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, any> | null
+) {
+  return resolveLessonImage(item, clubBranding, platformBanners);
 }
 
 export default function ClubLessonsScreen() {
@@ -190,6 +195,7 @@ export default function ClubLessonsScreen() {
   const { clubId: activeClubId, clubName } = useActiveClub();
   const { canManageLessons } = usePermission();
   const { data: clubBranding } = useClubBranding(activeClubId ?? '');
+  const { banners: platformBanners } = usePlatformBanners();
   const toggleDrawer = useDrawerStore((s) => s.toggleDrawer);
 
   const [activeTab, setActiveTab] = useState<StaffTab>('lessons');
@@ -966,7 +972,7 @@ export default function ClubLessonsScreen() {
   );
 
   const renderLessonCard = ({ item }: { item: ClubLesson }) => {
-    const cardImg = getLessonCardImage(item, clubBranding);
+    const cardImg = getLessonCardImage(item, clubBranding, platformBanners);
     const schedule = formatLessonDateTime(item.start_at, item.end_at);
     const tagLabel = (item.lesson_type_name || (item.is_private ? 'PRIVATE LESSON' : 'GROUP LESSON')).toUpperCase();
 
@@ -1459,7 +1465,7 @@ export default function ClubLessonsScreen() {
               {(() => {
                 const previewSource = lessonImageUrl
                   ? { uri: resolveMediaUrl(lessonImageUrl) }
-                  : resolveLessonImage(null, clubBranding);
+                  : resolveLessonImage(null, clubBranding, platformBanners);
                 if (previewSource) {
                   return (
                     <Image

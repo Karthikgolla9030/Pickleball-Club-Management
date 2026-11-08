@@ -47,7 +47,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
-import { useClubBranding } from '@/hooks';
+import { useClubBranding, usePlatformBanners } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Tournament, TournamentFormat } from '@/types';
@@ -103,9 +103,11 @@ export function UpcomingTournamentPreviewView({
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerImage = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   // Format Badge Config

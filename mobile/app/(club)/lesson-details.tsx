@@ -70,6 +70,7 @@ import {
   useStaffCancelLessonRegistration,
   useStaffMarkLessonAttendance,
   useStaffResetLessonAttendance,
+  usePlatformBanners,
 } from '@/hooks';
 import { formatCurrency } from '@/utils';
 import { resolveLessonPicture } from '@/utils/imageResolution';
@@ -408,7 +409,8 @@ export default function LessonDetailsScreen() {
   }
 
   const schedule = formatLessonSchedule(lesson.start_at, lesson.end_at);
-  const cardImg = resolveLessonPicture(lesson, clubBranding);
+  const { banners: platformBanners } = usePlatformBanners();
+  const cardImg = resolveLessonPicture(lesson, clubBranding, platformBanners);
 
   const feeDisplay =
     Number(lesson.price) > 0 ? formatCurrency(Number(lesson.price)) : 'Free';

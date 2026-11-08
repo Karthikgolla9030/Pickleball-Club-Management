@@ -68,6 +68,7 @@ import {
   usePublishClubEvent,
   useStaffCancelRegistration,
   useStaffMarkAttendance,
+  usePlatformBanners,
 } from '@/hooks';
 import { Colors, Radius, Spacing } from '@/theme';
 import { formatCurrency } from '@/utils';
@@ -416,7 +417,8 @@ export default function EventDetailsScreen() {
   const thumbnailDate = getEventThumbnailDate(event.start_at);
   const schedule = formatEventSchedule(event.start_at, event.end_at);
   const loc = parseEventLocation(event.location);
-  const cardImg = resolveEventCover(event, clubBranding);
+  const { banners: platformBanners } = usePlatformBanners();
+  const cardImg = resolveEventCover(event, clubBranding, platformBanners);
 
   const feeDisplay =
     Number(event.registration_fee) > 0

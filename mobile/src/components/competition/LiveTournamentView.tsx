@@ -65,6 +65,7 @@ import {
   usePlayerTeams,
   usePlayerTournamentRegistrations,
   usePlatformBranding,
+  usePlatformBanners,
 } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { getCourtDisplayLabel } from '@/utils';
@@ -147,9 +148,11 @@ export function LiveTournamentView({
   // Format Config
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerImage = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   // Format badge pill

@@ -18,7 +18,7 @@ import { AppText } from '@/components/AppText';
 import { formatDate } from '@/utils';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
-import { useClubBranding } from '@/hooks';
+import { useClubBranding, usePlatformBanners } from '@/hooks';
 import type { Tournament } from '@/types';
 
 export interface PlayerTournamentBannerProps {
@@ -35,9 +35,11 @@ export function PlayerTournamentBanner({
   categoryLabel,
 }: PlayerTournamentBannerProps) {
   const { branding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerSource = resolveTournamentBanner(
-    { banner_image_url: tournament.banner_image_url, format: tournament.format },
-    branding
+    tournament,
+    branding,
+    platformBanners
   );
 
   const status = (tournament.status || 'draft') as string;

@@ -16,6 +16,7 @@ Critical multi-tenant & isolation guarantees:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Literal
 from uuid import UUID
 
@@ -35,6 +36,23 @@ logger = logging.getLogger(__name__)
 ResolutionSource = Literal["custom", "club_default", "platform_default", "none"]
 
 
+def normalize_tournament_format(format_val: any) -> str:
+    """Normalize tournament format identifier across naming conventions and casings."""
+    if not format_val:
+        return "round_robin"
+    raw = str(getattr(format_val, "value", format_val) or "").lower().strip()
+    clean = re.sub(r"[\s-]+", "_", raw)
+    if "scramble" in clean:
+        return "scramble"
+    if "pool" in clean or "pool_play" in clean:
+        return "pool_play"
+    if "bracket" in clean or "elimination" in clean:
+        return "bracket"
+    if "round_robin" in clean or "roundrobin" in clean or clean == "rr":
+        return "round_robin"
+    return clean
+
+
 class ResolvedImageResult(BaseModel):
     content_type: str
     resolved_url: str | None = None
@@ -45,12 +63,15 @@ class ResolvedImageResult(BaseModel):
 
 
 class ImageResolutionService:
+    normalize_tournament_format = staticmethod(normalize_tournament_format)
+
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
     async def get_platform_banner_url(self, banner_type: str) -> str | None:
         """Fetch active platform default banner image URL by banner type."""
         clean_type = banner_type.lower().strip()
+        from app.services.platform_banner_service import BUILTIN_BANNER_URLS, update_cached_platform_default
         stmt = select(PlatformBanner).where(
             PlatformBanner.banner_type == clean_type,
         )
@@ -60,11 +81,15 @@ class ImageResolutionService:
             if not banner.is_active:
                 return None
             if banner.image_url and banner.image_url.strip():
-                return banner.image_url.strip()
+                url = banner.image_url.strip()
+                update_cached_platform_default(clean_type, url)
+                return url
             # If active but custom image_url is not set, use Platform Admin built-in default
-            from app.services.platform_banner_service import resolve_platform_default
-            return resolve_platform_default(clean_type)
-        return None
+            builtin = BUILTIN_BANNER_URLS.get(clean_type)
+            update_cached_platform_default(clean_type, builtin)
+            return builtin
+        # Fallback to built-in platform default when table record does not exist
+        return BUILTIN_BANNER_URLS.get(clean_type)
 
     async def get_club_by_id(self, club_id: UUID | str) -> Club | None:
         """Fetch club record by ID."""
@@ -109,6 +134,8 @@ class ImageResolutionService:
                 club_id = club_id or t_obj.club_id
                 format = format or (t_obj.format.value if hasattr(t_obj.format, "value") else str(t_obj.format or ""))
 
+        fmt_clean = normalize_tournament_format(format)
+
         # Priority 1: Individual custom banner
         if custom_url and custom_url.strip():
             return ResolvedImageResult(
@@ -117,11 +144,10 @@ class ImageResolutionService:
                 source="custom",
                 item_id=item_id_str,
                 club_id=str(club_id) if club_id else None,
-                format=format,
+                format=fmt_clean,
             )
 
         # Priority 2: Club Default Banner
-        fmt_clean = (str(format or "")).lower().strip()
         if club_id:
             club = await self.get_club_by_id(club_id)
             if club:
@@ -145,7 +171,7 @@ class ImageResolutionService:
                         source="club_default",
                         item_id=item_id_str,
                         club_id=str(club_id),
-                        format=format,
+                        format=fmt_clean,
                     )
 
         # Priority 3: Platform Admin Global Default
@@ -169,7 +195,7 @@ class ImageResolutionService:
                 source="platform_default",
                 item_id=item_id_str,
                 club_id=str(club_id) if club_id else None,
-                format=format,
+                format=fmt_clean,
             )
 
         # Priority 4: Clean neutral no-image state
@@ -179,7 +205,7 @@ class ImageResolutionService:
             source="none",
             item_id=item_id_str,
             club_id=str(club_id) if club_id else None,
-            format=format,
+            format=fmt_clean,
         )
 
     # ─── Event Resolution ─────────────────────────────────────────────────────
@@ -381,6 +407,89 @@ class ImageResolutionService:
             club_id=str(club_id) if club_id else None,
         )
 
+    # ─── Separate Strict Isolation Resolvers ──────────────────────────────────
+
+    async def resolve_court_image(self, court_image_url: str | None = None) -> ResolvedImageResult:
+        """
+        Courts strictly display only the uploaded court image from Court Management.
+        Never falls back to platform default, club default, or fake stock photo.
+        """
+        if court_image_url and court_image_url.strip():
+            return ResolvedImageResult(
+                content_type="court",
+                resolved_url=court_image_url.strip(),
+                source="custom",
+            )
+        return ResolvedImageResult(
+            content_type="court",
+            resolved_url=None,
+            source="none",
+        )
+
+    async def resolve_club_logo(
+        self,
+        club_id: UUID | str | None = None,
+        custom_url: str | None = None,
+    ) -> ResolvedImageResult:
+        """
+        Club Logo strictly displays only the club's uploaded logo.
+        Never falls back to platform default.
+        """
+        if custom_url and custom_url.strip():
+            return ResolvedImageResult(
+                content_type="club_logo",
+                resolved_url=custom_url.strip(),
+                source="custom",
+                club_id=str(club_id) if club_id else None,
+            )
+        if club_id:
+            club = await self.get_club_by_id(club_id)
+            if club and club.logo_url and club.logo_url.strip():
+                return ResolvedImageResult(
+                    content_type="club_logo",
+                    resolved_url=club.logo_url.strip(),
+                    source="custom",
+                    club_id=str(club.id),
+                )
+        return ResolvedImageResult(
+            content_type="club_logo",
+            resolved_url=None,
+            source="none",
+            club_id=str(club_id) if club_id else None,
+        )
+
+    async def resolve_club_cover(
+        self,
+        club_id: UUID | str | None = None,
+        custom_url: str | None = None,
+    ) -> ResolvedImageResult:
+        """
+        Player-Facing Club Cover strictly displays only the club's uploaded cover.
+        Never falls back to platform default.
+        """
+        if custom_url and custom_url.strip():
+            return ResolvedImageResult(
+                content_type="club_cover",
+                resolved_url=custom_url.strip(),
+                source="custom",
+                club_id=str(club_id) if club_id else None,
+            )
+        if club_id:
+            club = await self.get_club_by_id(club_id)
+            if club and club.cover_image_url and club.cover_image_url.strip():
+                return ResolvedImageResult(
+                    content_type="club_cover",
+                    resolved_url=club.cover_image_url.strip(),
+                    source="custom",
+                    club_id=str(club.id),
+                )
+        return ResolvedImageResult(
+            content_type="club_cover",
+            resolved_url=None,
+            source="none",
+            club_id=str(club_id) if club_id else None,
+        )
+
     # ─── Universal Resolver ───────────────────────────────────────────────────
 
     async def resolve_image(
@@ -418,6 +527,12 @@ class ImageResolutionService:
                 club_id=club_id,
                 custom_url=custom_url,
             )
+        elif c_type in ("court", "courts"):
+            return await self.resolve_court_image(custom_url)
+        elif c_type in ("logo", "club_logo"):
+            return await self.resolve_club_logo(club_id=club_id, custom_url=custom_url)
+        elif c_type in ("cover", "club_cover"):
+            return await self.resolve_club_cover(club_id=club_id, custom_url=custom_url)
         else:
             return ResolvedImageResult(
                 content_type=content_type,

@@ -56,7 +56,7 @@ import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatDate } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
-import { usePlayerScramble, useAuth, useClubBranding } from '@/hooks';
+import { usePlayerScramble, useAuth, useClubBranding, usePlatformBanners } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, Tournament } from '@/types';
 import type { ScrambleStandingRow } from '@/types/scramble';
@@ -118,9 +118,11 @@ export function CompletedScrambleView({
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerSource = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   // Global refresh

@@ -58,6 +58,7 @@ import {
   useCompleteClubEvent,
   usePermission,
   usePublishClubEvent,
+  usePlatformBanners,
 } from '@/hooks';
 import { resolveEventCover } from '@/utils/imageResolution';
 import { resolveMediaUrl } from '@/utils';
@@ -143,7 +144,8 @@ function CompactEventCard({
 
   const thumbnailDate = getEventThumbnailDate(event.start_at);
   const schedule = formatEventSchedule(event.start_at, event.end_at);
-  const cardImg = resolveEventCover(event, clubBranding);
+  const { banners: platformBanners } = usePlatformBanners();
+  const cardImg = resolveEventCover(event, clubBranding, platformBanners);
 
   const handleOptionsPress = () => {
     const options: { text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }[] = [

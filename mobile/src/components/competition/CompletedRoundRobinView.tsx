@@ -59,6 +59,7 @@ import {
   usePlayerStandings,
   usePlayerTeams,
   useAuth,
+  usePlatformBanners,
 } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, StandingRow, Tournament } from '@/types';
@@ -124,9 +125,11 @@ export function CompletedRoundRobinView({
   const isSingles = parsedConfig.isSingles;
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerSource = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   // Global refresh

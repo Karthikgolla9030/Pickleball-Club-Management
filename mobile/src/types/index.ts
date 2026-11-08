@@ -137,6 +137,9 @@ export interface PlatformBanner {
   id: string;
   banner_type: 'owner_home' | 'player_home' | string;
   image_url?: string | null;
+  resolved_image_url?: string | null;
+  default_image_url?: string | null;
+  is_custom?: boolean;
   title?: string | null;
   subtitle?: string | null;
   cta_text?: string | null;

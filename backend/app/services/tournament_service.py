@@ -98,21 +98,24 @@ def _build_tournament_response(
     club_name = t.club.name if getattr(t, "club", None) else None
     club_slug = t.club.slug if getattr(t, "club", None) else None
     custom_banner = getattr(t, "banner_image_url", None)
-    resolved_banner = custom_banner
-    fmt = (t.format.value if hasattr(t.format, "value") else str(t.format or "")).lower()
+    resolved_banner = custom_banner.strip() if (custom_banner and custom_banner.strip()) else None
+    from app.services.image_resolution_service import normalize_tournament_format
+    fmt = normalize_tournament_format(getattr(t, "format", None))
 
     # Priority 2: Club Format Default -> Club General Default
-    if not resolved_banner and getattr(t, "club", None):
-        if fmt == "round_robin" and t.club.default_tournament_round_robin_url:
-            resolved_banner = t.club.default_tournament_round_robin_url
-        elif fmt == "scramble" and t.club.default_tournament_scramble_url:
-            resolved_banner = t.club.default_tournament_scramble_url
-        elif fmt == "pool_play" and t.club.default_tournament_pool_play_url:
-            resolved_banner = t.club.default_tournament_pool_play_url
-        elif fmt == "bracket" and t.club.default_tournament_bracket_url:
-            resolved_banner = t.club.default_tournament_bracket_url
-        elif t.club.default_tournament_banner_url:
-            resolved_banner = t.club.default_tournament_banner_url
+    club = getattr(t, "club", None)
+    if not resolved_banner and club:
+        if fmt == "round_robin" and club.default_tournament_round_robin_url:
+            resolved_banner = club.default_tournament_round_robin_url.strip()
+        elif fmt == "scramble" and club.default_tournament_scramble_url:
+            resolved_banner = club.default_tournament_scramble_url.strip()
+        elif fmt == "pool_play" and club.default_tournament_pool_play_url:
+            resolved_banner = club.default_tournament_pool_play_url.strip()
+        elif fmt == "bracket" and club.default_tournament_bracket_url:
+            resolved_banner = club.default_tournament_bracket_url.strip()
+
+        if not resolved_banner and club.default_tournament_banner_url:
+            resolved_banner = club.default_tournament_banner_url.strip()
 
     # Priority 3: Platform Admin Global Default (Format-specific -> General Tournament Default)
     if not resolved_banner:

@@ -64,6 +64,7 @@ import {
   usePlayerTeams,
   useAuth,
   useClubBranding,
+  usePlatformBanners,
 } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
@@ -144,9 +145,11 @@ export function CompletedBracketView({
   const isSingles = parsedConfig.isSingles;
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerSource = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   const bracketType = useMemo(

@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ImageSourcePropType,
   Modal,
   Platform,
   ScrollView,
@@ -62,11 +63,18 @@ import {
   useClubCarouselSlides,
   useCarouselMutations,
   useUpdateClubBranding,
+  usePlatformBanners,
 } from '@/hooks';
 import { clubAssetsApi } from '@/services/api';
 import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { ClubCarouselSlide, UpdateClubBrandingPayload } from '@/types';
 import { BUILTIN_FALLBACKS, resolveMediaUrl } from '@/utils';
+import {
+  resolveTournamentFormatDefault,
+  resolveLeaguePicture,
+  resolveEventPicture,
+  resolveLessonPicture,
+} from '@/utils/imageResolution';
 
 interface ClubBrandingSectionProps {
   clubId: string;
@@ -79,6 +87,7 @@ interface BrandingAssetCardProps {
   description: string;
   recommendedSize?: string;
   currentUrl?: string | null;
+  fallbackImage?: ImageSourcePropType | null;
   uploading: boolean;
   isOwner: boolean;
   assetKind?: 'banner' | 'picture' | 'logo';
@@ -92,6 +101,7 @@ function BrandingAssetCard({
   description,
   recommendedSize,
   currentUrl,
+  fallbackImage,
   uploading,
   isOwner,
   assetKind = 'banner',
@@ -101,6 +111,7 @@ function BrandingAssetCard({
   const isCustom = Boolean(currentUrl);
   const isLogo = assetKind === 'logo';
   const noun = isLogo ? 'Logo' : assetKind === 'picture' ? 'Picture' : 'Banner';
+  const hasFallback = !isCustom && Boolean(fallbackImage);
 
   return (
     <Card style={styles.assetCard}>
@@ -113,8 +124,14 @@ function BrandingAssetCard({
           <AppText style={styles.assetCardTitle}>{title}</AppText>
         </View>
         <Badge
-          label={isCustom ? 'Configured' : 'Not Configured (Optional)'}
-          variant={isCustom ? 'success' : 'default'}
+          label={
+            isCustom
+              ? 'Configured'
+              : hasFallback
+              ? 'Inheriting Default'
+              : 'Not Configured (Optional)'
+          }
+          variant={isCustom ? 'success' : hasFallback ? 'info' : 'default'}
         />
       </View>
 
@@ -138,6 +155,18 @@ function BrandingAssetCard({
             style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
             resizeMode={isLogo ? 'contain' : 'cover'}
           />
+        ) : hasFallback ? (
+          <>
+            <Image
+              source={fallbackImage!}
+              style={styles.assetPreviewImage}
+              resizeMode="cover"
+            />
+            <View style={styles.inheritingBadgeOverlay}>
+              <Info size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <AppText style={styles.inheritingBadgeText}>Inheriting Platform Admin Default</AppText>
+            </View>
+          </>
         ) : isLogo ? (
           <View style={styles.assetLogoFallback}>
             <Building2 size={32} color="#94A3B8" />
@@ -213,6 +242,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
     isLoading: isLoadingBranding,
     refetch: refetchBranding,
   } = useClubBranding(clubId);
+  const { banners: platformBanners } = usePlatformBanners();
 
   const {
     slides = [],
@@ -338,9 +368,14 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   ) => {
     if (!isOwner) return;
 
+    const isLogoOrCover = fieldName === 'logo_url' || fieldName === 'cover_image_url';
+    const msg = isLogoOrCover
+      ? `Are you sure you want to remove the custom image for ${resetLabel}? The club will have no ${resetLabel.toLowerCase()} displayed.`
+      : `Are you sure you want to remove the custom image for ${resetLabel}? Your club's items will automatically restore and inherit the Platform Admin default banner.`;
+
     Alert.alert(
       `Remove ${resetLabel}`,
-      `Are you sure you want to remove the custom image for ${resetLabel}? The club will have no default image configured for this item.`,
+      msg,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -633,6 +668,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the fallback hero graphic for tournaments in this club when neither a custom tournament banner nor a format-specific default is uploaded."
         currentUrl={branding?.default_tournament_banner_url}
+        fallbackImage={resolveTournamentFormatDefault('general', null, platformBanners)}
         uploading={uploadingField === 'default_tournament_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -654,6 +690,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Round Robin tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_round_robin_url}
+        fallbackImage={resolveTournamentFormatDefault('round_robin', null, platformBanners)}
         uploading={uploadingField === 'default_tournament_round_robin_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -675,6 +712,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Scramble tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_scramble_url}
+        fallbackImage={resolveTournamentFormatDefault('scramble', null, platformBanners)}
         uploading={uploadingField === 'default_tournament_scramble_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -696,6 +734,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all Pool Play tournaments in this club unless a tournament-specific banner is uploaded."
         currentUrl={branding?.default_tournament_pool_play_url}
+        fallbackImage={resolveTournamentFormatDefault('pool_play', null, platformBanners)}
         uploading={uploadingField === 'default_tournament_pool_play_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -717,6 +756,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Used as the default hero graphic for all single/double elimination bracket tournaments in this club."
         currentUrl={branding?.default_tournament_bracket_url}
+        fallbackImage={resolveTournamentFormatDefault('bracket', null, platformBanners)}
         uploading={uploadingField === 'default_tournament_bracket_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -753,6 +793,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on league cards and league details when no custom picture is provided."
         currentUrl={branding?.default_league_banner_url}
+        fallbackImage={resolveLeaguePicture(null, null, platformBanners)}
         uploading={uploadingField === 'default_league_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -783,6 +824,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on event cards and event details when no custom picture is provided."
         currentUrl={branding?.default_event_banner_url}
+        fallbackImage={resolveEventPicture(null, null, platformBanners)}
         uploading={uploadingField === 'default_event_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -813,6 +855,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
         description="Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided."
         currentUrl={branding?.default_lesson_banner_url}
+        fallbackImage={resolveLessonPicture(null, null, platformBanners)}
         uploading={uploadingField === 'default_lesson_banner_url'}
         isOwner={isOwner}
         onUpload={() =>
@@ -1401,6 +1444,22 @@ const styles = StyleSheet.create({
   assetPreviewImage: {
     width: '100%',
     height: '100%',
+  },
+  inheritingBadgeOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.sm,
+  },
+  inheritingBadgeText: {
+    fontSize: 11,
+    fontFamily: 'Inter-Medium',
+    color: '#FFFFFF',
   },
   assetUploadOverlay: {
     position: 'absolute',

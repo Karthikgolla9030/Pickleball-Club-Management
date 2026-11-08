@@ -62,6 +62,36 @@ export const BUILTIN_FALLBACKS: Record<string, ImageSourcePropType | null> = {
 };
 
 /**
+ * Normalizes tournament format strings across casings and aliases.
+ */
+export function normalizeFormat(fmt?: string | null): string {
+  const norm = (fmt || '').toLowerCase().trim();
+  if (norm === 'round_robin' || norm === 'round robin' || norm === 'roundrobin') return 'round_robin';
+  if (norm === 'pool_play' || norm === 'pool play' || norm === 'poolplay') return 'pool_play';
+  if (norm === 'scramble') return 'scramble';
+  if (norm === 'bracket' || norm === 'single_elimination' || norm === 'double_elimination' || norm === 'bracket play' || norm === 'bracket_play') return 'bracket';
+  return norm;
+}
+
+/**
+ * Extracts the effective image URL from a PlatformBanner record.
+ * Checks custom uploaded image_url first, then resolved_image_url, then default_image_url.
+ */
+export function getPlatformBannerUrl(banner?: PlatformBanner | null): string | null {
+  if (!banner) return null;
+  if (banner.image_url && banner.image_url.trim()) {
+    return banner.image_url.trim();
+  }
+  if (banner.resolved_image_url && banner.resolved_image_url.trim()) {
+    return banner.resolved_image_url.trim();
+  }
+  if (banner.default_image_url && banner.default_image_url.trim()) {
+    return banner.default_image_url.trim();
+  }
+  return null;
+}
+
+/**
  * Retrieves cached platform banners from TanStack Query cache if available.
  */
 export function getCachedPlatformBanners(): Record<string, PlatformBanner> | undefined {
@@ -89,7 +119,7 @@ export function hasConfiguredImage(source: ImageSourcePropType | null | undefine
  * 2. club format default or club general default in Club Details -> Branding
  * 3. platform admin format default or platform general default in Platform Banners
  * 4. backend pre-resolved URL (if provided)
- * 5. deliberate built-in format fallback (if options.allowBuiltinFallback)
+ * 5. deliberate built-in format fallback (if options.allowBuiltinFallback !== false)
  * 6. null (clean neutral no-image state)
  */
 export function resolveTournamentBanner(
@@ -103,50 +133,53 @@ export function resolveTournamentBanner(
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
   // 1. Individual Custom Image (Priority 1)
-  if (tournament?.banner_image_url) {
-    return { uri: resolveMediaUrl(tournament.banner_image_url) };
+  if (tournament?.banner_image_url && tournament.banner_image_url.trim()) {
+    return { uri: resolveMediaUrl(tournament.banner_image_url.trim()) };
   }
 
-  const fmt = (tournament?.format || '').toLowerCase().trim();
+  const fmt = normalizeFormat(tournament?.format);
 
   // 2. Club Default Image (Priority 2)
-  if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
+  if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url.trim()) };
   }
-  if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
+  if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url.trim()) };
   }
-  if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
+  if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url.trim()) };
   }
-  if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
+  if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url.trim()) };
   }
-  if (clubBranding?.default_tournament_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+  if (clubBranding?.default_tournament_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
   }
 
   // 3. Platform Admin Default Image (Priority 3)
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  if (fmt === 'round_robin' && activePlatformBanners?.default_tournament_round_robin?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_round_robin.image_url) };
+  let platDefaultUrl: string | null = null;
+  if (fmt === 'round_robin') {
+    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
+  } else if (fmt === 'scramble') {
+    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
+  } else if (fmt === 'pool_play') {
+    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
+  } else if (fmt === 'bracket') {
+    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
   }
-  if (fmt === 'scramble' && activePlatformBanners?.default_tournament_scramble?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_scramble.image_url) };
+
+  if (!platDefaultUrl) {
+    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
   }
-  if (fmt === 'pool_play' && activePlatformBanners?.default_tournament_pool_play?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_pool_play.image_url) };
-  }
-  if (fmt === 'bracket' && activePlatformBanners?.default_tournament_bracket?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_bracket.image_url) };
-  }
-  if (activePlatformBanners?.default_tournament_banner?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+
+  if (platDefaultUrl) {
+    return { uri: resolveMediaUrl(platDefaultUrl) };
   }
 
   // 4. Backend pre-resolved fallback
-  if (tournament?.resolved_banner_url) {
-    return { uri: resolveMediaUrl(tournament.resolved_banner_url) };
+  if (tournament?.resolved_banner_url && tournament.resolved_banner_url.trim()) {
+    return { uri: resolveMediaUrl(tournament.resolved_banner_url.trim()) };
   }
 
   // 5. Deliberate built-in fallback (Platform Admin Built-in Default)
@@ -173,28 +206,28 @@ export function resolveTournamentBannerDetails(
   clubBranding?: ClubBranding | null,
   platformBanners?: Record<string, PlatformBanner> | null
 ): ImageResolutionDetails {
-  if (tournament?.banner_image_url) {
+  if (tournament?.banner_image_url && tournament.banner_image_url.trim()) {
     return {
-      source: { uri: resolveMediaUrl(tournament.banner_image_url) },
+      source: { uri: resolveMediaUrl(tournament.banner_image_url.trim()) },
       level: 'custom',
-      url: tournament.banner_image_url,
+      url: tournament.banner_image_url.trim(),
     };
   }
 
-  const fmt = (tournament?.format || '').toLowerCase().trim();
+  const fmt = normalizeFormat(tournament?.format);
 
-  // Club default
+  // Priority 2: Club default
   let clubDefaultUrl: string | null = null;
-  if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url) {
-    clubDefaultUrl = clubBranding.default_tournament_round_robin_url;
-  } else if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url) {
-    clubDefaultUrl = clubBranding.default_tournament_scramble_url;
-  } else if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url) {
-    clubDefaultUrl = clubBranding.default_tournament_pool_play_url;
-  } else if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url) {
-    clubDefaultUrl = clubBranding.default_tournament_bracket_url;
-  } else if (clubBranding?.default_tournament_banner_url) {
-    clubDefaultUrl = clubBranding.default_tournament_banner_url;
+  if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_round_robin_url.trim();
+  } else if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_scramble_url.trim();
+  } else if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_pool_play_url.trim();
+  } else if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_bracket_url.trim();
+  } else if (clubBranding?.default_tournament_banner_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_banner_url.trim();
   }
 
   if (clubDefaultUrl) {
@@ -205,19 +238,21 @@ export function resolveTournamentBannerDetails(
     };
   }
 
-  // Platform default
+  // Priority 3: Platform default
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
   let platformDefaultUrl: string | null = null;
-  if (fmt === 'round_robin' && activePlatformBanners?.default_tournament_round_robin?.image_url) {
-    platformDefaultUrl = activePlatformBanners.default_tournament_round_robin.image_url;
-  } else if (fmt === 'scramble' && activePlatformBanners?.default_tournament_scramble?.image_url) {
-    platformDefaultUrl = activePlatformBanners.default_tournament_scramble.image_url;
-  } else if (fmt === 'pool_play' && activePlatformBanners?.default_tournament_pool_play?.image_url) {
-    platformDefaultUrl = activePlatformBanners.default_tournament_pool_play.image_url;
-  } else if (fmt === 'bracket' && activePlatformBanners?.default_tournament_bracket?.image_url) {
-    platformDefaultUrl = activePlatformBanners.default_tournament_bracket.image_url;
-  } else if (activePlatformBanners?.default_tournament_banner?.image_url) {
-    platformDefaultUrl = activePlatformBanners.default_tournament_banner.image_url;
+  if (fmt === 'round_robin') {
+    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
+  } else if (fmt === 'scramble') {
+    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
+  } else if (fmt === 'pool_play') {
+    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
+  } else if (fmt === 'bracket') {
+    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
+  }
+
+  if (!platformDefaultUrl) {
+    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
   }
 
   if (platformDefaultUrl) {
@@ -228,14 +263,16 @@ export function resolveTournamentBannerDetails(
     };
   }
 
-  if (tournament?.resolved_banner_url) {
+  // Priority 4: Backend pre-resolved fallback
+  if (tournament?.resolved_banner_url && tournament.resolved_banner_url.trim()) {
     return {
-      source: { uri: resolveMediaUrl(tournament.resolved_banner_url) },
+      source: { uri: resolveMediaUrl(tournament.resolved_banner_url.trim()) },
       level: 'platform_default',
-      url: tournament.resolved_banner_url,
+      url: tournament.resolved_banner_url.trim(),
     };
   }
 
+  // Priority 5: Built-in platform fallback asset
   const builtinSource =
     fmt === 'round_robin'
       ? BUILTIN_FALLBACKS.tournamentRoundRobin
@@ -271,76 +308,88 @@ export function resolveTournamentFormatDefault(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
-  const fmt = format.toLowerCase().trim();
+  const fmt = normalizeFormat(format);
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
 
   if (fmt === 'round_robin') {
-    if (clubBranding?.default_tournament_round_robin_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url) };
+    if (clubBranding?.default_tournament_round_robin_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_round_robin?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_round_robin.image_url) };
+    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
+    if (platUrl) {
+      return { uri: resolveMediaUrl(platUrl) };
     }
-    if (clubBranding?.default_tournament_banner_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+    if (clubBranding?.default_tournament_banner_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_banner?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+    if (platGenUrl) {
+      return { uri: resolveMediaUrl(platGenUrl) };
     }
     return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentRoundRobin : null;
   }
+
   if (fmt === 'scramble') {
-    if (clubBranding?.default_tournament_scramble_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url) };
+    if (clubBranding?.default_tournament_scramble_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_scramble?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_scramble.image_url) };
+    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
+    if (platUrl) {
+      return { uri: resolveMediaUrl(platUrl) };
     }
-    if (clubBranding?.default_tournament_banner_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+    if (clubBranding?.default_tournament_banner_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_banner?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+    if (platGenUrl) {
+      return { uri: resolveMediaUrl(platGenUrl) };
     }
     return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentScramble : null;
   }
+
   if (fmt === 'pool_play') {
-    if (clubBranding?.default_tournament_pool_play_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url) };
+    if (clubBranding?.default_tournament_pool_play_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_pool_play?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_pool_play.image_url) };
+    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
+    if (platUrl) {
+      return { uri: resolveMediaUrl(platUrl) };
     }
-    if (clubBranding?.default_tournament_banner_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+    if (clubBranding?.default_tournament_banner_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_banner?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+    if (platGenUrl) {
+      return { uri: resolveMediaUrl(platGenUrl) };
     }
     return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentPoolPlay : null;
   }
+
   if (fmt === 'bracket') {
-    if (clubBranding?.default_tournament_bracket_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url) };
+    if (clubBranding?.default_tournament_bracket_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_bracket?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_bracket.image_url) };
+    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
+    if (platUrl) {
+      return { uri: resolveMediaUrl(platUrl) };
     }
-    if (clubBranding?.default_tournament_banner_url) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+    if (clubBranding?.default_tournament_banner_url?.trim()) {
+      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
     }
-    if (activePlatformBanners?.default_tournament_banner?.image_url) {
-      return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_bracket.image_url) };
+    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+    if (platGenUrl) {
+      return { uri: resolveMediaUrl(platGenUrl) };
     }
     return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentBracket : null;
   }
 
   // General tournament default
-  if (clubBranding?.default_tournament_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url) };
+  if (clubBranding?.default_tournament_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
   }
-  if (activePlatformBanners?.default_tournament_banner?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_tournament_banner.image_url) };
+  const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+  if (platGenUrl) {
+    return { uri: resolveMediaUrl(platGenUrl) };
   }
   return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentGeneric : null;
 }
@@ -351,7 +400,7 @@ export function resolveTournamentFormatDefault(
  * 2. club default_league_banner_url (configured in Club Details -> Branding)
  * 3. platform default_league_banner (configured in Platform Admin Banners)
  * 4. backend pre-resolved fallback
- * 5. deliberate built-in fallback (if options.allowBuiltinFallback)
+ * 5. deliberate built-in fallback (if options.allowBuiltinFallback !== false)
  * 6. null (clean neutral no-image state)
  */
 export function resolveLeaguePicture(
@@ -361,18 +410,19 @@ export function resolveLeaguePicture(
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
   const customUrl = typeof league === 'string' ? league : league?.banner_image_url;
-  if (customUrl) {
-    return { uri: resolveMediaUrl(customUrl) };
+  if (customUrl && customUrl.trim()) {
+    return { uri: resolveMediaUrl(customUrl.trim()) };
   }
-  if (clubBranding?.default_league_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_league_banner_url) };
+  if (clubBranding?.default_league_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_league_banner_url.trim()) };
   }
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  if (activePlatformBanners?.default_league_banner?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_league_banner.image_url) };
+  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_league_banner);
+  if (platUrl) {
+    return { uri: resolveMediaUrl(platUrl) };
   }
-  if (typeof league === 'object' && league?.resolved_banner_url) {
-    return { uri: resolveMediaUrl(league.resolved_banner_url) };
+  if (typeof league === 'object' && league?.resolved_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(league.resolved_banner_url.trim()) };
   }
   return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.league : null;
 }
@@ -395,18 +445,19 @@ export function resolveEventPicture(
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
   const customUrl = typeof event === 'string' ? event : event?.cover_image_url;
-  if (customUrl) {
-    return { uri: resolveMediaUrl(customUrl) };
+  if (customUrl && customUrl.trim()) {
+    return { uri: resolveMediaUrl(customUrl.trim()) };
   }
-  if (clubBranding?.default_event_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_event_banner_url) };
+  if (clubBranding?.default_event_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_event_banner_url.trim()) };
   }
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  if (activePlatformBanners?.default_event_banner?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_event_banner.image_url) };
+  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_event_banner);
+  if (platUrl) {
+    return { uri: resolveMediaUrl(platUrl) };
   }
-  if (typeof event === 'object' && event?.resolved_cover_image_url) {
-    return { uri: resolveMediaUrl(event.resolved_cover_image_url) };
+  if (typeof event === 'object' && event?.resolved_cover_image_url?.trim()) {
+    return { uri: resolveMediaUrl(event.resolved_cover_image_url.trim()) };
   }
   return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.event : null;
 }
@@ -434,21 +485,22 @@ export function resolveLessonPicture(
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
   if (typeof lesson === 'string') {
-    if (lesson) return { uri: resolveMediaUrl(lesson) };
-  } else if (lesson?.image_url) {
-    return { uri: resolveMediaUrl(lesson.image_url) };
-  } else if (lesson?.lesson_type?.image_url) {
-    return { uri: resolveMediaUrl(lesson.lesson_type.image_url) };
+    if (lesson.trim()) return { uri: resolveMediaUrl(lesson.trim()) };
+  } else if (lesson?.image_url && lesson.image_url.trim()) {
+    return { uri: resolveMediaUrl(lesson.image_url.trim()) };
+  } else if (lesson?.lesson_type?.image_url && lesson.lesson_type.image_url.trim()) {
+    return { uri: resolveMediaUrl(lesson.lesson_type.image_url.trim()) };
   }
-  if (clubBranding?.default_lesson_banner_url) {
-    return { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url) };
+  if (clubBranding?.default_lesson_banner_url?.trim()) {
+    return { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url.trim()) };
   }
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  if (activePlatformBanners?.default_lesson_banner?.image_url) {
-    return { uri: resolveMediaUrl(activePlatformBanners.default_lesson_banner.image_url) };
+  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_lesson_banner);
+  if (platUrl) {
+    return { uri: resolveMediaUrl(platUrl) };
   }
-  if (typeof lesson === 'object' && lesson?.resolved_image_url) {
-    return { uri: resolveMediaUrl(lesson.resolved_image_url) };
+  if (typeof lesson === 'object' && lesson?.resolved_image_url?.trim()) {
+    return { uri: resolveMediaUrl(lesson.resolved_image_url.trim()) };
   }
   return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.lesson : null;
 }
@@ -466,39 +518,38 @@ export function resolveCourtPicture(
   court?: { image_url?: string | null } | string | null
 ): ImageSourcePropType | null {
   const customUrl = typeof court === 'string' ? court : court?.image_url;
-  if (customUrl) {
-    return { uri: resolveMediaUrl(customUrl) };
+  if (customUrl && customUrl.trim()) {
+    return { uri: resolveMediaUrl(customUrl.trim()) };
   }
   return null;
 }
 
 /**
  * Resolves the owner home dashboard welcome card banner:
- * 1. platformBanner.image_url (Platform Admin configured banner)
+ * 1. platformBanner.image_url or resolved_image_url (Platform Admin configured banner)
  * 2. null (no fake stock photo)
  */
 export function resolveOwnerBanner(
-  platformBannerOrBranding?: { image_url?: string | null; owner_banner_url?: string | null } | null
+  platformBannerOrBranding?: { image_url?: string | null; resolved_image_url?: string | null; owner_banner_url?: string | null } | null
 ): ImageSourcePropType | null {
-  if (platformBannerOrBranding?.image_url) {
-    return { uri: resolveMediaUrl(platformBannerOrBranding.image_url) };
-  }
-  if (platformBannerOrBranding?.owner_banner_url) {
-    return { uri: resolveMediaUrl(platformBannerOrBranding.owner_banner_url) };
+  const url = platformBannerOrBranding?.image_url || platformBannerOrBranding?.resolved_image_url || platformBannerOrBranding?.owner_banner_url;
+  if (url && url.trim()) {
+    return { uri: resolveMediaUrl(url.trim()) };
   }
   return null;
 }
 
 /**
  * Resolves the player home page hero banner:
- * 1. platformBanner.image_url (Platform Admin configured banner)
+ * 1. platformBanner.image_url or resolved_image_url (Platform Admin configured banner)
  * 2. null (no fake stock photo)
  */
 export function resolvePlayerBanner(
-  platformBanner?: { image_url?: string | null } | null
+  platformBanner?: { image_url?: string | null; resolved_image_url?: string | null } | null
 ): ImageSourcePropType | null {
-  if (platformBanner?.image_url) {
-    return { uri: resolveMediaUrl(platformBanner.image_url) };
+  const url = platformBanner?.image_url || platformBanner?.resolved_image_url;
+  if (url && url.trim()) {
+    return { uri: resolveMediaUrl(url.trim()) };
   }
   return null;
 }
@@ -512,8 +563,8 @@ export function resolvePlayerBanner(
 export function resolveClubCover(
   clubOrBranding?: { cover_image_url?: string | null } | null
 ): ImageSourcePropType | null {
-  if (clubOrBranding?.cover_image_url) {
-    return { uri: resolveMediaUrl(clubOrBranding.cover_image_url) };
+  if (clubOrBranding?.cover_image_url && clubOrBranding.cover_image_url.trim()) {
+    return { uri: resolveMediaUrl(clubOrBranding.cover_image_url.trim()) };
   }
   return null;
 }
@@ -527,8 +578,8 @@ export function resolveClubCover(
 export function resolveClubLogo(
   clubOrBranding?: { logo_url?: string | null } | null
 ): ImageSourcePropType | null {
-  if (clubOrBranding?.logo_url) {
-    return { uri: resolveMediaUrl(clubOrBranding.logo_url) };
+  if (clubOrBranding?.logo_url && clubOrBranding.logo_url.trim()) {
+    return { uri: resolveMediaUrl(clubOrBranding.logo_url.trim()) };
   }
   return null;
 }

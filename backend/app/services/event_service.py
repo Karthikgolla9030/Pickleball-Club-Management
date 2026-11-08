@@ -819,19 +819,25 @@ class EventService:
             is_open = opens_ok and closes_ok
 
         club_name = None
-        if getattr(event, "club", None) and hasattr(event.club, "name"):
-            club_name = event.club.name
+        club = getattr(event, "club", None)
+        if club and hasattr(club, "name"):
+            club_name = club.name
         else:
             try:
                 club = await self.club_repo.get_by_id(event.club_id)
                 if club:
                     club_name = club.name
             except Exception:
-                pass
+                club = None
 
-        resolved_cover = event.cover_image_url
-        if not resolved_cover and getattr(event, "club", None) and getattr(event.club, "default_event_banner_url", None):
-            resolved_cover = event.club.default_event_banner_url
+        custom_cover = event.cover_image_url
+        resolved_cover = custom_cover.strip() if (custom_cover and custom_cover.strip()) else None
+
+        # Priority 2: Club default
+        if not resolved_cover and club and getattr(club, "default_event_banner_url", None):
+            resolved_cover = club.default_event_banner_url.strip()
+
+        # Priority 3: Platform default
         if not resolved_cover:
             from app.services.platform_banner_service import resolve_platform_default
             resolved_cover = resolve_platform_default("default_event_banner")

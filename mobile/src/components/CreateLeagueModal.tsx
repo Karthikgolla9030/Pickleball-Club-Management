@@ -26,6 +26,7 @@ import { Colors, Layout, Radius, Spacing, Typography } from '@/theme';
 import type { ClubBranding, CreateLeaguePayload, LeagueSummary } from '@/types';
 import { resolveMediaUrl } from '@/utils';
 import { resolveLeagueBanner } from '@/utils/imageResolution';
+import { usePlatformBanners } from '@/hooks';
 
 interface CreateLeagueModalProps {
   visible: boolean;
@@ -54,6 +55,7 @@ export function CreateLeagueModal({
   const [description, setDescription] = useState('');
   const [bannerImageUrl, setBannerImageUrl] = useState<string | null>(null);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const { banners: platformBanners } = usePlatformBanners();
   const [format, setFormat] = useState<'doubles' | 'singles'>('doubles');
   const [maxTeams, setMaxTeams] = useState('8');
   const [numberOfWeeks, setNumberOfWeeks] = useState('4');
@@ -348,7 +350,7 @@ export function CreateLeagueModal({
                   {(() => {
                     const previewSource = bannerImageUrl
                       ? { uri: resolveMediaUrl(bannerImageUrl) }
-                      : resolveLeagueBanner(null, clubBranding);
+                      : resolveLeagueBanner(null, clubBranding, platformBanners);
                     if (previewSource) {
                       return (
                         <Image

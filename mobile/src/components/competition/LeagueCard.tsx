@@ -43,7 +43,7 @@ import type { ClubBranding, LeagueStatus, LeagueSummary } from '@/types';
 import { formatDate } from '@/utils/formatters';
 import { resolveMediaUrl } from '@/utils';
 import { resolveLeagueBanner } from '@/utils/imageResolution';
-import { useClubBranding } from '@/hooks';
+import { useClubBranding, usePlatformBanners } from '@/hooks';
 
 export interface LeagueCardProps {
   league: LeagueSummary;
@@ -171,8 +171,9 @@ export function LeagueCard({
   const progressPct = totalMatches > 0 ? Math.min(100, Math.round((completedMatches / totalMatches) * 100)) : 0;
 
   const { branding: fetchedClubBranding } = useClubBranding(clubBranding ? null : league.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const activeClubBranding = clubBranding || fetchedClubBranding;
-  const imgSource = resolveLeagueBanner(league, activeClubBranding);
+  const imgSource = resolveLeagueBanner(league, activeClubBranding, platformBanners);
 
   const formatCardDate = (dateStr?: string | null): string => {
     if (!dateStr) return '';

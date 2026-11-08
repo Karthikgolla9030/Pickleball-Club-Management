@@ -73,6 +73,7 @@ import {
   usePlayerChampionshipMatches,
   useClubBranding,
   usePlatformBranding,
+  usePlatformBanners,
 } from '@/hooks';
 import { resolveTournamentBanner } from '@/utils/imageResolution';
 import type { Match, PoolStandingRow, Tournament } from '@/types';
@@ -125,9 +126,11 @@ export function CompletedPoolPlayView({
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
   const { branding: clubBranding } = useClubBranding(tournament.club_id);
+  const { banners: platformBanners } = usePlatformBanners();
   const bannerSource = resolveTournamentBanner(
     tournament,
-    clubBranding
+    clubBranding,
+    platformBanners
   );
 
   // Derive Champion & Runner-Up from championship matches

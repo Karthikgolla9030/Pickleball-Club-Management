@@ -216,7 +216,7 @@ class PlatformBannerService:
                 banner = await self.get_or_create_banner(b_type)
                 banner_resp = await self._to_banner_response(banner)
             result[b_type] = banner_resp
-            update_cached_platform_default(b_type, banner_resp.image_url)
+            update_cached_platform_default(b_type, banner_resp.resolved_image_url)
 
         return result
 
@@ -224,7 +224,7 @@ class PlatformBannerService:
         """Fetch a single platform banner."""
         banner = await self.get_or_create_banner(banner_type)
         resp = await self._to_banner_response(banner)
-        update_cached_platform_default(banner_type, resp.image_url)
+        update_cached_platform_default(banner_type, resp.resolved_image_url)
         return resp
 
     async def update_banner(
@@ -246,7 +246,7 @@ class PlatformBannerService:
         await self.db.commit()
         await self.db.refresh(banner)
         resp = await self._to_banner_response(banner)
-        update_cached_platform_default(banner_type, resp.image_url)
+        update_cached_platform_default(banner_type, resp.resolved_image_url)
         return resp
 
     async def upload_banner_image(
@@ -275,7 +275,7 @@ class PlatformBannerService:
         await self.db.commit()
         await self.db.refresh(banner)
         resp = await self._to_banner_response(banner)
-        update_cached_platform_default(banner_type, resp.image_url)
+        update_cached_platform_default(banner_type, resp.resolved_image_url)
         return resp
 
     async def reset_banner(
