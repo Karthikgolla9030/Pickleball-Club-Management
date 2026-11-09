@@ -8,7 +8,7 @@
  *   Ensures zero caching of private user data, tokens, auth state, or live match scores.
  */
 
-const CACHE_NAME = 'aught2-shell-v4';
+const CACHE_NAME = 'aught2-shell-v5';
 
 // Essential app shell and static resources precached during install
 const PRECACHE_ASSETS = [
@@ -68,7 +68,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ─── A. SECURITY RULE: NEVER cache API, auth, websocket, or backend data ──
+  // ─── A. SECURITY RULE: NEVER cache or intercept API, auth, websocket, or cross-origin backend data ──
   const isApiRequest =
     url.pathname.startsWith('/api/') ||
     url.pathname.startsWith('/v1/') ||
@@ -76,9 +76,9 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('onrender.com') ||
     url.port === '8000';
 
-  if (isApiRequest) {
-    // Pure network request — no caching of sensitive tokens or live scores
-    event.respondWith(fetch(request));
+  if (isApiRequest || url.origin !== self.location.origin) {
+    // Bypass service worker entirely — let the browser execute native network fetching
+    // directly. This eliminates unhandled service worker promise rejections on backend timeouts/cold starts.
     return;
   }
 
