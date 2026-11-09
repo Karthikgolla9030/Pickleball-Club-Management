@@ -16,7 +16,7 @@
  * - Instant query invalidation synchronizing across all portals
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +29,7 @@ import {
   Switch,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -177,7 +178,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     title: 'Bracket Play Default Banner',
     category: 'tournament',
     categoryLabel: 'Tournaments',
-    badgeLabel: 'Bracket Play',
+    badgeLabel: 'Bracket',
     description: 'Default banner for Bracket (Single & Double Elimination) tournaments without custom images.',
     recommendedSize: '1200 × 675 (16:9)',
     defaultTitle: 'Bracket Tournament',
@@ -207,7 +208,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     title: 'Lessons & Coaching Default Banner',
     category: 'activity',
     categoryLabel: 'Activities',
-    badgeLabel: 'Lessons',
+    badgeLabel: 'Lessons & Coaching',
     description: 'Default banner for coaching sessions and group clinics without custom session photos.',
     recommendedSize: '1200 × 675 (16:9)',
     defaultTitle: 'Lessons & Coaching',
@@ -237,6 +238,13 @@ export default function PlatformBannersScreen() {
 
   const { banners, isLoading, refetch } = usePlatformBanners();
   const { updateBanner, uploadBannerImage, resetBanner } = usePlatformBannerMutations();
+
+  const { width: windowWidth } = useWindowDimensions();
+  const isWideScreen = windowWidth >= 640;
+  const isCompactScreen = windowWidth < 380;
+
+  const categoryScrollRef = useRef<ScrollView>(null);
+  const subPillScrollRef = useRef<ScrollView>(null);
 
   const [activeCategory, setActiveCategory] = useState<PlatformBannerCategory>('home');
   const [activeBannerKey, setActiveBannerKey] = useState<PlatformBannerType>('owner_home');
@@ -271,6 +279,11 @@ export default function PlatformBannersScreen() {
       setActiveBannerKey(categoryItems[0].key);
     }
   }, [activeCategory, categoryItems, activeBannerKey]);
+
+  // Smooth scroll back to start when category changes
+  useEffect(() => {
+    subPillScrollRef.current?.scrollTo({ x: 0, animated: true });
+  }, [activeCategory]);
 
   // Synchronize form states when selected banner data arrives or active item changes
   useEffect(() => {
@@ -462,42 +475,62 @@ export default function PlatformBannersScreen() {
         </View>
 
         {/* ── 1. Top Category Selector ── */}
-        <View style={styles.categoryTabsTrack}>
-          {[
-            { key: 'home' as const, label: 'Home Banners', icon: Smartphone },
-            { key: 'tournament' as const, label: 'Tournament Defaults', icon: Trophy },
-            { key: 'activity' as const, label: 'Activity Defaults', icon: Calendar },
-          ].map((cat) => {
-            const isSelected = activeCategory === cat.key;
-            const IconComp = cat.icon;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                style={[styles.categoryTab, isSelected && styles.categoryTabActive]}
-                onPress={() => setActiveCategory(cat.key)}
-                activeOpacity={0.8}
-              >
-                <IconComp
-                  size={14}
-                  color={isSelected ? '#15803D' : '#64748B'}
-                  strokeWidth={2.2}
-                />
-                <AppText
-                  style={[styles.categoryTabText, isSelected && styles.categoryTabTextActive]}
-                  numberOfLines={1}
+        <View style={styles.categoryTabsOuter}>
+          <ScrollView
+            ref={categoryScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[
+              styles.categoryTabsTrack,
+              isWideScreen && styles.categoryTabsTrackWide,
+            ]}
+            style={styles.categoryTabsScroll}
+          >
+            {[
+              { key: 'home' as const, label: 'Home Banners', icon: Smartphone },
+              { key: 'tournament' as const, label: 'Tournament Defaults', icon: Trophy },
+              { key: 'activity' as const, label: 'Activity Defaults', icon: Calendar },
+            ].map((cat) => {
+              const isSelected = activeCategory === cat.key;
+              const IconComp = cat.icon;
+              return (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[
+                    styles.categoryTab,
+                    isWideScreen && styles.categoryTabWide,
+                    isSelected && styles.categoryTabActive,
+                  ]}
+                  onPress={() => setActiveCategory(cat.key)}
+                  activeOpacity={0.8}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={cat.label}
                 >
-                  {cat.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
+                  <IconComp
+                    size={15}
+                    color={isSelected ? '#15803D' : '#64748B'}
+                    strokeWidth={2.2}
+                    style={{ flexShrink: 0 }}
+                  />
+                  <AppText
+                    style={[styles.categoryTabText, isSelected && styles.categoryTabTextActive]}
+                  >
+                    {cat.label}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
         </View>
 
         {/* ── 2. Sub-Pill Selector for Selected Category ── */}
         <ScrollView
+          ref={subPillScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.subPillsScroll}
+          style={styles.subPillsScrollWrapper}
         >
           {categoryItems.map((item) => {
             const isSelected = activeBannerKey === item.key;
@@ -507,6 +540,9 @@ export default function PlatformBannersScreen() {
                 style={[styles.subPill, isSelected && styles.subPillActive]}
                 onPress={() => setActiveBannerKey(item.key)}
                 activeOpacity={0.8}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={item.badgeLabel}
               >
                 <AppText
                   style={[styles.subPillText, isSelected && styles.subPillTextActive]}
@@ -520,36 +556,38 @@ export default function PlatformBannersScreen() {
 
         {/* ── 3. Live Preview Card ── */}
         <View style={styles.previewCard}>
-          {/* Card Header Row */}
-          <View style={styles.previewHeaderRow}>
+          {/* Responsive Card Header (Heading + Status Badge) */}
+          <View style={[styles.previewHeaderBlock, isWideScreen && styles.previewHeaderBlockWide]}>
             <View style={styles.previewTitleRow}>
-              <Eye size={16} color="#15803D" strokeWidth={2.2} />
+              <Eye size={17} color="#15803D" strokeWidth={2.4} style={styles.previewTitleIcon} />
               <AppText style={styles.previewTitle}>{currentItemConfig.title}</AppText>
             </View>
-            <View
-              style={[
-                styles.previewBadgePill,
-                !isCustomImage && styles.previewBadgePillFallback,
-              ]}
-            >
+            <View style={styles.previewBadgeRow}>
               <View
                 style={[
-                  styles.previewBadgeDot,
-                  !isCustomImage && styles.previewBadgeDotFallback,
-                ]}
-              />
-              <AppText
-                style={[
-                  styles.previewBadgeText,
-                  !isCustomImage && styles.previewBadgeTextFallback,
+                  styles.previewBadgePill,
+                  !isCustomImage && styles.previewBadgePillFallback,
                 ]}
               >
-                {isCustomImage
-                  ? 'CUSTOM CONFIGURED'
-                  : currentItemConfig.builtinFallback
-                  ? 'BUILT-IN DEFAULT'
-                  : 'OPTIONAL (NO DEFAULT)'}
-              </AppText>
+                <View
+                  style={[
+                    styles.previewBadgeDot,
+                    !isCustomImage && styles.previewBadgeDotFallback,
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.previewBadgeText,
+                    !isCustomImage && styles.previewBadgeTextFallback,
+                  ]}
+                >
+                  {isCustomImage
+                    ? 'CUSTOM PLATFORM DEFAULT'
+                    : currentItemConfig.builtinFallback
+                    ? 'BUILT-IN DEFAULT'
+                    : 'OPTIONAL (NO DEFAULT)'}
+                </AppText>
+              </View>
             </View>
           </View>
 
@@ -632,7 +670,7 @@ export default function PlatformBannersScreen() {
               </View>
               <View style={styles.currentBannerTextCol}>
                 <AppText style={styles.currentBannerTitle}>Current Image Status</AppText>
-                <AppText style={styles.currentBannerDesc} numberOfLines={2}>
+                <AppText style={styles.currentBannerDesc}>
                   {isCustomImage
                     ? 'Custom image uploaded. This image is active platform-wide.'
                     : currentItemConfig.builtinFallback
@@ -896,24 +934,39 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
 
-  // Category Tabs Track
-  categoryTabsTrack: {
-    flexDirection: 'row',
+  // Category Tabs (Outer card wrapper + scrollable inner track)
+  categoryTabsOuter: {
     backgroundColor: '#F1F5F9',
     borderRadius: 10,
     padding: 3,
     marginBottom: 12,
+  },
+  categoryTabsScroll: {
+    flexGrow: 0,
+  },
+  categoryTabsTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
-  categoryTab: {
+  categoryTabsTrackWide: {
     flex: 1,
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  categoryTab: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRadius: 7,
-    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    gap: 7,
+    minHeight: 40,
+    flexShrink: 0,
+  },
+  categoryTabWide: {
+    flex: 1,
   },
   categoryTabActive: {
     backgroundColor: '#FFFFFF',
@@ -924,7 +977,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   categoryTabText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: '#64748B',
   },
@@ -934,25 +987,41 @@ const styles = StyleSheet.create({
   },
 
   // Sub-Pills Scroll
+  subPillsScrollWrapper: {
+    marginBottom: 14,
+    flexGrow: 0,
+  },
   subPillsScroll: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    paddingBottom: 14,
+    paddingVertical: 2,
+    paddingHorizontal: 1,
   },
   subPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    minHeight: 36,
+    flexShrink: 0,
   },
   subPillActive: {
     backgroundColor: '#15803D',
     borderColor: '#15803D',
+    shadowColor: '#15803D',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   subPillText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#475569',
   },
@@ -975,57 +1044,82 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1,
   },
-  previewHeaderRow: {
+  previewHeaderBlock: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 6,
+    width: '100%',
+  },
+  previewHeaderBlockWide: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    gap: 12,
   },
   previewTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    alignItems: 'flex-start',
+    gap: 7,
+    flex: 1,
+    minWidth: 0,
+  },
+  previewTitleIcon: {
+    marginTop: 2,
+    flexShrink: 0,
   },
   previewTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
+    lineHeight: 22,
+    flexShrink: 1,
+  },
+  previewBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
   },
   previewBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
     borderRadius: 12,
-    gap: 5,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    maxWidth: '100%',
   },
   previewBadgePillFallback: {
     backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
   },
   previewBadgeDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#15803D',
+    flexShrink: 0,
   },
   previewBadgeDotFallback: {
     backgroundColor: '#64748B',
   },
   previewBadgeText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
     color: '#15803D',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
   previewBadgeTextFallback: {
     color: '#64748B',
   },
   previewSubtitle: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
-    marginBottom: 10,
-    lineHeight: 15,
+    marginBottom: 12,
+    lineHeight: 17,
   },
 
   // 16:9 Aspect Ratio Container
@@ -1055,38 +1149,39 @@ const styles = StyleSheet.create({
   },
   heroContentInner: {
     flex: 1,
-    padding: 16,
+    padding: 12,
     justifyContent: 'space-between',
   },
   heroUpperBlock: {
-    maxWidth: '85%',
+    maxWidth: '92%',
   },
   heroTag: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#86EFAC',
     letterSpacing: 1,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   heroHeading: {
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 23,
-    marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.35)',
+    lineHeight: 21,
+    marginBottom: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
   heroSupportingText: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#E2E8F0',
-    lineHeight: 15,
+    lineHeight: 14,
+    opacity: 0.95,
   },
   heroBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   heroCtaPill: {
     flexDirection: 'row',
@@ -1096,6 +1191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 14,
     gap: 4,
+    alignSelf: 'flex-start',
   },
   heroCtaText: {
     fontSize: 11,
@@ -1123,76 +1219,86 @@ const styles = StyleSheet.create({
   // Current Banner Status Info
   currentBannerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 10,
   },
   currentBannerLeft: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 10,
     flex: 1,
+    minWidth: 0,
   },
   currentBannerIconWrap: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
   },
   currentBannerTextCol: {
     flex: 1,
+    minWidth: 0,
   },
   currentBannerTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0F172A',
+    marginBottom: 2,
   },
   currentBannerDesc: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748B',
+    lineHeight: 16,
   },
 
   // Action Buttons
   actionsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   btnUpload: {
     flex: 1,
+    minWidth: 140,
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#15803D',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
     gap: 6,
   },
   btnUploadText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   btnRestore: {
+    minHeight: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FEE2E2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    gap: 5,
+    gap: 6,
   },
   btnRestoreText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
 
@@ -1202,19 +1308,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
-    padding: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    padding: 10,
     gap: 8,
   },
   guidelinesIcon: {
-    marginTop: 1,
+    marginTop: 2,
+    flexShrink: 0,
   },
   guidelinesTextCol: {
     flex: 1,
+    minWidth: 0,
+    gap: 4,
   },
   guidelinesText: {
     fontSize: 11,
     color: '#64748B',
-    lineHeight: 15,
+    lineHeight: 16,
   },
 
   // Collapsible Text Settings
@@ -1230,18 +1341,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     backgroundColor: '#F8FAFC',
+    gap: 8,
+    minHeight: 44,
   },
   textSettingsHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    minWidth: 0,
   },
   textSettingsHeaderTitle: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
   },
   textSettingsBody: {
     padding: 14,
@@ -1255,10 +1372,10 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   inputLabel: {
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
     color: '#334155',
-    marginBottom: 4,
+    marginBottom: 5,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
@@ -1268,23 +1385,25 @@ const styles = StyleSheet.create({
     borderColor: '#CBD5E1',
     borderRadius: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     fontSize: 13,
     color: '#0F172A',
-    marginBottom: 10,
+    marginBottom: 12,
+    minHeight: 40,
   },
   textArea: {
-    minHeight: 64,
+    minHeight: 72,
     textAlignVertical: 'top',
   },
   switchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    marginBottom: 12,
+    marginBottom: 14,
+    gap: 12,
   },
   switchTitle: {
     fontSize: 13,
@@ -1294,15 +1413,18 @@ const styles = StyleSheet.create({
   switchSubtitle: {
     fontSize: 11.5,
     color: '#64748B',
+    lineHeight: 15,
   },
   btnSave: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#15803D',
-    paddingVertical: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
     borderRadius: 8,
     gap: 6,
+    minHeight: 44,
   },
   btnSaveText: {
     color: '#FFFFFF',
