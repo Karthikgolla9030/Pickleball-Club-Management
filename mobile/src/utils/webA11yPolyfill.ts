@@ -166,6 +166,25 @@ export function setupWebA11yPolyfill(): void {
       // MutationObserver not available or blocked
     }
   }
+
+  // 5. Suppress benign React Native Web touch bank desync logs in web browsers.
+  // In React Native Web, when DOM elements unmount or modal/alert dialogs close synchronously
+  // upon click/touch, the subsequent touchend event fires on an unmapped target.
+  // React Native Web's ResponderTouchHistoryStore logs "Cannot record touch end without a touch start".
+  // This is completely benign and expected on web platforms.
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    const originalConsoleError = console.error;
+    console.error = function (...args: unknown[]) {
+      if (
+        typeof args[0] === 'string' &&
+        (args[0].includes('Cannot record touch end without a touch start') ||
+         args[0].includes('Cannot record touch move without a touch start'))
+      ) {
+        return;
+      }
+      originalConsoleError.apply(console, args);
+    };
+  }
 }
 
 // Automatically initialize when imported
