@@ -149,8 +149,8 @@ export function runImageResolutionTests(): void {
       id: 'pb-1',
       banner_type: 'default_tournament_round_robin',
       image_url: null,
-      resolved_image_url: 'https://cdn.example.com/defaults/rr.png',
-      default_image_url: 'https://cdn.example.com/defaults/rr.png',
+      resolved_image_url: 'https://cdn.example.com/custom_platform/rr.png',
+      default_image_url: 'https://cdn.example.com/custom_platform/rr.png',
       is_active: true,
       created_at: '',
       updated_at: '',
@@ -159,8 +159,21 @@ export function runImageResolutionTests(): void {
       id: 'pb-2',
       banner_type: 'default_tournament_bracket',
       image_url: null,
-      resolved_image_url: 'https://cdn.example.com/defaults/bracket.png',
-      default_image_url: 'https://cdn.example.com/defaults/bracket.png',
+      resolved_image_url: 'https://cdn.example.com/custom_platform/bracket.png',
+      default_image_url: 'https://cdn.example.com/custom_platform/bracket.png',
+      is_active: true,
+      created_at: '',
+      updated_at: '',
+    },
+  };
+
+  const platformBannersWithBuiltinBackendUrl: Record<string, PlatformBanner> = {
+    default_tournament_round_robin: {
+      id: 'pb-1',
+      banner_type: 'default_tournament_round_robin',
+      image_url: null,
+      resolved_image_url: 'https://pickleball-club-management.onrender.com/uploads/defaults/tournaments/card_round_robin.jpg',
+      default_image_url: '/uploads/defaults/tournaments/card_round_robin.jpg',
       is_active: true,
       created_at: '',
       updated_at: '',
@@ -207,7 +220,7 @@ export function runImageResolutionTests(): void {
     emptyClubBranding,
     platformBannersWithResolvedUrl
   );
-  assert((res3C as any)?.uri === 'https://cdn.example.com/defaults/rr.png', 'Round Robin Priority 3C resolved_image_url failed');
+  assert((res3C as any)?.uri === 'https://cdn.example.com/custom_platform/rr.png', 'Round Robin Priority 3C resolved_image_url failed');
 
   // Priority 3D - Bracket uses default_tournament_bracket, NOT general banner
   const res3BracketResolved = resolveTournamentBanner(
@@ -215,25 +228,33 @@ export function runImageResolutionTests(): void {
     emptyClubBranding,
     platformBannersWithResolvedUrl
   );
-  assert((res3BracketResolved as any)?.uri === 'https://cdn.example.com/defaults/bracket.png', 'Bracket Priority 3D resolved_image_url failed');
+  assert((res3BracketResolved as any)?.uri === 'https://cdn.example.com/custom_platform/bracket.png', 'Bracket Priority 3D resolved_image_url failed');
 
-  // Priority 3E - Resolves built-in default even when platformBanners is null/empty and club is empty
-  const res3E = resolveTournamentBanner(
+  // Priority 3E - Built-in default path in resolved_image_url maps to local bundled asset directly
+  const res3EBuiltin = resolveTournamentBanner(
+    { banner_image_url: null, format: 'round_robin' },
+    emptyClubBranding,
+    platformBannersWithBuiltinBackendUrl
+  );
+  assert(res3EBuiltin === BUILTIN_FALLBACKS.tournamentRoundRobin, 'Round Robin Priority 3E built-in path mapping failed');
+
+  // Priority 3F - Resolves built-in default even when platformBanners is null/empty and club is empty
+  const res3F = resolveTournamentBanner(
     { banner_image_url: null, format: 'round_robin' },
     emptyClubBranding,
     null
   );
-  assert(res3E === BUILTIN_FALLBACKS.tournamentRoundRobin, 'Round Robin Priority 3E offline built-in fallback failed');
+  assert(res3F === BUILTIN_FALLBACKS.tournamentRoundRobin, 'Round Robin Priority 3F offline built-in fallback failed');
 
   // Format Aliases & Normalization
   const resAlias1 = resolveTournamentBanner({ format: 'Round Robin' }, emptyClubBranding, platformBannersWithResolvedUrl);
-  assert((resAlias1 as any)?.uri === 'https://cdn.example.com/defaults/rr.png', 'Format alias "Round Robin" failed');
+  assert((resAlias1 as any)?.uri === 'https://cdn.example.com/custom_platform/rr.png', 'Format alias "Round Robin" failed');
 
   const resAlias2 = resolveTournamentBanner({ format: 'round-robin' }, emptyClubBranding, platformBannersWithResolvedUrl);
-  assert((resAlias2 as any)?.uri === 'https://cdn.example.com/defaults/rr.png', 'Format alias "round-robin" failed');
+  assert((resAlias2 as any)?.uri === 'https://cdn.example.com/custom_platform/rr.png', 'Format alias "round-robin" failed');
 
   const resAlias3 = resolveTournamentBanner({ format: 'Single Elimination Bracket' }, emptyClubBranding, platformBannersWithResolvedUrl);
-  assert((resAlias3 as any)?.uri === 'https://cdn.example.com/defaults/bracket.png', 'Format alias "Single Elimination Bracket" failed');
+  assert((resAlias3 as any)?.uri === 'https://cdn.example.com/custom_platform/bracket.png', 'Format alias "Single Elimination Bracket" failed');
 
   // Priority 4 - Neutral no-image state when allowBuiltinFallback is false
   const resNeutral = resolveTournamentBanner(

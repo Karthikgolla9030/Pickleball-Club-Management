@@ -684,7 +684,7 @@ export default function ScrambleWorkspaceScreen() {
             {activeTab === 'settings' && (
               <TournamentSettingsTab
                 tournament={tournament ?? null}
-                onRefresh={refetchTournament}
+                onRefresh={() => void refetchTournament()}
                 canManage={canManage}
               />
             )}

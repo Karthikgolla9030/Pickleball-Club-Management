@@ -29,6 +29,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   Linking,
   Modal,
   Platform,
@@ -75,7 +76,7 @@ import {
   usePlatformBranding,
   usePlatformBanners,
 } from '@/hooks';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { Match, PoolStandingRow, Tournament } from '@/types';
 
 interface CompletedPoolPlayViewProps {
@@ -132,6 +133,12 @@ export function CompletedPoolPlayView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(tournament.format), [tournament.format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerSource ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerSource ?? builtinFallback);
+  }, [bannerSource, builtinFallback]);
 
   // Derive Champion & Runner-Up from championship matches
   const finalResults = useMemo(() => {
@@ -374,11 +381,16 @@ export function CompletedPoolPlayView({
       >
         {/* ─── Standardized Hero Banner matching Round Robin reference ─── */}
         <View style={styles.heroSection}>
-          {bannerSource ? (
+          {currentBanner ? (
             <Image
-              source={bannerSource}
+              source={currentBanner}
               style={styles.heroImage}
               resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
             />
           ) : null}
           {/* Standardized dark green overlay */}

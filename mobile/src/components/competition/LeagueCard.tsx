@@ -42,7 +42,7 @@ import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import type { ClubBranding, LeagueStatus, LeagueSummary } from '@/types';
 import { formatDate } from '@/utils/formatters';
 import { resolveMediaUrl } from '@/utils';
-import { resolveLeagueBanner } from '@/utils/imageResolution';
+import { resolveLeagueBanner, BUILTIN_FALLBACKS } from '@/utils/imageResolution';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
 
 export interface LeagueCardProps {
@@ -174,6 +174,11 @@ export function LeagueCard({
   const { banners: platformBanners } = usePlatformBanners();
   const activeClubBranding = clubBranding || fetchedClubBranding;
   const imgSource = resolveLeagueBanner(league, activeClubBranding, platformBanners);
+  const [currentImg, setCurrentImg] = React.useState<ImageSourcePropType | null>(() => imgSource ?? BUILTIN_FALLBACKS.league);
+
+  React.useEffect(() => {
+    setCurrentImg(imgSource ?? BUILTIN_FALLBACKS.league);
+  }, [imgSource]);
 
   const formatCardDate = (dateStr?: string | null): string => {
     if (!dateStr) return '';
@@ -209,8 +214,13 @@ export function LeagueCard({
       <View style={styles.contentRow}>
         {/* Left Column: Sports Thumbnail */}
         <View style={styles.imageWrapper}>
-          {imgSource ? (
-            <Image source={imgSource} style={styles.thumbnail} resizeMode="cover" />
+          {currentImg ? (
+            <Image
+              source={currentImg}
+              style={styles.thumbnail}
+              resizeMode="cover"
+              onError={() => setCurrentImg(BUILTIN_FALLBACKS.league)}
+            />
           ) : (
             <View style={styles.thumbnailFallback}>
               <Award size={24} color="#18794E" strokeWidth={1.8} />

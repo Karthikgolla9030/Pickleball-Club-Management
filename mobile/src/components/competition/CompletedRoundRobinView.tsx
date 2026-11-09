@@ -21,6 +21,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   RefreshControl,
   ScrollView,
   Share,
@@ -61,7 +62,7 @@ import {
   useAuth,
   usePlatformBanners,
 } from '@/hooks';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { Match, StandingRow, Tournament } from '@/types';
 
 interface CompletedRoundRobinViewProps {
@@ -131,6 +132,12 @@ export function CompletedRoundRobinView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(tournament.format), [tournament.format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerSource ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerSource ?? builtinFallback);
+  }, [bannerSource, builtinFallback]);
 
   // Global refresh
   const handleInternalRefresh = async () => {
@@ -315,11 +322,16 @@ export function CompletedRoundRobinView({
       >
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
-          {bannerSource ? (
+          {currentBanner ? (
             <Image
-              source={bannerSource}
+              source={currentBanner}
               style={styles.heroImage}
               resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
             />
           ) : null}
           {/* Dark green translucent overlay for legibility */}

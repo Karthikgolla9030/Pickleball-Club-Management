@@ -21,6 +21,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   Modal,
   RefreshControl,
   ScrollView,
@@ -57,7 +58,7 @@ import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatDate } from '@/utils';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { usePlayerScramble, useAuth, useClubBranding, usePlatformBanners } from '@/hooks';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { Match, Tournament } from '@/types';
 import type { ScrambleStandingRow } from '@/types/scramble';
 
@@ -124,6 +125,12 @@ export function CompletedScrambleView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(tournament.format), [tournament.format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerSource ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerSource ?? builtinFallback);
+  }, [bannerSource, builtinFallback]);
 
   // Global refresh
   const handleInternalRefresh = async () => {
@@ -316,11 +323,16 @@ export function CompletedScrambleView({
       >
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
-          {bannerSource ? (
+          {currentBanner ? (
             <Image
-              source={bannerSource}
+              source={currentBanner}
               style={styles.heroImage}
               resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
             />
           ) : null}
           <View style={styles.heroOverlay} />

@@ -46,7 +46,7 @@ import { Shadows } from '@/theme';
 import type { ClubBranding, TournamentDiscoveryItem, TournamentFormat } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
 
 export interface PlayerTournamentCardProps {
@@ -164,6 +164,10 @@ export function PlayerTournamentCard({
     activeClubBranding,
     platformBanners
   );
+  const [currentImg, setCurrentImg] = React.useState(() => imageSource);
+  React.useEffect(() => {
+    setCurrentImg(imageSource);
+  }, [imageSource]);
 
   // Status Badge rendered on the top-left of the banner image
   const renderStatusBadge = () => {
@@ -356,11 +360,17 @@ export function PlayerTournamentCard({
     >
       {/* ─── Top Banner Area (Image + Status Badge + Format Badge + Favorite) ─── */}
       <View style={styles.bannerContainer}>
-        {imageSource ? (
+        {currentImg ? (
           <Image
-            source={imageSource}
+            source={currentImg}
             style={styles.bannerImage}
             resizeMode="cover"
+            onError={() => {
+              const fallback = getTournamentBuiltinFallback(tournament.format);
+              if (fallback && currentImg !== fallback) {
+                setCurrentImg(fallback);
+              }
+            }}
           />
         ) : null}
 

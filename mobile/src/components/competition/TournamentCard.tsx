@@ -33,14 +33,16 @@ import { AppText } from '@/components/AppText';
 import type { ClubBranding, TournamentStatus } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
 
 export interface TournamentCardData {
   id: string;
+  club_id?: string;
   name: string;
   description?: string | null;
   banner_image_url?: string | null;
+  resolved_banner_url?: string | null;
   format?: string;
   format_label: string;
   status: TournamentStatus | string;
@@ -163,6 +165,11 @@ export function TournamentCard({
     activeClubBranding,
     platformBanners
   );
+  const [imageSource, setImageSource] = React.useState(() => banner);
+  React.useEffect(() => {
+    setImageSource(banner);
+  }, [banner]);
+
   const parsed = parseTournamentConfig(tournament as any);
   const entryLabel = parsed?.capacity?.entryLabel ? `${parsed.capacity.entryLabel.toLowerCase()} ` : '';
 
@@ -177,8 +184,18 @@ export function TournamentCard({
       {/* ─── Top: Hero Banner (Clean, consistent across all formats) ───────── */}
       <View style={styles.heroBanner}>
         {/* Background Image: object-fit cover, zero gaps */}
-        {banner ? (
-          <Image source={banner} style={styles.bannerImage} resizeMode="cover" />
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.bannerImage}
+            resizeMode="cover"
+            onError={() => {
+              const fallback = getTournamentBuiltinFallback(tournament.format);
+              if (fallback && imageSource !== fallback) {
+                setImageSource(fallback);
+              }
+            }}
+          />
         ) : null}
 
         {/* Subtle Darkening Overlay for text contrast across all court images */}

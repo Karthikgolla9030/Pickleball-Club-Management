@@ -16,7 +16,7 @@ import { Calendar, MapPin, Trophy, Users } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { formatDate } from '@/utils';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
 import type { Tournament } from '@/types';
@@ -41,6 +41,10 @@ export function PlayerTournamentBanner({
     branding,
     platformBanners
   );
+  const [currentBanner, setCurrentBanner] = React.useState(() => bannerSource);
+  React.useEffect(() => {
+    setCurrentBanner(bannerSource);
+  }, [bannerSource]);
 
   const status = (tournament.status || 'draft') as string;
   const format = tournament.format || 'round_robin';
@@ -90,8 +94,18 @@ export function PlayerTournamentBanner({
 
   return (
     <View style={styles.heroBanner}>
-      {bannerSource ? (
-        <Image source={bannerSource} style={styles.heroImage} resizeMode="cover" />
+      {currentBanner ? (
+        <Image
+          source={currentBanner}
+          style={styles.heroImage}
+          resizeMode="cover"
+          onError={() => {
+            const fallback = getTournamentBuiltinFallback(tournament.format);
+            if (fallback && currentBanner !== fallback) {
+              setCurrentBanner(fallback);
+            }
+          }}
+        />
       ) : null}
       <View style={styles.heroOverlay} />
 

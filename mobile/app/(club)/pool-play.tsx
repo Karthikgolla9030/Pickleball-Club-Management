@@ -1155,7 +1155,7 @@ export default function PoolPlayManagementScreen() {
           {activeTab === 'settings' && (
             <TournamentSettingsTab
               tournament={effectiveTournament ?? tournament ?? null}
-              onRefresh={refetchTournament}
+              onRefresh={() => void refetchTournament()}
               canManage={canManage}
             />
           )}

@@ -11,7 +11,11 @@
       "destination": "https://pickleball-club-management.onrender.com/uploads/:path*"
     },
     {
-      "source": "/((?!assets/|_expo/|icons/|favicon.png|manifest.json|sw.js|offline.html|api/|uploads/|.*\\..*).*)",
+      "source": "/static/:path*",
+      "destination": "https://pickleball-club-management.onrender.com/static/:path*"
+    },
+    {
+      "source": "/((?!assets/|_expo/|icons/|favicon.png|manifest.json|sw.js|offline.html|api/|uploads/|static/|.*\\..*).*)",
       "destination": "/index.html"
     }
   ],

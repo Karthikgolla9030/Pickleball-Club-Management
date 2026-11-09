@@ -24,6 +24,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Alert,
   Image,
+  ImageSourcePropType,
   Modal,
   RefreshControl,
   ScrollView,
@@ -66,7 +67,7 @@ import {
   useClubBranding,
   usePlatformBanners,
 } from '@/hooks';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { ChampionshipBracketView } from './ChampionshipBracketView';
 import { getBracketType, isConsolationMatch, isLosersMatch } from '@/utils/bracketLogic';
 import type { Match, Tournament } from '@/types';
@@ -151,6 +152,12 @@ export function CompletedBracketView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(tournament.format), [tournament.format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerSource ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerSource ?? builtinFallback);
+  }, [bannerSource, builtinFallback]);
 
   const bracketType = useMemo(
     () => getBracketType(tournament, matches),
@@ -375,11 +382,16 @@ export function CompletedBracketView({
       >
         {/* ─── Shared Hero Banner ─── */}
         <View style={styles.heroBanner}>
-          {bannerSource ? (
+          {currentBanner ? (
             <Image
-              source={bannerSource}
+              source={currentBanner}
               style={styles.heroImage}
               resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
             />
           ) : null}
           <View style={styles.heroOverlay} />

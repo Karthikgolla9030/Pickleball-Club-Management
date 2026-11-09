@@ -98,5 +98,9 @@ backups/
 backend/backups/
 uploads/
 backend/uploads/
+!backend/uploads/defaults/
+!backend/uploads/defaults/**
+!backend/static/defaults/
+!backend/static/defaults/**
 scratch/
 

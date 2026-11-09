@@ -21,6 +21,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   Image,
+  ImageSourcePropType,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -49,7 +50,7 @@ import {
 import { AppText } from '../AppText';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { Tournament, TournamentFormat } from '@/types';
 
 interface UpcomingTournamentPreviewViewProps {
@@ -109,6 +110,12 @@ export function UpcomingTournamentPreviewView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(format), [format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerImage ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerImage ?? builtinFallback);
+  }, [bannerImage, builtinFallback]);
 
   // Format Badge Config
   const formatBadge = useMemo(() => {
@@ -232,8 +239,17 @@ export function UpcomingTournamentPreviewView({
       >
         {/* ─── Hero Banner Card ─── */}
         <View style={styles.heroCard}>
-          {bannerImage ? (
-            <Image source={bannerImage} style={styles.heroBannerImage} resizeMode="cover" />
+          {currentBanner ? (
+            <Image
+              source={currentBanner}
+              style={styles.heroBannerImage}
+              resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
+            />
           ) : null}
           <View style={styles.heroOverlay} />
 

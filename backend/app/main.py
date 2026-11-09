@@ -236,6 +236,14 @@ def create_app() -> FastAPI:
 
     static_dir = os.path.join(backend_dir, "static")
     os.makedirs(static_dir, exist_ok=True)
+    static_defaults = os.path.join(static_dir, "defaults")
+    uploads_defaults = os.path.join(uploads_dir, "defaults")
+    if os.path.exists(static_defaults):
+        try:
+            import shutil
+            shutil.copytree(static_defaults, uploads_defaults, dirs_exist_ok=True)
+        except Exception as exc:
+            logger.warning("Failed to sync default static assets to uploads: %s", exc)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     # ─── Routers ──────────────────────────────────────────────────────────────

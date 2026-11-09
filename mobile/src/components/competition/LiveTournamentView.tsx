@@ -21,6 +21,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   Image,
+  ImageSourcePropType,
   RefreshControl,
   ScrollView,
   Share,
@@ -69,7 +70,7 @@ import {
 } from '@/hooks';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { getCourtDisplayLabel } from '@/utils';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type {
   Match,
   StandingRow,
@@ -154,6 +155,12 @@ export function LiveTournamentView({
     clubBranding,
     platformBanners
   );
+  const builtinFallback = useMemo(() => getTournamentBuiltinFallback(format), [format]);
+  const [currentBanner, setCurrentBanner] = useState<ImageSourcePropType | null>(() => bannerImage ?? builtinFallback);
+
+  React.useEffect(() => {
+    setCurrentBanner(bannerImage ?? builtinFallback);
+  }, [bannerImage, builtinFallback]);
 
   // Format badge pill
   const formatBadge = useMemo(() => {
@@ -470,8 +477,17 @@ export function LiveTournamentView({
       >
         {/* ─── Shared Tournament Banner ─── */}
         <View style={styles.heroCard}>
-          {bannerImage ? (
-            <Image source={bannerImage} style={styles.heroBannerImage} resizeMode="cover" />
+          {currentBanner ? (
+            <Image
+              source={currentBanner}
+              style={styles.heroBannerImage}
+              resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && currentBanner !== builtinFallback) {
+                  setCurrentBanner(builtinFallback);
+                }
+              }}
+            />
           ) : null}
           <View style={styles.heroOverlay} />
 

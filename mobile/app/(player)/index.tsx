@@ -50,6 +50,7 @@ import {
   usePlayerBookings,
   usePlayerProfile,
   usePlayerTournaments,
+  usePlatformBanners,
   useUniversalPromotionalAds,
   useUnreadNotificationCount,
 } from '@/hooks';
@@ -140,6 +141,7 @@ export default function PlayerHomeScreen() {
   const { platformName, maintenanceMode } = usePlatformBranding();
   const { clubId, clubName } = useActiveClub();
   const { branding: clubBranding } = useClubBranding(clubId);
+  const { banners: platformBanners } = usePlatformBanners();
 
   // 1. Next Booking (real authenticated player bookings)
   const {
@@ -534,11 +536,13 @@ export default function PlayerHomeScreen() {
                 const imgSource = upcomingEvent.isTournament
                   ? resolveTournamentBanner(
                       { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format, resolved_banner_url: (upcomingEvent as any).resolved_banner_url },
-                      clubBranding
+                      clubBranding,
+                      platformBanners
                     )
                   : resolveEventCover(
                       { cover_image_url: upcomingEvent.imageUrl, resolved_cover_image_url: (upcomingEvent as any).resolved_cover_image_url },
-                      clubBranding
+                      clubBranding,
+                      platformBanners
                     );
                 if (imgSource) {
                   return (

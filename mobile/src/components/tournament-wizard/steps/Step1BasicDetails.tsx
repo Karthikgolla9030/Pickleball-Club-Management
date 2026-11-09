@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ImageSourcePropType,
   Platform,
   StyleSheet,
   TouchableOpacity,
@@ -29,8 +30,9 @@ import { Input } from '@/components/Input';
 import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { ClubBranding } from '@/types';
+import { usePlatformBanners } from '@/hooks';
 import { resolveMediaUrl } from '@/utils';
-import { resolveTournamentBanner } from '@/utils/imageResolution';
+import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { TournamentWizardState } from '../types';
 
 interface Step1BasicDetailsProps {
@@ -51,11 +53,18 @@ export function Step1BasicDetails({
   errors,
 }: Step1BasicDetailsProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const { banners: platformBanners } = usePlatformBanners();
 
   const isCustom = Boolean(state.bannerImageUrl);
   const resolvedBannerSource = isCustom
     ? { uri: resolveMediaUrl(state.bannerImageUrl!) }
-    : resolveTournamentBanner({ format: state.format }, clubBranding);
+    : resolveTournamentBanner({ format: state.format }, clubBranding, platformBanners);
+  const builtinFallback = React.useMemo(() => getTournamentBuiltinFallback(state.format), [state.format]);
+  const [previewSource, setPreviewSource] = useState<ImageSourcePropType | null>(() => resolvedBannerSource ?? builtinFallback);
+
+  React.useEffect(() => {
+    setPreviewSource(resolvedBannerSource ?? builtinFallback);
+  }, [resolvedBannerSource, builtinFallback]);
 
   const handlePickBanner = async () => {
     if (!clubId) {
@@ -160,11 +169,16 @@ export function Step1BasicDetails({
         </AppText>
 
         <View style={styles.bannerPreviewContainer}>
-          {resolvedBannerSource ? (
+          {previewSource ? (
             <Image
-              source={resolvedBannerSource}
+              source={previewSource}
               style={styles.bannerPreviewImage}
               resizeMode="cover"
+              onError={() => {
+                if (builtinFallback && previewSource !== builtinFallback) {
+                  setPreviewSource(builtinFallback);
+                }
+              }}
             />
           ) : (
             <View style={styles.bannerEmptyPlaceholder}>

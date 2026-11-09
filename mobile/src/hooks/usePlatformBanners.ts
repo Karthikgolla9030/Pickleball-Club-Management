@@ -75,11 +75,15 @@ export function usePlatformBannerMutations(bannerType?: PlatformBannerType) {
     if (type) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLATFORM_BANNER(type as any) });
     }
-    // Invalidate activity & competition queries so items inheriting platform defaults refresh instantly
+    // Invalidate activity & competition queries across both Player and Club portals so items inheriting platform defaults refresh instantly
     queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+    queryClient.invalidateQueries({ queryKey: ['player'] });
+    queryClient.invalidateQueries({ queryKey: ['clubs'] });
     queryClient.invalidateQueries({ queryKey: ['leagues'] });
     queryClient.invalidateQueries({ queryKey: ['events'] });
     queryClient.invalidateQueries({ queryKey: ['lessons'] });
+    queryClient.invalidateQueries({ queryKey: ['public-tournaments'] });
+    queryClient.invalidateQueries({ queryKey: ['club-tournaments'] });
   };
 
   const updateBanner = useMutation({

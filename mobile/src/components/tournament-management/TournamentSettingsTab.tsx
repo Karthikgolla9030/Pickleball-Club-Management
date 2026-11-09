@@ -47,7 +47,7 @@ import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 interface TournamentSettingsTabProps {
   tournament: Tournament | null;
   clubBranding?: ClubBranding | null;
-  onRefresh?: () => void | Promise<unknown>;
+  onRefresh?: () => void | Promise<void>;
   canManage?: boolean;
 }
 
@@ -205,16 +205,16 @@ export function TournamentSettingsTab({
   const bannerBadgeLabel = isCustom
     ? 'Custom Banner'
     : bannerDetails.level === 'club_default'
-    ? 'Inheriting Club Default'
-    : bannerDetails.level === 'platform_default'
-    ? 'Inheriting Platform Default'
-    : 'No Banner Configured';
+      ? 'Inheriting Club Default'
+      : bannerDetails.level === 'platform_default'
+        ? 'Inheriting Platform Default'
+        : 'No Banner Configured';
 
   const bannerBadgeVariant = isCustom
     ? 'success'
     : bannerDetails.level === 'club_default'
-    ? 'info'
-    : 'default';
+      ? 'info'
+      : 'default';
 
   return (
     <View style={styles.container}>
@@ -231,10 +231,10 @@ export function TournamentSettingsTab({
           {isCustom
             ? 'This custom banner is displayed specifically for this tournament. It does not overwrite any club or platform default banners.'
             : bannerDetails.level === 'club_default'
-            ? `No custom banner selected. This tournament is automatically using your club's default ${(format || 'tournament').replace('_', ' ')} banner.`
-            : bannerDetails.level === 'platform_default'
-            ? 'No custom banner or club default selected. This tournament is using the global platform default banner.'
-            : 'No banner configured at any level. You can upload a custom banner specifically for this tournament.'}
+              ? `No custom banner selected. This tournament is automatically using your club's default ${(format || 'tournament').replace('_', ' ')} banner.`
+              : bannerDetails.level === 'platform_default'
+                ? 'No custom banner or club default selected. This tournament is using the global platform default banner.'
+                : 'No banner configured at any level. You can upload a custom banner specifically for this tournament.'}
         </AppText>
 
         <View style={styles.bannerPreviewContainer}>
@@ -312,8 +312,8 @@ export function TournamentSettingsTab({
               {format === 'scramble'
                 ? 'Individual players with rotating partners'
                 : parsed.isSingles
-                ? '1 player per entry (Singles)'
-                : '2 players per team (Fixed Doubles)'}
+                  ? '1 player per entry (Singles)'
+                  : '2 players per team (Fixed Doubles)'}
             </AppText>
           </View>
 

@@ -701,7 +701,7 @@ export default function BracketWorkspaceScreen() {
         {activeTab === 'settings' && (
           <TournamentSettingsTab
             tournament={tournament}
-            onRefresh={refetchTournament}
+            onRefresh={() => void refetchTournament()}
             canManage={canManage}
           />
         )}

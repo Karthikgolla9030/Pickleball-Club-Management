@@ -62,15 +62,61 @@ export const BUILTIN_FALLBACKS: Record<string, ImageSourcePropType | null> = {
 };
 
 /**
+ * Checks whether a given URL points to a built-in default asset path.
+ */
+export function isBuiltinDefaultUrl(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const lower = url.trim().toLowerCase();
+  return (
+    lower.includes('/defaults/') ||
+    lower.includes('/uploads/defaults') ||
+    lower.includes('/static/defaults') ||
+    lower.endsWith('hero_discover_banner.jpg') ||
+    lower.endsWith('card_round_robin.jpg') ||
+    lower.endsWith('banner2.jpg') ||
+    lower.endsWith('card_pool_play.jpg') ||
+    lower.endsWith('card_bracket.jpg') ||
+    lower.endsWith('hero_events_photo.jpg') ||
+    lower.endsWith('hero_lessons_photo.jpg') ||
+    lower.endsWith('hero_banner.jpg')
+  );
+}
+
+/**
  * Normalizes tournament format strings across casings and aliases.
  */
 export function normalizeFormat(fmt?: string | null): string {
-  const norm = (fmt || '').toLowerCase().trim();
-  if (norm === 'round_robin' || norm === 'round robin' || norm === 'roundrobin') return 'round_robin';
-  if (norm === 'pool_play' || norm === 'pool play' || norm === 'poolplay') return 'pool_play';
-  if (norm === 'scramble') return 'scramble';
-  if (norm === 'bracket' || norm === 'single_elimination' || norm === 'double_elimination' || norm === 'bracket play' || norm === 'bracket_play') return 'bracket';
-  return norm;
+  if (!fmt) return 'round_robin';
+  const clean = String(fmt).toLowerCase().trim().replace(/[\s-]+/g, '_');
+  if (clean.includes('scramble')) return 'scramble';
+  if (clean.includes('pool')) return 'pool_play';
+  if (clean.includes('bracket') || clean.includes('elimination')) return 'bracket';
+  if (clean.includes('round_robin') || clean.includes('roundrobin') || clean === 'rr') return 'round_robin';
+  return clean;
+}
+
+/**
+ * Resolves the built-in default asset for a specific tournament format.
+ */
+export function getTournamentBuiltinFallback(format?: string | null): ImageSourcePropType | null {
+  const fmt = normalizeFormat(format);
+  if (fmt === 'round_robin') return BUILTIN_FALLBACKS.tournamentRoundRobin;
+  if (fmt === 'scramble') return BUILTIN_FALLBACKS.tournamentScramble;
+  if (fmt === 'pool_play') return BUILTIN_FALLBACKS.tournamentPoolPlay;
+  if (fmt === 'bracket') return BUILTIN_FALLBACKS.tournamentBracket;
+  return BUILTIN_FALLBACKS.tournamentGeneric;
+}
+
+/**
+ * Extracts a custom uploaded image URL from a PlatformBanner record.
+ * Returns null if the banner is using the deliberate built-in default asset.
+ */
+export function getPlatformCustomImageUrl(banner?: PlatformBanner | null): string | null {
+  if (!banner) return null;
+  if (banner.image_url && banner.image_url.trim() && !isBuiltinDefaultUrl(banner.image_url)) {
+    return banner.image_url.trim();
+  }
+  return null;
 }
 
 /**
@@ -117,9 +163,9 @@ export function hasConfiguredImage(source: ImageSourcePropType | null | undefine
  * Resolves the tournament banner following strict priority:
  * 1. tournament.banner_image_url (custom item image)
  * 2. club format default or club general default in Club Details -> Branding
- * 3. platform admin format default or platform general default in Platform Banners
- * 4. backend pre-resolved URL (if provided)
- * 5. deliberate built-in format fallback (if options.allowBuiltinFallback !== false)
+ * 3. platform admin custom format default or platform general custom default
+ * 4. backend pre-resolved custom URL (if not a builtin default path)
+ * 5. deliberate built-in format fallback (Platform Admin deliberate built-in default)
  * 6. null (clean neutral no-image state)
  */
 export function resolveTournamentBanner(
@@ -132,63 +178,67 @@ export function resolveTournamentBanner(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
-  // 1. Individual Custom Image (Priority 1)
-  if (tournament?.banner_image_url && tournament.banner_image_url.trim()) {
-    return { uri: resolveMediaUrl(tournament.banner_image_url.trim()) };
-  }
-
+  const allowFallback = options?.allowBuiltinFallback !== false;
   const fmt = normalizeFormat(tournament?.format);
 
+  // 1. Individual Custom Image (Priority 1)
+  const customBanner = tournament?.banner_image_url?.trim();
+  if (customBanner && !isBuiltinDefaultUrl(customBanner)) {
+    return { uri: resolveMediaUrl(customBanner) };
+  }
+
   // 2. Club Default Image (Priority 2)
+  let clubDefaultUrl: string | null = null;
   if (fmt === 'round_robin' && clubBranding?.default_tournament_round_robin_url?.trim()) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url.trim()) };
-  }
-  if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url?.trim()) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url.trim()) };
-  }
-  if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url?.trim()) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url.trim()) };
-  }
-  if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url?.trim()) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url.trim()) };
-  }
-  if (clubBranding?.default_tournament_banner_url?.trim()) {
-    return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
+    clubDefaultUrl = clubBranding.default_tournament_round_robin_url.trim();
+  } else if (fmt === 'scramble' && clubBranding?.default_tournament_scramble_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_scramble_url.trim();
+  } else if (fmt === 'pool_play' && clubBranding?.default_tournament_pool_play_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_pool_play_url.trim();
+  } else if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_bracket_url.trim();
   }
 
-  // 3. Platform Admin Default Image (Priority 3)
+  if (!clubDefaultUrl && clubBranding?.default_tournament_banner_url?.trim()) {
+    clubDefaultUrl = clubBranding.default_tournament_banner_url.trim();
+  }
+
+  if (clubDefaultUrl && !isBuiltinDefaultUrl(clubDefaultUrl)) {
+    return { uri: resolveMediaUrl(clubDefaultUrl) };
+  }
+
+  // 3. Platform Admin Custom Default Image (Priority 3)
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  let platDefaultUrl: string | null = null;
+  let platCustomUrl: string | null = null;
   if (fmt === 'round_robin') {
-    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_round_robin);
   } else if (fmt === 'scramble') {
-    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_scramble);
   } else if (fmt === 'pool_play') {
-    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_pool_play);
   } else if (fmt === 'bracket') {
-    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_bracket);
   }
 
-  if (!platDefaultUrl) {
-    platDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+  if (!platCustomUrl) {
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_banner);
   }
 
-  if (platDefaultUrl) {
-    return { uri: resolveMediaUrl(platDefaultUrl) };
+  if (platCustomUrl) {
+    return { uri: resolveMediaUrl(platCustomUrl) };
   }
 
-  // 4. Backend pre-resolved fallback
-  if (tournament?.resolved_banner_url && tournament.resolved_banner_url.trim()) {
-    return { uri: resolveMediaUrl(tournament.resolved_banner_url.trim()) };
+  // 4. Backend pre-resolved custom URL (if not a builtin default path)
+  const resolvedBackendUrl = tournament?.resolved_banner_url?.trim();
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return { uri: resolveMediaUrl(resolvedBackendUrl) };
   }
 
-  // 5. Deliberate built-in fallback (Platform Admin Built-in Default)
-  if (options?.allowBuiltinFallback !== false) {
-    if (fmt === 'round_robin') return BUILTIN_FALLBACKS.tournamentRoundRobin;
-    if (fmt === 'scramble') return BUILTIN_FALLBACKS.tournamentScramble;
-    if (fmt === 'pool_play') return BUILTIN_FALLBACKS.tournamentPoolPlay;
-    if (fmt === 'bracket') return BUILTIN_FALLBACKS.tournamentBracket;
-    return BUILTIN_FALLBACKS.tournamentGeneric;
+  // 5. Deliberate Built-in Platform Default Asset (Priority 4 / Platform Fallback)
+  // When no custom image exists at item, club, or platform admin level,
+  // this automatically displays the deliberate platform default banner for this exact format.
+  if (allowFallback) {
+    return getTournamentBuiltinFallback(fmt);
   }
 
   return null;
@@ -206,11 +256,12 @@ export function resolveTournamentBannerDetails(
   clubBranding?: ClubBranding | null,
   platformBanners?: Record<string, PlatformBanner> | null
 ): ImageResolutionDetails {
-  if (tournament?.banner_image_url && tournament.banner_image_url.trim()) {
+  const customBanner = tournament?.banner_image_url?.trim();
+  if (customBanner && !isBuiltinDefaultUrl(customBanner)) {
     return {
-      source: { uri: resolveMediaUrl(tournament.banner_image_url.trim()) },
+      source: { uri: resolveMediaUrl(customBanner) },
       level: 'custom',
-      url: tournament.banner_image_url.trim(),
+      url: customBanner,
     };
   }
 
@@ -226,11 +277,13 @@ export function resolveTournamentBannerDetails(
     clubDefaultUrl = clubBranding.default_tournament_pool_play_url.trim();
   } else if (fmt === 'bracket' && clubBranding?.default_tournament_bracket_url?.trim()) {
     clubDefaultUrl = clubBranding.default_tournament_bracket_url.trim();
-  } else if (clubBranding?.default_tournament_banner_url?.trim()) {
+  }
+
+  if (!clubDefaultUrl && clubBranding?.default_tournament_banner_url?.trim()) {
     clubDefaultUrl = clubBranding.default_tournament_banner_url.trim();
   }
 
-  if (clubDefaultUrl) {
+  if (clubDefaultUrl && !isBuiltinDefaultUrl(clubDefaultUrl)) {
     return {
       source: { uri: resolveMediaUrl(clubDefaultUrl) },
       level: 'club_default',
@@ -238,52 +291,43 @@ export function resolveTournamentBannerDetails(
     };
   }
 
-  // Priority 3: Platform default
+  // Priority 3: Platform Admin custom default
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  let platformDefaultUrl: string | null = null;
+  let platCustomUrl: string | null = null;
   if (fmt === 'round_robin') {
-    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_round_robin);
   } else if (fmt === 'scramble') {
-    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_scramble);
   } else if (fmt === 'pool_play') {
-    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_pool_play);
   } else if (fmt === 'bracket') {
-    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_bracket);
   }
 
-  if (!platformDefaultUrl) {
-    platformDefaultUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
+  if (!platCustomUrl) {
+    platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_banner);
   }
 
-  if (platformDefaultUrl) {
+  if (platCustomUrl) {
     return {
-      source: { uri: resolveMediaUrl(platformDefaultUrl) },
+      source: { uri: resolveMediaUrl(platCustomUrl) },
       level: 'platform_default',
-      url: platformDefaultUrl,
+      url: platCustomUrl,
     };
   }
 
-  // Priority 4: Backend pre-resolved fallback
-  if (tournament?.resolved_banner_url && tournament.resolved_banner_url.trim()) {
+  // Priority 4: Backend pre-resolved custom URL (if not a default path)
+  const resolvedBackendUrl = tournament?.resolved_banner_url?.trim();
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
     return {
-      source: { uri: resolveMediaUrl(tournament.resolved_banner_url.trim()) },
+      source: { uri: resolveMediaUrl(resolvedBackendUrl) },
       level: 'platform_default',
-      url: tournament.resolved_banner_url.trim(),
+      url: resolvedBackendUrl,
     };
   }
 
-  // Priority 5: Built-in platform fallback asset
-  const builtinSource =
-    fmt === 'round_robin'
-      ? BUILTIN_FALLBACKS.tournamentRoundRobin
-      : fmt === 'scramble'
-      ? BUILTIN_FALLBACKS.tournamentScramble
-      : fmt === 'pool_play'
-      ? BUILTIN_FALLBACKS.tournamentPoolPlay
-      : fmt === 'bracket'
-      ? BUILTIN_FALLBACKS.tournamentBracket
-      : BUILTIN_FALLBACKS.tournamentGeneric;
-
+  // Priority 5: Deliberate built-in platform fallback asset
+  const builtinSource = getTournamentBuiltinFallback(fmt);
   if (builtinSource) {
     return {
       source: builtinSource,
@@ -308,98 +352,57 @@ export function resolveTournamentFormatDefault(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
+  const allowFallback = options?.allowBuiltinFallback !== false;
   const fmt = normalizeFormat(format);
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
 
-  if (fmt === 'round_robin') {
-    if (clubBranding?.default_tournament_round_robin_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_round_robin_url.trim()) };
-    }
-    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_round_robin);
-    if (platUrl) {
-      return { uri: resolveMediaUrl(platUrl) };
-    }
-    if (clubBranding?.default_tournament_banner_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
-    }
-    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
-    if (platGenUrl) {
-      return { uri: resolveMediaUrl(platGenUrl) };
-    }
-    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentRoundRobin : null;
+  // 1. Format-specific club default
+  let clubFormatUrl: string | null = null;
+  if (fmt === 'round_robin') clubFormatUrl = clubBranding?.default_tournament_round_robin_url?.trim() ?? null;
+  else if (fmt === 'scramble') clubFormatUrl = clubBranding?.default_tournament_scramble_url?.trim() ?? null;
+  else if (fmt === 'pool_play') clubFormatUrl = clubBranding?.default_tournament_pool_play_url?.trim() ?? null;
+  else if (fmt === 'bracket') clubFormatUrl = clubBranding?.default_tournament_bracket_url?.trim() ?? null;
+
+  if (clubFormatUrl && !isBuiltinDefaultUrl(clubFormatUrl)) {
+    return { uri: resolveMediaUrl(clubFormatUrl) };
   }
 
-  if (fmt === 'scramble') {
-    if (clubBranding?.default_tournament_scramble_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_scramble_url.trim()) };
-    }
-    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_scramble);
-    if (platUrl) {
-      return { uri: resolveMediaUrl(platUrl) };
-    }
-    if (clubBranding?.default_tournament_banner_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
-    }
-    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
-    if (platGenUrl) {
-      return { uri: resolveMediaUrl(platGenUrl) };
-    }
-    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentScramble : null;
+  // 2. Format-specific platform admin custom default
+  let platCustomUrl: string | null = null;
+  if (fmt === 'round_robin') platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_round_robin);
+  else if (fmt === 'scramble') platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_scramble);
+  else if (fmt === 'pool_play') platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_pool_play);
+  else if (fmt === 'bracket') platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_bracket);
+
+  if (platCustomUrl) {
+    return { uri: resolveMediaUrl(platCustomUrl) };
   }
 
-  if (fmt === 'pool_play') {
-    if (clubBranding?.default_tournament_pool_play_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_pool_play_url.trim()) };
-    }
-    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_pool_play);
-    if (platUrl) {
-      return { uri: resolveMediaUrl(platUrl) };
-    }
-    if (clubBranding?.default_tournament_banner_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
-    }
-    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
-    if (platGenUrl) {
-      return { uri: resolveMediaUrl(platGenUrl) };
-    }
-    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentPoolPlay : null;
-  }
-
-  if (fmt === 'bracket') {
-    if (clubBranding?.default_tournament_bracket_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_bracket_url.trim()) };
-    }
-    const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_bracket);
-    if (platUrl) {
-      return { uri: resolveMediaUrl(platUrl) };
-    }
-    if (clubBranding?.default_tournament_banner_url?.trim()) {
-      return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
-    }
-    const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
-    if (platGenUrl) {
-      return { uri: resolveMediaUrl(platGenUrl) };
-    }
-    return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentBracket : null;
-  }
-
-  // General tournament default
-  if (clubBranding?.default_tournament_banner_url?.trim()) {
+  // 3. General tournament club default
+  if (clubBranding?.default_tournament_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_tournament_banner_url)) {
     return { uri: resolveMediaUrl(clubBranding.default_tournament_banner_url.trim()) };
   }
-  const platGenUrl = getPlatformBannerUrl(activePlatformBanners?.default_tournament_banner);
-  if (platGenUrl) {
-    return { uri: resolveMediaUrl(platGenUrl) };
+
+  // 4. General tournament platform admin custom default
+  const platGeneralCustom = getPlatformCustomImageUrl(activePlatformBanners?.default_tournament_banner);
+  if (platGeneralCustom) {
+    return { uri: resolveMediaUrl(platGeneralCustom) };
   }
-  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.tournamentGeneric : null;
+
+  // 5. Deliberate format built-in fallback
+  if (allowFallback) {
+    return getTournamentBuiltinFallback(fmt);
+  }
+
+  return null;
 }
 
 /**
  * Resolves a league picture following strict priority:
  * 1. league.banner_image_url (custom item image)
  * 2. club default_league_banner_url (configured in Club Details -> Branding)
- * 3. platform default_league_banner (configured in Platform Admin Banners)
- * 4. backend pre-resolved fallback
+ * 3. platform default_league_banner (custom uploaded in Platform Admin Banners)
+ * 4. backend pre-resolved custom fallback
  * 5. deliberate built-in fallback (if options.allowBuiltinFallback !== false)
  * 6. null (clean neutral no-image state)
  */
@@ -409,22 +412,31 @@ export function resolveLeaguePicture(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
+  const allowFallback = options?.allowBuiltinFallback !== false;
   const customUrl = typeof league === 'string' ? league : league?.banner_image_url;
-  if (customUrl && customUrl.trim()) {
+  if (customUrl && customUrl.trim() && !isBuiltinDefaultUrl(customUrl)) {
     return { uri: resolveMediaUrl(customUrl.trim()) };
   }
-  if (clubBranding?.default_league_banner_url?.trim()) {
+
+  if (clubBranding?.default_league_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_league_banner_url)) {
     return { uri: resolveMediaUrl(clubBranding.default_league_banner_url.trim()) };
   }
+
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_league_banner);
-  if (platUrl) {
-    return { uri: resolveMediaUrl(platUrl) };
+  const platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_league_banner);
+  if (platCustomUrl) {
+    return { uri: resolveMediaUrl(platCustomUrl) };
   }
-  if (typeof league === 'object' && league?.resolved_banner_url?.trim()) {
-    return { uri: resolveMediaUrl(league.resolved_banner_url.trim()) };
+
+  const resolvedBackendUrl = typeof league === 'object' ? league?.resolved_banner_url?.trim() : null;
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return { uri: resolveMediaUrl(resolvedBackendUrl) };
   }
-  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.league : null;
+
+  if (allowFallback) {
+    return BUILTIN_FALLBACKS.league;
+  }
+  return null;
 }
 
 export const resolveLeagueBanner = resolveLeaguePicture;
@@ -433,8 +445,8 @@ export const resolveLeagueBanner = resolveLeaguePicture;
  * Resolves an event picture following strict priority:
  * 1. event.cover_image_url (custom item image)
  * 2. club default_event_banner_url (configured in Club Details -> Branding)
- * 3. platform default_event_banner (configured in Platform Admin Banners)
- * 4. backend pre-resolved fallback
+ * 3. platform default_event_banner (custom uploaded in Platform Admin Banners)
+ * 4. backend pre-resolved custom fallback
  * 5. deliberate built-in fallback (Platform Admin Built-in Default)
  * 6. null (clean neutral no-image state)
  */
@@ -444,22 +456,31 @@ export function resolveEventPicture(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
+  const allowFallback = options?.allowBuiltinFallback !== false;
   const customUrl = typeof event === 'string' ? event : event?.cover_image_url;
-  if (customUrl && customUrl.trim()) {
+  if (customUrl && customUrl.trim() && !isBuiltinDefaultUrl(customUrl)) {
     return { uri: resolveMediaUrl(customUrl.trim()) };
   }
-  if (clubBranding?.default_event_banner_url?.trim()) {
+
+  if (clubBranding?.default_event_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_event_banner_url)) {
     return { uri: resolveMediaUrl(clubBranding.default_event_banner_url.trim()) };
   }
+
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_event_banner);
-  if (platUrl) {
-    return { uri: resolveMediaUrl(platUrl) };
+  const platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_event_banner);
+  if (platCustomUrl) {
+    return { uri: resolveMediaUrl(platCustomUrl) };
   }
-  if (typeof event === 'object' && event?.resolved_cover_image_url?.trim()) {
-    return { uri: resolveMediaUrl(event.resolved_cover_image_url.trim()) };
+
+  const resolvedBackendUrl = typeof event === 'object' ? event?.resolved_cover_image_url?.trim() : null;
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return { uri: resolveMediaUrl(resolvedBackendUrl) };
   }
-  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.event : null;
+
+  if (allowFallback) {
+    return BUILTIN_FALLBACKS.event;
+  }
+  return null;
 }
 
 export const resolveEventCover = resolveEventPicture;
@@ -469,8 +490,8 @@ export const resolveEventCover = resolveEventPicture;
  * 1. lesson.image_url (custom session image)
  * 2. lesson.lesson_type?.image_url (lesson template picture)
  * 3. club default_lesson_banner_url (configured in Club Details -> Branding)
- * 4. platform default_lesson_banner (configured in Platform Admin Banners)
- * 5. backend pre-resolved fallback
+ * 4. platform default_lesson_banner (custom uploaded in Platform Admin Banners)
+ * 5. backend pre-resolved custom fallback
  * 6. deliberate built-in fallback (Platform Admin Built-in Default)
  * 7. null (clean neutral no-image state)
  */
@@ -484,25 +505,34 @@ export function resolveLessonPicture(
   platformBanners?: Record<string, PlatformBanner> | null,
   options?: ImageResolutionOptions
 ): ImageSourcePropType | null {
+  const allowFallback = options?.allowBuiltinFallback !== false;
   if (typeof lesson === 'string') {
-    if (lesson.trim()) return { uri: resolveMediaUrl(lesson.trim()) };
-  } else if (lesson?.image_url && lesson.image_url.trim()) {
+    if (lesson.trim() && !isBuiltinDefaultUrl(lesson)) return { uri: resolveMediaUrl(lesson.trim()) };
+  } else if (lesson?.image_url && lesson.image_url.trim() && !isBuiltinDefaultUrl(lesson.image_url)) {
     return { uri: resolveMediaUrl(lesson.image_url.trim()) };
-  } else if (lesson?.lesson_type?.image_url && lesson.lesson_type.image_url.trim()) {
+  } else if (lesson?.lesson_type?.image_url && lesson.lesson_type.image_url.trim() && !isBuiltinDefaultUrl(lesson.lesson_type.image_url)) {
     return { uri: resolveMediaUrl(lesson.lesson_type.image_url.trim()) };
   }
-  if (clubBranding?.default_lesson_banner_url?.trim()) {
+
+  if (clubBranding?.default_lesson_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_lesson_banner_url)) {
     return { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url.trim()) };
   }
+
   const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
-  const platUrl = getPlatformBannerUrl(activePlatformBanners?.default_lesson_banner);
-  if (platUrl) {
-    return { uri: resolveMediaUrl(platUrl) };
+  const platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_lesson_banner);
+  if (platCustomUrl) {
+    return { uri: resolveMediaUrl(platCustomUrl) };
   }
-  if (typeof lesson === 'object' && lesson?.resolved_image_url?.trim()) {
-    return { uri: resolveMediaUrl(lesson.resolved_image_url.trim()) };
+
+  const resolvedBackendUrl = typeof lesson === 'object' ? lesson?.resolved_image_url?.trim() : null;
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return { uri: resolveMediaUrl(resolvedBackendUrl) };
   }
-  return options?.allowBuiltinFallback !== false ? BUILTIN_FALLBACKS.lesson : null;
+
+  if (allowFallback) {
+    return BUILTIN_FALLBACKS.lesson;
+  }
+  return null;
 }
 
 export const resolveLessonImage = resolveLessonPicture;
