@@ -58,7 +58,7 @@ interface PlatformDrawerProps {
   };
 }
 
-export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
+export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
   const isOpen = useDrawerStore((s) => s.isOpen);
   const closeDrawer = useDrawerStore((s) => s.closeDrawer);
 
@@ -68,8 +68,8 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
   const { width: windowWidth } = useWindowDimensions();
   const logout = useAuthStore((s) => s.logout);
 
-  // Responsive drawer width: ~78vw, capped at 380px, suitable for all mobile viewports
-  const drawerWidth = Math.min(Math.round(windowWidth * 0.78), 380);
+  // Responsive drawer width: ~84vw (82–86% per spec), min 260px (for 320px screens) & max 340px
+  const drawerWidth = Math.min(Math.max(Math.round(windowWidth * 0.84), 260), 340);
 
   // Android hardware back button handler
   useEffect(() => {
@@ -95,11 +95,11 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
   }, [isOpen, closeDrawer]);
 
   // Smooth slide animation from LEFT
-  const translateX = useRef(new Animated.Value(-400)).current;
+  const translateX = useRef(new Animated.Value(-380)).current;
 
   useEffect(() => {
     Animated.timing(translateX, {
-      toValue: isOpen ? 0 : -drawerWidth - 30,
+      toValue: isOpen ? 0 : -drawerWidth - 25,
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: Platform.OS !== 'web',
@@ -136,6 +136,7 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
       subtitle: 'Review & approve clubs',
       route: '/platform/applications',
       icon: FileText,
+      badgeCount: counts?.pendingApplications,
     },
     {
       key: 'clubs',
@@ -164,6 +165,7 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
       subtitle: 'Inquiries & triage',
       route: '/platform/support',
       icon: LifeBuoy,
+      badgeCount: counts?.openTickets,
     },
     {
       key: 'banners',
@@ -188,8 +190,8 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
         {
           width: drawerWidth,
           transform: [{ translateX }],
-          paddingTop: insets.top + 10,
-          paddingBottom: Math.max(insets.bottom, 12),
+          paddingTop: Math.max(insets.top, 8) + 4,
+          paddingBottom: Math.max(insets.bottom, 10),
         },
       ]}
       pointerEvents={isOpen ? 'auto' : 'none'}
@@ -215,14 +217,14 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
           accessibilityRole="button"
           activeOpacity={0.7}
         >
-          <X size={18} color="#475569" strokeWidth={2.2} />
+          <X size={15} color="#475569" strokeWidth={2.4} />
         </TouchableOpacity>
       </View>
 
       {/* 2. Platform Owner Account Panel */}
       <View style={styles.accountPanel}>
         <View style={styles.shieldIconWrap}>
-          <ShieldCheck size={24} color="#16A34A" strokeWidth={2} />
+          <ShieldCheck size={18} color="#16A34A" strokeWidth={2.2} />
         </View>
 
         <View style={styles.accountTextCol}>
@@ -270,7 +272,7 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
 
               <View style={[styles.navIconTile, isActive && styles.navIconTileActive]}>
                 <IconComp
-                  size={20}
+                  size={18}
                   color={isActive ? '#FFFFFF' : '#16A34A'}
                   strokeWidth={2}
                 />
@@ -285,11 +287,17 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
                 </AppText>
               </View>
 
-              <ChevronRight
-                size={18}
-                color={isActive ? '#16A34A' : '#94A3B8'}
-                strokeWidth={2}
-              />
+              {!!item.badgeCount && item.badgeCount > 0 ? (
+                <View style={styles.badgePill}>
+                  <AppText style={styles.badgePillText}>{item.badgeCount}</AppText>
+                </View>
+              ) : (
+                <ChevronRight
+                  size={15}
+                  color={isActive ? '#16A34A' : '#94A3B8'}
+                  strokeWidth={2}
+                />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -304,9 +312,9 @@ export function PlatformDrawer({ adminUser }: PlatformDrawerProps) {
           accessibilityLabel="Sign out of platform"
           accessibilityRole="button"
         >
-          <LogOut size={18} color="#DC2626" strokeWidth={2} />
+          <LogOut size={16} color="#DC2626" strokeWidth={2} />
           <AppText style={styles.signOutText}>Sign Out of Platform</AppText>
-          <ChevronRight size={18} color="#DC2626" strokeWidth={2} />
+          <ChevronRight size={15} color="#DC2626" strokeWidth={2} />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -325,13 +333,13 @@ const styles = StyleSheet.create({
       ? ({
           position: 'fixed' as any,
           height: '100dvh' as any,
-          boxShadow: '8px 0 24px rgba(15, 23, 42, 0.12)' as any,
+          boxShadow: '6px 0 20px rgba(15, 23, 42, 0.14)' as any,
         } as any)
       : {
           shadowColor: '#0F172A',
-          shadowOffset: { width: 8, height: 0 },
-          shadowOpacity: 0.12,
-          shadowRadius: 24,
+          shadowOffset: { width: 6, height: 0 },
+          shadowOpacity: 0.14,
+          shadowRadius: 20,
           elevation: 25,
         }),
     borderRightWidth: 1,
@@ -343,29 +351,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingBottom: 6,
+    paddingTop: 2,
   },
   brandRow: {
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
   logoImage: {
-    width: 106,
-    height: 34,
+    width: 90,
+    height: 26,
   },
   brandSubtitle: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     color: '#64748B',
-    fontWeight: '500',
-    marginTop: 1,
-    marginLeft: 26,
+    fontWeight: '600',
+    marginTop: 0,
+    marginLeft: 22,
     letterSpacing: -0.2,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -374,46 +383,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#DCFCE7',
-    borderRadius: 14,
-    marginHorizontal: 16,
-    marginTop: 6,
-    marginBottom: 8,
-    padding: 12,
+    borderRadius: 10,
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   shieldIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: '#DCFCE7',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   accountTextCol: {
     flex: 1,
-    gap: 4,
+    gap: 2,
     minWidth: 0,
   },
   roleBadge: {
     alignSelf: 'flex-start',
     backgroundColor: '#DCFCE7',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 3,
   },
   roleBadgeText: {
-    fontSize: 9.5,
+    fontSize: 8.5,
     fontWeight: '800',
     color: '#15803D',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   accountEmail: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0F172A',
-    lineHeight: 18,
+    lineHeight: 16,
     letterSpacing: -0.2,
     ...(Platform.OS === 'web'
       ? ({
@@ -425,33 +436,33 @@ const styles = StyleSheet.create({
   sectionHeaderWrap: {
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    paddingTop: 12,
-    marginHorizontal: 16,
-    marginBottom: 6,
+    paddingTop: 8,
+    marginHorizontal: 12,
+    marginBottom: 4,
   },
   sectionHeadingText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.7,
+    letterSpacing: 0.6,
   },
   navList: {
     flex: 1,
     minHeight: 0,
   },
   navContent: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingTop: 2,
-    paddingBottom: 10,
-    gap: 6,
+    paddingBottom: 8,
+    gap: 3,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    gap: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    gap: 9,
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: 'transparent',
@@ -465,61 +476,83 @@ const styles = StyleSheet.create({
   activeAccentBar: {
     position: 'absolute',
     left: 0,
-    top: 6,
-    bottom: 6,
-    width: 4,
+    top: 4,
+    bottom: 4,
+    width: 3.5,
     borderRadius: 2,
     backgroundColor: '#16A34A',
   },
   navIconTile: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     backgroundColor: '#F0FDF4',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   navIconTileActive: {
     backgroundColor: '#16A34A',
   },
   navTextCol: {
     flex: 1,
-    gap: 2,
+    gap: 1,
     minWidth: 0,
+    justifyContent: 'center',
   },
   navItemTitle: {
-    fontSize: 14.5,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0F172A',
+    lineHeight: 17,
   },
   navItemTitleActive: {
     color: '#0F2922',
   },
   navItemSubtitle: {
-    fontSize: 11.5,
+    fontSize: 11,
     color: '#64748B',
+    lineHeight: 14,
+  },
+  badgePill: {
+    backgroundColor: '#DC2626',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   footer: {
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 12,
+    paddingTop: 6,
+    paddingBottom: 2,
+    borderTopWidth: 1,
+    borderTopColor: '#F8FAFC',
   },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FEE2E2',
-    gap: 10,
+    gap: 8,
+    minHeight: 40,
   },
   signOutText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#DC2626',
-    marginLeft: 8,
+    marginLeft: 6,
   },
 });
