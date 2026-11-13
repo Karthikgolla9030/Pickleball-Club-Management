@@ -37,6 +37,9 @@ def _build_membership_info(membership: ClubMembership) -> MembershipInfo:
     elif membership.role == ClubRole.CLUB_OWNER:
         from app.permissions import Permission
         perms = [p.value for p in Permission]
+    elif membership.role == ClubRole.STAFF_MEMBER:
+        role_label = "Staff Member (Legacy)"
+        perms = []
     else:
         from app.permissions import get_permissions
         perms = [p.value for p in get_permissions(membership.role)]

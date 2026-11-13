@@ -20,6 +20,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 
 import { AppDrawer, AppBottomNav, DrawerOverlay } from '@/components';
 import { useAuthStore } from '@/store';
+import { usePermission } from '@/hooks';
 import { isPlatformAdminEmail } from '@/constants';
 import { Colors } from '@/theme';
 
@@ -32,6 +33,7 @@ export default function ClubLayout() {
   const memberships = useAuthStore((s) => s.memberships);
   const activeMembership = useAuthStore((s) => s.activeMembership);
   const activePortal = useAuthStore((s) => s.activePortal);
+  const permissions = usePermission();
 
   useEffect(() => {
     if (isLoading) return;
@@ -60,26 +62,127 @@ export default function ClubLayout() {
       return;
     }
 
-    // Role-specific route enforcement
-    if (activeMembership.role === 'tournament_director') {
+    // Role-specific route enforcement and access guards
+    // Club Owner has full access to all club routes
+    if (permissions.isOwner) {
+      return;
+    }
+
+    // Tournament Director: Competitions only
+    if (permissions.isTournamentDirector) {
       const tdRestricted = [
         '/(club)/members',
         '/(club)/membership-requests',
-        '/(club)/register-club',
         '/(club)/courts',
         '/(club)/bookings',
         '/(club)/memberships',
         '/(club)/payments',
         '/(club)/analytics',
         '/(club)/lessons',
-        '/(club)/competition-schedule',
         '/(club)/club-details',
       ];
       if (tdRestricted.some((r) => pathname.startsWith(r))) {
         router.replace('/(club)/tournaments');
+        return;
       }
+      if (pathname === '/(club)' || pathname === '/(club)/' || pathname === '/(club)/index') {
+        router.replace('/(club)/tournaments');
+        return;
+      }
+      return;
     }
-  }, [isAuthenticated, isLoading, memberships, activeMembership, pathname, router]);
+
+    // Permission-driven route enforcement for managers, custom roles, and staff
+    const fallbackCompetitionRoute = permissions.canManageTournaments ? '/(club)/tournaments' : '/(club)';
+
+    // Payments guard
+    if (pathname.startsWith('/(club)/payments') && !permissions.canManagePayments) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Members guard
+    if (pathname.startsWith('/(club)/members') && !(permissions.canManageMembers || permissions.canManageRoles)) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Courts guard
+    if (pathname.startsWith('/(club)/courts') && !permissions.canManageCourts) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Bookings guard
+    if (pathname.startsWith('/(club)/bookings') && !permissions.canManageBookings) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Memberships guard
+    if (
+      (pathname.startsWith('/(club)/memberships') || pathname.startsWith('/(club)/membership-requests')) &&
+      !permissions.canManageMemberships
+    ) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Events guard
+    if (pathname.startsWith('/(club)/events') && !permissions.canManageEvents) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Lessons guard
+    if (pathname.startsWith('/(club)/lessons') && !permissions.canManageLessons) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Tournaments guard
+    if (
+      (pathname.startsWith('/(club)/tournaments') ||
+        pathname.startsWith('/(club)/tournament-details') ||
+        pathname.startsWith('/(club)/bracket') ||
+        pathname.startsWith('/(club)/pool-play') ||
+        pathname.startsWith('/(club)/round-robin') ||
+        pathname.startsWith('/(club)/scramble')) &&
+      !permissions.canManageTournaments
+    ) {
+      router.replace('/(club)' as any);
+      return;
+    }
+
+    // Leagues guard
+    if (
+      (pathname.startsWith('/(club)/leagues') || pathname.startsWith('/(club)/league-details')) &&
+      !(permissions.canManageLeagues || permissions.canManageTournaments)
+    ) {
+      router.replace('/(club)' as any);
+      return;
+    }
+
+    // Analytics / Reports guard
+    if (pathname.startsWith('/(club)/analytics') && !permissions.canManageReports) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+
+    // Club Details guard
+    if (pathname.startsWith('/(club)/club-details') && !permissions.canManageClub) {
+      router.replace(fallbackCompetitionRoute as any);
+      return;
+    }
+  }, [
+    isAuthenticated,
+    isLoading,
+    memberships,
+    activeMembership,
+    pathname,
+    router,
+    permissions,
+  ]);
 
   return (
     <View style={styles.container}>

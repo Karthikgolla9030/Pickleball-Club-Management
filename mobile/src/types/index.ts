@@ -293,6 +293,7 @@ export interface AddMemberPayload {
   custom_role_id?: string | null;
   full_name?: string;
   temporary_password?: string;
+  password?: string;
 }
 
 export interface UpdateMemberPayload {
@@ -661,6 +662,7 @@ export const ROLE_PERMISSIONS: Record<ClubRole, readonly ClubPermission[]> = {
     'manage_scores',
     'manage_standings',
     'manage_results',
+    'manage_schedules',
   ],
   staff_member: [],
 } as const;

@@ -53,7 +53,7 @@ import {
 
 import { AppText } from './AppText';
 import { useDrawerStore } from '@/navigation';
-import { useAuth, useActiveClub, usePlatformBranding } from '@/hooks';
+import { useAuth, useActiveClub, usePlatformBranding, usePermission } from '@/hooks';
 import { isPlatformAdminEmail } from '@/constants';
 
 interface NavItemConfig {
@@ -80,6 +80,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
   const { user, memberships, logout, activePortal } = useAuth();
   const { role, activeMembership } = useActiveClub();
   const { platformName } = usePlatformBranding();
+  const permissions = usePermission();
 
   const isPlatformAdmin = Boolean(
     user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
@@ -167,7 +168,12 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     roleBadgeBg = '#E0F2FE';
     roleBadgeColor = '#0E7490';
   } else if (!isPlayer) {
-    if (role === 'club_owner') {
+    if (activeMembership?.custom_role_name || ((activeMembership as any)?.role_label && (activeMembership as any)?.role_label !== 'Staff Member')) {
+      roleLabel = activeMembership?.custom_role_name || (activeMembership as any)?.role_label;
+      RoleIcon = UserCheck;
+      roleBadgeBg = '#EDE9FE';
+      roleBadgeColor = '#6D28D9';
+    } else if (role === 'club_owner') {
       roleLabel = 'Club Owner';
       RoleIcon = Crown;
       roleBadgeBg = '#E4F4EC';
@@ -183,10 +189,10 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
       roleBadgeBg = '#FEF3C7';
       roleBadgeColor = '#B45309';
     } else if (role === 'staff_member') {
-      roleLabel = 'Staff Member';
+      roleLabel = (activeMembership as any)?.role_label || 'Staff Member (Legacy)';
       RoleIcon = User;
-      roleBadgeBg = '#F1F5F9';
-      roleBadgeColor = '#475569';
+      roleBadgeBg = '#FEF2F2';
+      roleBadgeColor = '#DC2626';
     }
   }
 
@@ -222,14 +228,14 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     { key: 'player_help', label: 'Help & Support', icon: HelpCircle, route: '/(player)/help-support' },
   ];
 
-  // ─── 2. CLUB NAVIGATION (Role-Specific) ───────────────────────────────────
+  // ─── 2. CLUB NAVIGATION (Role-Specific & Permission-Driven) ───────────────
   let clubSection1: NavItemConfig[] = [];
   let clubSection2: NavItemConfig[] = [];
   let clubSection3: NavItemConfig[] = [];
 
   if (!isPlayer) {
     if (role === 'club_owner') {
-      // Club Owner: Full management
+      // Club Owner: Full access to all club features & administration
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
@@ -245,15 +251,15 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
         { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members?tab=staff' },
         { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
+        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' },
       ];
       clubSection3 = [
+        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
-        { key: 'privacy', label: 'Privacy Policy', icon: ShieldCheck, route: '/(club)/settings' },
-        { key: 'terms', label: 'Terms of Service', icon: FileText, route: '/(club)/settings' },
       ];
-    } else if (role === 'club_manager') {
-      // Club Manager: Operations only
+    } else if (role === 'club_manager' && !activeMembership?.custom_role_id) {
+      // Built-in Club Manager: Operational features (no staff/role management or club ownership)
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
         { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
@@ -266,31 +272,76 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' },
       ];
       clubSection2 = [
-        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
         { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
+        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' },
+      ];
+      clubSection3 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
-    } else if (role === 'tournament_director') {
-      // Tournament Director: Competitions only
+    } else if (role === 'tournament_director' && !activeMembership?.custom_role_id) {
+      // Built-in Tournament Director: Competitions only
       clubSection1 = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
         { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' },
         { key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' },
       ];
-      clubSection2 = [
+      clubSection2 = [];
+      clubSection3 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
         { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
     } else {
-      // General Staff Member: Least-privilege basic employee experience
-      clubSection1 = [
+      // Custom Role / Other Staff: Dynamically construct navigation based on backend-authorized permissions
+      const section1: NavItemConfig[] = [
         { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
       ];
-      clubSection2 = [
+      if (permissions.canManageMembers) {
+        section1.push({ key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' });
+      }
+      if (permissions.canManageCourts) {
+        section1.push({ key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' });
+      }
+      if (permissions.canManageBookings) {
+        section1.push({ key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' });
+      }
+      if (permissions.canManageMemberships) {
+        section1.push({ key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' });
+      }
+      if (permissions.canManageEvents) {
+        section1.push({ key: 'events', label: 'Events', icon: CalendarHeart, route: '/(club)/events' });
+      }
+      if (permissions.canManageTournaments) {
+        section1.push({ key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' });
+      }
+      if (permissions.canManageLeagues || permissions.canManageTournaments) {
+        section1.push({ key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' });
+      }
+      if (permissions.canManageLessons) {
+        section1.push({ key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' });
+      }
+      clubSection1 = section1;
+
+      const section2: NavItemConfig[] = [];
+      if (permissions.canManageClub) {
+        section2.push({ key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' });
+      }
+      if (permissions.canManageRoles) {
+        section2.push({ key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members?tab=staff' });
+      }
+      if (permissions.canManagePayments) {
+        section2.push({ key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' });
+      }
+      if (permissions.canManageReports) {
+        section2.push({ key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' });
+      }
+      clubSection2 = section2;
+
+      clubSection3 = [
         { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
+        { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
       ];
     }

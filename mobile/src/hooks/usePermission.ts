@@ -12,16 +12,34 @@ import { useActiveClub } from './useActiveClub';
 import { ROLE_PERMISSIONS, type ClubPermission } from '@/types';
 
 export function usePermission() {
-  const { role } = useActiveClub();
+  const { role, activeMembership } = useActiveClub();
 
   const permissions = useMemo(() => {
-    if (!role) return new Set<ClubPermission>();
-    return new Set<ClubPermission>(ROLE_PERMISSIONS[role] ?? []);
-  }, [role]);
+    if (!role && !activeMembership) return new Set<ClubPermission>();
+
+    // Club Owner always has all permissions
+    if (role === 'club_owner') {
+      return new Set<ClubPermission>(ROLE_PERMISSIONS.club_owner);
+    }
+
+    // If membership has authoritative permissions array from backend (custom role or built-in)
+    if (activeMembership?.permissions && Array.isArray(activeMembership.permissions) && activeMembership.permissions.length > 0) {
+      return new Set<ClubPermission>(activeMembership.permissions as ClubPermission[]);
+    }
+
+    // Fallback to built-in role permissions
+    if (role && ROLE_PERMISSIONS[role]) {
+      return new Set<ClubPermission>(ROLE_PERMISSIONS[role]);
+    }
+
+    return new Set<ClubPermission>();
+  }, [role, activeMembership]);
 
   const hasPermission = (permission: ClubPermission): boolean => {
     return permissions.has(permission);
   };
+
+  const isCustomRole = Boolean(activeMembership?.custom_role_id);
 
   return {
     hasPermission,
@@ -41,8 +59,9 @@ export function usePermission() {
     canManageLeagues: hasPermission('manage_leagues'),
     canManageSchedules: hasPermission('manage_schedules'),
     isOwner: role === 'club_owner',
-    isManager: role === 'club_manager',
-    isTournamentDirector: role === 'tournament_director',
-    isStaffMember: role === 'staff_member',
+    isManager: role === 'club_manager' && !isCustomRole,
+    isTournamentDirector: role === 'tournament_director' && !isCustomRole,
+    isCustomRole,
+    isStaffMember: role === 'staff_member' && !isCustomRole,
   };
 }

@@ -54,7 +54,9 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
   // Strict check: player if requested mode is player, or if account has no staff membership
   const isPlayer = mode === 'player' || memberships.length === 0 || !activeMembership;
-  const isTournamentDirector = !isPlayer && role === 'tournament_director';
+  const isTournamentDirector =
+    !isPlayer &&
+    (role === 'tournament_director' || (!permissions.canManageBookings && permissions.canManageTournaments));
 
   // Normalize path for matching
   const normalizedPath = pathname.replace(/\/$/, '') || '/';

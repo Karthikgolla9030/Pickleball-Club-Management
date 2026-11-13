@@ -36,6 +36,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   Check,
   Edit3,
+  Eye,
+  EyeOff,
   Mail,
   Menu,
   MoreVertical,
@@ -154,11 +156,43 @@ function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
 
 type PlayerFilterType = 'all' | 'subscribers' | 'normal';
 
-const VALID_ROLES: { role: ClubRole; label: string }[] = [
-  { role: 'club_owner', label: 'Club Owner' },
-  { role: 'staff_member', label: 'Staff Member' },
-  { role: 'club_manager', label: 'Club Manager' },
-  { role: 'tournament_director', label: 'Tournament Director' },
+export interface BuiltinStaffRole {
+  role: 'club_manager' | 'tournament_director';
+  label: string;
+  description: string;
+  permissionsList: string[];
+}
+
+export const BUILTIN_STAFF_ROLES: BuiltinStaffRole[] = [
+  {
+    role: 'club_manager',
+    label: 'Club Manager',
+    description: 'Operational management: members, bookings, courts, memberships, events, lessons, and operational reports.',
+    permissionsList: [
+      'Members & Staff',
+      'Court Bookings',
+      'Courts & Facilities',
+      'Membership Plans',
+      'Events & Socials',
+      'Lessons & Clinics',
+      'Tournaments & Leagues',
+      'Reports & Analytics',
+      'Payments & Billing',
+    ],
+  },
+  {
+    role: 'tournament_director',
+    label: 'Tournament Director',
+    description: 'Tournament & league operations: draws, brackets, matches, results, schedules, and standings.',
+    permissionsList: [
+      'Tournaments & Draws',
+      'Leagues & Seasons',
+      'Teams & Rosters',
+      'Competition Schedules',
+      'Scores & Results',
+      'Standings & Rankings',
+    ],
+  },
 ];
 
 const VALID_STATUSES: { status: PlayerMembershipStatus; label: string }[] = [
@@ -176,19 +210,24 @@ const PERMISSION_GROUPS = [
       { key: 'manage_memberships', label: 'Membership Plans', description: 'Configure membership plans and subscriptions' },
       { key: 'manage_bookings', label: 'Court Bookings', description: 'Create, edit, and cancel court reservations' },
       { key: 'manage_courts', label: 'Courts & Facilities', description: 'Configure court settings, availability, and status' },
-      { key: 'manage_reports', label: 'Reports & Analytics', description: 'Access club operational and financial reports' },
     ],
   },
   {
-    category: 'Activities & Competitions',
+    category: 'Events & Activities',
+    permissions: [
+      { key: 'manage_events', label: 'Events & Socials', description: 'Schedule and manage club social events & open play' },
+      { key: 'manage_lessons', label: 'Lessons & Coaching', description: 'Manage coaches, private lessons, and clinics' },
+    ],
+  },
+  {
+    category: 'Competitions',
     permissions: [
       { key: 'manage_tournaments', label: 'Tournaments', description: 'Create and organize tournament draws and brackets' },
       { key: 'manage_leagues', label: 'Leagues', description: 'Run league seasons, divisions, and rounds' },
-      { key: 'manage_events', label: 'Events & Open Plays', description: 'Schedule and manage club social events' },
-      { key: 'manage_lessons', label: 'Lessons & Clinics', description: 'Manage coaches, private lessons, and clinics' },
-      { key: 'manage_schedules', label: 'Schedules', description: 'Configure schedules and timeslot rules' },
-      { key: 'manage_scores', label: 'Scores & Results', description: 'Enter match scores and update standings' },
+      { key: 'manage_schedules', label: 'Competition Schedules', description: 'Configure competition schedules and timeslots' },
       { key: 'manage_teams', label: 'Teams & Rosters', description: 'Organize competition teams and player rosters' },
+      { key: 'manage_scores', label: 'Matches & Scores', description: 'Enter match scores and update match results' },
+      { key: 'manage_standings', label: 'Standings & Results', description: 'Publish competition rankings and leaderboards' },
     ],
   },
   {
@@ -198,10 +237,12 @@ const PERMISSION_GROUPS = [
     ],
   },
   {
-    category: 'Club Configuration',
+    category: 'Administration & Analytics',
     permissions: [
-      { key: 'manage_club', label: 'Club Profile & Hours', description: 'Update facility profile, contact, and hours' },
+      { key: 'manage_club', label: 'Club Details', description: 'Update facility profile, contact, and hours' },
       { key: 'manage_settings', label: 'Club Settings', description: 'Configure general club preferences' },
+      { key: 'manage_reports', label: 'Reports & Analytics', description: 'Access operational, membership, and financial reports' },
+      { key: 'manage_roles', label: 'Staff & Role Management', description: 'Create custom roles and manage staff permissions' },
     ],
   },
 ];
@@ -433,9 +474,10 @@ export default function ClubMembersScreen() {
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [showNewStaffPassword, setShowNewStaffPassword] = useState(false);
   const [selectedRoleChoice, setSelectedRoleChoice] = useState<
-    { type: 'builtin'; role: ClubRole } | { type: 'custom'; roleId: string }
-  >({ type: 'builtin', role: 'staff_member' });
+    { type: 'builtin'; role: 'club_manager' | 'tournament_director' } | { type: 'custom'; roleId: string }
+  >({ type: 'builtin', role: 'club_manager' });
   const [staffActionError, setStaffActionError] = useState<string | null>(null);
 
   // Manage Roles Modal
@@ -459,8 +501,8 @@ export default function ClubMembersScreen() {
   const [roleModalVisible, setRoleModalVisible] = useState(false);
   const [selectedStaffMember, setSelectedStaffMember] = useState<ClubMember | null>(null);
   const [staffEditRoleChoice, setStaffEditRoleChoice] = useState<
-    { type: 'builtin'; role: ClubRole } | { type: 'custom'; roleId: string }
-  >({ type: 'builtin', role: 'staff_member' });
+    { type: 'builtin'; role: 'club_manager' | 'tournament_director' } | { type: 'custom'; roleId: string }
+  >({ type: 'builtin', role: 'club_manager' });
 
   // Filter settings info modal
   const [filterInfoVisible, setFilterInfoVisible] = useState(false);
@@ -527,7 +569,26 @@ export default function ClubMembersScreen() {
   const handleStaffMenu = (member: ClubMember) => {
     blurActiveElement();
     const formattedName = member.user_full_name || member.user_email.split('@')[0];
-    const displayRole = member.custom_role_name || member.role_label || member.role;
+    const isOwner = member.role === 'club_owner';
+    const isLegacy = member.role === 'staff_member' && !member.custom_role_name;
+    const displayRole = member.custom_role_name
+      ? member.custom_role_name
+      : isLegacy
+      ? 'Staff Member (Legacy)'
+      : member.role_label || member.role;
+
+    if (isOwner) {
+      Alert.alert(
+        formattedName,
+        `Email: ${member.user_email}\nRole: Club Owner (Protected)\nStatus: ACTIVE`,
+        [
+          { text: 'Send Message', onPress: () => handleMessageStaff(member) },
+          { text: 'Close', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
       formattedName,
       `Email: ${member.user_email}\nRole: ${displayRole}\nStatus: ${member.is_active ? 'ACTIVE' : 'DISABLED'}`,
@@ -665,29 +726,51 @@ export default function ClubMembersScreen() {
 
   const handleAddStaff = async () => {
     setStaffActionError(null);
-    if (!newStaffEmail.trim()) {
-      setStaffActionError('Please enter a staff email address.');
+    const trimmedName = newStaffName.trim();
+    const trimmedEmail = newStaffEmail.trim().toLowerCase();
+    const password = newStaffPassword;
+
+    if (!trimmedName) {
+      setStaffActionError('Full Name is required.');
       return;
     }
-    if (!newStaffName.trim()) {
-      setStaffActionError('Please enter the staff member full name.');
+    if (!trimmedEmail) {
+      setStaffActionError('User Email is required.');
       return;
     }
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setStaffActionError('Please enter a valid email address.');
+      return;
+    }
+    if (!password) {
+      setStaffActionError('Password is required.');
+      return;
+    }
+    if (password.length < 6) {
+      setStaffActionError('Password must be at least 6 characters long.');
+      return;
+    }
+
     try {
-      if (selectedRoleChoice.type === 'custom' && selectedRoleChoice.roleId) {
+      if (selectedRoleChoice.type === 'custom') {
+        if (!selectedRoleChoice.roleId) {
+          setStaffActionError('Please select a valid custom role.');
+          return;
+        }
         await addMember({
-          email: newStaffEmail.trim(),
+          email: trimmedEmail,
           role: 'staff_member',
           custom_role_id: selectedRoleChoice.roleId,
-          full_name: newStaffName.trim(),
-          temporary_password: newStaffPassword.trim() || undefined,
+          full_name: trimmedName,
+          password: password,
         });
       } else {
+        const builtinRole = selectedRoleChoice.role;
         await addMember({
-          email: newStaffEmail.trim(),
-          role: selectedRoleChoice.type === 'builtin' ? selectedRoleChoice.role : 'staff_member',
-          full_name: newStaffName.trim(),
-          temporary_password: newStaffPassword.trim() || undefined,
+          email: trimmedEmail,
+          role: builtinRole,
+          full_name: trimmedName,
+          password: password,
         });
       }
       blurActiveElement();
@@ -695,7 +778,8 @@ export default function ClubMembersScreen() {
       setNewStaffEmail('');
       setNewStaffName('');
       setNewStaffPassword('');
-      setSelectedRoleChoice({ type: 'builtin', role: 'staff_member' });
+      setShowNewStaffPassword(false);
+      setSelectedRoleChoice({ type: 'builtin', role: 'club_manager' });
     } catch (err: unknown) {
       setStaffActionError(err instanceof Error ? err.message : 'Failed to add staff member');
     }
@@ -703,17 +787,27 @@ export default function ClubMembersScreen() {
 
   const handleOpenEditRole = (member: ClubMember) => {
     blurActiveElement();
+    if (member.role === 'club_owner') {
+      Alert.alert('Protected Account', 'The Club Owner account role cannot be modified.');
+      return;
+    }
     setSelectedStaffMember(member);
     if (member.custom_role_id) {
       setStaffEditRoleChoice({ type: 'custom', roleId: member.custom_role_id });
+    } else if (member.role === 'tournament_director') {
+      setStaffEditRoleChoice({ type: 'builtin', role: 'tournament_director' });
     } else {
-      setStaffEditRoleChoice({ type: 'builtin', role: member.role });
+      setStaffEditRoleChoice({ type: 'builtin', role: 'club_manager' });
     }
     setRoleModalVisible(true);
   };
 
   const handleSaveRole = async () => {
     if (!selectedStaffMember) return;
+    if (selectedStaffMember.role === 'club_owner') {
+      Alert.alert('Protected Account', 'The Club Owner account role cannot be modified.');
+      return;
+    }
     try {
       if (staffEditRoleChoice.type === 'custom') {
         await updateMember({
@@ -741,6 +835,10 @@ export default function ClubMembersScreen() {
   };
 
   const handleToggleStaffActive = (member: ClubMember) => {
+    if (member.role === 'club_owner') {
+      Alert.alert('Protected Account', 'The Club Owner account cannot be disabled.');
+      return;
+    }
     const willEnable = !member.is_active;
     Alert.alert(
       willEnable ? 'Enable Staff Member' : 'Disable Staff Member',
@@ -1134,14 +1232,20 @@ export default function ClubMembersScreen() {
         : 'Staff Member';
 
     const isCustomRole = Boolean(item.custom_role_name);
+    const isOwner = item.role === 'club_owner';
+    const isLegacyStaff = item.role === 'staff_member' && !isCustomRole;
+
+    const builtinMap: Record<string, { label: string; bg: string; text: string }> = {
+      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
+      club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
+      tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
+    };
+
     const roleConfig = isCustomRole
       ? { label: item.custom_role_name!, bg: '#E6F4EA', text: '#0D5F4D' }
-      : {
-          club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
-          staff_member: { label: 'Staff Member', bg: '#F1F5F9', text: '#475569' },
-          club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
-          tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
-        }[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
+      : isLegacyStaff
+      ? { label: 'Staff Member (Legacy)', bg: '#FEF3C7', text: '#92400E' }
+      : builtinMap[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
 
     return (
       <View style={styles.memberCard}>
@@ -1184,7 +1288,7 @@ export default function ClubMembersScreen() {
               {item.user_email}
             </AppText>
 
-            {/* Row 3: Status Badge */}
+            {/* Row 3: Status Badge & Legacy Indicator */}
             <View style={styles.statusRow}>
               <View
                 style={[
@@ -1207,6 +1311,14 @@ export default function ClubMembersScreen() {
                   {item.is_active ? 'ACTIVE' : 'DISABLED'}
                 </AppText>
               </View>
+
+              {isLegacyStaff && (
+                <View style={[styles.playerSubPlanBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                  <AppText style={[styles.playerSubPlanBadgeText, { color: '#92400E' }]}>
+                    Legacy • 0 perms
+                  </AppText>
+                </View>
+              )}
             </View>
           </View>
         </View>
@@ -1216,7 +1328,7 @@ export default function ClubMembersScreen() {
 
         {/* Bottom Actions Row */}
         <View style={styles.cardActionRow}>
-          {canManageRoles ? (
+          {canManageRoles && !isOwner ? (
             <TouchableOpacity
               style={styles.cardActionItem}
               onPress={() => handleOpenEditRole(item)}
@@ -1238,7 +1350,7 @@ export default function ClubMembersScreen() {
 
           <View style={styles.actionVerticalDivider} />
 
-          {canManageRoles && item.role !== 'club_owner' ? (
+          {canManageRoles && !isOwner ? (
             <TouchableOpacity
               style={styles.cardActionItem}
               onPress={() => handleToggleStaffActive(item)}
@@ -1257,14 +1369,12 @@ export default function ClubMembersScreen() {
               )}
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
-              style={styles.cardActionItem}
-              onPress={() => handleMessageStaff(item)}
-              activeOpacity={0.7}
-            >
-              <Mail size={15} color="#102F2A" strokeWidth={1.9} />
-              <AppText style={styles.cardActionText}>Message</AppText>
-            </TouchableOpacity>
+            <View style={styles.cardActionItem}>
+              <Shield size={14} color="#176B57" strokeWidth={2} />
+              <AppText style={[styles.cardActionText, { color: '#176B57', fontWeight: '600' }]}>
+                {isOwner ? 'Club Owner (Protected)' : 'Staff Member'}
+              </AppText>
+            </View>
           )}
         </View>
       </View>
@@ -1496,7 +1606,7 @@ export default function ClubMembersScreen() {
               </View>
             )}
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
               <View style={styles.formGroup}>
                 <AppText style={styles.formLabel}>Full Name *</AppText>
                 <TextInput
@@ -1523,6 +1633,34 @@ export default function ClubMembersScreen() {
               </View>
 
               <View style={styles.formGroup}>
+                <AppText style={styles.formLabel}>Password *</AppText>
+                <View style={styles.passwordInputContainer}>
+                  <TextInput
+                    style={styles.passwordInput}
+                    placeholder="••••••••"
+                    placeholderTextColor="#8C9BA5"
+                    secureTextEntry={!showNewStaffPassword}
+                    value={newStaffPassword}
+                    onChangeText={setNewStaffPassword}
+                  />
+                  <TouchableOpacity
+                    style={styles.eyeIconBtn}
+                    onPress={() => setShowNewStaffPassword((prev) => !prev)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    {showNewStaffPassword ? (
+                      <EyeOff size={18} color="#647570" />
+                    ) : (
+                      <Eye size={18} color="#647570" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+                <AppText style={styles.fieldHelperText}>
+                  Minimum 6 characters. Staff member will use this to sign in.
+                </AppText>
+              </View>
+
+              <View style={styles.formGroup}>
                 <View style={styles.roleHeaderRow}>
                   <AppText style={styles.formLabel}>Staff Role</AppText>
                   <TouchableOpacity
@@ -1535,8 +1673,8 @@ export default function ClubMembersScreen() {
                   </TouchableOpacity>
                 </View>
 
-                <AppText style={styles.roleSectionSubtitle}>System Built-in Roles</AppText>
-                {VALID_ROLES.filter((r) => r.role !== 'club_owner').map((r) => {
+                <AppText style={styles.roleSectionSubtitle}>SYSTEM BUILT-IN ROLES</AppText>
+                {BUILTIN_STAFF_ROLES.map((r) => {
                   const isSelected =
                     selectedRoleChoice.type === 'builtin' && selectedRoleChoice.role === r.role;
                   return (
@@ -1549,14 +1687,17 @@ export default function ClubMembersScreen() {
                       onPress={() => setSelectedRoleChoice({ type: 'builtin', role: r.role })}
                     >
                       <View style={styles.roleOptionRow}>
-                        <AppText
-                          style={[
-                            styles.roleSelectOptionText,
-                            isSelected && styles.roleSelectOptionTextActive,
-                          ]}
-                        >
-                          {r.label}
-                        </AppText>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <AppText
+                            style={[
+                              styles.roleSelectOptionText,
+                              isSelected && styles.roleSelectOptionTextActive,
+                            ]}
+                          >
+                            {r.label}
+                          </AppText>
+                          <AppText style={styles.roleOptionMeta}>{r.description}</AppText>
+                        </View>
                         {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
                       </View>
                     </TouchableOpacity>
@@ -1565,7 +1706,7 @@ export default function ClubMembersScreen() {
 
                 <View style={styles.customRolesHeaderRow}>
                   <AppText style={styles.roleSectionSubtitle}>
-                    Custom Roles ({customRoles.length})
+                    CUSTOM ROLES ({customRoles.length})
                   </AppText>
                 </View>
 
@@ -1610,18 +1751,37 @@ export default function ClubMembersScreen() {
                     );
                   })
                 )}
-              </View>
 
-              <View style={styles.formGroup}>
-                <AppText style={styles.formLabel}>Temporary Password</AppText>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="•••••••• (optional, min 6 chars)"
-                  placeholderTextColor="#8C9BA5"
-                  secureTextEntry
-                  value={newStaffPassword}
-                  onChangeText={setNewStaffPassword}
-                />
+                {/* Selected Role Permissions Preview */}
+                <View style={styles.rolePreviewContainer}>
+                  <AppText style={styles.rolePreviewTitle}>Selected Role Permissions</AppText>
+                  <View style={styles.rolePreviewList}>
+                    {selectedRoleChoice.type === 'builtin' ? (
+                      (BUILTIN_STAFF_ROLES.find((r) => r.role === selectedRoleChoice.role)?.permissionsList || []).map((p) => (
+                        <View key={p} style={styles.rolePreviewBadge}>
+                          <AppText style={styles.rolePreviewBadgeText}>{p}</AppText>
+                        </View>
+                      ))
+                    ) : (
+                      (() => {
+                        const cr = customRoles.find((r) => r.id === selectedRoleChoice.roleId);
+                        const perms = cr?.permissions || [];
+                        if (perms.length === 0) {
+                          return (
+                            <AppText style={styles.noPermsText}>No permissions granted for this role</AppText>
+                          );
+                        }
+                        return perms.map((p) => (
+                          <View key={p} style={styles.rolePreviewBadge}>
+                            <AppText style={styles.rolePreviewBadgeText}>
+                              {p.replace(/^manage_/, '').replace(/_/g, ' ')}
+                            </AppText>
+                          </View>
+                        ));
+                      })()
+                    )}
+                  </View>
+                </View>
               </View>
             </ScrollView>
 
@@ -1689,10 +1849,10 @@ export default function ClubMembersScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
               <View style={styles.formGroup}>
-                <AppText style={styles.roleSectionSubtitle}>System Built-in Roles</AppText>
-                {VALID_ROLES.map((r) => {
+                <AppText style={styles.roleSectionSubtitle}>SYSTEM BUILT-IN ROLES</AppText>
+                {BUILTIN_STAFF_ROLES.map((r) => {
                   const isSelected =
                     staffEditRoleChoice.type === 'builtin' && staffEditRoleChoice.role === r.role;
                   return (
@@ -1705,58 +1865,100 @@ export default function ClubMembersScreen() {
                       onPress={() => setStaffEditRoleChoice({ type: 'builtin', role: r.role })}
                     >
                       <View style={styles.roleOptionRow}>
-                        <AppText
-                          style={[
-                            styles.roleSelectOptionText,
-                            isSelected && styles.roleSelectOptionTextActive,
-                          ]}
-                        >
-                          {r.label}
-                        </AppText>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <AppText
+                            style={[
+                              styles.roleSelectOptionText,
+                              isSelected && styles.roleSelectOptionTextActive,
+                            ]}
+                          >
+                            {r.label}
+                          </AppText>
+                          <AppText style={styles.roleOptionMeta}>{r.description}</AppText>
+                        </View>
                         {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
                       </View>
                     </TouchableOpacity>
                   );
                 })}
 
-                {customRoles.length > 0 && (
-                  <>
-                    <AppText style={[styles.roleSectionSubtitle, { marginTop: 10 }]}>
-                      Custom Roles
+                <View style={styles.customRolesHeaderRow}>
+                  <AppText style={styles.roleSectionSubtitle}>
+                    CUSTOM ROLES ({customRoles.length})
+                  </AppText>
+                </View>
+
+                {customRoles.length === 0 ? (
+                  <View style={styles.emptyCustomRolesBox}>
+                    <AppText style={styles.emptyCustomRolesText}>
+                      No custom roles created yet for this club.
                     </AppText>
-                    {customRoles.map((cr) => {
-                      const isSelected =
-                        staffEditRoleChoice.type === 'custom' && staffEditRoleChoice.roleId === cr.id;
-                      return (
-                        <TouchableOpacity
-                          key={cr.id}
-                          style={[
-                            styles.roleSelectOption,
-                            isSelected && styles.roleSelectOptionActive,
-                          ]}
-                          onPress={() => setStaffEditRoleChoice({ type: 'custom', roleId: cr.id })}
-                        >
-                          <View style={styles.roleOptionRow}>
-                            <View style={{ flex: 1, paddingRight: 8 }}>
-                              <AppText
-                                style={[
-                                  styles.roleSelectOptionText,
-                                  isSelected && styles.roleSelectOptionTextActive,
-                                ]}
-                              >
-                                {cr.name}
-                              </AppText>
-                              <AppText style={styles.roleOptionMeta}>
-                                {(cr.permissions || []).length} permissions
-                              </AppText>
-                            </View>
-                            {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                  </View>
+                ) : (
+                  customRoles.map((cr) => {
+                    const isSelected =
+                      staffEditRoleChoice.type === 'custom' && staffEditRoleChoice.roleId === cr.id;
+                    return (
+                      <TouchableOpacity
+                        key={cr.id}
+                        style={[
+                          styles.roleSelectOption,
+                          isSelected && styles.roleSelectOptionActive,
+                        ]}
+                        onPress={() => setStaffEditRoleChoice({ type: 'custom', roleId: cr.id })}
+                      >
+                        <View style={styles.roleOptionRow}>
+                          <View style={{ flex: 1, paddingRight: 8 }}>
+                            <AppText
+                              style={[
+                                styles.roleSelectOptionText,
+                                isSelected && styles.roleSelectOptionTextActive,
+                              ]}
+                            >
+                              {cr.name}
+                            </AppText>
+                            <AppText style={styles.roleOptionMeta}>
+                              {(cr.permissions || []).length} permissions
+                              {cr.description ? ` • ${cr.description}` : ''}
+                            </AppText>
                           </View>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </>
+                          {isSelected && <Check size={16} color="#176B57" strokeWidth={2.5} />}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
                 )}
+
+                {/* Selected Role Permissions Preview */}
+                <View style={styles.rolePreviewContainer}>
+                  <AppText style={styles.rolePreviewTitle}>Effective Permissions Preview</AppText>
+                  <View style={styles.rolePreviewList}>
+                    {staffEditRoleChoice.type === 'builtin' ? (
+                      (BUILTIN_STAFF_ROLES.find((r) => r.role === staffEditRoleChoice.role)?.permissionsList || []).map((p) => (
+                        <View key={p} style={styles.rolePreviewBadge}>
+                          <AppText style={styles.rolePreviewBadgeText}>{p}</AppText>
+                        </View>
+                      ))
+                    ) : (
+                      (() => {
+                        const cr = customRoles.find((r) => r.id === staffEditRoleChoice.roleId);
+                        const perms = cr?.permissions || [];
+                        if (perms.length === 0) {
+                          return (
+                            <AppText style={styles.noPermsText}>No permissions granted for this role</AppText>
+                          );
+                        }
+                        return perms.map((p) => (
+                          <View key={p} style={styles.rolePreviewBadge}>
+                            <AppText style={styles.rolePreviewBadgeText}>
+                              {p.replace(/^manage_/, '').replace(/_/g, ' ')}
+                            </AppText>
+                          </View>
+                        ));
+                      })()
+                    )}
+                  </View>
+                </View>
               </View>
             </ScrollView>
 
@@ -3006,5 +3208,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#92400E',
     lineHeight: 17,
+  },
+  passwordInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAF9',
+    borderWidth: 1,
+    borderColor: '#E0E8E4',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+  },
+  passwordInput: {
+    flex: 1,
+    height: 44,
+    fontSize: 13.5,
+    color: '#102F2A',
+    paddingVertical: 0,
+  },
+  eyeIconBtn: {
+    padding: 6,
+  },
+  fieldHelperText: {
+    fontSize: 11,
+    color: '#647570',
+    marginTop: 4,
+  },
+  rolePreviewContainer: {
+    backgroundColor: '#F8FAF9',
+    borderWidth: 1,
+    borderColor: '#D4E8DD',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  rolePreviewTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#176B57',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  rolePreviewList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  rolePreviewBadge: {
+    backgroundColor: '#E8F3EE',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#D4E8DD',
+  },
+  rolePreviewBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#176B57',
   },
 });

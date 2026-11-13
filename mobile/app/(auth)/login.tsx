@@ -23,10 +23,30 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Screen, AppText, Input, Button, Card } from '@/components';
 import { useAuth } from '@/hooks';
+import { useAuthStore } from '@/store';
 import { isPlatformAdminEmail } from '@/constants';
 import { Colors, Spacing } from '@/theme';
 
 type AuthPortal = 'club' | 'player';
+
+function getClubRedirectTarget(membership: any): string {
+  if (!membership) return '/(club)';
+  if (membership.role === 'tournament_director' && !membership.custom_role_id) {
+    return '/(club)/tournaments';
+  }
+  if (membership.custom_role_id && membership.permissions && Array.isArray(membership.permissions)) {
+    const perms = new Set(membership.permissions);
+    const hasClubOps =
+      perms.has('manage_club') ||
+      perms.has('manage_bookings') ||
+      perms.has('manage_members') ||
+      perms.has('manage_courts');
+    if (!hasClubOps && perms.has('manage_tournaments')) {
+      return '/(club)/tournaments';
+    }
+  }
+  return '/(club)';
+}
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -49,7 +69,8 @@ export default function LoginScreen() {
       if (isPlatformAdmin) {
         router.replace('/platform' as any);
       } else if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
-        router.replace('/(club)');
+        const target = getClubRedirectTarget(activeMembership);
+        router.replace(target as any);
       } else {
         router.replace('/(player)');
       }
@@ -93,7 +114,9 @@ export default function LoginScreen() {
       const normalizedEmail = email.trim().toLowerCase();
       if (portal === 'club') {
         await loginClub(normalizedEmail, password);
-        router.replace('/(club)');
+        const currentMembership = useAuthStore.getState().activeMembership;
+        const target = getClubRedirectTarget(currentMembership);
+        router.replace(target as any);
       } else {
         await loginPlayer(normalizedEmail, password);
         router.replace('/(player)');

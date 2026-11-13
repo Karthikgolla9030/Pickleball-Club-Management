@@ -449,7 +449,7 @@ async def add_club_member(
         role=payload.role,
         custom_role_id=payload.custom_role_id,
         full_name=payload.full_name,
-        temporary_password=payload.temporary_password,
+        temporary_password=payload.password or payload.temporary_password,
         actor_id=current_user.id,
         actor_email=current_user.email,
     )

@@ -85,6 +85,10 @@ def _build_member_response(m: ClubMembership) -> MemberResponse:
     elif m.role == ClubRole.CLUB_OWNER:
         from app.permissions import Permission
         perms = [p.value for p in Permission]
+    elif m.role == ClubRole.STAFF_MEMBER:
+        # Legacy staff member without custom role
+        role_label = "Staff Member (Legacy)"
+        perms = []
     else:
         from app.permissions import get_permissions
         perms = [p.value for p in get_permissions(m.role)]
@@ -585,12 +589,32 @@ class ClubService:
                 detail="Membership is inactive",
             )
 
+        role_label = membership.role.display_label
+        custom_role_name = None
+        perms: list[str] = []
+        if getattr(membership, "custom_role", None):
+            custom_role_name = membership.custom_role.name
+            role_label = membership.custom_role.name
+            perms = list(membership.custom_role.permissions or [])
+        elif membership.role == ClubRole.CLUB_OWNER:
+            from app.permissions import Permission
+            perms = [p.value for p in Permission]
+        elif membership.role == ClubRole.STAFF_MEMBER:
+            role_label = "Staff Member (Legacy)"
+            perms = []
+        else:
+            from app.permissions import get_permissions
+            perms = [p.value for p in get_permissions(membership.role)]
+
         return ClubMembershipDetailResponse(
             id=membership.id,
             user_id=membership.user_id,
             club_id=membership.club_id,
             role=membership.role,
-            role_label=membership.role.display_label,
+            role_label=role_label,
+            custom_role_id=membership.custom_role_id,
+            custom_role_name=custom_role_name,
+            permissions=perms,
             is_active=membership.is_active,
             created_at=membership.created_at,
             updated_at=membership.updated_at,
@@ -958,7 +982,7 @@ class ClubService:
         self,
         club_id: UUID,
         email: str,
-        role: ClubRole = ClubRole.STAFF_MEMBER,
+        role: ClubRole | None = None,
         custom_role_id: UUID | None = None,
         full_name: str | None = None,
         temporary_password: str | None = None,
@@ -967,11 +991,12 @@ class ClubService:
     ) -> MemberResponse:
         """
         Add or invite a staff member to the club with a designated built-in or custom role.
-        Validates:
-        - If custom_role_id is provided, verifies that it exists and belongs to club_id.
-        - If user does not exist: creates User with full_name, email, and hashed password.
-        - If user exists: updates full_name/password if provided.
-        - If previously deactivated in club: reactivates with new role.
+        Enforces:
+        - Only TWO built-in roles: Club Manager and Tournament Director.
+        - Staff Member cannot be selected as a built-in role.
+        - Custom roles must belong to club_id.
+        - Full name and initial password are required.
+        - Safe password hashing (never stored plaintext).
         - User is not already an active member of this club.
         """
         custom_role = None
@@ -984,26 +1009,38 @@ class ClubService:
                     detail="Custom role not found in this club",
                 )
             role = ClubRole.STAFF_MEMBER
+        else:
+            if not role or role not in (ClubRole.CLUB_MANAGER, ClubRole.TOURNAMENT_DIRECTOR):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only Club Manager and Tournament Director are available as built-in staff roles. Please select a built-in role or assign a custom role.",
+                )
+
+        if not full_name or not full_name.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Full name is required for staff account creation.",
+            )
+
+        pwd = (temporary_password or "").strip()
+        if not pwd or len(pwd) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password is required and must be at least 6 characters.",
+            )
 
         user = await self.user_repo.get_by_email(email)
         if not user:
-            import secrets
-            pwd = (
-                temporary_password
-                if temporary_password and temporary_password.strip()
-                else f"Staff@{secrets.token_hex(4)}!"
-            )
             hashed = hash_password(pwd)
             user = await self.user_repo.create(
                 email=email,
                 hashed_password=hashed,
-                full_name=full_name or email.split("@")[0].capitalize(),
+                full_name=full_name.strip(),
             )
         else:
-            if full_name and not user.full_name:
-                user.full_name = full_name
-            if temporary_password and temporary_password.strip():
-                user.hashed_password = hash_password(temporary_password)
+            if full_name and full_name.strip():
+                user.full_name = full_name.strip()
+            user.hashed_password = hash_password(pwd)
             user.is_active = True
 
         existing = await self.membership_repo.get_by_user_and_club(
@@ -1147,6 +1184,13 @@ class ClubService:
                 detail="Member not found in this club",
             )
 
+        # Security check: Staff cannot modify their own permissions or role
+        if actor_id and target.user_id == actor_id and (role is not None or custom_role_id is not None):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Staff members cannot modify their own role or permissions.",
+            )
+
         custom_role = None
         if custom_role_id is not None:
             from app.repositories.club_custom_role_repository import ClubCustomRoleRepository
@@ -1158,6 +1202,17 @@ class ClubService:
                 )
             role = ClubRole.STAFF_MEMBER
             clear_custom_role = False
+        elif role is not None:
+            if role == ClubRole.CLUB_OWNER:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot assign Club Owner role through staff management.",
+                )
+            if role not in (ClubRole.CLUB_MANAGER, ClubRole.TOURNAMENT_DIRECTOR):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Only Club Manager and Tournament Director are available as built-in staff roles. Please select a built-in role or assign a custom role.",
+                )
 
         # Owner Safety Check
         if target.role == ClubRole.CLUB_OWNER and target.is_active:
