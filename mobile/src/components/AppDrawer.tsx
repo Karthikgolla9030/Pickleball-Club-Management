@@ -533,7 +533,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         <View style={styles.footerRow}>
           <View style={styles.footerBrandCol}>
             <AppText style={styles.footerBrandTitle}>
-              {platformName ? platformName.toUpperCase() : 'PICKLEBALL'}
+              {platformName ? platformName.trim().toUpperCase() : ''}
             </AppText>
             <AppText style={styles.footerBrandMotto}>Play  •  Connect  •  Grow</AppText>
           </View>

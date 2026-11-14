@@ -285,7 +285,7 @@ export default function PlayerHomeScreen() {
             source={require('../../assets/pickleball_logo_transparent.png')}
             style={styles.logoImage}
             resizeMode="contain"
-            accessibilityLabel="Pickleball"
+            accessibilityLabel={platformName || 'Platform'}
           />
         </View>
 
@@ -362,7 +362,11 @@ export default function PlayerHomeScreen() {
             {/* Content on Left */}
             <View style={styles.heroContent}>
               <AppText style={styles.heroTagline}>
-                {platformName ? `WELCOME TO ${platformName.toUpperCase()}` : 'WELCOME TO PICKLEBALL'}
+                {platformName
+                  ? `WELCOME TO ${platformName.trim().toUpperCase()}`
+                  : playerBanner?.title && !playerBanner.title.includes('Aught2')
+                  ? playerBanner.title.toUpperCase()
+                  : 'WELCOME'}
               </AppText>
               <AppText
                 style={styles.heroGreeting}

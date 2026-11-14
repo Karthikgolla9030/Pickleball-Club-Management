@@ -31,6 +31,13 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import {
+  setCachedPlatformBranding,
+  getCachedPlatformBanner,
+  setCachedPlatformBanner,
+} from '@/services/platformBrandingStorage';
+import { PLATFORM_BRANDING_QUERY_KEY } from '@/hooks/usePlatformBranding';
+import { QUERY_KEYS } from '@/constants';
+import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
@@ -256,10 +263,42 @@ export default function PlatformSettingsScreen() {
       setRuntimeSettings(updated.runtime_settings);
       setReadOnlyConfig(updated.read_only_config);
       setSuccessMsg('Platform settings updated successfully and synchronized across all portals.');
-      queryClient.invalidateQueries({ queryKey: ['platform', 'branding'] });
-      queryClient.invalidateQueries({ queryKey: ['platform', 'banners'] });
+
+      // 1. Immediately write to persistent cache
+      await setCachedPlatformBranding({
+        platform_name: updated.runtime_settings.platform_name,
+        platform_support_email: updated.runtime_settings.platform_support_email,
+        maintenance_mode: updated.runtime_settings.maintenance_mode,
+      });
+
+      // 2. Cascade banner title update in cache
+      const cachedOwnerBanner = getCachedPlatformBanner('owner_home');
+      if (cachedOwnerBanner) {
+        setCachedPlatformBanner('owner_home', {
+          ...cachedOwnerBanner,
+          title: `Welcome to ${updated.runtime_settings.platform_name}`,
+        });
+      }
+      const cachedPlayerBanner = getCachedPlatformBanner('player_home');
+      if (cachedPlayerBanner) {
+        setCachedPlatformBanner('player_home', {
+          ...cachedPlayerBanner,
+          title: `Welcome to ${updated.runtime_settings.platform_name}`,
+        });
+      }
+
+      // 3. Immediately set in-memory React Query data
+      queryClient.setQueryData(PLATFORM_BRANDING_QUERY_KEY, {
+        platform_name: updated.runtime_settings.platform_name,
+        platform_support_email: updated.runtime_settings.platform_support_email,
+        maintenance_mode: updated.runtime_settings.maintenance_mode,
+      });
+
+      // 4. Invalidate related queries so everything refreshes with latest server state
+      queryClient.invalidateQueries({ queryKey: PLATFORM_BRANDING_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLATFORM_BANNERS });
+      queryClient.invalidateQueries({ queryKey: ['platform-banner'] });
       queryClient.invalidateQueries({ queryKey: ['platform-settings'] });
-      queryClient.invalidateQueries({ queryKey: ['platform-branding'] });
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to update platform settings';
       setError(msg);

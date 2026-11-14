@@ -90,14 +90,29 @@ export function ClubHeroCarousel({
   // Global Owner Home Banner configured by Platform Admin
   const slides = useMemo<HeroBannerSlide[]>(() => {
     const ownerBannerImage = resolveOwnerBanner(platformBanner);
-    const resolvedTitle =
-      platformBanner?.title && !platformBanner.title.includes('Aught2')
-        ? platformBanner.title
-        : `Welcome to ${platformName || 'Pickleball'}`;
+
+    // Resolve authoritative title without flashing unconfigured brand
+    let resolvedTitle = 'Welcome';
+    if (platformBanner?.title && !platformBanner.title.includes('Aught2')) {
+      resolvedTitle = platformBanner.title;
+    } else if (platformName && platformName.trim().length > 0) {
+      resolvedTitle = `Welcome to ${platformName.trim()}`;
+    }
+
+    // Resolve authoritative tag
+    let resolvedTag = 'COMMUNITY';
+    if (platformName && platformName.trim().length > 0) {
+      resolvedTag = platformName.trim().toUpperCase();
+    } else if (platformBanner?.title && !platformBanner.title.includes('Aught2')) {
+      const match = platformBanner.title.match(/Welcome to (.+)/i);
+      if (match && match[1]) {
+        resolvedTag = match[1].trim().toUpperCase();
+      }
+    }
 
     const ownerWelcomeSlide: HeroBannerSlide = {
       id: 'platform-owner-home-banner-slide',
-      tag: (platformName || 'Pickleball').toUpperCase(),
+      tag: resolvedTag,
       title: resolvedTitle,
       supportingText:
         platformBanner?.subtitle ||

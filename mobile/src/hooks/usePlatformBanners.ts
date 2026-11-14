@@ -12,6 +12,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { platformBannersApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
+import {
+  getCachedPlatformBanner,
+  setCachedPlatformBanner,
+} from '@/services/platformBrandingStorage';
 import type { PlatformBanner, UpdatePlatformBannerPayload } from '@/types';
 
 export type PlatformBannerType =
@@ -30,7 +34,17 @@ export type PlatformBannerType =
 export function usePlatformBanners() {
   const query = useQuery<Record<string, PlatformBanner>>({
     queryKey: QUERY_KEYS.PLATFORM_BANNERS,
-    queryFn: () => platformBannersApi.getBanners(),
+    queryFn: async () => {
+      const data = await platformBannersApi.getBanners();
+      if (data && typeof data === 'object') {
+        Object.entries(data).forEach(([type, b]) => {
+          if (b && (b.banner_type || type)) {
+            setCachedPlatformBanner(type, b);
+          }
+        });
+      }
+      return data;
+    },
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 1,
   });
@@ -45,22 +59,31 @@ export function usePlatformBanners() {
 }
 
 export function usePlatformBanner(bannerType: PlatformBannerType) {
+  const cached = getCachedPlatformBanner(bannerType);
+
   const query = useQuery<PlatformBanner | null>({
     queryKey: QUERY_KEYS.PLATFORM_BANNER(bannerType),
     queryFn: async () => {
       try {
-        return await platformBannersApi.getBanner(bannerType);
+        const data = await platformBannersApi.getBanner(bannerType);
+        if (data) {
+          setCachedPlatformBanner(bannerType, data);
+        }
+        return data;
       } catch (err) {
         return null;
       }
     },
+    initialData: cached ?? undefined,
     staleTime: 1000 * 60 * 5,
     retry: 1,
   });
 
+  const active = query.data ?? cached ?? null;
+
   return {
-    banner: query.data ?? null,
-    isLoading: query.isLoading,
+    banner: active,
+    isLoading: query.isLoading && !active,
     isError: query.isError,
     error: query.error,
     refetch: query.refetch,
@@ -97,6 +120,7 @@ export function usePlatformBannerMutations(bannerType?: PlatformBannerType) {
       return platformBannersApi.updateBanner(type, payload);
     },
     onSuccess: (data, vars) => {
+      setCachedPlatformBanner(vars.type, data);
       queryClient.setQueryData(QUERY_KEYS.PLATFORM_BANNER(vars.type), data);
       invalidate(vars.type);
     },
@@ -113,6 +137,7 @@ export function usePlatformBannerMutations(bannerType?: PlatformBannerType) {
       return platformBannersApi.uploadBannerImage(type, fileInput);
     },
     onSuccess: (data, vars) => {
+      setCachedPlatformBanner(vars.type, data);
       queryClient.setQueryData(QUERY_KEYS.PLATFORM_BANNER(vars.type), data);
       invalidate(vars.type);
     },
@@ -123,6 +148,7 @@ export function usePlatformBannerMutations(bannerType?: PlatformBannerType) {
       return platformBannersApi.resetBanner(type);
     },
     onSuccess: (data, vars) => {
+      setCachedPlatformBanner(vars, data);
       queryClient.setQueryData(QUERY_KEYS.PLATFORM_BANNER(vars), data);
       invalidate(vars);
     },

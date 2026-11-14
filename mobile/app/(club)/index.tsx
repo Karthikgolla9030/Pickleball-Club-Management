@@ -149,7 +149,7 @@ export default function ClubHomeScreen() {
             source={require('../../assets/pickleball_logo_transparent.png')}
             style={styles.headerLogoImage}
             resizeMode="contain"
-            accessibilityLabel="Pickleball"
+            accessibilityLabel={platformName || 'Platform'}
           />
         </View>
 

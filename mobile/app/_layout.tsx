@@ -27,9 +27,12 @@ import { isPlatformAdminEmail } from '@/constants';
 import { WebSocketProvider } from '@/context/WebSocketContext';
 import { PendingAcceptancesModal } from '@/components/legal/PendingAcceptancesModal';
 import { usePlatformBanners } from '@/hooks/usePlatformBanners';
+import { usePlatformBranding } from '@/hooks/usePlatformBranding';
+import { initPlatformBrandingStorage } from '@/services/platformBrandingStorage';
 
 function RootLayoutContent() {
-  // Prefetch and hydrate global platform banners
+  // Prefetch and hydrate global platform branding & banners across all portals
+  usePlatformBranding();
   usePlatformBanners();
 
   const initialize = useAuthStore((s) => s.initialize);
@@ -43,6 +46,7 @@ function RootLayoutContent() {
   const router = useRouter();
 
   useEffect(() => {
+    initPlatformBrandingStorage();
     initialize();
   }, [initialize]);
 

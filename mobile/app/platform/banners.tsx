@@ -62,6 +62,7 @@ import { AppText, PlatformShell } from '@/components';
 import {
   usePlatformBanners,
   usePlatformBannerMutations,
+  usePlatformBranding,
   type PlatformBannerType,
 } from '@/hooks';
 import type { PlatformBanner } from '@/types';
@@ -238,6 +239,7 @@ export default function PlatformBannersScreen() {
 
   const { banners, isLoading, refetch } = usePlatformBanners();
   const { updateBanner, uploadBannerImage, resetBanner } = usePlatformBannerMutations();
+  const { platformName } = usePlatformBranding();
 
   const { width: windowWidth } = useWindowDimensions();
   const isWideScreen = windowWidth >= 640;
@@ -272,6 +274,13 @@ export default function PlatformBannersScreen() {
     [activeBannerKey]
   );
 
+  const resolvedDefaultTitle = useMemo(() => {
+    if ((activeBannerKey === 'owner_home' || activeBannerKey === 'player_home') && platformName) {
+      return `Welcome to ${platformName.trim()}`;
+    }
+    return currentItemConfig.defaultTitle;
+  }, [activeBannerKey, platformName, currentItemConfig.defaultTitle]);
+
   // Ensure active banner belongs to selected category when category switches
   useEffect(() => {
     const valid = categoryItems.some((item) => item.key === activeBannerKey);
@@ -289,19 +298,19 @@ export default function PlatformBannersScreen() {
   useEffect(() => {
     const banner = banners[activeBannerKey];
     if (banner) {
-      setFormTitle(banner.title || currentItemConfig.defaultTitle);
+      setFormTitle(banner.title || resolvedDefaultTitle);
       setFormSubtitle(banner.subtitle || currentItemConfig.defaultSubtitle);
       setFormCtaText(banner.cta_text || currentItemConfig.defaultCtaText);
       setFormCtaDestination(banner.cta_destination || currentItemConfig.defaultCtaDestination);
       setFormIsActive(banner.is_active ?? true);
     } else {
-      setFormTitle(currentItemConfig.defaultTitle);
+      setFormTitle(resolvedDefaultTitle);
       setFormSubtitle(currentItemConfig.defaultSubtitle);
       setFormCtaText(currentItemConfig.defaultCtaText);
       setFormCtaDestination(currentItemConfig.defaultCtaDestination);
       setFormIsActive(true);
     }
-  }, [banners, activeBannerKey, currentItemConfig]);
+  }, [banners, activeBannerKey, currentItemConfig, resolvedDefaultTitle]);
 
   const showStatus = (type: 'success' | 'error', text: string) => {
     setStatusMessage({ type, text });

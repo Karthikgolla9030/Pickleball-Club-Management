@@ -41,6 +41,7 @@ import {
 import { AppText } from '@/components/AppText';
 import { useDrawerStore } from '@/navigation';
 import { PlatformOwnerProfile } from '@/services/api/clubApplications';
+import { usePlatformBranding } from '@/hooks';
 import { Radius, Spacing } from '@/theme';
 
 export type PlatformTabKey = 'overview' | 'applications' | 'clubs' | 'users' | 'audit' | 'support' | 'settings' | 'banners';
@@ -70,6 +71,7 @@ export function PlatformHeader({
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const { platformName } = usePlatformBranding();
 
   const isDesktop = width >= 800;
 
@@ -93,7 +95,7 @@ export function PlatformHeader({
             style={styles.desktopBrandRow}
             onPress={() => router.push('/platform' as any)}
             activeOpacity={0.8}
-            accessibilityLabel="Pickleball Platform Admin Home"
+            accessibilityLabel={`${platformName || 'Platform'} Admin Home`}
           >
             <Image
               source={require('@/../assets/pickleball_logo_primary.png')}
@@ -185,7 +187,7 @@ export function PlatformHeader({
           style={styles.mobileBrandBlock}
           onPress={() => router.push('/platform' as any)}
           activeOpacity={0.8}
-          accessibilityLabel="Pickleball Platform Admin Home"
+          accessibilityLabel={`${platformName || 'Platform'} Admin Home`}
           accessibilityRole="button"
         >
           <Image
