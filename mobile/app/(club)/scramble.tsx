@@ -686,6 +686,8 @@ export default function ScrambleWorkspaceScreen() {
                 tournament={tournament ?? null}
                 onRefresh={() => void refetchTournament()}
                 canManage={canManage}
+                courtCount={state?.courts_count}
+                plannedRounds={state?.planned_rounds}
               />
             )}
           </View>

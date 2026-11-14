@@ -41,7 +41,6 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ScrambleState } from '@/types/scramble';
@@ -255,27 +254,6 @@ export function ScrambleOverviewTab({
           </AppText>
         </TouchableOpacity>
       </Card>
-
-      {/* ─── 2. Tournament Configuration Card ─── */}
-      {tournament ? (
-        <TournamentConfigurationCard
-          tournament={tournament}
-          plannedRounds={plannedRounds}
-          courtCount={state?.courts_count || 4}
-          extraFields={[
-            {
-              label: 'Current Phase',
-              value: isCompleted
-                ? 'Completed'
-                : `Round ${currentRound} of ${plannedRounds} • ${getRoundStatusLabel()}`,
-            },
-            {
-              label: 'Standings Tiebreakers',
-              value: '1. Wins → 2. Point Diff → 3. Points Scored',
-            },
-          ]}
-        />
-      ) : null}
 
       {/* Optional Planned Rounds Adjuster (Pre-match setup only) */}
       {canManage && !isCompleted && tournamentGamesCompleted === 0 && (

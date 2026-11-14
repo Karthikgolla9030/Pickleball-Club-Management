@@ -28,7 +28,6 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, Match, BracketSummaryResponse } from '@/types';
 import type { BracketProgress, BracketSubTab } from '@/types/bracket';
@@ -132,24 +131,29 @@ export function BracketOverviewTab({
           </AppText>
         </View>
 
-        {/* View Interactive Bracket Button */}
+        {/* Contextual Action Button */}
         <TouchableOpacity
           style={styles.viewBracketBtn}
-          onPress={() => onNavigateTab('bracket')}
+          onPress={() => {
+            if (progress.completedMatches > 0 && progress.remainingMatches === 0) {
+              onNavigateTab('results');
+            } else if (matches.length > 0) {
+              onNavigateTab('bracket');
+            } else {
+              onNavigateTab('teams');
+            }
+          }}
           activeOpacity={0.8}
         >
           <AppText style={styles.viewBracketBtnText}>
-            View Interactive Bracket →
+            {progress.completedMatches > 0 && progress.remainingMatches === 0
+              ? 'View Bracket Results →'
+              : matches.length > 0
+              ? 'View Interactive Bracket →'
+              : 'Review Registered Participants →'}
           </AppText>
         </TouchableOpacity>
       </Card>
-
-      {/* ─── 2. Tournament Configuration Card ─────────────────────────────── */}
-      <TournamentConfigurationCard
-        tournament={tournament}
-        byesCount={byesCount}
-        bracketSize={bracketSize}
-      />
     </View>
   );
 }

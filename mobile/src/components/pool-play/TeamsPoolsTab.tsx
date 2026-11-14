@@ -20,8 +20,6 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { FilterChips } from '@/components/FilterChips';
 import {
-  TournamentFormatInfoCard,
-  TournamentRegistrationSummaryCard,
   TournamentSectionHeading,
   TournamentTeamCard,
 } from '@/components/tournament-management';
@@ -119,34 +117,12 @@ export function TeamsPoolsTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
-      <TournamentRegistrationSummaryCard
-        registeredPlayersCount={totalPlayersCount}
-        maxPlayersCount={maxPlayersCount}
-        isDoubles={!isSingles}
-        registeredTeamsCount={teams.length}
-        maxTeamsCount={maxTeamsCount}
-        categoryLabel={(tournament?.format_configuration as any)?.category || (isSingles ? 'Singles Pool Play' : 'Doubles Pool Play')}
-        registrationTypeLabel={isSingles ? 'Singles individual' : 'Fixed teams'}
-        extraRows={[
-          { label: 'Pools configured', value: pools.length },
-          { label: 'Qualifiers advancing', value: config.qualifierCount },
-        ]}
-      />
-
-      {/* ─── 2. Section Heading: Players/Teams (N) [SINGLES/DOUBLES] ───────── */}
+      {/* ─── 1. Section Heading: Players/Teams (N) [SINGLES/DOUBLES] ───────── */}
       <TournamentSectionHeading
         title={isSingles ? `Players (${teams.length})` : `Teams (${teams.length})`}
         subtitle={!isSingles ? `· ${totalPlayersCount} Players across ${pools.length} Pools` : `· Across ${pools.length} Pools`}
         badgeLabel={isSingles ? 'SINGLES' : 'DOUBLES'}
         badgeVariant="blue"
-      />
-
-      {/* ─── 3. Format Callout Card ────────────────────────────────────────── */}
-      <TournamentFormatInfoCard
-        variant="info"
-        title="Pool Play + Championship Bracket Format"
-        description="Teams compete in round-robin play within assigned pools. The top advancing qualifiers from each pool qualify for the single-elimination Championship Bracket."
       />
 
       {/* ─── Action Bar ────────────────────────────────────────────── */}

@@ -58,7 +58,9 @@ export function RoundRobinStandingsTab({
     <View style={styles.container}>
       {/* Header Row: Title & Status Badge */}
       <View style={styles.headerRow}>
-        <AppText style={styles.headingTitle}>Live Standings</AppText>
+        <AppText style={styles.headingTitle}>
+          {isCompleted ? 'Final Standings' : inProgress ? 'Live Standings' : 'Standings'}
+        </AppText>
         <View
           style={[
             styles.statusBadge,
@@ -79,14 +81,18 @@ export function RoundRobinStandingsTab({
                 : styles.statusBadgeTextNotStarted,
             ]}
           >
-            {isCompleted ? 'Completed' : inProgress ? 'IN PROGRESS' : 'Not started'}
+            {isCompleted ? 'Official' : inProgress ? 'Live' : 'Scheduled'}
           </AppText>
         </View>
       </View>
 
-      {/* Completion Subtitle */}
+      {/* Standings Subtitle (Clear purpose, no duplicate progress statistics) */}
       <AppText style={styles.progressSubtitle}>
-        {completedMatches} of {totalMatches} matches completed ({completionPercentage}%)
+        {isCompleted
+          ? 'Final tournament rankings determined by official tiebreaker rules.'
+          : inProgress
+          ? 'Provisional rankings updated live as match scores are entered.'
+          : 'Rankings will calculate automatically once matches begin.'}
       </AppText>
 
       {/* Empty State vs Standings Table */}

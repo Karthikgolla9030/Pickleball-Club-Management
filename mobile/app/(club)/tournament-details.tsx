@@ -946,12 +946,6 @@ export default function TournamentDetailsScreen() {
               </View>
             </Card>
 
-            {/* Tournament Configuration Card */}
-            <TournamentConfigurationCard
-              tournament={tournament}
-              style={{ marginBottom: Spacing[4] }}
-            />
-
             {/* Bracket Mode Card (Bracket Only) */}
             {isBracket && (
               <Card style={styles.overviewCard}>

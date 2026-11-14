@@ -703,6 +703,8 @@ export default function BracketWorkspaceScreen() {
             tournament={tournament}
             onRefresh={() => void refetchTournament()}
             canManage={canManage}
+            courtCount={courts.length}
+            plannedRounds={summary?.total_rounds}
           />
         )}
         </View>

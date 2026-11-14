@@ -27,7 +27,6 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ChampionshipMatch, Match, PoolStat, PoolPlayConfig, Team } from '@/types/poolPlay';
@@ -206,14 +205,6 @@ export function PoolPlayOverviewTab({
           )}
         </View>
       </Card>
-
-      {/* ─── 3. Tournament Configuration Card ─────────────────────────────── */}
-      <TournamentConfigurationCard
-        tournament={tournament}
-        poolCount={pools.length > 0 ? pools.length : config.numPools}
-        qualifiersPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
-        courtCount={config.courts.length}
-      />
     </View>
   );
 }

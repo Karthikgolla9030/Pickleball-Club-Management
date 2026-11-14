@@ -1,16 +1,15 @@
 /**
  * Aught2 Pickleball — RoundRobinOverviewTab
  *
- * Standardized Tab 1 (Overview) for Round Robin Tournament Mode:
+ * Tab 1 (Overview) for Round Robin Tournament Mode:
+ * Provides a concise operational summary answering "How is my tournament progressing?":
  * - Tournament Progress card:
- *   - "X of Y matches completed" & percentage bar
- *   - 4-metric grid: PARTICIPANTS (Players/Teams), TOTAL ROUNDS, COMPLETED, REMAINING
- *   - Info strip: "All-play-all round robin schedule"
- *   - Quick action: "View Matchups & Schedule →"
- * - Format & Structure card:
- *   - Competition Format, Participant Structure, Scheduling Engine
- * - Official Scoring & Tiebreakers card:
- *   - Target Score, Win Margin, 4-level Tiebreaker hierarchy
+ *   - "X of Y matches completed" & percentage progress bar
+ *   - 4-metric grid: PARTICIPANTS, ROUNDS, COMPLETED, REMAINING
+ *   - Operational info strip: "Every player/team plays every other once in an intra-division round robin."
+ *   - Contextual next action button (View Results, Enter Scores, or Review Participants)
+ *
+ * Detailed configuration fields have been cleanly moved into the Settings tab.
  */
 
 import React from 'react';
@@ -21,13 +20,10 @@ import {
   CheckCircle2,
   Clock,
   Info,
-  Layers,
-  ShieldCheck,
   Users,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { TournamentConfigurationCard } from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, Match } from '@/types';
 import type { RoundRobinProgress } from '@/types/roundRobin';
@@ -42,7 +38,7 @@ interface RoundRobinOverviewTabProps {
 }
 
 export function RoundRobinOverviewTab({
-  tournament,
+  tournament: _tournament,
   matches: _matches,
   progress,
   onNavigateTab,
@@ -52,9 +48,9 @@ export function RoundRobinOverviewTab({
   const isSingles = teamSize === 1;
   const participantLabel = isSingles ? 'PLAYERS' : 'TEAMS';
 
-  const scoringRules = (tournament.scoring_rules as unknown as Record<string, unknown>) || {};
-  const targetScore: number = typeof scoringRules.target_score === 'number' ? scoringRules.target_score : 11;
-  const winBy: number = typeof scoringRules.win_by === 'number' ? scoringRules.win_by : 2;
+  const isCompleted = progress.isCompleted || (progress.totalMatches > 0 && progress.completedMatches === progress.totalMatches);
+  const remainingMatches = Math.max(0, progress.totalMatches - progress.completedMatches);
+  const totalRounds = Math.max(1, participantsCount > 0 ? (isSingles ? participantsCount - 1 : Math.max(1, participantsCount - 1)) : 1);
 
   return (
     <View style={styles.container}>
@@ -96,7 +92,7 @@ export function RoundRobinOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>ROUNDS</AppText>
             <Calendar size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{Math.max(1, participantsCount - 1)}</AppText>
+            <AppText style={styles.statTileNum}>{totalRounds}</AppText>
           </View>
 
           <View style={styles.statTile}>
@@ -108,7 +104,7 @@ export function RoundRobinOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>REMAINING</AppText>
             <Clock size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{Math.max(0, progress.totalMatches - progress.completedMatches)}</AppText>
+            <AppText style={styles.statTileNum}>{remainingMatches}</AppText>
           </View>
         </View>
 
@@ -120,25 +116,29 @@ export function RoundRobinOverviewTab({
           </AppText>
         </View>
 
-        {/* View Matchups Button */}
+        {/* Contextual Action Button */}
         <TouchableOpacity
-          style={styles.viewMatchupsBtn}
-          onPress={() => onNavigateTab('matchups')}
+          style={styles.actionBtn}
+          onPress={() => {
+            if (isCompleted) {
+              onNavigateTab('results');
+            } else if (progress.totalMatches > 0) {
+              onNavigateTab('matchups');
+            } else {
+              onNavigateTab('participants');
+            }
+          }}
           activeOpacity={0.8}
         >
-          <AppText style={styles.viewMatchupsBtnText}>
-            View Match Schedule & Enter Scores →
+          <AppText style={styles.actionBtnText}>
+            {isCompleted
+              ? 'View Tournament Results →'
+              : progress.totalMatches > 0
+              ? 'View Match Schedule & Enter Scores →'
+              : 'Review Registered Participants →'}
           </AppText>
         </TouchableOpacity>
       </Card>
-
-      {/* ─── 2. Tournament Configuration Card ─────────────────────────────── */}
-      <TournamentConfigurationCard
-        tournament={tournament}
-        extraFields={[
-          { label: 'Tiebreaker Hierarchy', value: '1. Wins  2. H2H  3. Diff  4. Pts' },
-        ]}
-      />
     </View>
   );
 }
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardHeaderTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -175,24 +175,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 8,
   },
   progressSubText: {
     fontSize: 13,
     color: '#64748B',
     fontWeight: '500',
-    flex: 1,
-    flexShrink: 1,
   },
   percentText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0F766E',
-    flexShrink: 0,
   },
   progressBarBackground: {
     height: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#E2E8F0',
     borderRadius: 4,
     overflow: 'hidden',
   },
@@ -203,45 +199,40 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   statTile: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 120,
+    flex: 1,
     backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
   },
   statTileLabel: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
     color: '#64748B',
     letterSpacing: 0.5,
   },
   statTileIcon: {
-    marginVertical: 2,
+    marginVertical: 1,
   },
   statTileNum: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#0F172A',
   },
   infoStrip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F9FF',
-    borderRadius: Radius.md,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     gap: 8,
+    backgroundColor: '#F0F9FF',
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#BAE6FD',
   },
@@ -250,49 +241,18 @@ const styles = StyleSheet.create({
     color: '#0369A1',
     flex: 1,
     lineHeight: 16,
-    fontWeight: '500',
   },
-  viewMatchupsBtn: {
+  actionBtn: {
     backgroundColor: '#0F766E',
     borderRadius: Radius.md,
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 4,
+    marginTop: 2,
   },
-  viewMatchupsBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
+  actionBtnText: {
     color: '#FFFFFF',
-  },
-  infoList: {
-    gap: 8,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingVertical: 4,
-    gap: 12,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '500',
-    flexShrink: 0,
-    maxWidth: '48%',
-  },
-  infoVal: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#0F172A',
-    flex: 1,
-    flexShrink: 1,
-    textAlign: 'right',
-    lineHeight: 18,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
   },
 });

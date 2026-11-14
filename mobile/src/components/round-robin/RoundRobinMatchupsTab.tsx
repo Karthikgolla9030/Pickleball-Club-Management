@@ -25,6 +25,7 @@ import {
   Lock,
   Clock,
   Check,
+  Swords,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
@@ -90,6 +91,12 @@ export function RoundRobinMatchupsTab({
     matches.length > 0
       ? Math.max(...matches.map((m) => m.round_number ?? 1), 1)
       : schedulePreview.totalRounds;
+
+  const completedMatchesCount = useMemo(
+    () => matches.filter((m) => m.status === 'completed').length,
+    [matches]
+  );
+  const remainingMatchesCount = Math.max(0, totalMatchesCount - completedMatchesCount);
 
   const isTournamentCompleted =
     tournament?.status === 'completed' ||
@@ -165,30 +172,28 @@ export function RoundRobinMatchupsTab({
       {/* Heading */}
       <AppText style={styles.headingTitle}>Matchups</AppText>
 
-      {/* Round Robin Setup Summary Card (3 Columns) */}
+      {/* Match Statistics Card (Total, Completed, Remaining) */}
       <Card style={styles.summaryCard}>
         <View style={styles.summaryCol}>
-          <Users size={20} color={Colors.brand.primary} />
-          <AppText style={styles.summaryNumber}>{teams.length}</AppText>
-          <AppText style={styles.summaryLabel}>
-            {teamSize > 1 ? 'Teams' : 'Players'}
-          </AppText>
-        </View>
-
-        <View style={styles.summaryDivider} />
-
-        <View style={styles.summaryCol}>
-          <Calendar size={20} color={Colors.text.secondary} />
+          <Swords size={20} color={Colors.brand.primary} />
           <AppText style={styles.summaryNumber}>{totalMatchesCount}</AppText>
-          <AppText style={styles.summaryLabel}>Matches</AppText>
+          <AppText style={styles.summaryLabel}>Total Matches</AppText>
         </View>
 
         <View style={styles.summaryDivider} />
 
         <View style={styles.summaryCol}>
-          <Layers size={20} color={Colors.brand.accent} />
-          <AppText style={styles.summaryNumber}>{totalRoundsCount}</AppText>
-          <AppText style={styles.summaryLabel}>Rounds</AppText>
+          <CheckCircle2 size={20} color="#0F766E" />
+          <AppText style={[styles.summaryNumber, { color: '#0F766E' }]}>{completedMatchesCount}</AppText>
+          <AppText style={styles.summaryLabel}>Completed</AppText>
+        </View>
+
+        <View style={styles.summaryDivider} />
+
+        <View style={styles.summaryCol}>
+          <Clock size={20} color={Colors.text.secondary} />
+          <AppText style={styles.summaryNumber}>{remainingMatchesCount}</AppText>
+          <AppText style={styles.summaryLabel}>Remaining</AppText>
         </View>
       </Card>
 

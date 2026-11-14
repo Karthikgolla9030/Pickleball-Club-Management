@@ -25,8 +25,6 @@ import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
 import {
-  TournamentFormatInfoCard,
-  TournamentRegistrationSummaryCard,
   TournamentSectionHeading,
   TournamentTeamCard,
 } from '@/components/tournament-management';
@@ -141,18 +139,7 @@ export function RoundRobinTeamsTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
-      <TournamentRegistrationSummaryCard
-        registeredPlayersCount={registeredPlayersCount}
-        maxPlayersCount={maxPlayersCount}
-        isDoubles={isDoubles}
-        registeredTeamsCount={registeredTeamsCount}
-        maxTeamsCount={maxTeamsCount}
-        categoryLabel={categoryLabel}
-        registrationTypeLabel={isDoubles ? 'Fixed teams' : 'Singles individual'}
-      />
-
-      {/* ─── 2. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
+      {/* ─── 1. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
       <TournamentSectionHeading
         title={isDoubles ? `Teams (${registeredTeamsCount})` : `Players (${registeredTeamsCount})`}
         subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
@@ -162,18 +149,7 @@ export function RoundRobinTeamsTab({
         onActionPress={onAddTeamPress}
       />
 
-      {/* ─── 3. Format Callout Card ────────────────────────────────────────── */}
-      <TournamentFormatInfoCard
-        variant="info"
-        title={teamSize === 1 ? 'Singles Format' : 'Fixed Partner Doubles Format'}
-        description={
-          teamSize === 1
-            ? 'Each entry consists of 1 player who competes individually for all rounds. Every player will play every other player once.'
-            : 'Each entry consists of 2 fixed partner players who compete together for all rounds. Every team will play every other team once.'
-        }
-      />
-
-      {/* ─── 4. Empty State vs Standardized Teams/Players List ──────────────── */}
+      {/* ─── 2. Empty State vs Standardized Teams/Players List ──────────────── */}
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>

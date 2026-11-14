@@ -671,6 +671,8 @@ export default function RoundRobinWorkspaceScreen() {
               tournament={tournament ?? null}
               onRefresh={() => void refetchTournament()}
               canManage={canManage}
+              courtCount={courts.length}
+              plannedRounds={totalRounds}
             />
           )}
           </View>

@@ -1157,6 +1157,8 @@ export default function PoolPlayManagementScreen() {
               tournament={effectiveTournament ?? tournament ?? null}
               onRefresh={() => void refetchTournament()}
               canManage={canManage}
+              courtCount={config.courts.length}
+              poolCount={pools.length > 0 ? pools.length : config.numPools}
             />
           )}
           </View>

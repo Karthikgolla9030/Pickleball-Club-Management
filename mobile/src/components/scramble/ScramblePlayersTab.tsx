@@ -29,8 +29,6 @@ import {
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import {
-  TournamentFormatInfoCard,
-  TournamentRegistrationSummaryCard,
   TournamentSectionHeading,
   TournamentTeamCard,
 } from '@/components/tournament-management';
@@ -196,30 +194,10 @@ export function ScramblePlayersTab({
         </View>
       )}
 
-      {/* ── 1. Registration & Category Overview Card ── */}
-      <TournamentRegistrationSummaryCard
-        registeredPlayersCount={confirmedPlayers.length}
-        maxPlayersCount={tournament?.max_participants ?? confirmedPlayers.length}
-        isDoubles={false}
-        categoryLabel={categoryName || 'Doubles Scramble'}
-        registrationTypeLabel="Individual rotating partner scramble"
-        extraRows={[
-          { label: 'Planned rounds', value: state?.planned_rounds ?? 3 },
-          { label: 'Active round', value: `Round ${currentRound}` },
-        ]}
-      />
-
-      {/* ── 2. Format Callout Card ── */}
-      <TournamentFormatInfoCard
-        variant="info"
-        title="Rotating Partner Scramble Format"
-        description={`Individual scoring with rotating partners and opponents across courts. Check in available players for Round ${currentRound} below.`}
-      />
-
-      {/* ── 3. Header: Round Availability & Quick Select ── */}
+      {/* ── 1. Header: Players & Round Availability ── */}
       <TournamentSectionHeading
-        title={`Round ${currentRound} Availability`}
-        subtitle={`· ${selectedIds.length} of ${confirmedPlayers.length} available`}
+        title={`Players (${confirmedPlayers.length})`}
+        subtitle={`· Round ${currentRound} Availability (${selectedIds.length} checked in)`}
         badgeLabel="SCRAMBLE"
         badgeVariant="green"
       />

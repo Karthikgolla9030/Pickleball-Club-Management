@@ -184,7 +184,11 @@ export function BracketStandingsTab({
       {/* ─── 2. Header Row: Title & Completion Status ───────────────────────── */}
       <View style={styles.headerRow}>
         <AppText style={styles.headingTitle}>
-          Tournament Standings ({standings.length})
+          {isTournamentCompleted
+            ? `Final Standings (${standings.length})`
+            : inProgress
+            ? `Live Standings (${standings.length})`
+            : `Standings (${standings.length})`}
         </AppText>
         <View
           style={[
@@ -206,16 +210,18 @@ export function BracketStandingsTab({
                 : styles.statusBadgeTextNotStarted,
             ]}
           >
-            {isTournamentCompleted ? 'Completed' : inProgress ? 'IN PROGRESS' : 'Not started'}
+            {isTournamentCompleted ? 'Official' : inProgress ? 'Live' : 'Scheduled'}
           </AppText>
         </View>
       </View>
 
-      {progress && (
-        <AppText style={styles.progressSubtitle}>
-          {progress.completedMatches} of {progress.totalMatches} matches completed ({progress.percentComplete}%)
-        </AppText>
-      )}
+      <AppText style={styles.progressSubtitle}>
+        {isTournamentCompleted
+          ? 'Final elimination rankings based on bracket progression and tiebreakers.'
+          : inProgress
+          ? 'Provisional rankings updated live as bracket match results are entered.'
+          : 'Rankings will calculate automatically as bracket matches are played.'}
+      </AppText>
 
       {/* ─── 3. Standardized Standings Table Card ───────────────────────────── */}
       <Card style={styles.tableCard}>

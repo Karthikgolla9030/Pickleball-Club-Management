@@ -132,18 +132,7 @@ export function BracketTeamsTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Registration & Category Overview Card ─────────────────────── */}
-      <TournamentRegistrationSummaryCard
-        registeredPlayersCount={registeredPlayersCount}
-        maxPlayersCount={maxPlayersCount}
-        isDoubles={isDoubles}
-        registeredTeamsCount={registeredTeamsCount}
-        maxTeamsCount={maxTeamsCount}
-        categoryLabel={categoryLabel}
-        registrationTypeLabel={registrationTypeLabel}
-      />
-
-      {/* ─── 2. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
+      {/* ─── 1. Section Heading: Players (N) [SINGLES] or Teams (N) [DOUBLES] ─ */}
       <TournamentSectionHeading
         title={isDoubles ? `Teams (${registeredTeamsCount})` : `Players (${registeredTeamsCount})`}
         subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
@@ -153,8 +142,8 @@ export function BracketTeamsTab({
         onActionPress={onOpenAddTeam}
       />
 
-      {/* ─── 3. Format Callout Card & Locked Roster Banner ─────────────────── */}
-      {matchesCount > 0 ? (
+      {/* ─── 2. Locked Roster Alert (Only when bracket is active) ─────────── */}
+      {matchesCount > 0 && (
         <TournamentFormatInfoCard
           variant="locked"
           title="Bracket Generated — Rosters Locked"
@@ -164,19 +153,9 @@ export function BracketTeamsTab({
               : 'Players cannot be modified while the bracket is active.'
           }
         />
-      ) : (
-        <TournamentFormatInfoCard
-          variant="info"
-          title={isDoubles ? 'Single Elimination Fixed Doubles Format' : 'Single Elimination Singles Format'}
-          description={
-            isDoubles
-              ? 'Each entry consists of 2 fixed partner players who compete in a knockout elimination bracket. Winners advance until the final.'
-              : 'Each entry consists of 1 player who competes in a knockout elimination bracket. Winners advance each round until a champion is crowned.'
-          }
-        />
       )}
 
-      {/* ─── 4. Empty State vs Standardized Teams/Players List ──────────────── */}
+      {/* ─── 3. Empty State vs Standardized Teams/Players List ──────────────── */}
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>
