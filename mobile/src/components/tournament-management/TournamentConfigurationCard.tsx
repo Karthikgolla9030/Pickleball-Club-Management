@@ -26,7 +26,7 @@
  */
 
 import React from 'react';
-import { StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleProp, StyleSheet, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -107,6 +107,8 @@ export function TournamentConfigurationCard({
   qualifiersPerPool: qualifiersPerPoolProp,
   courtCount: courtCountProp,
 }: TournamentConfigurationCardProps) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768;
   const parsed = parseTournamentConfig(tournament);
   const fc = (tournament.format_configuration || {}) as Record<string, any>;
   const formatKey = String(tournament.format || '').toLowerCase();
@@ -309,9 +311,9 @@ export function TournamentConfigurationCard({
         {rows.map((row, index) => (
           <React.Fragment key={`${row.label}-${index}`}>
             {index > 0 && <View style={styles.divider} />}
-            <View style={styles.infoRow}>
-              <AppText style={styles.infoLabel}>{row.label}</AppText>
-              <AppText style={styles.infoVal} numberOfLines={2}>
+            <View style={isDesktop ? styles.desktopRow : styles.mobileFieldBlock}>
+              <AppText style={styles.fieldLabel}>{row.label}</AppText>
+              <AppText style={styles.fieldVal}>
                 {row.value}
               </AppText>
             </View>
@@ -352,24 +354,29 @@ const styles = StyleSheet.create({
   infoList: {
     gap: 2,
   },
-  infoRow: {
+  mobileFieldBlock: {
+    paddingVertical: 7,
+    gap: 3,
+  },
+  desktopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingVertical: 6,
-    gap: 12,
+    paddingVertical: 7,
+    gap: 16,
   },
-  infoLabel: {
-    fontSize: 13,
+  fieldLabel: {
+    fontSize: 11.5,
     color: '#64748B',
-    fontWeight: '500',
-    flexShrink: 0,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
-  infoVal: {
-    fontSize: 13.5,
+  fieldVal: {
+    fontSize: 14,
     color: '#0F172A',
     fontWeight: '600',
-    textAlign: 'right',
+    lineHeight: 20,
     flexShrink: 1,
   },
   divider: {
