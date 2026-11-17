@@ -1,32 +1,23 @@
 /**
  * Aught2 Pickleball — Step 3: Category & Eligibility
  *
- * Configures category, skill level, age restrictions, gender eligibility,
- * and participant capacity according to the format selected in Step 2.
- *
- * Format-Dependent Behavior:
- * - Scramble: ALWAYS individual player registration ("Minimum Players" & "Maximum Players", min 4).
- *   Does not require fixed teams regardless of whether Singles or Doubles category is chosen.
- * - Singles: Individual player registration ("Min Players" & "Number of Players").
- * - Doubles (Bracket/Pool/RoundRobin): Fixed team registration ("Min Teams" & "Number of Teams").
+ * Clean, compact configuration for:
+ * A. Competition Category (or Division for Scramble)
+ * B. Skill Level (Single Level vs Skill Range)
+ * C. Age Restrictions (Minimum Age & Maximum Age)
+ * D. Gender Eligibility (Automatic inline display, or Male/Female for Singles)
+ * E. Player / Team Capacity (Format-dependent labels & validation)
  */
 
 import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
-import { ChevronDown, Info, UserCheck, Users } from 'lucide-react-native';
+import { ChevronDown } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Input } from '@/components/Input';
 import { Colors, Radius, Spacing } from '@/theme';
-import type { TournamentVisibility } from '@/types';
-import {
-  calculateCapacity,
-  formatAgeRestriction,
-  getRegistrationType,
-} from '@/utils/tournamentCapacity';
+import { calculateCapacity } from '@/utils/tournamentCapacity';
 import {
   CATEGORY_OPTIONS,
-  GENDER_CATEGORY_OPTIONS,
-  SCRAMBLE_DIVISION_DESCRIPTIONS,
   SCRAMBLE_DIVISION_OPTIONS,
   SKILL_LEVEL_OPTIONS,
   type ScrambleDivision,
@@ -49,8 +40,6 @@ export function Step3CategoryEligibility({
 
   const isScramble = state.format === 'scramble';
   const cap = calculateCapacity(state.category, state.maxParticipants, state.format);
-  const regType = getRegistrationType(state.format, state.category);
-  const ageDisplay = formatAgeRestriction(state.minAge, state.maxAge);
 
   const [isMinPickerOpen, setIsMinPickerOpen] = useState(false);
   const [isMaxPickerOpen, setIsMaxPickerOpen] = useState(false);
@@ -78,6 +67,14 @@ export function Step3CategoryEligibility({
       onChange({ genderCategory: 'Female' });
     } else if (state.category === 'Mixed Doubles' && state.genderCategory !== 'Mixed') {
       onChange({ genderCategory: 'Mixed' });
+    } else if (state.category === "Men's Scramble" && state.genderCategory !== 'Male') {
+      onChange({ genderCategory: 'Male' });
+    } else if (state.category === "Women's Scramble" && state.genderCategory !== 'Female') {
+      onChange({ genderCategory: 'Female' });
+    } else if (state.category === "Mixed Scramble" && state.genderCategory !== 'Mixed') {
+      onChange({ genderCategory: 'Mixed' });
+    } else if (state.category === "Open Scramble" && state.genderCategory !== 'Any') {
+      onChange({ genderCategory: 'Any' });
     } else if (state.category === 'Singles' && state.genderCategory !== 'Male' && state.genderCategory !== 'Female') {
       onChange({ genderCategory: 'Male' });
     }
@@ -89,6 +86,8 @@ export function Step3CategoryEligibility({
       patch.genderCategory = 'Male';
     } else if (div === "Women's Scramble") {
       patch.genderCategory = 'Female';
+    } else if (div === 'Mixed Scramble') {
+      patch.genderCategory = 'Mixed';
     } else {
       patch.genderCategory = 'Any';
     }
@@ -143,105 +142,100 @@ export function Step3CategoryEligibility({
     });
   };
 
+  const getResolvedGender = (): string => {
+    if (state.category === "Men's Doubles" || state.category === "Men's Scramble") {
+      return 'Male';
+    }
+    if (state.category === "Women's Doubles" || state.category === "Women's Scramble") {
+      return 'Female';
+    }
+    if (state.category === 'Mixed Doubles' || state.category === 'Mixed Scramble') {
+      return 'Mixed';
+    }
+    if (state.category === 'Open Scramble') {
+      return 'Any';
+    }
+    if (state.category === 'Singles') {
+      return state.genderCategory || 'Male';
+    }
+    return state.genderCategory || 'Any';
+  };
+
+  const resolvedGender = getResolvedGender();
+
   return (
     <View style={styles.container}>
-      {/* ── Compact Registration Notice ── */}
-      <View style={styles.compactRegNotice}>
-        <Users size={16} color="#08785E" />
-        <View style={styles.regNoticeTextCol}>
-          <AppText variant="caption" bold style={styles.regNoticeTitle}>
-            {isScramble
-              ? 'Singles Scramble'
-              : cap.isSingles
-              ? 'Singles'
-              : 'Doubles'}
-          </AppText>
-          <AppText variant="caption" style={styles.regNoticeDesc}>
-            {isScramble
-              ? 'Players register individually. Partners rotate automatically.'
-              : cap.isSingles
-              ? 'Players register individually.'
-              : 'Players register as teams.'}
-          </AppText>
-        </View>
-      </View>
-
-      {/* ── Competition Division (Scramble) or Competition Category (Other Formats) ── */}
+      {/* ── A. Competition Category (or Scramble Division) ── */}
       <View style={styles.fieldSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
           {isScramble ? 'COMPETITION DIVISION *' : 'COMPETITION CATEGORY *'}
         </AppText>
-        {isScramble ? (
-          <View style={styles.divisionsList}>
-            {SCRAMBLE_DIVISION_OPTIONS.map((div) => {
-              const isSelected = state.category === div;
-              return (
-                <TouchableOpacity
-                  key={div}
-                  onPress={() => handleDivisionChange(div)}
-                  style={[
-                    styles.divisionCard,
-                    isSelected && styles.divisionCardActive,
-                  ]}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.divisionCardHeader}>
+        <View style={styles.categoryButtonsRow}>
+          {isScramble
+            ? SCRAMBLE_DIVISION_OPTIONS.map((div) => {
+                const isSelected = state.category === div;
+                return (
+                  <TouchableOpacity
+                    key={div}
+                    onPress={() => handleDivisionChange(div)}
+                    style={[
+                      styles.categoryButton,
+                      isSelected && styles.categoryButtonActive,
+                      isNarrowScreen && styles.categoryButtonNarrow,
+                    ]}
+                    activeOpacity={0.7}
+                  >
                     <AppText
                       variant="bodySmall"
-                      bold
+                      bold={isSelected}
                       style={[
-                        styles.divisionCardTitle,
-                        isSelected && styles.divisionCardTitleActive,
+                        styles.categoryButtonText,
+                        isSelected && styles.categoryButtonTextActive,
                       ]}
                     >
                       {div}
                     </AppText>
-                    {isSelected && <View style={styles.selectedDot} />}
-                  </View>
-                  <AppText
-                    variant="caption"
+                  </TouchableOpacity>
+                );
+              })
+            : CATEGORY_OPTIONS.map((cat) => {
+                const isSelected = state.category === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => handleCategoryChange(cat)}
                     style={[
-                      styles.divisionDesc,
-                      isSelected && styles.divisionDescActive,
+                      styles.categoryButton,
+                      isSelected && styles.categoryButtonActive,
+                      isNarrowScreen && styles.categoryButtonNarrow,
                     ]}
+                    activeOpacity={0.7}
                   >
-                    {SCRAMBLE_DIVISION_DESCRIPTIONS[div]}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={styles.chipsWrap}>
-            {CATEGORY_OPTIONS.map((cat) => {
-              const isSelected = state.category === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => handleCategoryChange(cat)}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  activeOpacity={0.7}
-                >
-                  <AppText
-                    variant="caption"
-                    style={[styles.chipText, isSelected && styles.chipTextActive]}
-                  >
-                    {cat}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                    <AppText
+                      variant="bodySmall"
+                      bold={isSelected}
+                      style={[
+                        styles.categoryButtonText,
+                        isSelected && styles.categoryButtonTextActive,
+                      ]}
+                    >
+                      {cat}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+        </View>
+        {errors?.category && (
+          <AppText variant="caption" style={styles.fieldErrorText}>
+            {errors.category}
+          </AppText>
         )}
       </View>
 
-      {/* ── Skill Level Eligibility ── */}
+      {/* ── B. Skill Level ── */}
       <View style={styles.fieldSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          SKILL LEVEL ELIGIBILITY *
-        </AppText>
-        <AppText variant="caption" color="tertiary" style={styles.sectionDescription}>
-          Choose the skill level or rating range eligible to participate in this tournament.
+          SKILL LEVEL *
         </AppText>
 
         {/* Mode Selector: Single Level vs Skill Range */}
@@ -288,9 +282,9 @@ export function Step3CategoryEligibility({
         </View>
 
         {state.skillLevelMode !== 'range' ? (
-          /* Single Level Selection: Rating chips */
+          /* Single Level: Compact Rating Choice Pills */
           <View style={styles.singleLevelContainer}>
-            <View style={styles.chipsWrap}>
+            <View style={styles.ratingsWrap}>
               {SKILL_LEVEL_OPTIONS.map((lvl) => {
                 const isSelected = (state.skillLevel || '3.5') === lvl;
                 return (
@@ -303,12 +297,16 @@ export function Step3CategoryEligibility({
                         maxSkillLevel: lvl,
                       })
                     }
-                    style={[styles.chip, isSelected && styles.chipActive]}
+                    style={[styles.ratingPill, isSelected && styles.ratingPillActive]}
                     activeOpacity={0.7}
                   >
                     <AppText
-                      variant="caption"
-                      style={[styles.chipText, isSelected && styles.chipTextActive]}
+                      variant="bodySmall"
+                      bold={isSelected}
+                      style={[
+                        styles.ratingPillText,
+                        isSelected && styles.ratingPillTextActive,
+                      ]}
                     >
                       {lvl}
                     </AppText>
@@ -321,14 +319,11 @@ export function Step3CategoryEligibility({
                 {errors.skillLevel}
               </AppText>
             )}
-            <AppText variant="caption" color="tertiary" style={styles.helperText}>
-              Tournament eligibility is restricted to exactly rating {state.skillLevel || '3.5'}.
-            </AppText>
           </View>
         ) : (
-          /* Skill Range Selection: Two dropdowns side-by-side */
+          /* Skill Range: Two Compact Dropdowns */
           <View style={styles.rangeContainer}>
-            <View style={styles.inputsRow}>
+            <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
               <View style={styles.inputCol}>
                 <AppText variant="caption" color="secondary" style={styles.dropdownLabel}>
                   Minimum Skill Level
@@ -377,18 +372,14 @@ export function Step3CategoryEligibility({
                 )}
               </View>
             </View>
-
-            <AppText variant="caption" color="tertiary" style={styles.helperText}>
-              Eligible rating range: {state.minSkillLevel || '3.5'} through {state.maxSkillLevel || '4.5'} (inclusive).
-            </AppText>
           </View>
         )}
       </View>
 
-      {/* ── Age Restriction ── */}
+      {/* ── C. Age Restrictions ── */}
       <View style={styles.fieldSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          AGE RESTRICTION
+          AGE RESTRICTIONS
         </AppText>
         <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
           <View style={styles.inputCol}>
@@ -401,7 +392,6 @@ export function Step3CategoryEligibility({
               keyboardType="number-pad"
               placeholder="e.g. 18"
               error={errors?.minAge}
-              hint="Optional min"
             />
           </View>
           <View style={styles.inputCol}>
@@ -414,37 +404,38 @@ export function Step3CategoryEligibility({
               keyboardType="number-pad"
               placeholder="e.g. 50"
               error={errors?.maxAge}
-              hint="Optional max"
             />
           </View>
         </View>
-        <AppText variant="caption" color="tertiary" style={styles.helperText}>
-          {ageDisplay === 'None'
-            ? 'No age restrictions (empty means all ages welcome).'
-            : `Restricted to players aged: ${ageDisplay}`}
-        </AppText>
       </View>
 
-      {/* ── Gender Eligibility / Player Eligibility ── */}
+      {/* ── D. Gender Eligibility ── */}
       <View style={styles.fieldSection}>
         {state.category === 'Singles' ? (
           <>
             <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-              PLAYER ELIGIBILITY *
+              GENDER ELIGIBILITY *
             </AppText>
-            <View style={styles.chipsWrap}>
+            <View style={styles.genderButtonsRow}>
               {(['Male', 'Female'] as const).map((gen) => {
                 const isSelected = state.genderCategory === gen;
                 return (
                   <TouchableOpacity
                     key={gen}
                     onPress={() => onChange({ genderCategory: gen })}
-                    style={[styles.chip, isSelected && styles.chipActive]}
+                    style={[
+                      styles.genderButton,
+                      isSelected && styles.genderButtonActive,
+                    ]}
                     activeOpacity={0.7}
                   >
                     <AppText
-                      variant="caption"
-                      style={[styles.chipText, isSelected && styles.chipTextActive]}
+                      variant="bodySmall"
+                      bold={isSelected}
+                      style={[
+                        styles.genderButtonText,
+                        isSelected && styles.genderButtonTextActive,
+                      ]}
                     >
                       {gen}
                     </AppText>
@@ -452,33 +443,30 @@ export function Step3CategoryEligibility({
                 );
               })}
             </View>
-            <AppText variant="caption" color="tertiary" style={styles.helperText}>
-              Select whether this singles tournament is for male or female players.
-            </AppText>
+            {errors?.genderCategory && (
+              <AppText variant="caption" style={styles.fieldErrorText}>
+                {errors.genderCategory}
+              </AppText>
+            )}
           </>
         ) : (
-          <View style={styles.compactGenderCard}>
-            <UserCheck size={16} color="#08785E" />
-            <AppText variant="caption" style={styles.genderCardText}>
-              Gender eligibility:{' '}
-              <AppText variant="caption" bold style={styles.genderCardValue}>
-                {state.category === "Men's Doubles" || state.category === "Men's Scramble"
-                  ? 'Male'
-                  : state.category === "Women's Doubles" || state.category === "Women's Scramble"
-                  ? 'Female'
-                  : state.category === 'Mixed Doubles'
-                  ? 'Mixed'
-                  : 'Any'}
-              </AppText>
+          <View style={styles.inlineGenderRow}>
+            <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
+              GENDER ELIGIBILITY:
             </AppText>
+            <View style={styles.inlineBadge}>
+              <AppText variant="caption" bold style={styles.inlineBadgeText}>
+                {resolvedGender}
+              </AppText>
+            </View>
           </View>
         )}
       </View>
 
-      {/* ── Participant Capacity (Format-Dependent!) ── */}
+      {/* ── E. Player / Team Capacity ── */}
       <View style={styles.fieldSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          {isScramble || cap.isSingles ? 'PLAYER CAPACITY' : 'TEAM CAPACITY'}
+          {isScramble || cap.isSingles ? 'PLAYER CAPACITY *' : 'TEAM CAPACITY *'}
         </AppText>
         <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
           <View style={styles.inputCol}>
@@ -489,8 +477,8 @@ export function Step3CategoryEligibility({
                 onChange({ minParticipants: minParticipants.replace(/[^0-9]/g, '') })
               }
               keyboardType="number-pad"
+              placeholder={isScramble ? '4' : '2'}
               error={errors?.minParticipants}
-              hint={isScramble ? 'Min required (>= 4)' : 'Min required (>= 2)'}
             />
           </View>
           <View style={styles.inputCol}>
@@ -501,47 +489,11 @@ export function Step3CategoryEligibility({
                 onChange({ maxParticipants: maxParticipants.replace(/[^0-9]/g, '') })
               }
               keyboardType="number-pad"
+              placeholder={isScramble ? '16' : '8'}
               error={errors?.maxParticipants}
-              hint="Capacity cap"
             />
           </View>
         </View>
-
-        <AppText variant="caption" color="secondary" style={styles.capacitySummaryText}>
-          Total capacity: <AppText variant="caption" bold style={{ color: Colors.brand.primary }}>{cap.helperText}</AppText>
-        </AppText>
-      </View>
-
-      {/* ── Tournament Visibility ── */}
-      <View style={styles.fieldSection}>
-        <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          DISCOVERABILITY & VISIBILITY
-        </AppText>
-        <View style={styles.chipsWrap}>
-          {(['public', 'private'] as TournamentVisibility[]).map((v) => {
-            const isSelected = state.visibility === v;
-            return (
-              <TouchableOpacity
-                key={v}
-                onPress={() => onChange({ visibility: v })}
-                style={[styles.chip, isSelected && styles.chipActive]}
-                activeOpacity={0.7}
-              >
-                <AppText
-                  variant="caption"
-                  style={[styles.chipText, isSelected && styles.chipTextActive]}
-                >
-                  {v === 'public' ? 'Public (All Players)' : 'Private (Members Only)'}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <AppText variant="caption" color="tertiary" style={styles.visibilityHint}>
-          {state.visibility === 'public'
-            ? 'Listed publicly for all club players to view and register.'
-            : 'Restricted to invited participants and active members.'}
-        </AppText>
       </View>
 
       {/* Min Skill Level Picker Modal */}
@@ -647,28 +599,6 @@ const styles = StyleSheet.create({
   container: {
     gap: Spacing[4],
   },
-  scrambleFormatNotice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#E5F4EC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-    padding: Spacing[3],
-    gap: Spacing[3],
-    marginBottom: Spacing[1],
-  },
-  scrambleNoticeTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#08785E',
-    marginBottom: 2,
-  },
-  scrambleNoticeDescription: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: '#065F46',
-  },
   fieldSection: {
     gap: Spacing[2],
   },
@@ -677,147 +607,49 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     fontWeight: '700',
   },
-  chipsWrap: {
+  categoryButtonsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing[2],
   },
-  chip: {
+  categoryButton: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    minHeight: 44,
+    paddingVertical: 10,
     paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2],
-    borderRadius: Radius.full,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: Colors.surface.border,
     backgroundColor: Colors.surface.default,
-  },
-  chipActive: {
-    borderColor: Colors.brand.primary,
-    backgroundColor: 'rgba(8, 120, 94, 0.08)',
-  },
-  chipText: {
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
-  chipTextActive: {
-    color: Colors.brand.primary,
-    fontWeight: '700',
-  },
-  categoryScrambleHint: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 2,
-  },
-  compactRegNotice: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing[3],
-    marginBottom: Spacing[1],
+    justifyContent: 'center',
   },
-  regNoticeTextCol: {
-    flex: 1,
-    gap: 1,
-  },
-  regNoticeTitle: {
-    color: '#065F46',
-    fontSize: 12,
-  },
-  regNoticeDesc: {
-    color: '#047857',
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  inputsRow: {
-    flexDirection: 'row',
-    gap: Spacing[3],
-  },
-  inputsRowStacked: {
-    flexDirection: 'column',
-    gap: Spacing[2],
-  },
-  inputCol: {
-    flex: 1,
-  },
-  helperText: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  capacitySummaryText: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  visibilityHint: {
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 2,
-  },
-  divisionsList: {
-    gap: Spacing[2],
-  },
-  divisionCard: {
-    paddingVertical: 10,
-    paddingHorizontal: Spacing[3],
-    borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: Colors.surface.border,
-    backgroundColor: Colors.surface.default,
-    gap: 2,
-  },
-  divisionCardActive: {
+  categoryButtonActive: {
     borderColor: '#08785E',
-    backgroundColor: '#F0FDF4',
-  },
-  divisionCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  divisionCardTitle: {
-    fontSize: 13,
-    color: Colors.text.primary,
-  },
-  divisionCardTitleActive: {
-    color: '#065F46',
-  },
-  selectedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#08785E',
-  },
-  divisionDesc: {
-    fontSize: 11,
-    lineHeight: 15,
-    color: Colors.text.tertiary,
-  },
-  divisionDescActive: {
-    color: '#065F46',
-  },
-  divisionNotice: {
     backgroundColor: 'rgba(8, 120, 94, 0.08)',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[3],
   },
-  sectionDescription: {
-    fontSize: 12,
-    lineHeight: 16,
-    marginTop: -2,
-    marginBottom: Spacing[1],
+  categoryButtonNarrow: {
+    flexBasis: '100%',
+  },
+  categoryButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
+  },
+  categoryButtonTextActive: {
+    color: '#08785E',
+    fontWeight: '700',
   },
   modeTabsRow: {
     flexDirection: 'row',
     gap: Spacing[2],
-    marginBottom: Spacing[1],
   },
   modeTab: {
     flex: 1,
-    paddingVertical: Spacing[2],
+    minHeight: 40,
+    paddingVertical: 8,
     paddingHorizontal: Spacing[3],
     borderRadius: Radius.md,
     borderWidth: 1.5,
@@ -841,6 +673,37 @@ const styles = StyleSheet.create({
   },
   singleLevelContainer: {
     gap: Spacing[1],
+  },
+  ratingsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  ratingPill: {
+    flexBasis: '14%',
+    flexGrow: 1,
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.surface.border,
+    backgroundColor: Colors.surface.default,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ratingPillActive: {
+    borderColor: '#08785E',
+    backgroundColor: 'rgba(8, 120, 94, 0.08)',
+  },
+  ratingPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  ratingPillTextActive: {
+    color: '#08785E',
+    fontWeight: '700',
   },
   rangeContainer: {
     gap: Spacing[1],
@@ -867,6 +730,64 @@ const styles = StyleSheet.create({
   dropdownButtonText: {
     color: Colors.text.primary,
     fontSize: 14,
+  },
+  inputsRow: {
+    flexDirection: 'row',
+    gap: Spacing[3],
+  },
+  inputsRowStacked: {
+    flexDirection: 'column',
+    gap: Spacing[2],
+  },
+  inputCol: {
+    flex: 1,
+  },
+  genderButtonsRow: {
+    flexDirection: 'row',
+    gap: Spacing[2],
+  },
+  genderButton: {
+    flex: 1,
+    minHeight: 40,
+    paddingVertical: 8,
+    paddingHorizontal: Spacing[3],
+    borderRadius: Radius.md,
+    borderWidth: 1.5,
+    borderColor: Colors.surface.border,
+    backgroundColor: Colors.surface.default,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderButtonActive: {
+    borderColor: '#08785E',
+    backgroundColor: 'rgba(8, 120, 94, 0.08)',
+  },
+  genderButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  genderButtonTextActive: {
+    color: '#08785E',
+    fontWeight: '700',
+  },
+  inlineGenderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  inlineBadge: {
+    paddingHorizontal: Spacing[2],
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(8, 120, 94, 0.08)',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  inlineBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#08785E',
   },
   fieldErrorText: {
     color: Colors.status.error,
@@ -920,23 +841,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  compactGenderCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing[3],
-  },
-  genderCardText: {
-    color: Colors.text.secondary,
-    fontSize: 12,
-  },
-  genderCardValue: {
-    color: '#065F46',
-    fontWeight: '700',
+  selectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#08785E',
   },
 });
