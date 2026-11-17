@@ -76,16 +76,20 @@ export function ReviewSummary({ state, clubName }: ReviewSummaryProps) {
 
   const venueText = state.locationName || clubName || 'Main Courts';
 
-  // Format-specific details text
+  // Format-specific details text (human-readable, no technical jargon)
   let formatDetails = '';
+  const courtsText = state.activeCourtsCount
+    ? `${state.activeCourtsCount} Active Courts`
+    : 'Club Courts Management';
+
   if (state.format === 'round_robin') {
-    formatDetails = `${state.rrCourts || '3'} active courts`;
+    formatDetails = `All-play-all round robin • ${courtsText}`;
   } else if (state.format === 'pool_play') {
-    formatDetails = `${state.poolCount || '2'} pools • ${state.teamsPerPool || '4'} teams/pool • Top ${state.qualifiersPerPool || '2'} advance • ${state.poolCourts || '4'} courts`;
+    formatDetails = `${state.poolCount || '2'} pools • Top ${state.qualifiersPerPool || '2'} advance to Championship • ${courtsText}`;
   } else if (state.format === 'scramble') {
-    formatDetails = `${state.scrambleCourts || '4'} courts • ${state.scrambleRounds || '5'} planned rounds • ${state.scrambleRotationRule}`;
+    formatDetails = `${state.scrambleRounds || '5'} planned rounds • Individual leaderboard • ${courtsText}`;
   } else if (state.format === 'bracket') {
-    formatDetails = `${state.bracketType || 'Single Elimination'} • ${state.bracketCourts || '3'} courts • ${state.bracketSeedingMethod}`;
+    formatDetails = `${state.bracketType || 'Single Elimination'} • ${courtsText}`;
   }
 
   return (

@@ -21,15 +21,14 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Camera, Image as ImageIcon, RotateCcw, Trophy
-} from 'lucide-react-native';
+import { AlertTriangle, Camera, Image as ImageIcon, MapPin, RotateCcw, Trophy } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
 import { Input } from '@/components/Input';
 import { clubAssetsApi } from '@/services/api/clubAssets';
 import { Colors, Radius, Spacing } from '@/theme';
-import type { ClubBranding } from '@/types';
+import type { Club, ClubBranding } from '@/types';
 import { usePlatformBanners } from '@/hooks';
 import { resolveMediaUrl } from '@/utils';
 import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
@@ -41,6 +40,7 @@ interface Step1BasicDetailsProps {
   clubName?: string;
   clubId?: string | null;
   clubBranding?: ClubBranding | null;
+  club?: Club | null;
   errors?: Record<string, string>;
 }
 
@@ -50,10 +50,21 @@ export function Step1BasicDetails({
   clubName,
   clubId,
   clubBranding,
+  club,
   errors,
 }: Step1BasicDetailsProps) {
   const [isUploading, setIsUploading] = useState(false);
   const { banners: platformBanners } = usePlatformBanners();
+
+  const clubLocation = [club?.address_line1, club?.city, club?.state].filter(Boolean).join(', ');
+  const hostVenueName = clubName || club?.name || 'Club Facility';
+
+  React.useEffect(() => {
+    const loc = clubLocation ? `${hostVenueName} — ${clubLocation}` : hostVenueName;
+    if (loc && (!state.locationName || state.locationName === 'Main Courts' || state.locationName !== loc)) {
+      onChange({ locationName: loc });
+    }
+  }, [clubLocation, hostVenueName, state.locationName, onChange]);
 
   const isCustom = Boolean(state.bannerImageUrl);
   const resolvedBannerSource = isCustom
@@ -225,15 +236,38 @@ export function Step1BasicDetails({
         </View>
       </Card>
 
-      {/* Venue / Location */}
-      <Input
-        label="Venue / Location"
-        placeholder="e.g. Pickleball Central, Courts 1-6"
-        value={state.locationName}
-        onChangeText={(locationName) => onChange({ locationName })}
-        error={errors?.locationName}
-        hint="Where matches will be played"
-      />
+      {/* Host Venue / Location (Automatically inherited from Club Details) */}
+      {clubLocation ? (
+        <Card style={styles.venueCard}>
+          <View style={styles.venueHeaderRow}>
+            <View style={styles.venueTitleRow}>
+              <MapPin size={15} color={Colors.brand.primary} />
+              <AppText variant="caption" color="secondary" style={styles.venueHeaderLabel}>
+                HOST VENUE / LOCATION
+              </AppText>
+            </View>
+            <Badge label="Active Club Location" variant="info" />
+          </View>
+          <AppText variant="bodySmall" bold style={styles.venueName}>
+            {hostVenueName}
+          </AppText>
+          <AppText variant="caption" color="secondary" style={styles.venueAddress}>
+            {clubLocation}
+          </AppText>
+        </Card>
+      ) : (
+        <View style={styles.venueWarningCard}>
+          <View style={styles.venueWarningHeader}>
+            <AlertTriangle size={15} color="#EA580C" />
+            <AppText variant="caption" bold style={styles.venueWarningTitle}>
+              No Club Location Configured
+            </AppText>
+          </View>
+          <AppText variant="caption" style={styles.venueWarningText}>
+            No physical address configured in Club Details. You can configure your facility address in Club Details → Profile.
+          </AppText>
+        </View>
+      )}
 
       {/* Description */}
       <Input
@@ -391,5 +425,58 @@ const styles = StyleSheet.create({
   bannerResetBtnText: {
     color: Colors.text.secondary,
     fontWeight: '500',
+  },
+  venueCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[3],
+    gap: 4,
+  },
+  venueHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  venueTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  venueHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  venueName: {
+    color: '#0F172A',
+    fontSize: 14,
+  },
+  venueAddress: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  venueWarningCard: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: 4,
+  },
+  venueWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  venueWarningTitle: {
+    color: '#C2410C',
+    fontSize: 12,
+  },
+  venueWarningText: {
+    color: '#9A3412',
+    fontSize: 11,
+    lineHeight: 15,
   },
 });

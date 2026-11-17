@@ -12,6 +12,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.club_player_membership import PlayerMembershipStatus
@@ -379,18 +380,67 @@ class TournamentService:
             )
 
         format_config = dict(payload.format_configuration or {})
+
+        # Inherit club-level default tournament configuration if present
+        club_tourn_cfg = (club.tournament_configuration or {}).get(payload.format.value, {})
+        if club_tourn_cfg:
+            for k, v in club_tourn_cfg.items():
+                if k not in format_config and k not in ("match_scoring", "tiebreaker_rules"):
+                    format_config[k] = v
+
+        # Resolve scoring rules and tiebreakers with club configuration precedence
+        resolved_scoring_rules = payload.scoring_rules.model_dump() if payload.scoring_rules else None
+        if not resolved_scoring_rules and club_tourn_cfg.get("match_scoring"):
+            resolved_scoring_rules = dict(club_tourn_cfg["match_scoring"])
+
+        resolved_tiebreaker_rules = payload.tiebreaker_rules
+        if not resolved_tiebreaker_rules and club_tourn_cfg.get("tiebreaker_rules"):
+            resolved_tiebreaker_rules = list(club_tourn_cfg["tiebreaker_rules"])
+
+        # Resolve venue / location from club profile if not provided
+        resolved_location = payload.location_name
+        if not resolved_location or not str(resolved_location).strip():
+            loc_parts = [str(p).strip() for p in [club.address_line1, club.city, club.state] if p and str(p).strip()]
+            resolved_location = ", ".join(loc_parts) if loc_parts else club.name
+
+        # Validate and resolve active courts from club courts management
+        from app.models.court import Court, CourtStatus
+        court_stmt = (
+            select(Court)
+            .where(Court.club_id == club_id, Court.status == CourtStatus.ACTIVE)
+            .order_by(Court.display_order)
+        )
+        courts_res = await self.db.execute(court_stmt)
+        active_courts = courts_res.scalars().all()
+        active_court_ids = [str(c.id) for c in active_courts]
+
+        req_assigned = format_config.get("assigned_courts")
+        if req_assigned and isinstance(req_assigned, list) and len(req_assigned) > 0:
+            for c_id in req_assigned:
+                if str(c_id) not in active_court_ids:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Assigned court {c_id} is inactive or does not belong to this club.",
+                    )
+            format_config["assigned_courts"] = [str(c_id) for c_id in req_assigned]
+            format_config["courts_count"] = len(req_assigned)
+        elif active_courts:
+            format_config.setdefault("assigned_courts", active_court_ids)
+            format_config.setdefault("courts_count", len(active_courts))
+
+        # Format-specific and category-specific rules enforcement
+        category = format_config.get("category")
         if payload.format == TournamentFormat.SCRAMBLE:
             format_config["registration_type"] = "individual"
             format_config["team_size"] = 1
-            cat = format_config.get("category")
-            if not cat or cat not in VALID_SCRAMBLE_DIVISIONS:
-                cat = "Open Scramble"
-                format_config["category"] = cat
-            if cat == "Men's Scramble":
+            if not category or category not in VALID_SCRAMBLE_DIVISIONS:
+                category = "Open Scramble"
+                format_config["category"] = category
+            if category == "Men's Scramble":
                 format_config["gender_eligibility"] = "Male"
-            elif cat == "Women's Scramble":
+            elif category == "Women's Scramble":
                 format_config["gender_eligibility"] = "Female"
-            elif cat in ("Open Scramble", "Mixed Scramble"):
+            elif category in ("Open Scramble", "Mixed Scramble"):
                 format_config["gender_eligibility"] = "Any"
             raw_rounds = format_config.get("planned_rounds") or format_config.get("rounds")
             try:
@@ -399,10 +449,25 @@ class TournamentService:
                 p_rounds = 5
             format_config["planned_rounds"] = max(1, min(20, p_rounds))
             format_config["rounds"] = format_config["planned_rounds"]
-        elif format_config.get("category") == "Singles":
+        elif category == "Singles":
             format_config.setdefault("registration_type", "individual")
             format_config.setdefault("team_size", 1)
-        elif format_config.get("category"):
+            # Gender eligibility for singles must be Male or Female
+            if not format_config.get("gender_eligibility") or format_config.get("gender_eligibility") == "Any":
+                format_config["gender_eligibility"] = "Male"
+        elif category == "Men's Doubles":
+            format_config["registration_type"] = "team"
+            format_config["team_size"] = 2
+            format_config["gender_eligibility"] = "Male"
+        elif category == "Women's Doubles":
+            format_config["registration_type"] = "team"
+            format_config["team_size"] = 2
+            format_config["gender_eligibility"] = "Female"
+        elif category == "Mixed Doubles":
+            format_config["registration_type"] = "team"
+            format_config["team_size"] = 2
+            format_config["gender_eligibility"] = "Mixed"
+        elif category:
             format_config.setdefault("registration_type", "team")
             format_config.setdefault("team_size", 2)
 
@@ -417,11 +482,11 @@ class TournamentService:
             end_date=payload.end_date,
             registration_open_at=payload.registration_open_at,
             registration_close_at=payload.registration_close_at,
-            location_name=payload.location_name,
+            location_name=resolved_location,
             min_participants=payload.min_participants,
             max_participants=payload.max_participants,
-            scoring_rules=payload.scoring_rules.model_dump() if payload.scoring_rules else None,
-            tiebreaker_rules=payload.tiebreaker_rules,
+            scoring_rules=resolved_scoring_rules,
+            tiebreaker_rules=resolved_tiebreaker_rules,
             format_configuration=format_config if format_config else None,
             banner_image_url=payload.banner_image_url,
         )

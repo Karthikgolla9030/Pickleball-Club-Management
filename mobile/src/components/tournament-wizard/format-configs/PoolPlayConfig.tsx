@@ -1,36 +1,35 @@
 /**
- * Aught2 Pickleball — PoolPlayConfig
+ * Aught2 Pickleball — PoolPlayConfig (Step 2)
  *
- * Format configuration card for Pool Play:
- * - Blue border & badge: Pool Stage → Championship Bracket
- * - Number of Pools
- * - Teams per Pool (derives total teams and max participants)
- * - Qualifiers per Pool
- * - Championship Bracket type (Single Elimination)
- * - Available Courts
- * - Read-only Match Scoring: First to 11, win by 2
- * - Read-only Tiebreaker: Points Differential
+ * Master UI format card for Pool Play:
+ * - Blue border & badge
+ * - Clear, non-technical explanation
+ * - Displays inherited club engine configuration (pools, advancement, bracket)
+ * - Zero technical questions asked during tournament creation
  */
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { Check, CheckCircle2 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
-import { Input } from '@/components/Input';
-import { Radius, Spacing } from '@/theme';
-import { getTeamSize, isSinglesCategory } from '@/utils/tournamentCapacity';
+import { Colors, Radius, Spacing } from '@/theme';
+import type { Club } from '@/types';
 import type { TournamentWizardState } from '../types';
 
 interface PoolPlayConfigProps {
   state: TournamentWizardState;
   onChange: (patch: Partial<TournamentWizardState>) => void;
+  club?: Club | null;
   errors?: Record<string, string>;
 }
 
-export function PoolPlayConfig({ state, onChange, errors }: PoolPlayConfigProps) {
-  const isSingles = isSinglesCategory(state.category);
-  const teamSize = getTeamSize(state.category);
-
+export function PoolPlayConfig({ state, club }: PoolPlayConfigProps) {
+  const clubConfig = club?.tournament_configuration?.pool_play || {};
+  const poolCount = clubConfig.pool_count || state.poolCount || 2;
+  const qualifiers = clubConfig.qualifiers_per_pool || state.qualifiersPerPool || 2;
+  const targetScore = clubConfig.target_score || 11;
+  const winBy = clubConfig.win_by || 2;
 
   return (
     <View style={styles.card}>
@@ -38,37 +37,48 @@ export function PoolPlayConfig({ state, onChange, errors }: PoolPlayConfigProps)
       <View style={styles.badgeRow}>
         <Badge label="POOL PLAY FORMAT" variant="info" />
         <AppText variant="caption" color="secondary" style={styles.badgeSubtitle} numberOfLines={1}>
-          {isSingles ? 'Singles Pool Stage → Championship Bracket' : 'Pool Stage → Championship Bracket'}
+          Pool Stages → Championship Playoff
         </AppText>
       </View>
 
-      <AppText variant="caption" color="tertiary" style={styles.explanationText}>
-        {isSingles
-          ? 'Players compete round-robin inside assigned pools. Top qualifiers advance to a single-elimination championship bracket.'
-          : 'Teams play round-robin inside assigned pools. Top teams advance to a single-elimination championship bracket.'}
+      <AppText variant="bodySmall" color="secondary" style={styles.explanationText}>
+        Participants are divided into groups. The best performers move to the next stage.
       </AppText>
 
-      {/* Fields */}
-      <View style={styles.fieldsGrid}>
-        <View style={styles.fieldCol}>
-          <Input
-            label="Championship Bracket"
-            value="Single Elimination (deterministic pool seeds)"
-            editable={false}
-            style={styles.readOnlyInput}
-          />
+      {/* Applied Club Configuration Summary Box */}
+      <View style={styles.appliedConfigBox}>
+        <View style={styles.appliedHeaderRow}>
+          <CheckCircle2 size={15} color="#2563EB" />
+          <AppText variant="caption" bold style={styles.appliedHeaderLabel}>
+            APPLIED FROM CLUB CONFIGURATION
+          </AppText>
         </View>
 
-        <View style={styles.fieldCol}>
-          <Input
-            label="Available Courts"
-            placeholder="e.g. 4"
-            value={state.poolCourts}
-            onChangeText={(poolCourts) => onChange({ poolCourts })}
-            keyboardType="number-pad"
-            error={errors?.poolCourts}
-            hint="Parallel pool scheduling"
-          />
+        <View style={styles.rulesList}>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#2563EB" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Pool Structure: {poolCount} round-robin pools with balanced group allocation
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#2563EB" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Advancement: Top {qualifiers} entries from each pool advance to Championship Bracket
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#2563EB" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Championship Stage: Single Elimination seeded knockout playoff
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#2563EB" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Match Scoring: First to {targetScore} points, win by {winBy} (Single Game)
+            </AppText>
+          </View>
         </View>
       </View>
     </View>
@@ -82,36 +92,50 @@ const styles = StyleSheet.create({
     borderColor: '#3B82F6',
     borderRadius: Radius.lg,
     padding: Spacing[4],
-    marginBottom: Spacing[3],
+    gap: Spacing[3],
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
     flexWrap: 'wrap',
-    marginBottom: Spacing[1],
   },
   badgeSubtitle: {
     fontSize: 12,
   },
   explanationText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  appliedConfigBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDE8E2',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: Spacing[2],
+  },
+  appliedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  appliedHeaderLabel: {
+    color: '#2563EB',
+    letterSpacing: 0.5,
+  },
+  rulesList: {
+    gap: 6,
+  },
+  ruleItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ruleItemText: {
+    color: Colors.text.secondary,
     fontSize: 12,
-    marginBottom: Spacing[3],
-  },
-  fieldsGrid: {
-    gap: Spacing[3],
-    marginBottom: Spacing[2],
-  },
-  fieldCol: {
-    width: '100%',
-  },
-  readOnlyRow: {
-    gap: Spacing[3],
-  },
-  readOnlyCol: {
-    width: '100%',
-  },
-  readOnlyInput: {
-    opacity: 0.85,
+    flex: 1,
+    lineHeight: 16,
   },
 });

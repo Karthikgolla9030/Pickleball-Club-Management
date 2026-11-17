@@ -56,6 +56,10 @@ export interface TournamentWizardState {
   bracketSeedingMethod: string;
   bracketByeRule: string;
 
+  // Active Courts from Club Courts Management
+  assignedCourtIds: string[];
+  activeCourtsCount: number;
+
   // ─── Step 4: Schedule & Registration ───────────────────
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
@@ -111,6 +115,12 @@ export const SKILL_LEVEL_OPTIONS = [
 
 export const GENDER_CATEGORY_OPTIONS = [
   'Any',
+  'Male',
+  'Female',
+  'Mixed',
+] as const;
+
+export const SINGLES_GENDER_OPTIONS = [
   'Male',
   'Female',
 ] as const;

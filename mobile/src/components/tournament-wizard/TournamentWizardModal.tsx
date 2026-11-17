@@ -21,7 +21,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useClubBranding } from '@/hooks';
+import { useClubBranding, useClubCourts, useClubDetails } from '@/hooks';
 import { Colors, Spacing } from '@/theme';
 import type { CreateTournamentPayload, Tournament, TournamentFormat, TournamentVisibility } from '@/types';
 import {
@@ -107,6 +107,8 @@ function buildInitialState(): TournamentWizardState {
     bracketCourts: '3',
     bracketSeedingMethod: 'Team Average Rating (Highest = Seed #1)',
     bracketByeRule: 'Automatic BYEs awarded to top seeds',
+    assignedCourtIds: [],
+    activeCourtsCount: 0,
 
     // Step 4
     startDate: formatDateToISO(start),
@@ -133,6 +135,8 @@ export function TournamentWizardModal({
   isCreating = false,
 }: TournamentWizardModalProps) {
   const { branding } = useClubBranding(clubId);
+  const { club } = useClubDetails(clubId);
+  const { data: activeCourts = [], isLoading: isLoadingCourts } = useClubCourts(clubId, 'active');
   const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [formState, setFormState] = useState<TournamentWizardState>(buildInitialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -140,16 +144,57 @@ export function TournamentWizardModal({
 
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Reset form whenever opening
+  // Reset form whenever opening and apply club defaults
   useEffect(() => {
     if (visible) {
       setCurrentStep(1);
-      setFormState(buildInitialState());
+      const init = buildInitialState();
+      if (activeCourts.length > 0) {
+        init.assignedCourtIds = activeCourts.map((c) => c.id);
+        init.activeCourtsCount = activeCourts.length;
+      }
+      if (club) {
+        const clubLocation = [club.address_line1, club.city, club.state].filter(Boolean).join(', ');
+        if (clubLocation) {
+          init.locationName = `${club.name} — ${clubLocation}`;
+        }
+        if (club.tournament_configuration) {
+          const tc = club.tournament_configuration;
+          if (tc.pool_play) {
+            if (tc.pool_play.pool_count) init.poolCount = String(tc.pool_play.pool_count);
+            if (tc.pool_play.teams_per_pool) init.teamsPerPool = String(tc.pool_play.teams_per_pool);
+            if (tc.pool_play.qualifiers_per_pool) init.qualifiersPerPool = String(tc.pool_play.qualifiers_per_pool);
+            if (tc.pool_play.pool_bracket_type) init.poolBracketType = tc.pool_play.pool_bracket_type;
+          }
+          if (tc.bracket) {
+            if (tc.bracket.bracket_type) init.bracketType = tc.bracket.bracket_type;
+            if (tc.bracket.seeding_method) init.bracketSeedingMethod = tc.bracket.seeding_method;
+            if (tc.bracket.bye_rule) init.bracketByeRule = tc.bracket.bye_rule;
+          }
+          if (tc.scramble) {
+            if (tc.scramble.planned_rounds) init.scrambleRounds = String(tc.scramble.planned_rounds);
+            if (tc.scramble.rotation_rule) init.scrambleRotationRule = tc.scramble.rotation_rule;
+            if (tc.scramble.leaderboard_metric) init.scrambleLeaderboardMetric = tc.scramble.leaderboard_metric;
+          }
+        }
+      }
+      setFormState(init);
       setErrors({});
       setSubmitError(null);
       scrollViewRef.current?.scrollTo({ y: 0, animated: false });
     }
-  }, [visible]);
+  }, [visible, club, activeCourts]);
+
+  // Synchronize active courts count into formState whenever activeCourts change
+  useEffect(() => {
+    if (activeCourts.length > 0) {
+      setFormState((prev) => ({
+        ...prev,
+        assignedCourtIds: activeCourts.map((c) => c.id),
+        activeCourtsCount: activeCourts.length,
+      }));
+    }
+  }, [activeCourts]);
 
   // Scroll form back to top intentionally on every step change
   useEffect(() => {
@@ -189,51 +234,19 @@ export function TournamentWizardModal({
       }
     } else if (step === 2) {
       // Step 2: Format & Scoring
-      if (formState.format === 'round_robin') {
-        if (formState.rrCourts) {
-          const courts = parseInt(formState.rrCourts, 10);
-          if (isNaN(courts) || courts < 1) {
-            errs.rrCourts = 'Available courts must be at least 1.';
-          }
-        }
-      } else if (formState.format === 'pool_play') {
-        const pools = parseInt(formState.poolCount, 10);
-        const tpp = parseInt(formState.teamsPerPool, 10);
-        const qual = parseInt(formState.qualifiersPerPool, 10);
-        if (isNaN(pools) || pools < 2) {
-          errs.poolCount = 'Pool play requires at least 2 pools.';
-        }
-        if (isNaN(tpp) || tpp < 2) {
-          errs.teamsPerPool = 'Each pool must have at least 2 teams.';
-        }
-        if (isNaN(qual) || qual < 1 || qual > tpp) {
-          errs.qualifiersPerPool = 'Qualifiers per pool must be between 1 and teams per pool.';
-        }
-        if (formState.poolCourts) {
-          const courts = parseInt(formState.poolCourts, 10);
-          if (isNaN(courts) || courts < 1) {
-            errs.poolCourts = 'Available courts must be at least 1.';
-          }
-        }
-      } else if (formState.format === 'scramble') {
-        if (formState.scrambleCourts) {
-          const courts = parseInt(formState.scrambleCourts, 10);
-          if (isNaN(courts) || courts < 1) {
-            errs.scrambleCourts = 'Active courts must be at least 1.';
-          }
-        }
-      } else if (formState.format === 'bracket') {
-        if (formState.bracketCourts) {
-          const courts = parseInt(formState.bracketCourts, 10);
-          if (isNaN(courts) || courts < 1) {
-            errs.bracketCourts = 'Available courts must be at least 1.';
-          }
+      if (!isLoadingCourts && activeCourts.length === 0) {
+        errs.activeCourts = 'No active courts are available. Add or activate courts in Club Courts Management before creating this tournament.';
+      }
+      if (formState.format === 'bracket') {
+        if (!formState.bracketType) {
+          errs.bracketType = 'Please select a bracket type.';
         }
       }
     } else if (step === 3) {
       // Step 3: Category & Eligibility (Format-Dependent Capacity)
       const minP = parseInt(formState.minParticipants, 10);
       const maxP = parseInt(formState.maxParticipants, 10);
+      const isDoubles = formState.category.includes('Doubles');
 
       if (formState.format === 'scramble') {
         if (!SCRAMBLE_DIVISION_OPTIONS.includes(formState.category as any)) {
@@ -249,11 +262,16 @@ export function TournamentWizardModal({
         if (!CATEGORY_OPTIONS.includes(formState.category as any)) {
           errs.category = 'Please select a valid competition category.';
         }
+        if (formState.category === 'Singles') {
+          if (formState.genderCategory !== 'Male' && formState.genderCategory !== 'Female') {
+            errs.genderCategory = 'Please select player eligibility (Male or Female).';
+          }
+        }
         if (isNaN(minP) || minP < 2) {
-          errs.minParticipants = 'Min participants must be at least 2.';
+          errs.minParticipants = isDoubles ? 'Minimum teams must be at least 2.' : 'Minimum players must be at least 2.';
         }
         if (isNaN(maxP) || maxP < minP) {
-          errs.maxParticipants = 'Max capacity must be greater than or equal to min capacity.';
+          errs.maxParticipants = isDoubles ? 'Maximum teams must be greater than or equal to minimum teams.' : 'Maximum players must be greater than or equal to minimum players.';
         }
       }
 
@@ -418,26 +436,85 @@ export function TournamentWizardModal({
         entry_fee: parsedFee,
       };
 
+      const clubConfig = club?.tournament_configuration || {};
+      const assignedCourts = activeCourts.length > 0 ? activeCourts.map((c) => c.id) : undefined;
+      const courtsCount = activeCourts.length > 0 ? activeCourts.length : 1;
+
+      let scoringRules = {
+        game_format: 'single_game',
+        target_score: 11,
+        win_by: 2,
+      };
+      let tiebreakerRules = [
+        'wins',
+        'points_differential',
+        'total_points_scored',
+        'team_name_deterministic',
+      ];
+
       if (formState.format === 'scramble') {
-        const plannedRounds = parseInt(formState.scrambleRounds, 10) || 5;
-        formatConfig.courts_count = parseInt(formState.scrambleCourts, 10) || 4;
+        const scConfig = clubConfig.scramble || {};
+        const plannedRounds = scConfig.planned_rounds || parseInt(formState.scrambleRounds, 10) || 5;
+        formatConfig.courts_count = courtsCount;
+        if (assignedCourts) formatConfig.assigned_courts = assignedCourts;
         formatConfig.planned_rounds = plannedRounds;
         formatConfig.rounds = plannedRounds;
-        formatConfig.rotation_rule = formState.scrambleRotationRule;
-        formatConfig.leaderboard_metric = formState.scrambleLeaderboardMetric;
+        formatConfig.rotation_rule = scConfig.rotation_rule || formState.scrambleRotationRule;
+        formatConfig.leaderboard_metric = scConfig.leaderboard_metric || formState.scrambleLeaderboardMetric;
+        scoringRules = {
+          game_format: 'single_game',
+          target_score: scConfig.target_score || 11,
+          win_by: scConfig.win_by || 2,
+        };
       } else if (formState.format === 'round_robin') {
-        formatConfig.courts_count = parseInt(formState.rrCourts, 10) || 3;
+        const rrConfig = clubConfig.round_robin || {};
+        formatConfig.courts_count = courtsCount;
+        if (assignedCourts) formatConfig.assigned_courts = assignedCourts;
+        formatConfig.court_allocation_preference = rrConfig.court_allocation_preference || 'all_available';
+        scoringRules = {
+          game_format: rrConfig.game_format || 'single_game',
+          target_score: rrConfig.target_score || 11,
+          win_by: rrConfig.win_by || 2,
+        };
+        if (rrConfig.tiebreaker_rules) {
+          tiebreakerRules = rrConfig.tiebreaker_rules;
+        }
       } else if (formState.format === 'pool_play') {
-        formatConfig.pool_count = parseInt(formState.poolCount, 10) || 2;
-        formatConfig.teams_per_pool = parseInt(formState.teamsPerPool, 10) || 4;
-        formatConfig.qualifiers_per_pool = parseInt(formState.qualifiersPerPool, 10) || 2;
-        formatConfig.courts_count = parseInt(formState.poolCourts, 10) || 4;
+        const ppConfig = clubConfig.pool_play || {};
+        formatConfig.pool_count = ppConfig.pool_count || parseInt(formState.poolCount, 10) || 2;
+        formatConfig.teams_per_pool = ppConfig.teams_per_pool || parseInt(formState.teamsPerPool, 10) || 4;
+        formatConfig.qualifiers_per_pool = ppConfig.qualifiers_per_pool || parseInt(formState.qualifiersPerPool, 10) || 2;
+        formatConfig.pool_bracket_type = ppConfig.pool_bracket_type || 'Single Elimination';
+        formatConfig.advancement_rule = ppConfig.advancement_rule || 'top_per_pool';
+        formatConfig.courts_count = courtsCount;
+        if (assignedCourts) formatConfig.assigned_courts = assignedCourts;
+        scoringRules = {
+          game_format: ppConfig.game_format || 'single_game',
+          target_score: ppConfig.target_score || 11,
+          win_by: ppConfig.win_by || 2,
+        };
+        if (ppConfig.tiebreaker_rules) {
+          tiebreakerRules = ppConfig.tiebreaker_rules;
+        }
       } else if (formState.format === 'bracket') {
-        formatConfig.bracket_type = formState.bracketType;
-        formatConfig.courts_count = parseInt(formState.bracketCourts, 10) || 3;
-        formatConfig.seeding_method = formState.bracketSeedingMethod;
-        formatConfig.bye_rule = formState.bracketByeRule;
+        const bConfig = clubConfig.bracket || {};
+        formatConfig.bracket_type = formState.bracketType || bConfig.bracket_type || 'Single Elimination';
+        formatConfig.courts_count = courtsCount;
+        if (assignedCourts) formatConfig.assigned_courts = assignedCourts;
+        formatConfig.seeding_method = bConfig.seeding_method || formState.bracketSeedingMethod;
+        formatConfig.bye_rule = bConfig.bye_rule || formState.bracketByeRule;
+        scoringRules = {
+          game_format: bConfig.game_format || 'single_game',
+          target_score: bConfig.target_score || 11,
+          win_by: bConfig.win_by || 2,
+        };
+        if (bConfig.tiebreaker_rules) {
+          tiebreakerRules = bConfig.tiebreaker_rules;
+        }
       }
+
+      const clubLocation = [club?.address_line1, club?.city, club?.state].filter(Boolean).join(', ');
+      const finalLocation = formState.locationName.trim() || (clubLocation ? `${club?.name} — ${clubLocation}` : club?.name) || null;
 
       const payload: CreateTournamentPayload = {
         name: formState.name.trim(),
@@ -449,21 +526,12 @@ export function TournamentWizardModal({
         end_date: endIso,
         registration_open_at: regOpenIso,
         registration_close_at: regCloseIso,
-        location_name: formState.locationName.trim() || null,
+        location_name: finalLocation,
         min_participants: minP,
         max_participants: maxP,
         format_configuration: formatConfig,
-        scoring_rules: {
-          game_format: 'single_game',
-          target_score: 11,
-          win_by: 2,
-        },
-        tiebreaker_rules: [
-          'wins',
-          'points_differential',
-          'total_points_scored',
-          'team_name_deterministic',
-        ],
+        scoring_rules: scoringRules,
+        tiebreaker_rules: tiebreakerRules,
       };
 
       const created = await createTournament(payload);
@@ -524,6 +592,7 @@ export function TournamentWizardModal({
                 clubName={clubName}
                 clubId={clubId}
                 clubBranding={branding}
+                club={club}
                 errors={errors}
               />
             )}
@@ -532,6 +601,9 @@ export function TournamentWizardModal({
               <Step2FormatScoring
                 state={formState}
                 onChange={updateState}
+                club={club}
+                activeCourts={activeCourts}
+                isLoadingCourts={isLoadingCourts}
                 errors={errors}
               />
             )}

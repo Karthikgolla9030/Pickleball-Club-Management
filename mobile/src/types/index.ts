@@ -61,6 +61,7 @@ export interface Club {
   holiday_closure_notes?: string | null;
   facilities_summary?: string | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  tournament_configuration?: Record<string, any> | null;
   court_count?: number | null;
   member_count?: number | null;
   allows_free_join?: boolean;
@@ -200,6 +201,7 @@ export interface UpdateClubPayload {
   holiday_closure_notes?: string | null;
   facilities_summary?: string | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  tournament_configuration?: Record<string, any> | null;
 }
 
 export interface CreateClubPayload {
@@ -1524,6 +1526,7 @@ export interface PlayerCourt {
   display_order: number;
   description: string | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  tournament_configuration?: Record<string, any> | null;
 }
 
 export interface CourtCreateRequest {
@@ -1541,6 +1544,7 @@ export interface CourtCreateRequest {
   is_active?: boolean;
   display_order?: number | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  tournament_configuration?: Record<string, any> | null;
 }
 
 export interface CourtUpdateRequest {
@@ -1558,6 +1562,7 @@ export interface CourtUpdateRequest {
   is_active?: boolean;
   display_order?: number | null;
   operating_hours?: WeeklyOperatingHoursMap | null;
+  tournament_configuration?: Record<string, any> | null;
 }
 
 export interface CourtReorderRequest {

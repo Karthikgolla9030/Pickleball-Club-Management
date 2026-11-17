@@ -74,6 +74,7 @@ import {
   Screen,
   SegmentedTabs,
   ClubBrandingSection,
+  ClubTournamentConfigTab,
   InternationalPhoneInput,
   TimePickerInput,
   PlayerClubDetailsPreview,
@@ -139,8 +140,8 @@ export default function ClubDetailsScreen() {
   const { branding, refetch: refetchBranding } = useClubBranding(clubId);
   const updateBrandingMutation = useUpdateClubBranding(clubId);
 
-  // Active view tab: 'edit', 'branding', or 'preview'
-  const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'preview'>('edit');
+  // Active view tab: 'edit', 'branding', 'tournament_config', or 'preview'
+  const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'tournament_config' | 'preview'>('edit');
   const [isEditing, setIsEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -591,6 +592,7 @@ export default function ClubDetailsScreen() {
           {[
             { key: 'edit', label: 'Profile' },
             { key: 'branding', label: 'Branding' },
+            { key: 'tournament_config', label: 'Tournament Config' },
             { key: 'preview', label: 'Preview' },
           ].map((tab) => {
             const isSelected = activeTab === tab.key;
@@ -639,6 +641,10 @@ export default function ClubDetailsScreen() {
 
       {activeTab === 'branding' ? (
         <ClubBrandingSection clubId={clubId || ''} isOwner={isOwner} />
+      ) : activeTab === 'tournament_config' ? (
+        club ? (
+          <ClubTournamentConfigTab club={club} isOwner={isOwner} onSaved={() => { refetch(); }} />
+        ) : null
       ) : (
         <KeyboardAvoidingView
           style={styles.keyboardContainer}

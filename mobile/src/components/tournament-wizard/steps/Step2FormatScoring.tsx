@@ -1,20 +1,25 @@
 /**
  * Aught2 Pickleball — Step 2: Format & Scoring
  *
- * Primary competition engine configuration step (Moved to Step 2):
- * - Exactly 4 formats: Round Robin, Pool Play, Scramble, Bracket
- * - Cards styling & selected-state appearance preserved
- * - Dynamic format-specific configuration card
- * - Fixed read-only Match Scoring (First to 11, win by 2)
- * - Fixed read-only Tiebreakers (Wins -> Diff -> Points -> Deterministic)
+ * Simplified competition engine configuration step:
+ * - Exactly 4 formats with understandable descriptions:
+ *     Round Robin: Everyone plays against the other participants. Final positions are based on results.
+ *     Pool Play: Participants are divided into groups. The best performers move to the next stage.
+ *     Bracket: Participants compete in knockout matches. Winners advance to the next round.
+ *     Scramble: Players rotate partners across rounds and compete individually.
+ * - Active Courts automatically retrieved from Club Courts Management (no manual input).
+ * - Automatic application of club-level saved configurations.
+ * - Only Bracket presents an additional choice (Bracket Type).
  */
 
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { AlertTriangle, CheckCircle2, MapPin } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
-import { Input } from '@/components/Input';
+import { Badge } from '@/components/Badge';
+import { Card } from '@/components/Card';
 import { Colors, Radius, Spacing } from '@/theme';
-import { TOURNAMENT_FORMAT_LABELS, type TournamentFormat } from '@/types';
+import { TOURNAMENT_FORMAT_LABELS, type Club, type Court, type TournamentFormat } from '@/types';
 import { BracketConfig } from '../format-configs/BracketConfig';
 import { PoolPlayConfig } from '../format-configs/PoolPlayConfig';
 import { RoundRobinConfig } from '../format-configs/RoundRobinConfig';
@@ -24,30 +29,32 @@ import { SCRAMBLE_DIVISION_OPTIONS, type TournamentWizardState } from '../types'
 const FORMAT_LIST: TournamentFormat[] = [
   'round_robin',
   'pool_play',
-  'scramble',
   'bracket',
+  'scramble',
 ];
 
 const FORMAT_SUBTITLES: Record<TournamentFormat, string> = {
-  round_robin:
-    'Round Robin: Every participant plays every other participant once. Supports individual or team entries.',
-  pool_play:
-    'Pool Play: Pool stage round-robin with qualification into a single-elimination championship bracket.',
-  scramble:
-    'Scramble: Individual player registration with rotating partners across games in each round.',
-  bracket:
-    'Bracket: Seeded knockout tournament with single or double elimination.',
+  round_robin: 'Everyone plays against the other participants. Final positions are based on results.',
+  pool_play: 'Participants are divided into groups. The best performers move to the next stage.',
+  bracket: 'Participants compete in knockout matches. Winners advance to the next round.',
+  scramble: 'Players rotate partners across rounds and compete individually.',
 };
 
 interface Step2FormatScoringProps {
   state: TournamentWizardState;
   onChange: (patch: Partial<TournamentWizardState>) => void;
+  club?: Club | null;
+  activeCourts?: Court[];
+  isLoadingCourts?: boolean;
   errors?: Record<string, string>;
 }
 
 export function Step2FormatScoring({
   state,
   onChange,
+  club,
+  activeCourts = [],
+  isLoadingCourts = false,
   errors,
 }: Step2FormatScoringProps) {
   const currentFormat = state.format;
@@ -55,7 +62,7 @@ export function Step2FormatScoring({
   const handleFormatChange = (fmt: TournamentFormat) => {
     const patch: Partial<TournamentWizardState> = { format: fmt };
 
-    // Migrate/validate participant counts and categories safely when switching format
+    // Migrate/validate participant counts safely when switching format
     if (fmt === 'scramble') {
       const minP = parseInt(state.minParticipants, 10);
       const maxP = parseInt(state.maxParticipants, 10);
@@ -75,25 +82,52 @@ export function Step2FormatScoring({
         patch.minParticipants = '2';
       }
       if (SCRAMBLE_DIVISION_OPTIONS.includes(state.category as any)) {
-        if (state.category === "Men's Scramble") {
-          patch.category = "Men's Doubles";
-          patch.genderCategory = 'Male';
-        } else if (state.category === "Women's Scramble") {
-          patch.category = "Women's Doubles";
-          patch.genderCategory = 'Female';
-        } else {
-          patch.category = 'Mixed Doubles';
-          patch.genderCategory = 'Any';
-        }
+        patch.category = 'Singles';
+        patch.genderCategory = 'Male';
       }
     }
 
     onChange(patch);
   };
 
+  const hasCourts = activeCourts.length > 0;
+
   return (
     <View style={styles.container}>
-      {/* Format Selector */}
+      {/* ── Active Courts Banner (From Club Courts Management) ── */}
+      {hasCourts ? (
+        <Card style={styles.courtsCard}>
+          <View style={styles.courtsHeader}>
+            <View style={styles.courtsTitleRow}>
+              <MapPin size={15} color={Colors.brand.primary} />
+              <AppText variant="caption" color="secondary" style={styles.courtsHeaderLabel}>
+                ACTIVE CLUB COURTS (COURTS MANAGEMENT)
+              </AppText>
+            </View>
+            <Badge label={`${activeCourts.length} Courts Available`} variant="success" />
+          </View>
+          <AppText variant="bodySmall" bold style={styles.courtsNames}>
+            {activeCourts.map((c) => c.name).join(' • ')}
+          </AppText>
+          <AppText variant="caption" color="tertiary" style={styles.courtsSubtext}>
+            Courts are automatically allocated according to your club's court preferences.
+          </AppText>
+        </Card>
+      ) : !isLoadingCourts ? (
+        <View style={styles.noCourtsWarning}>
+          <View style={styles.noCourtsHeader}>
+            <AlertTriangle size={18} color="#DC2626" />
+            <AppText variant="bodySmall" bold style={styles.noCourtsTitle}>
+              No Active Courts Available
+            </AppText>
+          </View>
+          <AppText variant="caption" style={styles.noCourtsDescription}>
+            No active courts are available. Add or activate courts in Club Courts Management before creating this tournament.
+          </AppText>
+        </View>
+      ) : null}
+
+      {/* ── Format Selector ── */}
       <View style={styles.selectorSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
           COMPETITION FORMAT *
@@ -131,50 +165,22 @@ export function Step2FormatScoring({
         </AppText>
       </View>
 
-      {/* Dynamic Format Specific Card */}
+      {/* ── Dynamic Format Specific Card ── */}
       {currentFormat === 'round_robin' && (
-        <RoundRobinConfig state={state} onChange={onChange} errors={errors} />
+        <RoundRobinConfig state={state} onChange={onChange} club={club} errors={errors} />
       )}
 
       {currentFormat === 'pool_play' && (
-        <PoolPlayConfig state={state} onChange={onChange} errors={errors} />
-      )}
-
-      {currentFormat === 'scramble' && (
-        <ScrambleConfig state={state} onChange={onChange} errors={errors} />
+        <PoolPlayConfig state={state} onChange={onChange} club={club} errors={errors} />
       )}
 
       {currentFormat === 'bracket' && (
-        <BracketConfig state={state} onChange={onChange} errors={errors} />
+        <BracketConfig state={state} onChange={onChange} club={club} errors={errors} />
       )}
 
-      {/* Global Default Match Scoring & Tiebreaker Footer Summary */}
-      <View style={styles.scoringSummaryContainer}>
-        <AppText variant="caption" color="tertiary" style={styles.scoringSummaryHeader}>
-          COMPETITION ENGINE RULES (BACKEND ENFORCED)
-        </AppText>
-        <View style={styles.scoringSummaryRow}>
-          <View style={styles.scoringCol}>
-            <Input
-              label="Match Scoring"
-              value="First to 11, win by 2"
-              editable={false}
-              style={styles.readOnlyInput}
-            />
-          </View>
-          <View style={styles.scoringCol}>
-            <Input
-              label="Tiebreaker"
-              value="Points Differential"
-              editable={false}
-              style={styles.readOnlyInput}
-            />
-          </View>
-        </View>
-        <AppText variant="caption" color="tertiary" style={styles.tiebreakerList}>
-          Standings tiebreaker hierarchy: 1. Most Wins → 2. Point Differential → 3. Total Points Scored → 4. Player/Team Name (Deterministic)
-        </AppText>
-      </View>
+      {currentFormat === 'scramble' && (
+        <ScrambleConfig state={state} onChange={onChange} club={club} errors={errors} />
+      )}
     </View>
   );
 }
@@ -182,6 +188,57 @@ export function Step2FormatScoring({
 const styles = StyleSheet.create({
   container: {
     gap: Spacing[4],
+  },
+  courtsCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    padding: Spacing[3],
+    gap: 4,
+  },
+  courtsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  courtsTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  courtsHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  courtsNames: {
+    color: '#065F46',
+    fontSize: 13,
+  },
+  courtsSubtext: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  noCourtsWarning: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: 4,
+  },
+  noCourtsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  noCourtsTitle: {
+    color: '#991B1B',
+  },
+  noCourtsDescription: {
+    color: '#B91C1C',
+    fontSize: 12,
+    lineHeight: 16,
   },
   selectorSection: {
     marginBottom: Spacing[1],
@@ -222,33 +279,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     marginTop: 2,
-  },
-  scoringSummaryContainer: {
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    padding: Spacing[3],
-    gap: Spacing[2],
-  },
-  scoringSummaryHeader: {
-    fontSize: 10,
-    letterSpacing: 0.5,
-    fontWeight: '700',
-  },
-  scoringSummaryRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  scoringCol: {
-    flex: 1,
-  },
-  readOnlyInput: {
-    opacity: 0.85,
-    backgroundColor: Colors.surface.default,
-  },
-  tiebreakerList: {
-    fontSize: 11,
-    lineHeight: 16,
+    color: Colors.text.secondary,
   },
 });

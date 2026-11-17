@@ -1,36 +1,36 @@
 /**
- * Aught2 Pickleball — ScrambleConfig
+ * Aught2 Pickleball — ScrambleConfig (Step 2)
  *
- * Format configuration card for Scramble:
- * - Amber border & badge: Rotate-Partner play • 4-5 players per court • Individual leaderboard
- * - Total Players (individual player count, min 4)
- * - Active Courts
- * - Partner Rotation Rule selector
- * - Leaderboard Metric selector
- * - Read-only Match Scoring: First to 11, win by 2
- * - Read-only Tiebreaker: Points Differential
+ * Master UI format card for Scramble:
+ * - Amber border & badge
+ * - Clear explanation: "Players rotate partners across rounds and compete individually."
+ * - Displays inherited club engine configuration (planned rounds, rotation rule, leaderboard metric)
+ * - Zero technical questions asked during tournament creation
  */
 
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Check, CheckCircle2 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
-import { Input } from '@/components/Input';
 import { Colors, Radius, Spacing } from '@/theme';
-import {
-  SCRAMBLE_LEADERBOARD_OPTIONS,
-  SCRAMBLE_ROTATION_OPTIONS,
-  type TournamentWizardState,
-} from '../types';
+import type { Club } from '@/types';
+import type { TournamentWizardState } from '../types';
 
 interface ScrambleConfigProps {
   state: TournamentWizardState;
   onChange: (patch: Partial<TournamentWizardState>) => void;
+  club?: Club | null;
   errors?: Record<string, string>;
 }
 
-export function ScrambleConfig({ state, onChange, errors }: ScrambleConfigProps) {
-
+export function ScrambleConfig({ state, club }: ScrambleConfigProps) {
+  const clubConfig = club?.tournament_configuration?.scramble || {};
+  const rounds = clubConfig.planned_rounds || state.scrambleRounds || 5;
+  const rotationRule = clubConfig.rotation_rule || state.scrambleRotationRule || 'Full Rotation (no repeating partners)';
+  const leaderboardMetric = clubConfig.leaderboard_metric || state.scrambleLeaderboardMetric || 'Win Percentage (Wins / Played) • Avg Point Diff';
+  const targetScore = clubConfig.target_score || 11;
+  const winBy = clubConfig.win_by || 2;
 
   return (
     <View style={styles.card}>
@@ -38,124 +38,53 @@ export function ScrambleConfig({ state, onChange, errors }: ScrambleConfigProps)
       <View style={styles.badgeRow}>
         <Badge label="SCRAMBLE FORMAT" variant="warning" />
         <AppText variant="caption" color="secondary" style={styles.badgeSubtitle} numberOfLines={1}>
-          Rotate-Partner play • Individual leaderboard
+          Rotate-Partner Play • Individual Leaderboard
         </AppText>
       </View>
 
-      <AppText variant="bodySmall" style={styles.explanationText}>
-        Players register individually. The system automatically rotates partners across games in each round.
+      <AppText variant="bodySmall" color="secondary" style={styles.explanationText}>
+        Players rotate partners across rounds and compete individually.
       </AppText>
 
-      {/* Rules list */}
-      <View style={styles.rulesList}>
-        {state.category === 'Mixed Scramble' ? (
-          <>
-            <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-              • Mixed Scramble: balanced 4-player courts (2 men, 2 women) forming 100% mixed-gender teams.
-            </AppText>
-            <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-              • 2 games per court block (both possible mixed partner combinations; no men-only/women-only pairs).
-            </AppText>
-          </>
-        ) : (
-          <>
-            <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-              • 4-player court: 3 games, every player partners each other player in that court group.
-            </AppText>
-            <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-              • 5-player court: 5 games, every player sits out exactly once and plays 4 games.
-            </AppText>
-          </>
-        )}
-        <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-          • Full-field rotation regrouping across courts between rounds to minimize repeat partners and vary opponents.
-        </AppText>
-        <AppText variant="caption" color="secondary" style={styles.ruleItem}>
-          • Finite tournament: manager confirms planned rounds; tournament ends after the final planned round.
-        </AppText>
-      </View>
-
-      {/* Fields */}
-      <View style={styles.fieldsGrid}>
-        <View style={styles.fieldCol}>
-          <Input
-            label="Active Courts"
-            placeholder="e.g. 4"
-            value={state.scrambleCourts}
-            onChangeText={(scrambleCourts) => onChange({ scrambleCourts })}
-            keyboardType="number-pad"
-            error={errors?.scrambleCourts}
-            hint="For court distribution"
-          />
-        </View>
-
-        <View style={styles.fieldCol}>
-          <Input
-            label="Planned Rotation Rounds"
-            placeholder="e.g. 5"
-            value={state.scrambleRounds}
-            onChangeText={(scrambleRounds) => onChange({ scrambleRounds })}
-            keyboardType="number-pad"
-            error={errors?.scrambleRounds}
-            hint="Tentative round count (recommended: 4-5). Confirmed before Round 1."
-          />
-        </View>
-
-        {/* Partner Rotation Rule */}
-        <View style={styles.fieldCol}>
-          <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-            PARTNER ROTATION RULE
+      {/* Applied Club Configuration Summary Box */}
+      <View style={styles.appliedConfigBox}>
+        <View style={styles.appliedHeaderRow}>
+          <CheckCircle2 size={15} color="#D97706" />
+          <AppText variant="caption" bold style={styles.appliedHeaderLabel}>
+            APPLIED FROM CLUB CONFIGURATION
           </AppText>
-          <View style={styles.chipRow}>
-            {SCRAMBLE_ROTATION_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => onChange({ scrambleRotationRule: opt })}
-                style={[
-                  styles.optionChip,
-                  state.scrambleRotationRule === opt && styles.optionChipActive,
-                ]}
-              >
-                <AppText
-                  variant="caption"
-                  style={[
-                    styles.optionChipText,
-                    state.scrambleRotationRule === opt && styles.optionChipTextActive,
-                  ]}
-                >
-                  {opt}
-                </AppText>
-              </TouchableOpacity>
-            ))}
+        </View>
+
+        <View style={styles.rulesList}>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#D97706" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Tournament Rounds: {rounds} planned rotation rounds
+            </AppText>
           </View>
-        </View>
-
-        {/* Leaderboard Metric */}
-        <View style={styles.fieldCol}>
-          <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-            LEADERBOARD METRIC
-          </AppText>
-          <View style={styles.chipRow}>
-            {SCRAMBLE_LEADERBOARD_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => onChange({ scrambleLeaderboardMetric: opt })}
-                style={[
-                  styles.optionChip,
-                  state.scrambleLeaderboardMetric === opt && styles.optionChipActive,
-                ]}
-              >
-                <AppText
-                  variant="caption"
-                  style={[
-                    styles.optionChipText,
-                    state.scrambleLeaderboardMetric === opt && styles.optionChipTextActive,
-                  ]}
-                >
-                  {opt}
-                </AppText>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#D97706" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Partner Rotation: {rotationRule}
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#D97706" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Leaderboard Metric: {leaderboardMetric}
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#D97706" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Court Distribution: Automatically calculated from registered players and active courts
+            </AppText>
+          </View>
+          <View style={styles.ruleItemRow}>
+            <Check size={13} color="#D97706" />
+            <AppText variant="caption" style={styles.ruleItemText}>
+              Match Scoring: First to {targetScore} points, win by {winBy} (Single Game)
+            </AppText>
           </View>
         </View>
       </View>
@@ -170,77 +99,50 @@ const styles = StyleSheet.create({
     borderColor: '#F59E0B',
     borderRadius: Radius.lg,
     padding: Spacing[4],
-    marginBottom: Spacing[3],
+    gap: Spacing[3],
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
     flexWrap: 'wrap',
-    marginBottom: Spacing[1],
   },
   badgeSubtitle: {
     fontSize: 12,
   },
   explanationText: {
-    fontSize: 12,
-    marginBottom: Spacing[2],
+    fontSize: 13,
+    lineHeight: 18,
   },
-  rulesList: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+  appliedConfigBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDE8E2',
     borderRadius: Radius.md,
-    padding: Spacing[2.5],
-    marginBottom: Spacing[3],
-    gap: 4,
-  },
-  ruleItem: {
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  fieldsGrid: {
-    gap: Spacing[3],
-    marginBottom: Spacing[2],
-  },
-  fieldCol: {
-    width: '100%',
-  },
-  fieldLabel: {
-    marginBottom: Spacing[1],
-    fontWeight: '600',
-    fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  chipRow: {
-    flexDirection: 'column',
+    padding: Spacing[3],
     gap: Spacing[2],
   },
-  optionChip: {
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[3],
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    backgroundColor: Colors.surface.elevated,
+  appliedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  optionChipActive: {
-    borderColor: '#F59E0B',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+  appliedHeaderLabel: {
+    color: '#D97706',
+    letterSpacing: 0.5,
   },
-  optionChipText: {
+  rulesList: {
+    gap: 6,
+  },
+  ruleItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ruleItemText: {
     color: Colors.text.secondary,
     fontSize: 12,
-  },
-  optionChipTextActive: {
-    color: '#F59E0B',
-    fontWeight: '600',
-  },
-  readOnlyRow: {
-    gap: Spacing[3],
-  },
-  readOnlyCol: {
-    width: '100%',
-  },
-  readOnlyInput: {
-    opacity: 0.85,
+    flex: 1,
+    lineHeight: 16,
   },
 });

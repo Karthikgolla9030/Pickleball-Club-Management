@@ -46,6 +46,7 @@ class ClubResponse(BaseModel):
     holiday_closure_notes: str | None = None
     facilities_summary: str | None = None
     operating_hours: dict[str, Any] | None = None
+    tournament_configuration: dict[str, Any] | None = None
 
     created_at: datetime
     updated_at: datetime
@@ -79,6 +80,7 @@ class PublicClubResponse(BaseModel):
     facilities_summary: str | None = None
     holiday_closure_notes: str | None = None
     operating_hours: dict[str, Any] | None = None
+    tournament_configuration: dict[str, Any] | None = None
     is_active: bool
     allows_free_join: bool = True
     court_count: int | None = None
@@ -101,6 +103,7 @@ class UserClubResponse(BaseModel):
     description: str | None = None
     city: str | None = None
     state: str | None = None
+    tournament_configuration: dict[str, Any] | None = None
     is_active: bool
     membership_id: UUID
     role: str
@@ -138,6 +141,7 @@ class ClubUpdateRequest(BaseModel):
     holiday_closure_notes: str | None = Field(None, max_length=500)
     facilities_summary: str | None = Field(None, max_length=500)
     operating_hours: WeeklyOperatingHours | dict[str, Any] | None = None
+    tournament_configuration: dict[str, Any] | None = None
 
     @field_validator("contact_email")
     @classmethod
@@ -208,6 +212,7 @@ class ClubCreateRequest(BaseModel):
     timezone: str | None = Field(default="UTC", max_length=50)
     facilities_summary: str | None = Field(None, max_length=500)
     holiday_closure_notes: str | None = Field(None, max_length=500)
+    tournament_configuration: dict[str, Any] | None = None
 
     @field_validator("contact_email")
     @classmethod

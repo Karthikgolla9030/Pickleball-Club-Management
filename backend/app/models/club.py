@@ -84,6 +84,7 @@ class Club(Base):
     holiday_closure_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     facilities_summary: Mapped[str | None] = mapped_column(String(500), nullable=True)
     operating_hours: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tournament_configuration: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=dict)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

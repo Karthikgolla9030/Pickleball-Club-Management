@@ -112,6 +112,7 @@ VALID_GENDER_ELIGIBILITIES = {
     "Any",
     "Male",
     "Female",
+    "Mixed",
 }
 
 VALID_REGISTRATION_TYPES = {

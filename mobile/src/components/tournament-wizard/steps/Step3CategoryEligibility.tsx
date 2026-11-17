@@ -11,9 +11,9 @@
  * - Doubles (Bracket/Pool/RoundRobin): Fixed team registration ("Min Teams" & "Number of Teams").
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { ChevronDown, Info, Users } from 'lucide-react-native';
+import { ChevronDown, Info, UserCheck, Users } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Input } from '@/components/Input';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -51,6 +51,34 @@ export function Step3CategoryEligibility({
 
   const [isMinPickerOpen, setIsMinPickerOpen] = useState(false);
   const [isMaxPickerOpen, setIsMaxPickerOpen] = useState(false);
+
+  const handleCategoryChange = (cat: string) => {
+    const patch: Partial<TournamentWizardState> = { category: cat };
+    if (cat === "Men's Doubles") {
+      patch.genderCategory = 'Male';
+    } else if (cat === "Women's Doubles") {
+      patch.genderCategory = 'Female';
+    } else if (cat === 'Mixed Doubles') {
+      patch.genderCategory = 'Mixed';
+    } else if (cat === 'Singles') {
+      if (state.genderCategory !== 'Male' && state.genderCategory !== 'Female') {
+        patch.genderCategory = 'Male';
+      }
+    }
+    onChange(patch);
+  };
+
+  useEffect(() => {
+    if (state.category === "Men's Doubles" && state.genderCategory !== 'Male') {
+      onChange({ genderCategory: 'Male' });
+    } else if (state.category === "Women's Doubles" && state.genderCategory !== 'Female') {
+      onChange({ genderCategory: 'Female' });
+    } else if (state.category === 'Mixed Doubles' && state.genderCategory !== 'Mixed') {
+      onChange({ genderCategory: 'Mixed' });
+    } else if (state.category === 'Singles' && state.genderCategory !== 'Male' && state.genderCategory !== 'Female') {
+      onChange({ genderCategory: 'Male' });
+    }
+  }, [state.category, state.genderCategory, onChange]);
 
   const handleDivisionChange = (div: ScrambleDivision) => {
     const patch: Partial<TournamentWizardState> = { category: div };
@@ -181,7 +209,7 @@ export function Step3CategoryEligibility({
               return (
                 <TouchableOpacity
                   key={cat}
-                  onPress={() => onChange({ category: cat })}
+                  onPress={() => handleCategoryChange(cat)}
                   style={[styles.chip, isSelected && styles.chipActive]}
                   activeOpacity={0.7}
                 >
@@ -388,46 +416,92 @@ export function Step3CategoryEligibility({
         </AppText>
       </View>
 
-      {/* ── Gender Eligibility ── */}
+      {/* ── Gender Eligibility / Player Eligibility ── */}
       <View style={styles.fieldSection}>
-        <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          GENDER ELIGIBILITY
-        </AppText>
-        {isScramble && (state.category === "Men's Scramble" || state.category === "Women's Scramble") ? (
-          <View style={styles.divisionNotice}>
-            <AppText variant="caption" style={{ fontWeight: '600', color: '#08785E' }}>
-              {state.category === "Men's Scramble"
-                ? '• Division Rule: Restricted to male players.'
-                : '• Division Rule: Restricted to female players.'}
+        {state.category === 'Singles' ? (
+          <>
+            <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
+              PLAYER ELIGIBILITY *
+            </AppText>
+            <View style={styles.chipsWrap}>
+              {(['Male', 'Female'] as const).map((gen) => {
+                const isSelected = state.genderCategory === gen;
+                return (
+                  <TouchableOpacity
+                    key={gen}
+                    onPress={() => onChange({ genderCategory: gen })}
+                    style={[styles.chip, isSelected && styles.chipActive]}
+                    activeOpacity={0.7}
+                  >
+                    <AppText
+                      variant="caption"
+                      style={[styles.chipText, isSelected && styles.chipTextActive]}
+                    >
+                      {gen}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <AppText variant="caption" color="tertiary" style={styles.helperText}>
+              Select whether this singles tournament is for male or female players.
+            </AppText>
+          </>
+        ) : state.category === "Men's Doubles" ? (
+          <View style={styles.derivedGenderCard}>
+            <View style={styles.derivedGenderRow}>
+              <UserCheck size={16} color="#08785E" />
+              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
+                Gender Eligibility: Male
+              </AppText>
+            </View>
+            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
+              Automatically set to Male based on Men's Doubles category. Both players must be male.
             </AppText>
           </View>
-        ) : (
-          <View style={styles.chipsWrap}>
-            {GENDER_CATEGORY_OPTIONS.map((gen) => {
-              const isSelected = state.genderCategory === gen;
-              return (
-                <TouchableOpacity
-                  key={gen}
-                  onPress={() => onChange({ genderCategory: gen })}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  activeOpacity={0.7}
-                >
-                  <AppText
-                    variant="caption"
-                    style={[styles.chipText, isSelected && styles.chipTextActive]}
-                  >
-                    {gen}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
+        ) : state.category === "Women's Doubles" ? (
+          <View style={styles.derivedGenderCard}>
+            <View style={styles.derivedGenderRow}>
+              <UserCheck size={16} color="#08785E" />
+              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
+                Gender Eligibility: Female
+              </AppText>
+            </View>
+            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
+              Automatically set to Female based on Women's Doubles category. Both players must be female.
+            </AppText>
           </View>
-        )}
-        {isScramble && state.category === 'Mixed Scramble' && (
-          <AppText variant="caption" color="tertiary" style={styles.helperText}>
-            Mixed Scramble accepts both male and female players with balanced court allocation.
-          </AppText>
-        )}
+        ) : state.category === "Mixed Doubles" ? (
+          <View style={styles.derivedGenderCard}>
+            <View style={styles.derivedGenderRow}>
+              <UserCheck size={16} color="#08785E" />
+              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
+                Gender Eligibility: Mixed
+              </AppText>
+            </View>
+            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
+              Automatically set to Mixed based on Mixed Doubles category. Requires one male and one female player per team.
+            </AppText>
+          </View>
+        ) : isScramble ? (
+          <View style={styles.derivedGenderCard}>
+            <View style={styles.derivedGenderRow}>
+              <UserCheck size={16} color="#08785E" />
+              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
+                Gender Eligibility: {state.category === "Men's Scramble" ? 'Male' : state.category === "Women's Scramble" ? 'Female' : 'Any'}
+              </AppText>
+            </View>
+            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
+              {state.category === "Men's Scramble"
+                ? 'Restricted to male players.'
+                : state.category === "Women's Scramble"
+                ? 'Restricted to female players.'
+                : state.category === 'Mixed Scramble'
+                ? 'Balanced male and female player entries.'
+                : 'Open to all eligible players.'}
+            </AppText>
+          </View>
+        ) : null}
       </View>
 
       {/* ── Participant Capacity (Format-Dependent!) ── */}
@@ -864,5 +938,27 @@ const styles = StyleSheet.create({
     color: '#08785E',
     fontWeight: '700',
     fontSize: 14,
+  },
+  derivedGenderCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: 4,
+  },
+  derivedGenderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  derivedGenderTitle: {
+    color: '#065F46',
+    fontSize: 13,
+  },
+  derivedGenderDesc: {
+    color: '#047857',
+    fontSize: 11,
+    lineHeight: 15,
   },
 });
