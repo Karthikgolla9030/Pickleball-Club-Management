@@ -325,16 +325,18 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   leadingIcon: {
-    marginRight: Spacing[2.5],
+    marginRight: Spacing[2],
   },
   valueText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: Colors.text.primary,
     fontWeight: Typography.weight.medium,
   },
   placeholderText: {
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 18,
     color: Colors.text.tertiary,
   },
   clearBtn: {

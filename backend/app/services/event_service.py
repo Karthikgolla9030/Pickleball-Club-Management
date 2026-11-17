@@ -87,6 +87,11 @@ class EventService:
                 detail="Club not found",
             )
 
+        # Resolve venue / location from club profile if not provided
+        loc_parts = [p for p in [club.address_line1, club.city, club.state, club.country] if p]
+        default_club_location = ", ".join(loc_parts) if loc_parts else club.name
+        resolved_location = payload.location.strip() if payload.location and payload.location.strip() else default_club_location
+
         event = Event(
             club_id=club_id,
             title=payload.title,
@@ -97,7 +102,7 @@ class EventService:
             visibility=payload.visibility,
             start_at=payload.start_at,
             end_at=payload.end_at,
-            location=payload.location or club.name,
+            location=resolved_location,
             capacity=payload.capacity,
             registration_required=payload.registration_required,
             registration_opens_at=payload.registration_opens_at,

@@ -486,6 +486,60 @@ export function resolveEventPicture(
 export const resolveEventCover = resolveEventPicture;
 
 /**
+ * Returns complete image resolution diagnostics for an event picture:
+ * - source: resolved ImageSourcePropType or built-in fallback
+ * - level: 'custom' | 'club_default' | 'platform_default' | 'backend_default' | 'builtin_fallback'
+ * - url: raw remote URL string if remote, or null
+ */
+export function resolveEventPictureDetails(
+  event?: { cover_image_url?: string | null; resolved_cover_image_url?: string | null } | string | null,
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
+): ImageResolutionDetails {
+  const customUrl = typeof event === 'string' ? event?.trim() : event?.cover_image_url?.trim();
+  if (customUrl && !isBuiltinDefaultUrl(customUrl)) {
+    return {
+      source: { uri: resolveMediaUrl(customUrl) },
+      level: 'custom',
+      url: customUrl,
+    };
+  }
+
+  if (clubBranding?.default_event_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_event_banner_url)) {
+    return {
+      source: { uri: resolveMediaUrl(clubBranding.default_event_banner_url.trim()) },
+      level: 'club_default',
+      url: clubBranding.default_event_banner_url.trim(),
+    };
+  }
+
+  const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
+  const platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_event_banner);
+  if (platCustomUrl) {
+    return {
+      source: { uri: resolveMediaUrl(platCustomUrl) },
+      level: 'platform_default',
+      url: platCustomUrl,
+    };
+  }
+
+  const resolvedBackendUrl = typeof event === 'object' ? event?.resolved_cover_image_url?.trim() : null;
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return {
+      source: { uri: resolveMediaUrl(resolvedBackendUrl) },
+      level: 'platform_default',
+      url: resolvedBackendUrl,
+    };
+  }
+
+  return {
+    source: BUILTIN_FALLBACKS.event,
+    level: 'fallback',
+    url: null,
+  };
+}
+
+/**
  * Resolves a lesson/coaching picture following strict priority:
  * 1. lesson.image_url (custom session image)
  * 2. lesson.lesson_type?.image_url (lesson template picture)
