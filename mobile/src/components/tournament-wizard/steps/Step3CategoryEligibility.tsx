@@ -3,7 +3,7 @@
  *
  * Clean, compact configuration for:
  * A. Competition Category (or Division for Scramble)
- * B. Skill Level (Single Level vs Skill Range)
+ * B. Skill Level (Single Level vs Skill Range with dedicated dropdowns)
  * C. Age Restrictions (Minimum Age & Maximum Age)
  * D. Gender Eligibility (Automatic inline display, or Male/Female for Singles)
  * E. Player / Team Capacity (Format-dependent labels & validation)
@@ -30,6 +30,29 @@ interface Step3CategoryEligibilityProps {
   errors?: Record<string, string>;
 }
 
+export const sanitizeMinSkill = (val?: string | null, fallback = '3.5'): string => {
+  if (!val) return fallback;
+  if ((SKILL_LEVEL_OPTIONS as readonly string[]).includes(val)) return val;
+  // If val has multiple values e.g. "3.5-4.5" or "3.5-3.5-4.5", extract the first valid one
+  const match = val.match(/(2\.5|3\.0|3\.5|4\.0|4\.5|5\.0)/);
+  if (match) return match[1];
+  return fallback;
+};
+
+export const sanitizeMaxSkill = (val?: string | null, fallback = '4.5'): string => {
+  if (!val) return fallback;
+  if ((SKILL_LEVEL_OPTIONS as readonly string[]).includes(val)) return val;
+  // If val has multiple values, extract the second or last valid one
+  const matches = val.match(/(2\.5|3\.0|3\.5|4\.0|4\.5|5\.0)/g);
+  if (matches && matches.length > 1) {
+    return matches[matches.length - 1];
+  }
+  if (matches && matches.length === 1) {
+    return matches[0];
+  }
+  return fallback;
+};
+
 export function Step3CategoryEligibility({
   state,
   onChange,
@@ -43,6 +66,71 @@ export function Step3CategoryEligibility({
 
   const [isMinPickerOpen, setIsMinPickerOpen] = useState(false);
   const [isMaxPickerOpen, setIsMaxPickerOpen] = useState(false);
+
+  // Resolved clean skill values to prevent any possibility of concatenation bugs
+  const currentMinSkill = sanitizeMinSkill(state.minSkillLevel, '3.5');
+  const currentMaxSkill = sanitizeMaxSkill(state.maxSkillLevel, '4.5');
+  const currentSingleSkill = sanitizeMinSkill(state.skillLevel, '3.5');
+
+  // Auto-heal any invalid or concatenated skill state and synchronize gender/category
+  useEffect(() => {
+    const patch: Partial<TournamentWizardState> = {};
+
+    // Auto-heal skill level values if they contain invalid strings (like "3.5-4.5" in min)
+    if (state.minSkillLevel !== currentMinSkill) {
+      patch.minSkillLevel = currentMinSkill;
+    }
+    if (state.maxSkillLevel !== currentMaxSkill) {
+      patch.maxSkillLevel = currentMaxSkill;
+    }
+    if (state.skillLevelMode === 'single' && state.skillLevel !== currentSingleSkill) {
+      patch.skillLevel = currentSingleSkill;
+    }
+
+    // Verify category matches tournament format
+    if (isScramble && !SCRAMBLE_DIVISION_OPTIONS.includes(state.category as any)) {
+      patch.category = 'Open Scramble';
+      patch.genderCategory = 'Any';
+    } else if (!isScramble && !CATEGORY_OPTIONS.includes(state.category as any)) {
+      patch.category = 'Singles';
+      patch.genderCategory = 'Male';
+    } else {
+      // Synchronize gender category with selected category
+      if (state.category === "Men's Doubles" && state.genderCategory !== 'Male') {
+        patch.genderCategory = 'Male';
+      } else if (state.category === "Women's Doubles" && state.genderCategory !== 'Female') {
+        patch.genderCategory = 'Female';
+      } else if (state.category === 'Mixed Doubles' && state.genderCategory !== 'Mixed') {
+        patch.genderCategory = 'Mixed';
+      } else if (state.category === "Men's Scramble" && state.genderCategory !== 'Male') {
+        patch.genderCategory = 'Male';
+      } else if (state.category === "Women's Scramble" && state.genderCategory !== 'Female') {
+        patch.genderCategory = 'Female';
+      } else if (state.category === "Mixed Scramble" && state.genderCategory !== 'Mixed') {
+        patch.genderCategory = 'Mixed';
+      } else if (state.category === "Open Scramble" && state.genderCategory !== 'Any') {
+        patch.genderCategory = 'Any';
+      } else if (state.category === 'Singles' && state.genderCategory !== 'Male' && state.genderCategory !== 'Female') {
+        patch.genderCategory = 'Male';
+      }
+    }
+
+    if (Object.keys(patch).length > 0) {
+      onChange(patch);
+    }
+  }, [
+    state.category,
+    state.genderCategory,
+    state.minSkillLevel,
+    state.maxSkillLevel,
+    state.skillLevel,
+    state.skillLevelMode,
+    isScramble,
+    currentMinSkill,
+    currentMaxSkill,
+    currentSingleSkill,
+    onChange,
+  ]);
 
   const handleCategoryChange = (cat: string) => {
     const patch: Partial<TournamentWizardState> = { category: cat };
@@ -60,26 +148,6 @@ export function Step3CategoryEligibility({
     onChange(patch);
   };
 
-  useEffect(() => {
-    if (state.category === "Men's Doubles" && state.genderCategory !== 'Male') {
-      onChange({ genderCategory: 'Male' });
-    } else if (state.category === "Women's Doubles" && state.genderCategory !== 'Female') {
-      onChange({ genderCategory: 'Female' });
-    } else if (state.category === 'Mixed Doubles' && state.genderCategory !== 'Mixed') {
-      onChange({ genderCategory: 'Mixed' });
-    } else if (state.category === "Men's Scramble" && state.genderCategory !== 'Male') {
-      onChange({ genderCategory: 'Male' });
-    } else if (state.category === "Women's Scramble" && state.genderCategory !== 'Female') {
-      onChange({ genderCategory: 'Female' });
-    } else if (state.category === "Mixed Scramble" && state.genderCategory !== 'Mixed') {
-      onChange({ genderCategory: 'Mixed' });
-    } else if (state.category === "Open Scramble" && state.genderCategory !== 'Any') {
-      onChange({ genderCategory: 'Any' });
-    } else if (state.category === 'Singles' && state.genderCategory !== 'Male' && state.genderCategory !== 'Female') {
-      onChange({ genderCategory: 'Male' });
-    }
-  }, [state.category, state.genderCategory, onChange]);
-
   const handleDivisionChange = (div: ScrambleDivision) => {
     const patch: Partial<TournamentWizardState> = { category: div };
     if (div === "Men's Scramble") {
@@ -96,7 +164,7 @@ export function Step3CategoryEligibility({
 
   const handleModeChange = (mode: 'single' | 'range') => {
     if (mode === 'single') {
-      const selectedSkill = state.skillLevel || state.minSkillLevel || '3.5';
+      const selectedSkill = currentSingleSkill || currentMinSkill || '3.5';
       onChange({
         skillLevelMode: 'single',
         skillLevel: selectedSkill,
@@ -104,8 +172,8 @@ export function Step3CategoryEligibility({
         maxSkillLevel: selectedSkill,
       });
     } else {
-      const min = state.minSkillLevel || state.skillLevel || '3.5';
-      let max = state.maxSkillLevel || '4.5';
+      const min = currentMinSkill;
+      let max = currentMaxSkill;
       if (parseFloat(max) < parseFloat(min)) {
         max = min === '5.0' ? '5.0' : (parseFloat(min) + 0.5 <= 5.0 ? (parseFloat(min) + 0.5).toFixed(1) : min);
       }
@@ -113,32 +181,34 @@ export function Step3CategoryEligibility({
         skillLevelMode: 'range',
         minSkillLevel: min,
         maxSkillLevel: max,
-        skillLevel: `${min}-${max}`,
+        skillLevel: min, // Always clean single rating
       });
     }
   };
 
   const handleMinSkillChange = (newMin: string) => {
-    let currentMax = state.maxSkillLevel || '4.5';
-    if (parseFloat(newMin) > parseFloat(currentMax)) {
-      currentMax = newMin;
+    const cleanMin = sanitizeMinSkill(newMin, '3.5');
+    let cleanMax = currentMaxSkill;
+    if (parseFloat(cleanMin) > parseFloat(cleanMax)) {
+      cleanMax = cleanMin;
     }
     onChange({
-      minSkillLevel: newMin,
-      maxSkillLevel: currentMax,
-      skillLevel: `${newMin}-${currentMax}`,
+      minSkillLevel: cleanMin,
+      maxSkillLevel: cleanMax,
+      skillLevel: cleanMin,
     });
   };
 
   const handleMaxSkillChange = (newMax: string) => {
-    let currentMin = state.minSkillLevel || '3.5';
-    if (parseFloat(newMax) < parseFloat(currentMin)) {
-      currentMin = newMax;
+    const cleanMax = sanitizeMaxSkill(newMax, '4.5');
+    let cleanMin = currentMinSkill;
+    if (parseFloat(cleanMax) < parseFloat(cleanMin)) {
+      cleanMin = cleanMax;
     }
     onChange({
-      minSkillLevel: currentMin,
-      maxSkillLevel: newMax,
-      skillLevel: `${currentMin}-${newMax}`,
+      minSkillLevel: cleanMin,
+      maxSkillLevel: cleanMax,
+      skillLevel: cleanMin,
     });
   };
 
@@ -286,7 +356,7 @@ export function Step3CategoryEligibility({
           <View style={styles.singleLevelContainer}>
             <View style={styles.ratingsWrap}>
               {SKILL_LEVEL_OPTIONS.map((lvl) => {
-                const isSelected = (state.skillLevel || '3.5') === lvl;
+                const isSelected = currentSingleSkill === lvl;
                 return (
                   <TouchableOpacity
                     key={lvl}
@@ -321,13 +391,11 @@ export function Step3CategoryEligibility({
             )}
           </View>
         ) : (
-          /* Skill Range: Two Compact Dropdowns */
+          /* Skill Range: Two Compact Dropdowns with explicit 48px height and clean alignment */
           <View style={styles.rangeContainer}>
             <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
               <View style={styles.inputCol}>
-                <AppText variant="caption" color="secondary" style={styles.dropdownLabel}>
-                  Minimum Skill Level
-                </AppText>
+                <AppText style={styles.dropdownLabel}>Minimum Skill Level</AppText>
                 <TouchableOpacity
                   style={[
                     styles.dropdownButton,
@@ -336,10 +404,10 @@ export function Step3CategoryEligibility({
                   onPress={() => setIsMinPickerOpen(true)}
                   activeOpacity={0.7}
                 >
-                  <AppText variant="bodySmall" bold style={styles.dropdownButtonText}>
-                    {state.minSkillLevel || '3.5'}
+                  <AppText style={styles.dropdownButtonText} numberOfLines={1}>
+                    {currentMinSkill}
                   </AppText>
-                  <ChevronDown size={16} color={Colors.text.secondary} />
+                  <ChevronDown size={18} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 {errors?.minSkillLevel && (
                   <AppText variant="caption" style={styles.fieldErrorText}>
@@ -349,9 +417,7 @@ export function Step3CategoryEligibility({
               </View>
 
               <View style={styles.inputCol}>
-                <AppText variant="caption" color="secondary" style={styles.dropdownLabel}>
-                  Maximum Skill Level
-                </AppText>
+                <AppText style={styles.dropdownLabel}>Maximum Skill Level</AppText>
                 <TouchableOpacity
                   style={[
                     styles.dropdownButton,
@@ -360,10 +426,10 @@ export function Step3CategoryEligibility({
                   onPress={() => setIsMaxPickerOpen(true)}
                   activeOpacity={0.7}
                 >
-                  <AppText variant="bodySmall" bold style={styles.dropdownButtonText}>
-                    {state.maxSkillLevel || '4.5'}
+                  <AppText style={styles.dropdownButtonText} numberOfLines={1}>
+                    {currentMaxSkill}
                   </AppText>
-                  <ChevronDown size={16} color={Colors.text.secondary} />
+                  <ChevronDown size={18} color={Colors.text.secondary} />
                 </TouchableOpacity>
                 {errors?.maxSkillLevel && (
                   <AppText variant="caption" style={styles.fieldErrorText}>
@@ -386,9 +452,10 @@ export function Step3CategoryEligibility({
             <Input
               label="Minimum Age"
               value={state.minAge}
-              onChangeText={(minAge) =>
-                onChange({ minAge: minAge.replace(/[^0-9]/g, '') })
-              }
+              onChangeText={(minAge) => {
+                const clean = minAge.replace(/[^0-9]/g, '');
+                onChange({ minAge: clean });
+              }}
               keyboardType="number-pad"
               placeholder="e.g. 18"
               error={errors?.minAge}
@@ -398,9 +465,10 @@ export function Step3CategoryEligibility({
             <Input
               label="Maximum Age"
               value={state.maxAge}
-              onChangeText={(maxAge) =>
-                onChange({ maxAge: maxAge.replace(/[^0-9]/g, '') })
-              }
+              onChangeText={(maxAge) => {
+                const clean = maxAge.replace(/[^0-9]/g, '');
+                onChange({ maxAge: clean });
+              }}
               keyboardType="number-pad"
               placeholder="e.g. 50"
               error={errors?.maxAge}
@@ -515,7 +583,7 @@ export function Step3CategoryEligibility({
               </AppText>
             </View>
             {SKILL_LEVEL_OPTIONS.map((lvl) => {
-              const isSelected = (state.minSkillLevel || '3.5') === lvl;
+              const isSelected = currentMinSkill === lvl;
               return (
                 <TouchableOpacity
                   key={lvl}
@@ -563,7 +631,7 @@ export function Step3CategoryEligibility({
               </AppText>
             </View>
             {SKILL_LEVEL_OPTIONS.map((lvl) => {
-              const isSelected = (state.maxSkillLevel || '4.5') === lvl;
+              const isSelected = currentMaxSkill === lvl;
               return (
                 <TouchableOpacity
                   key={lvl}
@@ -598,6 +666,7 @@ export function Step3CategoryEligibility({
 const styles = StyleSheet.create({
   container: {
     gap: Spacing[4],
+    paddingBottom: Spacing[6],
   },
   fieldSection: {
     gap: Spacing[2],
@@ -615,8 +684,7 @@ const styles = StyleSheet.create({
   categoryButton: {
     flexBasis: '48%',
     flexGrow: 1,
-    minHeight: 44,
-    paddingVertical: 10,
+    height: 48,
     paddingHorizontal: Spacing[3],
     borderRadius: Radius.md,
     borderWidth: 1.5,
@@ -645,11 +713,11 @@ const styles = StyleSheet.create({
   modeTabsRow: {
     flexDirection: 'row',
     gap: Spacing[2],
+    marginBottom: Spacing[1],
   },
   modeTab: {
     flex: 1,
-    minHeight: 40,
-    paddingVertical: 8,
+    height: 44,
     paddingHorizontal: Spacing[3],
     borderRadius: Radius.md,
     borderWidth: 1.5,
@@ -682,8 +750,7 @@ const styles = StyleSheet.create({
   ratingPill: {
     flexBasis: '14%',
     flexGrow: 1,
-    minHeight: 40,
-    paddingVertical: 8,
+    height: 44,
     paddingHorizontal: 6,
     borderRadius: Radius.md,
     borderWidth: 1.5,
@@ -709,27 +776,31 @@ const styles = StyleSheet.create({
     gap: Spacing[1],
   },
   dropdownLabel: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '600',
-    marginBottom: 2,
+    color: Colors.text.primary,
+    letterSpacing: 0.1,
+    marginBottom: Spacing[1.5],
   },
   dropdownButton: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 44,
-    paddingHorizontal: Spacing[3],
-    borderRadius: Radius.md,
+    height: 48,
+    paddingHorizontal: Spacing[3.5],
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.surface.border,
     backgroundColor: Colors.surface.default,
   },
   dropdownButtonError: {
     borderColor: Colors.status.error,
+    borderWidth: 1.5,
   },
   dropdownButtonText: {
     color: Colors.text.primary,
     fontSize: 14,
+    fontWeight: '600',
   },
   inputsRow: {
     flexDirection: 'row',
@@ -748,8 +819,7 @@ const styles = StyleSheet.create({
   },
   genderButton: {
     flex: 1,
-    minHeight: 40,
-    paddingVertical: 8,
+    height: 44,
     paddingHorizontal: Spacing[3],
     borderRadius: Radius.md,
     borderWidth: 1.5,
@@ -775,10 +845,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
+    paddingVertical: Spacing[1],
   },
   inlineBadge: {
-    paddingHorizontal: Spacing[2],
-    paddingVertical: 3,
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: 4,
     borderRadius: Radius.sm,
     backgroundColor: 'rgba(8, 120, 94, 0.08)',
     borderWidth: 1,

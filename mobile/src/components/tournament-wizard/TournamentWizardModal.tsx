@@ -583,7 +583,7 @@ export function TournamentWizardModal({
             style={styles.bodyScroll}
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
           >
             {currentStep === 1 && (
               <Step1BasicDetails
@@ -669,6 +669,6 @@ const styles = StyleSheet.create({
   bodyContent: {
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[3],
-    paddingBottom: 110,
+    paddingBottom: 150,
   },
 });
