@@ -669,6 +669,6 @@ const styles = StyleSheet.create({
   bodyContent: {
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[3],
-    paddingBottom: Spacing[8],
+    paddingBottom: 110,
   },
 });

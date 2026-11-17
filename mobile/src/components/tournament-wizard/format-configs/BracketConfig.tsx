@@ -1,17 +1,14 @@
 /**
  * Aught2 Pickleball — BracketConfig (Step 2)
  *
- * Master UI format card for Bracket:
- * - Purple border & badge
- * - Clear explanation: "Participants compete in knockout matches. Winners advance to the next round."
- * - ONLY ONE QUESTION: Bracket Type (Single Elimination, Single Elimination with Consolation, Double Elimination)
- * - Seeding and BYE rules retrieved automatically from Club Details
- * - No manual courts, no seeding inputs, no non-power-of-two bye chips
+ * Clean, compact format view:
+ * - Exactly ONE question: Bracket Type (Single Elimination, Consolation, Double Elimination)
+ * - Bracket Settings summary box below with "Using club settings" badge
+ * - No technical backend names, no duplicate format descriptions
  */
 
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Check, CheckCircle2 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -27,32 +24,18 @@ interface BracketConfigProps {
 
 const BRACKET_TYPE_DESCRIPTIONS: Record<string, string> = {
   'Single Elimination': 'Lose once and you are out.',
-  'Single Elimination with Consolation': 'Players eliminated from the main bracket can compete in a separate consolation bracket.',
+  'Single Elimination with Consolation': 'Players eliminated early can compete in a consolation bracket.',
   'Double Elimination': 'A participant is eliminated after two losses.',
 };
 
-export function BracketConfig({ state, onChange, club }: BracketConfigProps) {
+export function BracketConfig({ state, onChange, club, errors }: BracketConfigProps) {
   const clubConfig = club?.tournament_configuration?.bracket || {};
-  const seedingMethod = clubConfig.seeding_method || state.bracketSeedingMethod || 'Team Average Rating (Highest = Seed #1)';
-  const byeRule = clubConfig.bye_rule || state.bracketByeRule || 'Automatic BYEs awarded to top seeds';
   const targetScore = clubConfig.target_score || 11;
   const winBy = clubConfig.win_by || 2;
 
   return (
-    <View style={styles.card}>
-      {/* Badge Header */}
-      <View style={styles.badgeRow}>
-        <Badge label="BRACKET FORMAT" variant="default" />
-        <AppText variant="caption" color="secondary" style={styles.badgeSubtitle} numberOfLines={1}>
-          Knockout Tournament
-        </AppText>
-      </View>
-
-      <AppText variant="bodySmall" color="secondary" style={styles.explanationText}>
-        Participants compete in knockout matches. Winners advance to the next round.
-      </AppText>
-
-      {/* ONLY Question: Bracket Type */}
+    <View style={styles.container}>
+      {/* Question: Bracket Type */}
       <View style={styles.questionSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionTitle}>
           BRACKET TYPE *
@@ -96,34 +79,41 @@ export function BracketConfig({ state, onChange, club }: BracketConfigProps) {
             );
           })}
         </View>
+        {errors?.bracketType && (
+          <AppText variant="caption" style={styles.errorText}>
+            {errors.bracketType}
+          </AppText>
+        )}
       </View>
 
-      {/* Applied Club Configuration Summary Box */}
-      <View style={styles.appliedConfigBox}>
-        <View style={styles.appliedHeaderRow}>
-          <CheckCircle2 size={15} color="#7C3AED" />
-          <AppText variant="caption" bold style={styles.appliedHeaderLabel}>
-            APPLIED FROM CLUB CONFIGURATION
+      {/* Bracket Settings Box */}
+      <View style={styles.settingsCard}>
+        <View style={styles.headerRow}>
+          <AppText variant="bodySmall" bold style={styles.cardTitle}>
+            Bracket Settings
           </AppText>
+          <Badge label="Using club settings" variant="success" />
         </View>
 
-        <View style={styles.rulesList}>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#7C3AED" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Seeding Method: {seedingMethod}
+        <View style={styles.bulletsList}>
+          <View style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <AppText variant="caption" style={styles.bulletText}>
+              Seeding: <AppText variant="caption" bold>Team average rating</AppText>
             </AppText>
           </View>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#7C3AED" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              BYE Allocation: {byeRule}
+
+          <View style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <AppText variant="caption" style={styles.bulletText}>
+              Byes: <AppText variant="caption" bold>Automatic for top seeds</AppText>
             </AppText>
           </View>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#7C3AED" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Match Scoring: First to {targetScore} points, win by {winBy} (Single Game)
+
+          <View style={styles.bulletRow}>
+            <View style={styles.bulletDot} />
+            <AppText variant="caption" style={styles.bulletText}>
+              Match scoring: First to <AppText variant="caption" bold>{targetScore}</AppText> (win by <AppText variant="caption" bold>{winBy}</AppText>)
             </AppText>
           </View>
         </View>
@@ -133,40 +123,22 @@ export function BracketConfig({ state, onChange, club }: BracketConfigProps) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: 'rgba(124, 58, 237, 0.04)',
-    borderWidth: 1.5,
-    borderColor: '#7C3AED',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
+  container: {
     gap: Spacing[3],
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    flexWrap: 'wrap',
-  },
-  badgeSubtitle: {
-    fontSize: 12,
-  },
-  explanationText: {
-    fontSize: 13,
-    lineHeight: 18,
   },
   questionSection: {
     gap: Spacing[2],
   },
   sectionTitle: {
     fontSize: 11,
-    fontWeight: '700',
     letterSpacing: 0.5,
+    fontWeight: '700',
   },
   optionsList: {
     gap: Spacing[2],
   },
   bracketTypeCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface.default,
     borderWidth: 1.5,
     borderColor: Colors.surface.border,
     borderRadius: Radius.md,
@@ -174,8 +146,8 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   bracketTypeCardSelected: {
-    borderColor: '#7C3AED',
-    backgroundColor: 'rgba(124, 58, 237, 0.06)',
+    borderColor: Colors.brand.primary,
+    backgroundColor: '#F0FDF4',
   },
   cardTopRow: {
     flexDirection: 'row',
@@ -184,55 +156,65 @@ const styles = StyleSheet.create({
   },
   bracketTypeName: {
     color: Colors.text.primary,
-    fontSize: 13,
   },
   bracketTypeNameSelected: {
-    color: '#7C3AED',
-    fontWeight: '700',
-  },
-  bracketTypeDesc: {
-    color: Colors.text.secondary,
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  bracketTypeDescSelected: {
-    color: '#6D28D9',
+    color: '#065F46',
   },
   selectedIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#7C3AED',
+    backgroundColor: Colors.brand.primary,
   },
-  appliedConfigBox: {
-    backgroundColor: '#FFFFFF',
+  bracketTypeDesc: {
+    color: Colors.text.secondary,
+    lineHeight: 16,
+    fontSize: 12,
+  },
+  bracketTypeDescSelected: {
+    color: '#065F46',
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+  },
+  settingsCard: {
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#DDE8E2',
+    borderColor: '#E2E8F0',
     borderRadius: Radius.md,
     padding: Spacing[3],
     gap: Spacing[2],
   },
-  appliedHeaderRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  cardTitle: {
+    color: '#0F172A',
+    fontSize: 13,
+  },
+  bulletsList: {
     gap: 6,
+    paddingLeft: 2,
   },
-  appliedHeaderLabel: {
-    color: '#7C3AED',
-    letterSpacing: 0.5,
-  },
-  rulesList: {
-    gap: 6,
-  },
-  ruleItemRow: {
+  bulletRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  ruleItemText: {
+  bulletDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.brand.primary,
+  },
+  bulletText: {
     color: Colors.text.secondary,
     fontSize: 12,
-    flex: 1,
     lineHeight: 16,
   },
 });

@@ -50,7 +50,6 @@ function SummaryRow({ label, value, isFormat }: SummaryRowProps) {
         variant="bodySmall"
         bold
         style={[styles.valueCol, isFormat && styles.formatValue]}
-        numberOfLines={2}
       >
         {value}
       </AppText>

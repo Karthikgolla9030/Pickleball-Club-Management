@@ -31,7 +31,7 @@ import { Colors, Radius, Spacing } from '@/theme';
 import type { Club, ClubBranding } from '@/types';
 import { usePlatformBanners } from '@/hooks';
 import { resolveMediaUrl } from '@/utils';
-import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
+import { resolveTournamentBanner, resolveTournamentBannerDetails, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { TournamentWizardState } from '../types';
 
 interface Step1BasicDetailsProps {
@@ -67,15 +67,25 @@ export function Step1BasicDetails({
   }, [clubLocation, hostVenueName, state.locationName, onChange]);
 
   const isCustom = Boolean(state.bannerImageUrl);
-  const resolvedBannerSource = isCustom
-    ? { uri: resolveMediaUrl(state.bannerImageUrl!) }
-    : resolveTournamentBanner({ format: state.format }, clubBranding, platformBanners);
   const builtinFallback = React.useMemo(() => getTournamentBuiltinFallback(state.format), [state.format]);
-  const [previewSource, setPreviewSource] = useState<ImageSourcePropType | null>(() => resolvedBannerSource ?? builtinFallback);
+  const bannerDetails = React.useMemo(() => {
+    return resolveTournamentBannerDetails(
+      { format: state.format, banner_image_url: state.bannerImageUrl },
+      clubBranding,
+      platformBanners
+    );
+  }, [state.format, state.bannerImageUrl, clubBranding, platformBanners]);
 
-  React.useEffect(() => {
-    setPreviewSource(resolvedBannerSource ?? builtinFallback);
-  }, [resolvedBannerSource, builtinFallback]);
+  const activeBannerSource = isCustom
+    ? { uri: resolveMediaUrl(state.bannerImageUrl!) }
+    : (bannerDetails.source ?? builtinFallback);
+
+  const bannerSourceLabel =
+    isCustom || bannerDetails.level === 'custom'
+      ? 'Custom tournament banner'
+      : bannerDetails.level === 'club_default'
+      ? 'Club default banner'
+      : 'Platform default banner';
 
   const handlePickBanner = async () => {
     if (!clubId) {
@@ -163,33 +173,22 @@ export function Step1BasicDetails({
         <View style={styles.bannerHeader}>
           <View style={styles.bannerHeaderTitleRow}>
             <ImageIcon size={16} color={Colors.brand.primary} />
-            <AppText variant="caption" color="secondary" style={styles.bannerHeaderLabel}>
-              TOURNAMENT BANNER (OPTIONAL)
+            <AppText variant="bodySmall" bold color="primary" style={styles.bannerHeaderLabel}>
+              Tournament Banner (Optional)
             </AppText>
           </View>
-          <Badge
-            label={isCustom ? 'Custom Banner' : 'Inheriting Club Default'}
-            variant={isCustom ? 'success' : 'default'}
-          />
         </View>
 
-        <AppText variant="caption" color="tertiary" style={styles.bannerDescription}>
-          {isCustom
-            ? 'This custom banner will be displayed specifically for this tournament.'
-            : `No custom banner selected. This tournament will automatically use your club's default ${(state.format || 'round robin').replace('_', ' ')} banner.`}
+        <AppText variant="caption" color="secondary" style={styles.bannerDescription}>
+          Your tournament will use the club's default banner unless you upload a different one.
         </AppText>
 
         <View style={styles.bannerPreviewContainer}>
-          {previewSource ? (
+          {activeBannerSource ? (
             <Image
-              source={previewSource}
+              source={activeBannerSource}
               style={styles.bannerPreviewImage}
               resizeMode="cover"
-              onError={() => {
-                if (builtinFallback && previewSource !== builtinFallback) {
-                  setPreviewSource(builtinFallback);
-                }
-              }}
             />
           ) : (
             <View style={styles.bannerEmptyPlaceholder}>
@@ -205,6 +204,14 @@ export function Step1BasicDetails({
               </AppText>
             </View>
           )}
+        </View>
+
+        {/* Small source status below preview */}
+        <View style={styles.bannerStatusRow}>
+          <View style={[styles.statusDot, isCustom && styles.statusDotCustom]} />
+          <AppText variant="caption" color="tertiary" style={styles.bannerStatusText}>
+            {bannerSourceLabel}
+          </AppText>
         </View>
 
         <View style={styles.bannerActionsRow}>
@@ -374,6 +381,26 @@ const styles = StyleSheet.create({
   bannerPreviewImage: {
     width: '100%',
     height: '100%',
+  },
+  bannerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: Colors.brand.primary,
+  },
+  statusDotCustom: {
+    backgroundColor: '#10B981',
+  },
+  bannerStatusText: {
+    fontSize: 11,
+    fontWeight: '500',
   },
   bannerUploadingOverlay: {
     position: 'absolute',

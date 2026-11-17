@@ -1,16 +1,14 @@
 /**
  * Aught2 Pickleball — PoolPlayConfig (Step 2)
  *
- * Master UI format card for Pool Play:
- * - Blue border & badge
- * - Clear, non-technical explanation
- * - Displays inherited club engine configuration (pools, advancement, bracket)
- * - Zero technical questions asked during tournament creation
+ * Clean, compact configuration summary:
+ * - Pool Play Settings header with "Using club settings" badge
+ * - Simple, readable bullets using actual saved configuration
+ * - No technical backend names, no duplicate format descriptions
  */
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Check, CheckCircle2 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Colors, Radius, Spacing } from '@/theme';
@@ -33,52 +31,40 @@ export function PoolPlayConfig({ state, club }: PoolPlayConfigProps) {
 
   return (
     <View style={styles.card}>
-      {/* Badge Header */}
-      <View style={styles.badgeRow}>
-        <Badge label="POOL PLAY FORMAT" variant="info" />
-        <AppText variant="caption" color="secondary" style={styles.badgeSubtitle} numberOfLines={1}>
-          Pool Stages → Championship Playoff
+      <View style={styles.headerRow}>
+        <AppText variant="bodySmall" bold style={styles.cardTitle}>
+          Pool Play Settings
         </AppText>
+        <Badge label="Using club settings" variant="success" />
       </View>
 
-      <AppText variant="bodySmall" color="secondary" style={styles.explanationText}>
-        Participants are divided into groups. The best performers move to the next stage.
-      </AppText>
-
-      {/* Applied Club Configuration Summary Box */}
-      <View style={styles.appliedConfigBox}>
-        <View style={styles.appliedHeaderRow}>
-          <CheckCircle2 size={15} color="#2563EB" />
-          <AppText variant="caption" bold style={styles.appliedHeaderLabel}>
-            APPLIED FROM CLUB CONFIGURATION
+      <View style={styles.bulletsList}>
+        <View style={styles.bulletRow}>
+          <View style={styles.bulletDot} />
+          <AppText variant="caption" style={styles.bulletText}>
+            Pool stage: <AppText variant="caption" bold>{poolCount} round-robin pools</AppText>
           </AppText>
         </View>
 
-        <View style={styles.rulesList}>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#2563EB" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Pool Structure: {poolCount} round-robin pools with balanced group allocation
-            </AppText>
-          </View>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#2563EB" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Advancement: Top {qualifiers} entries from each pool advance to Championship Bracket
-            </AppText>
-          </View>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#2563EB" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Championship Stage: Single Elimination seeded knockout playoff
-            </AppText>
-          </View>
-          <View style={styles.ruleItemRow}>
-            <Check size={13} color="#2563EB" />
-            <AppText variant="caption" style={styles.ruleItemText}>
-              Match Scoring: First to {targetScore} points, win by {winBy} (Single Game)
-            </AppText>
-          </View>
+        <View style={styles.bulletRow}>
+          <View style={styles.bulletDot} />
+          <AppText variant="caption" style={styles.bulletText}>
+            Advancement: Top <AppText variant="caption" bold>{qualifiers} per pool</AppText> advance to Championship
+          </AppText>
+        </View>
+
+        <View style={styles.bulletRow}>
+          <View style={styles.bulletDot} />
+          <AppText variant="caption" style={styles.bulletText}>
+            Playoff bracket: <AppText variant="caption" bold>Single elimination knockout</AppText>
+          </AppText>
+        </View>
+
+        <View style={styles.bulletRow}>
+          <View style={styles.bulletDot} />
+          <AppText variant="caption" style={styles.bulletText}>
+            Match scoring: First to <AppText variant="caption" bold>{targetScore}</AppText> (win by <AppText variant="caption" bold>{winBy}</AppText>)
+          </AppText>
         </View>
       </View>
     </View>
@@ -87,55 +73,42 @@ export function PoolPlayConfig({ state, club }: PoolPlayConfigProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: 'rgba(59, 130, 246, 0.04)',
-    borderWidth: 1.5,
-    borderColor: '#3B82F6',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    gap: Spacing[3],
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    flexWrap: 'wrap',
-  },
-  badgeSubtitle: {
-    fontSize: 12,
-  },
-  explanationText: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  appliedConfigBox: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#DDE8E2',
+    borderColor: '#E2E8F0',
     borderRadius: Radius.md,
     padding: Spacing[3],
     gap: Spacing[2],
   },
-  appliedHeaderRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  cardTitle: {
+    color: '#0F172A',
+    fontSize: 13,
+  },
+  bulletsList: {
     gap: 6,
+    paddingLeft: 2,
   },
-  appliedHeaderLabel: {
-    color: '#2563EB',
-    letterSpacing: 0.5,
-  },
-  rulesList: {
-    gap: 6,
-  },
-  ruleItemRow: {
+  bulletRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  ruleItemText: {
+  bulletDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.brand.primary,
+  },
+  bulletText: {
     color: Colors.text.secondary,
     fontSize: 12,
-    flex: 1,
     lineHeight: 16,
   },
 });

@@ -12,9 +12,9 @@
  * - Only Bracket presents an additional choice (Bracket Type).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import { AlertTriangle, CheckCircle2, MapPin } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, MapPin } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
@@ -34,10 +34,10 @@ const FORMAT_LIST: TournamentFormat[] = [
 ];
 
 const FORMAT_SUBTITLES: Record<TournamentFormat, string> = {
-  round_robin: 'Everyone plays against the other participants. Final positions are based on results.',
-  pool_play: 'Participants are divided into groups. The best performers move to the next stage.',
-  bracket: 'Participants compete in knockout matches. Winners advance to the next round.',
-  scramble: 'Players rotate partners across rounds and compete individually.',
+  round_robin: 'Everyone plays against the other participants.',
+  pool_play: 'Participants compete in groups, with the best advancing.',
+  bracket: 'Win to advance to the next round.',
+  scramble: 'Players rotate partners and compete individually.',
 };
 
 interface Step2FormatScoringProps {
@@ -58,6 +58,7 @@ export function Step2FormatScoring({
   errors,
 }: Step2FormatScoringProps) {
   const currentFormat = state.format;
+  const [isCourtsExpanded, setIsCourtsExpanded] = useState(false);
 
   const handleFormatChange = (fmt: TournamentFormat) => {
     const patch: Partial<TournamentWizardState> = { format: fmt };
@@ -99,19 +100,47 @@ export function Step2FormatScoring({
         <Card style={styles.courtsCard}>
           <View style={styles.courtsHeader}>
             <View style={styles.courtsTitleRow}>
-              <MapPin size={15} color={Colors.brand.primary} />
-              <AppText variant="caption" color="secondary" style={styles.courtsHeaderLabel}>
-                ACTIVE CLUB COURTS (COURTS MANAGEMENT)
+              <MapPin size={16} color={Colors.brand.primary} />
+              <AppText variant="bodySmall" bold style={styles.courtsHeaderLabel}>
+                Available Club Courts
               </AppText>
             </View>
-            <Badge label={`${activeCourts.length} Courts Available`} variant="success" />
+            <Badge
+              label={`${activeCourts.length} Active Court${activeCourts.length === 1 ? '' : 's'}`}
+              variant="success"
+            />
           </View>
-          <AppText variant="bodySmall" bold style={styles.courtsNames}>
-            {activeCourts.map((c) => c.name).join(' • ')}
+          <AppText variant="caption" color="secondary" style={styles.courtsSubtext}>
+            Courts will be assigned automatically based on your club's scheduling preferences.
           </AppText>
-          <AppText variant="caption" color="tertiary" style={styles.courtsSubtext}>
-            Courts are automatically allocated according to your club's court preferences.
-          </AppText>
+
+          <TouchableOpacity
+            style={styles.expandCourtsBtn}
+            onPress={() => setIsCourtsExpanded((prev) => !prev)}
+            activeOpacity={0.7}
+          >
+            <AppText variant="caption" bold style={styles.expandCourtsText}>
+              {isCourtsExpanded ? 'Hide Available Courts' : 'View Available Courts'}
+            </AppText>
+            {isCourtsExpanded ? (
+              <ChevronUp size={14} color={Colors.brand.primary} />
+            ) : (
+              <ChevronDown size={14} color={Colors.brand.primary} />
+            )}
+          </TouchableOpacity>
+
+          {isCourtsExpanded && (
+            <View style={styles.courtsVerticalList}>
+              {activeCourts.map((court, idx) => (
+                <View key={court.id || idx} style={styles.courtItemRow}>
+                  <View style={styles.courtBullet} />
+                  <AppText variant="caption" style={styles.courtItemName}>
+                    {court.name}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+          )}
         </Card>
       ) : !isLoadingCourts ? (
         <View style={styles.noCourtsWarning}>
@@ -122,7 +151,7 @@ export function Step2FormatScoring({
             </AppText>
           </View>
           <AppText variant="caption" style={styles.noCourtsDescription}>
-            No active courts are available. Add or activate courts in Club Courts Management before creating this tournament.
+            No active courts available. Please add or activate courts in Club Management.
           </AppText>
         </View>
       ) : null}
@@ -194,12 +223,14 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#BBF7D0',
     padding: Spacing[3],
-    gap: 4,
+    gap: 6,
   },
   courtsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
   },
   courtsTitleRow: {
     flexDirection: 'row',
@@ -207,17 +238,48 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   courtsHeaderLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  courtsNames: {
     color: '#065F46',
     fontSize: 13,
   },
   courtsSubtext: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12,
+    lineHeight: 16,
+    color: Colors.text.secondary,
+  },
+  expandCourtsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+    paddingVertical: 2,
+  },
+  expandCourtsText: {
+    color: Colors.brand.primary,
+    fontSize: 12,
+  },
+  courtsVerticalList: {
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#DCFCE7',
+    gap: 6,
+  },
+  courtItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  courtBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.brand.primary,
+  },
+  courtItemName: {
+    fontSize: 12,
+    color: '#065F46',
+    fontWeight: '500',
   },
   noCourtsWarning: {
     backgroundColor: '#FEF2F2',

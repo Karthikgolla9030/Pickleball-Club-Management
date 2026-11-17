@@ -14,10 +14,10 @@ import { Colors, Spacing } from '@/theme';
 import type { WizardStep } from './types';
 
 const NEXT_LABELS: Record<WizardStep, string> = {
-  1: 'Next: Eligibility',
-  2: 'Next: Format & Scoring',
+  1: 'Next: Format & Scoring',
+  2: 'Next: Category & Eligibility',
   3: 'Next: Schedule & Reg',
-  4: 'Next: Review',
+  4: 'Next: Review & Create',
   5: 'Create Tournament',
 };
 

@@ -12,7 +12,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Modal, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { ChevronDown, Info, UserCheck, Users } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Input } from '@/components/Input';
@@ -44,6 +44,9 @@ export function Step3CategoryEligibility({
   onChange,
   errors,
 }: Step3CategoryEligibilityProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  const isNarrowScreen = screenWidth < 360;
+
   const isScramble = state.format === 'scramble';
   const cap = calculateCapacity(state.category, state.maxParticipants, state.format);
   const regType = getRegistrationType(state.format, state.category);
@@ -142,20 +145,26 @@ export function Step3CategoryEligibility({
 
   return (
     <View style={styles.container}>
-      {/* ── Format Context Notice for Scramble ── */}
-      {isScramble && (
-        <View style={styles.scrambleFormatNotice}>
-          <Users size={18} color="#08785E" />
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.scrambleNoticeTitle}>
-              Registration type: Individual players
-            </AppText>
-            <AppText style={styles.scrambleNoticeDescription}>
-              All players register individually. Partners are automatically rotated each round.
-            </AppText>
-          </View>
+      {/* ── Compact Registration Notice ── */}
+      <View style={styles.compactRegNotice}>
+        <Users size={16} color="#08785E" />
+        <View style={styles.regNoticeTextCol}>
+          <AppText variant="caption" bold style={styles.regNoticeTitle}>
+            {isScramble
+              ? 'Singles Scramble'
+              : cap.isSingles
+              ? 'Singles'
+              : 'Doubles'}
+          </AppText>
+          <AppText variant="caption" style={styles.regNoticeDesc}>
+            {isScramble
+              ? 'Players register individually. Partners rotate automatically.'
+              : cap.isSingles
+              ? 'Players register individually.'
+              : 'Players register as teams.'}
+          </AppText>
         </View>
-      )}
+      </View>
 
       {/* ── Competition Division (Scramble) or Competition Category (Other Formats) ── */}
       <View style={styles.fieldSection}>
@@ -381,7 +390,7 @@ export function Step3CategoryEligibility({
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
           AGE RESTRICTION
         </AppText>
-        <View style={styles.inputsRow}>
+        <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
           <View style={styles.inputCol}>
             <Input
               label="Minimum Age"
@@ -447,76 +456,34 @@ export function Step3CategoryEligibility({
               Select whether this singles tournament is for male or female players.
             </AppText>
           </>
-        ) : state.category === "Men's Doubles" ? (
-          <View style={styles.derivedGenderCard}>
-            <View style={styles.derivedGenderRow}>
-              <UserCheck size={16} color="#08785E" />
-              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
-                Gender Eligibility: Male
+        ) : (
+          <View style={styles.compactGenderCard}>
+            <UserCheck size={16} color="#08785E" />
+            <AppText variant="caption" style={styles.genderCardText}>
+              Gender eligibility:{' '}
+              <AppText variant="caption" bold style={styles.genderCardValue}>
+                {state.category === "Men's Doubles" || state.category === "Men's Scramble"
+                  ? 'Male'
+                  : state.category === "Women's Doubles" || state.category === "Women's Scramble"
+                  ? 'Female'
+                  : state.category === 'Mixed Doubles'
+                  ? 'Mixed'
+                  : 'Any'}
               </AppText>
-            </View>
-            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
-              Automatically set to Male based on Men's Doubles category. Both players must be male.
             </AppText>
           </View>
-        ) : state.category === "Women's Doubles" ? (
-          <View style={styles.derivedGenderCard}>
-            <View style={styles.derivedGenderRow}>
-              <UserCheck size={16} color="#08785E" />
-              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
-                Gender Eligibility: Female
-              </AppText>
-            </View>
-            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
-              Automatically set to Female based on Women's Doubles category. Both players must be female.
-            </AppText>
-          </View>
-        ) : state.category === "Mixed Doubles" ? (
-          <View style={styles.derivedGenderCard}>
-            <View style={styles.derivedGenderRow}>
-              <UserCheck size={16} color="#08785E" />
-              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
-                Gender Eligibility: Mixed
-              </AppText>
-            </View>
-            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
-              Automatically set to Mixed based on Mixed Doubles category. Requires one male and one female player per team.
-            </AppText>
-          </View>
-        ) : isScramble ? (
-          <View style={styles.derivedGenderCard}>
-            <View style={styles.derivedGenderRow}>
-              <UserCheck size={16} color="#08785E" />
-              <AppText variant="bodySmall" bold style={styles.derivedGenderTitle}>
-                Gender Eligibility: {state.category === "Men's Scramble" ? 'Male' : state.category === "Women's Scramble" ? 'Female' : 'Any'}
-              </AppText>
-            </View>
-            <AppText variant="caption" color="secondary" style={styles.derivedGenderDesc}>
-              {state.category === "Men's Scramble"
-                ? 'Restricted to male players.'
-                : state.category === "Women's Scramble"
-                ? 'Restricted to female players.'
-                : state.category === 'Mixed Scramble'
-                ? 'Balanced male and female player entries.'
-                : 'Open to all eligible players.'}
-            </AppText>
-          </View>
-        ) : null}
+        )}
       </View>
 
       {/* ── Participant Capacity (Format-Dependent!) ── */}
       <View style={styles.fieldSection}>
         <AppText variant="caption" color="secondary" style={styles.sectionLabel}>
-          {isScramble
-            ? 'PLAYER CAPACITY (INDIVIDUAL)'
-            : cap.isSingles
-            ? 'PLAYER CAPACITY (INDIVIDUAL)'
-            : 'TEAM CAPACITY (FIXED PARTNERS)'}
+          {isScramble || cap.isSingles ? 'PLAYER CAPACITY' : 'TEAM CAPACITY'}
         </AppText>
-        <View style={styles.inputsRow}>
+        <View style={[styles.inputsRow, isNarrowScreen && styles.inputsRowStacked]}>
           <View style={styles.inputCol}>
             <Input
-              label={isScramble ? 'Minimum Players *' : cap.minInputLabel}
+              label={isScramble || cap.isSingles ? 'Minimum Players *' : 'Minimum Teams *'}
               value={state.minParticipants}
               onChangeText={(minParticipants) =>
                 onChange({ minParticipants: minParticipants.replace(/[^0-9]/g, '') })
@@ -528,7 +495,7 @@ export function Step3CategoryEligibility({
           </View>
           <View style={styles.inputCol}>
             <Input
-              label={isScramble ? 'Maximum Players *' : cap.inputLabel}
+              label={isScramble || cap.isSingles ? 'Maximum Players *' : 'Maximum Teams *'}
               value={state.maxParticipants}
               onChangeText={(maxParticipants) =>
                 onChange({ maxParticipants: maxParticipants.replace(/[^0-9]/g, '') })
@@ -540,16 +507,9 @@ export function Step3CategoryEligibility({
           </View>
         </View>
 
-        {/* Dynamic Capacity Preview Banner */}
-        <View style={styles.capacityBanner}>
-          <AppText variant="caption" color="secondary">
-            Configured:{' '}
-            <AppText variant="caption" style={styles.highlightText}>
-              {cap.helperText}
-            </AppText>{' '}
-            • <AppText variant="caption" color="tertiary">{cap.structureLabel}</AppText>
-          </AppText>
-        </View>
+        <AppText variant="caption" color="secondary" style={styles.capacitySummaryText}>
+          Total capacity: <AppText variant="caption" bold style={{ color: Colors.brand.primary }}>{cap.helperText}</AppText>
+        </AppText>
       </View>
 
       {/* ── Tournament Visibility ── */}
@@ -747,9 +707,38 @@ const styles = StyleSheet.create({
     lineHeight: 15,
     marginTop: 2,
   },
+  compactRegNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing[3],
+    marginBottom: Spacing[1],
+  },
+  regNoticeTextCol: {
+    flex: 1,
+    gap: 1,
+  },
+  regNoticeTitle: {
+    color: '#065F46',
+    fontSize: 12,
+  },
+  regNoticeDesc: {
+    color: '#047857',
+    fontSize: 11,
+    lineHeight: 15,
+  },
   inputsRow: {
     flexDirection: 'row',
     gap: Spacing[3],
+  },
+  inputsRowStacked: {
+    flexDirection: 'column',
+    gap: Spacing[2],
   },
   inputCol: {
     flex: 1,
@@ -758,18 +747,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
   },
-  capacityBanner: {
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2],
-    marginTop: Spacing[1],
-  },
-  highlightText: {
-    fontWeight: '700',
-    color: Colors.text.primary,
+  capacitySummaryText: {
+    fontSize: 12,
+    marginTop: 4,
   },
   visibilityHint: {
     fontSize: 11,
@@ -780,28 +760,29 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   divisionCard: {
-    padding: Spacing[3],
+    paddingVertical: 10,
+    paddingHorizontal: Spacing[3],
     borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: Colors.surface.border,
     backgroundColor: Colors.surface.default,
+    gap: 2,
   },
   divisionCardActive: {
     borderColor: '#08785E',
-    backgroundColor: 'rgba(8, 120, 94, 0.06)',
+    backgroundColor: '#F0FDF4',
   },
   divisionCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
   divisionCardTitle: {
     fontSize: 13,
     color: Colors.text.primary,
   },
   divisionCardTitleActive: {
-    color: '#08785E',
+    color: '#065F46',
   },
   selectedDot: {
     width: 8,
@@ -811,7 +792,7 @@ const styles = StyleSheet.create({
   },
   divisionDesc: {
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
     color: Colors.text.tertiary,
   },
   divisionDescActive: {
@@ -939,26 +920,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-  derivedGenderCard: {
+  compactGenderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: '#F0FDF4',
     borderWidth: 1,
     borderColor: '#BBF7D0',
     borderRadius: Radius.md,
-    padding: Spacing[3],
-    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing[3],
   },
-  derivedGenderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  genderCardText: {
+    color: Colors.text.secondary,
+    fontSize: 12,
   },
-  derivedGenderTitle: {
+  genderCardValue: {
     color: '#065F46',
-    fontSize: 13,
-  },
-  derivedGenderDesc: {
-    color: '#047857',
-    fontSize: 11,
-    lineHeight: 15,
+    fontWeight: '700',
   },
 });
