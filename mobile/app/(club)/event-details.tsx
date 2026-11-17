@@ -160,6 +160,7 @@ export default function EventDetailsScreen() {
 
   const { canManageEvents } = usePermission();
   const { data: clubBranding } = useClubBranding(clubId);
+  const { banners: platformBanners } = usePlatformBanners();
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -417,7 +418,6 @@ export default function EventDetailsScreen() {
   const thumbnailDate = getEventThumbnailDate(event.start_at);
   const schedule = formatEventSchedule(event.start_at, event.end_at);
   const loc = parseEventLocation(event.location);
-  const { banners: platformBanners } = usePlatformBanners();
   const cardImg = resolveEventCover(event, clubBranding, platformBanners);
 
   const feeDisplay =

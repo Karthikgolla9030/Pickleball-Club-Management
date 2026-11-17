@@ -36,6 +36,10 @@ import {
   Users,
 } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
+import {
+  TournamentMatchCard,
+  TournamentMatchSummaryCard,
+} from '@/components/tournament-management';
 import { Radius, Spacing } from '@/theme';
 import type { Match } from '@/types';
 import type { ScrambleState } from '@/types/scramble';
@@ -225,6 +229,15 @@ export function ScrambleRoundsTab({
         </AppText>
       </View>
 
+      {/* ── Match Progress Summary Card ── */}
+      {matches.length > 0 && (
+        <TournamentMatchSummaryCard
+          totalMatches={matches.length}
+          completedMatches={matches.filter((m) => m.status === 'completed').length}
+          remainingMatches={Math.max(0, matches.length - matches.filter((m) => m.status === 'completed').length)}
+        />
+      )}
+
       {/* ── 3. Content: Empty State vs Court Cards ── */}
       {roundMatches.length === 0 ? (
         selectedRound > currentRound ? (
@@ -329,90 +342,35 @@ export function ScrambleRoundsTab({
                     </View>
                   ) : (
                     courtGroup.matches.map((match, idx) => {
-                    const isCompleted = match.status === 'completed';
-                    const scoreA = match.score_a ?? 0;
-                    const scoreB = match.score_b ?? 0;
-                    const sitOut = getSitOutParticipant(match);
-                    const sideANames = formatPartnerNames(match.side_a_participants);
-                    const sideBNames = formatPartnerNames(match.side_b_participants);
+                      const isCompleted = match.status === 'completed';
+                      const scoreA = match.score_a ?? 0;
+                      const scoreB = match.score_b ?? 0;
+                      const sitOut = getSitOutParticipant(match);
+                      const sideANames = formatPartnerNames(match.side_a_participants);
+                      const sideBNames = formatPartnerNames(match.side_b_participants);
+                      const aWon = isCompleted && scoreA > scoreB;
+                      const bWon = isCompleted && scoreB > scoreA;
 
-                    return (
-                      <View key={match.id} style={styles.matchItem}>
-                        <View style={styles.matchTopRow}>
-                          <AppText style={styles.gameNumberText}>Game {idx + 1}</AppText>
-                          {isCompleted ? (
-                            <View style={styles.completedTag}>
-                              <CheckCircle2 size={12} color="#08785E" />
-                              <AppText style={styles.completedTagText}>Final</AppText>
-                            </View>
-                          ) : (
-                            <View style={styles.scheduledTag}>
-                              <Clock size={12} color="#71817E" />
-                              <AppText style={styles.scheduledTagText}>Scheduled</AppText>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* Teams & Score */}
-                        <View style={styles.gameRow}>
-                          <View style={{ flex: 1 }}>
-                            <AppText
-                              style={[
-                                styles.teamNames,
-                                isCompleted && scoreA > scoreB && styles.winningTeam,
-                              ]}
-                            >
-                              {sideANames}
-                            </AppText>
-                            <AppText style={styles.vsText}>vs</AppText>
-                            <AppText
-                              style={[
-                                styles.teamNames,
-                                isCompleted && scoreB > scoreA && styles.winningTeam,
-                              ]}
-                            >
-                              {sideBNames}
-                            </AppText>
-                          </View>
-
-                          {/* Score or Action */}
-                          <View style={styles.scoreContainer}>
-                            {isCompleted ? (
-                              <TouchableOpacity
-                                style={styles.scoreDisplayBadge}
-                                onPress={() => canManage && !isTournamentCompleted && onOpenScoreModal(match)}
-                                disabled={!canManage || isTournamentCompleted}
-                              >
-                                <AppText style={styles.finalScoreText}>
-                                  {scoreA} - {scoreB}
-                                </AppText>
-                                {canManage && !isTournamentCompleted && <Edit2 size={12} color="#71817E" />}
-                              </TouchableOpacity>
-                            ) : (
-                              canManage && !isTournamentCompleted && (
-                                <TouchableOpacity
-                                  style={styles.recordScoreButton}
-                                  onPress={() => onOpenScoreModal(match)}
-                                >
-                                  <AppText style={styles.recordScoreText}>Enter Score</AppText>
-                                </TouchableOpacity>
-                              )
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Sit-out Player for 5-player court */}
-                        {sitOut && (
-                          <View style={styles.sitOutBanner}>
-                            <UserX size={12} color="#71817E" />
-                            <AppText style={styles.sitOutText}>
-                              Sit-out: {sitOut.display_name || 'Player'}
-                            </AppText>
-                          </View>
-                        )}
-                      </View>
-                    );
-                  })
+                      return (
+                        <TournamentMatchCard
+                          key={match.id}
+                          metaText={`Game ${idx + 1}${sitOut ? ` · Sit-out: ${sitOut.display_name || 'Player'}` : ''}`}
+                          statusLabel={isCompleted ? 'Completed' : 'Scheduled'}
+                          statusVariant={isCompleted ? 'success' : 'default'}
+                          sideAName={sideANames}
+                          scoreA={isCompleted ? scoreA : null}
+                          isWinnerA={aWon}
+                          sideBName={sideBNames}
+                          scoreB={isCompleted ? scoreB : null}
+                          isWinnerB={bWon}
+                          winnerName={isCompleted ? (aWon ? sideANames : bWon ? sideBNames : undefined) : undefined}
+                          isCompleted={isCompleted}
+                          canManage={canManage}
+                          onOpenScoreModal={!isCompleted && !isTournamentCompleted ? () => onOpenScoreModal(match) : undefined}
+                          onEditScore={isCompleted && !isTournamentCompleted ? () => onOpenScoreModal(match) : undefined}
+                        />
+                      );
+                    })
                 )}
                 </View>
               </View>

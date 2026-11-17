@@ -32,6 +32,10 @@ import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { FilterChips } from '@/components/FilterChips';
+import {
+  TournamentMatchCard,
+  TournamentMatchSummaryCard,
+} from '@/components/tournament-management';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Court, Match, Team, Tournament } from '@/types';
 import {
@@ -173,29 +177,11 @@ export function RoundRobinMatchupsTab({
       <AppText style={styles.headingTitle}>Matchups</AppText>
 
       {/* Match Statistics Card (Total, Completed, Remaining) */}
-      <Card style={styles.summaryCard}>
-        <View style={styles.summaryCol}>
-          <Swords size={20} color={Colors.brand.primary} />
-          <AppText style={styles.summaryNumber}>{totalMatchesCount}</AppText>
-          <AppText style={styles.summaryLabel}>Total Matches</AppText>
-        </View>
-
-        <View style={styles.summaryDivider} />
-
-        <View style={styles.summaryCol}>
-          <CheckCircle2 size={20} color="#0F766E" />
-          <AppText style={[styles.summaryNumber, { color: '#0F766E' }]}>{completedMatchesCount}</AppText>
-          <AppText style={styles.summaryLabel}>Completed</AppText>
-        </View>
-
-        <View style={styles.summaryDivider} />
-
-        <View style={styles.summaryCol}>
-          <Clock size={20} color={Colors.text.secondary} />
-          <AppText style={styles.summaryNumber}>{remainingMatchesCount}</AppText>
-          <AppText style={styles.summaryLabel}>Remaining</AppText>
-        </View>
-      </Card>
+      <TournamentMatchSummaryCard
+        totalMatches={totalMatchesCount}
+        completedMatches={completedMatchesCount}
+        remainingMatches={remainingMatchesCount}
+      />
 
       {/* Empty State vs Generated Matches */}
       {matches.length === 0 ? (
@@ -334,110 +320,27 @@ export function RoundRobinMatchupsTab({
                   const isThisStarting = startingMatchId === match.id;
 
                   return (
-                    <Card key={match.id} style={styles.matchCard}>
-                      <View style={styles.matchMetaRow}>
-                        <AppText style={styles.matchMetaText}>
-                          Match #{match.match_number} · {courtLabel}
-                        </AppText>
-                        <Badge label={statusLabel} variant={statusVariant} />
-                      </View>
-
-                      {/* Opponents & Score */}
-                      <View style={styles.matchScoresContainer}>
-                        {/* Side A */}
-                        <View style={[styles.sideRow, aWon && styles.winningSide]}>
-                          <View style={styles.sideInfoCol}>
-                            <AppText
-                              style={[styles.teamNameText, aWon && styles.winningTeamText]}
-                              numberOfLines={1}
-                            >
-                              {teamAName}
-                            </AppText>
-                            {teamSize > 1 && teamAMembers && (
-                              <AppText style={styles.teamMembersSub} numberOfLines={1}>
-                                {teamAMembers}
-                              </AppText>
-                            )}
-                          </View>
-                          <AppText
-                            style={[styles.scoreText, aWon && styles.winningScoreText]}
-                          >
-                            {match.score_a !== null ? match.score_a : '-'}
-                          </AppText>
-                        </View>
-
-                        {/* Side B */}
-                        <View style={[styles.sideRow, bWon && styles.winningSide]}>
-                          <View style={styles.sideInfoCol}>
-                            <AppText
-                              style={[styles.teamNameText, bWon && styles.winningTeamText]}
-                              numberOfLines={1}
-                            >
-                              {teamBName}
-                            </AppText>
-                            {teamSize > 1 && teamBMembers && (
-                              <AppText style={styles.teamMembersSub} numberOfLines={1}>
-                                {teamBMembers}
-                              </AppText>
-                            )}
-                          </View>
-                          <AppText
-                            style={[styles.scoreText, bWon && styles.winningScoreText]}
-                          >
-                            {match.score_b !== null ? match.score_b : '-'}
-                          </AppText>
-                        </View>
-                      </View>
-
-                      {/* Match Actions — standardized Button components */}
-                      {canManage && (
-                        <View style={styles.matchActionsRow}>
-                          {isPending && (
-                            <>
-                              {onStartMatch && (
-                                <Button
-                                  label={isThisStarting ? 'Starting...' : 'Start Match'}
-                                  variant="outline"
-                                  size="sm"
-                                  onPress={() => { void handleStartMatchPress(match.id); }}
-                                  disabled={isThisStarting}
-                                  loading={isThisStarting}
-                                  style={{ flex: 1 }}
-                                />
-                              )}
-
-                              <Button
-                                label="Enter Score"
-                                variant="primary"
-                                size="sm"
-                                onPress={() => onOpenScoreModal(match)}
-                                style={{ flex: 1 }}
-                              />
-                            </>
-                          )}
-
-                          {isInProgress && (
-                            <Button
-                              label="Enter Score"
-                              variant="primary"
-                              size="sm"
-                              onPress={() => onOpenScoreModal(match)}
-                              style={{ flex: 1 }}
-                            />
-                          )}
-
-                          {isCompleted && !isTournamentCompleted && (
-                            <Button
-                              label="Edit Score"
-                              variant="outline"
-                              size="sm"
-                              onPress={() => onOpenScoreModal(match)}
-                              style={{ flex: 1 }}
-                            />
-                          )}
-                        </View>
-                      )}
-                    </Card>
+                    <TournamentMatchCard
+                      key={match.id}
+                      metaText={`Match #${match.match_number} · ${courtLabel}`}
+                      statusLabel={statusLabel}
+                      statusVariant={statusVariant}
+                      sideAName={teamAName}
+                      sideASubtitle={teamSize > 1 ? teamAMembers : null}
+                      scoreA={match.score_a}
+                      isWinnerA={aWon}
+                      sideBName={teamBName}
+                      sideBSubtitle={teamSize > 1 ? teamBMembers : null}
+                      scoreB={match.score_b}
+                      isWinnerB={bWon}
+                      winnerName={aWon ? teamAName : bWon ? teamBName : null}
+                      isCompleted={isCompleted}
+                      canManage={canManage}
+                      onStartMatch={isPending && onStartMatch ? () => { void handleStartMatchPress(match.id); } : undefined}
+                      isStartingMatch={isThisStarting}
+                      onOpenScoreModal={(isPending || isInProgress) ? () => onOpenScoreModal(match) : undefined}
+                      onEditScore={(isCompleted && !isTournamentCompleted) ? () => onOpenScoreModal(match) : undefined}
+                    />
                   );
                 })}
               </View>

@@ -139,6 +139,7 @@ export default function LessonDetailsScreen() {
 
   const { canManageEvents } = usePermission();
   const { data: clubBranding } = useClubBranding(clubId);
+  const { banners: platformBanners } = usePlatformBanners();
 
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -409,7 +410,6 @@ export default function LessonDetailsScreen() {
   }
 
   const schedule = formatLessonSchedule(lesson.start_at, lesson.end_at);
-  const { banners: platformBanners } = usePlatformBanners();
   const cardImg = resolveLessonPicture(lesson, clubBranding, platformBanners);
 
   const feeDisplay =
