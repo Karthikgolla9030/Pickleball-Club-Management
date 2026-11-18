@@ -388,7 +388,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
               styles.navRowLabel,
               isActive && styles.navRowLabelActive,
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {item.label}
           </AppText>
@@ -453,10 +453,10 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
           </View>
 
           <View style={styles.profileDetails}>
-            <AppText style={styles.profileName} numberOfLines={1}>
+            <AppText style={styles.profileName} numberOfLines={2}>
               {displayName}
             </AppText>
-            <AppText style={styles.profileEmail} numberOfLines={1}>
+            <AppText style={styles.profileEmail}>
               {email}
             </AppText>
 
@@ -659,7 +659,8 @@ const styles = StyleSheet.create({
     gap: 1.5,
   },
   navRow: {
-    height: 42,
+    minHeight: 42,
+    paddingVertical: 6,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

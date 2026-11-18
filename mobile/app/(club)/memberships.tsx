@@ -607,7 +607,7 @@ export default function MembershipsScreen() {
           <View style={styles.subCardDetails}>
             {/* Row 1: Name and Status Badge */}
             <View style={styles.subNameAndBadgeRow}>
-              <AppText style={styles.subPlayerName} numberOfLines={1}>
+              <AppText style={styles.subPlayerName} numberOfLines={2}>
                 {playerName}
               </AppText>
               <View style={[styles.subStatusBadge, { backgroundColor: statusConfig.bg }]}>
@@ -618,14 +618,14 @@ export default function MembershipsScreen() {
             </View>
 
             {/* Row 2: Email */}
-            <AppText style={styles.subPlayerEmail} numberOfLines={1}>
+            <AppText style={styles.subPlayerEmail}>
               {playerEmail}
             </AppText>
 
             {/* Row 3: Plan Badge and Renewal Date */}
             <View style={styles.subPlanAndRenewalRow}>
               <View style={styles.subPlanBadge}>
-                <AppText style={styles.subPlanBadgeText} numberOfLines={1}>
+                <AppText style={styles.subPlanBadgeText}>
                   {planName}
                 </AppText>
               </View>

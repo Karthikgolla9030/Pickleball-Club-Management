@@ -206,7 +206,7 @@ export function PlayerClubDetailsPreview({
         <View style={styles.backButton}>
           <ArrowLeft size={18} color="#102B2A" strokeWidth={2.4} />
         </View>
-        <AppText style={styles.headerTitle} numberOfLines={1}>
+        <AppText style={styles.headerTitle} numberOfLines={2}>
           {displayName}
         </AppText>
       </View>
@@ -254,7 +254,7 @@ export function PlayerClubDetailsPreview({
               {/* Title, Badge, Location, and Hours */}
               <View style={styles.heroDetailsCol}>
                 <View style={styles.nameRow}>
-                  <AppText style={styles.clubNameText} numberOfLines={1}>
+                  <AppText style={styles.clubNameText} numberOfLines={2}>
                     {displayName}
                   </AppText>
                   {club?.is_active !== false && (
@@ -266,14 +266,14 @@ export function PlayerClubDetailsPreview({
 
                 <View style={styles.metaRow}>
                   <MapPin size={12} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={1}>
+                  <AppText style={styles.metaText} numberOfLines={2}>
                     {locationText}
                   </AppText>
                 </View>
 
                 <View style={styles.metaRow}>
                   <Clock size={12} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={1}>
+                  <AppText style={styles.metaText} numberOfLines={2}>
                     {daysList}  |  {hoursText}
                   </AppText>
                 </View>
@@ -380,10 +380,10 @@ export function PlayerClubDetailsPreview({
 
                       {/* Court Info */}
                       <View style={styles.courtInfoCol}>
-                        <AppText style={styles.courtNameText} numberOfLines={1}>
+                        <AppText style={styles.courtNameText} numberOfLines={2}>
                           {court.display_name || court.name}
                         </AppText>
-                        <AppText style={styles.courtSurfaceText} numberOfLines={1}>
+                        <AppText style={styles.courtSurfaceText} numberOfLines={2}>
                           {envLabel} • {surfaceLabel}
                         </AppText>
                       </View>
@@ -414,10 +414,10 @@ export function PlayerClubDetailsPreview({
                 <Calendar size={16} color="#18794E" strokeWidth={2.2} />
               </View>
               <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={1}>
+                <AppText style={styles.shortcutHeading} numberOfLines={2}>
                   Upcoming Events
                 </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
+                <AppText style={styles.shortcutSubtext} numberOfLines={2}>
                   View socials and tournaments
                 </AppText>
               </View>
@@ -430,10 +430,10 @@ export function PlayerClubDetailsPreview({
                 <UserCheck size={16} color="#18794E" strokeWidth={2.2} />
               </View>
               <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={1}>
+                <AppText style={styles.shortcutHeading} numberOfLines={2}>
                   Lessons & Coaching
                 </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
+                <AppText style={styles.shortcutSubtext} numberOfLines={2}>
                   Book a session with our coaches
                 </AppText>
               </View>
@@ -487,7 +487,7 @@ export function PlayerClubDetailsPreview({
                         {plan.benefits.slice(0, 3).map((b, idx) => (
                           <View key={idx} style={styles.benefitItemRow}>
                             <CheckCircle2 size={11} color="#18794E" />
-                            <AppText style={styles.benefitItemText} numberOfLines={1}>
+                            <AppText style={styles.benefitItemText} numberOfLines={2}>
                               {b}
                             </AppText>
                           </View>

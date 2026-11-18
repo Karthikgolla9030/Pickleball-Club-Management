@@ -717,7 +717,7 @@ export default function EventDetailsScreen() {
                         </View>
                         <View style={styles.participantTextCol}>
                           <View style={styles.participantNameLine}>
-                            <AppText style={styles.participantName} numberOfLines={1}>
+                            <AppText style={styles.participantName} numberOfLines={2}>
                               {playerName}
                             </AppText>
                             <Badge
@@ -726,7 +726,7 @@ export default function EventDetailsScreen() {
                             />
                           </View>
                           {reg.user_email ? (
-                            <AppText style={styles.participantEmail} numberOfLines={1}>
+                            <AppText style={styles.participantEmail}>
                               {reg.user_email}
                             </AppText>
                           ) : null}

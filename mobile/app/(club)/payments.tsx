@@ -508,7 +508,7 @@ export default function ClubPaymentsScreen() {
       >
         {/* Row 1: Player Name & Status Badge */}
         <View style={styles.cardHeaderRow}>
-          <AppText style={styles.playerName} numberOfLines={1}>
+          <AppText style={styles.playerName} numberOfLines={2}>
             {playerName}
           </AppText>
 
@@ -579,7 +579,7 @@ export default function ClubPaymentsScreen() {
         {isRefunded && (
           <View style={styles.refundCardStrip}>
             <RotateCcw size={13} color="#6D28D9" />
-            <AppText style={styles.refundCardStripText} numberOfLines={1}>
+            <AppText style={styles.refundCardStripText}>
               Refunded: {formatCurrency(item.refunded_amount || item.amount, 'USD')}
               {item.refund_reason ? ` • ${item.refund_reason}` : ''}
             </AppText>
@@ -595,7 +595,7 @@ export default function ClubPaymentsScreen() {
             Created: {details.formattedDate}
           </AppText>
           {item.provider_payment_id ? (
-            <AppText style={styles.providerRefText} numberOfLines={1}>
+            <AppText style={styles.providerRefText}>
               Ref: {item.provider_payment_id}
             </AppText>
           ) : null}

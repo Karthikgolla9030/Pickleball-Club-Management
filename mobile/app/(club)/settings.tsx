@@ -9,7 +9,7 @@
  *   - Role-aware display matching the authenticated club staff member.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Platform,
@@ -19,6 +19,7 @@ import {
   Switch,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -58,7 +59,7 @@ import {
 } from '@/hooks';
 import { authApi } from '@/services/api';
 import { usePreferencesStore, type DateFormat, type TimeFormat } from '@/store';
-import { Colors, Radius, Shadows, getBottomNavPadding } from '@/theme';
+import { Colors, Radius, Shadows, Spacing, getBottomNavPadding } from '@/theme';
 
 type SettingsTab = 'notifications' | 'preferences' | 'security' | 'legal';
 
@@ -67,7 +68,11 @@ export default function ClubSettingsScreen() {
   const insets = useSafeAreaInsets();
   const searchParams = useLocalSearchParams<{ tab?: string }>();
   const { user, logout, activeRole } = useAuth();
-  const { role, activeMembership, clubName } = useActiveClub();
+  const { role, activeMembership, clubName, clubTimezone } = useActiveClub();
+  const { width: windowWidth } = useWindowDimensions();
+
+  const tabsScrollRef = useRef<ScrollView>(null);
+  const tabLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
 
   // Active Tab state (defaults to searchParam 'tab' if valid, or 'notifications')
   const initialTab: SettingsTab =
@@ -213,13 +218,36 @@ export default function ClubSettingsScreen() {
     { key: 'legal', label: 'Legal & Info', icon: ShieldCheck },
   ] as const;
 
+  const handleTabPress = (tabKey: SettingsTab) => {
+    setActiveTab(tabKey);
+    setPasswordSuccessMessage(null);
+    const layout = tabLayoutsRef.current[tabKey];
+    if (layout && tabsScrollRef.current) {
+      const containerWidth = windowWidth - Spacing.md * 2;
+      const targetX = Math.max(0, layout.x - containerWidth / 2 + layout.width / 2);
+      tabsScrollRef.current.scrollTo({ x: targetX, animated: true });
+    }
+  };
+
+  useEffect(() => {
+    const layout = tabLayoutsRef.current[activeTab];
+    if (layout && tabsScrollRef.current) {
+      const containerWidth = windowWidth - Spacing.md * 2;
+      const targetX = Math.max(0, layout.x - containerWidth / 2 + layout.width / 2);
+      tabsScrollRef.current.scrollTo({ x: targetX, animated: true });
+    } else if (activeTab === 'notifications' && tabsScrollRef.current) {
+      tabsScrollRef.current.scrollTo({ x: 0, animated: false });
+    }
+  }, [activeTab, windowWidth]);
+
   return (
     <Screen style={styles.screenWrapper}>
       <AppHeader title="Settings" showMenu={true} showBack={true} />
 
-      {/* ─── TAB NAVIGATION BAR ─── */}
+      {/* ─── TAB NAVIGATION BAR (Auto-Centering & No Clipping) ─── */}
       <View style={styles.tabBarWrapper}>
         <ScrollView
+          ref={tabsScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.tabBarScroll}
@@ -232,9 +260,10 @@ export default function ClubSettingsScreen() {
               <TouchableOpacity
                 key={tab.key}
                 style={[styles.tabPill, isActive && styles.tabPillActive]}
-                onPress={() => {
-                  setActiveTab(tab.key);
-                  setPasswordSuccessMessage(null);
+                onPress={() => handleTabPress(tab.key)}
+                onLayout={(e) => {
+                  const { x, width } = e.nativeEvent.layout;
+                  tabLayoutsRef.current[tab.key] = { x, width };
                 }}
                 activeOpacity={0.75}
                 accessibilityRole="tab"
@@ -248,7 +277,6 @@ export default function ClubSettingsScreen() {
                 />
                 <AppText
                   style={[styles.tabLabel, isActive && styles.tabLabelActive]}
-                  numberOfLines={1}
                 >
                   {tab.label}
                 </AppText>
@@ -492,33 +520,39 @@ export default function ClubSettingsScreen() {
               <View style={styles.divider} />
 
               <View style={styles.infoStaticRow}>
-                <View>
+                <View style={styles.infoStaticTextCol}>
                   <AppText style={styles.staticRowTitle}>Active Club</AppText>
                   <AppText style={styles.staticRowSubtitle}>Current management context</AppText>
                 </View>
-                <Badge label={clubName || 'Active Club'} variant="default" size="sm" />
+                <View style={styles.infoStaticBadgeCol}>
+                  <Badge label={clubName || 'Pickleball Club'} variant="default" size="sm" noUppercase />
+                </View>
               </View>
 
               <View style={styles.rowDivider} />
 
               <View style={styles.infoStaticRow}>
-                <View>
+                <View style={styles.infoStaticTextCol}>
                   <AppText style={styles.staticRowTitle}>Operational Timezone</AppText>
                   <AppText style={styles.staticRowSubtitle}>
                     Court schedules and reports conform to this timezone
                   </AppText>
                 </View>
-                <Badge label="America/New_York (UTC-5)" variant="info" size="sm" />
+                <View style={styles.infoStaticBadgeCol}>
+                  <Badge label={clubTimezone || 'America/Chicago'} variant="info" size="sm" noUppercase />
+                </View>
               </View>
 
               <View style={styles.rowDivider} />
 
               <View style={styles.infoStaticRow}>
-                <View>
+                <View style={styles.infoStaticTextCol}>
                   <AppText style={styles.staticRowTitle}>System Language</AppText>
                   <AppText style={styles.staticRowSubtitle}>Primary application language</AppText>
                 </View>
-                <Badge label="English (US)" variant="default" size="sm" />
+                <View style={styles.infoStaticBadgeCol}>
+                  <Badge label="English (US)" variant="default" size="sm" noUppercase />
+                </View>
               </View>
             </Card>
           </View>
@@ -546,21 +580,25 @@ export default function ClubSettingsScreen() {
               <View style={styles.divider} />
 
               <View style={styles.infoStaticRow}>
-                <View>
+                <View style={styles.infoStaticTextCol}>
                   <AppText style={styles.staticRowTitle}>Account Email</AppText>
                   <AppText style={styles.staticRowSubtitle}>{user?.email}</AppText>
                 </View>
-                <Badge label="Verified" variant="success" size="sm" />
+                <View style={styles.infoStaticBadgeCol}>
+                  <Badge label="Verified" variant="success" size="sm" noUppercase />
+                </View>
               </View>
 
               <View style={styles.rowDivider} />
 
               <View style={styles.infoStaticRow}>
-                <View>
+                <View style={styles.infoStaticTextCol}>
                   <AppText style={styles.staticRowTitle}>Assigned Role</AppText>
                   <AppText style={styles.staticRowSubtitle}>Access clearance level</AppText>
                 </View>
-                <Badge label={roleLabel} variant="info" size="sm" />
+                <View style={styles.infoStaticBadgeCol}>
+                  <Badge label={roleLabel} variant="info" size="sm" noUppercase />
+                </View>
               </View>
             </Card>
 
@@ -968,12 +1006,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Static Info Rows
+  // Static Info Rows (Responsive Wrap & Full Values)
   infoStaticRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    paddingVertical: 8,
+  },
+  infoStaticTextCol: {
+    flex: 1,
+    minWidth: 160,
+    marginRight: Spacing.xs,
+  },
+  infoStaticBadgeCol: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   staticRowTitle: {
     fontSize: 13.5,

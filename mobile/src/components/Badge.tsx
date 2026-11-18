@@ -4,13 +4,13 @@
  * Light theme: tinted background + solid text color.
  * Never uses solid colored blocks — always a gentle tint with dark text.
  *
- * Tournament status variants added:
+ * Tournament status variants:
  *   'in_progress', 'completed', 'cancelled', 'draft', 'registration_open'
  */
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '@/theme';
+import { Colors, Radius, Typography } from '@/theme';
 import { AppText } from './AppText';
 import type { ClubRole } from '@/types';
 
@@ -32,6 +32,10 @@ interface BadgeProps {
   role?: ClubRole;
   size?: 'sm' | 'md';
   icon?: React.ReactNode;
+  style?: any;
+  textStyle?: any;
+  numberOfLines?: number;
+  noUppercase?: boolean;
 }
 
 const variantColors: Record<BadgeVariant, { bg: string; text: string }> = {
@@ -56,7 +60,17 @@ const roleColors: Record<ClubRole, { bg: string; text: string }> = {
   staff_member:         { bg: '#F1F5F9', text: Colors.roles.staffMember },
 };
 
-export function Badge({ label, variant = 'default', role, size = 'md', icon }: BadgeProps) {
+export function Badge({
+  label,
+  variant = 'default',
+  role,
+  size = 'md',
+  icon,
+  style,
+  textStyle,
+  numberOfLines,
+  noUppercase = false,
+}: BadgeProps) {
   const colors = role ? roleColors[role] : variantColors[variant];
 
   return (
@@ -65,15 +79,22 @@ export function Badge({ label, variant = 'default', role, size = 'md', icon }: B
         styles.badge,
         size === 'sm' && styles.badgeSm,
         { backgroundColor: colors.bg },
+        style,
       ]}
     >
       <View style={styles.contentRow}>
         {icon && <View style={styles.iconContainer}>{icon}</View>}
         <AppText
           variant="caption"
-          style={[styles.label, size === 'sm' && styles.labelSm, { color: colors.text }]}
-          uppercase
-          numberOfLines={1}
+          style={[
+            styles.label,
+            size === 'sm' && styles.labelSm,
+            noUppercase && styles.labelNoUppercase,
+            { color: colors.text },
+            textStyle,
+          ]}
+          uppercase={!noUppercase}
+          numberOfLines={numberOfLines}
         >
           {label}
         </AppText>
@@ -88,27 +109,33 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: Radius.md, // 8px
     alignSelf: 'flex-start',
-    flexShrink: 1,
+    maxWidth: '100%',
   },
   badgeSm: {
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  label: {
-    fontSize: 11,
-    fontWeight: Typography.weight.bold,
-    letterSpacing: 0.4,
-    lineHeight: 14,
-    textTransform: 'uppercase',
-  },
-  labelSm: {
-    fontSize: 10,
-    lineHeight: 13,
-  },
   contentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    maxWidth: '100%',
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: Typography.weight.bold,
+    letterSpacing: 0.3,
+    lineHeight: 15,
+    textTransform: 'uppercase',
+    flexShrink: 1,
+  },
+  labelSm: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  labelNoUppercase: {
+    textTransform: 'none',
+    letterSpacing: 0,
   },
   iconContainer: {
     justifyContent: 'center',

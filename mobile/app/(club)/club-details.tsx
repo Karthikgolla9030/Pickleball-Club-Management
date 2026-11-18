@@ -759,7 +759,7 @@ export default function ClubDetailsScreen() {
                         {locationPillText ? (
                           <View style={styles.identityPill}>
                             <MapPin size={12} color="#49635E" />
-                            <AppText style={styles.identityPillText} numberOfLines={1}>
+                            <AppText style={styles.identityPillText}>
                               {locationPillText}
                             </AppText>
                           </View>
@@ -892,7 +892,7 @@ export default function ClubDetailsScreen() {
                           onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
                           activeOpacity={0.7}
                         >
-                          <AppText style={styles.contactLinkText} numberOfLines={1}>
+                          <AppText style={styles.contactLinkText}>
                             {contactEmail}
                           </AppText>
                           <ExternalLink size={13} color="#667776" style={styles.externalIcon} />
@@ -938,7 +938,7 @@ export default function ClubDetailsScreen() {
                           }}
                           activeOpacity={0.7}
                         >
-                          <AppText style={styles.contactLinkText} numberOfLines={1}>
+                          <AppText style={styles.contactLinkText}>
                             {website}
                           </AppText>
                           <ExternalLink size={13} color="#667776" style={styles.externalIcon} />

@@ -176,7 +176,7 @@ export default function ClubMembershipRequestsScreen() {
 
           <View style={styles.applicantInfo}>
             <View style={styles.nameRow}>
-              <AppText variant="heading3" color="primary" numberOfLines={1} style={styles.nameText}>
+              <AppText variant="heading3" color="primary" numberOfLines={2} style={styles.nameText}>
                 {displayName}
               </AppText>
               <Badge label={item.status.toUpperCase()} variant={badgeVariant} size="sm" />

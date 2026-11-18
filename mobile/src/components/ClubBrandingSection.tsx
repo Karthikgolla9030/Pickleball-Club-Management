@@ -962,7 +962,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                       </View>
                     </View>
 
-                    <AppText style={styles.slideTitle} numberOfLines={1}>
+                    <AppText style={styles.slideTitle} numberOfLines={2}>
                       {slide.title || 'Untitled Promotional Ad'}
                     </AppText>
                     {slide.subtitle ? (
@@ -976,7 +976,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                     ) : null}
 
                     {slide.cta_text ? (
-                      <AppText style={styles.slideCtaInfo} numberOfLines={1}>
+                      <AppText style={styles.slideCtaInfo} numberOfLines={2}>
                         CTA: "{slide.cta_text}" → {slide.cta_route || 'Default'}
                       </AppText>
                     ) : null}

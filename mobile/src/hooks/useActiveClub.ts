@@ -62,6 +62,8 @@ export function useActiveClub() {
     clubId: resolvedClubId,
     clubName: liveClubName,
     clubSlug: liveClubSlug,
+    clubTimezone: activeClubData?.timezone || 'America/Chicago',
+    club: activeClubData ?? null,
     role: effectiveMembership?.role ?? null,
     roleLabel: effectiveMembership?.role_label ?? null,
     isActive: effectiveMembership?.is_active ?? (playerPrimaryClub?.status === 'active'),

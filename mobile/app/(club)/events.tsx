@@ -220,7 +220,7 @@ function CompactEventCard({
         <View style={styles.infoContainer}>
           {/* Header Row: Title, Status Badge, More Menu */}
           <View style={styles.cardHeaderRow}>
-            <AppText style={styles.cardTitle} numberOfLines={1}>
+            <AppText style={styles.cardTitle} numberOfLines={2}>
               {event.title}
             </AppText>
             <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
@@ -257,7 +257,7 @@ function CompactEventCard({
           {/* Date Row */}
           <View style={styles.scheduleRow}>
             <Calendar size={13} color="#102B2A" style={styles.scheduleIcon} />
-            <AppText style={styles.scheduleText} numberOfLines={1}>
+            <AppText style={styles.scheduleText} numberOfLines={2}>
               {schedule.date}
             </AppText>
           </View>
@@ -265,7 +265,7 @@ function CompactEventCard({
           {/* Time Row */}
           <View style={styles.scheduleRow}>
             <Clock size={13} color="#102B2A" style={styles.scheduleIcon} />
-            <AppText style={styles.scheduleText} numberOfLines={1}>
+            <AppText style={styles.scheduleText} numberOfLines={2}>
               {schedule.time}
             </AppText>
           </View>

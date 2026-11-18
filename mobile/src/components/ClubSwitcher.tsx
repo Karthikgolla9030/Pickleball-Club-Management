@@ -57,7 +57,7 @@ export function ClubSwitcher({
           <View style={styles.iconCircle}>
             <Trophy size={14} color={Colors.text.inverse} />
           </View>
-          <AppText variant="caption" color="secondary" numberOfLines={1}>
+          <AppText variant="caption" color="secondary" numberOfLines={2}>
             Player Mode (No active club)
           </AppText>
         </View>
@@ -83,7 +83,7 @@ export function ClubSwitcher({
                 resizeMode="contain"
               />
             </View>
-            <AppText style={styles.compactClubName} numberOfLines={1}>
+            <AppText style={styles.compactClubName}>
               {clubName ?? 'Select Club'}
             </AppText>
             <ChevronDown size={15} color="#667776" style={styles.compactChevron} />
@@ -152,7 +152,6 @@ export function ClubSwitcher({
                         <AppText
                           variant="title"
                           color={isSelected ? 'brand' : 'primary'}
-                          numberOfLines={1}
                         >
                           {item.club_name}
                         </AppText>
@@ -201,7 +200,6 @@ export function ClubSwitcher({
           <View style={styles.clubInfo}>
             <AppText
               variant="label"
-              numberOfLines={1}
               style={styles.clubName}
             >
               {clubName ?? 'Select Club'}
@@ -278,7 +276,7 @@ export function ClubSwitcher({
                       <AppText
                         variant="title"
                         color={isSelected ? 'brand' : 'primary'}
-                        numberOfLines={1}
+                        numberOfLines={2}
                       >
                         {item.club_name}
                       </AppText>

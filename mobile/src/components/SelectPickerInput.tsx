@@ -153,17 +153,17 @@ export function SelectPickerInput({
             <Text style={styles.placeholderText}>{loadingMessage}</Text>
           ) : selectedOption ? (
             <View style={styles.selectedValueCol}>
-              <Text style={styles.valueText} numberOfLines={1} ellipsizeMode="tail">
+              <Text style={styles.valueText} numberOfLines={2}>
                 {selectedOption.label}
               </Text>
               {selectedOption.subtitle ? (
-                <Text style={styles.valueSubtitle} numberOfLines={1} ellipsizeMode="tail">
+                <Text style={styles.valueSubtitle} numberOfLines={2}>
                   {selectedOption.subtitle}
                 </Text>
               ) : null}
             </View>
           ) : (
-            <Text style={styles.placeholderText} numberOfLines={1}>
+            <Text style={styles.placeholderText} numberOfLines={2}>
               {placeholder}
             </Text>
           )}
@@ -327,7 +327,7 @@ export function SelectPickerInput({
                                   isSelected && styles.optionLabelSelected,
                                   opt.disabled && styles.optionLabelDisabled,
                                 ]}
-                                numberOfLines={1}
+                                numberOfLines={2}
                               >
                                 {opt.label}
                               </Text>

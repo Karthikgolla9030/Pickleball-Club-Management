@@ -374,7 +374,7 @@ export default function ClubHomeScreen() {
             )}
 
             <View style={styles.scheduleContent}>
-              <AppText style={styles.scheduleTitle} numberOfLines={1}>
+              <AppText style={styles.scheduleTitle} numberOfLines={2}>
                 {todayItem.title}
               </AppText>
 
@@ -446,7 +446,7 @@ export default function ClubHomeScreen() {
               <Users size={15} color="#18794E" strokeWidth={2.2} />
             </View>
             <AppText style={styles.statNumber}>{totalPlayers}</AppText>
-            <AppText style={styles.statLabel} numberOfLines={1}>
+            <AppText style={styles.statLabel} numberOfLines={2}>
               {activePlayers} Active Players
             </AppText>
           </TouchableOpacity>
@@ -462,7 +462,7 @@ export default function ClubHomeScreen() {
               <Calendar size={15} color="#1E40AF" strokeWidth={2.2} />
             </View>
             <AppText style={styles.statNumber}>{todayBookings}</AppText>
-            <AppText style={styles.statLabel} numberOfLines={1}>
+            <AppText style={styles.statLabel} numberOfLines={2}>
               {upcomingBookings} Upcoming
             </AppText>
           </TouchableOpacity>
@@ -478,7 +478,7 @@ export default function ClubHomeScreen() {
               <Trophy size={15} color="#D97706" strokeWidth={2.2} />
             </View>
             <AppText style={styles.statNumber}>{upcomingTournaments}</AppText>
-            <AppText style={styles.statLabel} numberOfLines={1}>
+            <AppText style={styles.statLabel} numberOfLines={2}>
               {upcomingLeagues} Leagues
             </AppText>
           </TouchableOpacity>
@@ -494,7 +494,7 @@ export default function ClubHomeScreen() {
               <ShieldCheck size={15} color="#7C3AED" strokeWidth={2.2} />
             </View>
             <AppText style={styles.statNumber}>{activeStaff}</AppText>
-            <AppText style={styles.statLabel} numberOfLines={1}>
+            <AppText style={styles.statLabel} numberOfLines={2}>
               Staff Active
             </AppText>
           </TouchableOpacity>
@@ -518,7 +518,7 @@ export default function ClubHomeScreen() {
                   ? formatCurrency(dashboard.payments.pending_amount)
                   : formatCurrency(dashboard.payments.total_revenue)}
               </AppText>
-              <AppText style={styles.statLabel} numberOfLines={1}>
+              <AppText style={styles.statLabel} numberOfLines={2}>
                 {dashboard.payments.pending_count > 0
                   ? `${dashboard.payments.pending_count} Pending Payments`
                   : `${dashboard.payments.succeeded_count} Succeeded Payments`}
@@ -536,7 +536,7 @@ export default function ClubHomeScreen() {
                 <Star size={15} color="#DB2777" strokeWidth={2.2} />
               </View>
               <AppText style={styles.statNumber}>{upcomingEvents}</AppText>
-              <AppText style={styles.statLabel} numberOfLines={1}>
+              <AppText style={styles.statLabel} numberOfLines={2}>
                 Events ({upcomingLessons} Lessons)
               </AppText>
             </TouchableOpacity>

@@ -174,7 +174,7 @@ export function PromotionalAdsCarousel({
                     {clubName ? (
                       <View style={styles.clubBadge}>
                         <MapPin size={11} color="#FFFFFF" />
-                        <AppText style={styles.clubBadgeText} numberOfLines={1}>
+                        <AppText style={styles.clubBadgeText} numberOfLines={2}>
                           {clubName}
                         </AppText>
                       </View>

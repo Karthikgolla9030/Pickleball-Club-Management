@@ -1800,7 +1800,7 @@ export default function TournamentDetailsScreen() {
                     <View key={row.team_id} style={styles.standingsRow}>
                       <AppText variant="bodySmall" style={styles.colRank}>{row.rank}</AppText>
                       <View style={styles.colTeam}>
-                        <AppText variant="bodySmall" numberOfLines={1}>{row.team_name}</AppText>
+                        <AppText variant="bodySmall" numberOfLines={2}>{row.team_name}</AppText>
                         {row.team_seed && (
                           <AppText variant="caption" color="tertiary">Seed #{row.team_seed}</AppText>
                         )}
@@ -2142,7 +2142,7 @@ export default function TournamentDetailsScreen() {
 
           <View style={styles.scoreInputRow}>
             <View style={styles.scoreInputCol}>
-              <AppText variant="bodySmall" numberOfLines={1}>
+              <AppText variant="bodySmall" numberOfLines={2}>
                 {isScramble
                   ? selectedMatch?.side_a_participants &&
                     selectedMatch.side_a_participants.length > 0
@@ -2166,7 +2166,7 @@ export default function TournamentDetailsScreen() {
             </AppText>
 
             <View style={styles.scoreInputCol}>
-              <AppText variant="bodySmall" numberOfLines={1}>
+              <AppText variant="bodySmall" numberOfLines={2}>
                 {isScramble
                   ? selectedMatch?.side_b_participants &&
                     selectedMatch.side_b_participants.length > 0

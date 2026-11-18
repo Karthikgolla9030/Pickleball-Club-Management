@@ -624,7 +624,7 @@ export default function AnalyticsScreen() {
                 <Building2 size={18} color={Colors.brand.primary} strokeWidth={2.2} />
               </View>
               <View style={styles.summaryTextGroup}>
-                <AppText style={styles.summaryClubName} numberOfLines={1}>
+                <AppText style={styles.summaryClubName} numberOfLines={2}>
                   {clubName || 'Pickleball Club'}
                 </AppText>
                 <AppText style={styles.summarySubtitle}>Operational Intelligence & Reports</AppText>
@@ -746,7 +746,6 @@ export default function AnalyticsScreen() {
                   />
                   <AppText
                     style={[styles.navTabLabel, isActive && styles.navTabLabelActive]}
-                    numberOfLines={1}
                   >
                     {tab.label}
                   </AppText>

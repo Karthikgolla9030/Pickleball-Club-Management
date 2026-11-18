@@ -149,7 +149,7 @@ export default function ClubHelpSupportScreen() {
         <View style={styles.headerTitleWrap}>
           <AppText style={styles.headerTitle}>Club Help & Support</AppText>
           {activeMembership?.club_name && (
-            <AppText style={styles.headerClubName} numberOfLines={1}>
+            <AppText style={styles.headerClubName} numberOfLines={2}>
               {activeMembership.club_name}
             </AppText>
           )}
@@ -447,7 +447,7 @@ export default function ClubHelpSupportScreen() {
               >
                 <X size={22} color={Colors.text.primary} />
               </TouchableOpacity>
-              <AppText style={styles.modalHeaderTitle} numberOfLines={1}>
+              <AppText style={styles.modalHeaderTitle} numberOfLines={2}>
                 {selectedArticle.title}
               </AppText>
               <View style={{ width: 32 }} />

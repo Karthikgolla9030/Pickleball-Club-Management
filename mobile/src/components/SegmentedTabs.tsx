@@ -8,7 +8,7 @@
 import React from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { AppText } from './AppText';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Spacing } from '@/theme';
 
 interface Tab<T extends string> {
   key: T;
@@ -61,7 +61,6 @@ export function SegmentedTabs<T extends string>({
             styles.label,
             isActive ? styles.labelActive : styles.labelInactive,
           ]}
-          numberOfLines={1}
         >
           {tab.label}
         </AppText>

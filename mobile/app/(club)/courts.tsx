@@ -988,7 +988,7 @@ export default function ClubCourtsScreen() {
                           <CourtGlyph size={18} color="#176B57" strokeWidth={1.8} />
                         </View>
                         <View style={styles.statTextCol}>
-                          <AppText style={styles.statLabel} numberOfLines={1}>
+                          <AppText style={styles.statLabel} numberOfLines={2}>
                             Total Courts
                           </AppText>
                           <AppText style={styles.statValue}>{totalCount}</AppText>
@@ -1001,7 +1001,7 @@ export default function ClubCourtsScreen() {
                           <View style={styles.activeDot} />
                         </View>
                         <View style={styles.statTextCol}>
-                          <AppText style={styles.statLabel} numberOfLines={1}>
+                          <AppText style={styles.statLabel} numberOfLines={2}>
                             Active
                           </AppText>
                           <AppText style={styles.statValue}>{activeCount}</AppText>
@@ -1014,7 +1014,7 @@ export default function ClubCourtsScreen() {
                           <View style={styles.inactiveRing} />
                         </View>
                         <View style={styles.statTextCol}>
-                          <AppText style={styles.statLabel} numberOfLines={1}>
+                          <AppText style={styles.statLabel} numberOfLines={2}>
                             Inactive
                           </AppText>
                           <AppText style={styles.statValue}>{inactiveCount}</AppText>
@@ -1118,7 +1118,7 @@ export default function ClubCourtsScreen() {
                       <View style={styles.cardDetails}>
                         {/* Title Row: Court Name + Status Pill + Three Dots */}
                         <View style={styles.cardHeaderRow}>
-                          <AppText style={styles.courtName} numberOfLines={1}>
+                          <AppText style={styles.courtName} numberOfLines={2}>
                             {item.name}
                           </AppText>
 
@@ -1167,7 +1167,7 @@ export default function ClubCourtsScreen() {
 
                           <View style={styles.metaItem}>
                             <Layers size={13} color="#667776" strokeWidth={2} />
-                            <AppText style={styles.metaText} numberOfLines={1}>
+                            <AppText style={styles.metaText} numberOfLines={2}>
                               {surfaceText}
                             </AppText>
                           </View>
@@ -1176,7 +1176,7 @@ export default function ClubCourtsScreen() {
                         {/* Metadata Row 2: Location */}
                         <View style={styles.metadataRow2}>
                           <MapPin size={13} color="#667776" strokeWidth={2} />
-                          <AppText style={styles.metaText} numberOfLines={1}>
+                          <AppText style={styles.metaText} numberOfLines={2}>
                             {locationText}
                           </AppText>
                         </View>
@@ -1203,7 +1203,7 @@ export default function ClubCourtsScreen() {
 
                           <View style={styles.hoursBadge}>
                             <Clock size={11} color="#176B57" strokeWidth={2} />
-                            <AppText style={styles.hoursBadgeText} numberOfLines={1}>
+                            <AppText style={styles.hoursBadgeText}>
                               {getCourtHoursSummary(item)}
                             </AppText>
                           </View>

@@ -66,7 +66,6 @@ export function FilterChips<T extends string>({
             styles.chipLabel,
             isActive ? styles.chipLabelActive : styles.chipLabelInactive,
           ]}
-          numberOfLines={1}
         >
           {chip.label}
         </AppText>

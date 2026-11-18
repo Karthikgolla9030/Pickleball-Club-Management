@@ -1128,7 +1128,7 @@ export default function ClubMembersScreen() {
           <View style={styles.cardDetailsColumn}>
             {/* Row 1: Name, ID Badge, Three-dot Menu */}
             <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={1}>
+              <AppText style={styles.playerName} numberOfLines={2}>
                 {playerName}
               </AppText>
               <View style={styles.badgeAndMenuRow}>
@@ -1147,7 +1147,7 @@ export default function ClubMembersScreen() {
             </View>
 
             {/* Row 2: Email */}
-            <AppText style={styles.playerEmail} numberOfLines={1}>
+            <AppText style={styles.playerEmail}>
               {item.user_email}
             </AppText>
 
@@ -1183,7 +1183,7 @@ export default function ClubMembersScreen() {
 
               {subInfo && (
                 <View style={styles.playerSubPlanBadge}>
-                  <AppText style={styles.playerSubPlanBadgeText} numberOfLines={1}>
+                  <AppText style={styles.playerSubPlanBadgeText}>
                     {subInfo.planName}
                     {subInfo.status === 'scheduled' ? ' · SCHEDULED' : ''}
                   </AppText>
@@ -1260,7 +1260,7 @@ export default function ClubMembersScreen() {
           <View style={styles.cardDetailsColumn}>
             {/* Row 1: Name, Role Badge, Three-dot Menu */}
             <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={1}>
+              <AppText style={styles.playerName} numberOfLines={2}>
                 {staffName}
               </AppText>
               <View style={styles.badgeAndMenuRow}>
@@ -1284,7 +1284,7 @@ export default function ClubMembersScreen() {
             </View>
 
             {/* Row 2: Email */}
-            <AppText style={styles.playerEmail} numberOfLines={1}>
+            <AppText style={styles.playerEmail}>
               {item.user_email}
             </AppText>
 

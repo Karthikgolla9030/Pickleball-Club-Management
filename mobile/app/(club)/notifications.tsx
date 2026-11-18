@@ -481,7 +481,7 @@ export default function ClubNotificationsScreen() {
 
             {/* Middle Details */}
             <View style={styles.cardCenter}>
-              <AppText style={styles.cardTitle} numberOfLines={1}>
+              <AppText style={styles.cardTitle} numberOfLines={2}>
                 {item.title}
               </AppText>
 

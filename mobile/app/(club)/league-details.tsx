@@ -815,7 +815,7 @@ export default function ClubLeagueDetailsScreen() {
 
           {/* Centered League Title */}
           <View style={styles.headerTitleWrap}>
-            <AppText style={styles.headerLeagueName} numberOfLines={1}>
+            <AppText style={styles.headerLeagueName} numberOfLines={2}>
               {league.name}
             </AppText>
           </View>
@@ -874,7 +874,7 @@ export default function ClubLeagueDetailsScreen() {
             </View>
 
             {/* Subtitle / Metadata row */}
-            <AppText style={styles.headerSubtitleText} numberOfLines={1}>
+            <AppText style={styles.headerSubtitleText}>
               {subtitleText}
             </AppText>
           </View>
@@ -1086,7 +1086,7 @@ export default function ClubLeagueDetailsScreen() {
 
                       {/* Team Name + Player subtitle */}
                       <View style={styles.tdTeamCol}>
-                        <AppText style={styles.tdTeamName} numberOfLines={1}>
+                        <AppText style={styles.tdTeamName} numberOfLines={2}>
                           {team.name}
                         </AppText>
                         {!isSingles && (
@@ -1384,7 +1384,7 @@ export default function ClubLeagueDetailsScreen() {
                               <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
                                 <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
                               </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
                                 {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
                               </AppText>
                               <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
@@ -1396,7 +1396,7 @@ export default function ClubLeagueDetailsScreen() {
                               <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
                                 <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
                               </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
                                 {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
                               </AppText>
                               {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
@@ -1524,7 +1524,7 @@ export default function ClubLeagueDetailsScreen() {
                               <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
                                 <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
                               </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
                                 {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
                               </AppText>
                               <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
@@ -1536,7 +1536,7 @@ export default function ClubLeagueDetailsScreen() {
                               <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
                                 <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
                               </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={1}>
+                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
                                 {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
                               </AppText>
                               {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
@@ -1677,7 +1677,7 @@ export default function ClubLeagueDetailsScreen() {
                             {initials}
                           </AppText>
                         </View>
-                        <AppText style={styles.sTeamName} numberOfLines={1}>
+                        <AppText style={styles.sTeamName} numberOfLines={2}>
                           {row.team_name}
                         </AppText>
                       </View>
@@ -1947,7 +1947,7 @@ export default function ClubLeagueDetailsScreen() {
                     <View key={m.id} style={styles.screen8MatchCard}>
                       {/* Top Header Line */}
                       <View style={styles.screen8TopRow}>
-                        <AppText style={styles.screen8DateText} numberOfLines={1}>
+                        <AppText style={styles.screen8DateText} numberOfLines={2}>
                           {dateLine}
                         </AppText>
                         <View
@@ -1976,7 +1976,7 @@ export default function ClubLeagueDetailsScreen() {
                           <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
                             <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
                           </View>
-                          <AppText style={styles.screen8TeamName} numberOfLines={1}>
+                          <AppText style={styles.screen8TeamName} numberOfLines={2}>
                             {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
                           </AppText>
                         </View>
@@ -1994,7 +1994,7 @@ export default function ClubLeagueDetailsScreen() {
 
                         {/* Team B */}
                         <View style={[styles.screen8TeamBlock, styles.screen8TeamBlockRight]}>
-                          <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={1}>
+                          <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={2}>
                             {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
                           </AppText>
                           <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
@@ -2259,7 +2259,7 @@ export default function ClubLeagueDetailsScreen() {
 
           <View style={styles.scoreInputsRow}>
             <View style={styles.scoreInputCol}>
-              <AppText style={styles.scoreTeamLabel} numberOfLines={1}>
+              <AppText style={styles.scoreTeamLabel} numberOfLines={2}>
                 {scoreModalMatch?.team_a_name || scoreModalMatch?.team_a?.name || 'Team A'}
               </AppText>
               <Input
@@ -2274,7 +2274,7 @@ export default function ClubLeagueDetailsScreen() {
             <AppText style={styles.scoreVs}>vs</AppText>
 
             <View style={styles.scoreInputCol}>
-              <AppText style={styles.scoreTeamLabel} numberOfLines={1}>
+              <AppText style={styles.scoreTeamLabel} numberOfLines={2}>
                 {scoreModalMatch?.team_b_name || scoreModalMatch?.team_b?.name || 'Team B'}
               </AppText>
               <Input

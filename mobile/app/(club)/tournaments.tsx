@@ -535,7 +535,6 @@ export default function ClubTournamentsScreen() {
           activeOpacity={0.75}
         >
           <AppText
-            numberOfLines={1}
             style={[styles.statusTabText, statusTab === 'all' && styles.statusTabTextActive]}
           >
             All
@@ -549,7 +548,6 @@ export default function ClubTournamentsScreen() {
         >
           <Clock size={14} color={statusTab === 'upcoming' ? '#FFFFFF' : '#3D544F'} />
           <AppText
-            numberOfLines={1}
             style={[styles.statusTabText, statusTab === 'upcoming' && styles.statusTabTextActive]}
           >
             Upcoming
@@ -563,7 +561,6 @@ export default function ClubTournamentsScreen() {
         >
           <Zap size={14} color={statusTab === 'in_progress' ? '#FFFFFF' : '#3D544F'} />
           <AppText
-            numberOfLines={1}
             style={[styles.statusTabText, statusTab === 'in_progress' && styles.statusTabTextActive]}
           >
             In Progress
@@ -577,7 +574,6 @@ export default function ClubTournamentsScreen() {
         >
           <Check size={14} color={statusTab === 'completed' ? '#FFFFFF' : '#3D544F'} />
           <AppText
-            numberOfLines={1}
             style={[styles.statusTabText, statusTab === 'completed' && styles.statusTabTextActive]}
           >
             Completed
@@ -630,7 +626,7 @@ export default function ClubTournamentsScreen() {
       {/* Active Advanced Filters Clear Pill */}
       {activeAdvancedFiltersCount > 0 && (
         <View style={styles.activeFilterPillsRow}>
-          <AppText variant="caption" color="secondary" numberOfLines={1} style={styles.activeFiltersLabel}>
+          <AppText variant="caption" color="secondary" numberOfLines={2} style={styles.activeFiltersLabel}>
             Filtered: {statusFilter ? `Status: ${STATUS_FILTERS.find((s) => s.status === statusFilter)?.label}` : ''}
             {statusFilter && formatFilter ? ' • ' : ''}
             {formatFilter ? `Format: ${FORMAT_OPTIONS.find((fo) => fo.format === formatFilter)?.label}` : ''}
