@@ -247,35 +247,36 @@ const LessonCardItem: React.FC<LessonCardItemProps> = React.memo(
         accessibilityRole="button"
         accessibilityLabel={`Lesson: ${item.title}`}
       >
-        {/* Top Row: Thumbnail + (Title & Status) + Actions Menu */}
+        {/* Top Row: Left (Thumbnail + Title) & Right (Status Badge + Menu) */}
         <View style={styles.cardTopRow}>
           <LessonThumbnail source={cardImg} />
 
-          <View style={styles.cardMain}>
-            <View style={styles.titleAndBadgeRow}>
-              <AppText style={styles.lessonTitle} numberOfLines={2}>
-                {item.title}
-              </AppText>
-              <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
-                <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
-                  {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
-                </AppText>
-              </View>
-            </View>
+          <View style={styles.titleContainer}>
+            <AppText style={styles.lessonTitle} numberOfLines={2}>
+              {item.title}
+            </AppText>
           </View>
 
-          <TouchableOpacity
-            onPress={(e) => {
-              e.stopPropagation?.();
-              onOpenMenu(item);
-            }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={styles.moreBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Lesson options"
-          >
-            <MoreVertical size={16} color="#64748B" />
-          </TouchableOpacity>
+          <View style={styles.cardTopRight}>
+            <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
+              <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
+                {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
+              </AppText>
+            </View>
+
+            <TouchableOpacity
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onOpenMenu(item);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.moreBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Lesson options"
+            >
+              <MoreVertical size={16} color="#64748B" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Subtle Divider */}
@@ -2044,18 +2045,24 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  cardMain: {
+  titleContainer: {
     flex: 1,
     marginLeft: 12,
-    marginRight: 6,
+    marginRight: 8,
     justifyContent: 'center',
     minWidth: 0,
   },
-  titleAndBadgeRow: {
+  lessonTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+    lineHeight: 20,
+  },
+  cardTopRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
+    flexShrink: 0,
   },
   statusBadge: {
     paddingHorizontal: 7.5,
@@ -2093,18 +2100,11 @@ const styles = StyleSheet.create({
     color: '#C5221F',
   },
   moreBtn: {
-    padding: 6,
-    width: 32,
-    height: 32,
+    padding: 4,
+    width: 26,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-start',
-  },
-  lessonTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#102B2A',
-    lineHeight: 20,
   },
   cardDivider: {
     height: 1,
