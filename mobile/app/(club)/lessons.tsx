@@ -50,7 +50,6 @@ import {
   GraduationCap,
   Image as ImageIcon,
   Mail,
-  MapPin,
   Menu,
   MoreVertical,
   Phone,
@@ -985,23 +984,14 @@ export default function ClubLessonsScreen() {
   const renderLessonCard = ({ item }: { item: ClubLesson }) => {
     const cardImg = getLessonCardImage(item, clubBranding, platformBanners);
     const schedule = formatLessonDateTime(item.start_at, item.end_at);
-    const tagLabel = (item.lesson_type_name || (item.is_private ? 'PRIVATE LESSON' : 'GROUP LESSON')).toUpperCase();
-
-    const descriptionText =
-      item.description ||
-      (item.title.toLowerCase().includes('doubles')
-        ? 'Improve your doubles play with proven strategies and drills.'
-        : item.title.toLowerCase().includes('beginner')
-        ? 'Learn the basics, rules and essential skills in a fun group setting.'
-        : item.is_private || item.title.toLowerCase().includes('one-on-one')
-        ? 'Personalized coaching to take your game to the next level.'
-        : 'Improve your game with proven strategies and drills.');
 
     return (
       <TouchableOpacity
         style={styles.lessonCard}
         onPress={() => handleNavigateToDetails(item)}
-        activeOpacity={0.9}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel={`Lesson: ${item.title}`}
       >
         {/* Top Section */}
         <View style={styles.cardTopRow}>
@@ -1009,48 +999,34 @@ export default function ClubLessonsScreen() {
             <Image source={cardImg} style={styles.cardThumbnail} resizeMode="cover" />
           ) : (
             <View style={styles.cardThumbnailFallback}>
-              <GraduationCap size={28} color="#18794E" strokeWidth={1.8} />
+              <GraduationCap size={22} color="#18794E" strokeWidth={1.8} />
             </View>
           )}
 
           <View style={styles.cardMain}>
             <View style={styles.cardTopMeta}>
-              <View style={styles.badgeGroup}>
-                <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
-                  <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
-                    {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
-                  </AppText>
-                </View>
-                <View style={styles.categoryBadge}>
-                  <AppText style={styles.categoryBadgeText}>
-                    {item.is_private ? 'PRIVATE' : 'GROUP'}
-                  </AppText>
-                </View>
+              <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
+                <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
+                  {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
+                </AppText>
               </View>
 
-              <View style={styles.priceContainer}>
-                <AppText style={styles.priceText}>
-                  {Number(item.price) === 0 ? 'Free' : formatCurrency(Number(item.price))}
-                </AppText>
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation?.();
-                    handleLessonMenu(item);
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.moreBtn}
-                >
-                  <MoreVertical size={16} color="#102B2A" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleLessonMenu(item);
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={styles.moreBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Lesson options"
+              >
+                <MoreVertical size={16} color="#475569" />
+              </TouchableOpacity>
             </View>
 
-            <AppText style={styles.lessonTitle} numberOfLines={1}>
+            <AppText style={styles.lessonTitle} numberOfLines={2}>
               {item.title}
-            </AppText>
-
-            <AppText style={styles.lessonDescription} numberOfLines={2}>
-              {descriptionText}
             </AppText>
           </View>
         </View>
@@ -1058,47 +1034,21 @@ export default function ClubLessonsScreen() {
         {/* Divider */}
         <View style={styles.cardDivider} />
 
-        {/* 2-Row Metadata Section */}
-        <View style={styles.metaSection}>
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Calendar size={13} color="#657776" style={styles.metaIcon} />
-              <AppText style={styles.metaText}>{schedule.date}</AppText>
-            </View>
-            <View style={styles.metaItem}>
-              <Clock size={13} color="#657776" style={styles.metaIcon} />
-              <AppText style={styles.metaText}>{schedule.time}</AppText>
-            </View>
-          </View>
-
-          <View style={[styles.metaRow, { marginTop: 6 }]}>
-            <View style={styles.metaItem}>
-              <User size={13} color="#657776" style={styles.metaIcon} />
-              <AppText style={styles.metaText}>Coach: {item.coach_name || 'Unassigned'}</AppText>
-            </View>
-            <View style={styles.metaItem}>
-              <MapPin size={13} color="#657776" style={styles.metaIcon} />
-              <AppText style={styles.metaText}>{item.court_name || 'No Court'}</AppText>
-            </View>
-            <View style={styles.metaItem}>
-              <Users size={13} color="#657776" style={styles.metaIcon} />
-              <AppText style={styles.metaText}>
-                Capacity: {item.registered_count ?? 0} / {item.capacity ?? '∞'}
-              </AppText>
-            </View>
-          </View>
-        </View>
-
-        {/* Bottom Tag & View Details CTA */}
+        {/* Bottom Section: Compact Schedule Row & View Details CTA */}
         <View style={styles.cardBottomRow}>
-          <View style={styles.bottomTag}>
-            <AppText style={styles.bottomTagText}>{tagLabel}</AppText>
+          <View style={styles.scheduleRow}>
+            <Calendar size={13} color="#18794E" style={styles.scheduleIcon} />
+            <AppText style={styles.scheduleText} numberOfLines={1}>
+              {schedule.date}  •  {schedule.time}
+            </AppText>
           </View>
 
           <TouchableOpacity
             style={styles.viewDetailsBtn}
             onPress={() => handleNavigateToDetails(item)}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`View details for ${item.title}`}
           >
             <AppText style={styles.viewDetailsText}>View Details →</AppText>
           </TouchableOpacity>
@@ -1985,33 +1935,39 @@ const styles = StyleSheet.create({
   lessonCard: {
     backgroundColor: '#FFFFFF',
     marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 16,
+    marginBottom: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    padding: 14,
+    padding: 12,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1.5 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 5,
+    shadowRadius: 4,
     elevation: 1,
   },
   cardTopRow: {
     flexDirection: 'row',
+    alignItems: 'center',
   },
   cardThumbnail: {
-    width: 88,
-    height: 88,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 10,
     backgroundColor: '#E5F5EC',
   },
   cardThumbnailFallback: {
-    width: 88,
-    height: 88,
-    borderRadius: 12,
+    width: 56,
+    height: 56,
+    borderRadius: 10,
     backgroundColor: '#E5F5EC',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   formAssetEmptyPlaceholder: {
     width: '100%',
@@ -2033,18 +1989,14 @@ const styles = StyleSheet.create({
   cardMain: {
     flex: 1,
     marginLeft: 12,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     minWidth: 0,
+    gap: 4,
   },
   cardTopMeta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  badgeGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   statusBadge: {
     paddingHorizontal: 7,
@@ -2080,97 +2032,52 @@ const styles = StyleSheet.create({
   statusBadgeText_cancelled: {
     color: '#C5221F',
   },
-  categoryBadge: {
-    backgroundColor: '#E6F4EA',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 5,
-  },
-  categoryBadgeText: {
-    color: '#137333',
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  priceText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#102B2A',
-  },
   moreBtn: {
-    padding: 2,
+    padding: 4,
   },
   lessonTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#102B2A',
-    marginTop: 3,
-  },
-  lessonDescription: {
-    fontSize: 12,
-    color: '#657776',
-    lineHeight: 16,
-    marginTop: 2,
+    lineHeight: 19,
   },
   cardDivider: {
     height: 1,
-    backgroundColor: '#F0F4F2',
-    marginVertical: 12,
-  },
-  metaSection: {
-    gap: 6,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  metaIcon: {
-    flexShrink: 0,
-  },
-  metaText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#102B2A',
+    backgroundColor: '#F1F5F9',
+    marginVertical: 10,
   },
   cardBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  bottomTag: {
-    backgroundColor: '#E5F5EC',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
   },
-  bottomTagText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#176B57',
-    letterSpacing: 0.3,
+  scheduleIcon: {
+    flexShrink: 0,
+  },
+  scheduleText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
   },
   viewDetailsBtn: {
     backgroundColor: '#0F392D',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 5.5,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
   viewDetailsText: {
     color: '#FFFFFF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
   },
   listContent: {
