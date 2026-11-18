@@ -593,6 +593,70 @@ export const resolveLessonImage = resolveLessonPicture;
 export const resolveTournamentPicture = resolveTournamentBanner;
 
 /**
+ * Returns complete image resolution diagnostics for a lesson picture:
+ * - source: resolved ImageSourcePropType or built-in fallback
+ * - level: 'custom' | 'club_default' | 'platform_default' | 'fallback'
+ * - url: raw remote URL string if remote, or null
+ */
+export function resolveLessonPictureDetails(
+  lesson?: {
+    image_url?: string | null;
+    resolved_image_url?: string | null;
+    lesson_type?: { image_url?: string | null } | null;
+  } | string | null,
+  clubBranding?: ClubBranding | null,
+  platformBanners?: Record<string, PlatformBanner> | null
+): ImageResolutionDetails {
+  const customUrl =
+    typeof lesson === 'string'
+      ? lesson.trim()
+      : lesson?.image_url?.trim() || lesson?.lesson_type?.image_url?.trim();
+  if (customUrl && !isBuiltinDefaultUrl(customUrl)) {
+    return {
+      source: { uri: resolveMediaUrl(customUrl) },
+      level: 'custom',
+      url: customUrl,
+    };
+  }
+
+  if (clubBranding?.default_lesson_banner_url?.trim() && !isBuiltinDefaultUrl(clubBranding.default_lesson_banner_url)) {
+    return {
+      source: { uri: resolveMediaUrl(clubBranding.default_lesson_banner_url.trim()) },
+      level: 'club_default',
+      url: clubBranding.default_lesson_banner_url.trim(),
+    };
+  }
+
+  const activePlatformBanners = platformBanners ?? getCachedPlatformBanners();
+  const platCustomUrl = getPlatformCustomImageUrl(activePlatformBanners?.default_lesson_banner);
+  if (platCustomUrl) {
+    return {
+      source: { uri: resolveMediaUrl(platCustomUrl) },
+      level: 'platform_default',
+      url: platCustomUrl,
+    };
+  }
+
+  const resolvedBackendUrl = typeof lesson === 'object' ? lesson?.resolved_image_url?.trim() : null;
+  if (resolvedBackendUrl && !isBuiltinDefaultUrl(resolvedBackendUrl)) {
+    return {
+      source: { uri: resolveMediaUrl(resolvedBackendUrl) },
+      level: 'platform_default',
+      url: resolvedBackendUrl,
+    };
+  }
+
+  return {
+    source: BUILTIN_FALLBACKS.lesson,
+    level: 'fallback',
+    url: null,
+  };
+}
+
+export const resolveLessonImageDetails = resolveLessonPictureDetails;
+
+
+/**
  * Resolves the court picture:
  * Displays the uploaded court photo ONLY.
  * NEVER falls back to club defaults, platform defaults, or generic stock images.

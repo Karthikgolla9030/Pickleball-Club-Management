@@ -128,8 +128,8 @@ function BrandingAssetCard({
             isCustom
               ? 'Configured'
               : hasFallback
-              ? 'Inheriting Default'
-              : 'Not Configured (Optional)'
+              ? 'Default'
+              : 'Optional'
           }
           variant={isCustom ? 'success' : hasFallback ? 'info' : 'default'}
         />
@@ -164,7 +164,7 @@ function BrandingAssetCard({
             />
             <View style={styles.inheritingBadgeOverlay}>
               <Info size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <AppText style={styles.inheritingBadgeText}>Inheriting Platform Admin Default</AppText>
+              <AppText style={styles.inheritingBadgeText}>Platform Default</AppText>
             </View>
           </>
         ) : isLogo ? (
@@ -1352,6 +1352,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#102B2A',
+    flexShrink: 1,
   },
   assetCardDesc: {
     fontSize: 12,

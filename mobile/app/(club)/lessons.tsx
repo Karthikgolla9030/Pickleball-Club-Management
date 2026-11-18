@@ -133,7 +133,7 @@ import {
   type UpdateLessonPayload,
 } from '@/types';
 import { formatCurrency, resolveMediaUrl, parseIsoToLocalParts } from '@/utils';
-import { resolveLessonImage } from '@/utils/imageResolution';
+import { resolveLessonImage, resolveLessonPictureDetails } from '@/utils/imageResolution';
 
 type StaffTab = 'lessons' | 'coaches' | 'lesson_types';
 
@@ -277,6 +277,17 @@ export default function ClubLessonsScreen() {
   const [lessonEndAt, setLessonEndAt] = useState('');
   const [lessonCapacity, setLessonCapacity] = useState('');
   const [lessonPrice, setLessonPrice] = useState('');
+
+  const isCustomLessonImage = Boolean(lessonImageUrl);
+  const resolvedLessonImageDetails = useMemo(() => {
+    return resolveLessonPictureDetails(lessonImageUrl, clubBranding, platformBanners);
+  }, [lessonImageUrl, clubBranding, platformBanners]);
+
+  const lessonImageStatusLabel = isCustomLessonImage
+    ? 'Custom lesson picture'
+    : resolvedLessonImageDetails.level === 'club_default'
+    ? 'Club default'
+    : 'Platform default';
 
   // Lesson Type & Coach options for SelectPickerInput
   const activeLessonTypes = useMemo(() => {
@@ -1445,43 +1456,29 @@ export default function ClubLessonsScreen() {
             <View style={styles.formAssetHeader}>
               <View style={styles.formAssetHeaderTitleRow}>
                 <ImageIcon size={16} color={Colors.brand.primary} />
-                <AppText variant="caption" color="secondary" style={styles.formAssetHeaderLabel}>
-                  LESSON PICTURE (OPTIONAL)
+                <AppText style={styles.formAssetHeaderTitle}>
+                  Lesson Picture (Optional)
                 </AppText>
               </View>
-              <Badge
-                label={lessonImageUrl ? 'Custom Picture' : 'Inheriting Club Default'}
-                variant={lessonImageUrl ? 'success' : 'default'}
-              />
             </View>
 
-            <AppText variant="caption" color="tertiary" style={styles.formAssetDescription}>
-              {lessonImageUrl
-                ? 'This custom picture will be displayed specifically for this lesson session.'
-                : "No custom picture selected. This lesson will automatically use your club's default coaching picture."}
+            <AppText style={styles.formAssetDescription}>
+              Uses your club's default coaching picture unless you upload a custom picture.
             </AppText>
 
             <View style={styles.formAssetPreviewContainer}>
-              {(() => {
-                const previewSource = lessonImageUrl
-                  ? { uri: resolveMediaUrl(lessonImageUrl) }
-                  : resolveLessonImage(null, clubBranding, platformBanners);
-                if (previewSource) {
-                  return (
-                    <Image
-                      source={previewSource}
-                      style={styles.formAssetPreviewImage}
-                      resizeMode="cover"
-                    />
-                  );
-                }
-                return (
-                  <View style={styles.formAssetEmptyPlaceholder}>
-                    <GraduationCap size={28} color="#94A3B8" />
-                    <AppText style={styles.formAssetEmptyText}>No image configured (optional)</AppText>
-                  </View>
-                );
-              })()}
+              {resolvedLessonImageDetails.source ? (
+                <Image
+                  source={resolvedLessonImageDetails.source}
+                  style={styles.formAssetPreviewImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.formAssetEmptyPlaceholder}>
+                  <GraduationCap size={28} color="#94A3B8" />
+                  <AppText style={styles.formAssetEmptyText}>No image configured (optional)</AppText>
+                </View>
+              )}
               {isUploadingLessonImage && (
                 <View style={styles.formAssetUploadingOverlay}>
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -1490,6 +1487,12 @@ export default function ClubLessonsScreen() {
                   </AppText>
                 </View>
               )}
+            </View>
+
+            {/* Source Status */}
+            <View style={styles.bannerStatusRow}>
+              <View style={styles.bannerStatusDot} />
+              <AppText style={styles.bannerStatusText}>{lessonImageStatusLabel}</AppText>
             </View>
 
             <View style={styles.formAssetActionsRow}>
@@ -1501,7 +1504,7 @@ export default function ClubLessonsScreen() {
               >
                 <Camera size={14} color={Colors.text.primary} />
                 <AppText variant="bodySmall" style={styles.formAssetActionBtnText}>
-                  {lessonImageUrl ? 'Replace Custom Picture' : 'Upload Custom Picture'}
+                  {lessonImageUrl ? 'Change Picture' : 'Upload Custom Picture'}
                 </AppText>
               </TouchableOpacity>
 
@@ -2309,9 +2312,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface.elevated,
     borderWidth: 1,
     borderColor: Colors.surface.border,
-    borderRadius: Radius.md,
-    padding: Spacing[3],
-    gap: Spacing[2],
+    borderRadius: Radius.lg,
+    padding: Spacing[3.5],
+    gap: Spacing[2.5],
   },
   formAssetHeader: {
     flexDirection: 'row',
@@ -2322,6 +2325,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 1,
+  },
+  formAssetHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
   },
   formAssetHeaderLabel: {
     fontSize: 10,
@@ -2330,16 +2339,35 @@ const styles = StyleSheet.create({
   },
   formAssetDescription: {
     fontSize: 12,
+    color: '#64748B',
     lineHeight: 16,
   },
   formAssetPreviewContainer: {
-    height: 120,
-    borderRadius: Radius.sm,
+    width: '100%',
+    height: 140,
+    borderRadius: Radius.md,
     overflow: 'hidden',
-    backgroundColor: Colors.surface.default,
+    backgroundColor: '#F1F5F9',
     position: 'relative',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: '#E2E8F0',
+  },
+  bannerStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 2,
+  },
+  bannerStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#08785E',
+  },
+  bannerStatusText: {
+    fontSize: 11.5,
+    fontWeight: '500',
+    color: '#64748B',
   },
   formAssetPreviewImage: {
     width: '100%',
