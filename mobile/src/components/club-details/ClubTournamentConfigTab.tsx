@@ -16,6 +16,7 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -24,14 +25,12 @@ import {
   Info,
   Layers,
   Save,
-  ShieldAlert,
   Trophy,
   Users,
   Zap,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { Input } from '@/components/Input';
@@ -66,6 +65,7 @@ export const DEFAULT_CLUB_TOURNAMENT_CONFIG = {
     pool_bracket_type: 'Single Elimination',
     target_score: 11,
     win_by: 2,
+    court_allocation_preference: 'all_available',
     advancement_rule: 'top_per_pool',
     tiebreaker_rules: [
       'wins',
@@ -80,6 +80,7 @@ export const DEFAULT_CLUB_TOURNAMENT_CONFIG = {
     bye_rule: 'Automatic BYEs awarded to top seeds',
     target_score: 11,
     win_by: 2,
+    court_allocation_preference: 'all_available',
     tiebreaker_rules: [
       'wins',
       'points_differential',
@@ -93,6 +94,7 @@ export const DEFAULT_CLUB_TOURNAMENT_CONFIG = {
     leaderboard_metric: 'Win Percentage (Wins / Played) • Avg Point Diff',
     target_score: 11,
     win_by: 2,
+    court_allocation_preference: 'all_available',
   },
 };
 
@@ -107,31 +109,43 @@ export function ClubTournamentConfigTab({
   isOwner,
   onSaved,
 }: ClubTournamentConfigTabProps) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 640;
+
   const [activeFormat, setActiveFormat] = useState<TournamentFormat>('round_robin');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
   // Form states per format
-  // Round Robin
+  // 1. Round Robin
   const [rrTargetScore, setRrTargetScore] = useState('11');
   const [rrWinBy, setRrWinBy] = useState('2');
   const [rrCourtPref, setRrCourtPref] = useState('all_available');
 
-  // Pool Play
+  // 2. Pool Play
   const [poolCount, setPoolCount] = useState('2');
   const [teamsPerPool, setTeamsPerPool] = useState('4');
   const [qualifiersPerPool, setQualifiersPerPool] = useState('2');
   const [poolBracketType, setPoolBracketType] = useState('Single Elimination');
+  const [ppCourtPref, setPpCourtPref] = useState('all_available');
+  const [ppTargetScore, setPpTargetScore] = useState('11');
+  const [ppWinBy, setPpWinBy] = useState('2');
 
-  // Bracket
+  // 3. Bracket
   const [bracketType, setBracketType] = useState<string>('Single Elimination');
   const [seedingMethod, setSeedingMethod] = useState<string>(BRACKET_SEEDING_OPTIONS[0]);
   const [byeRule, setByeRule] = useState<string>(BRACKET_BYE_OPTIONS[0]);
+  const [brCourtPref, setBrCourtPref] = useState('all_available');
+  const [brTargetScore, setBrTargetScore] = useState('11');
+  const [brWinBy, setBrWinBy] = useState('2');
 
-  // Scramble
+  // 4. Scramble
   const [scrambleRounds, setScrambleRounds] = useState('5');
   const [scrambleRotationRule, setScrambleRotationRule] = useState<string>(SCRAMBLE_ROTATION_OPTIONS[0]);
   const [scrambleLeaderboardMetric, setScrambleLeaderboardMetric] = useState<string>(SCRAMBLE_LEADERBOARD_OPTIONS[0]);
+  const [scCourtPref, setScCourtPref] = useState('all_available');
+  const [scTargetScore, setScTargetScore] = useState('11');
+  const [scWinBy, setScWinBy] = useState('2');
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -152,14 +166,23 @@ export function ClubTournamentConfigTab({
     setTeamsPerPool(String(pp.teams_per_pool ?? 4));
     setQualifiersPerPool(String(pp.qualifiers_per_pool ?? 2));
     setPoolBracketType(pp.pool_bracket_type || 'Single Elimination');
+    setPpCourtPref(pp.court_allocation_preference || 'all_available');
+    setPpTargetScore(String(pp.target_score ?? 11));
+    setPpWinBy(String(pp.win_by ?? 2));
 
     setBracketType(br.bracket_type || 'Single Elimination');
     setSeedingMethod(br.seeding_method || BRACKET_SEEDING_OPTIONS[0]);
     setByeRule(br.bye_rule || BRACKET_BYE_OPTIONS[0]);
+    setBrCourtPref(br.court_allocation_preference || 'all_available');
+    setBrTargetScore(String(br.target_score ?? 11));
+    setBrWinBy(String(br.win_by ?? 2));
 
     setScrambleRounds(String(sc.planned_rounds ?? 5));
     setScrambleRotationRule(sc.rotation_rule || SCRAMBLE_ROTATION_OPTIONS[0]);
     setScrambleLeaderboardMetric(sc.leaderboard_metric || SCRAMBLE_LEADERBOARD_OPTIONS[0]);
+    setScCourtPref(sc.court_allocation_preference || 'all_available');
+    setScTargetScore(String(sc.target_score ?? 11));
+    setScWinBy(String(sc.win_by ?? 2));
   }, [club]);
 
   const validate = (): boolean => {
@@ -175,13 +198,27 @@ export function ClubTournamentConfigTab({
     const pCount = parseInt(poolCount, 10);
     const tpp = parseInt(teamsPerPool, 10);
     const qpp = parseInt(qualifiersPerPool, 10);
+    const ppScore = parseInt(ppTargetScore, 10);
+    const ppW = parseInt(ppWinBy, 10);
     if (isNaN(pCount) || pCount < 2) errs.poolCount = 'Must have at least 2 pools.';
     if (isNaN(tpp) || tpp < 2) errs.teamsPerPool = 'Must have at least 2 teams per pool.';
     if (isNaN(qpp) || qpp < 1 || qpp > tpp) errs.qualifiersPerPool = 'Qualifiers must be between 1 and teams per pool.';
+    if (isNaN(ppScore) || ppScore < 1) errs.ppTargetScore = 'Target score must be at least 1.';
+    if (isNaN(ppW) || ppW < 1) errs.ppWinBy = 'Win by points must be at least 1.';
+
+    // Bracket validation
+    const brScore = parseInt(brTargetScore, 10);
+    const brW = parseInt(brWinBy, 10);
+    if (isNaN(brScore) || brScore < 1) errs.brTargetScore = 'Target score must be at least 1.';
+    if (isNaN(brW) || brW < 1) errs.brWinBy = 'Win by points must be at least 1.';
 
     // Scramble validation
     const sRounds = parseInt(scrambleRounds, 10);
+    const scScore = parseInt(scTargetScore, 10);
+    const scW = parseInt(scWinBy, 10);
     if (isNaN(sRounds) || sRounds < 1 || sRounds > 20) errs.scrambleRounds = 'Rounds must be between 1 and 20.';
+    if (isNaN(scScore) || scScore < 1) errs.scTargetScore = 'Target score must be at least 1.';
+    if (isNaN(scW) || scW < 1) errs.scWinBy = 'Win by points must be at least 1.';
 
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -219,39 +256,42 @@ export function ClubTournamentConfigTab({
         teams_per_pool: parseInt(teamsPerPool, 10) || 4,
         qualifiers_per_pool: parseInt(qualifiersPerPool, 10) || 2,
         pool_bracket_type: poolBracketType,
-        target_score: 11,
-        win_by: 2,
+        target_score: parseInt(ppTargetScore, 10) || 11,
+        win_by: parseInt(ppWinBy, 10) || 2,
+        court_allocation_preference: ppCourtPref,
         advancement_rule: 'top_per_pool',
         tiebreaker_rules: DEFAULT_CLUB_TOURNAMENT_CONFIG.pool_play.tiebreaker_rules,
         match_scoring: {
           game_format: 'single_game',
-          target_score: 11,
-          win_by: 2,
+          target_score: parseInt(ppTargetScore, 10) || 11,
+          win_by: parseInt(ppWinBy, 10) || 2,
         },
       },
       bracket: {
         bracket_type: bracketType,
         seeding_method: seedingMethod,
         bye_rule: byeRule,
-        target_score: 11,
-        win_by: 2,
+        target_score: parseInt(brTargetScore, 10) || 11,
+        win_by: parseInt(brWinBy, 10) || 2,
+        court_allocation_preference: brCourtPref,
         tiebreaker_rules: DEFAULT_CLUB_TOURNAMENT_CONFIG.bracket.tiebreaker_rules,
         match_scoring: {
           game_format: 'single_game',
-          target_score: 11,
-          win_by: 2,
+          target_score: parseInt(brTargetScore, 10) || 11,
+          win_by: parseInt(brWinBy, 10) || 2,
         },
       },
       scramble: {
         planned_rounds: parseInt(scrambleRounds, 10) || 5,
         rotation_rule: scrambleRotationRule,
         leaderboard_metric: scrambleLeaderboardMetric,
-        target_score: 11,
-        win_by: 2,
+        target_score: parseInt(scTargetScore, 10) || 11,
+        win_by: parseInt(scWinBy, 10) || 2,
+        court_allocation_preference: scCourtPref,
         match_scoring: {
           game_format: 'single_game',
-          target_score: 11,
-          win_by: 2,
+          target_score: parseInt(scTargetScore, 10) || 11,
+          win_by: parseInt(scWinBy, 10) || 2,
         },
       },
     };
@@ -278,23 +318,27 @@ export function ClubTournamentConfigTab({
     { key: 'scramble', label: 'Scramble', icon: Users },
   ];
 
+  const COURT_ALLOCATION_OPTIONS = [
+    { key: 'all_available', label: 'Use All Active Courts' },
+    { key: 'sequential', label: 'Sequential Allocation' },
+  ];
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Informational Header Card */}
+      {/* 1. Simplified Introduction Card */}
       <Card style={styles.introCard}>
         <View style={styles.introHeader}>
-          <Award size={20} color={Colors.brand.primary} />
-          <AppText variant="heading3" bold style={styles.introTitle}>
+          <Award size={18} color="#176B57" />
+          <AppText style={styles.introTitle}>
             Club Tournament Configuration
           </AppText>
         </View>
-        <AppText variant="caption" color="secondary" style={styles.introText}>
-          Configure tournament format defaults once for your club. When creating a tournament, these
-          settings are automatically applied so you do not need to configure them repeatedly.
+        <AppText style={styles.introText}>
+          Set your club's default tournament settings. These will be applied automatically when you create tournaments.
         </AppText>
       </Card>
 
@@ -306,21 +350,29 @@ export function ClubTournamentConfigTab({
         </View>
       )}
 
-      {/* Format Selector Tabs */}
-      <View style={styles.formatTabsTrack}>
+      {/* 2. Responsive Format Selector: 2x2 Grid on Mobile, Horizontal on Wide Screens */}
+      <View style={[styles.formatSelectorTrack, isMobile && styles.formatSelectorGrid]}>
         {FORMAT_TABS.map((tab) => {
           const isSelected = activeFormat === tab.key;
           const Icon = tab.icon;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.formatTabItem, isSelected && styles.formatTabItemSelected]}
+              style={[
+                styles.formatTabItem,
+                isMobile && styles.formatTabItemGrid,
+                isSelected && styles.formatTabItemSelected,
+              ]}
               onPress={() => setActiveFormat(tab.key)}
               activeOpacity={0.8}
             >
-              <Icon size={14} color={isSelected ? Colors.brand.primary : Colors.text.tertiary} />
+              <Icon
+                size={16}
+                color={isSelected ? '#0F392D' : '#64748B'}
+                strokeWidth={isSelected ? 2.2 : 1.8}
+              />
               <AppText
-                variant="caption"
+                numberOfLines={1}
                 style={[styles.formatTabText, isSelected && styles.formatTabTextSelected]}
               >
                 {tab.label}
@@ -333,18 +385,24 @@ export function ClubTournamentConfigTab({
       {/* ─── 1. Round Robin Configuration ────────────────────────────── */}
       {activeFormat === 'round_robin' && (
         <Card style={styles.formatCard}>
-          <View style={styles.cardHeaderRow}>
-            <Badge label="ROUND ROBIN ENGINE" variant="success" />
-            <AppText variant="caption" color="tertiary">
-              Full round-robin rotation
-            </AppText>
+          {/* Format Summary Header */}
+          <View style={styles.formatHeaderRow}>
+            <View style={styles.formatIconCircle}>
+              <Trophy size={18} color="#176B57" />
+            </View>
+            <View style={styles.formatHeaderTextCol}>
+              <AppText style={styles.formatHeaderTitle}>Round Robin Setup</AppText>
+              <AppText style={styles.formatHeaderDesc}>
+                Every participant plays against all other entries once.
+              </AppText>
+            </View>
           </View>
-          <AppText variant="bodySmall" color="secondary" style={styles.sectionExplanation}>
-            Every participant plays against all other entries once. Final positions are calculated
-            deterministically from match results.
-          </AppText>
 
-          <View style={styles.fieldsGrid}>
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Match Scoring */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Match Scoring</AppText>
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
@@ -371,46 +429,48 @@ export function ClubTournamentConfigTab({
                 />
               </View>
             </View>
+          </View>
 
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                COURT ALLOCATION PREFERENCE
-              </AppText>
-              <View style={styles.chipsRow}>
-                {[
-                  { key: 'all_available', label: 'Use All Active Courts' },
-                  { key: 'sequential', label: 'Sequential Allocation' },
-                ].map((opt) => (
-                  <TouchableOpacity
-                    key={opt.key}
-                    onPress={() => isOwner && setRrCourtPref(opt.key)}
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Court Allocation */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Court Allocation</AppText>
+            <AppText style={styles.sectionSubtitle}>
+              Determine how active club courts are assigned across tournament rounds.
+            </AppText>
+            <View style={styles.chipsRow}>
+              {COURT_ALLOCATION_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => isOwner && setRrCourtPref(opt.key)}
+                  style={[
+                    styles.choiceChip,
+                    rrCourtPref === opt.key && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
                     style={[
-                      styles.choiceChip,
-                      rrCourtPref === opt.key && styles.choiceChipActive,
+                      styles.choiceChipText,
+                      rrCourtPref === opt.key && styles.choiceChipTextActive,
                     ]}
-                    activeOpacity={0.7}
                   >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        rrCourtPref === opt.key && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt.label}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                    {opt.label}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
             </View>
+          </View>
 
-            {/* Tiebreaker Rules (Enforced) */}
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Tiebreaker Rules */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Deterministic Tiebreaker Hierarchy</AppText>
             <View style={styles.infoCardBox}>
-              <AppText variant="caption" bold style={styles.infoBoxTitle}>
-                Deterministic Tiebreaker Hierarchy
-              </AppText>
-              <AppText variant="caption" color="tertiary" style={styles.infoBoxText}>
-                1. Total Wins → 2. Point Differential → 3. Total Points Scored → 4. Team Name
+              <AppText style={styles.infoBoxText}>
+                Ties in standings are resolved strictly in this order: Total Wins → Point Differential → Total Points Scored → Team Name.
               </AppText>
             </View>
           </View>
@@ -420,17 +480,24 @@ export function ClubTournamentConfigTab({
       {/* ─── 2. Pool Play Configuration ────────────────────────────── */}
       {activeFormat === 'pool_play' && (
         <Card style={styles.formatCard}>
-          <View style={styles.cardHeaderRow}>
-            <Badge label="POOL PLAY ENGINE" variant="info" />
-            <AppText variant="caption" color="tertiary">
-              Groups + Championship Playoff
-            </AppText>
+          {/* Format Summary Header */}
+          <View style={styles.formatHeaderRow}>
+            <View style={styles.formatIconCircle}>
+              <Layers size={18} color="#176B57" />
+            </View>
+            <View style={styles.formatHeaderTextCol}>
+              <AppText style={styles.formatHeaderTitle}>Pool Play Setup</AppText>
+              <AppText style={styles.formatHeaderDesc}>
+                Participants are divided into pools, followed by a championship bracket.
+              </AppText>
+            </View>
           </View>
-          <AppText variant="bodySmall" color="secondary" style={styles.sectionExplanation}>
-            Participants are divided into groups (pools). Best performers advance into a championship bracket.
-          </AppText>
 
-          <View style={styles.fieldsGrid}>
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Pool Setup */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Pool Setup</AppText>
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
@@ -457,7 +524,13 @@ export function ClubTournamentConfigTab({
                 />
               </View>
             </View>
+          </View>
 
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Advancement to Championship Bracket */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Advancement to Championship Bracket</AppText>
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
@@ -468,7 +541,7 @@ export function ClubTournamentConfigTab({
                   placeholder="2"
                   editable={isOwner}
                   error={errors.qualifiersPerPool}
-                  hint="Top entries advancing"
+                  hint="Top entries advancing per pool"
                 />
               </View>
               <View style={styles.col}>
@@ -476,17 +549,85 @@ export function ClubTournamentConfigTab({
                   label="Playoff Bracket Type"
                   value={poolBracketType}
                   editable={false}
-                  hint="Championship stage"
+                  hint="Championship playoff stage"
                 />
               </View>
             </View>
+          </View>
 
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Court Allocation */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Court Allocation</AppText>
+            <AppText style={styles.sectionSubtitle}>
+              Determine how active club courts are assigned across tournament pools.
+            </AppText>
+            <View style={styles.chipsRow}>
+              {COURT_ALLOCATION_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => isOwner && setPpCourtPref(opt.key)}
+                  style={[
+                    styles.choiceChip,
+                    ppCourtPref === opt.key && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
+                    style={[
+                      styles.choiceChipText,
+                      ppCourtPref === opt.key && styles.choiceChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Match Scoring */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Match Scoring</AppText>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Input
+                  label="Target Score (Points) *"
+                  value={ppTargetScore}
+                  onChangeText={(v) => setPpTargetScore(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="11"
+                  editable={isOwner}
+                  error={errors.ppTargetScore}
+                  hint="Points needed to win game"
+                />
+              </View>
+              <View style={styles.col}>
+                <Input
+                  label="Win By Margin *"
+                  value={ppWinBy}
+                  onChangeText={(v) => setPpWinBy(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="2"
+                  editable={isOwner}
+                  error={errors.ppWinBy}
+                  hint="Lead required to close match"
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Tiebreaker Rules */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Advancement & Tiebreaker Rules</AppText>
             <View style={styles.infoCardBox}>
-              <AppText variant="caption" bold style={styles.infoBoxTitle}>
-                Advancement Structure
-              </AppText>
-              <AppText variant="caption" color="tertiary" style={styles.infoBoxText}>
-                Top {qualifiersPerPool || 2} entries from each pool automatically seed into a Single Elimination championship playoff bracket.
+              <AppText style={styles.infoBoxText}>
+                Top {qualifiersPerPool || 2} entries from each pool seed into a Single Elimination championship bracket. Ties within a pool are resolved by Total Wins → Point Differential → Total Points Scored → Team Name.
               </AppText>
             </View>
           </View>
@@ -496,101 +637,164 @@ export function ClubTournamentConfigTab({
       {/* ─── 3. Bracket Configuration ──────────────────────────────── */}
       {activeFormat === 'bracket' && (
         <Card style={styles.formatCard}>
-          <View style={styles.cardHeaderRow}>
-            <Badge label="BRACKET ENGINE" variant="default" />
-            <AppText variant="caption" color="tertiary">
-              Knockout Tournament
-            </AppText>
+          {/* Format Summary Header */}
+          <View style={styles.formatHeaderRow}>
+            <View style={styles.formatIconCircle}>
+              <Zap size={18} color="#176B57" />
+            </View>
+            <View style={styles.formatHeaderTextCol}>
+              <AppText style={styles.formatHeaderTitle}>Bracket Setup</AppText>
+              <AppText style={styles.formatHeaderDesc}>
+                Participants compete in single or double elimination bracket rounds.
+              </AppText>
+            </View>
           </View>
-          <AppText variant="bodySmall" color="secondary" style={styles.sectionExplanation}>
-            Participants compete in elimination matches. Match winners advance to the next round.
-          </AppText>
 
-          <View style={styles.fieldsGrid}>
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                DEFAULT BRACKET TYPE
-              </AppText>
-              <View style={styles.chipsRow}>
-                {BRACKET_TYPE_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => isOwner && setBracketType(opt)}
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Bracket Type */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Bracket Type</AppText>
+            <View style={styles.chipsRow}>
+              {BRACKET_TYPE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => isOwner && setBracketType(opt)}
+                  style={[
+                    styles.choiceChip,
+                    bracketType === opt && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
                     style={[
-                      styles.choiceChip,
-                      bracketType === opt && styles.choiceChipActive,
+                      styles.choiceChipText,
+                      bracketType === opt && styles.choiceChipTextActive,
                     ]}
-                    activeOpacity={0.7}
                   >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        bracketType === opt && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                    {opt}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
             </View>
+          </View>
 
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                SEEDING METHOD
-              </AppText>
-              <View style={styles.chipsRow}>
-                {BRACKET_SEEDING_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => isOwner && setSeedingMethod(opt)}
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Seeding Method */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Seeding Method</AppText>
+            <View style={styles.chipsRow}>
+              {BRACKET_SEEDING_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => isOwner && setSeedingMethod(opt)}
+                  style={[
+                    styles.choiceChip,
+                    seedingMethod === opt && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
                     style={[
-                      styles.choiceChip,
-                      seedingMethod === opt && styles.choiceChipActive,
+                      styles.choiceChipText,
+                      seedingMethod === opt && styles.choiceChipTextActive,
                     ]}
-                    activeOpacity={0.7}
                   >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        seedingMethod === opt && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                    {opt}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
             </View>
+          </View>
 
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                NON-POWER-OF-TWO BYES
-              </AppText>
-              <View style={styles.chipsRow}>
-                {BRACKET_BYE_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => isOwner && setByeRule(opt)}
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Byes and Advancement */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Byes and Advancement</AppText>
+            <View style={styles.chipsRow}>
+              {BRACKET_BYE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => isOwner && setByeRule(opt)}
+                  style={[
+                    styles.choiceChip,
+                    byeRule === opt && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
                     style={[
-                      styles.choiceChip,
-                      byeRule === opt && styles.choiceChipActive,
+                      styles.choiceChipText,
+                      byeRule === opt && styles.choiceChipTextActive,
                     ]}
-                    activeOpacity={0.7}
                   >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        byeRule === opt && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
+                    {opt}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Court Allocation */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Court Allocation</AppText>
+            <View style={styles.chipsRow}>
+              {COURT_ALLOCATION_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => isOwner && setBrCourtPref(opt.key)}
+                  style={[
+                    styles.choiceChip,
+                    brCourtPref === opt.key && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
+                    style={[
+                      styles.choiceChipText,
+                      brCourtPref === opt.key && styles.choiceChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Match Scoring */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Match Scoring</AppText>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Input
+                  label="Target Score (Points) *"
+                  value={brTargetScore}
+                  onChangeText={(v) => setBrTargetScore(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="11"
+                  editable={isOwner}
+                  error={errors.brTargetScore}
+                  hint="Points needed to win game"
+                />
+              </View>
+              <View style={styles.col}>
+                <Input
+                  label="Win By Margin *"
+                  value={brWinBy}
+                  onChangeText={(v) => setBrWinBy(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="2"
+                  editable={isOwner}
+                  error={errors.brWinBy}
+                  hint="Lead required to close match"
+                />
               </View>
             </View>
           </View>
@@ -600,85 +804,152 @@ export function ClubTournamentConfigTab({
       {/* ─── 4. Scramble Configuration ─────────────────────────────── */}
       {activeFormat === 'scramble' && (
         <Card style={styles.formatCard}>
-          <View style={styles.cardHeaderRow}>
-            <Badge label="SCRAMBLE ENGINE" variant="warning" />
-            <AppText variant="caption" color="tertiary">
-              Rotating Partners Play
-            </AppText>
+          {/* Format Summary Header */}
+          <View style={styles.formatHeaderRow}>
+            <View style={styles.formatIconCircle}>
+              <Users size={18} color="#176B57" />
+            </View>
+            <View style={styles.formatHeaderTextCol}>
+              <AppText style={styles.formatHeaderTitle}>Scramble Setup</AppText>
+              <AppText style={styles.formatHeaderDesc}>
+                Players register individually and rotate partners each round.
+              </AppText>
+            </View>
           </View>
-          <AppText variant="bodySmall" color="secondary" style={styles.sectionExplanation}>
-            Players register individually and rotate partners each round. Points accumulate individually on the standings leaderboard.
-          </AppText>
 
-          <View style={styles.fieldsGrid}>
-            <View style={styles.col}>
-              <Input
-                label="Default Planned Rotation Rounds *"
-                value={scrambleRounds}
-                onChangeText={(v) => setScrambleRounds(v.replace(/[^0-9]/g, ''))}
-                keyboardType="number-pad"
-                placeholder="5"
-                editable={isOwner}
-                error={errors.scrambleRounds}
-                hint="Recommended: 4 to 6 rounds"
-              />
-            </View>
+          <View style={styles.sectionDivider} />
 
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                PARTNER ROTATION RULE
-              </AppText>
-              <View style={styles.chipsRow}>
-                {SCRAMBLE_ROTATION_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => isOwner && setScrambleRotationRule(opt)}
+          {/* Section: Number of Rounds */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Number of Rounds</AppText>
+            <Input
+              label="Planned Rotation Rounds *"
+              value={scrambleRounds}
+              onChangeText={(v) => setScrambleRounds(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              placeholder="5"
+              editable={isOwner}
+              error={errors.scrambleRounds}
+              hint="Recommended: 4 to 6 rounds"
+            />
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Rotation Rules */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Rotation Rules</AppText>
+            <View style={styles.chipsRow}>
+              {SCRAMBLE_ROTATION_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => isOwner && setScrambleRotationRule(opt)}
+                  style={[
+                    styles.choiceChip,
+                    scrambleRotationRule === opt && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
                     style={[
-                      styles.choiceChip,
-                      scrambleRotationRule === opt && styles.choiceChipActive,
+                      styles.choiceChipText,
+                      scrambleRotationRule === opt && styles.choiceChipTextActive,
                     ]}
-                    activeOpacity={0.7}
                   >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        scrambleRotationRule === opt && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
+                    {opt}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Leaderboard and Scoring */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Leaderboard and Scoring</AppText>
+            <View style={styles.chipsRow}>
+              {SCRAMBLE_LEADERBOARD_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt}
+                  onPress={() => isOwner && setScrambleLeaderboardMetric(opt)}
+                  style={[
+                    styles.choiceChip,
+                    scrambleLeaderboardMetric === opt && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
+                    style={[
+                      styles.choiceChipText,
+                      scrambleLeaderboardMetric === opt && styles.choiceChipTextActive,
+                    ]}
+                  >
+                    {opt}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Court Allocation */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Court Allocation</AppText>
+            <View style={styles.chipsRow}>
+              {COURT_ALLOCATION_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => isOwner && setScCourtPref(opt.key)}
+                  style={[
+                    styles.choiceChip,
+                    scCourtPref === opt.key && styles.choiceChipActive,
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <AppText
+                    style={[
+                      styles.choiceChipText,
+                      scCourtPref === opt.key && styles.choiceChipTextActive,
+                    ]}
+                  >
+                    {opt.label}
+                  </AppText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.sectionDivider} />
+
+          {/* Section: Match Scoring */}
+          <View style={styles.sectionBlock}>
+            <AppText style={styles.sectionTitle}>Match Scoring</AppText>
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Input
+                  label="Target Score (Points) *"
+                  value={scTargetScore}
+                  onChangeText={(v) => setScTargetScore(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="11"
+                  editable={isOwner}
+                  error={errors.scTargetScore}
+                  hint="Points needed to win game"
+                />
               </View>
-            </View>
-
-            <View style={styles.fullCol}>
-              <AppText variant="caption" color="secondary" style={styles.fieldLabel}>
-                LEADERBOARD METRIC
-              </AppText>
-              <View style={styles.chipsRow}>
-                {SCRAMBLE_LEADERBOARD_OPTIONS.map((opt) => (
-                  <TouchableOpacity
-                    key={opt}
-                    onPress={() => isOwner && setScrambleLeaderboardMetric(opt)}
-                    style={[
-                      styles.choiceChip,
-                      scrambleLeaderboardMetric === opt && styles.choiceChipActive,
-                    ]}
-                    activeOpacity={0.7}
-                  >
-                    <AppText
-                      variant="caption"
-                      style={[
-                        styles.choiceChipText,
-                        scrambleLeaderboardMetric === opt && styles.choiceChipTextActive,
-                      ]}
-                    >
-                      {opt}
-                    </AppText>
-                  </TouchableOpacity>
-                ))}
+              <View style={styles.col}>
+                <Input
+                  label="Win By Margin *"
+                  value={scWinBy}
+                  onChangeText={(v) => setScWinBy(v.replace(/[^0-9]/g, ''))}
+                  keyboardType="number-pad"
+                  placeholder="2"
+                  editable={isOwner}
+                  error={errors.scWinBy}
+                  hint="Lead required to close match"
+                />
               </View>
             </View>
           </View>
@@ -706,28 +977,30 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     padding: Spacing[4],
-    gap: Spacing[4],
+    gap: 12,
     paddingBottom: Spacing[10],
   },
   introCard: {
     backgroundColor: '#F0FDF4',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#BBF7D0',
-    padding: Spacing[4],
-    gap: Spacing[2],
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
   },
   introHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    gap: 8,
   },
   introTitle: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
     color: '#065F46',
   },
   introText: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12.5,
+    lineHeight: 17,
     color: '#047857',
   },
   successBanner: {
@@ -746,120 +1019,172 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-  formatTabsTrack: {
+
+  // Format Selector Track
+  formatSelectorTrack: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.lg,
+    backgroundColor: '#E2EAE6',
+    borderRadius: Radius.full,
     padding: 3,
-    gap: 4,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
+    width: '100%',
+    alignItems: 'center',
+  },
+  formatSelectorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderRadius: 14,
+    padding: 4,
+    gap: 6,
+    justifyContent: 'space-between',
   },
   formatTabItem: {
     flex: 1,
+    height: 42,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: Spacing[2] + 2,
-    borderRadius: Radius.md,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+  },
+  formatTabItemGrid: {
+    flex: undefined,
+    width: '48.8%',
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D1DDD7',
   },
   formatTabItemSelected: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F392D',
+    borderColor: '#0F392D',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   formatTabText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.text.tertiary,
+    color: '#3D544F',
   },
   formatTabTextSelected: {
-    color: Colors.brand.primary,
+    color: '#FFFFFF',
     fontWeight: '700',
   },
+
+  // Format Configuration Card
   formatCard: {
-    padding: Spacing[4],
-    gap: Spacing[3],
-    backgroundColor: Colors.surface.default,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.surface.border,
-    borderRadius: Radius.lg,
+    borderColor: '#E2EAE6',
+    borderRadius: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  cardHeaderRow: {
+  formatHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    paddingBottom: 2,
   },
-  sectionExplanation: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: Spacing[1],
+  formatIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#E8F5EE',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  fieldsGrid: {
-    gap: Spacing[3],
+  formatHeaderTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  formatHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  formatHeaderDesc: {
+    fontSize: 12.5,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 14,
+  },
+
+  // Section Blocks
+  sectionBlock: {
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: -2,
+    marginBottom: 2,
   },
   row: {
     flexDirection: 'row',
-    gap: Spacing[3],
+    gap: 12,
   },
   col: {
     flex: 1,
-  },
-  fullCol: {
-    width: '100%',
-    gap: Spacing[1],
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    minWidth: 0,
   },
   chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing[2],
+    gap: 8,
   },
   choiceChip: {
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2],
-    borderRadius: Radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: Colors.surface.border,
-    backgroundColor: Colors.surface.default,
+    borderColor: '#E2EAE6',
+    backgroundColor: '#FFFFFF',
   },
   choiceChipActive: {
-    borderColor: Colors.brand.primary,
-    backgroundColor: 'rgba(8, 120, 94, 0.08)',
+    borderColor: '#176B57',
+    backgroundColor: '#E8F5EE',
   },
   choiceChipText: {
-    color: Colors.text.secondary,
+    color: '#475569',
     fontWeight: '600',
+    fontSize: 12.5,
   },
   choiceChipTextActive: {
-    color: Colors.brand.primary,
+    color: '#0F392D',
     fontWeight: '700',
   },
   infoCardBox: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
-    gap: 4,
-    marginTop: Spacing[1],
-  },
-  infoBoxTitle: {
-    fontSize: 12,
-    color: Colors.text.primary,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 2,
   },
   infoBoxText: {
-    fontSize: 11,
-    lineHeight: 16,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#475569',
   },
   actionsContainer: {
     marginTop: Spacing[2],

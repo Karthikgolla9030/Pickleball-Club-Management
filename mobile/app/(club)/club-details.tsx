@@ -24,6 +24,7 @@ import {
   StatusBar,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -124,6 +125,8 @@ function parseDaysList(rawDays: string | null | undefined): string[] {
 export default function ClubDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobileTabs = width < 640;
   const { clubId, role } = useActiveClub();
   const {
     club,
@@ -586,13 +589,13 @@ export default function ClubDetailsScreen() {
         borderless
       />
 
-      {/* Horizontal Segmented Control: Profile | Branding | Preview */}
+      {/* Segmented Control Tabs (Responsive 2x2 grid on mobile, horizontal on wide screens) */}
       <View style={styles.tabsContainer}>
-        <View style={styles.segmentedControlTrack}>
+        <View style={[styles.segmentedControlTrack, isMobileTabs && styles.segmentedControlTrackGrid]}>
           {[
             { key: 'edit', label: 'Profile' },
             { key: 'branding', label: 'Branding' },
-            { key: 'tournament_config', label: 'Tournament Config' },
+            { key: 'tournament_config', label: 'Tournament Configuration' },
             { key: 'preview', label: 'Preview' },
           ].map((tab) => {
             const isSelected = activeTab === tab.key;
@@ -601,15 +604,17 @@ export default function ClubDetailsScreen() {
                 key={tab.key}
                 style={[
                   styles.segmentedTabItem,
+                  isMobileTabs && styles.segmentedTabItemGrid,
                   isSelected && styles.segmentedTabItemSelected,
                 ]}
                 onPress={() => setActiveTab(tab.key as any)}
                 activeOpacity={0.8}
               >
                 <AppText
-                  numberOfLines={1}
+                  numberOfLines={isMobileTabs ? 2 : 1}
                   style={[
                     styles.segmentedTabText,
+                    isMobileTabs && styles.segmentedTabTextGrid,
                     isSelected && styles.segmentedTabTextSelected,
                   ]}
                 >
@@ -1534,6 +1539,14 @@ const styles = StyleSheet.create({
     padding: 3,
     width: '100%',
   },
+  segmentedControlTrackGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderRadius: 14,
+    padding: 4,
+    gap: 6,
+    justifyContent: 'space-between',
+  },
   segmentedTabItem: {
     flex: 1,
     height: 38,
@@ -1541,6 +1554,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing[1],
+  },
+  segmentedTabItemGrid: {
+    flex: undefined,
+    width: '48.8%',
+    height: 44,
+    borderRadius: 10,
+    paddingHorizontal: 8,
   },
   segmentedTabItemSelected: {
     backgroundColor: '#176B57',
@@ -1551,6 +1571,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#49635E',
     textAlign: 'center',
+  },
+  segmentedTabTextGrid: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   segmentedTabTextSelected: {
     color: '#FFFFFF',
