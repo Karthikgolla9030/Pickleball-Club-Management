@@ -189,6 +189,128 @@ function getLessonCardImage(
   return resolveLessonImage(item, clubBranding, platformBanners);
 }
 
+// ─── SUB-COMPONENTS FOR LESSON CARDS ─────────────────────────────────────────
+
+interface LessonThumbnailProps {
+  source: any;
+}
+
+const LessonThumbnail: React.FC<LessonThumbnailProps> = React.memo(({ source }) => {
+  const [hasError, setHasError] = useState(false);
+
+  const isValidSource = useMemo(() => {
+    if (!source) return false;
+    if (typeof source === 'number') return true;
+    if (typeof source === 'object' && 'uri' in source) {
+      const uri = (source as any).uri;
+      return typeof uri === 'string' && uri.trim().length > 0 && uri !== 'null' && uri !== 'undefined';
+    }
+    return false;
+  }, [source]);
+
+  if (!isValidSource || hasError) {
+    return (
+      <View style={styles.cardThumbnailFallback}>
+        <GraduationCap size={22} color="#18794E" strokeWidth={1.8} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={source}
+      style={styles.cardThumbnail}
+      resizeMode="cover"
+      onError={() => setHasError(true)}
+    />
+  );
+});
+
+interface LessonCardItemProps {
+  item: ClubLesson;
+  clubBranding?: ClubBranding | null;
+  platformBanners?: Record<string, any> | null;
+  onNavigateDetails: (item: ClubLesson) => void;
+  onOpenMenu: (item: ClubLesson) => void;
+}
+
+const LessonCardItem: React.FC<LessonCardItemProps> = React.memo(
+  ({ item, clubBranding, platformBanners, onNavigateDetails, onOpenMenu }) => {
+    const cardImg = getLessonCardImage(item, clubBranding, platformBanners);
+    const schedule = formatLessonDateTime(item.start_at, item.end_at);
+
+    return (
+      <TouchableOpacity
+        style={styles.lessonCard}
+        onPress={() => onNavigateDetails(item)}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel={`Lesson: ${item.title}`}
+      >
+        {/* Top Row: Thumbnail + (Title & Status) + Actions Menu */}
+        <View style={styles.cardTopRow}>
+          <LessonThumbnail source={cardImg} />
+
+          <View style={styles.cardMain}>
+            <View style={styles.titleAndBadgeRow}>
+              <AppText style={styles.lessonTitle} numberOfLines={2}>
+                {item.title}
+              </AppText>
+              <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
+                <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
+                  {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
+                </AppText>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              onOpenMenu(item);
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.moreBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Lesson options"
+          >
+            <MoreVertical size={16} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Subtle Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Bottom Row: Balanced Two-Sided Schedule & View Details CTA */}
+        <View style={styles.cardBottomRow}>
+          <View style={styles.scheduleLeftCol}>
+            <View style={styles.scheduleItemsRow}>
+              <View style={styles.scheduleItem}>
+                <Calendar size={13} color="#18794E" style={styles.scheduleIcon} />
+                <AppText style={styles.scheduleDateText}>{schedule.date}</AppText>
+              </View>
+              <View style={styles.scheduleItem}>
+                <Clock size={12.5} color="#64748B" style={styles.scheduleIcon} />
+                <AppText style={styles.scheduleTimeText}>{schedule.time}</AppText>
+              </View>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.viewDetailsBtn}
+            onPress={() => onNavigateDetails(item)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`View details for ${item.title}`}
+          >
+            <AppText style={styles.viewDetailsText}>View Details →</AppText>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+);
+
 export default function ClubLessonsScreen() {
   const router = useRouter();
   const { clubId: activeClubId, clubName } = useActiveClub();
@@ -981,81 +1103,15 @@ export default function ClubLessonsScreen() {
     </>
   );
 
-  const renderLessonCard = ({ item }: { item: ClubLesson }) => {
-    const cardImg = getLessonCardImage(item, clubBranding, platformBanners);
-    const schedule = formatLessonDateTime(item.start_at, item.end_at);
-
-    return (
-      <TouchableOpacity
-        style={styles.lessonCard}
-        onPress={() => handleNavigateToDetails(item)}
-        activeOpacity={0.88}
-        accessibilityRole="button"
-        accessibilityLabel={`Lesson: ${item.title}`}
-      >
-        {/* Top Section */}
-        <View style={styles.cardTopRow}>
-          {cardImg ? (
-            <Image source={cardImg} style={styles.cardThumbnail} resizeMode="cover" />
-          ) : (
-            <View style={styles.cardThumbnailFallback}>
-              <GraduationCap size={22} color="#18794E" strokeWidth={1.8} />
-            </View>
-          )}
-
-          <View style={styles.cardMain}>
-            <View style={styles.cardTopMeta}>
-              <View style={[styles.statusBadge, (styles as any)[`statusBadge_${item.status}`] || styles.statusBadge_draft]}>
-                <AppText style={[styles.statusBadgeText, (styles as any)[`statusBadgeText_${item.status}`] || styles.statusBadgeText_draft]}>
-                  {(LESSON_STATUS_LABELS[item.status] || item.status).toUpperCase()}
-                </AppText>
-              </View>
-
-              <TouchableOpacity
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  handleLessonMenu(item);
-                }}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={styles.moreBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Lesson options"
-              >
-                <MoreVertical size={16} color="#475569" />
-              </TouchableOpacity>
-            </View>
-
-            <AppText style={styles.lessonTitle} numberOfLines={2}>
-              {item.title}
-            </AppText>
-          </View>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.cardDivider} />
-
-        {/* Bottom Section: Compact Schedule Row & View Details CTA */}
-        <View style={styles.cardBottomRow}>
-          <View style={styles.scheduleRow}>
-            <Calendar size={13} color="#18794E" style={styles.scheduleIcon} />
-            <AppText style={styles.scheduleText} numberOfLines={1}>
-              {schedule.date}  •  {schedule.time}
-            </AppText>
-          </View>
-
-          <TouchableOpacity
-            style={styles.viewDetailsBtn}
-            onPress={() => handleNavigateToDetails(item)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={`View details for ${item.title}`}
-          >
-            <AppText style={styles.viewDetailsText}>View Details →</AppText>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderLessonCard = ({ item }: { item: ClubLesson }) => (
+    <LessonCardItem
+      item={item}
+      clubBranding={clubBranding}
+      platformBanners={platformBanners}
+      onNavigateDetails={handleNavigateToDetails}
+      onOpenMenu={handleLessonMenu}
+    />
+  );
 
   return (
     <Screen style={styles.container}>
@@ -1939,11 +1995,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2EAE6',
-    padding: 12,
+    padding: 13,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 1,
   },
   cardTopRow: {
@@ -1954,13 +2010,15 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: '#E5F5EC',
+    backgroundColor: '#E6F4EA',
   },
   cardThumbnailFallback: {
     width: 56,
     height: 56,
     borderRadius: 10,
-    backgroundColor: '#E5F5EC',
+    backgroundColor: '#E6F4EA',
+    borderWidth: 1,
+    borderColor: '#C6E7D2',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1989,19 +2047,21 @@ const styles = StyleSheet.create({
   cardMain: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 6,
     justifyContent: 'center',
     minWidth: 0,
-    gap: 4,
   },
-  cardTopMeta: {
+  titleAndBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   statusBadge: {
-    paddingHorizontal: 7,
+    paddingHorizontal: 7.5,
     paddingVertical: 2.5,
     borderRadius: 5,
+    alignSelf: 'center',
   },
   statusBadgeText: {
     fontSize: 9.5,
@@ -2033,13 +2093,18 @@ const styles = StyleSheet.create({
     color: '#C5221F',
   },
   moreBtn: {
-    padding: 4,
+    padding: 6,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-start',
   },
   lessonTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#102B2A',
-    lineHeight: 19,
+    lineHeight: 20,
   },
   cardDivider: {
     height: 1,
@@ -2050,35 +2115,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
-    flexWrap: 'wrap',
+    gap: 10,
   },
-  scheduleRow: {
+  scheduleLeftCol: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  scheduleItemsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    flexShrink: 1,
+    flexWrap: 'wrap',
+    rowGap: 4,
+    columnGap: 12,
+  },
+  scheduleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   scheduleIcon: {
     flexShrink: 0,
   },
-  scheduleText: {
+  scheduleDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  scheduleTimeText: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#475569',
+    color: '#64748B',
   },
   viewDetailsBtn: {
     backgroundColor: '#0F392D',
     paddingHorizontal: 13,
-    paddingVertical: 5.5,
+    paddingVertical: 6,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   viewDetailsText: {
     color: '#FFFFFF',
     fontSize: 11.5,
     fontWeight: '700',
+    letterSpacing: 0.1,
   },
   listContent: {
     paddingBottom: 100,
