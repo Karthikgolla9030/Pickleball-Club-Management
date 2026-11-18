@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
     AuthResponse,
+    ChangePasswordRequest,
     ClubLoginRequest,
     LoginRequest,
     PlatformLoginRequest,
@@ -127,3 +128,22 @@ async def get_me(
     """
     service = AuthService(db)
     return await service.get_current_user_profile(str(current_user.id))
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    """
+    Change password for authenticated user.
+    Requires current password verification.
+    """
+    service = AuthService(db)
+    await service.change_password(
+        user_id=str(current_user.id),
+        current_password=request.current_password,
+        new_password=request.new_password,
+    )
+    return {"status": "ok", "message": "Password changed successfully"}

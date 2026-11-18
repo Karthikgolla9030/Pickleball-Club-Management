@@ -339,3 +339,22 @@ class AuthService:
             user=UserResponse.model_validate(user),
             memberships=[_build_membership_info(m) for m in memberships],
         )
+
+    async def change_password(
+        self, user_id: str, current_password: str, new_password: str
+    ) -> None:
+        """Update authenticated user's password after verifying existing password."""
+        from uuid import UUID
+        user = await self.user_repo.get_by_id(UUID(user_id))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+        if not verify_password(current_password, user.hashed_password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Current password does not match our records.",
+            )
+        user.hashed_password = hash_password(new_password)
+        await self.db.commit()

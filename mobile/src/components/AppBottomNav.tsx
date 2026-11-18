@@ -91,7 +91,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
   const isClubTournamentsActive = normalizedPath === '/(club)/tournaments';
   const isClubLeaguesActive = normalizedPath === '/(club)/leagues';
   const isClubEventsActive = normalizedPath === '/(club)/events';
-  const isClubProfileActive = normalizedPath === '/(club)/settings' || normalizedPath === '/(club)/profile';
+  const isClubProfileActive = normalizedPath === '/(club)/profile';
 
   const handleNavigate = (route: string) => {
     if (normalizedPath === route) return;

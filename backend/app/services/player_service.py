@@ -224,6 +224,19 @@ class PlayerService:
             await self.db.refresh(updated)
             resp = PlayerProfileResponse.model_validate(updated)
 
+        # Synchronize User.full_name if name fields were updated
+        try:
+            user = await self.user_repo.get_by_id(user_id)
+            if user:
+                name_parts = [p for p in (updated.first_name, updated.last_name) if p]
+                if name_parts:
+                    user.full_name = " ".join(name_parts)
+                elif updated.display_name:
+                    user.full_name = updated.display_name
+                await self.db.commit()
+        except Exception:
+            pass
+
         # Dispatch real-time profile update to user and their clubs
         try:
             memberships = await self.player_membership_repo.get_user_player_memberships(user_id)

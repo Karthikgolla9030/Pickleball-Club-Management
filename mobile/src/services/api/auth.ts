@@ -82,4 +82,15 @@ export const authApi = {
   getMe(): Promise<AuthResponse> {
     return apiClient.get<AuthResponse>(API_ENDPOINTS.AUTH_ME, true);
   },
+
+  /**
+   * Change password for the current authenticated user.
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<{ status: string; message: string }> {
+    return apiClient.post<{ status: string; message: string }>(
+      `${API_ENDPOINTS.BASE}/api/v1/auth/change-password`,
+      { current_password: currentPassword, new_password: newPassword },
+      true
+    );
+  },
 };

@@ -141,3 +141,26 @@ class AuthResponse(BaseModel):
 class TokenRefreshResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("current_password")
+    @classmethod
+    def validate_current_password_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Current password is required")
+        return v
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("New password must be at least 8 characters")
+        if not _HAS_LETTER.search(v):
+            raise ValueError("New password must contain at least one letter")
+        if not _HAS_DIGIT.search(v):
+            raise ValueError("New password must contain at least one number")
+        return v
