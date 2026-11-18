@@ -125,8 +125,6 @@ function parseDaysList(rawDays: string | null | undefined): string[] {
 export default function ClubDetailsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isMobileTabs = width < 640;
   const { clubId, role } = useActiveClub();
   const {
     club,
@@ -589,40 +587,85 @@ export default function ClubDetailsScreen() {
         borderless
       />
 
-      {/* Segmented Control Tabs (Responsive 2x2 grid on mobile, horizontal on wide screens) */}
+      {/* ─── Club Details Navigation (2x2 Grid) ─── */}
       <View style={styles.tabsContainer}>
-        <View style={[styles.segmentedControlTrack, isMobileTabs && styles.segmentedControlTrackGrid]}>
-          {[
-            { key: 'edit', label: 'Profile' },
-            { key: 'branding', label: 'Branding' },
-            { key: 'tournament_config', label: 'Tournament Configuration' },
-            { key: 'preview', label: 'Preview' },
-          ].map((tab) => {
-            const isSelected = activeTab === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
+        <View style={styles.tabsGridContainer}>
+          <View style={styles.tabsGridRow}>
+            <TouchableOpacity
+              style={[
+                styles.gridTabBtn,
+                activeTab === 'edit' && styles.gridTabBtnSelected,
+              ]}
+              onPress={() => setActiveTab('edit')}
+              activeOpacity={0.8}
+            >
+              <AppText
                 style={[
-                  styles.segmentedTabItem,
-                  isMobileTabs && styles.segmentedTabItemGrid,
-                  isSelected && styles.segmentedTabItemSelected,
+                  styles.gridTabBtnText,
+                  activeTab === 'edit' && styles.gridTabBtnTextSelected,
                 ]}
-                onPress={() => setActiveTab(tab.key as any)}
-                activeOpacity={0.8}
               >
-                <AppText
-                  numberOfLines={isMobileTabs ? 2 : 1}
-                  style={[
-                    styles.segmentedTabText,
-                    isMobileTabs && styles.segmentedTabTextGrid,
-                    isSelected && styles.segmentedTabTextSelected,
-                  ]}
-                >
-                  {tab.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
+                Profile
+              </AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.gridTabBtn,
+                activeTab === 'branding' && styles.gridTabBtnSelected,
+              ]}
+              onPress={() => setActiveTab('branding')}
+              activeOpacity={0.8}
+            >
+              <AppText
+                style={[
+                  styles.gridTabBtnText,
+                  activeTab === 'branding' && styles.gridTabBtnTextSelected,
+                ]}
+              >
+                Branding
+              </AppText>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.tabsGridRow}>
+            <TouchableOpacity
+              style={[
+                styles.gridTabBtn,
+                activeTab === 'tournament_config' && styles.gridTabBtnSelected,
+              ]}
+              onPress={() => setActiveTab('tournament_config')}
+              activeOpacity={0.8}
+            >
+              <AppText
+                style={[
+                  styles.gridTabBtnText,
+                  styles.gridTabBtnTextConfig,
+                  activeTab === 'tournament_config' && styles.gridTabBtnTextSelected,
+                ]}
+              >
+                Tournament Configuration
+              </AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.gridTabBtn,
+                activeTab === 'preview' && styles.gridTabBtnSelected,
+              ]}
+              onPress={() => setActiveTab('preview')}
+              activeOpacity={0.8}
+            >
+              <AppText
+                style={[
+                  styles.gridTabBtnText,
+                  activeTab === 'preview' && styles.gridTabBtnTextSelected,
+                ]}
+              >
+                Preview
+              </AppText>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -1531,52 +1574,40 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing[3],
     backgroundColor: '#F4F8F5',
   },
-  segmentedControlTrack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E2EAE6',
-    borderRadius: Radius.full,
-    padding: 3,
+  tabsGridContainer: {
+    gap: 8,
     width: '100%',
   },
-  segmentedControlTrackGrid: {
+  tabsGridRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    borderRadius: 14,
-    padding: 4,
-    gap: 6,
-    justifyContent: 'space-between',
+    gap: 8,
+    width: '100%',
   },
-  segmentedTabItem: {
+  gridTabBtn: {
     flex: 1,
-    height: 38,
-    borderRadius: Radius.full,
+    minHeight: 46,
+    borderRadius: 12,
+    backgroundColor: '#E2EAE6',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing[1],
-  },
-  segmentedTabItemGrid: {
-    flex: undefined,
-    width: '48.8%',
-    height: 44,
-    borderRadius: 10,
     paddingHorizontal: 8,
+    paddingVertical: 6,
   },
-  segmentedTabItemSelected: {
+  gridTabBtnSelected: {
     backgroundColor: '#176B57',
     ...Shadows.sm,
   },
-  segmentedTabText: {
+  gridTabBtnText: {
     fontSize: 13,
     fontWeight: '600',
     color: '#49635E',
     textAlign: 'center',
   },
-  segmentedTabTextGrid: {
+  gridTabBtnTextConfig: {
     fontSize: 12,
     lineHeight: 16,
   },
-  segmentedTabTextSelected: {
+  gridTabBtnTextSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
   },

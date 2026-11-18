@@ -16,7 +16,6 @@ import {
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -109,9 +108,6 @@ export function ClubTournamentConfigTab({
   isOwner,
   onSaved,
 }: ClubTournamentConfigTabProps) {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 640;
-
   const [activeFormat, setActiveFormat] = useState<TournamentFormat>('round_robin');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -311,13 +307,6 @@ export function ClubTournamentConfigTab({
     }
   };
 
-  const FORMAT_TABS: Array<{ key: TournamentFormat; label: string; icon: any }> = [
-    { key: 'round_robin', label: 'Round Robin', icon: Trophy },
-    { key: 'pool_play', label: 'Pool Play', icon: Layers },
-    { key: 'bracket', label: 'Bracket', icon: Zap },
-    { key: 'scramble', label: 'Scramble', icon: Users },
-  ];
-
   const COURT_ALLOCATION_OPTIONS = [
     { key: 'all_available', label: 'Use All Active Courts' },
     { key: 'sequential', label: 'Sequential Allocation' },
@@ -350,36 +339,103 @@ export function ClubTournamentConfigTab({
         </View>
       )}
 
-      {/* 2. Responsive Format Selector: 2x2 Grid on Mobile, Horizontal on Wide Screens */}
-      <View style={[styles.formatSelectorTrack, isMobile && styles.formatSelectorGrid]}>
-        {FORMAT_TABS.map((tab) => {
-          const isSelected = activeFormat === tab.key;
-          const Icon = tab.icon;
-          return (
-            <TouchableOpacity
-              key={tab.key}
+      {/* 2. Tournament Format Selector: 2x2 Grid */}
+      <View style={styles.formatSelectorContainer}>
+        <View style={styles.formatSelectorRow}>
+          <TouchableOpacity
+            style={[
+              styles.formatBtn,
+              activeFormat === 'round_robin' && styles.formatBtnSelected,
+            ]}
+            onPress={() => setActiveFormat('round_robin')}
+            activeOpacity={0.8}
+          >
+            <Trophy
+              size={16}
+              color={activeFormat === 'round_robin' ? '#FFFFFF' : '#176B57'}
+              strokeWidth={activeFormat === 'round_robin' ? 2.2 : 1.8}
+            />
+            <AppText
               style={[
-                styles.formatTabItem,
-                isMobile && styles.formatTabItemGrid,
-                isSelected && styles.formatTabItemSelected,
+                styles.formatBtnText,
+                activeFormat === 'round_robin' && styles.formatBtnTextSelected,
               ]}
-              onPress={() => setActiveFormat(tab.key)}
-              activeOpacity={0.8}
             >
-              <Icon
-                size={16}
-                color={isSelected ? '#0F392D' : '#64748B'}
-                strokeWidth={isSelected ? 2.2 : 1.8}
-              />
-              <AppText
-                numberOfLines={1}
-                style={[styles.formatTabText, isSelected && styles.formatTabTextSelected]}
-              >
-                {tab.label}
-              </AppText>
-            </TouchableOpacity>
-          );
-        })}
+              Round Robin
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.formatBtn,
+              activeFormat === 'pool_play' && styles.formatBtnSelected,
+            ]}
+            onPress={() => setActiveFormat('pool_play')}
+            activeOpacity={0.8}
+          >
+            <Layers
+              size={16}
+              color={activeFormat === 'pool_play' ? '#FFFFFF' : '#176B57'}
+              strokeWidth={activeFormat === 'pool_play' ? 2.2 : 1.8}
+            />
+            <AppText
+              style={[
+                styles.formatBtnText,
+                activeFormat === 'pool_play' && styles.formatBtnTextSelected,
+              ]}
+            >
+              Pool Play
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.formatSelectorRow}>
+          <TouchableOpacity
+            style={[
+              styles.formatBtn,
+              activeFormat === 'bracket' && styles.formatBtnSelected,
+            ]}
+            onPress={() => setActiveFormat('bracket')}
+            activeOpacity={0.8}
+          >
+            <Zap
+              size={16}
+              color={activeFormat === 'bracket' ? '#FFFFFF' : '#176B57'}
+              strokeWidth={activeFormat === 'bracket' ? 2.2 : 1.8}
+            />
+            <AppText
+              style={[
+                styles.formatBtnText,
+                activeFormat === 'bracket' && styles.formatBtnTextSelected,
+              ]}
+            >
+              Bracket
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.formatBtn,
+              activeFormat === 'scramble' && styles.formatBtnSelected,
+            ]}
+            onPress={() => setActiveFormat('scramble')}
+            activeOpacity={0.8}
+          >
+            <Users
+              size={16}
+              color={activeFormat === 'scramble' ? '#FFFFFF' : '#176B57'}
+              strokeWidth={activeFormat === 'scramble' ? 2.2 : 1.8}
+            />
+            <AppText
+              style={[
+                styles.formatBtnText,
+                activeFormat === 'scramble' && styles.formatBtnTextSelected,
+              ]}
+            >
+              Scramble
+            </AppText>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ─── 1. Round Robin Configuration ────────────────────────────── */}
@@ -1020,57 +1076,51 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // Format Selector Track
-  formatSelectorTrack: {
-    flexDirection: 'row',
-    backgroundColor: '#E2EAE6',
-    borderRadius: Radius.full,
-    padding: 3,
+  // Format Selector 2x2 Grid
+  formatSelectorContainer: {
+    gap: 8,
     width: '100%',
-    alignItems: 'center',
   },
-  formatSelectorGrid: {
+  formatSelectorRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    borderRadius: 14,
-    padding: 4,
-    gap: 6,
-    justifyContent: 'space-between',
+    gap: 8,
+    width: '100%',
   },
-  formatTabItem: {
+  formatBtn: {
     flex: 1,
-    height: 42,
+    minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    borderRadius: Radius.full,
-    paddingHorizontal: 8,
-  },
-  formatTabItemGrid: {
-    flex: undefined,
-    width: '48.8%',
-    height: 46,
-    borderRadius: 10,
+    gap: 8,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1DDD7',
+    borderWidth: 1.5,
+    borderColor: '#E2EAE6',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  formatTabItemSelected: {
+  formatBtnSelected: {
     backgroundColor: '#0F392D',
     borderColor: '#0F392D',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 2,
   },
-  formatTabText: {
-    fontSize: 13,
+  formatBtnText: {
+    fontSize: 13.5,
     fontWeight: '600',
-    color: '#3D544F',
+    color: '#102B2A',
+    textAlign: 'center',
   },
-  formatTabTextSelected: {
+  formatBtnTextSelected: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
