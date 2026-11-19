@@ -89,7 +89,7 @@ interface MemberAvatarProps {
   size?: number;
 }
 
-function MemberAvatar({ imageUrl, name, size = 42 }: MemberAvatarProps) {
+function MemberAvatar({ imageUrl, name, size = 40 }: MemberAvatarProps) {
   const [loadError, setLoadError] = useState(false);
 
   const resolvedUri = useMemo(() => {
@@ -1109,21 +1109,18 @@ export default function ClubMembersScreen() {
 
     return (
       <View style={styles.memberCard}>
-        {/* Top Profile Information Area */}
+        {/* Top Profile Information Area: Two-Column Header */}
         <View style={styles.cardHeader}>
-          {/* Avatar (42px) */}
-          <MemberAvatar
-            imageUrl={item.profile_image_url}
-            name={playerName}
-            size={42}
-          />
-
-          {/* Details Column */}
-          <View style={styles.cardContent}>
-            {/* Top Row: Name + ID + Three-dot Menu */}
-            <View style={styles.cardTopRow}>
-              <View style={styles.nameBlock}>
-                <AppText style={styles.memberName} numberOfLines={1}>
+          {/* Left Side: Avatar + Name + ID + Email */}
+          <View style={styles.cardLeftCol}>
+            <MemberAvatar
+              imageUrl={item.profile_image_url}
+              name={playerName}
+              size={40}
+            />
+            <View style={styles.memberInfo}>
+              <View style={styles.nameRow}>
+                <AppText style={styles.memberName}>
                   {playerName}
                 </AppText>
                 {formattedMemberNumber && (
@@ -1132,64 +1129,55 @@ export default function ClubMembersScreen() {
                   </View>
                 )}
               </View>
-
-              <TouchableOpacity
-                onPress={() => handlePlayerMenu(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.threeDotBtn}
-                accessibilityLabel="Player actions"
-              >
-                <MoreVertical size={16} color="#64748B" strokeWidth={2} />
-              </TouchableOpacity>
+              <AppText style={styles.memberEmail}>
+                {item.user_email}
+              </AppText>
             </View>
+          </View>
 
-            {/* Email */}
-            <AppText style={styles.memberEmail} numberOfLines={1}>
-              {item.user_email}
-            </AppText>
-
-            {/* Badges Row: Status + Subscription Plan (Only when subscriber) */}
-            <View style={styles.badgesRow}>
+          {/* Right Side: Badges vertically stacked & right-aligned */}
+          <View style={styles.cardRightCol}>
+            {/* Row 1: Active status */}
+            <View
+              style={[
+                styles.statusBadge,
+                isActive && styles.statusBadgeActive,
+                isInactive && styles.statusBadgeInactive,
+                isSuspended && styles.statusBadgeWarning,
+                isExpired && styles.statusBadgeDanger,
+              ]}
+            >
               <View
                 style={[
-                  styles.statusBadge,
-                  isActive && styles.statusBadgeActive,
-                  isInactive && styles.statusBadgeInactive,
-                  isSuspended && styles.statusBadgeWarning,
-                  isExpired && styles.statusBadgeDanger,
+                  styles.statusDot,
+                  isActive && styles.statusDotActive,
+                  isInactive && styles.statusDotInactive,
+                  isSuspended && styles.statusDotWarning,
+                  isExpired && styles.statusDotDanger,
+                ]}
+              />
+              <AppText
+                style={[
+                  styles.statusBadgeText,
+                  isActive && styles.statusBadgeTextActive,
+                  isInactive && styles.statusBadgeTextInactive,
+                  isSuspended && styles.statusBadgeTextWarning,
+                  isExpired && styles.statusBadgeTextDanger,
                 ]}
               >
-                <View
-                  style={[
-                    styles.statusDot,
-                    isActive && styles.statusDotActive,
-                    isInactive && styles.statusDotInactive,
-                    isSuspended && styles.statusDotWarning,
-                    isExpired && styles.statusDotDanger,
-                  ]}
-                />
-                <AppText
-                  style={[
-                    styles.statusBadgeText,
-                    isActive && styles.statusBadgeTextActive,
-                    isInactive && styles.statusBadgeTextInactive,
-                    isSuspended && styles.statusBadgeTextWarning,
-                    isExpired && styles.statusBadgeTextDanger,
-                  ]}
-                >
-                  {item.status.toUpperCase()}
+                {item.status.toUpperCase()}
+              </AppText>
+            </View>
+
+            {/* Row 2: Membership badge, if applicable */}
+            {subInfo && (
+              <View style={styles.subPlanBadge}>
+                <AppText style={styles.subPlanBadgeText}>
+                  {subInfo.planName}
+                  {subInfo.status === 'scheduled' ? ' · Scheduled' : ''}
                 </AppText>
               </View>
-
-              {subInfo && (
-                <View style={styles.subPlanBadge}>
-                  <AppText style={styles.subPlanBadgeText}>
-                    {subInfo.planName}
-                    {subInfo.status === 'scheduled' ? ' · Scheduled' : ''}
-                  </AppText>
-                </View>
-              )}
-            </View>
+            )}
           </View>
         </View>
 
@@ -1288,101 +1276,90 @@ export default function ClubMembersScreen() {
 
     return (
       <View style={styles.memberCard}>
-        {/* Top Information Area */}
+        {/* Top Information Area: Two-Column Header */}
         <View style={styles.cardHeader}>
-          {/* Avatar (42px) */}
-          <MemberAvatar
-            imageUrl={item.profile_image_url}
-            name={staffName}
-            size={42}
-          />
-
-          {/* Details Column */}
-          <View style={styles.cardContent}>
-            {/* Top Row: Name + Three-dot Menu */}
-            <View style={styles.cardTopRow}>
-              <View style={styles.nameBlock}>
-                <AppText style={styles.memberName} numberOfLines={1}>
+          {/* Left Side: Avatar + Name + Email */}
+          <View style={styles.cardLeftCol}>
+            <MemberAvatar
+              imageUrl={item.profile_image_url}
+              name={staffName}
+              size={40}
+            />
+            <View style={styles.memberInfo}>
+              <View style={styles.nameRow}>
+                <AppText style={styles.memberName}>
                   {staffName}
                 </AppText>
               </View>
-
-              <TouchableOpacity
-                onPress={() => handleStaffMenu(item)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.threeDotBtn}
-                accessibilityLabel="Staff actions"
-              >
-                <MoreVertical size={16} color="#64748B" strokeWidth={2} />
-              </TouchableOpacity>
+              <AppText style={styles.memberEmail}>
+                {item.user_email}
+              </AppText>
             </View>
+          </View>
 
-            {/* Email */}
-            <AppText style={styles.memberEmail} numberOfLines={1}>
-              {item.user_email}
-            </AppText>
-
-            {/* Badges Row: Role Badge + Status Badge */}
-            <View style={styles.badgesRow}>
-              <View
-                style={[
-                  styles.roleBadge,
-                  {
-                    backgroundColor: roleConfig.bg,
-                    borderColor: roleConfig.border,
-                  },
-                ]}
-              >
-                {isCustomRole && (
-                  <Shield
-                    size={11}
-                    color="#0F766E"
-                    strokeWidth={2.2}
-                    style={{ marginRight: 3 }}
-                  />
-                )}
-                <AppText
-                  style={[styles.roleBadgeText, { color: roleConfig.text }]}
-                >
-                  {roleConfig.label}
-                </AppText>
-              </View>
-
-              <View
-                style={[
-                  styles.statusBadge,
-                  item.is_active ? styles.statusBadgeActive : styles.statusBadgeDanger,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    item.is_active ? styles.statusDotActive : styles.statusDotDanger,
-                  ]}
+          {/* Right Side: Badges vertically stacked & right-aligned */}
+          <View style={styles.cardRightCol}>
+            {/* Row 1: Role badge */}
+            <View
+              style={[
+                styles.roleBadge,
+                {
+                  backgroundColor: roleConfig.bg,
+                  borderColor: roleConfig.border,
+                },
+              ]}
+            >
+              {isCustomRole && (
+                <Shield
+                  size={10}
+                  color="#0F766E"
+                  strokeWidth={2.2}
+                  style={{ marginRight: 3 }}
                 />
-                <AppText
-                  style={[
-                    styles.statusBadgeText,
-                    item.is_active ? styles.statusBadgeTextActive : styles.statusBadgeTextDanger,
-                  ]}
-                >
-                  {item.is_active ? 'ACTIVE' : 'DISABLED'}
+              )}
+              <AppText
+                style={[styles.roleBadgeText, { color: roleConfig.text }]}
+              >
+                {roleConfig.label}
+              </AppText>
+            </View>
+
+            {/* Row 2: Active status */}
+            <View
+              style={[
+                styles.statusBadge,
+                item.is_active ? styles.statusBadgeActive : styles.statusBadgeDanger,
+              ]}
+            >
+              <View
+                style={[
+                  styles.statusDot,
+                  item.is_active ? styles.statusDotActive : styles.statusDotDanger,
+                ]}
+              />
+              <AppText
+                style={[
+                  styles.statusBadgeText,
+                  item.is_active ? styles.statusBadgeTextActive : styles.statusBadgeTextDanger,
+                ]}
+              >
+                {item.is_active ? 'ACTIVE' : 'DISABLED'}
+              </AppText>
+            </View>
+
+            {/* Row 3: Legacy Staff indicator if applicable */}
+            {isLegacyStaff && (
+              <View
+                style={[
+                  styles.subPlanBadge,
+                  { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+                ]}
+              >
+                <AppText style={[styles.subPlanBadgeText, { color: '#92400E' }]}>
+                  0 permissions
                 </AppText>
               </View>
-
-              {isLegacyStaff && (
-                <View
-                  style={[
-                    styles.subPlanBadge,
-                    { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
-                  ]}
-                >
-                  <AppText style={[styles.subPlanBadgeText, { color: '#92400E' }]}>
-                    0 permissions
-                  </AppText>
-                </View>
-              )}
-            </View>
+            )}
           </View>
         </View>
 
@@ -2694,7 +2671,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E2EAE5',
     paddingTop: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingBottom: 0,
     marginBottom: 10,
     shadowColor: '#000000',
@@ -2706,52 +2683,52 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  nameBlock: {
+  cardLeftCol: {
     flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  memberInfo: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
+  },
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginRight: 6,
+    flexWrap: 'wrap',
+    gap: 5,
   },
   memberName: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#102F2A',
-    lineHeight: 20,
-    flexShrink: 1,
+    lineHeight: 19,
   },
   idBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   idBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.2,
   },
-  threeDotBtn: {
-    padding: 2,
-  },
   memberEmail: {
-    fontSize: 12,
+    fontSize: 11.5,
     color: '#64748B',
     marginTop: 2,
-    marginBottom: 6,
+    lineHeight: 16,
   },
 
   // ─── Avatar ──────────────────────────────────────────────────────────────────
@@ -2775,34 +2752,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ─── Badges Row ──────────────────────────────────────────────────────────────
-  badgesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
+  // ─── Right Column Badges ─────────────────────────────────────────────────────
+  cardRightCol: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+    gap: 4,
+    flexShrink: 0,
+    maxWidth: '48%',
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    paddingHorizontal: 6.5,
+    paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
+    alignSelf: 'flex-end',
+    maxWidth: '100%',
   },
   roleBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.2,
+    textAlign: 'right',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 12,
+    paddingHorizontal: 6.5,
+    paddingVertical: 2,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
-    gap: 4.5,
+    gap: 4,
+    alignSelf: 'flex-end',
   },
   statusBadgeActive: {
     backgroundColor: '#DEF2E6',
@@ -2817,8 +2799,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
   },
   statusDot: {
-    width: 6,
-    height: 6,
+    width: 5.5,
+    height: 5.5,
     borderRadius: 3,
     backgroundColor: '#94A3B8',
   },
@@ -2835,7 +2817,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#94A3B8',
   },
   statusBadgeText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.3,
     color: '#64748B',
@@ -2856,15 +2838,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#E0F2FE',
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
+    paddingHorizontal: 6.5,
+    paddingVertical: 2,
     borderRadius: 6,
-    maxWidth: 160,
+    alignSelf: 'flex-end',
+    maxWidth: '100%',
   },
   subPlanBadgeText: {
     color: '#0369A1',
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
+    textAlign: 'right',
   },
 
   // ─── Divider & Actions ───────────────────────────────────────────────────────
