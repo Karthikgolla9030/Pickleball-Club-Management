@@ -1,33 +1,35 @@
 /**
  * Aught2 Pickleball — PlayerTournamentOverviewTab
  *
- * Standardized Overview & Rules page across all 4 formats:
- * - Card 1: Tournament Summary (clean, single-line dynamic summary without brackets or duplication)
- * - Card 2: Competition Details (balanced 2-column grid layout across rows with format-specific details)
- * - Card 3: Schedule & Venue (standardized 2-column layout matching Competition Details)
- * - Card 4: Game Rules & Scoring (game format, target score, tiebreakers, competition notes)
+ * Dedicated, authoritative Overview & Rules tab for Player Side Tournament Details.
+ * Redesigned to follow the exact same UI design system and information-display format as
+ * Club Side → League Management → Overview & Rules tab (PlayerLeagueOverviewTab):
+ * - Light page background (#F2F8F5) with consistent padding and spacing
+ * - White information cards with subtle borders (#E2EAE5) and soft elevation
+ * - Consistent card padding (16px) and corner radius (14px)
+ * - Section header with 26x26 mint icon wrap (#DEF2E6) and 15px bold title (#102F2A)
+ * - Single-column InfoRow on mobile (muted label on top, readable value below)
+ * - Responsive row layout on tablet/desktop (>= 768px)
+ * - Nested, clean tiebreaker hierarchy callout box
+ * - Restrained green accents (#176B57)
+ * - Dynamically supports all 4 tournament formats (Round Robin, Bracket, Pool Play, Scramble)
+ * - Strictly avoids repeated summary banners or duplicated tournament titles
  */
 
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
-  Activity,
   Calendar,
-  Clock,
   FileText,
-  LayoutGrid,
-  MapPin,
+  Layers,
   Scale,
-  ShieldAlert,
   Tag,
   Trophy,
-  UserCheck,
-  Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { formatDate } from '@/utils';
+import { normalizeTournamentFormat } from '@/navigation';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import type { Tournament } from '@/types';
 
@@ -35,96 +37,263 @@ export interface PlayerTournamentOverviewTabProps {
   tournament: Tournament;
 }
 
-export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOverviewTabProps) {
-  const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
-  const format = tournament.format || 'round_robin';
-  const isSingles = parsedConfig.isSingles;
-  const fc = (tournament.format_configuration || {}) as any;
+function formatTournamentDate(dateStr?: string | null): string {
+  if (!dateStr) return '';
+  try {
+    const d = new Date(dateStr);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  } catch {
+    return dateStr;
+  }
+}
 
-  // Format label
+function formatTournamentDateRange(startStr?: string | null, endStr?: string | null): string {
+  if (!startStr) return 'Not configured';
+  const startFmt = formatTournamentDate(startStr);
+  if (!endStr || startStr === endStr) return startFmt;
+  const endFmt = formatTournamentDate(endStr);
+  return `${startFmt} – ${endFmt}`;
+}
+
+function formatTournamentDeadline(dateStr?: string | null): string {
+  if (!dateStr) return 'Not specified';
+  try {
+    const d = new Date(dateStr);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
+    const dateFormatted = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    const hours = d.getHours();
+    const minutes = d.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    const minuteStr = minutes < 10 ? `0${minutes}` : `${minutes}`;
+    if (hours === 0 && minutes === 0) {
+      return dateFormatted;
+    }
+    return `${dateFormatted}, ${hour12}:${minuteStr} ${ampm}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function humanizeGameFormat(formatStr?: string | null): string {
+  if (!formatStr) return 'Single Game';
+  const lower = formatStr.toLowerCase();
+  if (lower.includes('single') || lower === 'single_game') return 'Single Game';
+  if (lower.includes('best_of_3') || lower.includes('best 2 of 3')) return 'Best 2 of 3 Games';
+  if (lower.includes('best_of_5') || lower.includes('best 3 of 5')) return 'Best 3 of 5 Games';
+  return formatStr.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function InfoRow({
+  label,
+  value,
+  isLast = false,
+  isTablet = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  isLast?: boolean;
+  isTablet?: boolean;
+}) {
+  return (
+    <View style={[styles.infoRow, isTablet && styles.infoRowTablet, isLast && styles.infoRowLast]}>
+      <AppText style={[styles.infoLabel, isTablet && styles.infoLabelTablet]}>{label}</AppText>
+      {typeof value === 'string' || typeof value === 'number' ? (
+        <AppText style={[styles.infoValue, isTablet && styles.infoValueTablet]}>{value}</AppText>
+      ) : (
+        <View style={isTablet && styles.infoValueTabletWrap}>{value}</View>
+      )}
+    </View>
+  );
+}
+
+export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOverviewTabProps) {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+
+  const format = normalizeTournamentFormat(tournament?.format);
+  const parsed = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+  const formatConfig = (tournament?.format_configuration as Record<string, unknown>) || {};
+  const scoringRules = (tournament?.scoring_rules as unknown as Record<string, unknown>) || {};
+
+  const targetScore = typeof scoringRules.target_score === 'number' ? scoringRules.target_score : 11;
+  const winBy = typeof scoringRules.win_by === 'number' ? scoringRules.win_by : 2;
+  const gameFormat = typeof scoringRules.game_format === 'string' ? scoringRules.game_format : 'single_game';
+
+  // ─── 1. Format Label & Display ──────────────────────────────────────────
   const formatLabel = useMemo(() => {
     switch (format) {
       case 'bracket':
-        return 'Bracket';
+        return 'Bracket Play';
       case 'pool_play':
         return 'Pool Play';
       case 'scramble':
-        return 'Scramble';
+        return 'Rotating Scramble';
       case 'round_robin':
       default:
         return 'Round Robin';
     }
   }, [format]);
 
-  // Elimination type for Bracket tournaments
-  const eliminationType = useMemo(() => {
-    const raw =
-      fc?.bracket_type ||
-      fc?.bracket_format ||
-      (tournament as any)?.bracket_type ||
-      (tournament as any)?.bracket_format;
-    if (typeof raw === 'string' && raw.trim()) {
-      return raw.trim();
+  const competitionFormatDisplay = useMemo(() => {
+    if (format === 'scramble') {
+      return `Rotating Scramble • ${parsed.category || 'Open'}`;
     }
-    return 'Single Elimination';
-  }, [fc, tournament]);
-
-  // Clean structured summary string: Singles · Skill 3.5–4.5 · Any Gender · Age 20–30 · $65/player
-  const summaryString = useMemo(() => {
-    const parts: string[] = [];
-
-    // Division / Category
-    const category = parsedConfig.category || (isSingles ? 'Singles' : 'Doubles');
-    if (category) parts.push(category);
-
-    // Skill
-    const skill = parsedConfig.skillLevelDisplay || parsedConfig.skillLevel;
-    if (skill && skill !== 'All Levels' && skill !== 'Open') {
-      const cleanSkill = skill.replace(/^skill:\s*/i, '');
-      parts.push(`Skill ${cleanSkill}`);
-    } else if (skill) {
-      parts.push('All Skill Levels');
+    if (format === 'bracket') {
+      const bType = String(formatConfig.bracket_type || formatConfig.bracket_format || 'Single Elimination');
+      const pStructure = parsed.isSingles ? 'Individual Singles' : 'Fixed Partner Doubles';
+      return `${bType} • ${pStructure}`;
     }
-
-    // Gender Eligibility
-    const gender = parsedConfig.genderEligibility;
-    if (gender) {
-      if (gender.toLowerCase() === 'any') {
-        parts.push('Any Gender');
-      } else {
-        parts.push(gender);
-      }
+    if (format === 'pool_play') {
+      const pStructure = parsed.isSingles ? 'Singles' : 'Doubles';
+      return `Pool Play • ${pStructure}`;
     }
-
-    // Age Limits
-    const age = parsedConfig.ageRestrictionText;
-    if (age && age !== 'All Ages') {
-      const cleanAge = age.replace(/^age:\s*/i, '');
-      parts.push(`Age ${cleanAge}`);
+    if (format === 'round_robin') {
+      const pStructure = parsed.isSingles ? 'Individual Singles' : 'Fixed Partner Doubles';
+      return `Round Robin • ${pStructure}`;
     }
+    return `${tournament?.format_label || 'Tournament'} • ${parsed.category || 'Open'}`;
+  }, [format, formatConfig, parsed, tournament]);
 
-    // Entry Fee
-    if (parsedConfig.entryFee != null && parsedConfig.entryFee > 0) {
-      parts.push(`$${parsedConfig.entryFee}/player`);
-    } else if (parsedConfig.entryFeeDisplay && !parsedConfig.entryFeeDisplay.toLowerCase().includes('free')) {
-      const cleanFee = parsedConfig.entryFeeDisplay.replace(/^fee:\s*/i, '');
-      parts.push(cleanFee.includes('/player') ? cleanFee : `${cleanFee}/player`);
+  // ─── 2. Division Display ───────────────────────────────────────────────
+  const divisionDisplay = useMemo(() => {
+    if (parsed.category) return parsed.category;
+    if (format === 'scramble') return 'Individual Open';
+    return parsed.isSingles ? 'Singles' : 'Doubles';
+  }, [parsed, format]);
+
+  // ─── 3. Registration Type ──────────────────────────────────────────────
+  const registrationTypeDisplay = useMemo(() => {
+    if (format === 'scramble') return 'Individual (Rotating Partners)';
+    if (parsed.isSingles) return 'Individual (Singles)';
+    return 'Fixed Partner (Doubles)';
+  }, [format, parsed.isSingles]);
+
+  // ─── 4. Age Group Display ──────────────────────────────────────────────
+  const ageDisplay = useMemo(() => {
+    if (parsed.minAge && parsed.maxAge) {
+      return `${parsed.minAge}–${parsed.maxAge} years`;
     }
+    if (parsed.minAge && !parsed.maxAge) {
+      return `${parsed.minAge}+ years`;
+    }
+    if (!parsed.minAge && parsed.maxAge) {
+      return `Under ${parsed.maxAge} years`;
+    }
+    if (parsed.ageRestrictionText && parsed.ageRestrictionText !== 'None') {
+      return parsed.ageRestrictionText.includes('year')
+        ? parsed.ageRestrictionText
+        : `${parsed.ageRestrictionText} years`;
+    }
+    return 'All ages welcome';
+  }, [parsed]);
 
-    return parts.join(' · ');
-  }, [parsedConfig, isSingles]);
+  // ─── 5. Dates & Deadline ───────────────────────────────────────────────
+  const datesDisplay = formatTournamentDateRange(tournament?.start_date, tournament?.end_date);
+  const deadlineDisplay = formatTournamentDeadline(tournament?.registration_close_at);
 
-  // Sanitize and extract real prose description if provided, avoiding duplicate metadata
+  // ─── 6. Assigned Courts & Venue ────────────────────────────────────────
+  const courtsAssigned = useMemo(() => {
+    if (typeof formatConfig.courts_count === 'number') {
+      return `${formatConfig.courts_count} dedicated courts`;
+    }
+    if (typeof formatConfig.num_courts === 'number') {
+      return `${formatConfig.num_courts} dedicated courts`;
+    }
+    if (Array.isArray(formatConfig.assigned_courts) && formatConfig.assigned_courts.length > 0) {
+      return `${formatConfig.assigned_courts.length} assigned courts`;
+    }
+    if (Array.isArray(formatConfig.courts) && formatConfig.courts.length > 0) {
+      return `${formatConfig.courts.length} dedicated courts`;
+    }
+    return 'Dedicated Tournament Courts';
+  }, [formatConfig]);
+
+  // ─── 7. Scheduling Engine ──────────────────────────────────────────────
+  const schedulingEngineInfo = useMemo(() => {
+    if (format === 'round_robin') {
+      return 'Round-Robin Berger Tables (All-play-all schedule)';
+    }
+    if (format === 'bracket') {
+      const bType = String(formatConfig.bracket_type || formatConfig.bracket_format || 'Single Elimination');
+      return `${bType} Bracket Engine (Deterministic seed pairings)`;
+    }
+    if (format === 'scramble') {
+      return 'Dynamic Partner Rotation Matrix (Fair round pairings)';
+    }
+    if (format === 'pool_play') {
+      return 'Serpentine Pool Play & Knockout Bracket Engine';
+    }
+    return 'Standard Tournament Scheduling Engine';
+  }, [format, formatConfig]);
+
+  // ─── 8. Capacity & Entry Fee ───────────────────────────────────────────
+  const maxCount = tournament?.max_participants ?? 8;
+  const entryUnit = parsed.isSingles ? 'Players' : 'Teams';
+  const entryFeeDisplay = useMemo(() => {
+    if (parsed.entryFee != null && parsed.entryFee > 0) {
+      return `$${parsed.entryFee.toFixed(2)}${parsed.isSingles ? ' / player' : ' / team'}`;
+    }
+    if (parsed.entryFeeDisplay && !parsed.entryFeeDisplay.toLowerCase().includes('free')) {
+      return parsed.entryFeeDisplay;
+    }
+    return 'Free ($0.00)';
+  }, [parsed]);
+
+  // ─── 9. Format-Specific Competition Structure ──────────────────────────
+  const eliminationType = String(formatConfig.bracket_type || formatConfig.bracket_format || 'Single Elimination');
+  const bracketSize = Math.pow(
+    2,
+    Math.ceil(Math.log2(Math.max(2, parsed.capacity.entryCount || tournament?.max_participants || 8)))
+  );
+  const bracketRounds = Math.ceil(Math.log2(bracketSize));
+  const hasConsolation = Boolean(formatConfig.has_consolation_bracket || formatConfig.bronze_match);
+  const poolCount = Number(formatConfig.pool_count || formatConfig.num_pools || 2);
+  const qualifiersPerPool = Number(formatConfig.qualifiers_per_pool || 2);
+  const teamsPerPool = Math.ceil(maxCount / poolCount);
+  const plannedRounds = Number(formatConfig.planned_rounds || 5);
+  const roundRobinRounds = Math.max(1, maxCount - 1);
+
+  // ─── 10. Tiebreaker Hierarchy List ─────────────────────────────────────
+  const tiebreakers = useMemo(() => {
+    if (format === 'scramble') {
+      return [
+        { num: 1, title: 'Total Individual Points', desc: 'Cumulative score across all played rounds' },
+        { num: 2, title: 'Total Games Played', desc: 'Rounds completed' },
+        { num: 3, title: 'Point Differential', desc: 'Points scored minus opponent points allowed' },
+        { num: 4, title: 'Player Name (A–Z)', desc: 'Alphabetical order' },
+      ];
+    }
+    if (format === 'bracket') {
+      return [
+        { num: 1, title: 'Bracket Progression', desc: 'Furthest round reached in the championship tree' },
+        { num: 2, title: 'Initial Tournament Seed', desc: 'Higher tournament seed takes precedence' },
+        { num: 3, title: 'Point Differential', desc: 'Cumulative point differential across all matches' },
+      ];
+    }
+    // Round Robin & Pool Play
+    return [
+      { num: 1, title: 'Match Wins', desc: 'Total match victories in the tournament' },
+      { num: 2, title: 'Head-to-Head Record', desc: 'Direct match outcome between tied opponents' },
+      { num: 3, title: 'Point Differential', desc: 'Points scored minus points conceded' },
+      { num: 4, title: 'Total Points Scored', desc: 'Total offensive points scored in all matches' },
+      { num: 5, title: 'Participant Name (A–Z)', desc: 'Alphabetical order by player or team name' },
+    ];
+  }, [format]);
+
+  // Clean description without legacy bracket tags or serialized metadata
   const cleanDescription = useMemo(() => {
-    if (!tournament.description) return null;
+    if (!tournament?.description) return null;
     let desc = tournament.description.trim();
 
     // Strip bracketed metadata e.g. [Singles • Skill: 3.5–4.5 • Any • Age: 20–30 • Fee: $65/player]
     desc = desc.replace(/\[\s*(?:singles|doubles)?\s*[\s\S]*?fee:[^\]]*\]/gi, '').trim();
-    // Strip any leading bracketed token [ ... ]
+    // Strip leading bracket tokens [ ... ]
     desc = desc.replace(/^\[[^\]]+\]\s*/, '').trim();
 
-    // If remaining text is merely metadata fields serialized into plain text
+    if (desc.startsWith('{') || desc.startsWith('[')) return null;
+
     const isMetadataOnly =
       /(?:singles|doubles)/i.test(desc) &&
       /skill/i.test(desc) &&
@@ -133,428 +302,299 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
       !desc.includes('\n');
     if (isMetadataOnly) return null;
 
-    // If identical to summaryString
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (summaryString && normalize(desc) === normalize(summaryString)) {
-      return null;
-    }
-
     return desc.length > 0 ? desc : null;
-  }, [tournament.description, summaryString]);
-
-  // Scoring rules
-  const scoringFormat = useMemo(() => {
-    const rules = tournament.scoring_rules;
-    if (rules?.game_format) {
-      return `${rules.game_format} to ${rules.target_score || 11} (win by ${rules.win_by || 2})`;
-    }
-    const pts = rules?.target_score || 11;
-    const winBy = rules?.win_by || 2;
-    return `First to ${pts} (win by ${winBy})`;
-  }, [tournament.scoring_rules]);
-
-  // Format-specific rules explanation
-  const formatRulesNote = useMemo(() => {
-    switch (format) {
-      case 'bracket':
-        return 'Knockout single-elimination tournament. Match winners advance to the next round while defeated players/teams are eliminated or move to consolation.';
-      case 'pool_play':
-        return 'Entrants are divided into pools for round-robin play. Top teams from each pool automatically advance into the championship single-elimination bracket.';
-      case 'scramble':
-        return 'Individual scramble format where players rotate partners across multiple rounds. Points scored accumulate individually on the standings board.';
-      case 'round_robin':
-      default:
-        return 'Every player or team plays a round-robin matchup against every other entry in the division. Final rankings are based on wins, differential, and total points.';
-    }
-  }, [format]);
-
-  // Assigned courts
-  const courtsInfo = useMemo(() => {
-    if (fc?.assigned_courts && Array.isArray(fc.assigned_courts) && fc.assigned_courts.length > 0) {
-      return `${fc.assigned_courts.length} Courts Assigned`;
-    }
-    if (fc?.courts_count && Number(fc.courts_count) > 0) {
-      return `${fc.courts_count} Courts Dedicated`;
-    }
-    return 'Dedicated Pickleball Courts';
-  }, [fc]);
+  }, [tournament?.description]);
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Tournament Summary ─── */}
+      {/* ─── 1. Optional Custom Description ─── */}
+      {cleanDescription ? (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <FileText size={15} color="#176B57" />
+            </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              About the Tournament
+            </AppText>
+          </View>
+          <AppText style={styles.descriptionText}>{cleanDescription}</AppText>
+        </Card>
+      ) : null}
+
+      {/* ─── 2. Tournament Information Card ─── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.iconWrap}>
-            <FileText size={18} color="#065F46" />
+            <Tag size={15} color="#176B57" />
           </View>
-          <AppText variant="heading3" bold style={styles.cardTitle}>
-            Tournament Summary
+          <AppText variant="body" bold style={styles.cardTitle}>
+            Tournament Information
           </AppText>
         </View>
 
-        <View style={styles.summaryBox}>
-          <AppText variant="bodySmall" bold style={styles.summaryText}>
-            {summaryString}
-          </AppText>
-        </View>
-
-        {cleanDescription ? (
-          <AppText variant="bodySmall" style={styles.descriptionText}>
-            {cleanDescription}
-          </AppText>
-        ) : null}
-      </Card>
-
-      {/* ─── 2. Competition Details ─── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.iconWrap}>
-            <FileText size={18} color="#065F46" />
-          </View>
-          <AppText variant="heading3" bold style={styles.cardTitle}>
-            Competition Details
-          </AppText>
-        </View>
-
-        <View style={styles.gridContainer}>
-          {/* Row 1: Format | Division */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Tag size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Format
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {formatLabel}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Trophy size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Division
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {parsedConfig.category || (isSingles ? 'Singles' : 'Doubles')}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 2: Registration Type | Skill Requirement */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Users size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Registration Type
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {format === 'scramble'
-                    ? 'Individual (Scramble)'
-                    : isSingles
-                    ? 'Individual (Singles)'
-                    : 'Fixed Team (Doubles)'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Activity size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Skill Requirement
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {parsedConfig.skillLevelDisplay || parsedConfig.skillLevel || 'Open / All Levels'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 3: Gender Eligibility | Age Limits */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <UserCheck size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Gender Eligibility
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {parsedConfig.genderEligibility || 'Any'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Calendar size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Age Limits
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {parsedConfig.ageRestrictionText || 'All Ages'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 4: Format-Specific Configurations */}
-          {format === 'bracket' && (
-            <View style={styles.gridRow}>
-              <View style={styles.gridColLeft}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <Trophy size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Elimination Type
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    {eliminationType}
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.gridColRight}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <Activity size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Seeding Method
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    {fc?.seeding_method || 'Rating Seeding'}
-                  </AppText>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {format === 'pool_play' && (
-            <View style={styles.gridRow}>
-              <View style={styles.gridColLeft}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Pools Config
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    {fc?.pool_count || 2} Pools ({fc?.teams_per_pool || 4} teams/pool)
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.gridColRight}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <Trophy size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Advancement
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    Top {fc?.qualifiers_per_pool || 2} Advance to Championship
-                  </AppText>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {format === 'scramble' && (
-            <View style={styles.gridRow}>
-              <View style={styles.gridColLeft}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <Users size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Rotation Rule
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    {fc?.rotation_rule || 'Dynamic Partner Switch'}
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.gridColRight}>
-                <View style={styles.item}>
-                  <View style={styles.labelRow}>
-                    <Activity size={14} color="#065F46" style={styles.rowIcon} />
-                    <AppText variant="caption" style={styles.label}>
-                      Leaderboard Metric
-                    </AppText>
-                  </View>
-                  <AppText variant="bodySmall" bold style={styles.value}>
-                    {fc?.leaderboard_metric || 'Win % • Point Differential'}
-                  </AppText>
-                </View>
-              </View>
-            </View>
-          )}
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Competition Format"
+            value={competitionFormatDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Division"
+            value={divisionDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Type"
+            value={registrationTypeDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Skill Eligibility"
+            value={parsed.skillLevelDisplay || parsed.skillLevel || 'Open / All Levels'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Gender Eligibility"
+            value={parsed.genderEligibility || 'Any / All Genders'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Age Group"
+            value={ageDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Fee"
+            value={entryFeeDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Maximum Capacity"
+            value={`${maxCount} ${entryUnit}`}
+            isTablet={isTablet}
+            isLast
+          />
         </View>
       </Card>
 
-      {/* ─── 3. Schedule & Venue ─── */}
+      {/* ─── 3. Schedule & Venue Card ─── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.iconWrap}>
-            <Calendar size={18} color="#065F46" />
+            <Calendar size={15} color="#176B57" />
           </View>
-          <AppText variant="heading3" bold style={styles.cardTitle}>
+          <AppText variant="body" bold style={styles.cardTitle}>
             Schedule & Venue
           </AppText>
         </View>
 
-        <View style={styles.gridContainer}>
-          {/* Row 1: Event Dates | Registration Deadline */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Calendar size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Event Dates
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {formatDate(tournament.start_date)} – {formatDate(tournament.end_date)}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <Clock size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Registration Deadline
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {tournament.registration_close_at
-                    ? formatDate(tournament.registration_close_at)
-                    : formatDate(tournament.start_date)}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 2: Location | Courts */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <MapPin size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Location
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {tournament.location_name || tournament.club_name || 'Main Courts'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <View style={styles.labelRow}>
-                  <LayoutGrid size={14} color="#065F46" style={styles.rowIcon} />
-                  <AppText variant="caption" style={styles.label}>
-                    Courts
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" bold style={styles.value}>
-                  {courtsInfo}
-                </AppText>
-              </View>
-            </View>
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Tournament Dates"
+            value={datesDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Deadline"
+            value={deadlineDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Host Club"
+            value={tournament?.club_name || 'Pickleball Club'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Venue Location"
+            value={tournament?.location_name || tournament?.club_name || 'Dedicated Pickleball Facility'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Assigned Courts"
+            value={courtsAssigned}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Scheduling Engine"
+            value={schedulingEngineInfo}
+            isTablet={isTablet}
+            isLast
+          />
         </View>
       </Card>
 
-      {/* ─── 4. Game Rules & Scoring ─── */}
+      {/* ─── 4. Format-Specific Competition Structure Card ─── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <View style={styles.iconWrap}>
-            <Scale size={18} color="#065F46" />
+            <Trophy size={15} color="#176B57" />
           </View>
-          <AppText variant="heading3" bold style={styles.cardTitle}>
+          <AppText variant="body" bold style={styles.cardTitle}>
+            {formatLabel} Structure
+          </AppText>
+        </View>
+
+        <View style={styles.rowsList}>
+          {format === 'round_robin' && (
+            <>
+              <InfoRow
+                label="Format Type"
+                value="All-Play-All Round Robin"
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Scheduled Rounds"
+                value={`${roundRobinRounds} scheduled rounds`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Matchup Scheduling"
+                value="Round-Robin Berger Tables (balanced court allocation)"
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Standings Hierarchy"
+                value="Ranked by Match Wins · Point Differential · Points Scored"
+                isTablet={isTablet}
+                isLast
+              />
+            </>
+          )}
+
+          {format === 'bracket' && (
+            <>
+              <InfoRow
+                label="Elimination Type"
+                value={`${eliminationType} Bracket`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Bracket Structure"
+                value={`${bracketSize}-Entry Bracket (${bracketRounds} elimination rounds)`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Seeding Method"
+                value={String(formatConfig.seeding_method || 'Rating Seeding')}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Consolation Play"
+                value={hasConsolation ? '3rd Place Consolation Final Included' : 'Single Bracket Elimination'}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="First-Round BYEs"
+                value="Automatic BYE allocation for highest-seeded entries"
+                isTablet={isTablet}
+                isLast
+              />
+            </>
+          )}
+
+          {format === 'pool_play' && (
+            <>
+              <InfoRow
+                label="Pools Configuration"
+                value={`${poolCount} Preliminary Pools (~${teamsPerPool} entrants per pool)`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Pool Play Schedule"
+                value="Intra-pool round-robin fixtures"
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Championship Advancement"
+                value={`Top ${qualifiersPerPool} from each pool qualify for Championship`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Championship Knockout"
+                value="Single-elimination championship knockout bracket"
+                isTablet={isTablet}
+                isLast
+              />
+            </>
+          )}
+
+          {format === 'scramble' && (
+            <>
+              <InfoRow
+                label="Competition Format"
+                value="Individual Rotating Scramble"
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Partner Rotation Rule"
+                value="Dynamic round-by-round partner rotation matrix"
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Planned Rounds"
+                value={`${plannedRounds} rotation rounds`}
+                isTablet={isTablet}
+              />
+              <InfoRow
+                label="Leaderboard Metric"
+                value="Individual cumulative point scoring across all rounds"
+                isTablet={isTablet}
+                isLast
+              />
+            </>
+          )}
+        </View>
+      </Card>
+
+      {/* ─── 5. Game Rules & Scoring Card ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconWrap}>
+            <Scale size={15} color="#176B57" />
+          </View>
+          <AppText variant="body" bold style={styles.cardTitle}>
             Game Rules & Scoring
           </AppText>
         </View>
 
-        <View style={styles.rulesList}>
-          <View style={styles.ruleRow}>
-            <AppText variant="caption" bold style={styles.ruleLabel}>
-              Game Format:
-            </AppText>
-            <AppText variant="bodySmall" style={styles.ruleValue}>
-              {scoringFormat}
-            </AppText>
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Match Format"
+            value={humanizeGameFormat(gameFormat)}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Target Score"
+            value={`${targetScore} Points`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Win-by Margin"
+            value={`${winBy} Points (win by ${winBy})`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Scoring System"
+            value={
+              format === 'scramble'
+                ? 'Rally / Side-out point accumulation'
+                : 'Traditional Side-out Scoring'
+            }
+            isTablet={isTablet}
+          />
 
-          <View style={styles.ruleRow}>
-            <AppText variant="caption" bold style={styles.ruleLabel}>
-              Target Score:
-            </AppText>
-            <AppText variant="bodySmall" style={styles.ruleValue}>
-              {tournament.scoring_rules?.target_score || 11} points (must win by {tournament.scoring_rules?.win_by || 2})
-            </AppText>
-          </View>
-
-          <View style={styles.ruleRow}>
-            <AppText variant="caption" bold style={styles.ruleLabel}>
-              Win Condition:
-            </AppText>
-            <AppText variant="bodySmall" style={styles.ruleValue}>
-              Win by {tournament.scoring_rules?.win_by || 2} points
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.tiebreakerBlock}>
-            <AppText variant="caption" bold style={styles.tiebreakerTitle}>
-              Official Tiebreaker Hierarchy:
-            </AppText>
-            <AppText variant="caption" style={styles.tiebreakerItem}>
-              1. Head-to-Head match result
-            </AppText>
-            <AppText variant="caption" style={styles.tiebreakerItem}>
-              2. Total Point Differential (+ / -)
-            </AppText>
-            <AppText variant="caption" style={styles.tiebreakerItem}>
-              3. Total Points Scored
-            </AppText>
-            <AppText variant="caption" style={styles.tiebreakerItem}>
-              4. Coin toss / Initial tournament seed
-            </AppText>
-          </View>
-
-          <View style={styles.noteBox}>
-            <ShieldAlert size={14} color="#047857" style={{ marginTop: 2, marginRight: 6 }} />
-            <AppText variant="caption" style={styles.noteText}>
-              {formatRulesNote}
-            </AppText>
+          {/* Compact Tiebreaker Order Box */}
+          <View style={styles.tiebreakerBox}>
+            <AppText style={styles.tiebreakerHeader}>Tiebreaker Hierarchy</AppText>
+            <View style={styles.tiebreakerList}>
+              {tiebreakers.map((t) => (
+                <AppText key={t.num} style={styles.tiebreakerItem}>
+                  {t.num}. {t.title}
+                  <AppText style={styles.tiebreakerDesc}> — {t.desc}</AppText>
+                </AppText>
+              ))}
+            </View>
           </View>
         </View>
       </Card>
@@ -565,144 +605,116 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
 const styles = StyleSheet.create({
   container: {
     padding: 16,
-    gap: 16,
+    gap: 12,
+    backgroundColor: '#F2F8F5',
   },
   card: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: 14,
+    borderColor: '#E2EAE5',
+    gap: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    paddingBottom: 2,
   },
   iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#ECFDF5',
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: '#DEF2E6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
-  },
-  summaryBox: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  summaryText: {
-    fontSize: 13,
-    color: '#065F46',
-    fontWeight: '700',
-    lineHeight: 20,
+    color: '#102F2A',
   },
   descriptionText: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#475569',
     lineHeight: 20,
-    marginTop: 2,
   },
-  gridContainer: {
-    gap: 16,
+  rowsList: {
+    gap: 0,
   },
-  gridRow: {
+  infoRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F2',
+  },
+  infoRowTablet: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 20,
-  },
-  gridColLeft: {
-    flex: 1,
-    minWidth: 0,
-  },
-  gridColRight: {
-    flex: 1,
-    minWidth: 0,
-    paddingLeft: 8,
-  },
-  item: {
-    gap: 2,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  rowIcon: {
-    marginRight: 5,
-  },
-  label: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  value: {
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  rulesList: {
-    gap: 8,
-  },
-  ruleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  ruleLabel: {
+  infoRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 2,
+  },
+  infoLabel: {
     fontSize: 12,
+    fontWeight: '500',
     color: '#64748B',
+    marginBottom: 3,
   },
-  ruleValue: {
-    fontSize: 12,
-    color: '#0F172A',
+  infoLabelTablet: {
+    marginBottom: 0,
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14.5,
     fontWeight: '600',
+    color: '#111827',
+    lineHeight: 20,
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 4,
+  infoValueTablet: {
+    textAlign: 'right',
+    flex: 1,
   },
-  tiebreakerBlock: {
-    gap: 4,
-    backgroundColor: '#F8FAFC',
-    padding: 10,
+  infoValueTabletWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  tiebreakerBox: {
+    backgroundColor: '#F8FAF9',
     borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#EBF1EE',
+    marginTop: 10,
   },
-  tiebreakerTitle: {
-    fontSize: 12,
-    color: '#0F172A',
+  tiebreakerHeader: {
+    fontSize: 11.5,
     fontWeight: '700',
-    marginBottom: 2,
+    color: '#176B57',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 6,
+  },
+  tiebreakerList: {
+    gap: 5,
   },
   tiebreakerItem: {
-    fontSize: 11,
-    color: '#475569',
-    lineHeight: 16,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#1E293B',
+    lineHeight: 18,
   },
-  noteBox: {
-    flexDirection: 'row',
-    backgroundColor: '#ECFDF5',
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'flex-start',
-    marginTop: 4,
-  },
-  noteText: {
-    flex: 1,
+  tiebreakerDesc: {
     fontSize: 12,
-    color: '#065F46',
-    lineHeight: 17,
+    fontWeight: '400',
+    color: '#64748B',
   },
 });
