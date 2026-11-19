@@ -89,7 +89,7 @@ interface MemberAvatarProps {
   size?: number;
 }
 
-function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
+function MemberAvatar({ imageUrl, name, size = 42 }: MemberAvatarProps) {
   const [loadError, setLoadError] = useState(false);
 
   const resolvedUri = useMemo(() => {
@@ -143,7 +143,7 @@ function MemberAvatar({ imageUrl, name, size = 64 }: MemberAvatarProps) {
       <AppText
         style={[
           styles.avatarInitialsText,
-          { fontSize: Math.round(size * 0.34) },
+          { fontSize: Math.round(size * 0.36) },
         ]}
       >
         {initials}
@@ -912,71 +912,66 @@ export default function ClubMembersScreen() {
 
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* 1. Main Action Buttons: [ Players ] [ Staff ] */}
-      <View style={styles.mainActionsRow}>
+      {/* 1. Main Segmented Tab Selector: [ 👥 Players (N) ] [ 👔 Staff (M) ] */}
+      <View style={styles.tabSelectorContainer}>
         <TouchableOpacity
-          style={[styles.mainActionBtn, activeTab === 'players' && styles.mainActionBtnActive]}
+          style={[styles.tabSelectorBtn, activeTab === 'players' && styles.tabSelectorBtnActive]}
           onPress={() => handleTabChange('players')}
           activeOpacity={0.8}
         >
           <Users
-            size={15}
-            color={activeTab === 'players' ? '#FFFFFF' : '#102F2A'}
-            strokeWidth={2}
+            size={14}
+            color={activeTab === 'players' ? '#FFFFFF' : '#475569'}
+            strokeWidth={2.2}
           />
           <AppText
             style={[
-              styles.mainActionBtnText,
-              activeTab === 'players' && styles.mainActionBtnTextActive,
+              styles.tabSelectorBtnText,
+              activeTab === 'players' && styles.tabSelectorBtnTextActive,
             ]}
           >
-            Players
+            Players ({playerMembers.length})
           </AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.mainActionBtn, activeTab === 'staff' && styles.mainActionBtnActive]}
+          style={[styles.tabSelectorBtn, activeTab === 'staff' && styles.tabSelectorBtnActive]}
           onPress={() => handleTabChange('staff')}
           activeOpacity={0.8}
         >
           <User
-            size={15}
-            color={activeTab === 'staff' ? '#FFFFFF' : '#102F2A'}
-            strokeWidth={2}
+            size={14}
+            color={activeTab === 'staff' ? '#FFFFFF' : '#475569'}
+            strokeWidth={2.2}
           />
           <AppText
             style={[
-              styles.mainActionBtnText,
-              activeTab === 'staff' && styles.mainActionBtnTextActive,
+              styles.tabSelectorBtnText,
+              activeTab === 'staff' && styles.tabSelectorBtnTextActive,
             ]}
           >
-            Staff
+            Staff ({staffMembers.length})
           </AppText>
         </TouchableOpacity>
       </View>
 
-      {/* 3. Section Controls (Players vs Staff) */}
+      {/* 2. Section Controls (Players vs Staff) */}
       {activeTab === 'players' ? (
-        <>
-          {/* Sub-Filters: All Players, Subscribers, Normal Users + Settings Button */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterPillsScrollContent}
-            style={styles.filterScrollView}
-          >
+        <View style={styles.controlsGroup}>
+          {/* Sub-Filters: All Players, Subscribers, Non-Subscribers */}
+          <View style={styles.subFiltersRow}>
             <TouchableOpacity
               style={[
-                styles.filterPill,
-                playerFilter === 'all' && styles.filterPillActive,
+                styles.subFilterPill,
+                playerFilter === 'all' && styles.subFilterPillActive,
               ]}
               onPress={() => setPlayerFilter('all')}
               activeOpacity={0.8}
             >
               <AppText
                 style={[
-                  styles.filterPillText,
-                  playerFilter === 'all' && styles.filterPillTextActive,
+                  styles.subFilterPillText,
+                  playerFilter === 'all' && styles.subFilterPillTextActive,
                 ]}
               >
                 All Players
@@ -985,16 +980,16 @@ export default function ClubMembersScreen() {
 
             <TouchableOpacity
               style={[
-                styles.filterPill,
-                playerFilter === 'subscribers' && styles.filterPillActive,
+                styles.subFilterPill,
+                playerFilter === 'subscribers' && styles.subFilterPillActive,
               ]}
               onPress={() => setPlayerFilter('subscribers')}
               activeOpacity={0.8}
             >
               <AppText
                 style={[
-                  styles.filterPillText,
-                  playerFilter === 'subscribers' && styles.filterPillTextActive,
+                  styles.subFilterPillText,
+                  playerFilter === 'subscribers' && styles.subFilterPillTextActive,
                 ]}
               >
                 Subscribers
@@ -1003,80 +998,70 @@ export default function ClubMembersScreen() {
 
             <TouchableOpacity
               style={[
-                styles.filterPill,
-                playerFilter === 'normal' && styles.filterPillActive,
+                styles.subFilterPill,
+                playerFilter === 'normal' && styles.subFilterPillActive,
               ]}
               onPress={() => setPlayerFilter('normal')}
               activeOpacity={0.8}
             >
               <AppText
                 style={[
-                  styles.filterPillText,
-                  playerFilter === 'normal' && styles.filterPillTextActive,
+                  styles.subFilterPillText,
+                  playerFilter === 'normal' && styles.subFilterPillTextActive,
                 ]}
               >
-                Normal Users
+                Non-Subscribers
               </AppText>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.filterIconButton}
-              onPress={() => {
-                blurActiveElement();
-                setFilterInfoVisible(true);
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel="Filter settings"
-            >
-              <SlidersHorizontal size={15} color="#102F2A" strokeWidth={2} />
-            </TouchableOpacity>
-          </ScrollView>
+          </View>
 
           {/* Search Bar */}
           <View style={styles.searchContainer}>
-            <Search size={18} color="#718096" strokeWidth={2} style={styles.searchIcon} />
+            <Search size={15} color="#64748B" strokeWidth={2} style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search players by name or email..."
-              placeholderTextColor="#8C9BA5"
+              placeholder="Search players by name, email, or ID..."
+              placeholderTextColor="#94A3B8"
               value={playerSearchQuery}
               onChangeText={setPlayerSearchQuery}
               returnKeyType="search"
               autoCapitalize="none"
               autoCorrect={false}
+              clearButtonMode="while-editing"
             />
             {playerSearchQuery.length > 0 && (
               <TouchableOpacity
                 onPress={() => setPlayerSearchQuery('')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <X size={16} color="#718096" />
+                <X size={15} color="#94A3B8" />
               </TouchableOpacity>
             )}
           </View>
-        </>
+        </View>
       ) : (
-        /* Staff Controls */
-        <View style={styles.staffControlsContainer}>
+        /* Staff Controls: Search + Add Staff */
+        <View style={styles.controlsGroup}>
           <View style={styles.staffSearchAndAddRow}>
             <View style={styles.staffSearchBox}>
-              <Search size={18} color="#718096" strokeWidth={2} style={styles.searchIcon} />
+              <Search size={15} color="#64748B" strokeWidth={2} style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
                 placeholder="Search staff by name, email or role..."
-                placeholderTextColor="#8C9BA5"
+                placeholderTextColor="#94A3B8"
                 value={staffSearchQuery}
                 onChangeText={setStaffSearchQuery}
                 returnKeyType="search"
                 autoCapitalize="none"
                 autoCorrect={false}
+                clearButtonMode="while-editing"
               />
               {staffSearchQuery.length > 0 && (
                 <TouchableOpacity
                   onPress={() => setStaffSearchQuery('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <X size={16} color="#718096" />
+                  <X size={15} color="#94A3B8" />
                 </TouchableOpacity>
               )}
             </View>
@@ -1092,7 +1077,7 @@ export default function ClubMembersScreen() {
                 accessibilityLabel="Add Staff"
                 accessibilityRole="button"
               >
-                <Plus size={15} color="#FFFFFF" strokeWidth={2.4} />
+                <Plus size={14} color="#FFFFFF" strokeWidth={2.4} />
                 <AppText style={styles.addStaffBtnText}>Staff</AppText>
               </TouchableOpacity>
             )}
@@ -1104,77 +1089,92 @@ export default function ClubMembersScreen() {
 
   // ─── Render Player Card ──────────────────────────────────────────────────────
 
-  const renderPlayerItem = ({ item, index }: { item: ClubPlayerMember; index: number }) => {
+  const renderPlayerItem = ({ item }: { item: ClubPlayerMember; index: number }) => {
     const playerName = formatPlayerName(item);
-
-    const playerId = item.membership_number
-      ? `#${item.membership_number.replace(/^#/, '')}`
-      : '—';
-
     const subInfo = getSubscriberInfo(item);
+    const hasMembershipNumber = Boolean(
+      item.membership_number &&
+      item.membership_number.trim() &&
+      item.membership_number.trim() !== '—' &&
+      item.membership_number.trim() !== '-'
+    );
+    const formattedMemberNumber = hasMembershipNumber
+      ? `#${item.membership_number!.trim().replace(/^#/, '')}`
+      : null;
+
+    const isActive = item.status === 'active';
+    const isInactive = item.status === 'inactive';
+    const isSuspended = item.status === 'suspended';
+    const isExpired = item.status === 'expired';
 
     return (
       <View style={styles.memberCard}>
         {/* Top Profile Information Area */}
-        <View style={styles.cardTopRow}>
-          {/* Avatar on Left */}
+        <View style={styles.cardHeader}>
+          {/* Avatar (42px) */}
           <MemberAvatar
             imageUrl={item.profile_image_url}
             name={playerName}
-            size={64}
+            size={42}
           />
 
-          {/* Details Column on Right */}
-          <View style={styles.cardDetailsColumn}>
-            {/* Row 1: Name, ID Badge, Three-dot Menu */}
-            <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={2}>
-                {playerName}
-              </AppText>
-              <View style={styles.badgeAndMenuRow}>
-                <View style={styles.idBadge}>
-                  <AppText style={styles.idBadgeText}>{playerId}</AppText>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handlePlayerMenu(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.threeDotBtn}
-                  accessibilityLabel="Player actions"
-                >
-                  <MoreVertical size={18} color="#647570" strokeWidth={2} />
-                </TouchableOpacity>
+          {/* Details Column */}
+          <View style={styles.cardContent}>
+            {/* Top Row: Name + ID + Three-dot Menu */}
+            <View style={styles.cardTopRow}>
+              <View style={styles.nameBlock}>
+                <AppText style={styles.memberName} numberOfLines={1}>
+                  {playerName}
+                </AppText>
+                {formattedMemberNumber && (
+                  <View style={styles.idBadge}>
+                    <AppText style={styles.idBadgeText}>{formattedMemberNumber}</AppText>
+                  </View>
+                )}
               </View>
+
+              <TouchableOpacity
+                onPress={() => handlePlayerMenu(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.threeDotBtn}
+                accessibilityLabel="Player actions"
+              >
+                <MoreVertical size={16} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
             </View>
 
-            {/* Row 2: Email */}
-            <AppText style={styles.playerEmail}>
+            {/* Email */}
+            <AppText style={styles.memberEmail} numberOfLines={1}>
               {item.user_email}
             </AppText>
 
-            {/* Row 3: Status Badge & Subscriber Plan Badge */}
-            <View style={styles.statusRow}>
+            {/* Badges Row: Status + Subscription Plan (Only when subscriber) */}
+            <View style={styles.badgesRow}>
               <View
                 style={[
                   styles.statusBadge,
-                  item.status === 'active' && styles.statusBadgeActive,
-                  item.status === 'suspended' && styles.statusBadgeWarning,
-                  item.status === 'expired' && styles.statusBadgeDanger,
+                  isActive && styles.statusBadgeActive,
+                  isInactive && styles.statusBadgeInactive,
+                  isSuspended && styles.statusBadgeWarning,
+                  isExpired && styles.statusBadgeDanger,
                 ]}
               >
                 <View
                   style={[
                     styles.statusDot,
-                    item.status === 'active' && styles.statusDotActive,
-                    item.status === 'suspended' && styles.statusDotWarning,
-                    item.status === 'expired' && styles.statusDotDanger,
+                    isActive && styles.statusDotActive,
+                    isInactive && styles.statusDotInactive,
+                    isSuspended && styles.statusDotWarning,
+                    isExpired && styles.statusDotDanger,
                   ]}
                 />
                 <AppText
                   style={[
                     styles.statusBadgeText,
-                    item.status === 'active' && styles.statusBadgeTextActive,
-                    item.status === 'suspended' && styles.statusBadgeTextWarning,
-                    item.status === 'expired' && styles.statusBadgeTextDanger,
+                    isActive && styles.statusBadgeTextActive,
+                    isInactive && styles.statusBadgeTextInactive,
+                    isSuspended && styles.statusBadgeTextWarning,
+                    isExpired && styles.statusBadgeTextDanger,
                   ]}
                 >
                   {item.status.toUpperCase()}
@@ -1182,10 +1182,10 @@ export default function ClubMembersScreen() {
               </View>
 
               {subInfo && (
-                <View style={styles.playerSubPlanBadge}>
-                  <AppText style={styles.playerSubPlanBadgeText}>
+                <View style={styles.subPlanBadge}>
+                  <AppText style={styles.subPlanBadgeText}>
                     {subInfo.planName}
-                    {subInfo.status === 'scheduled' ? ' · SCHEDULED' : ''}
+                    {subInfo.status === 'scheduled' ? ' · Scheduled' : ''}
                   </AppText>
                 </View>
               )}
@@ -1203,7 +1203,7 @@ export default function ClubMembersScreen() {
             onPress={() => handleOpenEditPlayer(item)}
             activeOpacity={0.7}
           >
-            <SquarePen size={15} color="#102F2A" strokeWidth={1.9} />
+            <SquarePen size={14} color="#1E293B" strokeWidth={1.8} />
             <AppText style={styles.cardActionText}>Edit Status</AppText>
           </TouchableOpacity>
 
@@ -1214,7 +1214,7 @@ export default function ClubMembersScreen() {
             onPress={() => handleMessagePlayer(item)}
             activeOpacity={0.7}
           >
-            <Mail size={15} color="#102F2A" strokeWidth={1.9} />
+            <Mail size={14} color="#1E293B" strokeWidth={1.8} />
             <AppText style={styles.cardActionText}>Message</AppText>
           </TouchableOpacity>
         </View>
@@ -1225,71 +1225,129 @@ export default function ClubMembersScreen() {
   // ─── Render Staff Card ───────────────────────────────────────────────────────
 
   const renderStaffItem = ({ item }: { item: ClubMember; index: number }) => {
-    const staffName = item.user_full_name && item.user_full_name.trim().length > 0
-      ? item.user_full_name.trim()
-      : item.user_email
-        ? item.user_email.split('@')[0].replace(/[._-]+/g, ' ').split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    const staffName =
+      item.user_full_name && item.user_full_name.trim().length > 0
+        ? item.user_full_name.trim()
+        : item.user_email
+        ? item.user_email
+            .split('@')[0]
+            .replace(/[._-]+/g, ' ')
+            .split(' ')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ')
         : 'Staff Member';
 
     const isCustomRole = Boolean(item.custom_role_name);
     const isOwner = item.role === 'club_owner';
     const isLegacyStaff = item.role === 'staff_member' && !isCustomRole;
 
-    const builtinMap: Record<string, { label: string; bg: string; text: string }> = {
-      club_owner: { label: 'Club Owner', bg: '#DEF2E6', text: '#176B57' },
-      club_manager: { label: 'Club Manager', bg: '#E7F0FB', text: '#1D4ED8' },
-      tournament_director: { label: 'Tournament Director', bg: '#F1EDFD', text: '#6D28D9' },
+    const builtinMap: Record<
+      string,
+      { label: string; bg: string; text: string; border: string }
+    > = {
+      club_owner: {
+        label: 'Club Owner',
+        bg: '#DEF2E6',
+        text: '#0D5F4D',
+        border: '#BBE5CF',
+      },
+      club_manager: {
+        label: 'Club Manager',
+        bg: '#EFF6FF',
+        text: '#1D4ED8',
+        border: '#BFDBFE',
+      },
+      tournament_director: {
+        label: 'Tournament Director',
+        bg: '#F5F3FF',
+        text: '#6D28D9',
+        border: '#DDD6FE',
+      },
     };
 
     const roleConfig = isCustomRole
-      ? { label: item.custom_role_name!, bg: '#E6F4EA', text: '#0D5F4D' }
+      ? {
+          label: item.custom_role_name!,
+          bg: '#F0FDFA',
+          text: '#0F766E',
+          border: '#99F6E4',
+        }
       : isLegacyStaff
-      ? { label: 'Staff Member (Legacy)', bg: '#FEF3C7', text: '#92400E' }
-      : builtinMap[item.role] || { label: item.role_label || item.role, bg: '#EAF0EC', text: '#102F2A' };
+      ? {
+          label: 'Staff Member (Legacy)',
+          bg: '#FEF3C7',
+          text: '#92400E',
+          border: '#FDE68A',
+        }
+      : builtinMap[item.role] || {
+          label: item.role_label || item.role,
+          bg: '#F1F5F9',
+          text: '#334155',
+          border: '#E2E8F0',
+        };
 
     return (
       <View style={styles.memberCard}>
         {/* Top Information Area */}
-        <View style={styles.cardTopRow}>
+        <View style={styles.cardHeader}>
+          {/* Avatar (42px) */}
           <MemberAvatar
             imageUrl={item.profile_image_url}
             name={staffName}
-            size={64}
+            size={42}
           />
 
-          <View style={styles.cardDetailsColumn}>
-            {/* Row 1: Name, Role Badge, Three-dot Menu */}
-            <View style={styles.nameAndIdRow}>
-              <AppText style={styles.playerName} numberOfLines={2}>
-                {staffName}
-              </AppText>
-              <View style={styles.badgeAndMenuRow}>
-                <View style={[styles.roleBadge, { backgroundColor: roleConfig.bg }]}>
-                  {isCustomRole && (
-                    <Shield size={11} color="#0D5F4D" strokeWidth={2.2} style={{ marginRight: 3 }} />
-                  )}
-                  <AppText style={[styles.roleBadgeText, { color: roleConfig.text }]}>
-                    {roleConfig.label}
-                  </AppText>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleStaffMenu(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  style={styles.threeDotBtn}
-                  accessibilityLabel="Staff actions"
-                >
-                  <MoreVertical size={18} color="#647570" strokeWidth={2} />
-                </TouchableOpacity>
+          {/* Details Column */}
+          <View style={styles.cardContent}>
+            {/* Top Row: Name + Three-dot Menu */}
+            <View style={styles.cardTopRow}>
+              <View style={styles.nameBlock}>
+                <AppText style={styles.memberName} numberOfLines={1}>
+                  {staffName}
+                </AppText>
               </View>
+
+              <TouchableOpacity
+                onPress={() => handleStaffMenu(item)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.threeDotBtn}
+                accessibilityLabel="Staff actions"
+              >
+                <MoreVertical size={16} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
             </View>
 
-            {/* Row 2: Email */}
-            <AppText style={styles.playerEmail}>
+            {/* Email */}
+            <AppText style={styles.memberEmail} numberOfLines={1}>
               {item.user_email}
             </AppText>
 
-            {/* Row 3: Status Badge & Legacy Indicator */}
-            <View style={styles.statusRow}>
+            {/* Badges Row: Role Badge + Status Badge */}
+            <View style={styles.badgesRow}>
+              <View
+                style={[
+                  styles.roleBadge,
+                  {
+                    backgroundColor: roleConfig.bg,
+                    borderColor: roleConfig.border,
+                  },
+                ]}
+              >
+                {isCustomRole && (
+                  <Shield
+                    size={11}
+                    color="#0F766E"
+                    strokeWidth={2.2}
+                    style={{ marginRight: 3 }}
+                  />
+                )}
+                <AppText
+                  style={[styles.roleBadgeText, { color: roleConfig.text }]}
+                >
+                  {roleConfig.label}
+                </AppText>
+              </View>
+
               <View
                 style={[
                   styles.statusBadge,
@@ -1313,9 +1371,14 @@ export default function ClubMembersScreen() {
               </View>
 
               {isLegacyStaff && (
-                <View style={[styles.playerSubPlanBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                  <AppText style={[styles.playerSubPlanBadgeText, { color: '#92400E' }]}>
-                    Legacy • 0 perms
+                <View
+                  style={[
+                    styles.subPlanBadge,
+                    { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+                  ]}
+                >
+                  <AppText style={[styles.subPlanBadgeText, { color: '#92400E' }]}>
+                    0 permissions
                   </AppText>
                 </View>
               )}
@@ -1334,7 +1397,7 @@ export default function ClubMembersScreen() {
               onPress={() => handleOpenEditRole(item)}
               activeOpacity={0.7}
             >
-              <SquarePen size={15} color="#102F2A" strokeWidth={1.9} />
+              <SquarePen size={14} color="#1E293B" strokeWidth={1.8} />
               <AppText style={styles.cardActionText}>Edit Role</AppText>
             </TouchableOpacity>
           ) : (
@@ -1343,7 +1406,7 @@ export default function ClubMembersScreen() {
               onPress={() => handleMessageStaff(item)}
               activeOpacity={0.7}
             >
-              <Mail size={15} color="#102F2A" strokeWidth={1.9} />
+              <Mail size={14} color="#1E293B" strokeWidth={1.8} />
               <AppText style={styles.cardActionText}>Message</AppText>
             </TouchableOpacity>
           )}
@@ -1358,20 +1421,29 @@ export default function ClubMembersScreen() {
             >
               {item.is_active ? (
                 <>
-                  <UserX size={15} color="#B91C1C" strokeWidth={1.9} />
-                  <AppText style={[styles.cardActionText, { color: '#B91C1C' }]}>Disable</AppText>
+                  <UserX size={14} color="#DC2626" strokeWidth={1.8} />
+                  <AppText style={[styles.cardActionText, { color: '#DC2626' }]}>
+                    Disable
+                  </AppText>
                 </>
               ) : (
                 <>
-                  <UserCheck size={15} color="#176B57" strokeWidth={1.9} />
-                  <AppText style={[styles.cardActionText, { color: '#176B57' }]}>Enable</AppText>
+                  <UserCheck size={14} color="#059669" strokeWidth={1.8} />
+                  <AppText style={[styles.cardActionText, { color: '#059669' }]}>
+                    Enable
+                  </AppText>
                 </>
               )}
             </TouchableOpacity>
           ) : (
             <View style={styles.cardActionItem}>
-              <Shield size={14} color="#176B57" strokeWidth={2} />
-              <AppText style={[styles.cardActionText, { color: '#176B57', fontWeight: '600' }]}>
+              <Shield size={13} color="#0D5F4D" strokeWidth={2.2} />
+              <AppText
+                style={[
+                  styles.cardActionText,
+                  { color: '#0D5F4D', fontWeight: '600', fontSize: 12 },
+                ]}
+              >
                 {isOwner ? 'Club Owner (Protected)' : 'Staff Member'}
               </AppText>
             </View>
@@ -2473,74 +2545,76 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // ─── Main Action 3-Button Row ────────────────────────────────────────────────
-  mainActionsRow: {
+  // ─── Tab Selector (Segmented) ────────────────────────────────────────────────
+  tabSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    backgroundColor: '#E2EBE6',
+    borderRadius: 12,
+    padding: 4,
+    gap: 6,
     marginBottom: 12,
   },
-  mainActionBtn: {
+  tabSelectorBtn: {
     flex: 1,
     height: 38,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DFE7E3',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderRadius: 9,
+    backgroundColor: 'transparent',
   },
-  mainActionBtnActive: {
+  tabSelectorBtnActive: {
     backgroundColor: '#176B57',
-    borderColor: '#176B57',
+    shadowColor: '#176B57',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  mainActionBtnText: {
+  tabSelectorBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#475569',
   },
-  mainActionBtnTextActive: {
+  tabSelectorBtnTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
 
-  // ─── Filter Pills ────────────────────────────────────────────────────────────
-  filterScrollView: {
+  // ─── Section Controls ────────────────────────────────────────────────────────
+  controlsGroup: {
     marginBottom: 12,
+    gap: 10,
   },
-  filterPillsScrollContent: {
+  subFiltersRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingRight: 16,
+    gap: 6,
   },
-  filterPill: {
-    height: 34,
-    paddingHorizontal: 14,
-    borderRadius: 17,
+  subFilterPill: {
+    flex: 1,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7E3',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
-  filterPillActive: {
-    backgroundColor: '#176B57',
+  subFilterPillActive: {
+    backgroundColor: '#DEF2E6',
     borderColor: '#176B57',
   },
-  filterPillText: {
-    fontSize: 12.5,
+  subFilterPillText: {
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#334155',
-    lineHeight: 16,
+    color: '#475569',
     textAlign: 'center',
   },
-  filterPillTextActive: {
-    color: '#FFFFFF',
+  subFilterPillTextActive: {
+    color: '#176B57',
     fontWeight: '700',
   },
   filterIconButton: {
@@ -2562,24 +2636,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7E3',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 46,
-    marginBottom: 14,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 6,
   },
   searchInput: {
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 13,
     color: '#102F2A',
     paddingVertical: 0,
   },
 
   // ─── Staff Controls ──────────────────────────────────────────────────────────
   staffControlsContainer: {
-    marginBottom: 14,
+    marginBottom: 12,
   },
   staffSearchAndAddRow: {
     flexDirection: 'row',
@@ -2593,45 +2666,92 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DFE7E3',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 44,
+    height: 40,
   },
   addStaffBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#176B57',
-    paddingHorizontal: 14,
-    height: 44,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     flexShrink: 0,
   },
   addStaffBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
   },
 
   // ─── Member Card ─────────────────────────────────────────────────────────────
   memberCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#E2EAE5',
-    padding: 16,
-    marginBottom: 12,
+    paddingTop: 12,
+    paddingHorizontal: 14,
+    paddingBottom: 0,
+    marginBottom: 10,
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 1.5,
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  cardContent: {
+    flex: 1,
   },
   cardTopRow: {
     flexDirection: 'row',
-    gap: 14,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  nameBlock: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginRight: 6,
+  },
+  memberName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102F2A',
+    lineHeight: 20,
+    flexShrink: 1,
+  },
+  idBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  idBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+    letterSpacing: 0.2,
+  },
+  threeDotBtn: {
+    padding: 2,
+  },
+  memberEmail: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 6,
   },
 
   // ─── Avatar ──────────────────────────────────────────────────────────────────
@@ -2655,64 +2775,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ─── Card Details Column ─────────────────────────────────────────────────────
-  cardDetailsColumn: {
-    flex: 1,
-  },
-  nameAndIdRow: {
+  // ─── Badges Row ──────────────────────────────────────────────────────────────
+  badgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  playerName: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#102F2A',
-    lineHeight: 22,
-  },
-  badgeAndMenuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  idBadge: {
-    backgroundColor: '#EEF2F0',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  idBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#5E716D',
-    letterSpacing: 0.3,
-  },
-  threeDotBtn: {
-    padding: 2,
-  },
-  playerEmail: {
-    fontSize: 13.5,
-    color: '#647570',
-    marginTop: 3,
-    marginBottom: 8,
-  },
-
-  // ─── Status Badge ────────────────────────────────────────────────────────────
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  roleBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 9,
-    paddingVertical: 3.5,
-    borderRadius: 14,
-    backgroundColor: '#EAF0EC',
-    gap: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    gap: 4.5,
   },
   statusBadgeActive: {
     backgroundColor: '#DEF2E6',
@@ -2723,11 +2813,14 @@ const styles = StyleSheet.create({
   statusBadgeDanger: {
     backgroundColor: '#FEE2E2',
   },
+  statusBadgeInactive: {
+    backgroundColor: '#F1F5F9',
+  },
   statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#647570',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#94A3B8',
   },
   statusDotActive: {
     backgroundColor: '#15803D',
@@ -2738,11 +2831,14 @@ const styles = StyleSheet.create({
   statusDotDanger: {
     backgroundColor: '#DC2626',
   },
+  statusDotInactive: {
+    backgroundColor: '#94A3B8',
+  },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    letterSpacing: 0.4,
-    color: '#647570',
+    letterSpacing: 0.3,
+    color: '#64748B',
   },
   statusBadgeTextActive: {
     color: '#15803D',
@@ -2753,39 +2849,35 @@ const styles = StyleSheet.create({
   statusBadgeTextDanger: {
     color: '#DC2626',
   },
-  playerSubPlanBadge: {
-    backgroundColor: '#E7F0FB',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+  statusBadgeTextInactive: {
+    color: '#64748B',
+  },
+  subPlanBadge: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
     maxWidth: 160,
   },
-  playerSubPlanBadgeText: {
-    color: '#1E69D2',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  roleBadgeText: {
-    fontSize: 11,
+  subPlanBadgeText: {
+    color: '#0369A1',
+    fontSize: 10.5,
     fontWeight: '700',
   },
 
   // ─── Divider & Actions ───────────────────────────────────────────────────────
   cardDivider: {
     height: 1,
-    backgroundColor: '#F0F4F2',
-    marginTop: 14,
-    marginBottom: 2,
+    backgroundColor: '#F1F5F9',
+    marginTop: 10,
+    marginBottom: 0,
   },
   cardActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 42,
+    height: 38,
   },
   cardActionItem: {
     flex: 1,
@@ -2797,13 +2889,13 @@ const styles = StyleSheet.create({
   },
   actionVerticalDivider: {
     width: 1,
-    height: 20,
-    backgroundColor: '#E2EAE5',
+    height: 18,
+    backgroundColor: '#E2E8F0',
   },
   cardActionText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
-    color: '#102F2A',
+    color: '#334155',
   },
 
   // ─── Modals ──────────────────────────────────────────────────────────────────
