@@ -202,9 +202,13 @@ export default function ClubPaymentsScreen() {
     });
   }, [allPayments, statusFilter, categoryFilter, searchQuery]);
 
-  // Essential summary metrics
-  const { totalCollectedAmount, totalPaymentsCount, successfulCount } = useMemo(() => {
+  // Supported summary metrics (Net Collected, Total, Successful, Pending, Failed, Refunded)
+  const metricsData = useMemo(() => {
     const succeededList = allPayments.filter((p) => p.status === 'succeeded');
+    const pendingList = allPayments.filter(
+      (p) => p.status === 'pending' || p.status === 'processing'
+    );
+    const failedList = allPayments.filter((p) => p.status === 'failed');
     const refundedList = allPayments.filter(
       (p) => p.status === 'refunded' || p.status === 'partially_refunded'
     );
@@ -217,22 +221,132 @@ export default function ClubPaymentsScreen() {
       (acc, p) => acc + Number(p.refunded_amount || p.amount || 0),
       0
     );
-    const netCollected = grossCollected - refundedSum;
+    const pendingSum = pendingList.reduce(
+      (acc, p) => acc + Number(p.amount || 0),
+      0
+    );
+    const failedSum = failedList.reduce(
+      (acc, p) => acc + Number(p.amount || 0),
+      0
+    );
 
-    const totalCollected =
+    const netCollected =
       summary?.net_collected != null
         ? Number(summary.net_collected)
-        : netCollected;
+        : Math.max(0, grossCollected - refundedSum);
+
+    const totalRefunded =
+      summary?.total_refunded_amount != null
+        ? Number(summary.total_refunded_amount)
+        : refundedSum;
 
     const totalPayments = summary?.total_count ?? allPayments.length;
     const successful = summary?.succeeded_count ?? succeededList.length;
+    const pending = summary?.pending_count ?? pendingList.length;
+    const failed = summary?.failed_count ?? failedList.length;
+    const refunded = summary?.refunded_count ?? refundedList.length;
 
     return {
-      totalCollectedAmount: Math.max(0, totalCollected),
+      netCollectedAmount: Math.max(0, netCollected),
       totalPaymentsCount: totalPayments,
       successfulCount: successful,
+      successfulAmount: grossCollected,
+      pendingCount: pending,
+      pendingAmount: pendingSum,
+      failedCount: failed,
+      failedAmount: failedSum,
+      refundedCount: refunded,
+      refundedAmount: totalRefunded,
     };
   }, [allPayments, summary]);
+
+  // Responsive 2-column or multi-column grid widths
+  const contentWidth = Math.min(windowWidth - 32, 1200);
+  const cardWidth = useMemo(() => {
+    if (windowWidth >= 1024) {
+      return (contentWidth - 50) / 6;
+    }
+    if (windowWidth >= 640) {
+      return (contentWidth - 20) / 3;
+    }
+    return (contentWidth - 10) / 2;
+  }, [windowWidth, contentWidth]);
+
+  // All 6 supported payment summary cards
+  const metricCards = useMemo(
+    () => [
+      {
+        id: 'net_collected',
+        label: 'Net Collected',
+        value: formatCurrency(metricsData.netCollectedAmount, 'USD'),
+        subtext: 'After refunds',
+        Icon: CreditCard,
+        bgColor: '#ECFDF5',
+        iconColor: '#059669',
+        valColor: '#047857',
+      },
+      {
+        id: 'total_payments',
+        label: 'Total Payments',
+        value: String(metricsData.totalPaymentsCount),
+        subtext: 'All transactions',
+        Icon: FileText,
+        bgColor: '#F1F5F9',
+        iconColor: '#475569',
+        valColor: '#0F172A',
+      },
+      {
+        id: 'successful',
+        label: 'Successful',
+        value: String(metricsData.successfulCount),
+        subtext: `${formatCurrency(metricsData.successfulAmount, 'USD')} collected`,
+        Icon: CheckCircle2,
+        bgColor: '#DEF2E6',
+        iconColor: '#15803D',
+        valColor: '#15803D',
+      },
+      {
+        id: 'pending',
+        label: 'Pending',
+        value: String(metricsData.pendingCount),
+        subtext:
+          metricsData.pendingAmount > 0
+            ? `${formatCurrency(metricsData.pendingAmount, 'USD')} awaiting`
+            : 'Awaiting payment',
+        Icon: Clock,
+        bgColor: '#FEF3C7',
+        iconColor: '#D97706',
+        valColor: '#B45309',
+      },
+      {
+        id: 'failed',
+        label: 'Failed',
+        value: String(metricsData.failedCount),
+        subtext:
+          metricsData.failedAmount > 0
+            ? `${formatCurrency(metricsData.failedAmount, 'USD')} failed`
+            : 'Declined / aborted',
+        Icon: ShieldAlert,
+        bgColor: '#FEE2E2',
+        iconColor: '#EF4444',
+        valColor: '#DC2626',
+      },
+      {
+        id: 'refunded',
+        label: 'Refunded',
+        value: String(metricsData.refundedCount),
+        subtext:
+          metricsData.refundedAmount > 0
+            ? `${formatCurrency(metricsData.refundedAmount, 'USD')} refunded`
+            : 'No refunds',
+        Icon: RotateCcw,
+        bgColor: '#EDE9FE',
+        iconColor: '#7C3AED',
+        valColor: '#6D28D9',
+      },
+    ],
+    [metricsData]
+  );
 
   const onRefresh = () => {
     refetchSummary();
@@ -334,55 +448,37 @@ export default function ClubPaymentsScreen() {
     );
   }
 
-  // ─── Header: 3 Summary Metrics + Unified Filter Section ────────────────────
+  // ─── Header: 6 Summary Metrics (2-Column Grid) + Unified Filter Section ────
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* ─── 1. Essential Summary Metrics (3 Compact Cards) ─── */}
-      <View style={styles.summaryRow}>
-        {/* Metric 1: Net Collected */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTopRow}>
-            <View style={[styles.summaryIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CreditCard size={13} color="#059669" strokeWidth={2.2} />
+      {/* ─── 1. Supported Summary Metrics (2-Column Responsive Grid) ─── */}
+      <View style={styles.summaryGrid}>
+        {metricCards.map((card) => (
+          <View
+            key={card.id}
+            style={[styles.summaryCard, { width: cardWidth }]}
+          >
+            <View style={styles.summaryTopRow}>
+              <View style={[styles.summaryIconBox, { backgroundColor: card.bgColor }]}>
+                <card.Icon size={13} color={card.iconColor} strokeWidth={2.2} />
+              </View>
+              <AppText style={styles.summaryLabel}>
+                {card.label}
+              </AppText>
             </View>
-            <AppText style={styles.summaryLabel} numberOfLines={1}>
-              Net Collected
-            </AppText>
-          </View>
-          <AppText style={[styles.summaryValue, { color: '#047857' }]} numberOfLines={1}>
-            {formatCurrency(totalCollectedAmount, 'USD')}
-          </AppText>
-        </View>
 
-        {/* Metric 2: Total Payments */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTopRow}>
-            <View style={[styles.summaryIconBox, { backgroundColor: '#F1F5F9' }]}>
-              <FileText size={13} color="#475569" strokeWidth={2.2} />
+            <View style={styles.summaryValueBlock}>
+              <AppText style={[styles.summaryValue, { color: card.valColor }]}>
+                {card.value}
+              </AppText>
+              {card.subtext ? (
+                <AppText style={styles.summarySubtext}>
+                  {card.subtext}
+                </AppText>
+              ) : null}
             </View>
-            <AppText style={styles.summaryLabel} numberOfLines={1}>
-              Total Payments
-            </AppText>
           </View>
-          <AppText style={styles.summaryValue} numberOfLines={1}>
-            {totalPaymentsCount}
-          </AppText>
-        </View>
-
-        {/* Metric 3: Successful */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTopRow}>
-            <View style={[styles.summaryIconBox, { backgroundColor: '#DEF2E6' }]}>
-              <CheckCircle2 size={13} color="#15803D" strokeWidth={2.2} />
-            </View>
-            <AppText style={styles.summaryLabel} numberOfLines={1}>
-              Successful
-            </AppText>
-          </View>
-          <AppText style={[styles.summaryValue, { color: '#15803D' }]} numberOfLines={1}>
-            {successfulCount}
-          </AppText>
-        </View>
+        ))}
       </View>
 
       {/* ─── 2. Unified Filter Section (Search + 2 Compact Dropdowns) ─── */}
@@ -507,9 +603,11 @@ export default function ClubPaymentsScreen() {
     else if (isRefunded) statusText = 'REFUNDED';
 
     // Meaningful secondary item detail (only if distinct from serviceType)
-    const itemDetail = details.activityTitle && details.activityTitle.toLowerCase() !== details.serviceType.toLowerCase()
-      ? details.activityTitle
-      : details.activitySubtitle;
+    const itemDetail =
+      details.activityTitle &&
+      details.activityTitle.toLowerCase() !== details.serviceType.toLowerCase()
+        ? details.activityTitle
+        : details.activitySubtitle;
 
     return (
       <TouchableOpacity
@@ -517,9 +615,9 @@ export default function ClubPaymentsScreen() {
         onPress={() => setSelectedPayment(item)}
         activeOpacity={0.8}
       >
-        {/* Top Row: Player Name + Restrained Status Badge */}
+        {/* Top Section: Player Name + Subtle Status Badge */}
         <View style={styles.cardHeaderRow}>
-          <AppText style={styles.playerName} numberOfLines={1}>
+          <AppText style={styles.playerName}>
             {playerName}
           </AppText>
 
@@ -548,8 +646,8 @@ export default function ClubPaymentsScreen() {
           </View>
         </View>
 
-        {/* Middle Section: Prominent Amount + Service Details */}
-        <View style={styles.cardMiddleSection}>
+        {/* Main Section: Prominent Amount + Service Type + Item Description */}
+        <View style={styles.cardMainSection}>
           <AppText style={styles.amountText}>
             {details.formattedAmount}
           </AppText>
@@ -559,7 +657,7 @@ export default function ClubPaymentsScreen() {
               {details.serviceType}
             </AppText>
             {itemDetail ? (
-              <AppText style={styles.serviceItemDetailText} numberOfLines={1}>
+              <AppText style={styles.serviceItemDetailText}>
                 {itemDetail}
               </AppText>
             ) : null}
@@ -570,14 +668,14 @@ export default function ClubPaymentsScreen() {
         {details.failureReason ? (
           <View style={styles.failureNoticeStrip}>
             <ShieldAlert size={12} color="#DC2626" />
-            <AppText style={styles.failureNoticeText} numberOfLines={1}>
+            <AppText style={styles.failureNoticeText}>
               {details.failureReason}
             </AppText>
           </View>
         ) : isRefunded ? (
           <View style={styles.refundNoticeStrip}>
             <RotateCcw size={12} color="#6D28D9" />
-            <AppText style={styles.refundNoticeText} numberOfLines={1}>
+            <AppText style={styles.refundNoticeText}>
               Refunded: {formatCurrency(item.refunded_amount || item.amount, 'USD')}
             </AppText>
           </View>
@@ -586,20 +684,27 @@ export default function ClubPaymentsScreen() {
         {/* Subtle Divider */}
         <View style={styles.cardDivider} />
 
-        {/* Bottom Section: Transaction ID, Timestamp, Payment Method */}
-        <View style={styles.cardFooterRow}>
-          <View style={styles.footerLeftCol}>
-            <AppText style={styles.transactionIdText}>
-              Transaction: {item.reference}
-            </AppText>
-            <AppText style={styles.createdDateText}>
-              {details.formattedDate}
-            </AppText>
+        {/* Bottom Section: Transaction ID, Payment Method, Date & Time */}
+        <View style={styles.cardFooter}>
+          <View style={styles.cardFooterTopRow}>
+            <View style={styles.txReferenceGroup}>
+              <AppText style={styles.txReferencePrefix}>Ref:</AppText>
+              <AppText style={styles.txReferenceValue}>
+                {item.reference}
+              </AppText>
+            </View>
+
+            <View style={styles.methodBadge}>
+              <AppText style={styles.methodBadgeText}>
+                {details.methodLabel}
+              </AppText>
+            </View>
           </View>
 
-          <View style={styles.methodBadge}>
-            <AppText style={styles.methodBadgeText}>
-              {details.methodLabel}
+          <View style={styles.cardFooterBottomRow}>
+            <Clock size={11} color="#94A3B8" />
+            <AppText style={styles.createdDateText}>
+              {details.formattedDate}
             </AppText>
           </View>
         </View>
@@ -1183,51 +1288,60 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // 2. Summary Metrics (3 Compact Cards in 1 Row)
+  // 2. Summary Metrics (Responsive 2-Column Grid on Mobile)
   listHeaderWrapper: {
     gap: 12,
     marginBottom: 4,
   },
-  summaryRow: {
+  summaryGrid: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   summaryCard: {
-    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 11,
     borderWidth: 1,
     borderColor: Colors.surface.border,
     justifyContent: 'space-between',
-    minHeight: 74,
+    minHeight: 84,
     ...Shadows.sm,
   },
   summaryTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 6,
   },
   summaryIconBox: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
     borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
   summaryLabel: {
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '600',
     color: Colors.text.secondary,
     flex: 1,
+    flexShrink: 1,
+  },
+  summaryValueBlock: {
+    gap: 1,
   },
   summaryValue: {
-    fontSize: 16.5,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.text.primary,
     letterSpacing: -0.3,
+  },
+  summarySubtext: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '500',
   },
 
   // 3. Unified Filter Card
@@ -1396,9 +1510,8 @@ const styles = StyleSheet.create({
     color: '#6D28D9',
   },
 
-  // Middle section
-  cardMiddleSection: {
-    flexDirection: 'column',
+  // Main section: prominent amount + service type + item description
+  cardMainSection: {
     gap: 3,
     marginTop: 2,
   },
@@ -1409,13 +1522,10 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   serviceInfoGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
+    gap: 1,
   },
   serviceNameHeading: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#1E293B',
   },
@@ -1465,24 +1575,39 @@ const styles = StyleSheet.create({
   cardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 2,
+    marginVertical: 4,
   },
 
-  // Footer row
-  cardFooterRow: {
+  // Bottom section: reference + method on top row, timestamp below
+  cardFooter: {
+    gap: 5,
+  },
+  cardFooterTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     gap: 8,
   },
-  footerLeftCol: {
+  txReferenceGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     flex: 1,
-    gap: 2,
   },
-  transactionIdText: {
+  txReferencePrefix: {
     fontSize: 11,
     color: '#64748B',
     fontWeight: '500',
+  },
+  txReferenceValue: {
+    fontSize: 12,
+    color: '#1E293B',
+    fontWeight: '600',
+  },
+  cardFooterBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   createdDateText: {
     fontSize: 11,
@@ -1492,7 +1617,7 @@ const styles = StyleSheet.create({
   methodBadge: {
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 2.5,
     borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: '#E2E8F0',
