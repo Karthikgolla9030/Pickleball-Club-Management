@@ -1,21 +1,32 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ImageBackground,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+/**
+ * Aught2 Pickleball — ClubHeroCarousel
+ *
+ * Layered Club Side Welcome Hero Banner with automatically sliding promotional
+ * advertisement carousel in the background:
+ * - When the club has active promotional advertisements:
+ *     * Displays promotional images belonging exclusively to the currently selected club.
+ *     * Automatically transitions with a smooth crossfade every 5 seconds behind the Welcome banner.
+ *     * Multi-tenant isolated: switching active clubs refreshes ads so previous club ads are never shown.
+ * - When the club has no active advertisements:
+ *     * Seamlessly displays the default Club Welcome banner without pagination controls or empty boxes.
+ * - The Welcome banner (greetings, title, supporting text, CTA button, motto) remains
+ *   visibly prominent, readable, and interactive in the foreground at all times.
+ */
+
+import React, { useMemo } from 'react';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
-import { useActiveClub, usePlatformBanner, usePlatformBranding } from '@/hooks';
-import { resolveMediaUrl, resolveOwnerBanner } from '@/utils';
+import { LayeredHeroAdBackground } from './LayeredHeroAdBackground';
+import {
+  useActiveClub,
+  useClubCarouselSlides,
+  usePlatformBanner,
+  usePlatformBranding,
+} from '@/hooks';
+import { resolveOwnerBanner } from '@/utils';
 
 export interface HeroBannerSlide {
   id: string;
@@ -28,39 +39,6 @@ export interface HeroBannerSlide {
   image: any;
 }
 
-export const DEFAULT_HERO_SLIDES: HeroBannerSlide[] = [
-  {
-    id: 'court-booking',
-    tag: 'PICKLEBALL',
-    title: 'Play Together\nGrow Stronger',
-    supportingText: 'Great courts. Active members.\nA healthier, happier community.',
-    ctaText: 'Book a Court',
-    route: '/(club)/bookings',
-    scriptLines: ['Same', 'Game', 'Bigger', 'Community'],
-    image: null,
-  },
-  {
-    id: 'tournaments',
-    tag: 'CLUB TOURNAMENTS',
-    title: 'Compete, Rally\n& Take The Crown',
-    supportingText: 'Upcoming scrambles, round robins\n& championship brackets.',
-    ctaText: 'View Tournaments',
-    route: '/(club)/tournaments',
-    scriptLines: ['Serve', 'Rally', 'Score', 'Win'],
-    image: null,
-  },
-  {
-    id: 'memberships',
-    tag: 'MEMBER PERKS',
-    title: 'Flexible Plans\nStronger Community',
-    supportingText: 'Exclusive court access, priority slots\n& unlimited open play privileges.',
-    ctaText: 'Explore Plans',
-    route: '/(club)/memberships',
-    scriptLines: ['Passion', 'Power', 'Pure', 'Fun'],
-    image: null,
-  },
-];
-
 interface ClubHeroCarouselProps {
   clubId?: string | null;
   fallbackCoverUrl?: string | null;
@@ -69,29 +47,24 @@ interface ClubHeroCarouselProps {
 
 export function ClubHeroCarousel({
   clubId: propClubId,
-  fallbackCoverUrl,
   fallbackClubName,
 }: ClubHeroCarouselProps = {}) {
   const router = useRouter();
   const { clubId: activeClubId, clubName: activeClubName } = useActiveClub();
   const { platformName } = usePlatformBranding();
+  const effectiveClubId = propClubId ?? activeClubId;
   const effectiveClubName = fallbackClubName ?? activeClubName;
 
+  // Platform Admin Global Banner for owner home fallback
   const { banner: platformBanner } = usePlatformBanner('owner_home');
 
-  const { width: windowWidth } = useWindowDimensions();
-  const [cardWidth, setCardWidth] = useState<number>(Math.max(windowWidth - 32, 280));
-  const [activeSlide, setActiveSlide] = useState<number>(0);
+  // Club-specific promotional ads (only active, scheduled ads belonging strictly to this club)
+  const { slides: clubAds = [] } = useClubCarouselSlides(effectiveClubId, true);
 
-  const scrollRef = useRef<ScrollView>(null);
-  const isInteractingRef = useRef<boolean>(false);
-  const pauseCooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Global Owner Home Banner configured by Platform Admin
-  const slides = useMemo<HeroBannerSlide[]>(() => {
+  // Default welcome content
+  const welcomeData = useMemo(() => {
     const ownerBannerImage = resolveOwnerBanner(platformBanner);
 
-    // Resolve authoritative title without flashing unconfigured brand
     let resolvedTitle = 'Welcome';
     if (platformBanner?.title && !platformBanner.title.includes('Aught2')) {
       resolvedTitle = platformBanner.title;
@@ -99,7 +72,6 @@ export function ClubHeroCarousel({
       resolvedTitle = `Welcome to ${platformName.trim()}`;
     }
 
-    // Resolve authoritative tag
     let resolvedTag = 'COMMUNITY';
     if (platformName && platformName.trim().length > 0) {
       resolvedTag = platformName.trim().toUpperCase();
@@ -110,8 +82,7 @@ export function ClubHeroCarousel({
       }
     }
 
-    const ownerWelcomeSlide: HeroBannerSlide = {
-      id: 'platform-owner-home-banner-slide',
+    return {
       tag: resolvedTag,
       title: resolvedTitle,
       supportingText:
@@ -122,275 +93,72 @@ export function ClubHeroCarousel({
       scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
       image: ownerBannerImage,
     };
-
-    return [ownerWelcomeSlide];
   }, [platformBanner, platformName, effectiveClubName]);
 
-  // Keep scroll position aligned on container width changes
-  useEffect(() => {
-    if (cardWidth > 0 && activeSlide > 0) {
-      scrollRef.current?.scrollTo({
-        x: activeSlide * cardWidth,
-        animated: false,
-      });
-    }
-  }, [cardWidth]);
-
-  // Ensure activeSlide stays within bounds if slides length changes
-  useEffect(() => {
-    if (activeSlide >= slides.length) {
-      setActiveSlide(0);
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-    }
-  }, [slides.length, activeSlide]);
-
-  // Pause auto-sliding temporarily when user manually interacts
-  const pauseAutoPlayTemporarily = () => {
-    isInteractingRef.current = true;
-    if (pauseCooldownTimer.current) {
-      clearTimeout(pauseCooldownTimer.current);
-    }
-    pauseCooldownTimer.current = setTimeout(() => {
-      isInteractingRef.current = false;
-    }, 6000);
-  };
-
-  // Auto-play timer: rotate every 5s if user is not actively interacting and multiple slides exist
-  useEffect(() => {
-    if (slides.length <= 1) return;
-
-    const interval = setInterval(() => {
-      if (!isInteractingRef.current && cardWidth > 0) {
-        setActiveSlide((prev) => {
-          const next = (prev + 1) % slides.length;
-          scrollRef.current?.scrollTo({
-            x: next * cardWidth,
-            animated: true,
-          });
-          return next;
-        });
-      }
-    }, 5000);
-
-    return () => {
-      clearInterval(interval);
-      if (pauseCooldownTimer.current) {
-        clearTimeout(pauseCooldownTimer.current);
-      }
-    };
-  }, [cardWidth, slides.length]);
-
-  const scrollToSlide = (index: number) => {
-    pauseAutoPlayTemporarily();
-    if (scrollRef.current && cardWidth > 0) {
-      scrollRef.current.scrollTo({
-        x: index * cardWidth,
-        animated: true,
-      });
-      setActiveSlide(index);
-    }
-  };
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    pauseAutoPlayTemporarily();
-    const offsetX = event.nativeEvent.contentOffset.x;
-    if (cardWidth > 0) {
-      const nextIndex = Math.round(offsetX / cardWidth);
-      if (nextIndex >= 0 && nextIndex < slides.length && nextIndex !== activeSlide) {
-        setActiveSlide(nextIndex);
-      }
-    }
-  };
-
-  const handleMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetX = event.nativeEvent.contentOffset.x;
-    if (cardWidth > 0) {
-      const nextIndex = Math.round(offsetX / cardWidth);
-      if (nextIndex >= 0 && nextIndex < slides.length) {
-        setActiveSlide(nextIndex);
-      }
-    }
-  };
-
   return (
-    <View
-      style={styles.heroWrapper}
-      onLayout={(e) => {
-        const width = e.nativeEvent.layout.width;
-        if (width > 0 && Math.abs(width - cardWidth) > 1) {
-          setCardWidth(width);
-        }
-      }}
-    >
-      {/* Horizontal Carousel Scroller */}
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        nestedScrollEnabled={true}
-        directionalLockEnabled={true}
-        showsHorizontalScrollIndicator={false}
-        decelerationRate="fast"
-        snapToInterval={cardWidth}
-        snapToAlignment="center"
-        bounces={false}
-        scrollEventThrottle={16}
-        onScroll={handleScroll}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        onScrollBeginDrag={() => {
-          isInteractingRef.current = true;
-          pauseAutoPlayTemporarily();
+    <View style={styles.heroWrapper}>
+      <LayeredHeroAdBackground
+        ads={clubAds}
+        fallbackImageSource={welcomeData.image}
+        overlayVariant="dark-emerald"
+        minHeight={215}
+        attributionPosition="none"
+        onAdPress={(ad) => {
+          if (ad.cta_route) {
+            router.push(ad.cta_route as any);
+          }
         }}
-        contentContainerStyle={
-          Platform.OS === 'web'
-            ? ({ scrollSnapType: 'x mandatory' } as any)
-            : undefined
-        }
       >
-        {slides.map((slide) => (
-          <View
-            key={slide.id}
-            style={[
-              styles.slideContainer,
-              { width: cardWidth },
-              Platform.OS === 'web' &&
-              ({ scrollSnapAlign: 'start', WebkitScrollSnapAlign: 'start' } as any),
-            ]}
-          >
-            {slide.image ? (
-              <ImageBackground
-                source={slide.image}
-                style={styles.heroCard}
-                imageStyle={styles.heroCardImage}
-              >
-                {/* Dark green overlay for high-contrast typography */}
-                <View style={styles.heroOverlay} />
+        <View style={styles.heroInner}>
+          {/* Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
+          <View style={styles.heroUpperBlock}>
+            <AppText style={styles.heroTagText}>{welcomeData.tag}</AppText>
+            <AppText style={styles.heroHeading} numberOfLines={2}>
+              {welcomeData.title}
+            </AppText>
+            <AppText style={styles.heroSupportingText} numberOfLines={2}>
+              {welcomeData.supportingText}
+            </AppText>
+          </View>
 
-                <View style={styles.heroInner}>
-                  {/* 1. Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
-                  <View style={styles.heroUpperBlock}>
-                    <AppText style={styles.heroTagText}>{slide.tag}</AppText>
-                    <AppText
-                      style={styles.heroHeading}
-                      numberOfLines={2}
-                    >
-                      {slide.title}
-                    </AppText>
-                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                      {slide.supportingText}
-                    </AppText>
-                  </View>
+          {/* Spacer */}
+          <View style={styles.heroSpacer} />
 
-                  {/* 2. Flexible spacing to keep CTA near the bottom */}
-                  <View style={styles.heroSpacer} />
+          {/* Lower portion: CTA button on the left, Decorative Script Motto on the right */}
+          <View style={styles.heroBottomRow}>
+            <TouchableOpacity
+              style={styles.heroCtaButton}
+              onPress={() => router.push(welcomeData.route as any)}
+              activeOpacity={0.88}
+              accessibilityLabel={welcomeData.ctaText}
+              accessibilityRole="button"
+            >
+              <AppText style={styles.heroCtaText} numberOfLines={1}>
+                {welcomeData.ctaText}
+              </AppText>
+              <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
+            </TouchableOpacity>
 
-                  {/* 3. Lower portion: CTA button on the left, Decorative Script Motto on the right */}
-                  <View style={styles.heroBottomRow}>
-                    <TouchableOpacity
-                      style={styles.heroCtaButton}
-                      onPress={() => router.push(slide.route as any)}
-                      activeOpacity={0.88}
-                      accessibilityLabel={slide.ctaText}
-                      accessibilityRole="button"
-                    >
-                      <AppText style={styles.heroCtaText} numberOfLines={1}>
-                        {slide.ctaText}
-                      </AppText>
-                      <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
-                    </TouchableOpacity>
-
-                    {/* Decorative Script Motto (Right side) */}
-                    {slide.scriptLines && slide.scriptLines.length > 0 && (
-                      <View style={styles.heroScriptMotto}>
-                        {slide.scriptLines.map((line, lIdx) => (
-                          <AppText key={lIdx} style={styles.scriptLine}>
-                            {line}
-                          </AppText>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                </View>
-              </ImageBackground>
-            ) : (
-              <View style={[styles.heroCard, { backgroundColor: '#0A2B23' }]}>
-                <View style={styles.heroInner}>
-                  <View style={styles.heroUpperBlock}>
-                    <AppText style={styles.heroTagText}>{slide.tag}</AppText>
-                    <AppText
-                      style={styles.heroHeading}
-                      numberOfLines={2}
-                    >
-                      {slide.title}
-                    </AppText>
-                    <AppText style={styles.heroSupportingText} numberOfLines={2}>
-                      {slide.supportingText}
-                    </AppText>
-                  </View>
-
-                  <View style={styles.heroSpacer} />
-
-                  <View style={styles.heroBottomRow}>
-                    <TouchableOpacity
-                      style={styles.heroCtaButton}
-                      onPress={() => router.push(slide.route as any)}
-                      activeOpacity={0.88}
-                      accessibilityLabel={slide.ctaText}
-                      accessibilityRole="button"
-                    >
-                      <AppText style={styles.heroCtaText} numberOfLines={1}>
-                        {slide.ctaText}
-                      </AppText>
-                      <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
-                    </TouchableOpacity>
-
-                    {slide.scriptLines && slide.scriptLines.length > 0 && (
-                      <View style={styles.heroScriptMotto}>
-                        {slide.scriptLines.map((line, lIdx) => (
-                          <AppText key={lIdx} style={styles.scriptLine}>
-                            {line}
-                          </AppText>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                </View>
+            {/* Decorative Script Motto (Right side) */}
+            {welcomeData.scriptLines && welcomeData.scriptLines.length > 0 && (
+              <View style={styles.heroScriptMotto}>
+                {welcomeData.scriptLines.map((line, lIdx) => (
+                  <AppText key={lIdx} style={styles.scriptLine}>
+                    {line}
+                  </AppText>
+                ))}
               </View>
             )}
           </View>
-        ))}
-      </ScrollView>
-
-      {/* ── Fixed Interactive Pagination Dots (Bottom-Left Edge, below CTA) ── */}
-      {slides.length > 1 && (
-        <View style={styles.floatingDotsContainer} pointerEvents="box-none">
-          {slides.map((_, dotIndex) => {
-            const isActive = activeSlide === dotIndex;
-            return (
-              <TouchableOpacity
-                key={dotIndex}
-                onPress={() => scrollToSlide(dotIndex)}
-                activeOpacity={0.75}
-                hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                accessibilityLabel={`Go to banner ${dotIndex + 1} of ${slides.length}`}
-                accessibilityRole="button"
-                style={[
-                  styles.dotCircle,
-                  isActive && styles.dotPill,
-                  isActive && styles.dotActive,
-                ]}
-              />
-            );
-          })}
         </View>
-      )}
+      </LayeredHeroAdBackground>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   heroWrapper: {
-    borderRadius: 20,
+    borderRadius: 22,
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#102F2B',
@@ -399,33 +167,12 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4,
   },
-  slideContainer: {
-    overflow: 'hidden',
-    borderRadius: 20,
-  },
-  heroCard: {
-    width: '100%',
-    minHeight: 220,
-  },
-  heroCardImage: {
-    borderRadius: 20,
-  },
-  heroOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(16, 47, 43, 0.46)',
-    borderRadius: 20,
-  },
   heroInner: {
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    paddingBottom: 30,
+    paddingTop: 18,
+    paddingHorizontal: 18,
+    paddingBottom: 22,
     justifyContent: 'space-between',
-    flex: 1,
-    minHeight: 220,
+    minHeight: 215,
   },
   heroUpperBlock: {
     gap: 4,
@@ -435,26 +182,25 @@ const styles = StyleSheet.create({
   heroTagText: {
     fontSize: 10.5,
     fontWeight: '800',
-    color: '#FFFFFF',
+    color: '#6EE7B7',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   heroHeading: {
-    fontSize: 21,
+    fontSize: 22,
     fontWeight: '800',
     color: '#FFFFFF',
-    lineHeight: 25,
+    lineHeight: 26,
     letterSpacing: -0.4,
   },
   heroSupportingText: {
-    fontSize: 11.5,
-    color: 'rgba(255, 255, 255, 0.88)',
-    lineHeight: 15.5,
-    maxWidth: '90%',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.90)',
+    lineHeight: 16.5,
+    maxWidth: '85%',
   },
   heroSpacer: {
-    flex: 1,
-    minHeight: 10,
+    minHeight: 14,
   },
   heroBottomRow: {
     flexDirection: 'row',
@@ -468,8 +214,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
-    paddingVertical: 7,
-    paddingHorizontal: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: 999,
     maxWidth: '70%',
     shadowColor: '#000000',
@@ -479,7 +225,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   heroCtaText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#102F2B',
   },
@@ -491,31 +237,9 @@ const styles = StyleSheet.create({
   scriptLine: {
     fontSize: 10.5,
     fontStyle: 'italic',
-    fontWeight: '400',
-    color: 'rgba(255, 255, 255, 0.82)',
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.85)',
     letterSpacing: 0.2,
-    lineHeight: 13.5,
-  },
-  floatingDotsContainer: {
-    position: 'absolute',
-    bottom: 11,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    zIndex: 10,
-  },
-  dotCircle: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-  },
-  dotPill: {
-    width: 18,
-    borderRadius: 4,
-  },
-  dotActive: {
-    backgroundColor: '#FFFFFF',
+    lineHeight: 14,
   },
 });

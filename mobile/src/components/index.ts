@@ -57,6 +57,8 @@ export { DateRangePickerInput } from './DateRangePickerInput';
 export { SelectPickerInput } from './SelectPickerInput';
 export type { SelectPickerOption, SelectPickerInputProps } from './SelectPickerInput';
 export { PromotionalAdsCarousel } from './PromotionalAdsCarousel';
+export { LayeredHeroAdBackground } from './LayeredHeroAdBackground';
+export type { AdSlideItem, LayeredHeroAdBackgroundProps } from './LayeredHeroAdBackground';
 export * from './checkout';
 export * from './events';
 export * from './lessons';

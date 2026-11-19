@@ -38,7 +38,7 @@ import {
   Trophy,
 } from 'lucide-react-native';
 
-import { AppText, PromotionalAdsCarousel } from '@/components';
+import { AppText, LayeredHeroAdBackground } from '@/components';
 import {
   useActiveClub,
   useAuth,
@@ -345,20 +345,25 @@ export default function PlayerHomeScreen() {
           </View>
         )}
 
-        {/* ─── 2. GLOBAL PLAYER HOME HERO SECTION (Platform Admin Managed) ────── */}
+        {/* ─── 2. LAYERED WELCOME HERO BANNER (With Promotional Ad Carousel in Background) ─── */}
         <View style={styles.heroSection}>
-          <View style={styles.heroCard}>
-            {/* Banner Image */}
-            {playerBanner?.image_url ? (
-              <Image
-                source={{ uri: resolveMediaUrl(playerBanner.image_url) }}
-                style={styles.heroImage}
-                resizeMode="cover"
-              />
-            ) : null}
-            {/* Soft overlay ensuring high contrast readability */}
-            <View style={styles.heroGradientOverlay} />
-
+          <LayeredHeroAdBackground
+            ads={universalAds}
+            fallbackImageUrl={playerBanner?.image_url}
+            overlayVariant="light-mint"
+            minHeight={195}
+            attributionPosition="top-right"
+            onAdPress={(ad) => {
+              if (ad.cta_route) {
+                router.push(ad.cta_route as any);
+              } else if (ad.club_id) {
+                router.push({
+                  pathname: '/(player)/club-details',
+                  params: { clubId: ad.club_id },
+                } as any);
+              }
+            }}
+          >
             {/* Content on Left */}
             <View style={styles.heroContent}>
               <AppText style={styles.heroTagline}>
@@ -396,17 +401,8 @@ export default function PlayerHomeScreen() {
                 <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
               </Pressable>
             </View>
-          </View>
+          </LayeredHeroAdBackground>
         </View>
-
-        {/* ─── 2B. UNIVERSAL PROMOTIONAL ADS CAROUSEL (Aggregated Across Clubs) ── */}
-        <PromotionalAdsCarousel
-          ads={universalAds}
-          title="Club Promotions & Special Offers"
-          subtitle="Exclusive tournaments, clinics, and specials from participating clubs"
-          isLoading={isUniversalAdsLoading}
-          hideIfEmpty
-        />
 
         {/* ─── 3. YOUR NEXT BOOKING (Conditional) ────────────────────────────── */}
         {nextBooking && (

@@ -40,7 +40,18 @@ export function useActiveClub() {
   // Live query for active club details to keep club name synchronized in real-time
   const { data: activeClubData } = useQuery({
     queryKey: resolvedClubId ? QUERY_KEYS.CLUB_DETAIL(resolvedClubId) : ['clubs', 'none'],
-    queryFn: () => (resolvedClubId ? clubsApi.getClub(resolvedClubId) : null),
+    queryFn: async () => {
+      if (!resolvedClubId) return null;
+      if (effectiveMembership) {
+        try {
+          return await clubsApi.getClub(resolvedClubId);
+        } catch {
+          // If staff membership authorization fails (e.g. 403), fallback to public club details
+          return await clubsApi.getPublicClub(resolvedClubId);
+        }
+      }
+      return await clubsApi.getPublicClub(resolvedClubId);
+    },
     enabled: Boolean(resolvedClubId),
     staleTime: 30 * 1000,
   });
