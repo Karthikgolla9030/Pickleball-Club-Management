@@ -224,6 +224,7 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   const playerAccount: NavItemConfig[] = [
     { key: 'player_profile', label: 'Profile', icon: User, route: '/(player)/profile' },
+    { key: 'player_settings', label: 'Settings', icon: Settings, route: '/(player)/settings' },
     { key: 'player_notifications', label: 'Notifications', icon: Bell, route: '/(player)/notifications' },
     { key: 'player_help', label: 'Help & Support', icon: HelpCircle, route: '/(player)/help-support' },
   ];

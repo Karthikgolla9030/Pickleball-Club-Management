@@ -79,10 +79,10 @@ export default function ClubSettingsScreen() {
     searchParams.tab === 'security'
       ? 'security'
       : searchParams.tab === 'preferences'
-      ? 'preferences'
-      : searchParams.tab === 'legal'
-      ? 'legal'
-      : 'notifications';
+        ? 'preferences'
+        : searchParams.tab === 'legal'
+          ? 'legal'
+          : 'notifications';
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab);
 
@@ -206,10 +206,10 @@ export default function ClubSettingsScreen() {
     (role === 'club_owner' || activeRole === 'club_owner'
       ? 'Club Owner'
       : role === 'club_manager' || activeRole === 'club_manager'
-      ? 'Club Manager'
-      : role === 'tournament_director' || activeRole === 'tournament_director'
-      ? 'Tournament Director'
-      : 'Staff Member');
+        ? 'Club Manager'
+        : role === 'tournament_director' || activeRole === 'tournament_director'
+          ? 'Tournament Director'
+          : 'Staff Member');
 
   const tabsConfig = [
     { key: 'notifications', label: 'Notifications', icon: Bell },
