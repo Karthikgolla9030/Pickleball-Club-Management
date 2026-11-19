@@ -61,7 +61,6 @@ import {
   ModalSheet,
   Screen,
 } from '@/components';
-import { getLeagueStatusBadgeDetails } from '@/components/competition/LeagueOptionsMenuModal';
 import {
   useActiveClub,
   useClubCourts,
@@ -740,7 +739,6 @@ export default function ClubLeagueDetailsScreen() {
   const teamCount = teams?.length ?? league.teams_count ?? 0;
   const maxTeamsCount = league.max_teams || 8;
   const regPercent = maxTeamsCount > 0 ? Math.min(100, Math.round((teamCount / maxTeamsCount) * 100)) : 0;
-  const statusBadge = getLeagueStatusBadgeDetails(league.status);
 
   const isSingles =
     (league.team_size ?? 2) === 1 ||
@@ -757,15 +755,6 @@ export default function ClubLeagueDetailsScreen() {
   const isRegistrationClosed = ['registration_closed', 'closed'].includes(league.status?.toLowerCase());
   const isDraft = league.status?.toLowerCase() === 'draft';
 
-  // Subtitle string: Concise contextual info without repeating division, max capacity, duration, and playoffs
-  const subtitleText = isCancelled
-    ? 'League was cancelled by administrator'
-    : isCompleted
-    ? `Season Completed${league.end_date ? ` · ${formatDate(league.end_date)}` : ''}`
-    : isDraft
-    ? 'Draft League · Not Published'
-    : `${league.start_date ? `Starts ${formatDate(league.start_date)}` : 'Dates TBA'}${league.club_name ? ` · ${league.club_name}` : ''}`;
-
   // Tab definitions (Exact required order: Overview & Rules, Players/Teams, Schedule, Standings, Playoffs, Results)
   const clubTabs: { key: TabKey; label: string }[] = [
     { key: 'overview', label: 'Overview & Rules' },
@@ -780,8 +769,8 @@ export default function ClubLeagueDetailsScreen() {
   const regCloseDateStr = league.registration_close_at
     ? formatDate(league.registration_close_at)
     : league.start_date
-    ? `By ${formatDate(league.start_date)}`
-    : 'Before Start';
+      ? `By ${formatDate(league.start_date)}`
+      : 'Before Start';
 
   let daysLeftText = '';
   if (isRegistrationOpen && league.registration_close_at) {
@@ -799,6 +788,87 @@ export default function ClubLeagueDetailsScreen() {
   } else if (isRegistrationOpen) {
     daysLeftText = 'Open for entry';
   }
+
+  // Status banner configuration with subtle, distinct styling for all states
+  const statusConfig = useMemo(() => {
+    const s = league.status?.toLowerCase();
+    if (s === 'cancelled') {
+      return {
+        bg: '#FEF2F2',
+        border: '#FECACA',
+        dot: '#EF4444',
+        text: '#991B1B',
+        subtextCol: '#B91C1C',
+        label: 'Cancelled',
+        subtext: 'Registration voided',
+      };
+    }
+    if (s === 'completed') {
+      return {
+        bg: '#F1F5F9',
+        border: '#CBD5E1',
+        dot: '#475569',
+        text: '#334155',
+        subtextCol: '#64748B',
+        label: 'Completed',
+        subtext: league.end_date ? `Ended ${formatDate(league.end_date)}` : 'Season concluded',
+      };
+    }
+    if (s === 'in_progress') {
+      return {
+        bg: '#EFF6FF',
+        border: '#BFDBFE',
+        dot: '#2563EB',
+        text: '#1E40AF',
+        subtextCol: '#1D4ED8',
+        label: 'In Progress',
+        subtext: 'Regular season active',
+      };
+    }
+    if (s === 'playoffs') {
+      return {
+        bg: '#FAF5FF',
+        border: '#E9D5FF',
+        dot: '#9333EA',
+        text: '#6B21A8',
+        subtextCol: '#7E22CE',
+        label: 'Playoffs Active',
+        subtext: 'Championship rounds',
+      };
+    }
+    if (s === 'draft') {
+      return {
+        bg: '#F8FAFC',
+        border: '#E2E8F0',
+        dot: '#64748B',
+        text: '#475569',
+        subtextCol: '#64748B',
+        label: 'Draft',
+        subtext: 'Not published yet',
+      };
+    }
+    if (['registration_closed', 'closed'].includes(s)) {
+      return {
+        bg: '#FFFBEB',
+        border: '#FDE68A',
+        dot: '#D97706',
+        text: '#92400E',
+        subtextCol: '#B45309',
+        label: 'Registration Closed',
+        subtext: 'Awaiting season start',
+      };
+    }
+    // registration_open / open / default
+    return {
+      bg: '#F0FDF4',
+      border: '#BBF7D0',
+      dot: '#16A34A',
+      text: '#166534',
+      subtextCol: '#15803D',
+      label: 'Registration Open',
+      subtext: daysLeftText || (regCloseDateStr ? `Closes ${regCloseDateStr}` : 'Open for entry'),
+    };
+  }, [league.status, league.end_date, daysLeftText, regCloseDateStr]);
 
   // Filtered matches for Matches tab
   const filteredMatches = matches?.filter((m) => {
@@ -866,127 +936,54 @@ export default function ClubLeagueDetailsScreen() {
       >
         {/* ─── INDEX 0: NATURAL-SCROLLING HEADER & CARDS ─── */}
         <View style={styles.scrollHeaderWrapper}>
-          <View style={styles.headerContainer}>
-            {/* Status Pill below title */}
-            <View style={styles.headerStatusWrap}>
+          {/* Status Banner */}
+          <View
+            style={[
+              styles.statusBanner,
+              { backgroundColor: statusConfig.bg, borderColor: statusConfig.border },
+            ]}
+          >
+            <View style={[styles.statusBannerDot, { backgroundColor: statusConfig.dot }]} />
+            <AppText style={[styles.statusBannerLabel, { color: statusConfig.text }]}>
+              {statusConfig.label}
+            </AppText>
+            {statusConfig.subtext ? (
+              <AppText style={[styles.statusBannerSubtext, { color: statusConfig.subtextCol }]}>
+                · {statusConfig.subtext}
+              </AppText>
+            ) : null}
+          </View>
+
+          {/* ─── COMPACT REGISTRATION SUMMARY CARD ─── */}
+          <View style={styles.registrationSummaryCard}>
+            <View style={styles.regSummaryRow}>
+              <AppText style={styles.regSummaryCount}>
+                <AppText style={styles.regSummaryBold}>{teamCount}</AppText>
+                <AppText style={styles.regSummaryMuted}>
+                  {' '}of {maxTeamsCount} {isSingles ? 'players' : 'teams'} registered
+                </AppText>
+              </AppText>
+              <AppText style={styles.regSummaryPercent}>{regPercent}%</AppText>
+            </View>
+            <View style={styles.regProgressBarTrack}>
               <View
                 style={[
-                  styles.statusPill,
-                  { backgroundColor: statusBadge.bg },
+                  styles.regProgressBarFill,
+                  {
+                    width: `${regPercent}%`,
+                    backgroundColor: isCancelled
+                      ? '#94A3B8'
+                      : isCompleted
+                      ? '#64748B'
+                      : '#176B57',
+                  },
                 ]}
-              >
-                <View
-                  style={[
-                    styles.statusDot,
-                    { backgroundColor: statusBadge.text },
-                  ]}
-                />
-                <AppText
-                  style={[
-                    styles.statusPillText,
-                    { color: statusBadge.text },
-                  ]}
-                >
-                  {statusBadge.label}
-                </AppText>
-              </View>
-            </View>
-
-            {/* Subtitle / Metadata row */}
-            <AppText style={styles.headerSubtitleText}>
-              {subtitleText}
-            </AppText>
-          </View>
-
-          {/* ─── 2-COLUMN REGISTRATION SUMMARY CARD ─── */}
-          <View style={styles.regStatsCard}>
-            {/* Left Col: Teams/Players Registered */}
-            <View style={styles.regStatCol}>
-              <AppText style={styles.regStatLabel}>
-                {isCancelled
-                  ? 'Past Registrations'
-                  : isCompleted
-                  ? (isSingles ? 'Final Participants' : 'Final Teams')
-                  : isInProgress || isPlayoffs
-                  ? (isSingles ? 'Active Players' : 'Active Teams')
-                  : isDraft
-                  ? 'Capacity Target'
-                  : (isSingles ? 'Players Registered' : 'Teams Registered')}
-              </AppText>
-              <View style={styles.regStatValueRow}>
-                <AppText style={styles.regStatValue}>
-                  {teamCount} / {league.max_teams || 8}
-                </AppText>
-                <AppText style={styles.regStatPercent}>{regPercent}%</AppText>
-              </View>
-              {/* Progress Bar */}
-              <View style={styles.regProgressBarTrack}>
-                <View
-                  style={[
-                    styles.regProgressBarFill,
-                    {
-                      width: `${regPercent}%`,
-                      backgroundColor: isCancelled
-                        ? '#94A3B8'
-                        : isCompleted
-                        ? '#64748B'
-                        : '#176B57',
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-
-            {/* Vertical Divider */}
-            <View style={styles.regStatDivider} />
-
-            {/* Right Col: Registration Status / Closes */}
-            <View style={styles.regStatCol}>
-              <AppText style={styles.regStatLabel}>
-                {isRegistrationOpen
-                  ? 'Registration Closes'
-                  : 'Registration Status'}
-              </AppText>
-              {isCancelled ? (
-                <>
-                  <AppText style={[styles.regStatValueText, { color: '#DC2626' }]}>Cancelled</AppText>
-                  <AppText style={styles.regStatSubtext}>Registration voided</AppText>
-                </>
-              ) : isCompleted ? (
-                <>
-                  <AppText style={styles.regStatValueText}>Concluded</AppText>
-                  <AppText style={styles.regStatSubtext}>
-                    {league.end_date ? `Ended ${formatDate(league.end_date)}` : 'Season complete'}
-                  </AppText>
-                </>
-              ) : isInProgress || isPlayoffs ? (
-                <>
-                  <AppText style={styles.regStatValueText}>Closed</AppText>
-                  <AppText style={styles.regStatSubtext}>Matches in progress</AppText>
-                </>
-              ) : isDraft ? (
-                <>
-                  <AppText style={styles.regStatValueText}>Draft</AppText>
-                  <AppText style={styles.regStatSubtext}>Not yet published</AppText>
-                </>
-              ) : isRegistrationClosed ? (
-                <>
-                  <AppText style={styles.regStatValueText}>Closed</AppText>
-                  <AppText style={styles.regStatSubtext}>Awaiting season start</AppText>
-                </>
-              ) : (
-                <>
-                  <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
-                  {daysLeftText ? (
-                    <AppText style={styles.regStatDaysLeft}>{daysLeftText}</AppText>
-                  ) : null}
-                </>
-              )}
+              />
             </View>
           </View>
 
-          {/* ─── COMPACT MANAGEMENT ACTIONS (TEAMS/PLAYERS TAB) ─── */}
-          {activeTab === 'teams' && canManageLeague && (
+          {/* ─── COMPACT MANAGEMENT ACTIONS (OVERVIEW & TEAMS TABS) ─── */}
+          {(activeTab === 'overview' || activeTab === 'teams') && canManageLeague && (
             <View style={styles.managementActionsRow}>
               {league.status === 'registration_open' ? (
                 <TouchableOpacity
@@ -1030,28 +1027,30 @@ export default function ClubLeagueDetailsScreen() {
 
         {/* ─── INDEX 1: STICKY NAVIGATION TABS WITH GREEN UNDERLINE ─── */}
         <View style={styles.stickyTabsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.tabsStripScroll}
-          >
-            {clubTabs.map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={styles.tabButton}
-                  onPress={() => setActiveTab(tab.key)}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
-                    {tab.label}
-                  </AppText>
-                  {isActive && <View style={styles.activeTabIndicator} />}
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          <View style={styles.stickyTabsInner}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabsStripScroll}
+            >
+              {clubTabs.map((tab) => {
+                const isActive = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={styles.tabButton}
+                    onPress={() => setActiveTab(tab.key)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText style={[styles.tabButtonText, isActive && styles.tabButtonTextActive]}>
+                      {tab.label}
+                    </AppText>
+                    {isActive && <View style={styles.activeTabIndicator} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
         </View>
 
         {/* ─── INDEX 2: TAB BODY CONTENT ─── */}
@@ -1080,7 +1079,7 @@ export default function ClubLeagueDetailsScreen() {
                     {isSingles ? 'Players' : 'Teams'} ({teams?.length ?? 0})
                   </AppText>
                   {canManageLeague &&
-                  (league.status === 'draft' || league.status === 'registration_open') ? (
+                    (league.status === 'draft' || league.status === 'registration_open') ? (
                     <TouchableOpacity
                       style={styles.addTeamButton}
                       onPress={() => {
@@ -1108,97 +1107,97 @@ export default function ClubLeagueDetailsScreen() {
                   <View style={styles.thChevronSpacer} />
                 </View>
 
-              {/* Team Rows */}
-              {isTeamsLoading ? (
-                <View style={{ padding: Spacing[6] }}>
-                  <LoadingState message={isSingles ? "Loading players..." : "Loading teams..."} />
-                </View>
-              ) : !teams || teams.length === 0 ? (
-                <View style={styles.emptyTeamsBox}>
-                  <AppText style={styles.emptyTeamsTitle}>
-                    {isSingles ? 'No Players Registered Yet' : 'No Teams Registered Yet'}
-                  </AppText>
-                  <AppText style={styles.emptyTeamsSubtitle}>
-                    {league.status === 'draft' || league.status === 'registration_open'
-                      ? (isSingles ? 'Add players or wait for player registration.' : 'Add teams or wait for player registration.')
-                      : (isSingles ? 'No players entered for this league.' : 'No teams entered for this league.')}
-                  </AppText>
-                </View>
-              ) : (
-                teams.map((team, index) => {
-                  const rating = team.avg_skill_level ?? 3.5;
-                  const playerCount = team.members?.length ?? 1;
+                {/* Team Rows */}
+                {isTeamsLoading ? (
+                  <View style={{ padding: Spacing[6] }}>
+                    <LoadingState message={isSingles ? "Loading players..." : "Loading teams..."} />
+                  </View>
+                ) : !teams || teams.length === 0 ? (
+                  <View style={styles.emptyTeamsBox}>
+                    <AppText style={styles.emptyTeamsTitle}>
+                      {isSingles ? 'No Players Registered Yet' : 'No Teams Registered Yet'}
+                    </AppText>
+                    <AppText style={styles.emptyTeamsSubtitle}>
+                      {league.status === 'draft' || league.status === 'registration_open'
+                        ? (isSingles ? 'Add players or wait for player registration.' : 'Add teams or wait for player registration.')
+                        : (isSingles ? 'No players entered for this league.' : 'No teams entered for this league.')}
+                    </AppText>
+                  </View>
+                ) : (
+                  teams.map((team, index) => {
+                    const rating = team.avg_skill_level ?? 3.5;
+                    const playerCount = team.members?.length ?? 1;
 
-                  return (
-                    <TouchableOpacity
-                      key={team.id}
-                      style={[
-                        styles.teamRow,
-                        index === teams.length - 1 && styles.teamRowLast,
-                      ]}
-                      onPress={() => setSelectedTeam(team)}
-                      activeOpacity={0.7}
-                    >
-                      {/* # Number */}
-                      <AppText style={styles.tdNum}>{index + 1}</AppText>
+                    return (
+                      <TouchableOpacity
+                        key={team.id}
+                        style={[
+                          styles.teamRow,
+                          index === teams.length - 1 && styles.teamRowLast,
+                        ]}
+                        onPress={() => setSelectedTeam(team)}
+                        activeOpacity={0.7}
+                      >
+                        {/* # Number */}
+                        <AppText style={styles.tdNum}>{index + 1}</AppText>
 
-                      {/* Team Name + Player subtitle */}
-                      <View style={styles.tdTeamCol}>
-                        <AppText style={styles.tdTeamName} numberOfLines={2}>
-                          {team.name}
-                        </AppText>
-                        {!isSingles && (
-                          <AppText style={styles.tdTeamSubtitle}>
-                            {team.members && team.members.length > 0
-                              ? team.members.map((m) => m.display_name || m.user?.full_name || m.user?.display_name || 'Player').join(' & ')
-                              : (playerCount === 1 ? '1 player' : `${playerCount} players`)}
+                        {/* Team Name + Player subtitle */}
+                        <View style={styles.tdTeamCol}>
+                          <AppText style={styles.tdTeamName} numberOfLines={2}>
+                            {team.name}
                           </AppText>
-                        )}
-                      </View>
+                          {!isSingles && (
+                            <AppText style={styles.tdTeamSubtitle}>
+                              {team.members && team.members.length > 0
+                                ? team.members.map((m) => m.display_name || m.user?.full_name || m.user?.display_name || 'Player').join(' & ')
+                                : (playerCount === 1 ? '1 player' : `${playerCount} players`)}
+                            </AppText>
+                          )}
+                        </View>
 
-                      {/* Players count or Division */}
-                      <View style={styles.tdPlayersCol}>
-                        <AppText style={styles.tdPlayersCount}>
-                          {isSingles ? ((league as any).division || (league as any).skill_level || 'Singles') : playerCount}
-                        </AppText>
-                      </View>
-
-                      {/* Avg Skill Level Blue Pill */}
-                      <View style={styles.tdSkillCol}>
-                        <View style={styles.skillPillBlue}>
-                          <AppText style={styles.skillPillTextBlue}>
-                            {rating.toFixed(1)}
+                        {/* Players count or Division */}
+                        <View style={styles.tdPlayersCol}>
+                          <AppText style={styles.tdPlayersCount}>
+                            {isSingles ? ((league as any).division || (league as any).skill_level || 'Singles') : playerCount}
                           </AppText>
                         </View>
-                      </View>
 
-                      {/* Chevron > */}
-                      <ChevronRight size={18} color="#9CA3AF" />
-                    </TouchableOpacity>
-                  );
-                })
-              )}
+                        {/* Avg Skill Level Blue Pill */}
+                        <View style={styles.tdSkillCol}>
+                          <View style={styles.skillPillBlue}>
+                            <AppText style={styles.skillPillTextBlue}>
+                              {rating.toFixed(1)}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        {/* Chevron > */}
+                        <ChevronRight size={18} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* ══════════════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════════════════════
             TAB 2: SCHEDULE (SCREENS 3 & 4)
             - Screen 3 (No Schedule): Compact card, checklist, green Generate Matches button, info callout
             - Screen 4 (Schedule Exists): Week 1 Schedule header, Week Date card, match cards,
               Edit Week Dates outline button
            ══════════════════════════════════════════════════════════════════════════ */}
-        {(activeTab === 'schedule' || activeTab === 'matches') && (
-          <View style={styles.tabPane}>
-            {/* Week Selector */}
-            <View style={styles.weekSelectorContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.weekSelectorScroll}
-              >
-                {regularWeeks && regularWeeks.length > 0
-                  ? regularWeeks.map((w: LeagueWeek) => {
+          {(activeTab === 'schedule' || activeTab === 'matches') && (
+            <View style={styles.tabPane}>
+              {/* Week Selector */}
+              <View style={styles.weekSelectorContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.weekSelectorScroll}
+                >
+                  {regularWeeks && regularWeeks.length > 0
+                    ? regularWeeks.map((w: LeagueWeek) => {
                       const isSelected =
                         selectedWeekId !== 'all' &&
                         (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
@@ -1223,7 +1222,7 @@ export default function ClubLeagueDetailsScreen() {
                         </TouchableOpacity>
                       );
                     })
-                  : Array.from({
+                    : Array.from({
                       length: Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0)),
                     }).map((_, idx) => (
                       <View
@@ -1244,531 +1243,531 @@ export default function ClubLeagueDetailsScreen() {
                       </View>
                     ))}
 
-                {/* Dropdown filter on Match Scores: "All Courts ▾" */}
-                {scheduleSubView === 'scores' && (
-                  <TouchableOpacity
-                    style={styles.courtFilterPill}
-                    onPress={() => {
-                      const courtIds = clubCourts?.map((c) => c.id) || [];
-                      if (!courtFilterId) {
-                        setCourtFilterId(courtIds[0] || null);
-                      } else {
-                        const currentIdx = courtIds.indexOf(courtFilterId);
-                        if (currentIdx === courtIds.length - 1) {
-                          setCourtFilterId(null);
+                  {/* Dropdown filter on Match Scores: "All Courts ▾" */}
+                  {scheduleSubView === 'scores' && (
+                    <TouchableOpacity
+                      style={styles.courtFilterPill}
+                      onPress={() => {
+                        const courtIds = clubCourts?.map((c) => c.id) || [];
+                        if (!courtFilterId) {
+                          setCourtFilterId(courtIds[0] || null);
                         } else {
-                          setCourtFilterId(courtIds[currentIdx + 1]);
+                          const currentIdx = courtIds.indexOf(courtFilterId);
+                          if (currentIdx === courtIds.length - 1) {
+                            setCourtFilterId(null);
+                          } else {
+                            setCourtFilterId(courtIds[currentIdx + 1]);
+                          }
                         }
-                      }
-                    }}
-                  >
-                    <AppText style={styles.courtFilterPillText}>
-                      {courtFilterId
-                        ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
-                        : 'All Courts'}{' '}
-                      ▾
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-              </ScrollView>
-            </View>
-
-            {!hasSchedule ? (
-              /* SCREEN 3: NO SCHEDULE GENERATED CARD */
-              <View style={styles.noScheduleCard}>
-                <AppText style={styles.noScheduleTitle}>No Schedule Generated</AppText>
-                <AppText style={styles.noScheduleSubtitle}>
-                  Registration is closed. Generate matches to create the regular season schedule across all {league.number_of_weeks || 4} weeks.
-                </AppText>
-
-                <View style={styles.scheduleChecklist}>
-                  <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
-                    <AppText style={styles.checkItemText}>
-                      {teamCount} {isSingles ? 'players' : 'teams'} registered
-                    </AppText>
-                  </View>
-                  <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
-                    <AppText style={styles.checkItemText}>
-                      {league.number_of_weeks || 4} weeks configured ({regularWeeks.length || (league.number_of_weeks || 4) - 1} regular + {league.playoff_team_count > 0 ? '1 playoffs' : '0 playoffs'})
-                    </AppText>
-                  </View>
-                  <View style={styles.checkItemRow}>
-                    <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
-                    <AppText style={styles.checkItemText}>
-                      Round-robin matches will be generated
-                    </AppText>
-                  </View>
-                </View>
-
-                {canManageLeague && (
-                  <TouchableOpacity
-                    style={styles.generateMatchesButton}
-                    onPress={() => handleGenerateSchedule(false)}
-                    disabled={isGeneratingSchedule}
-                    activeOpacity={0.8}
-                  >
-                    <AppText style={styles.generateMatchesButtonText}>
-                      {isGeneratingSchedule ? 'Generating Matches...' : 'Generate Matches'}
-                    </AppText>
-                  </TouchableOpacity>
-                )}
-
-                <View style={styles.infoNoticeBox}>
-                  <AppText style={styles.infoNoticeText}>
-                    This will create all regular season matches across Week 1 to Week {regularWeeks.length || (league.number_of_weeks || 4) - 1} (Week {league.number_of_weeks || 4} is for playoffs). You can assign dates and courts after generation.
-                  </AppText>
-                </View>
+                      }}
+                    >
+                      <AppText style={styles.courtFilterPillText}>
+                        {courtFilterId
+                          ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
+                          : 'All Courts'}{' '}
+                        ▾
+                      </AppText>
+                    </TouchableOpacity>
+                  )}
+                </ScrollView>
               </View>
-            ) : (
-              <View>
-                {/* Mode toggle: Fixtures & Times vs Match Scores */}
-                <View style={styles.scheduleViewModeRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.scheduleViewModeBtn,
-                      scheduleSubView === 'fixtures' && styles.scheduleViewModeBtnActive,
-                    ]}
-                    onPress={() => setScheduleSubView('fixtures')}
-                    activeOpacity={0.8}
-                  >
-                    <AppText
-                      style={[
-                        styles.scheduleViewModeText,
-                        scheduleSubView === 'fixtures' && styles.scheduleViewModeTextActive,
-                      ]}
-                    >
-                      Fixtures & Times
-                    </AppText>
-                  </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.scheduleViewModeBtn,
-                      scheduleSubView === 'scores' && styles.scheduleViewModeBtnActive,
-                    ]}
-                    onPress={() => setScheduleSubView('scores')}
-                    activeOpacity={0.8}
-                  >
-                    <AppText
-                      style={[
-                        styles.scheduleViewModeText,
-                        scheduleSubView === 'scores' && styles.scheduleViewModeTextActive,
-                      ]}
-                    >
-                      Match Scores
-                    </AppText>
-                  </TouchableOpacity>
-                </View>
-
-                {scheduleSubView === 'fixtures' ? (
-                  /* SCREEN 4: SCHEDULE GENERATED */
-              <View style={styles.scheduleContent}>
-                {/* Week Header Row */}
-                <View style={styles.weekHeaderRow}>
-                  <AppText style={styles.weekScheduleTitle}>
-                    Week {activeWeek?.week_number || 1} Schedule
+              {!hasSchedule ? (
+                /* SCREEN 3: NO SCHEDULE GENERATED CARD */
+                <View style={styles.noScheduleCard}>
+                  <AppText style={styles.noScheduleTitle}>No Schedule Generated</AppText>
+                  <AppText style={styles.noScheduleSubtitle}>
+                    Registration is closed. Generate matches to create the regular season schedule across all {league.number_of_weeks || 4} weeks.
                   </AppText>
-                  <AppText style={styles.weekMatchCountText}>
-                    {matches?.length || 0} Matches
-                  </AppText>
-                </View>
 
-                {/* Week Date (Optional) Card */}
-                <View style={styles.weekDateCard}>
-                  <View style={styles.weekDateLeft}>
-                    <Calendar size={18} color="#6B7280" />
-                    <View>
-                      <AppText style={styles.weekDateLabel}>Week Date (Optional)</AppText>
-                      <AppText style={styles.weekDateValue}>
-                        {activeWeek?.start_date ? formatDate(activeWeek.start_date) : 'May 6, 2026'}
+                  <View style={styles.scheduleChecklist}>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
+                      <AppText style={styles.checkItemText}>
+                        {teamCount} {isSingles ? 'players' : 'teams'} registered
+                      </AppText>
+                    </View>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
+                      <AppText style={styles.checkItemText}>
+                        {league.number_of_weeks || 4} weeks configured ({regularWeeks.length || (league.number_of_weeks || 4) - 1} regular + {league.playoff_team_count > 0 ? '1 playoffs' : '0 playoffs'})
+                      </AppText>
+                    </View>
+                    <View style={styles.checkItemRow}>
+                      <CheckCircle2 size={16} color="#15803D" strokeWidth={2.2} />
+                      <AppText style={styles.checkItemText}>
+                        Round-robin matches will be generated
                       </AppText>
                     </View>
                   </View>
-                  {canManageLeague && activeWeek && (
+
+                  {canManageLeague && (
                     <TouchableOpacity
-                      style={styles.weekDateEditBtn}
-                      onPress={() => openWeekDatesModal(activeWeek)}
+                      style={styles.generateMatchesButton}
+                      onPress={() => handleGenerateSchedule(false)}
+                      disabled={isGeneratingSchedule}
+                      activeOpacity={0.8}
                     >
-                      <AppText style={styles.weekDateEditBtnText}>Edit</AppText>
+                      <AppText style={styles.generateMatchesButtonText}>
+                        {isGeneratingSchedule ? 'Generating Matches...' : 'Generate Matches'}
+                      </AppText>
                     </TouchableOpacity>
                   )}
-                </View>
 
-                {/* Match Cards List */}
-                <View style={styles.matchesList}>
-                  {matches?.map((m) => {
-                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
-                    const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
-                    const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
-                    const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
-                    const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
-                    const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
-                    const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
-
-                    const timeStr = m.scheduled_start_at
-                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                      : '6:00 PM';
-                    const courtStr = getCourtDisplayLabel(
-                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
-                      { unassignedLabel: 'Court not assigned' }
-                    );
-                    const dateStr = m.scheduled_start_at
-                      ? formatDateTime(m.scheduled_start_at)
-                      : activeWeek?.start_date
-                      ? `${formatDate(activeWeek.start_date)} • ${timeStr}`
-                      : `May 6, 2026 • ${timeStr}`;
-
-                    return (
-                      <TouchableOpacity
-                        key={m.id}
-                        style={styles.screen4MatchCard}
-                        onPress={() => canManageLeague && openScheduleModal(m)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.screen4MatchTopRow}>
-                          {/* Left Col: Match X, Time, Court */}
-                          <View style={styles.screen4MatchLeftCol}>
-                            <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
-                            <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
-                            <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
-                          </View>
-
-                          {/* Right Col: Team A vs Team B with avatars and ratings */}
-                          <View style={styles.screen4MatchupCol}>
-                            <View style={styles.matchupTeamRow}>
-                              <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                                <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
-                              </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                              </AppText>
-                              <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
-                            </View>
-
-                            <AppText style={styles.matchupVsText}>vs</AppText>
-
-                            <View style={styles.matchupTeamRow}>
-                              <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                                <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
-                              </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
-                              </AppText>
-                              {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
-                            </View>
-                          </View>
-
-                          {/* Chevron Right */}
-                          <ChevronRight size={18} color="#9CA3AF" />
-                        </View>
-
-                        {/* Bottom Date Row */}
-                        <View style={styles.screen4MatchDateRow}>
-                          <Calendar size={13} color="#6B7280" />
-                          <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Edit Week Dates Button at bottom */}
-                {canManageLeague && activeWeek && (
-                  <TouchableOpacity
-                    style={styles.editWeekDatesOutlineBtn}
-                    onPress={() => openWeekDatesModal(activeWeek)}
-                    activeOpacity={0.8}
-                  >
-                    <Calendar size={16} color="#111827" />
-                    <AppText style={styles.editWeekDatesOutlineBtnText}>
-                      Edit Week {activeWeek.week_number} Dates
+                  <View style={styles.infoNoticeBox}>
+                    <AppText style={styles.infoNoticeText}>
+                      This will create all regular season matches across Week 1 to Week {regularWeeks.length || (league.number_of_weeks || 4) - 1} (Week {league.number_of_weeks || 4} is for playoffs). You can assign dates and courts after generation.
                     </AppText>
-                  </TouchableOpacity>
-                )}
-              </View>
-            ) : (
-              /* SCREEN 5: MATCH SCORES */
-              <View style={styles.scheduleContent}>
-                {/* Week Matches Header */}
-                <View style={styles.weekHeaderRow}>
-                  <AppText style={styles.weekScheduleTitle}>
-                    Week {activeWeek?.week_number || 1} Matches
-                  </AppText>
-                  <AppText style={styles.weekMatchCountText}>
-                    {filteredMatches.length} Matches
-                  </AppText>
+                  </View>
                 </View>
+              ) : (
+                <View>
+                  {/* Mode toggle: Fixtures & Times vs Match Scores */}
+                  <View style={styles.scheduleViewModeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.scheduleViewModeBtn,
+                        scheduleSubView === 'fixtures' && styles.scheduleViewModeBtnActive,
+                      ]}
+                      onPress={() => setScheduleSubView('fixtures')}
+                      activeOpacity={0.8}
+                    >
+                      <AppText
+                        style={[
+                          styles.scheduleViewModeText,
+                          scheduleSubView === 'fixtures' && styles.scheduleViewModeTextActive,
+                        ]}
+                      >
+                        Fixtures & Times
+                      </AppText>
+                    </TouchableOpacity>
 
-                {/* Match Cards List */}
-                <View style={styles.matchesList}>
-                  {filteredMatches.map((m, idx) => {
-                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
-                    const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
-                    const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
-                    const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
-                    const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
-                    const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
-                    const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+                    <TouchableOpacity
+                      style={[
+                        styles.scheduleViewModeBtn,
+                        scheduleSubView === 'scores' && styles.scheduleViewModeBtnActive,
+                      ]}
+                      onPress={() => setScheduleSubView('scores')}
+                      activeOpacity={0.8}
+                    >
+                      <AppText
+                        style={[
+                          styles.scheduleViewModeText,
+                          scheduleSubView === 'scores' && styles.scheduleViewModeTextActive,
+                        ]}
+                      >
+                        Match Scores
+                      </AppText>
+                    </TouchableOpacity>
+                  </View>
 
-                    const timeStr = m.scheduled_start_at
-                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                      : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
-                    const courtStr = getCourtDisplayLabel(
-                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
-                      { unassignedLabel: 'Court not assigned' }
-                    );
-                    const dateStr = m.scheduled_start_at
-                      ? formatDateTime(m.scheduled_start_at)
-                      : `May 6, 2026 • ${timeStr}`;
+                  {scheduleSubView === 'fixtures' ? (
+                    /* SCREEN 4: SCHEDULE GENERATED */
+                    <View style={styles.scheduleContent}>
+                      {/* Week Header Row */}
+                      <View style={styles.weekHeaderRow}>
+                        <AppText style={styles.weekScheduleTitle}>
+                          Week {activeWeek?.week_number || 1} Schedule
+                        </AppText>
+                        <AppText style={styles.weekMatchCountText}>
+                          {matches?.length || 0} Matches
+                        </AppText>
+                      </View>
 
-                    // Status pill config
-                    const isCompleted = m.status === 'completed';
-                    const isInProgress = m.status === 'in_progress';
-                    const isScheduled = Boolean(m.court_id && m.scheduled_start_at);
-
-                    let statusLabel = 'Not Started';
-                    let statusBg = '#F3F4F6';
-                    let statusText = '#4B5563';
-
-                    if (isCompleted) {
-                      statusLabel = '✓ Completed';
-                      statusBg = '#DCFCE7';
-                      statusText = '#15803D';
-                    } else if (isInProgress) {
-                      statusLabel = '● In Progress';
-                      statusBg = '#FEF3C7';
-                      statusText = '#D97706';
-                    } else if (isScheduled) {
-                      statusLabel = '✓ Scheduled';
-                      statusBg = '#E0F2FE';
-                      statusText = '#0284C7';
-                    }
-
-                    // Score input values
-                    const currentInline = inlineScores[m.id] || {
-                      a: m.score_a !== null ? String(m.score_a) : '',
-                      b: m.score_b !== null ? String(m.score_b) : '',
-                    };
-
-                    return (
-                      <View key={m.id} style={styles.screen5MatchCard}>
-                        {/* Top Row: Left match meta + Right status badge */}
-                        <View style={styles.screen5TopRow}>
-                          <View style={styles.screen4MatchLeftCol}>
-                            <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
-                            <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
-                            <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
-                          </View>
-
-                          <View style={[styles.screen5StatusBadge, { backgroundColor: statusBg }]}>
-                            <AppText style={[styles.screen5StatusText, { color: statusText }]}>
-                              {statusLabel}
+                      {/* Week Date (Optional) Card */}
+                      <View style={styles.weekDateCard}>
+                        <View style={styles.weekDateLeft}>
+                          <Calendar size={18} color="#6B7280" />
+                          <View>
+                            <AppText style={styles.weekDateLabel}>Week Date (Optional)</AppText>
+                            <AppText style={styles.weekDateValue}>
+                              {activeWeek?.start_date ? formatDate(activeWeek.start_date) : 'May 6, 2026'}
                             </AppText>
                           </View>
                         </View>
-
-                        {/* Matchup row */}
-                        <TouchableOpacity
-                          style={styles.screen5MatchupRow}
-                          onPress={() => canManageLeague && openScoreModal(m)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.screen4MatchupCol}>
-                            <View style={styles.matchupTeamRow}>
-                              <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                                <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
-                              </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                              </AppText>
-                              <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
-                            </View>
-
-                            <AppText style={styles.matchupVsText}>vs</AppText>
-
-                            <View style={styles.matchupTeamRow}>
-                              <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                                <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
-                              </View>
-                              <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
-                              </AppText>
-                              {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
-                            </View>
-                          </View>
-
-                          <ChevronRight size={18} color="#9CA3AF" />
-                        </TouchableOpacity>
-
-                        {/* Bottom Date Row (if not in progress score editing) */}
-                        {!isInProgress && (
-                          <View style={styles.screen4MatchDateRow}>
-                            <Calendar size={13} color="#6B7280" />
-                            <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
-                          </View>
-                        )}
-
-                        {/* Inline Score Entry Row (when in progress or completed) */}
-                        {canManageLeague && (isInProgress || isCompleted) && (
-                          <View style={styles.inlineScoreRow}>
-                            <TextInput
-                              style={styles.inlineScoreInput}
-                              keyboardType="numeric"
-                              value={currentInline.a}
-                              placeholder="11"
-                              placeholderTextColor="#9CA3AF"
-                              onChangeText={(val) =>
-                                setInlineScores((prev) => ({
-                                  ...prev,
-                                  [m.id]: { ...currentInline, a: val },
-                                }))
-                              }
-                            />
-                            <AppText style={styles.inlineScoreDash}>-</AppText>
-                            <TextInput
-                              style={styles.inlineScoreInput}
-                              keyboardType="numeric"
-                              value={currentInline.b}
-                              placeholder="9"
-                              placeholderTextColor="#9CA3AF"
-                              onChangeText={(val) =>
-                                setInlineScores((prev) => ({
-                                  ...prev,
-                                  [m.id]: { ...currentInline, b: val },
-                                }))
-                              }
-                            />
-                            <TouchableOpacity
-                              style={styles.inlineSaveScoreBtn}
-                              onPress={() => handleInlineSaveScore(m)}
-                              disabled={savingScoreMatchId === m.id}
-                            >
-                              <AppText style={styles.inlineSaveScoreBtnText}>
-                                {savingScoreMatchId === m.id ? 'Saving...' : 'Save Score'}
-                              </AppText>
-                            </TouchableOpacity>
-                          </View>
+                        {canManageLeague && activeWeek && (
+                          <TouchableOpacity
+                            style={styles.weekDateEditBtn}
+                            onPress={() => openWeekDatesModal(activeWeek)}
+                          >
+                            <AppText style={styles.weekDateEditBtnText}>Edit</AppText>
+                          </TouchableOpacity>
                         )}
                       </View>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-    )}
 
-        {/* ══════════════════════════════════════════════════════════════════════════
+                      {/* Match Cards List */}
+                      <View style={styles.matchesList}>
+                        {matches?.map((m) => {
+                          const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                          const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                          const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                          const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                          const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                          const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
+                          const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
+                          const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+
+                          const timeStr = m.scheduled_start_at
+                            ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                            : '6:00 PM';
+                          const courtStr = getCourtDisplayLabel(
+                            m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                            { unassignedLabel: 'Court not assigned' }
+                          );
+                          const dateStr = m.scheduled_start_at
+                            ? formatDateTime(m.scheduled_start_at)
+                            : activeWeek?.start_date
+                              ? `${formatDate(activeWeek.start_date)} • ${timeStr}`
+                              : `May 6, 2026 • ${timeStr}`;
+
+                          return (
+                            <TouchableOpacity
+                              key={m.id}
+                              style={styles.screen4MatchCard}
+                              onPress={() => canManageLeague && openScheduleModal(m)}
+                              activeOpacity={0.8}
+                            >
+                              <View style={styles.screen4MatchTopRow}>
+                                {/* Left Col: Match X, Time, Court */}
+                                <View style={styles.screen4MatchLeftCol}>
+                                  <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
+                                  <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
+                                  <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
+                                </View>
+
+                                {/* Right Col: Team A vs Team B with avatars and ratings */}
+                                <View style={styles.screen4MatchupCol}>
+                                  <View style={styles.matchupTeamRow}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                                      <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                                    </View>
+                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
+                                      {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
+                                    </AppText>
+                                    <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
+                                  </View>
+
+                                  <AppText style={styles.matchupVsText}>vs</AppText>
+
+                                  <View style={styles.matchupTeamRow}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                                      <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                                    </View>
+                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
+                                      {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                                    </AppText>
+                                    {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
+                                  </View>
+                                </View>
+
+                                {/* Chevron Right */}
+                                <ChevronRight size={18} color="#9CA3AF" />
+                              </View>
+
+                              {/* Bottom Date Row */}
+                              <View style={styles.screen4MatchDateRow}>
+                                <Calendar size={13} color="#6B7280" />
+                                <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+
+                      {/* Edit Week Dates Button at bottom */}
+                      {canManageLeague && activeWeek && (
+                        <TouchableOpacity
+                          style={styles.editWeekDatesOutlineBtn}
+                          onPress={() => openWeekDatesModal(activeWeek)}
+                          activeOpacity={0.8}
+                        >
+                          <Calendar size={16} color="#111827" />
+                          <AppText style={styles.editWeekDatesOutlineBtnText}>
+                            Edit Week {activeWeek.week_number} Dates
+                          </AppText>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ) : (
+                    /* SCREEN 5: MATCH SCORES */
+                    <View style={styles.scheduleContent}>
+                      {/* Week Matches Header */}
+                      <View style={styles.weekHeaderRow}>
+                        <AppText style={styles.weekScheduleTitle}>
+                          Week {activeWeek?.week_number || 1} Matches
+                        </AppText>
+                        <AppText style={styles.weekMatchCountText}>
+                          {filteredMatches.length} Matches
+                        </AppText>
+                      </View>
+
+                      {/* Match Cards List */}
+                      <View style={styles.matchesList}>
+                        {filteredMatches.map((m, idx) => {
+                          const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                          const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                          const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                          const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                          const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                          const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
+                          const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
+                          const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+
+                          const timeStr = m.scheduled_start_at
+                            ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                            : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                          const courtStr = getCourtDisplayLabel(
+                            m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                            { unassignedLabel: 'Court not assigned' }
+                          );
+                          const dateStr = m.scheduled_start_at
+                            ? formatDateTime(m.scheduled_start_at)
+                            : `May 6, 2026 • ${timeStr}`;
+
+                          // Status pill config
+                          const isCompleted = m.status === 'completed';
+                          const isInProgress = m.status === 'in_progress';
+                          const isScheduled = Boolean(m.court_id && m.scheduled_start_at);
+
+                          let statusLabel = 'Not Started';
+                          let statusBg = '#F3F4F6';
+                          let statusText = '#4B5563';
+
+                          if (isCompleted) {
+                            statusLabel = '✓ Completed';
+                            statusBg = '#DCFCE7';
+                            statusText = '#15803D';
+                          } else if (isInProgress) {
+                            statusLabel = '● In Progress';
+                            statusBg = '#FEF3C7';
+                            statusText = '#D97706';
+                          } else if (isScheduled) {
+                            statusLabel = '✓ Scheduled';
+                            statusBg = '#E0F2FE';
+                            statusText = '#0284C7';
+                          }
+
+                          // Score input values
+                          const currentInline = inlineScores[m.id] || {
+                            a: m.score_a !== null ? String(m.score_a) : '',
+                            b: m.score_b !== null ? String(m.score_b) : '',
+                          };
+
+                          return (
+                            <View key={m.id} style={styles.screen5MatchCard}>
+                              {/* Top Row: Left match meta + Right status badge */}
+                              <View style={styles.screen5TopRow}>
+                                <View style={styles.screen4MatchLeftCol}>
+                                  <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
+                                  <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
+                                  <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
+                                </View>
+
+                                <View style={[styles.screen5StatusBadge, { backgroundColor: statusBg }]}>
+                                  <AppText style={[styles.screen5StatusText, { color: statusText }]}>
+                                    {statusLabel}
+                                  </AppText>
+                                </View>
+                              </View>
+
+                              {/* Matchup row */}
+                              <TouchableOpacity
+                                style={styles.screen5MatchupRow}
+                                onPress={() => canManageLeague && openScoreModal(m)}
+                                activeOpacity={0.7}
+                              >
+                                <View style={styles.screen4MatchupCol}>
+                                  <View style={styles.matchupTeamRow}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                                      <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                                    </View>
+                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
+                                      {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
+                                    </AppText>
+                                    <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
+                                  </View>
+
+                                  <AppText style={styles.matchupVsText}>vs</AppText>
+
+                                  <View style={styles.matchupTeamRow}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                                      <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                                    </View>
+                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
+                                      {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                                    </AppText>
+                                    {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
+                                  </View>
+                                </View>
+
+                                <ChevronRight size={18} color="#9CA3AF" />
+                              </TouchableOpacity>
+
+                              {/* Bottom Date Row (if not in progress score editing) */}
+                              {!isInProgress && (
+                                <View style={styles.screen4MatchDateRow}>
+                                  <Calendar size={13} color="#6B7280" />
+                                  <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
+                                </View>
+                              )}
+
+                              {/* Inline Score Entry Row (when in progress or completed) */}
+                              {canManageLeague && (isInProgress || isCompleted) && (
+                                <View style={styles.inlineScoreRow}>
+                                  <TextInput
+                                    style={styles.inlineScoreInput}
+                                    keyboardType="numeric"
+                                    value={currentInline.a}
+                                    placeholder="11"
+                                    placeholderTextColor="#9CA3AF"
+                                    onChangeText={(val) =>
+                                      setInlineScores((prev) => ({
+                                        ...prev,
+                                        [m.id]: { ...currentInline, a: val },
+                                      }))
+                                    }
+                                  />
+                                  <AppText style={styles.inlineScoreDash}>-</AppText>
+                                  <TextInput
+                                    style={styles.inlineScoreInput}
+                                    keyboardType="numeric"
+                                    value={currentInline.b}
+                                    placeholder="9"
+                                    placeholderTextColor="#9CA3AF"
+                                    onChangeText={(val) =>
+                                      setInlineScores((prev) => ({
+                                        ...prev,
+                                        [m.id]: { ...currentInline, b: val },
+                                      }))
+                                    }
+                                  />
+                                  <TouchableOpacity
+                                    style={styles.inlineSaveScoreBtn}
+                                    onPress={() => handleInlineSaveScore(m)}
+                                    disabled={savingScoreMatchId === m.id}
+                                  >
+                                    <AppText style={styles.inlineSaveScoreBtnText}>
+                                      {savingScoreMatchId === m.id ? 'Saving...' : 'Save Score'}
+                                    </AppText>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ══════════════════════════════════════════════════════════════════════════
             TAB 4: STANDINGS (SCREEN 6)
             - Current Standings ⓘ header with Regular Season pill
             - Table: #, Team, MP, W, L, +/-, Pts
             - Bottom info note
             - Strictly NO premature "Playoff Seed #1" badges during regular season
            ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'standings' && (
-          <View style={styles.tabPane}>
-            {/* Header row */}
-            <View style={styles.standingsHeaderRow}>
-              <View style={styles.standingsHeaderLeft}>
-                <AppText style={styles.standingsTitle}>Current Standings</AppText>
-                <Info size={16} color="#6B7280" />
-              </View>
-              <View style={styles.regularSeasonPill}>
-                <AppText style={styles.regularSeasonPillText}>✓ Regular Season</AppText>
-              </View>
-            </View>
-
-            {/* Standings Table Card */}
-            {isStandingsLoading ? (
-              <LoadingState message="Calculating standings..." />
-            ) : !standingsData || standingsData.standings.length === 0 ? (
-              <EmptyState
-                title="No Standings Data"
-                description="Standings will update automatically as weekly match scores are entered."
-              />
-            ) : (
-              <View style={styles.standingsCard}>
-                {/* Table Header */}
-                <View style={styles.standingsTableHeader}>
-                  <AppText style={[styles.sTh, styles.sThRank]}>#</AppText>
-                  <AppText style={[styles.sTh, styles.sThTeam]}>{isSingles ? 'Player' : 'Team'}</AppText>
-                  <AppText style={[styles.sTh, styles.sThStat]}>MP</AppText>
-                  <AppText style={[styles.sTh, styles.sThStat]}>W</AppText>
-                  <AppText style={[styles.sTh, styles.sThStat]}>L</AppText>
-                  <AppText style={[styles.sTh, styles.sThStat]}>+/-</AppText>
-                  <AppText style={[styles.sTh, styles.sThStat, styles.sThPts]}>Pts</AppText>
+          {activeTab === 'standings' && (
+            <View style={styles.tabPane}>
+              {/* Header row */}
+              <View style={styles.standingsHeaderRow}>
+                <View style={styles.standingsHeaderLeft}>
+                  <AppText style={styles.standingsTitle}>Current Standings</AppText>
+                  <Info size={16} color="#6B7280" />
                 </View>
+                <View style={styles.regularSeasonPill}>
+                  <AppText style={styles.regularSeasonPillText}>✓ Regular Season</AppText>
+                </View>
+              </View>
 
-                {/* Table Rows */}
-                {standingsData.standings.map((row, idx) => {
-                  const avatarColors = getAvatarColors(idx);
-                  const initials = getTeamInitials(row.team_name);
-                  const pts = ((row as any).points ?? row.wins * 2);
-                  const diffStr =
-                    row.points_differential > 0
-                      ? `+${row.points_differential}`
-                      : `${row.points_differential}`;
+              {/* Standings Table Card */}
+              {isStandingsLoading ? (
+                <LoadingState message="Calculating standings..." />
+              ) : !standingsData || standingsData.standings.length === 0 ? (
+                <EmptyState
+                  title="No Standings Data"
+                  description="Standings will update automatically as weekly match scores are entered."
+                />
+              ) : (
+                <View style={styles.standingsCard}>
+                  {/* Table Header */}
+                  <View style={styles.standingsTableHeader}>
+                    <AppText style={[styles.sTh, styles.sThRank]}>#</AppText>
+                    <AppText style={[styles.sTh, styles.sThTeam]}>{isSingles ? 'Player' : 'Team'}</AppText>
+                    <AppText style={[styles.sTh, styles.sThStat]}>MP</AppText>
+                    <AppText style={[styles.sTh, styles.sThStat]}>W</AppText>
+                    <AppText style={[styles.sTh, styles.sThStat]}>L</AppText>
+                    <AppText style={[styles.sTh, styles.sThStat]}>+/-</AppText>
+                    <AppText style={[styles.sTh, styles.sThStat, styles.sThPts]}>Pts</AppText>
+                  </View>
 
-                  return (
-                    <View
-                      key={row.team_id}
-                      style={[
-                        styles.standingsTableRow,
-                        idx === standingsData.standings.length - 1 && styles.standingsTableRowLast,
-                      ]}
-                    >
-                      {/* Rank # */}
-                      <AppText style={[styles.sTd, styles.sThRank, styles.sRankBold]}>
-                        {row.rank}
-                      </AppText>
+                  {/* Table Rows */}
+                  {standingsData.standings.map((row, idx) => {
+                    const avatarColors = getAvatarColors(idx);
+                    const initials = getTeamInitials(row.team_name);
+                    const pts = ((row as any).points ?? row.wins * 2);
+                    const diffStr =
+                      row.points_differential > 0
+                        ? `+${row.points_differential}`
+                        : `${row.points_differential}`;
 
-                      {/* Team Avatar + Name */}
-                      <View style={[styles.sThTeam, styles.sTeamCol]}>
-                        <View style={[styles.standingsAvatar, { backgroundColor: avatarColors.bg }]}>
-                          <AppText style={[styles.standingsAvatarText, { color: avatarColors.text }]}>
-                            {initials}
+                    return (
+                      <View
+                        key={row.team_id}
+                        style={[
+                          styles.standingsTableRow,
+                          idx === standingsData.standings.length - 1 && styles.standingsTableRowLast,
+                        ]}
+                      >
+                        {/* Rank # */}
+                        <AppText style={[styles.sTd, styles.sThRank, styles.sRankBold]}>
+                          {row.rank}
+                        </AppText>
+
+                        {/* Team Avatar + Name */}
+                        <View style={[styles.sThTeam, styles.sTeamCol]}>
+                          <View style={[styles.standingsAvatar, { backgroundColor: avatarColors.bg }]}>
+                            <AppText style={[styles.standingsAvatarText, { color: avatarColors.text }]}>
+                              {initials}
+                            </AppText>
+                          </View>
+                          <AppText style={styles.sTeamName} numberOfLines={2}>
+                            {row.team_name}
                           </AppText>
                         </View>
-                        <AppText style={styles.sTeamName} numberOfLines={2}>
-                          {row.team_name}
+
+                        {/* MP */}
+                        <AppText style={[styles.sTd, styles.sThStat]}>{row.matches_played}</AppText>
+                        {/* W */}
+                        <AppText style={[styles.sTd, styles.sThStat]}>{row.wins}</AppText>
+                        {/* L */}
+                        <AppText style={[styles.sTd, styles.sThStat]}>{row.losses}</AppText>
+                        {/* +/- */}
+                        <AppText style={[styles.sTd, styles.sThStat]}>{diffStr}</AppText>
+                        {/* Pts */}
+                        <AppText style={[styles.sTd, styles.sThStat, styles.sPtsBold]}>
+                          {pts}
                         </AppText>
                       </View>
+                    );
+                  })}
+                </View>
+              )}
 
-                      {/* MP */}
-                      <AppText style={[styles.sTd, styles.sThStat]}>{row.matches_played}</AppText>
-                      {/* W */}
-                      <AppText style={[styles.sTd, styles.sThStat]}>{row.wins}</AppText>
-                      {/* L */}
-                      <AppText style={[styles.sTd, styles.sThStat]}>{row.losses}</AppText>
-                      {/* +/- */}
-                      <AppText style={[styles.sTd, styles.sThStat]}>{diffStr}</AppText>
-                      {/* Pts */}
-                      <AppText style={[styles.sTd, styles.sThStat, styles.sPtsBold]}>
-                        {pts}
-                      </AppText>
-                    </View>
-                  );
-                })}
+              {/* Bottom info note matching Screen 6 */}
+              <View style={styles.standingsInfoNotice}>
+                <Info size={16} color="#0284C7" style={{ marginTop: 2 }} />
+                <AppText style={styles.standingsInfoNoticeText}>
+                  Top {league.playoff_team_count || 4} {isSingles ? 'players' : 'teams'} will advance to the playoffs after the regular season is completed. Playoff seeding will be determined based on final standings and tiebreaker rules.
+                </AppText>
               </View>
-            )}
-
-            {/* Bottom info note matching Screen 6 */}
-            <View style={styles.standingsInfoNotice}>
-              <Info size={16} color="#0284C7" style={{ marginTop: 2 }} />
-              <AppText style={styles.standingsInfoNoticeText}>
-                Top {league.playoff_team_count || 4} {isSingles ? 'players' : 'teams'} will advance to the playoffs after the regular season is completed. Playoff seeding will be determined based on final standings and tiebreaker rules.
-              </AppText>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* ══════════════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════════════════════
             TAB 5: PLAYOFFS (SCREEN 7)
             - Gold trophy icon in circular box
             - Heading: Playoffs Not Available Yet
@@ -1777,311 +1776,311 @@ export default function ClubLeagueDetailsScreen() {
             - Disabled button: Generate Playoff Matches (enabled when 100% complete)
             - Checklist with green checkmarks
            ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'playoffs' && (
-          <View style={styles.tabPane}>
-            {!playoffs ? (
-              <View style={styles.playoffsNotAvailableContainer}>
-                {/* Gold Trophy Circle */}
-                <View style={styles.playoffTrophyCircle}>
-                  <Trophy size={36} color="#D97706" />
-                </View>
+          {activeTab === 'playoffs' && (
+            <View style={styles.tabPane}>
+              {!playoffs ? (
+                <View style={styles.playoffsNotAvailableContainer}>
+                  {/* Gold Trophy Circle */}
+                  <View style={styles.playoffTrophyCircle}>
+                    <Trophy size={36} color="#D97706" />
+                  </View>
 
-                <AppText style={styles.playoffsNotAvailableTitle}>
-                  {isRegularSeasonComplete
-                    ? 'Regular Season Complete!'
-                    : 'Playoffs Not Available Yet'}
-                </AppText>
-                <AppText style={styles.playoffsNotAvailableSubtitle}>
-                  {isRegularSeasonComplete
-                    ? `All ${totalRegularMatchesCount} regular season matches are finished. Generate the playoff bracket to begin championship rounds.`
-                    : 'Playoffs will be generated after all regular season matches are completed.'}
-                </AppText>
+                  <AppText style={styles.playoffsNotAvailableTitle}>
+                    {isRegularSeasonComplete
+                      ? 'Regular Season Complete!'
+                      : 'Playoffs Not Available Yet'}
+                  </AppText>
+                  <AppText style={styles.playoffsNotAvailableSubtitle}>
+                    {isRegularSeasonComplete
+                      ? `All ${totalRegularMatchesCount} regular season matches are finished. Generate the playoff bracket to begin championship rounds.`
+                      : 'Playoffs will be generated after all regular season matches are completed.'}
+                  </AppText>
 
-                {/* Regular Season Progress Card */}
-                <View style={styles.playoffProgressCard}>
-                  <View style={styles.playoffProgressHeader}>
-                    <AppText style={styles.playoffProgressTitle}>Regular Season Progress</AppText>
-                    <AppText style={styles.playoffProgressPercent}>
-                      {regularProgressPercent}%
+                  {/* Regular Season Progress Card */}
+                  <View style={styles.playoffProgressCard}>
+                    <View style={styles.playoffProgressHeader}>
+                      <AppText style={styles.playoffProgressTitle}>Regular Season Progress</AppText>
+                      <AppText style={styles.playoffProgressPercent}>
+                        {regularProgressPercent}%
+                      </AppText>
+                    </View>
+
+                    <AppText style={styles.playoffProgressCount}>
+                      {completedRegularMatchesCount} / {totalRegularMatchesCount || 18} matches completed
                     </AppText>
-                  </View>
 
-                  <AppText style={styles.playoffProgressCount}>
-                    {completedRegularMatchesCount} / {totalRegularMatchesCount || 18} matches completed
-                  </AppText>
-
-                  {/* Progress Bar */}
-                  <View style={styles.playoffProgressBarTrack}>
-                    <View
-                      style={[
-                        styles.playoffProgressBarFill,
-                        {
-                          width: `${regularProgressPercent}%`,
-                          backgroundColor: isRegularSeasonComplete ? '#059669' : '#10B981',
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  {/* Action Button: Generate Playoff Matches */}
-                  {canManageLeague && (
-                    <TouchableOpacity
-                      style={[
-                        styles.generatePlayoffBtn,
-                        isRegularSeasonComplete
-                          ? styles.generatePlayoffBtnActive
-                          : styles.generatePlayoffBtnDisabled,
-                      ]}
-                      onPress={handleGeneratePlayoffs}
-                      disabled={!isRegularSeasonComplete || isGeneratingPlayoffs}
-                      activeOpacity={0.8}
-                    >
-                      <AppText
+                    {/* Progress Bar */}
+                    <View style={styles.playoffProgressBarTrack}>
+                      <View
                         style={[
-                          styles.generatePlayoffBtnText,
-                          isRegularSeasonComplete
-                            ? styles.generatePlayoffBtnTextActive
-                            : styles.generatePlayoffBtnTextDisabled,
+                          styles.playoffProgressBarFill,
+                          {
+                            width: `${regularProgressPercent}%`,
+                            backgroundColor: isRegularSeasonComplete ? '#059669' : '#10B981',
+                          },
                         ]}
-                      >
-                        {isGeneratingPlayoffs ? 'Generating...' : 'Generate Playoff Matches'}
-                      </AppText>
-                    </TouchableOpacity>
-                  )}
+                      />
+                    </View>
 
-                  {/* Checklist */}
-                  <View style={styles.playoffChecklist}>
-                    <View style={styles.checkItemRow}>
-                      <CheckCircle2
-                        size={16}
-                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
-                      />
-                      <AppText style={styles.checkItemText}>
-                        Complete all regular season matches
-                      </AppText>
-                    </View>
-                    <View style={styles.checkItemRow}>
-                      <CheckCircle2
-                        size={16}
-                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
-                      />
-                      <AppText style={styles.checkItemText}>
-                        Final standings will determine top {league.playoff_team_count || 4} teams
-                      </AppText>
-                    </View>
-                    <View style={styles.checkItemRow}>
-                      <CheckCircle2
-                        size={16}
-                        color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
-                      />
-                      <AppText style={styles.checkItemText}>
-                        Then you can generate the playoff bracket
-                      </AppText>
+                    {/* Action Button: Generate Playoff Matches */}
+                    {canManageLeague && (
+                      <TouchableOpacity
+                        style={[
+                          styles.generatePlayoffBtn,
+                          isRegularSeasonComplete
+                            ? styles.generatePlayoffBtnActive
+                            : styles.generatePlayoffBtnDisabled,
+                        ]}
+                        onPress={handleGeneratePlayoffs}
+                        disabled={!isRegularSeasonComplete || isGeneratingPlayoffs}
+                        activeOpacity={0.8}
+                      >
+                        <AppText
+                          style={[
+                            styles.generatePlayoffBtnText,
+                            isRegularSeasonComplete
+                              ? styles.generatePlayoffBtnTextActive
+                              : styles.generatePlayoffBtnTextDisabled,
+                          ]}
+                        >
+                          {isGeneratingPlayoffs ? 'Generating...' : 'Generate Playoff Matches'}
+                        </AppText>
+                      </TouchableOpacity>
+                    )}
+
+                    {/* Checklist */}
+                    <View style={styles.playoffChecklist}>
+                      <View style={styles.checkItemRow}>
+                        <CheckCircle2
+                          size={16}
+                          color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                        />
+                        <AppText style={styles.checkItemText}>
+                          Complete all regular season matches
+                        </AppText>
+                      </View>
+                      <View style={styles.checkItemRow}>
+                        <CheckCircle2
+                          size={16}
+                          color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                        />
+                        <AppText style={styles.checkItemText}>
+                          Final standings will determine top {league.playoff_team_count || 4} teams
+                        </AppText>
+                      </View>
+                      <View style={styles.checkItemRow}>
+                        <CheckCircle2
+                          size={16}
+                          color={isRegularSeasonComplete ? '#059669' : '#9CA3AF'}
+                        />
+                        <AppText style={styles.checkItemText}>
+                          Then you can generate the playoff bracket
+                        </AppText>
+                      </View>
                     </View>
                   </View>
                 </View>
-              </View>
-            ) : (
-              /* Playoff Bracket View */
-              <View style={styles.scheduleContent}>
-                <Card style={styles.playoffActiveCard}>
-                  <View style={styles.playoffActiveHeader}>
-                    <Trophy size={22} color="#15803D" />
-                    <AppText style={styles.playoffActiveTitle}>Championship Bracket Active</AppText>
-                  </View>
-                  <AppText style={styles.playoffActiveDetails}>
-                    • {playoffs.playoff_teams_count} Qualified Teams{'\n'}
-                    • {playoffs.rounds_count} Knockout Rounds{'\n'}
-                    • {playoffs.matches_played ?? 0} Completed,{' '}
-                    {playoffs.matches_remaining ?? 0} Remaining
-                  </AppText>
-                  {playoffs.champion_team_name && (
-                    <View style={styles.playoffChampionBanner}>
-                      <AppText style={styles.playoffChampionText}>
-                        👑 Champion: {playoffs.champion_team_name}
-                      </AppText>
+              ) : (
+                /* Playoff Bracket View */
+                <View style={styles.scheduleContent}>
+                  <Card style={styles.playoffActiveCard}>
+                    <View style={styles.playoffActiveHeader}>
+                      <Trophy size={22} color="#15803D" />
+                      <AppText style={styles.playoffActiveTitle}>Championship Bracket Active</AppText>
                     </View>
-                  )}
-                </Card>
+                    <AppText style={styles.playoffActiveDetails}>
+                      • {playoffs.playoff_teams_count} Qualified Teams{'\n'}
+                      • {playoffs.rounds_count} Knockout Rounds{'\n'}
+                      • {playoffs.matches_played ?? 0} Completed,{' '}
+                      {playoffs.matches_remaining ?? 0} Remaining
+                    </AppText>
+                    {playoffs.champion_team_name && (
+                      <View style={styles.playoffChampionBanner}>
+                        <AppText style={styles.playoffChampionText}>
+                          👑 Champion: {playoffs.champion_team_name}
+                        </AppText>
+                      </View>
+                    )}
+                  </Card>
 
-                {/* Button to view playoff matches */}
-                <TouchableOpacity
-                  style={styles.viewPlayoffMatchesBtn}
-                  onPress={() => {
-                    const playoffWeek = weeks?.find((w) => w.week_type === 'playoffs');
-                    if (playoffWeek) setSelectedWeekId(playoffWeek.id);
-                    setActiveTab('matches');
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <AppText style={styles.viewPlayoffMatchesBtnText}>
-                    View Playoff Matches in Matches Tab
-                  </AppText>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        )}
+                  {/* Button to view playoff matches */}
+                  <TouchableOpacity
+                    style={styles.viewPlayoffMatchesBtn}
+                    onPress={() => {
+                      const playoffWeek = weeks?.find((w) => w.week_type === 'playoffs');
+                      if (playoffWeek) setSelectedWeekId(playoffWeek.id);
+                      setActiveTab('matches');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <AppText style={styles.viewPlayoffMatchesBtnText}>
+                      View Playoff Matches in Matches Tab
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
 
-        {/* ══════════════════════════════════════════════════════════════════════════
+          {/* ══════════════════════════════════════════════════════════════════════════
             TAB 6: RESULTS (SCREEN 8)
             - Dropdowns: Regular Season ▾ & Week 1 ▾
             - Heading: Regular Season Results
             - Completed Match Cards with Match 1 • May 6, 2026 • 6:00 PM • Court 1 & ✓ Completed badge
             - Scores: AA Alpha Aces 11 - 9 BB Beta Blasters
            ══════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === 'results' && (
-          <View style={styles.tabPane}>
-            {/* Filter Dropdowns Row */}
-            <View style={styles.resultsFiltersRow}>
-              <TouchableOpacity
-                style={styles.resultsFilterBtn}
-                onPress={() =>
-                  setResultStageFilter((prev) =>
-                    prev === 'regular_season' ? 'playoffs' : 'regular_season'
-                  )
-                }
-              >
-                <AppText style={styles.resultsFilterBtnText}>
-                  {resultStageFilter === 'regular_season' ? 'Regular Season' : 'Playoffs'} ▾
-                </AppText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.resultsFilterBtn}
-                onPress={() => {
-                  if (resultWeekFilter === 'all') {
-                    setResultWeekFilter('1');
-                  } else {
-                    const nextWeek = parseInt(resultWeekFilter, 10) + 1;
-                    if (nextWeek > (regularWeeks.length || 4)) {
-                      setResultWeekFilter('all');
-                    } else {
-                      setResultWeekFilter(String(nextWeek));
-                    }
-                  }
-                }}
-              >
-                <AppText style={styles.resultsFilterBtnText}>
-                  {resultWeekFilter === 'all' ? 'All Weeks' : `Week ${resultWeekFilter}`} ▾
-                </AppText>
-              </TouchableOpacity>
-            </View>
-
-            {/* Results Heading */}
-            <View style={styles.weekHeaderRow}>
-              <AppText style={styles.weekScheduleTitle}>
-                {resultStageFilter === 'playoffs' ? 'Playoff Results' : 'Regular Season Results'}
-              </AppText>
-            </View>
-
-            {/* Completed Match Cards List */}
-            {resultsMatches.length === 0 ? (
-              <EmptyState
-                title="No Completed Matches"
-                description="Match results will appear here once games have been scored and completed."
-              />
-            ) : (
-              <View style={styles.matchesList}>
-                {resultsMatches.map((m, idx) => {
-                  const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                  const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
-                  const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
-                  const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
-                  const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
-                  const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
-
-                  const isCompleted = m.status === 'completed';
-                  const timeStr = m.scheduled_start_at
-                    ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                    : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
-                  const courtStr = getCourtDisplayLabel(
-                    m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
-                    { unassignedLabel: 'Court not assigned' }
-                  );
-                  const dateLine = `Match ${m.match_number} • May 6, 2026 • ${timeStr} • ${courtStr}`;
-
-                  return (
-                    <View key={m.id} style={styles.screen8MatchCard}>
-                      {/* Top Header Line */}
-                      <View style={styles.screen8TopRow}>
-                        <AppText style={styles.screen8DateText} numberOfLines={2}>
-                          {dateLine}
-                        </AppText>
-                        <View
-                          style={[
-                            styles.screen8Badge,
-                            isCompleted ? styles.screen8BadgeCompleted : styles.screen8BadgeScheduled,
-                          ]}
-                        >
-                          <AppText
-                            style={[
-                              styles.screen8BadgeText,
-                              isCompleted
-                                ? styles.screen8BadgeTextCompleted
-                                : styles.screen8BadgeTextScheduled,
-                            ]}
-                          >
-                            {isCompleted ? '✓ Completed' : '✓ Scheduled'}
-                          </AppText>
-                        </View>
-                      </View>
-
-                      {/* Scores & Matchup Row */}
-                      <View style={styles.screen8MatchupRow}>
-                        {/* Team A */}
-                        <View style={styles.screen8TeamBlock}>
-                          <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                            <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
-                          </View>
-                          <AppText style={styles.screen8TeamName} numberOfLines={2}>
-                            {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                          </AppText>
-                        </View>
-
-                        {/* Scores */}
-                        <View style={styles.screen8ScoresBlock}>
-                          <AppText style={styles.screen8ScoreDigit}>
-                            {m.score_a !== null ? m.score_a : '-'}
-                          </AppText>
-                          <AppText style={styles.screen8ScoreSeparator}>-</AppText>
-                          <AppText style={styles.screen8ScoreDigit}>
-                            {m.score_b !== null ? m.score_b : '-'}
-                          </AppText>
-                        </View>
-
-                        {/* Team B */}
-                        <View style={[styles.screen8TeamBlock, styles.screen8TeamBlockRight]}>
-                          <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={2}>
-                            {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
-                          </AppText>
-                          <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                            <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
-                          </View>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-
-            {/* Champion Crowning or Finalize League Banner */}
-            {canManageLeague && league.status !== 'completed' && isRegularSeasonComplete && (
-              <View style={styles.finalizeLeagueBox}>
+          {activeTab === 'results' && (
+            <View style={styles.tabPane}>
+              {/* Filter Dropdowns Row */}
+              <View style={styles.resultsFiltersRow}>
                 <TouchableOpacity
-                  style={styles.finalizeLeagueBtn}
-                  onPress={handleConfirmCompleteLeague}
-                  disabled={isCompletingLeague}
+                  style={styles.resultsFilterBtn}
+                  onPress={() =>
+                    setResultStageFilter((prev) =>
+                      prev === 'regular_season' ? 'playoffs' : 'regular_season'
+                    )
+                  }
                 >
-                  <AppText style={styles.finalizeLeagueBtnText}>
-                    {isCompletingLeague ? 'Finalizing...' : 'Finalize & Complete League'}
+                  <AppText style={styles.resultsFilterBtnText}>
+                    {resultStageFilter === 'regular_season' ? 'Regular Season' : 'Playoffs'} ▾
+                  </AppText>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.resultsFilterBtn}
+                  onPress={() => {
+                    if (resultWeekFilter === 'all') {
+                      setResultWeekFilter('1');
+                    } else {
+                      const nextWeek = parseInt(resultWeekFilter, 10) + 1;
+                      if (nextWeek > (regularWeeks.length || 4)) {
+                        setResultWeekFilter('all');
+                      } else {
+                        setResultWeekFilter(String(nextWeek));
+                      }
+                    }
+                  }}
+                >
+                  <AppText style={styles.resultsFilterBtnText}>
+                    {resultWeekFilter === 'all' ? 'All Weeks' : `Week ${resultWeekFilter}`} ▾
                   </AppText>
                 </TouchableOpacity>
               </View>
-            )}
-          </View>
-        )}
+
+              {/* Results Heading */}
+              <View style={styles.weekHeaderRow}>
+                <AppText style={styles.weekScheduleTitle}>
+                  {resultStageFilter === 'playoffs' ? 'Playoff Results' : 'Regular Season Results'}
+                </AppText>
+              </View>
+
+              {/* Completed Match Cards List */}
+              {resultsMatches.length === 0 ? (
+                <EmptyState
+                  title="No Completed Matches"
+                  description="Match results will appear here once games have been scored and completed."
+                />
+              ) : (
+                <View style={styles.matchesList}>
+                  {resultsMatches.map((m, idx) => {
+                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
+                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                    const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
+                    const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
+                    const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
+                    const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
+
+                    const isCompleted = m.status === 'completed';
+                    const timeStr = m.scheduled_start_at
+                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                      : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                    const courtStr = getCourtDisplayLabel(
+                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                      { unassignedLabel: 'Court not assigned' }
+                    );
+                    const dateLine = `Match ${m.match_number} • May 6, 2026 • ${timeStr} • ${courtStr}`;
+
+                    return (
+                      <View key={m.id} style={styles.screen8MatchCard}>
+                        {/* Top Header Line */}
+                        <View style={styles.screen8TopRow}>
+                          <AppText style={styles.screen8DateText} numberOfLines={2}>
+                            {dateLine}
+                          </AppText>
+                          <View
+                            style={[
+                              styles.screen8Badge,
+                              isCompleted ? styles.screen8BadgeCompleted : styles.screen8BadgeScheduled,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.screen8BadgeText,
+                                isCompleted
+                                  ? styles.screen8BadgeTextCompleted
+                                  : styles.screen8BadgeTextScheduled,
+                              ]}
+                            >
+                              {isCompleted ? '✓ Completed' : '✓ Scheduled'}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        {/* Scores & Matchup Row */}
+                        <View style={styles.screen8MatchupRow}>
+                          {/* Team A */}
+                          <View style={styles.screen8TeamBlock}>
+                            <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
+                              <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                            </View>
+                            <AppText style={styles.screen8TeamName} numberOfLines={2}>
+                              {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
+                            </AppText>
+                          </View>
+
+                          {/* Scores */}
+                          <View style={styles.screen8ScoresBlock}>
+                            <AppText style={styles.screen8ScoreDigit}>
+                              {m.score_a !== null ? m.score_a : '-'}
+                            </AppText>
+                            <AppText style={styles.screen8ScoreSeparator}>-</AppText>
+                            <AppText style={styles.screen8ScoreDigit}>
+                              {m.score_b !== null ? m.score_b : '-'}
+                            </AppText>
+                          </View>
+
+                          {/* Team B */}
+                          <View style={[styles.screen8TeamBlock, styles.screen8TeamBlockRight]}>
+                            <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={2}>
+                              {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                            </AppText>
+                            <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
+                              <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Champion Crowning or Finalize League Banner */}
+              {canManageLeague && league.status !== 'completed' && isRegularSeasonComplete && (
+                <View style={styles.finalizeLeagueBox}>
+                  <TouchableOpacity
+                    style={styles.finalizeLeagueBtn}
+                    onPress={handleConfirmCompleteLeague}
+                    disabled={isCompletingLeague}
+                  >
+                    <AppText style={styles.finalizeLeagueBtnText}>
+                      {isCompletingLeague ? 'Finalizing...' : 'Finalize & Complete League'}
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -2117,7 +2116,7 @@ export default function ClubLeagueDetailsScreen() {
       <CreateLeagueModal
         visible={isEditLeagueModalOpen}
         onClose={() => setIsEditLeagueModalOpen(false)}
-        onSubmit={async () => {}}
+        onSubmit={async () => { }}
         isCreating={false}
         clubId={clubId}
         leagueToEdit={league}
@@ -2456,6 +2455,9 @@ const styles = StyleSheet.create({
   },
   scrollHeaderWrapper: {
     backgroundColor: '#F2F8F5',
+    maxWidth: 860,
+    alignSelf: 'center',
+    width: '100%',
   },
   stickyTabsContainer: {
     backgroundColor: '#FFFFFF',
@@ -2463,6 +2465,11 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5ECE8',
     zIndex: 10,
     elevation: 4,
+  },
+  stickyTabsInner: {
+    maxWidth: 860,
+    alignSelf: 'center',
+    width: '100%',
   },
   tabBodyWrapper: {
     flex: 1,
@@ -2501,14 +2508,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // ─── Compact Header Styles ───
-  headerContainer: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: 8,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5ECE8',
-  },
   fixedTopBar: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
@@ -2520,7 +2519,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 44,
+    height: 48,
   },
   backButton: {
     width: 36,
@@ -2534,8 +2533,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   headerLeagueName: {
-    fontSize: 19,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#111827',
     textAlign: 'center',
     letterSpacing: -0.2,
@@ -2546,118 +2545,86 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'flex-end',
   },
-  headerStatusWrap: {
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 6,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 3.5,
-    borderRadius: 12,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 6,
-  },
-  statusPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.4,
-  },
-  headerSubtitleText: {
-    fontSize: 12.5,
-    fontWeight: '500',
-    color: '#4B5563',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
 
-  // ─── 2-Column Registration Stats Card ───
-  regStatsCard: {
+  // ─── Compact Status Banner ───
+  statusBanner: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    paddingVertical: 13,
-    paddingHorizontal: 15,
-    borderWidth: 1,
-    borderColor: '#E2EAE5',
+    alignItems: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     marginHorizontal: 16,
     marginTop: 10,
-    marginBottom: 12,
+    marginBottom: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  statusBannerDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginRight: 8,
+  },
+  statusBannerLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  statusBannerSubtext: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    marginLeft: 6,
+  },
+
+  // ─── Compact Registration Summary Section ───
+  registrationSummaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E2EAE5',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
     elevation: 1,
   },
-  regStatCol: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  regStatLabel: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontWeight: '500',
-    marginBottom: 3,
-  },
-  regStatValueRow: {
+  regSummaryRow: {
     flexDirection: 'row',
-    alignItems: 'baseline',
     justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 8,
   },
-  regStatValue: {
-    fontSize: 18,
+  regSummaryCount: {
+    fontSize: 13.5,
+  },
+  regSummaryBold: {
+    fontSize: 15,
     fontWeight: '800',
     color: '#111827',
   },
-  regStatPercent: {
-    fontSize: 12,
+  regSummaryMuted: {
+    fontSize: 13,
     fontWeight: '500',
     color: '#64748B',
+  },
+  regSummaryPercent: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#176B57',
   },
   regProgressBarTrack: {
     height: 5,
     backgroundColor: '#E5ECE8',
     borderRadius: 2.5,
     overflow: 'hidden',
-    marginTop: 6,
   },
   regProgressBarFill: {
     height: '100%',
-    backgroundColor: '#176B57',
     borderRadius: 2.5,
-  },
-  regStatDivider: {
-    width: 1,
-    backgroundColor: '#E2EAE5',
-    marginHorizontal: 14,
-    alignSelf: 'stretch',
-  },
-  regStatValueText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  regStatDaysLeft: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#D97706',
-    marginTop: 2,
-  },
-  regStatSubtext: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  regStatClosedText: {
-    color: '#64748B',
   },
 
   // ─── Compact Management Actions (Teams Tab) ───
@@ -2796,6 +2763,9 @@ const styles = StyleSheet.create({
   },
   tabPane: {
     paddingHorizontal: 16,
+    maxWidth: 860,
+    alignSelf: 'center',
+    width: '100%',
   },
 
   // ─── Teams Tab Styles (Screen 2) ───

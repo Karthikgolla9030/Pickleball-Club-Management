@@ -1,15 +1,15 @@
 /**
  * Aught2 Pickleball — PlayerLeagueOverviewTab
  *
- * Clean, modern Overview & Rules tab for League Details:
+ * Clean, single-column premium Overview & Rules tab for League Details:
  * - Card 1: About the League (optional, only rendered if a custom description exists)
- * - Card 2: League Information (compact 2-column layout, muted labels, no redundant icons)
- * - Card 3: Schedule & Venue (start/end dates, frequency, host club, venue/courts)
- * - Card 4: Game Rules & Scoring (match format, target score, standings points, playoff rules, tiebreaker list)
+ * - Card 2: League Information (clean information rows, muted labels, readable values)
+ * - Card 3: Schedule & Venue (start/end dates, frequency, deadline, host club, venue)
+ * - Card 4: Game Rules & Scoring (match format, target score, win-by, points, tiebreaker list)
  */
 
 import React, { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import {
   Calendar,
   FileText,
@@ -26,7 +26,29 @@ export interface PlayerLeagueOverviewTabProps {
   league: LeagueSummary | any;
 }
 
+function InfoRow({
+  label,
+  value,
+  isLast = false,
+  isTablet = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  isLast?: boolean;
+  isTablet?: boolean;
+}) {
+  return (
+    <View style={[styles.infoRow, isTablet && styles.infoRowTablet, isLast && styles.infoRowLast]}>
+      <AppText style={[styles.infoLabel, isTablet && styles.infoLabelTablet]}>{label}</AppText>
+      <AppText style={[styles.infoValue, isTablet && styles.infoValueTablet]}>{value}</AppText>
+    </View>
+  );
+}
+
 export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps) {
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
+
   const isSingles =
     (league.team_size ?? 2) === 1 ||
     (league.category?.toLowerCase().includes('singles') ?? false);
@@ -38,7 +60,7 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
   // Clean description if provided
   const cleanDescription = useMemo(() => {
     if (!league.description) return null;
-    let desc = league.description.trim();
+    const desc = league.description.trim();
     // Strip raw JSON / metadata artifacts if any
     if (desc.startsWith('{') || desc.startsWith('[')) return null;
     return desc.length > 0 ? desc : null;
@@ -72,94 +94,54 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
           </AppText>
         </View>
 
-        <View style={styles.gridContainer}>
-          {/* Row 1: Format | Division */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Competition Format</AppText>
-                <AppText style={styles.value}>
-                  {hasPlayoffs ? 'Regular Season + Playoffs' : 'Round Robin League'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Division</AppText>
-                <AppText style={styles.value}>
-                  {league.category || (isSingles ? 'Singles' : 'Doubles')}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 2: Registration Type | Regular Season */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Registration Type</AppText>
-                <AppText style={styles.value}>
-                  {isSingles ? 'Individual (Singles)' : 'Fixed Team (Doubles)'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Regular Season</AppText>
-                <AppText style={styles.value}>
-                  {totalWeeks} Weeks
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 3: Playoff Qualification (if enabled) | Max Capacity */}
-          <View style={styles.gridRow}>
-            {hasPlayoffs ? (
-              <View style={styles.gridColLeft}>
-                <View style={styles.item}>
-                  <AppText style={styles.label}>Playoff Qualification</AppText>
-                  <AppText style={styles.value}>
-                    Top {playoffSpots} Advance to Playoffs
-                  </AppText>
-                </View>
-              </View>
-            ) : null}
-
-            <View style={hasPlayoffs ? styles.gridColRight : styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Max Capacity</AppText>
-                <AppText style={styles.value}>
-                  {league.max_teams || 8} {isSingles ? 'Players' : 'Teams'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 4: Skill Eligibility | Registration Fee */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Skill Eligibility</AppText>
-                <AppText style={styles.value}>
-                  {league.skill_level || 'Open / All Levels'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Registration Fee</AppText>
-                <AppText style={styles.value}>
-                  {league.registration_fee && league.registration_fee > 0
-                    ? `$${league.registration_fee.toFixed(2)}`
-                    : 'Free ($0.00)'}
-                </AppText>
-              </View>
-            </View>
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Competition Format"
+            value={hasPlayoffs ? 'Regular Season + Playoffs' : 'Round Robin League'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Division"
+            value={league.category || (isSingles ? 'Singles' : 'Doubles')}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Type"
+            value={isSingles ? 'Individual (Singles)' : 'Fixed Team (Doubles)'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Season Length"
+            value={`${totalWeeks} Weeks`}
+            isTablet={isTablet}
+          />
+          {hasPlayoffs ? (
+            <InfoRow
+              label="Playoff Qualification"
+              value={`Top ${playoffSpots} Advance to Playoffs`}
+              isTablet={isTablet}
+            />
+          ) : null}
+          <InfoRow
+            label="Maximum Capacity"
+            value={`${league.max_teams || 8} ${isSingles ? 'Players' : 'Teams'}`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Skill Eligibility"
+            value={league.skill_level || 'Open / All Levels'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Fee"
+            value={
+              league.registration_fee && league.registration_fee > 0
+                ? `$${league.registration_fee.toFixed(2)}`
+                : 'Free ($0.00)'
+            }
+            isTablet={isTablet}
+            isLast
+          />
         </View>
       </Card>
 
@@ -174,60 +156,44 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
           </AppText>
         </View>
 
-        <View style={styles.gridContainer}>
-          {/* Row 1: Start Date | End Date */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Start Date</AppText>
-                <AppText style={styles.value}>
-                  {league.start_date ? formatDate(league.start_date) : 'TBA'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>End Date</AppText>
-                <AppText style={styles.value}>
-                  {league.end_date ? formatDate(league.end_date) : 'TBA'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 2: Match Frequency | Host Club */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Match Frequency</AppText>
-                <AppText style={styles.value}>
-                  {league.match_frequency || 'Weekly Fixtures'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Host Club</AppText>
-                <AppText style={styles.value}>
-                  {league.club_name || 'Pickleball Club'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 3: Venue & Courts (Full Width) */}
-          <View style={styles.gridRow}>
-            <View style={[styles.gridColLeft, { flex: 2 }]}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Venue & Courts</AppText>
-                <AppText style={styles.value}>
-                  {league.venue_name || league.location || 'Dedicated Pickleball Courts'}
-                </AppText>
-              </View>
-            </View>
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Start Date"
+            value={league.start_date ? formatDate(league.start_date) : 'TBA'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="End Date"
+            value={league.end_date ? formatDate(league.end_date) : 'TBA'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Match Frequency"
+            value={league.match_frequency || 'Weekly Fixtures'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Deadline"
+            value={
+              league.registration_close_at
+                ? formatDate(league.registration_close_at)
+                : league.start_date
+                ? `By ${formatDate(league.start_date)}`
+                : 'Before Season Start'
+            }
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Host Club"
+            value={league.club_name || 'Pickleball Club'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Venue & Courts"
+            value={league.venue_name || league.location || 'Dedicated Pickleball Courts'}
+            isTablet={isTablet}
+            isLast
+          />
         </View>
       </Card>
 
@@ -242,54 +208,38 @@ export function PlayerLeagueOverviewTab({ league }: PlayerLeagueOverviewTabProps
           </AppText>
         </View>
 
-        <View style={styles.gridContainer}>
-          {/* Row 1: Match Format | Target Score */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Match Format</AppText>
-                <AppText style={styles.value}>
-                  {league.match_format || 'Best 2 of 3 Games'}
-                </AppText>
-              </View>
-            </View>
-
-            <View style={styles.gridColRight}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Target Score</AppText>
-                <AppText style={styles.value}>
-                  {league.target_score || '11 Points (win by 2)'}
-                </AppText>
-              </View>
-            </View>
-          </View>
-
-          {/* Row 2: Standings Points | Playoff Format (only if playoffs) */}
-          <View style={styles.gridRow}>
-            <View style={styles.gridColLeft}>
-              <View style={styles.item}>
-                <AppText style={styles.label}>Standings Points</AppText>
-                <AppText style={styles.value}>
-                  {league.standings_points || 'Win: 2 pts · Loss: 0 pts'}
-                </AppText>
-              </View>
-            </View>
-
-            {hasPlayoffs ? (
-              <View style={styles.gridColRight}>
-                <View style={styles.item}>
-                  <AppText style={styles.label}>Playoff Format</AppText>
-                  <AppText style={styles.value}>
-                    {league.playoff_format || 'Single Elimination Bracket'}
-                  </AppText>
-                </View>
-              </View>
-            ) : null}
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Match Format"
+            value={league.match_format || 'Best 2 of 3 Games'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Target Score"
+            value={league.target_score || '11 Points'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Win-by Margin"
+            value={league.win_by ? `${league.win_by} Points` : 'Win by 2'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Standings Points"
+            value={league.standings_points || 'Win: 2 pts · Loss: 0 pts'}
+            isTablet={isTablet}
+          />
+          {hasPlayoffs ? (
+            <InfoRow
+              label="Playoff Format"
+              value={league.playoff_format || 'Single Elimination Bracket'}
+              isTablet={isTablet}
+            />
+          ) : null}
 
           {/* Compact Tiebreaker Order Box */}
           <View style={styles.tiebreakerBox}>
-            <AppText style={styles.tiebreakerHeader}>Tiebreaker Order</AppText>
+            <AppText style={styles.tiebreakerHeader}>Tiebreaker Hierarchy</AppText>
             <View style={styles.tiebreakerList}>
               <AppText style={styles.tiebreakerItem}>1. Head-to-Head record</AppText>
               <AppText style={styles.tiebreakerItem}>2. Point differential (+/-)</AppText>
@@ -308,7 +258,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -324,6 +274,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    paddingBottom: 2,
   },
   iconWrap: {
     width: 26,
@@ -334,56 +285,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardTitle: {
-    fontSize: 14.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#102F2A',
   },
   descriptionText: {
-    fontSize: 13,
+    fontSize: 13.5,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 20,
   },
-  gridContainer: {
-    gap: 12,
+  rowsList: {
+    gap: 0,
   },
-  gridRow: {
+  infoRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F2',
+  },
+  infoRowTablet: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 14,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
   },
-  gridColLeft: {
-    flex: 1,
-    minWidth: 0,
+  infoRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 2,
   },
-  gridColRight: {
-    flex: 1,
-    minWidth: 0,
-  },
-  item: {
-    gap: 2,
-  },
-  label: {
-    fontSize: 11.5,
+  infoLabel: {
+    fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
-    lineHeight: 15,
+    marginBottom: 3,
   },
-  value: {
-    fontSize: 13.5,
+  infoLabelTablet: {
+    marginBottom: 0,
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14.5,
     fontWeight: '600',
     color: '#111827',
-    lineHeight: 18,
+    lineHeight: 20,
+  },
+  infoValueTablet: {
+    textAlign: 'right',
+    flex: 1,
   },
   tiebreakerBox: {
     backgroundColor: '#F8FAF9',
     borderRadius: 8,
-    padding: 10,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#EBF1EE',
-    marginTop: 2,
+    marginTop: 10,
   },
   tiebreakerHeader: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#176B57',
     textTransform: 'uppercase',
@@ -391,12 +349,12 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tiebreakerList: {
-    gap: 3,
+    gap: 4,
   },
   tiebreakerItem: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '500',
     color: '#334155',
-    lineHeight: 17,
+    lineHeight: 18,
   },
 });
