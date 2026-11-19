@@ -899,22 +899,21 @@ export default function ClubLeagueDetailsScreen() {
     return m.stage === 'regular_season';
   });
 
-  // Display weeks for Schedule tab week selector (supports <= 4 equal row or > 4 scroll)
-  const displayWeeks = useMemo(() => {
-    if (regularWeeks && regularWeeks.length > 0) {
-      return regularWeeks.map((w) => ({
-        id: w.id,
-        weekNumber: w.week_number,
-        weekObj: w,
-      }));
-    }
-    const count = Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0));
-    return Array.from({ length: count }).map((_, idx) => ({
-      id: `fake-${idx + 1}`,
-      weekNumber: idx + 1,
-      weekObj: null as LeagueWeek | null,
-    }));
-  }, [regularWeeks, league.number_of_weeks, league.playoff_team_count]);
+  // Display weeks for Schedule tab week selector (supports <= 4 equal row or > 4 scroll - pure computation, no hook)
+  const displayWeeks =
+    regularWeeks && regularWeeks.length > 0
+      ? regularWeeks.map((w) => ({
+          id: w.id,
+          weekNumber: w.week_number,
+          weekObj: w,
+        }))
+      : Array.from({
+          length: Math.max(1, (league.number_of_weeks || 4) - ((league.playoff_team_count ?? 0) > 0 ? 1 : 0)),
+        }).map((_, idx) => ({
+          id: `fake-${idx + 1}`,
+          weekNumber: idx + 1,
+          weekObj: null as LeagueWeek | null,
+        }));
 
   const getDoublesSubtitle = (team?: LeagueTeam) => {
     if (!team || !team.members || team.members.length < 2) return null;
