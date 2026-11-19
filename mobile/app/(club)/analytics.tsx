@@ -1,15 +1,14 @@
 /**
- * Aught2 Pickleball — Club Analytics & Operational Reports Screen
+ * Aught2 Pickleball — Club Analytics & Operational Reports
  *
- * Premium business analytics dashboard for club owners and managers:
- *   - Preserves Club Side design language: forest green accents, light surfaces, crisp typography.
- *   - Simplified Top Summary Card: compact, balanced, club branding, manual refresh & CSV export.
- *   - Compact Reporting Period Selector with clean dropdown sheet and subtle date/timezone context.
- *   - Responsive Court Capacity & Utilization Card: no heading/badge collisions, accurate small percentage handling.
- *   - Accurate Daily Booking Distribution & Revenue charts with sensible non-duplicated axis scales.
- *   - Clean empty states when zero bookings/revenue exist without misleading tall ghost bars.
- *   - Standardized KPI metric cards across all 5 sections (Overview, Bookings, Members, Competitions, Finance).
- *   - Strict multi-tenant isolation, real-time WebSocket invalidation, and sanitized CSV exports.
+ * SaaS-grade operational intelligence dashboard for club owners & managers:
+ *   - Simplified Top Summary Card: compact club identity, manual refresh, CSV export.
+ *   - Compact Reporting Period Selector: dropdown picker with subtle secondary date context.
+ *   - Zero UI Clutter & No Repeated Metrics across Overview, Bookings, Members, Competitions, Finance.
+ *   - Collision-Free Court Capacity & Utilization Card: responsive badge layout & accurate progress bar.
+ *   - Honest Chart Visualizations: zero-state baseline indicators without tall misleading empty bars.
+ *   - Resilient Multi-Source Fallbacks: graceful data binding if sub-endpoints experience transient errors.
+ *   - Clean Green/Mint SaaS Aesthetic: cohesive cards, crisp typography, responsive 2-column mobile layout.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -96,8 +95,8 @@ interface TabItem {
 }
 
 const PRESET_OPTIONS: { id: PresetType; label: string; desc: string }[] = [
-  { id: '7d', label: 'Last 7 days', desc: 'Past 7 days activity window' },
-  { id: '30d', label: 'Last 30 days', desc: 'Standard monthly reporting cycle' },
+  { id: '7d', label: 'Last 7 days', desc: 'Recent 7-day operational window' },
+  { id: '30d', label: 'Last 30 days', desc: 'Standard 30-day reporting cycle' },
   { id: '90d', label: 'Last 90 days', desc: 'Quarterly operational overview' },
   { id: 'custom', label: 'Custom date range', desc: 'Specify exact start and end dates' },
 ];
@@ -129,7 +128,7 @@ function AnalyticsKpiCard({
 }: AnalyticsKpiCardProps) {
   return (
     <View style={[styles.kpiCard, cardWidth ? { width: cardWidth } : styles.kpiCardHalf]}>
-      {/* Top Header: Small Icon Box + Restrained Badge */}
+      {/* Top Header: Icon + Restrained Badge */}
       <View style={styles.kpiTopRow}>
         <View style={[styles.kpiIconBox, { backgroundColor: iconBgColor }]}>
           {icon}
@@ -139,7 +138,7 @@ function AnalyticsKpiCard({
         ) : null}
       </View>
 
-      {/* Middle: Prominent Value & Naturally Wrapping Label */}
+      {/* Value & Label */}
       <View style={styles.kpiBody}>
         <AppText style={styles.kpiValueText} numberOfLines={1}>
           {value}
@@ -149,7 +148,7 @@ function AnalyticsKpiCard({
         </AppText>
       </View>
 
-      {/* Bottom: Subtle Divider + Supporting Information */}
+      {/* Supporting Subtext */}
       {subText ? (
         <View style={styles.kpiFooter}>
           <AppText style={styles.kpiSubText}>
@@ -162,7 +161,7 @@ function AnalyticsKpiCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT: DAILY BOOKINGS BAR CHART (Sensible Scale & Clean Zero State)
+// COMPONENT: DAILY BOOKINGS BAR CHART (No Duplicate Ribbons, Honest Zero-State)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DailyBookingsChartProps {
@@ -180,19 +179,18 @@ function DailyBookingsChart({
     return dailyData.slice(-7);
   }, [dailyData]);
 
-  const { maxCount, totalCount, avgCount, peakItem, isAllZero } = useMemo(() => {
+  const { maxCount, isAllZero, peakItem } = useMemo(() => {
     if (!chartItems.length) {
-      return { maxCount: 0, totalCount: 0, avgCount: '0.0', peakItem: null, isAllZero: true };
+      return { maxCount: 0, isAllZero: true, peakItem: null };
     }
-    const counts = chartItems.map((d) => d.count);
+    const counts = chartItems.map((d) => Number(d.count) || 0);
     const sum = counts.reduce((acc, curr) => acc + curr, 0);
     const max = Math.max(...counts, 0);
-    const avg = (sum / chartItems.length).toFixed(1);
     const peak = sum > 0 ? chartItems.reduce((prev, curr) => (curr.count > prev.count ? curr : prev), chartItems[0]) : null;
-    return { maxCount: max, totalCount: sum, avgCount: avg, peakItem: peak, isAllZero: sum === 0 };
+    return { maxCount: max, isAllZero: sum === 0, peakItem: peak };
   }, [chartItems]);
 
-  // Sensible Y-axis scale with distinct grid levels (NO DUPLICATE 1-1-0 LABELS!)
+  // Distinct Y-axis ticks without duplicates
   const yAxisTicks = useMemo(() => {
     if (isAllZero || maxCount <= 0) {
       return [0];
@@ -209,7 +207,7 @@ function DailyBookingsChart({
 
   return (
     <Card style={styles.chartCard}>
-      {/* Header */}
+      {/* Chart Header */}
       <View style={styles.chartHeader}>
         <View style={styles.chartTitleCol}>
           <View style={styles.chartTitleRow}>
@@ -229,29 +227,7 @@ function DailyBookingsChart({
         )}
       </View>
 
-      {/* Quick Summary Metrics Ribbon */}
-      <View style={styles.chartMetricRibbon}>
-        <View style={styles.ribbonItem}>
-          <AppText style={styles.ribbonLabel}>Total in Period</AppText>
-          <AppText style={styles.ribbonValue}>
-            {totalCount} {totalCount === 1 ? 'booking' : 'bookings'}
-          </AppText>
-        </View>
-        <View style={styles.ribbonDivider} />
-        <View style={styles.ribbonItem}>
-          <AppText style={styles.ribbonLabel}>Daily Average</AppText>
-          <AppText style={styles.ribbonValue}>{avgCount} / day</AppText>
-        </View>
-        <View style={styles.ribbonDivider} />
-        <View style={styles.ribbonItem}>
-          <AppText style={styles.ribbonLabel}>Highest Day</AppText>
-          <AppText style={styles.ribbonValue}>
-            {peakItem && peakItem.count > 0 ? `${peakItem.count} bookings` : '0 bookings'}
-          </AppText>
-        </View>
-      </View>
-
-      {/* Zero Activity Notice Banner & Clean Empty State */}
+      {/* Zero Activity State: Clean notice with flat baseline (no misleading grey bars) */}
       {isAllZero ? (
         <View style={styles.chartZeroStateWrap}>
           <View style={styles.chartZeroBanner}>
@@ -260,12 +236,13 @@ function DailyBookingsChart({
               No bookings recorded during this period
             </AppText>
           </View>
+
           {chartItems.length > 0 ? (
             <View style={styles.chartZeroDaysGrid}>
               {chartItems.map((item) => (
                 <View key={item.date} style={styles.zeroDayCol}>
                   <AppText style={styles.zeroDayCount}>0</AppText>
-                  <View style={styles.zeroDayTrack} />
+                  <View style={styles.zeroDayBaselineDot} />
                   <AppText style={styles.barDayLabel}>{item.day_name.slice(0, 3)}</AppText>
                   <AppText style={styles.barDateLabel}>
                     {item.date.length >= 10 ? item.date.slice(5) : item.date}
@@ -277,7 +254,7 @@ function DailyBookingsChart({
         </View>
       ) : (
         <View style={styles.chartViewport}>
-          {/* Dynamic grid lines matching yAxisTicks without duplicates */}
+          {/* Grid lines matching yAxisTicks */}
           <View style={styles.chartGridLines}>
             {yAxisTicks.map((tick, idx) => (
               <View key={idx} style={styles.chartGridLine}>
@@ -287,23 +264,22 @@ function DailyBookingsChart({
             ))}
           </View>
 
-          {/* Vertical Bar Columns */}
+          {/* Bar Columns */}
           <View style={styles.barsContainer}>
             {chartItems.map((item) => {
-              const heightPercent = item.count > 0 && maxCount > 0
-                ? Math.max(10, Math.round((item.count / maxCount) * 100))
+              const count = Number(item.count) || 0;
+              const heightPercent = count > 0 && maxCount > 0
+                ? Math.max(12, Math.round((count / maxCount) * 100))
                 : 0;
-              const isPeak = item.count === maxCount && item.count > 0;
+              const isPeak = count === maxCount && count > 0;
               const shortDate = item.date.length >= 10 ? item.date.slice(5) : item.date;
 
               return (
                 <View key={item.date} style={styles.barCol}>
-                  {/* Floating count tag */}
                   <AppText style={[styles.barCountTag, isPeak && styles.barCountTagPeak]}>
-                    {item.count}
+                    {count}
                   </AppText>
 
-                  {/* Bar Track & Fill */}
                   <View style={styles.barTrack}>
                     {heightPercent > 0 ? (
                       <View
@@ -313,10 +289,11 @@ function DailyBookingsChart({
                           isPeak && styles.barFillPeak,
                         ]}
                       />
-                    ) : null}
+                    ) : (
+                      <View style={styles.barZeroTick} />
+                    )}
                   </View>
 
-                  {/* Day and Date Labels */}
                   <AppText style={[styles.barDayLabel, isPeak && styles.barDayLabelPeak]}>
                     {item.day_name.slice(0, 3)}
                   </AppText>
@@ -332,7 +309,7 @@ function DailyBookingsChart({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT: DAILY REVENUE BAR CHART (Sensible Scale & Clean Zero State)
+// COMPONENT: DAILY REVENUE BAR CHART
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DailyRevenueChartProps {
@@ -376,14 +353,15 @@ function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
             </View>
             <AppText style={styles.chartHeading}>Daily Revenue Trend</AppText>
           </View>
-          <AppText style={styles.chartSubheading}>Daily collected payments volume</AppText>
+          <AppText style={styles.chartSubheading}>Settled daily transaction volume</AppText>
         </View>
-        <View style={styles.peakBadge}>
-          <AppText style={styles.peakBadgeText}>Total: {formatCurrency(totalRev)}</AppText>
-        </View>
+        {totalRev > 0 && (
+          <View style={styles.peakBadge}>
+            <AppText style={styles.peakBadgeText}>{formatCurrency(totalRev)}</AppText>
+          </View>
+        )}
       </View>
 
-      {/* Zero Activity Notice Banner & Clean Empty State */}
       {isAllZero ? (
         <View style={styles.chartZeroStateWrap}>
           <View style={styles.chartZeroBanner}>
@@ -397,7 +375,7 @@ function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
               {chartItems.map((item) => (
                 <View key={item.date} style={styles.zeroDayCol}>
                   <AppText style={styles.zeroDayCount}>$0</AppText>
-                  <View style={styles.zeroDayTrack} />
+                  <View style={styles.zeroDayBaselineDot} />
                   <AppText style={styles.barDayLabel}>
                     {item.date.length >= 10 ? item.date.slice(5) : item.date}
                   </AppText>
@@ -424,7 +402,7 @@ function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
             {chartItems.map((item) => {
               const amountNum = parseFloat(item.amount) || 0;
               const heightPercent = amountNum > 0 && maxAmount > 0
-                ? Math.max(10, Math.round((amountNum / maxAmount) * 100))
+                ? Math.max(12, Math.round((amountNum / maxAmount) * 100))
                 : 0;
               const isPeak = item === peakDay && amountNum > 0;
               const shortDate = item.date.length >= 10 ? item.date.slice(5) : item.date;
@@ -442,7 +420,9 @@ function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
                           { height: `${heightPercent}%`, backgroundColor: isPeak ? Colors.brand.primary : '#2E8069' },
                         ]}
                       />
-                    ) : null}
+                    ) : (
+                      <View style={styles.barZeroTick} />
+                    )}
                   </View>
                   <AppText style={styles.barDayLabel}>{shortDate}</AppText>
                   <AppText style={styles.barDateLabel}>{item.succeeded_count} txns</AppText>
@@ -479,7 +459,6 @@ export default function AnalyticsScreen() {
   const [exportLoading, setExportLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  // Tab horizontal scroll ref & layout measurements for automatic centering
   const tabsScrollRef = useRef<ScrollView>(null);
   const tabLayoutsRef = useRef<Record<string, { x: number; width: number }>>({});
 
@@ -490,7 +469,7 @@ export default function AnalyticsScreen() {
     return { preset };
   }, [preset, customStart, customEnd]);
 
-  // TanStack Query Hooks with automatic refetch on filter or active club change
+  // TanStack Query Hooks
   const summaryQuery = useClubAnalyticsSummary(clubId, filters, canManageReports);
   const bookingsQuery = useBookingsReport(
     clubId,
@@ -520,7 +499,6 @@ export default function AnalyticsScreen() {
     competitionsQuery.isRefetching ||
     paymentsQuery.isRefetching;
 
-  // Track data update timestamps
   useEffect(() => {
     if (
       summaryQuery.dataUpdatedAt ||
@@ -578,7 +556,6 @@ export default function AnalyticsScreen() {
     }
   };
 
-  // Tab definitions: Overview, Bookings, Members, Competitions, Finance
   const tabs = useMemo<TabItem[]>(() => {
     const list: TabItem[] = [
       { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -602,7 +579,6 @@ export default function AnalyticsScreen() {
     }
   };
 
-  // Center the active tab on mount or when window size changes
   useEffect(() => {
     const layout = tabLayoutsRef.current[activeTab];
     if (layout && tabsScrollRef.current) {
@@ -614,7 +590,6 @@ export default function AnalyticsScreen() {
     }
   }, [activeTab, windowWidth]);
 
-  // Clean trigger label for the compact reporting period selector
   const presetDisplayLabel = useMemo(() => {
     switch (preset) {
       case '7d':
@@ -628,7 +603,6 @@ export default function AnalyticsScreen() {
     }
   }, [preset, customStart, customEnd]);
 
-  // Subtle secondary date range string
   const formattedDateRangeText = useMemo(() => {
     if (summaryQuery.data?.period) {
       const p = summaryQuery.data.period;
@@ -647,7 +621,6 @@ export default function AnalyticsScreen() {
     }
   }, [lastUpdated]);
 
-  // Balanced 2-column mobile KPI width
   const kpiCardWidth = useMemo<DimensionValue>(() => {
     if (isDesktop) return '23.5%';
     if (isSmallPhone) return '100%';
@@ -656,6 +629,23 @@ export default function AnalyticsScreen() {
   }, [isDesktop, isSmallPhone, windowWidth]);
 
   const summary = summaryQuery.data;
+
+  // Resilient Competitions Data binding (uses summary if sub-endpoint query encounters delay/error)
+  const competitionsData = useMemo(() => {
+    if (competitionsQuery.data) {
+      return {
+        competitions: competitionsQuery.data.competitions,
+        community: competitionsQuery.data.community,
+      };
+    }
+    if (summary) {
+      return {
+        competitions: summary.competitions,
+        community: summary.community,
+      };
+    }
+    return null;
+  }, [competitionsQuery.data, summary]);
 
   if (!canManageReports) {
     return (
@@ -692,7 +682,7 @@ export default function AnalyticsScreen() {
           />
         }
       >
-        {/* ─── 1. SIMPLIFIED TOP SUMMARY CARD ─── */}
+        {/* ─── 1. SIMPLIFIED TOP SUMMARY CARD (Compact, No Redundant Pills) ─── */}
         <View style={styles.summaryCard}>
           <View style={styles.summaryContentRow}>
             <View style={styles.summaryIdentityGroup}>
@@ -826,13 +816,12 @@ export default function AnalyticsScreen() {
         ) : (
           <>
             {/* ══════════════════════════════════════════════════════════════════
-                TAB 1: OVERVIEW
+                TAB 1: OVERVIEW (De-duplicated & Compact)
                ══════════════════════════════════════════════════════════════════ */}
             {activeTab === 'overview' && summary && (
               <View style={styles.tabContent}>
-                {/* Balanced 2x2 Overview KPI Grid */}
+                {/* 4 Balanced Overview KPIs */}
                 <View style={styles.kpiGrid}>
-                  {/* KPI 1: Court Bookings */}
                   <AnalyticsKpiCard
                     cardWidth={kpiCardWidth}
                     icon={<Clock size={17} color={Colors.status.info} strokeWidth={2} />}
@@ -844,7 +833,6 @@ export default function AnalyticsScreen() {
                     subText={`${summary.bookings.confirmed_count} Active • ${summary.bookings.cancellation_rate}% Cancelled`}
                   />
 
-                  {/* KPI 2: Active Players */}
                   <AnalyticsKpiCard
                     cardWidth={kpiCardWidth}
                     icon={<Users size={17} color={Colors.status.success} strokeWidth={2} />}
@@ -856,7 +844,6 @@ export default function AnalyticsScreen() {
                     subText={`${summary.memberships.pending_requests_count} Pending Applications`}
                   />
 
-                  {/* KPI 3: Competitions */}
                   <AnalyticsKpiCard
                     cardWidth={kpiCardWidth}
                     icon={<Trophy size={17} color={Colors.status.warning} strokeWidth={2} />}
@@ -868,13 +855,12 @@ export default function AnalyticsScreen() {
                     subText={`${summary.competitions.total_tournament_registrations} Players Registered`}
                   />
 
-                  {/* KPI 4: Financial Revenue (Or Community Events fallback) */}
                   {canManagePayments && summary.payments ? (
                     <AnalyticsKpiCard
                       cardWidth={kpiCardWidth}
                       icon={<DollarSign size={17} color={Colors.brand.primary} strokeWidth={2} />}
                       iconBgColor={Colors.brand.primaryLight}
-                      badgeLabel="Collected"
+                      badgeLabel="Settled"
                       badgeVariant="success"
                       value={formatCurrency(summary.payments.total_collected_amount)}
                       label="Revenue Collected"
@@ -894,10 +880,10 @@ export default function AnalyticsScreen() {
                   )}
                 </View>
 
-                {/* Daily Bookings Trend Chart */}
+                {/* Daily Bookings Trend Chart (No duplicate ribbon) */}
                 <DailyBookingsChart dailyData={summary.daily_bookings} />
 
-                {/* Court Utilization & Capacity Overview Card (Fixed collisions & wrapping) */}
+                {/* Court Capacity & Utilization Card (Collision-free badge & honest progress bar) */}
                 <Card style={styles.sectionCard}>
                   <View style={styles.utilizationHeaderRow}>
                     <View style={styles.sectionIconTitle}>
@@ -905,26 +891,11 @@ export default function AnalyticsScreen() {
                       <AppText style={styles.cardTitle}>Court Capacity & Utilization</AppText>
                     </View>
                     <View style={styles.utilizationBadgeContainer}>
-                      <View
-                        style={[
-                          styles.utilizationBadge,
-                          summary.bookings.court_utilization_rate > 50
-                            ? styles.utilizationBadgeSuccess
-                            : styles.utilizationBadgeDefault,
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.utilizationBadgeText,
-                            summary.bookings.court_utilization_rate > 50
-                              ? styles.utilizationBadgeTextSuccess
-                              : styles.utilizationBadgeTextDefault,
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {summary.bookings.court_utilization_rate.toFixed(1)}% UTILIZATION
-                        </AppText>
-                      </View>
+                      <Badge
+                        label={`${summary.bookings.court_utilization_rate.toFixed(1)}% UTILIZATION`}
+                        variant={summary.bookings.court_utilization_rate > 50 ? 'success' : 'default'}
+                        size="sm"
+                      />
                     </View>
                   </View>
 
@@ -941,7 +912,7 @@ export default function AnalyticsScreen() {
                             styles.progressBarFill,
                             {
                               width: `${Math.min(100, Math.max(0, summary.bookings.court_utilization_rate))}%`,
-                              minWidth: 4, // Clean visible sliver even for 0.2%
+                              minWidth: 4,
                               backgroundColor:
                                 summary.bookings.court_utilization_rate > 50
                                   ? Colors.status.success
@@ -999,7 +970,7 @@ export default function AnalyticsScreen() {
                   </View>
                 </Card>
 
-                {/* Community & Coaching Reach */}
+                {/* Consolidated Community & Coaching Reach */}
                 <Card style={styles.sectionCard}>
                   <View style={styles.sectionCardHeader}>
                     <View style={styles.sectionIconTitle}>
@@ -1045,7 +1016,7 @@ export default function AnalyticsScreen() {
             )}
 
             {/* ══════════════════════════════════════════════════════════════════
-                TAB 2: BOOKINGS & UTILIZATION
+                TAB 2: BOOKINGS (Performance, Court-by-Court & Trends)
                ══════════════════════════════════════════════════════════════════ */}
             {activeTab === 'bookings' && (
               <View style={styles.tabContent}>
@@ -1058,7 +1029,7 @@ export default function AnalyticsScreen() {
                   />
                 ) : bookingsQuery.data ? (
                   <>
-                    {/* Operational Status Breakdown */}
+                    {/* Operational Booking Status KPIs */}
                     <View style={styles.kpiGrid}>
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
@@ -1141,7 +1112,6 @@ export default function AnalyticsScreen() {
                                 />
                               </View>
 
-                              {/* Utilization Progress Bar (0% when rate is 0) */}
                               <View style={styles.courtBarTrack}>
                                 {utilRate > 0 ? (
                                   <View
@@ -1179,7 +1149,7 @@ export default function AnalyticsScreen() {
             )}
 
             {/* ══════════════════════════════════════════════════════════════════
-                TAB 3: MEMBERSHIPS
+                TAB 3: MEMBERS (Roster, Standing & Plan Subscriptions)
                ══════════════════════════════════════════════════════════════════ */}
             {activeTab === 'memberships' && (
               <View style={styles.tabContent}>
@@ -1192,7 +1162,7 @@ export default function AnalyticsScreen() {
                   />
                 ) : membershipsQuery.data ? (
                   <>
-                    {/* Member Status Grid */}
+                    {/* Member Core KPIs (De-duplicated) */}
                     <View style={styles.kpiGrid}>
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
@@ -1214,53 +1184,55 @@ export default function AnalyticsScreen() {
                       />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
-                        icon={<AlertCircle size={17} color={Colors.status.warning} strokeWidth={2} />}
-                        iconBgColor={Colors.status.warningBg}
-                        value={membershipsQuery.data.summary.suspended_count}
-                        label="Suspended"
-                        badgeLabel="Review"
-                        badgeVariant="warning"
-                        subText="Temporarily inactive"
+                        icon={<Sparkles size={17} color={Colors.brand.primary} strokeWidth={2} />}
+                        iconBgColor={Colors.brand.primaryLight}
+                        value={`+${membershipsQuery.data.summary.new_members_in_period}`}
+                        label="New in Period"
+                        badgeLabel="Growth"
+                        badgeVariant="success"
+                        subText="New member joins"
                       />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
-                        icon={<Clock size={17} color={Colors.text.tertiary} strokeWidth={2} />}
-                        iconBgColor={Colors.background.tertiary}
-                        value={membershipsQuery.data.summary.expired_count}
-                        label="Expired"
-                        subText="Requires plan renewal"
+                        icon={<AlertCircle size={17} color={Colors.status.warning} strokeWidth={2} />}
+                        iconBgColor={Colors.status.warningBg}
+                        value={membershipsQuery.data.summary.pending_requests_count}
+                        label="Pending Review"
+                        badgeLabel="Pending"
+                        badgeVariant="warning"
+                        subText="Membership applications"
                       />
                     </View>
 
-                    {/* Member Acquisition & Pipeline Health */}
+                    {/* Member Standing & Retention Breakdown */}
                     <Card style={styles.sectionCard}>
                       <View style={styles.sectionCardHeader}>
                         <View style={styles.sectionIconTitle}>
-                          <Sparkles size={16} color={Colors.brand.primary} strokeWidth={2} />
-                          <AppText style={styles.cardTitle}>Membership Growth & Pipeline</AppText>
+                          <ShieldCheck size={16} color={Colors.brand.primary} strokeWidth={2} />
+                          <AppText style={styles.cardTitle}>Member Standing & Retention</AppText>
                         </View>
                       </View>
                       <AppText style={styles.sectionSubtitle}>
-                        Member acquisition, renewal pipeline, and pending applications
+                        Operational standing across active subscriptions and renewals
                       </AppText>
 
                       <View style={styles.metricStatsStrip}>
                         <View style={styles.metricStatBox}>
-                          <AppText style={[styles.metricStatValue, { color: Colors.status.success }]}>
-                            +{membershipsQuery.data.summary.new_members_in_period}
-                          </AppText>
-                          <AppText style={styles.metricStatLabel}>New in Period</AppText>
-                        </View>
-                        <View style={styles.metricStatDivider} />
-                        <View style={styles.metricStatBox}>
                           <AppText style={[styles.metricStatValue, { color: Colors.status.warning }]}>
-                            {membershipsQuery.data.summary.pending_requests_count}
+                            {membershipsQuery.data.summary.suspended_count}
                           </AppText>
-                          <AppText style={styles.metricStatLabel}>Pending Review</AppText>
+                          <AppText style={styles.metricStatLabel}>Suspended</AppText>
                         </View>
                         <View style={styles.metricStatDivider} />
                         <View style={styles.metricStatBox}>
-                          <AppText style={styles.metricStatValue}>
+                          <AppText style={[styles.metricStatValue, { color: Colors.text.tertiary }]}>
+                            {membershipsQuery.data.summary.expired_count}
+                          </AppText>
+                          <AppText style={styles.metricStatLabel}>Expired</AppText>
+                        </View>
+                        <View style={styles.metricStatDivider} />
+                        <View style={styles.metricStatBox}>
+                          <AppText style={[styles.metricStatValue, { color: Colors.status.success }]}>
                             {membershipsQuery.data.summary.active_subscriptions_count}
                           </AppText>
                           <AppText style={styles.metricStatLabel}>Paid Subscriptions</AppText>
@@ -1310,44 +1282,29 @@ export default function AnalyticsScreen() {
             )}
 
             {/* ══════════════════════════════════════════════════════════════════
-                TAB 4: COMPETITIONS & COMMUNITY
+                TAB 4: COMPETITIONS & COMMUNITY (Resilient Multi-Source Data)
                ══════════════════════════════════════════════════════════════════ */}
             {activeTab === 'competitions' && (
               <View style={styles.tabContent}>
-                {competitionsQuery.isLoading ? (
+                {competitionsQuery.isLoading && !competitionsData ? (
                   <LoadingState message="Loading tournament and league reports..." />
-                ) : competitionsQuery.isError ? (
-                  <ErrorState
-                    message="Failed to load competitions report"
-                    onRetry={() => competitionsQuery.refetch()}
-                  />
-                ) : competitionsQuery.data ? (
+                ) : competitionsData ? (
                   <>
-                    {/* Section 1: Tournaments & Leagues */}
-                    <View style={styles.sectionHeaderBlock}>
-                      <View style={styles.sectionIconTitle}>
-                        <Trophy size={16} color={Colors.brand.primary} strokeWidth={2} />
-                        <AppText style={styles.sectionHeading}>Tournaments & Leagues</AppText>
-                      </View>
-                      <AppText style={styles.sectionSubtitle}>
-                        Competitive events, brackets, and team participation
-                      </AppText>
-                    </View>
-
+                    {/* 4 Competitive KPIs */}
                     <View style={styles.kpiGrid}>
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
                         icon={<Trophy size={17} color={Colors.brand.primary} strokeWidth={2} />}
                         iconBgColor={Colors.brand.primaryLight}
-                        value={competitionsQuery.data.competitions.total_tournaments}
+                        value={competitionsData.competitions.total_tournaments}
                         label="Total Tournaments"
-                        subText={`${competitionsQuery.data.competitions.upcoming_tournaments} Upcoming • ${competitionsQuery.data.competitions.completed_tournaments} Completed`}
+                        subText={`${competitionsData.competitions.upcoming_tournaments} Upcoming • ${competitionsData.competitions.completed_tournaments} Completed`}
                       />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
                         icon={<Users size={17} color={Colors.status.success} strokeWidth={2} />}
                         iconBgColor={Colors.status.successBg}
-                        value={competitionsQuery.data.competitions.total_tournament_registrations}
+                        value={competitionsData.competitions.total_tournament_registrations}
                         label="Tournament Players"
                         badgeLabel="Enrolled"
                         badgeVariant="success"
@@ -1357,9 +1314,9 @@ export default function AnalyticsScreen() {
                         cardWidth={kpiCardWidth}
                         icon={<ShieldCheck size={17} color={Colors.status.warning} strokeWidth={2} />}
                         iconBgColor={Colors.status.warningBg}
-                        value={competitionsQuery.data.competitions.total_leagues}
+                        value={competitionsData.competitions.total_leagues}
                         label="Club Leagues"
-                        badgeLabel={`${competitionsQuery.data.competitions.active_leagues} Active`}
+                        badgeLabel={`${competitionsData.competitions.active_leagues} Active`}
                         badgeVariant="warning"
                         subText="Organized league divisions"
                       />
@@ -1367,66 +1324,66 @@ export default function AnalyticsScreen() {
                         cardWidth={kpiCardWidth}
                         icon={<Layers size={17} color={Colors.status.info} strokeWidth={2} />}
                         iconBgColor={Colors.status.infoBg}
-                        value={competitionsQuery.data.competitions.total_league_teams}
+                        value={competitionsData.competitions.total_league_teams}
                         label="League Teams"
                         subText="Active competing teams"
                       />
                     </View>
 
-                    {/* Section 2: Community Events & Coaching */}
-                    <View style={[styles.sectionHeaderBlock, { marginTop: Spacing.sm }]}>
-                      <View style={styles.sectionIconTitle}>
-                        <GraduationCap size={16} color={Colors.brand.primary} strokeWidth={2} />
-                        <AppText style={styles.sectionHeading}>Community Events & Coaching</AppText>
+                    {/* Consolidated Community & Coaching Reach Card */}
+                    <Card style={styles.sectionCard}>
+                      <View style={styles.sectionCardHeader}>
+                        <View style={styles.sectionIconTitle}>
+                          <GraduationCap size={16} color={Colors.brand.primary} strokeWidth={2} />
+                          <AppText style={styles.cardTitle}>Community Events & Coaching</AppText>
+                        </View>
                       </View>
                       <AppText style={styles.sectionSubtitle}>
                         Social clinics, beginner workshops, and private coaching
                       </AppText>
-                    </View>
 
-                    <View style={styles.kpiGrid}>
-                      <AnalyticsKpiCard
-                        cardWidth={kpiCardWidth}
-                        icon={<CalendarDays size={17} color={Colors.status.info} strokeWidth={2} />}
-                        iconBgColor={Colors.status.infoBg}
-                        value={competitionsQuery.data.community.total_events}
-                        label="Social Events"
-                        subText={`${competitionsQuery.data.community.upcoming_events} Upcoming events`}
-                      />
-                      <AnalyticsKpiCard
-                        cardWidth={kpiCardWidth}
-                        icon={<Users size={17} color={Colors.status.success} strokeWidth={2} />}
-                        iconBgColor={Colors.status.successBg}
-                        value={competitionsQuery.data.community.total_event_registrations}
-                        label="Event Players"
-                        badgeLabel="Social"
-                        badgeVariant="info"
-                        subText="Social event registrations"
-                      />
-                      <AnalyticsKpiCard
-                        cardWidth={kpiCardWidth}
-                        icon={<GraduationCap size={17} color={Colors.brand.primary} strokeWidth={2} />}
-                        iconBgColor={Colors.brand.primaryLight}
-                        value={competitionsQuery.data.community.total_lessons}
-                        label="Coaching Lessons"
-                        subText={`${competitionsQuery.data.community.upcoming_lessons} Upcoming sessions`}
-                      />
-                      <AnalyticsKpiCard
-                        cardWidth={kpiCardWidth}
-                        icon={<Sparkles size={17} color={Colors.status.success} strokeWidth={2} />}
-                        iconBgColor={Colors.status.successBg}
-                        value={competitionsQuery.data.community.total_lesson_registrations}
-                        label="Lesson Students"
-                        subText="Coaching enrollments"
-                      />
-                    </View>
+                      <View style={styles.metricStatsStrip}>
+                        <View style={styles.metricStatBox}>
+                          <AppText style={styles.metricStatValue}>
+                            {competitionsData.community.total_events}
+                          </AppText>
+                          <AppText style={styles.metricStatLabel}>Events</AppText>
+                        </View>
+                        <View style={styles.metricStatDivider} />
+                        <View style={styles.metricStatBox}>
+                          <AppText style={styles.metricStatValue}>
+                            {competitionsData.community.total_event_registrations}
+                          </AppText>
+                          <AppText style={styles.metricStatLabel}>Event Players</AppText>
+                        </View>
+                        <View style={styles.metricStatDivider} />
+                        <View style={styles.metricStatBox}>
+                          <AppText style={styles.metricStatValue}>
+                            {competitionsData.community.total_lessons}
+                          </AppText>
+                          <AppText style={styles.metricStatLabel}>Lessons</AppText>
+                        </View>
+                        <View style={styles.metricStatDivider} />
+                        <View style={styles.metricStatBox}>
+                          <AppText style={styles.metricStatValue}>
+                            {competitionsData.community.total_lesson_registrations}
+                          </AppText>
+                          <AppText style={styles.metricStatLabel}>Students</AppText>
+                        </View>
+                      </View>
+                    </Card>
                   </>
-                ) : null}
+                ) : (
+                  <ErrorState
+                    message="Failed to load competitions report"
+                    onRetry={() => competitionsQuery.refetch()}
+                  />
+                )}
               </View>
             )}
 
             {/* ══════════════════════════════════════════════════════════════════
-                TAB 5: FINANCIAL TRANSACTIONS & REVENUE
+                TAB 5: FINANCE (De-duplicated & Honest Revenue Breakdown)
                ══════════════════════════════════════════════════════════════════ */}
             {activeTab === 'payments' && canManagePayments && (
               <View style={styles.tabContent}>
@@ -1439,61 +1396,27 @@ export default function AnalyticsScreen() {
                   />
                 ) : paymentsQuery.data ? (
                   <>
-                    {/* Balanced Executive Revenue Card */}
-                    <Card style={styles.sectionCard}>
-                      <View style={styles.sectionCardHeader}>
-                        <View style={styles.sectionIconTitle}>
-                          <DollarSign size={16} color={Colors.brand.primary} strokeWidth={2} />
-                          <AppText style={styles.cardTitle}>Total Revenue Collected</AppText>
-                        </View>
-                        <Badge
-                          label={`${Math.round(
-                            (paymentsQuery.data.summary.succeeded_count /
-                              (paymentsQuery.data.summary.total_recorded_count || 1)) *
-                              100
-                          )}% Success`}
-                          variant="success"
-                          size="sm"
-                        />
-                      </View>
-                      <AppText style={styles.financialHeroValue}>
-                        {formatCurrency(Number(paymentsQuery.data.summary.total_collected_amount))}
-                      </AppText>
-                      <AppText style={styles.financialHeroSub}>
-                        {paymentsQuery.data.summary.succeeded_count} successful transactions of{' '}
-                        {paymentsQuery.data.summary.total_recorded_count} recorded in period
-                      </AppText>
-                    </Card>
-
-                    {/* Transaction Status 4-Card Grid */}
+                    {/* 4 Crisp Financial KPIs without duplicate hero billboard */}
                     <View style={styles.kpiGrid}>
-                      <AnalyticsKpiCard
-                        cardWidth={kpiCardWidth}
-                        icon={<CreditCard size={17} color={Colors.brand.primary} strokeWidth={2} />}
-                        iconBgColor={Colors.brand.primaryLight}
-                        value={formatCurrency(paymentsQuery.data.summary.total_recorded_amount)}
-                        label="Total Recorded"
-                        subText={`${paymentsQuery.data.summary.total_recorded_count} transactions`}
-                      />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
                         icon={<CheckCircle2 size={17} color={Colors.status.success} strokeWidth={2} />}
                         iconBgColor={Colors.status.successBg}
                         value={formatCurrency(paymentsQuery.data.summary.total_collected_amount)}
-                        label="Succeeded"
-                        badgeLabel="Paid"
+                        label="Revenue Collected"
+                        badgeLabel="Settled"
                         badgeVariant="success"
-                        subText={`${paymentsQuery.data.summary.succeeded_count} settled`}
+                        subText={`${paymentsQuery.data.summary.succeeded_count} settled transactions`}
                       />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
                         icon={<Clock size={17} color={Colors.status.warning} strokeWidth={2} />}
                         iconBgColor={Colors.status.warningBg}
                         value={formatCurrency(paymentsQuery.data.summary.pending_amount)}
-                        label="Awaiting"
+                        label="Pending Settlement"
                         badgeLabel="Pending"
                         badgeVariant="warning"
-                        subText={`${paymentsQuery.data.summary.pending_count} pending`}
+                        subText={`${paymentsQuery.data.summary.pending_count} pending transactions`}
                       />
                       <AnalyticsKpiCard
                         cardWidth={kpiCardWidth}
@@ -1509,7 +1432,15 @@ export default function AnalyticsScreen() {
                         subText={`${
                           paymentsQuery.data.summary.failed_count +
                           paymentsQuery.data.summary.cancelled_count
-                        } failed`}
+                        } failed transactions`}
+                      />
+                      <AnalyticsKpiCard
+                        cardWidth={kpiCardWidth}
+                        icon={<CreditCard size={17} color={Colors.brand.primary} strokeWidth={2} />}
+                        iconBgColor={Colors.brand.primaryLight}
+                        value={formatCurrency(paymentsQuery.data.summary.total_recorded_amount)}
+                        label="Gross Recorded Volume"
+                        subText={`${paymentsQuery.data.summary.total_recorded_count} total recorded`}
                       />
                     </View>
 
@@ -1569,7 +1500,6 @@ export default function AnalyticsScreen() {
                                 </AppText>
                               </View>
 
-                              {/* Share percentage bar (0% when percent is 0) */}
                               <View style={styles.methodBarTrack}>
                                 {percent > 0 ? (
                                   <View
@@ -1972,16 +1902,6 @@ const styles = StyleSheet.create({
     gap: Spacing.md,
   },
 
-  // Section Headers for Tab Blocks
-  sectionHeaderBlock: {
-    marginBottom: 2,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text.primary,
-  },
-
   // 4. KPI Cards & Grid
   kpiGrid: {
     flexDirection: 'row',
@@ -2060,13 +1980,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
-  // Utilization Card Responsive Layout (No collisions)
+  // Utilization Card Responsive Layout (Collision-free badge)
   utilizationHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
+    rowGap: 6,
+    columnGap: 8,
     marginBottom: 4,
   },
   sectionIconTitle: {
@@ -2074,7 +1995,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     flexShrink: 1,
-    minWidth: 200,
+    minWidth: 180,
   },
   cardTitle: {
     fontSize: 14.5,
@@ -2088,31 +2009,6 @@ const styles = StyleSheet.create({
   },
   utilizationBadgeContainer: {
     alignSelf: 'flex-start',
-  },
-  utilizationBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  utilizationBadgeDefault: {
-    backgroundColor: '#F3F4F6',
-    borderColor: '#E5E7EB',
-  },
-  utilizationBadgeSuccess: {
-    backgroundColor: Colors.brand.primaryLight,
-    borderColor: '#C3E7D2',
-  },
-  utilizationBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-  utilizationBadgeTextDefault: {
-    color: Colors.text.primary,
-  },
-  utilizationBadgeTextSuccess: {
-    color: Colors.brand.primary,
   },
   utilizationProgressSection: {
     marginVertical: Spacing.xs,
@@ -2189,38 +2085,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.brand.primary,
   },
-  chartMetricRibbon: {
-    flexDirection: 'row',
-    backgroundColor: Colors.background.primary,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-  },
-  ribbonItem: {
-    alignItems: 'center',
-  },
-  ribbonLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  ribbonValue: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginTop: 2,
-  },
-  ribbonDivider: {
-    width: 1,
-    height: 20,
-    backgroundColor: Colors.surface.border,
-  },
   chartZeroStateWrap: {
     paddingVertical: Spacing.xs,
     gap: Spacing.sm,
@@ -2258,9 +2122,9 @@ const styles = StyleSheet.create({
     color: Colors.text.tertiary,
     marginBottom: 4,
   },
-  zeroDayTrack: {
-    width: 16,
-    height: 4,
+  zeroDayBaselineDot: {
+    width: 14,
+    height: 2,
     backgroundColor: Colors.surface.border,
     borderRadius: Radius.full,
     marginVertical: 4,
@@ -2330,12 +2194,17 @@ const styles = StyleSheet.create({
   barTrack: {
     width: 18,
     height: 85,
-    backgroundColor: Colors.background.primary,
+    backgroundColor: 'transparent',
     borderRadius: Radius.sm,
     justifyContent: 'flex-end',
+    alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.surface.borderLight,
+  },
+  barZeroTick: {
+    width: 14,
+    height: 2,
+    backgroundColor: Colors.surface.border,
+    borderRadius: 1,
   },
   barFill: {
     width: '100%',
@@ -2403,16 +2272,19 @@ const styles = StyleSheet.create({
   },
   metricStatDivider: {
     width: 1,
-    height: 22,
+    height: 24,
     backgroundColor: Colors.surface.border,
   },
 
-  // Court Item Cards
+  // Court list items
   courtItemCard: {
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.borderLight,
-    gap: 6,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.surface.borderLight,
+    gap: 8,
   },
   courtMetaRow: {
     flexDirection: 'row',
@@ -2421,7 +2293,6 @@ const styles = StyleSheet.create({
   },
   courtIdentityGroup: {
     flex: 1,
-    marginRight: Spacing.xs,
   },
   courtNameText: {
     fontSize: 13,
@@ -2429,28 +2300,36 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
   },
   courtSubtitleText: {
-    fontSize: 10.5,
+    fontSize: 11,
     color: Colors.text.secondary,
     marginTop: 1,
   },
   courtBarTrack: {
     height: 6,
-    backgroundColor: Colors.background.primary,
+    backgroundColor: Colors.surface.borderLight,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.surface.borderLight,
   },
   courtBarFill: {
     height: '100%',
     borderRadius: Radius.full,
   },
+  emptyInlineText: {
+    fontSize: 12,
+    color: Colors.text.tertiary,
+    fontStyle: 'italic',
+    paddingVertical: Spacing.sm,
+    textAlign: 'center',
+  },
 
-  // Plan Cards
+  // Plan subscriptions
   planCard: {
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.borderLight,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.surface.borderLight,
   },
   planCardHeader: {
     flexDirection: 'row',
@@ -2459,7 +2338,6 @@ const styles = StyleSheet.create({
   },
   planInfoCol: {
     flex: 1,
-    marginRight: Spacing.xs,
   },
   planNameText: {
     fontSize: 13,
@@ -2468,29 +2346,20 @@ const styles = StyleSheet.create({
   },
   planPriceText: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: Colors.brand.primary,
+    fontWeight: '600',
     marginTop: 1,
   },
 
-  // Financial Hero Card
-  financialHeroValue: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.text.primary,
-    marginVertical: 4,
-    letterSpacing: -0.4,
-  },
-  financialHeroSub: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-  },
-
-  // Payment Method Breakdown
+  // Payment methods
   methodCard: {
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surface.borderLight,
-    gap: 6,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+    borderWidth: 1,
+    borderColor: Colors.surface.borderLight,
+    gap: 8,
   },
   methodTopRow: {
     flexDirection: 'row',
@@ -2500,7 +2369,7 @@ const styles = StyleSheet.create({
   methodIdentityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: Spacing.xs,
     flex: 1,
   },
   methodIconSquircle: {
@@ -2513,25 +2382,24 @@ const styles = StyleSheet.create({
   },
   methodNameText: {
     fontSize: 12.5,
-    fontWeight: '600',
+    fontWeight: '700',
     color: Colors.text.primary,
   },
   methodCountText: {
     fontSize: 10.5,
     color: Colors.text.secondary,
+    marginTop: 1,
   },
   methodAmountText: {
     fontSize: 13,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: Colors.brand.primary,
   },
   methodBarTrack: {
-    height: 5,
-    backgroundColor: Colors.background.primary,
+    height: 6,
+    backgroundColor: Colors.surface.borderLight,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.surface.borderLight,
   },
   methodBarFill: {
     height: '100%',
@@ -2539,38 +2407,33 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
   },
 
-  // Empty and Modals
-  emptyInlineText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontStyle: 'italic',
-    paddingVertical: Spacing.xs,
-  },
+  // Modal Sheet Content
   periodModalContent: {
-    gap: Spacing.md,
-    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   periodModalDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.text.secondary,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   presetOptionsList: {
-    gap: Spacing.sm,
+    gap: Spacing.xs,
+    marginTop: 4,
   },
   presetOptionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 13,
+    backgroundColor: Colors.background.primary,
     borderRadius: Radius.md,
-    backgroundColor: Colors.surface.default,
+    padding: 12,
     borderWidth: 1,
-    borderColor: Colors.surface.border,
+    borderColor: Colors.surface.borderLight,
   },
   presetOptionCardSelected: {
-    borderColor: Colors.brand.primary,
     backgroundColor: Colors.brand.primaryLight,
+    borderColor: '#C3E7D2',
   },
   presetOptionLeft: {
     flexDirection: 'row',
@@ -2589,14 +2452,14 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface.default,
   },
   presetRadioCircleSelected: {
-    borderColor: Colors.brand.primary,
     backgroundColor: Colors.brand.primary,
+    borderColor: Colors.brand.primary,
   },
   presetOptionTextGroup: {
     flex: 1,
   },
   presetOptionLabel: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.text.primary,
   },
@@ -2609,34 +2472,41 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     marginTop: 1,
   },
+
+  // Export Modal
   exportModalContent: {
-    gap: Spacing.md,
-    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   exportModalDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.text.secondary,
-    lineHeight: 18,
+    lineHeight: 17,
+    marginBottom: 4,
   },
   exportActionBtn: {
-    marginTop: Spacing.xs,
+    marginVertical: 2,
   },
+
+  // Custom Date Modal
   customDateModalContent: {
-    gap: Spacing.md,
-    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
   },
   customDateModalDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.text.secondary,
-    lineHeight: 18,
+    lineHeight: 17,
+    marginBottom: 4,
   },
   datePickerInputGroup: {
     marginVertical: Spacing.xs,
   },
   customDateActions: {
     flexDirection: 'row',
+    justifyContent: 'flex-end',
     gap: Spacing.sm,
-    marginTop: Spacing.sm,
+    marginTop: Spacing.xs,
   },
   customModalBtn: {
     flex: 1,

@@ -482,13 +482,17 @@ class AnalyticsService:
     ) -> CompetitionAnalyticsSummary:
         """Compute tournament and league metrics for the club."""
         # Tournaments
-        t_stmt = (
-            select(Tournament.status, func.count(Tournament.id))
-            .where(Tournament.club_id == club_id)
-            .group_by(Tournament.status)
-        )
-        t_res = await self.db.execute(t_stmt)
-        t_map = dict(t_res.all())
+        t_map: dict[Any, int] = {}
+        try:
+            t_stmt = (
+                select(Tournament.status, func.count(Tournament.id))
+                .where(Tournament.club_id == club_id)
+                .group_by(Tournament.status)
+            )
+            t_res = await self.db.execute(t_stmt)
+            t_map = dict(t_res.all())
+        except Exception:
+            t_map = {}
 
         total_tournaments = sum(t_map.values())
         upcoming_tournaments = (
@@ -499,19 +503,27 @@ class AnalyticsService:
         completed_tournaments = t_map.get(TournamentStatus.COMPLETED, 0)
         cancelled_tournaments = t_map.get(TournamentStatus.CANCELLED, 0)
 
-        t_reg_stmt = select(func.count(TournamentRegistration.id)).join(
-            Tournament, TournamentRegistration.tournament_id == Tournament.id
-        ).where(Tournament.club_id == club_id)
-        total_t_registrations = (await self.db.scalar(t_reg_stmt)) or 0
+        total_t_registrations = 0
+        try:
+            t_reg_stmt = select(func.count(TournamentRegistration.id)).join(
+                Tournament, TournamentRegistration.tournament_id == Tournament.id
+            ).where(Tournament.club_id == club_id)
+            total_t_registrations = (await self.db.scalar(t_reg_stmt)) or 0
+        except Exception:
+            total_t_registrations = 0
 
         # Leagues
-        l_stmt = (
-            select(League.status, func.count(League.id))
-            .where(League.club_id == club_id)
-            .group_by(League.status)
-        )
-        l_res = await self.db.execute(l_stmt)
-        l_map = dict(l_res.all())
+        l_map: dict[Any, int] = {}
+        try:
+            l_stmt = (
+                select(League.status, func.count(League.id))
+                .where(League.club_id == club_id)
+                .group_by(League.status)
+            )
+            l_res = await self.db.execute(l_stmt)
+            l_map = dict(l_res.all())
+        except Exception:
+            l_map = {}
 
         total_leagues = sum(l_map.values())
         active_leagues = (
@@ -522,10 +534,14 @@ class AnalyticsService:
         )
         completed_leagues = l_map.get(LeagueStatus.COMPLETED, 0)
 
-        team_stmt = select(func.count(Team.id)).join(
-            League, Team.league_id == League.id
-        ).where(League.club_id == club_id)
-        total_league_teams = (await self.db.scalar(team_stmt)) or 0
+        total_league_teams = 0
+        try:
+            team_stmt = select(func.count(Team.id)).join(
+                League, Team.league_id == League.id
+            ).where(League.club_id == club_id)
+            total_league_teams = (await self.db.scalar(team_stmt)) or 0
+        except Exception:
+            total_league_teams = 0
 
         return CompetitionAnalyticsSummary(
             total_tournaments=total_tournaments,
@@ -547,52 +563,76 @@ class AnalyticsService:
         now_utc = datetime.now(timezone.utc)
 
         # Events
-        e_stmt = (
-            select(Event.status, func.count(Event.id))
-            .where(Event.club_id == club_id)
-            .group_by(Event.status)
-        )
-        e_res = await self.db.execute(e_stmt)
-        e_map = dict(e_res.all())
+        e_map: dict[Any, int] = {}
+        try:
+            e_stmt = (
+                select(Event.status, func.count(Event.id))
+                .where(Event.club_id == club_id)
+                .group_by(Event.status)
+            )
+            e_res = await self.db.execute(e_stmt)
+            e_map = dict(e_res.all())
+        except Exception:
+            e_map = {}
 
         total_events = sum(e_map.values())
         completed_events = e_map.get(EventStatus.COMPLETED, 0)
 
-        upcoming_events_stmt = select(func.count(Event.id)).where(
-            Event.club_id == club_id,
-            Event.status == EventStatus.PUBLISHED,
-            Event.end_at >= now_utc,
-        )
-        upcoming_events = (await self.db.scalar(upcoming_events_stmt)) or 0
+        upcoming_events = 0
+        try:
+            upcoming_events_stmt = select(func.count(Event.id)).where(
+                Event.club_id == club_id,
+                Event.status == EventStatus.PUBLISHED,
+                Event.end_at >= now_utc,
+            )
+            upcoming_events = (await self.db.scalar(upcoming_events_stmt)) or 0
+        except Exception:
+            upcoming_events = 0
 
-        e_reg_stmt = select(func.count(EventRegistration.id)).join(
-            Event, EventRegistration.event_id == Event.id
-        ).where(Event.club_id == club_id)
-        total_event_registrations = (await self.db.scalar(e_reg_stmt)) or 0
+        total_event_registrations = 0
+        try:
+            e_reg_stmt = select(func.count(EventRegistration.id)).join(
+                Event, EventRegistration.event_id == Event.id
+            ).where(Event.club_id == club_id)
+            total_event_registrations = (await self.db.scalar(e_reg_stmt)) or 0
+        except Exception:
+            total_event_registrations = 0
 
         # Lessons
-        ls_stmt = (
-            select(Lesson.status, func.count(Lesson.id))
-            .where(Lesson.club_id == club_id)
-            .group_by(Lesson.status)
-        )
-        ls_res = await self.db.execute(ls_stmt)
-        ls_map = dict(ls_res.all())
+        ls_map: dict[Any, int] = {}
+        try:
+            ls_stmt = (
+                select(Lesson.status, func.count(Lesson.id))
+                .where(Lesson.club_id == club_id)
+                .group_by(Lesson.status)
+            )
+            ls_res = await self.db.execute(ls_stmt)
+            ls_map = dict(ls_res.all())
+        except Exception:
+            ls_map = {}
 
         total_lessons = sum(ls_map.values())
         completed_lessons = ls_map.get(LessonStatus.COMPLETED, 0)
 
-        upcoming_lessons_stmt = select(func.count(Lesson.id)).where(
-            Lesson.club_id == club_id,
-            Lesson.status == LessonStatus.PUBLISHED,
-            Lesson.end_at >= now_utc,
-        )
-        upcoming_lessons = (await self.db.scalar(upcoming_lessons_stmt)) or 0
+        upcoming_lessons = 0
+        try:
+            upcoming_lessons_stmt = select(func.count(Lesson.id)).where(
+                Lesson.club_id == club_id,
+                Lesson.status == LessonStatus.PUBLISHED,
+                Lesson.end_at >= now_utc,
+            )
+            upcoming_lessons = (await self.db.scalar(upcoming_lessons_stmt)) or 0
+        except Exception:
+            upcoming_lessons = 0
 
-        ls_reg_stmt = select(func.count(LessonRegistration.id)).join(
-            Lesson, LessonRegistration.lesson_id == Lesson.id
-        ).where(Lesson.club_id == club_id)
-        total_lesson_registrations = (await self.db.scalar(ls_reg_stmt)) or 0
+        total_lesson_registrations = 0
+        try:
+            ls_reg_stmt = select(func.count(LessonRegistration.id)).join(
+                Lesson, LessonRegistration.lesson_id == Lesson.id
+            ).where(Lesson.club_id == club_id)
+            total_lesson_registrations = (await self.db.scalar(ls_reg_stmt)) or 0
+        except Exception:
+            total_lesson_registrations = 0
 
         return CommunityAnalyticsSummary(
             total_events=total_events,
@@ -855,8 +895,15 @@ class AnalyticsService:
             end_date=end_date,
         )
 
-        competitions = await self._compute_competitions_summary(club_id=club_id)
-        community = await self._compute_community_summary(club_id=club_id)
+        try:
+            competitions = await self._compute_competitions_summary(club_id=club_id)
+        except Exception:
+            competitions = CompetitionAnalyticsSummary()
+
+        try:
+            community = await self._compute_community_summary(club_id=club_id)
+        except Exception:
+            community = CommunityAnalyticsSummary()
 
         return CompetitionsReportResponse(
             club_id=club.id,
