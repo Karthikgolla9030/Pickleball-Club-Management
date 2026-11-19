@@ -115,6 +115,91 @@ function getAvatarColors(index: number) {
   return PASTEL_PALETTE[index % PASTEL_PALETTE.length];
 }
 
+function getStatusBannerConfig(
+  status?: string | null,
+  endDate?: string | null,
+  daysLeftText?: string,
+  regCloseDateStr?: string
+) {
+  const s = status?.toLowerCase();
+  if (s === 'cancelled') {
+    return {
+      bg: '#FEF2F2',
+      border: '#FECACA',
+      dot: '#EF4444',
+      text: '#991B1B',
+      subtextCol: '#B91C1C',
+      label: 'Cancelled',
+      subtext: 'Registration voided',
+    };
+  }
+  if (s === 'completed') {
+    return {
+      bg: '#F1F5F9',
+      border: '#CBD5E1',
+      dot: '#475569',
+      text: '#334155',
+      subtextCol: '#64748B',
+      label: 'Completed',
+      subtext: endDate ? `Ended ${formatDate(endDate)}` : 'Season concluded',
+    };
+  }
+  if (s === 'in_progress') {
+    return {
+      bg: '#EFF6FF',
+      border: '#BFDBFE',
+      dot: '#2563EB',
+      text: '#1E40AF',
+      subtextCol: '#1D4ED8',
+      label: 'In Progress',
+      subtext: 'Regular season active',
+    };
+  }
+  if (s === 'playoffs') {
+    return {
+      bg: '#FAF5FF',
+      border: '#E9D5FF',
+      dot: '#9333EA',
+      text: '#6B21A8',
+      subtextCol: '#7E22CE',
+      label: 'Playoffs Active',
+      subtext: 'Championship rounds',
+    };
+  }
+  if (s === 'draft') {
+    return {
+      bg: '#F8FAFC',
+      border: '#E2E8F0',
+      dot: '#64748B',
+      text: '#475569',
+      subtextCol: '#64748B',
+      label: 'Draft',
+      subtext: 'Not published yet',
+    };
+  }
+  if (s && ['registration_closed', 'closed'].includes(s)) {
+    return {
+      bg: '#FFFBEB',
+      border: '#FDE68A',
+      dot: '#D97706',
+      text: '#92400E',
+      subtextCol: '#B45309',
+      label: 'Registration Closed',
+      subtext: 'Awaiting season start',
+    };
+  }
+  // registration_open / open / default
+  return {
+    bg: '#F0FDF4',
+    border: '#BBF7D0',
+    dot: '#16A34A',
+    text: '#166534',
+    subtextCol: '#15803D',
+    label: 'Registration Open',
+    subtext: daysLeftText || (regCloseDateStr ? `Closes ${regCloseDateStr}` : 'Open for entry'),
+  };
+}
+
 export default function ClubLeagueDetailsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -789,86 +874,13 @@ export default function ClubLeagueDetailsScreen() {
     daysLeftText = 'Open for entry';
   }
 
-  // Status banner configuration with subtle, distinct styling for all states
-  const statusConfig = useMemo(() => {
-    const s = league.status?.toLowerCase();
-    if (s === 'cancelled') {
-      return {
-        bg: '#FEF2F2',
-        border: '#FECACA',
-        dot: '#EF4444',
-        text: '#991B1B',
-        subtextCol: '#B91C1C',
-        label: 'Cancelled',
-        subtext: 'Registration voided',
-      };
-    }
-    if (s === 'completed') {
-      return {
-        bg: '#F1F5F9',
-        border: '#CBD5E1',
-        dot: '#475569',
-        text: '#334155',
-        subtextCol: '#64748B',
-        label: 'Completed',
-        subtext: league.end_date ? `Ended ${formatDate(league.end_date)}` : 'Season concluded',
-      };
-    }
-    if (s === 'in_progress') {
-      return {
-        bg: '#EFF6FF',
-        border: '#BFDBFE',
-        dot: '#2563EB',
-        text: '#1E40AF',
-        subtextCol: '#1D4ED8',
-        label: 'In Progress',
-        subtext: 'Regular season active',
-      };
-    }
-    if (s === 'playoffs') {
-      return {
-        bg: '#FAF5FF',
-        border: '#E9D5FF',
-        dot: '#9333EA',
-        text: '#6B21A8',
-        subtextCol: '#7E22CE',
-        label: 'Playoffs Active',
-        subtext: 'Championship rounds',
-      };
-    }
-    if (s === 'draft') {
-      return {
-        bg: '#F8FAFC',
-        border: '#E2E8F0',
-        dot: '#64748B',
-        text: '#475569',
-        subtextCol: '#64748B',
-        label: 'Draft',
-        subtext: 'Not published yet',
-      };
-    }
-    if (['registration_closed', 'closed'].includes(s)) {
-      return {
-        bg: '#FFFBEB',
-        border: '#FDE68A',
-        dot: '#D97706',
-        text: '#92400E',
-        subtextCol: '#B45309',
-        label: 'Registration Closed',
-        subtext: 'Awaiting season start',
-      };
-    }
-    // registration_open / open / default
-    return {
-      bg: '#F0FDF4',
-      border: '#BBF7D0',
-      dot: '#16A34A',
-      text: '#166534',
-      subtextCol: '#15803D',
-      label: 'Registration Open',
-      subtext: daysLeftText || (regCloseDateStr ? `Closes ${regCloseDateStr}` : 'Open for entry'),
-    };
-  }, [league.status, league.end_date, daysLeftText, regCloseDateStr]);
+  // Status banner configuration with subtle, distinct styling for all states (pure function, no hook)
+  const statusConfig = getStatusBannerConfig(
+    league.status,
+    league.end_date,
+    daysLeftText,
+    regCloseDateStr
+  );
 
   // Filtered matches for Matches tab
   const filteredMatches = matches?.filter((m) => {
