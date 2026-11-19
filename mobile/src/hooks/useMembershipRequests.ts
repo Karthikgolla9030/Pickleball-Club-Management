@@ -33,6 +33,7 @@ export function useMembershipRequests(clubId: string | null | undefined, statusF
       queryClient.invalidateQueries({ queryKey: ['clubs', validClubId, 'membership-requests'] });
       queryClient.invalidateQueries({ queryKey: ['club-player-members', validClubId] });
       queryClient.invalidateQueries({ queryKey: ['club-members', validClubId] });
+      queryClient.invalidateQueries({ queryKey: ['clubs', validClubId, 'analytics'] });
     },
   });
 
@@ -41,6 +42,7 @@ export function useMembershipRequests(clubId: string | null | undefined, statusF
       clubsApi.rejectMembershipRequest(validClubId, requestId, reason),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clubs', validClubId, 'membership-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs', validClubId, 'analytics'] });
     },
   });
 

@@ -73,6 +73,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'court-availability'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'competition-schedule'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
         }
       }
 
@@ -101,9 +102,20 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         }
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
           if (targetTournamentId) {
             queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments', String(targetTournamentId)] });
           }
+        }
+      }
+
+      // ─── Leagues ────────────────────────────────────────────────────────────
+      else if (eventType.startsWith('league.')) {
+        queryClient.invalidateQueries({ queryKey: ['leagues'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'leagues'] });
+        if (clubId) {
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'leagues'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
         }
       }
 
@@ -114,6 +126,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'events'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
         }
       }
 
@@ -127,6 +140,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         if (eventClubId) {
           const cId = String(eventClubId);
           queryClient.invalidateQueries({ queryKey: ['clubs', cId, 'lessons'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', cId, 'analytics'] });
           if (targetLessonId) {
             const lId = String(targetLessonId);
             queryClient.invalidateQueries({ queryKey: ['clubs', cId, 'lessons', lId] });
@@ -149,6 +163,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'members'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'player-memberships'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
         }
       }
 
@@ -161,6 +176,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'subscriptions'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'members'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+        }
+      }
+
+      // ─── Payments & Financial Records ───────────────────────────────────────
+      else if (eventType.startsWith('payment.')) {
+        queryClient.invalidateQueries({ queryKey: ['payments'] });
+        if (clubId) {
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'payments'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
         }
       }
 

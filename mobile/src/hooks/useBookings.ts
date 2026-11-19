@@ -146,6 +146,9 @@ export function useClubStaffBookings(
         queryClient.invalidateQueries({
           queryKey: ['clubs', clubId, 'availability'],
         });
+        queryClient.invalidateQueries({
+          queryKey: ['clubs', clubId, 'analytics'],
+        });
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
     },
@@ -169,6 +172,9 @@ export function useClubStaffBookings(
         });
         queryClient.invalidateQueries({
           queryKey: ['clubs', clubId, 'availability'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['clubs', clubId, 'analytics'],
         });
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });

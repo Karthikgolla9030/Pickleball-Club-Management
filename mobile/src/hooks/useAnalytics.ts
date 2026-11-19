@@ -24,7 +24,7 @@ export function useClubAnalyticsSummary(
     queryKey: QUERY_KEYS.CLUB_ANALYTICS_SUMMARY(clubId, filterKey),
     queryFn: () => analyticsApi.getSummary(clubId, filters),
     enabled: !!clubId && enabled,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 30 * 1000, // 30 seconds
   });
 }
 
@@ -41,7 +41,7 @@ export function useBookingsReport(
     queryKey: QUERY_KEYS.CLUB_ANALYTICS_BOOKINGS(clubId, filterKey),
     queryFn: () => analyticsApi.getBookingsReport(clubId, filters),
     enabled: !!clubId && enabled,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -58,7 +58,7 @@ export function useMembershipsReport(
     queryKey: QUERY_KEYS.CLUB_ANALYTICS_MEMBERSHIPS(clubId, filterKey),
     queryFn: () => analyticsApi.getMembershipsReport(clubId, filters),
     enabled: !!clubId && enabled,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -75,7 +75,7 @@ export function useCompetitionsReport(
     queryKey: QUERY_KEYS.CLUB_ANALYTICS_COMPETITIONS(clubId, filterKey),
     queryFn: () => analyticsApi.getCompetitionsReport(clubId, filters),
     enabled: !!clubId && enabled,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -92,6 +92,6 @@ export function usePaymentsReport(
     queryKey: QUERY_KEYS.CLUB_ANALYTICS_PAYMENTS(clubId, filterKey),
     queryFn: () => analyticsApi.getPaymentsReport(clubId, filters),
     enabled: !!clubId && enabled,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000,
   });
 }

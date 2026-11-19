@@ -1,18 +1,15 @@
 /**
  * Aught2 Pickleball — Club Analytics & Operational Reports Screen
  *
- * Unified, premium business analytics dashboard for club owners and managers:
+ * Premium business analytics dashboard for club owners and managers:
  *   - Preserves Club Side design language: forest green accents, light surfaces, crisp typography.
- *   - Executive Club Summary Card with period, timezone, and export action.
- *   - Compact segmented period selector (7D, 30D, 90D, Custom).
- *   - Horizontally scrollable, full-label navigation tabs (Overview, Bookings, Members, Competitions, Finance)
- *     with automatic centering on the active tab and zero initial clipping.
- *   - Standardized, consistent KPI card component across ALL 5 sections with balanced 2-column mobile grid.
- *   - Accurate charts: true zero-data baselines (no fake non-zero bars or arbitrary minimums),
- *     clear axis labels, and informative empty states.
- *   - Fixed all text truncation, competing badges, and card overflows.
- *   - Balanced white surface cards with subtle borders and shadows (no oversized billboard cards).
- *   - Strict tenant boundary, role-based permission gating, real server-aggregated metrics, and sanitized CSV exports.
+ *   - Simplified Top Summary Card: compact, balanced, club branding, manual refresh & CSV export.
+ *   - Compact Reporting Period Selector with clean dropdown sheet and subtle date/timezone context.
+ *   - Responsive Court Capacity & Utilization Card: no heading/badge collisions, accurate small percentage handling.
+ *   - Accurate Daily Booking Distribution & Revenue charts with sensible non-duplicated axis scales.
+ *   - Clean empty states when zero bookings/revenue exist without misleading tall ghost bars.
+ *   - Standardized KPI metric cards across all 5 sections (Overview, Bookings, Members, Competitions, Finance).
+ *   - Strict multi-tenant isolation, real-time WebSocket invalidation, and sanitized CSV exports.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -36,15 +33,17 @@ import {
   Calendar,
   CalendarCheck,
   CalendarDays,
+  Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   CreditCard,
   DollarSign,
   Download,
-  Globe,
   GraduationCap,
   Layers,
   LayoutDashboard,
+  RotateCw,
   ShieldCheck,
   Sparkles,
   TrendingUp,
@@ -95,6 +94,13 @@ interface TabItem {
   label: string;
   icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
 }
+
+const PRESET_OPTIONS: { id: PresetType; label: string; desc: string }[] = [
+  { id: '7d', label: 'Last 7 days', desc: 'Past 7 days activity window' },
+  { id: '30d', label: 'Last 30 days', desc: 'Standard monthly reporting cycle' },
+  { id: '90d', label: 'Last 90 days', desc: 'Quarterly operational overview' },
+  { id: 'custom', label: 'Custom date range', desc: 'Specify exact start and end dates' },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT: STANDARDIZED KPI METRIC CARD
@@ -156,7 +162,7 @@ function AnalyticsKpiCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT: DAILY BOOKINGS BAR CHART (Accurate Zero-Fill & No Fake Bars)
+// COMPONENT: DAILY BOOKINGS BAR CHART (Sensible Scale & Clean Zero State)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DailyBookingsChartProps {
@@ -174,19 +180,32 @@ function DailyBookingsChart({
     return dailyData.slice(-7);
   }, [dailyData]);
 
-  const { maxCount, totalCount, avgCount, peakItem } = useMemo(() => {
+  const { maxCount, totalCount, avgCount, peakItem, isAllZero } = useMemo(() => {
     if (!chartItems.length) {
-      return { maxCount: 1, totalCount: 0, avgCount: 0, peakItem: null };
+      return { maxCount: 0, totalCount: 0, avgCount: '0.0', peakItem: null, isAllZero: true };
     }
     const counts = chartItems.map((d) => d.count);
-    const max = Math.max(...counts, 1);
     const sum = counts.reduce((acc, curr) => acc + curr, 0);
+    const max = Math.max(...counts, 0);
     const avg = (sum / chartItems.length).toFixed(1);
-    const peak = chartItems.reduce((prev, curr) => (curr.count > prev.count ? curr : prev), chartItems[0]);
-    return { maxCount: max, totalCount: sum, avgCount: avg, peakItem: peak };
+    const peak = sum > 0 ? chartItems.reduce((prev, curr) => (curr.count > prev.count ? curr : prev), chartItems[0]) : null;
+    return { maxCount: max, totalCount: sum, avgCount: avg, peakItem: peak, isAllZero: sum === 0 };
   }, [chartItems]);
 
-  const isAllZero = totalCount === 0;
+  // Sensible Y-axis scale with distinct grid levels (NO DUPLICATE 1-1-0 LABELS!)
+  const yAxisTicks = useMemo(() => {
+    if (isAllZero || maxCount <= 0) {
+      return [0];
+    }
+    if (maxCount === 1) {
+      return [1, 0];
+    }
+    if (maxCount === 2) {
+      return [2, 1, 0];
+    }
+    const mid = Math.ceil(maxCount / 2);
+    return [maxCount, mid, 0];
+  }, [maxCount, isAllZero]);
 
   return (
     <Card style={styles.chartCard}>
@@ -232,45 +251,47 @@ function DailyBookingsChart({
         </View>
       </View>
 
-      {/* Zero Activity Notice Banner */}
-      {isAllZero && (
-        <View style={styles.chartZeroBanner}>
-          <CalendarCheck size={13} color={Colors.text.tertiary} />
-          <AppText style={styles.chartZeroBannerText}>
-            No bookings recorded during this period
-          </AppText>
-        </View>
-      )}
-
-      {/* Responsive Bar Chart Viewport */}
-      {chartItems.length === 0 ? (
-        <View style={styles.chartEmptyWrap}>
-          <AppText style={styles.emptyInlineText}>No daily booking data recorded for this period.</AppText>
+      {/* Zero Activity Notice Banner & Clean Empty State */}
+      {isAllZero ? (
+        <View style={styles.chartZeroStateWrap}>
+          <View style={styles.chartZeroBanner}>
+            <CalendarCheck size={14} color={Colors.text.secondary} />
+            <AppText style={styles.chartZeroBannerText}>
+              No bookings recorded during this period
+            </AppText>
+          </View>
+          {chartItems.length > 0 ? (
+            <View style={styles.chartZeroDaysGrid}>
+              {chartItems.map((item) => (
+                <View key={item.date} style={styles.zeroDayCol}>
+                  <AppText style={styles.zeroDayCount}>0</AppText>
+                  <View style={styles.zeroDayTrack} />
+                  <AppText style={styles.barDayLabel}>{item.day_name.slice(0, 3)}</AppText>
+                  <AppText style={styles.barDateLabel}>
+                    {item.date.length >= 10 ? item.date.slice(5) : item.date}
+                  </AppText>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : (
         <View style={styles.chartViewport}>
-          {/* Subtle horizontal reference lines */}
+          {/* Dynamic grid lines matching yAxisTicks without duplicates */}
           <View style={styles.chartGridLines}>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>{maxCount}</AppText>
-              <View style={styles.gridLineDotted} />
-            </View>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>{Math.round(maxCount / 2)}</AppText>
-              <View style={styles.gridLineDotted} />
-            </View>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>0</AppText>
-              <View style={styles.gridLineSolid} />
-            </View>
+            {yAxisTicks.map((tick, idx) => (
+              <View key={idx} style={styles.chartGridLine}>
+                <AppText style={styles.gridLineLabel}>{tick}</AppText>
+                <View style={tick === 0 ? styles.gridLineSolid : styles.gridLineDotted} />
+              </View>
+            ))}
           </View>
 
           {/* Vertical Bar Columns */}
           <View style={styles.barsContainer}>
             {chartItems.map((item) => {
-              // Accurate height: strictly 0% when count is 0! No fake green bars!
               const heightPercent = item.count > 0 && maxCount > 0
-                ? Math.max(8, Math.round((item.count / maxCount) * 100))
+                ? Math.max(10, Math.round((item.count / maxCount) * 100))
                 : 0;
               const isPeak = item.count === maxCount && item.count > 0;
               const shortDate = item.date.length >= 10 ? item.date.slice(5) : item.date;
@@ -311,7 +332,7 @@ function DailyBookingsChart({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// COMPONENT: DAILY REVENUE BAR CHART (Accurate Zero-Fill & No Fake Bars)
+// COMPONENT: DAILY REVENUE BAR CHART (Sensible Scale & Clean Zero State)
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface DailyRevenueChartProps {
@@ -321,21 +342,29 @@ interface DailyRevenueChartProps {
 function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
   const chartItems = useMemo(() => dailyRevenue.slice(-7), [dailyRevenue]);
 
-  const { maxAmount, totalRev, peakDay } = useMemo(() => {
+  const { maxAmount, totalRev, peakDay, isAllZero } = useMemo(() => {
     if (!chartItems.length) {
-      return { maxAmount: 1, totalRev: 0, peakDay: null };
+      return { maxAmount: 0, totalRev: 0, peakDay: null, isAllZero: true };
     }
     const amounts = chartItems.map((d) => parseFloat(d.amount) || 0);
-    const max = Math.max(...amounts, 1);
     const sum = amounts.reduce((acc, curr) => acc + curr, 0);
-    const peak = chartItems.reduce(
-      (prev, curr) => ((parseFloat(curr.amount) || 0) > (parseFloat(prev.amount) || 0) ? curr : prev),
-      chartItems[0]
-    );
-    return { maxAmount: max, totalRev: sum, peakDay: peak };
+    const max = Math.max(...amounts, 0);
+    const peak = sum > 0
+      ? chartItems.reduce(
+          (prev, curr) => ((parseFloat(curr.amount) || 0) > (parseFloat(prev.amount) || 0) ? curr : prev),
+          chartItems[0]
+        )
+      : null;
+    return { maxAmount: max, totalRev: sum, peakDay: peak, isAllZero: sum === 0 };
   }, [chartItems]);
 
-  const isAllZero = totalRev === 0;
+  const yAxisTicks = useMemo(() => {
+    if (isAllZero || maxAmount <= 0) {
+      return [0];
+    }
+    const mid = Math.round(maxAmount / 2);
+    return [maxAmount, mid, 0];
+  }, [maxAmount, isAllZero]);
 
   return (
     <Card style={styles.chartCard}>
@@ -354,45 +383,48 @@ function DailyRevenueChart({ dailyRevenue }: DailyRevenueChartProps) {
         </View>
       </View>
 
-      {/* Zero Activity Notice Banner */}
-      {isAllZero && (
-        <View style={styles.chartZeroBanner}>
-          <CreditCard size={13} color={Colors.text.tertiary} />
-          <AppText style={styles.chartZeroBannerText}>
-            No revenue recorded during this period
-          </AppText>
-        </View>
-      )}
-
-      {chartItems.length === 0 ? (
-        <View style={styles.chartEmptyWrap}>
-          <AppText style={styles.emptyInlineText}>No daily revenue data for this period.</AppText>
+      {/* Zero Activity Notice Banner & Clean Empty State */}
+      {isAllZero ? (
+        <View style={styles.chartZeroStateWrap}>
+          <View style={styles.chartZeroBanner}>
+            <CreditCard size={14} color={Colors.text.secondary} />
+            <AppText style={styles.chartZeroBannerText}>
+              No revenue recorded during this period
+            </AppText>
+          </View>
+          {chartItems.length > 0 ? (
+            <View style={styles.chartZeroDaysGrid}>
+              {chartItems.map((item) => (
+                <View key={item.date} style={styles.zeroDayCol}>
+                  <AppText style={styles.zeroDayCount}>$0</AppText>
+                  <View style={styles.zeroDayTrack} />
+                  <AppText style={styles.barDayLabel}>
+                    {item.date.length >= 10 ? item.date.slice(5) : item.date}
+                  </AppText>
+                  <AppText style={styles.barDateLabel}>0 txns</AppText>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : (
         <View style={styles.chartViewport}>
           <View style={styles.chartGridLines}>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>{formatCurrency(maxAmount).replace('.00', '')}</AppText>
-              <View style={styles.gridLineDotted} />
-            </View>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>
-                {formatCurrency(maxAmount / 2).replace('.00', '')}
-              </AppText>
-              <View style={styles.gridLineDotted} />
-            </View>
-            <View style={styles.chartGridLine}>
-              <AppText style={styles.gridLineLabel}>$0</AppText>
-              <View style={styles.gridLineSolid} />
-            </View>
+            {yAxisTicks.map((tick, idx) => (
+              <View key={idx} style={styles.chartGridLine}>
+                <AppText style={styles.gridLineLabel}>
+                  {tick > 0 ? formatCurrency(tick).replace('.00', '') : '$0'}
+                </AppText>
+                <View style={tick === 0 ? styles.gridLineSolid : styles.gridLineDotted} />
+              </View>
+            ))}
           </View>
 
           <View style={styles.barsContainer}>
             {chartItems.map((item) => {
               const amountNum = parseFloat(item.amount) || 0;
-              // Accurate height: strictly 0% when amount is 0! No fake bars!
               const heightPercent = amountNum > 0 && maxAmount > 0
-                ? Math.max(8, Math.round((amountNum / maxAmount) * 100))
+                ? Math.max(10, Math.round((amountNum / maxAmount) * 100))
                 : 0;
               const isPeak = item === peakDay && amountNum > 0;
               const shortDate = item.date.length >= 10 ? item.date.slice(5) : item.date;
@@ -443,7 +475,9 @@ export default function AnalyticsScreen() {
   const [customEnd, setCustomEnd] = useState('');
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
   const [isCustomDateModalVisible, setIsCustomDateModalVisible] = useState(false);
+  const [isPeriodPickerVisible, setIsPeriodPickerVisible] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
   // Tab horizontal scroll ref & layout measurements for automatic centering
   const tabsScrollRef = useRef<ScrollView>(null);
@@ -486,15 +520,39 @@ export default function AnalyticsScreen() {
     competitionsQuery.isRefetching ||
     paymentsQuery.isRefetching;
 
+  // Track data update timestamps
+  useEffect(() => {
+    if (
+      summaryQuery.dataUpdatedAt ||
+      bookingsQuery.dataUpdatedAt ||
+      membershipsQuery.dataUpdatedAt ||
+      competitionsQuery.dataUpdatedAt ||
+      paymentsQuery.dataUpdatedAt
+    ) {
+      setLastUpdated(new Date());
+    }
+  }, [
+    summaryQuery.dataUpdatedAt,
+    bookingsQuery.dataUpdatedAt,
+    membershipsQuery.dataUpdatedAt,
+    competitionsQuery.dataUpdatedAt,
+    paymentsQuery.dataUpdatedAt,
+  ]);
+
   const handleRefresh = async () => {
-    if (activeTab === 'bookings') await bookingsQuery.refetch();
-    else if (activeTab === 'memberships') await membershipsQuery.refetch();
-    else if (activeTab === 'competitions') await competitionsQuery.refetch();
-    else if (activeTab === 'payments') await paymentsQuery.refetch();
-    else await summaryQuery.refetch();
+    try {
+      if (activeTab === 'bookings') await bookingsQuery.refetch();
+      else if (activeTab === 'memberships') await membershipsQuery.refetch();
+      else if (activeTab === 'competitions') await competitionsQuery.refetch();
+      else if (activeTab === 'payments') await paymentsQuery.refetch();
+      await summaryQuery.refetch();
+      setLastUpdated(new Date());
+    } catch {
+      // Ignored: Query error state will display error card
+    }
   };
 
-  const handleExport = async (type: 'bookings' | 'memberships') => {
+  const handleExport = async (type: 'bookings' | 'memberships' | 'payments') => {
     if (!clubId) return;
     setExportLoading(true);
     try {
@@ -520,8 +578,7 @@ export default function AnalyticsScreen() {
     }
   };
 
-  // Tab definitions with complete section names as requested:
-  // Overview, Bookings, Members, Competitions, Finance
+  // Tab definitions: Overview, Bookings, Members, Competitions, Finance
   const tabs = useMemo<TabItem[]>(() => {
     const list: TabItem[] = [
       { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -557,21 +614,40 @@ export default function AnalyticsScreen() {
     }
   }, [activeTab, windowWidth]);
 
-  const presetLabel = useMemo(() => {
+  // Clean trigger label for the compact reporting period selector
+  const presetDisplayLabel = useMemo(() => {
     switch (preset) {
       case '7d':
-        return 'Last 7 Days';
+        return 'Last 7 days';
       case '30d':
-        return 'Last 30 Days';
+        return 'Last 30 days';
       case '90d':
-        return 'Last 90 Days';
+        return 'Last 90 days';
       case 'custom':
-        return customStart && customEnd ? `${customStart} – ${customEnd}` : 'Custom Range';
+        return customStart && customEnd ? `${customStart} – ${customEnd}` : 'Custom range';
     }
   }, [preset, customStart, customEnd]);
 
-  // Pixel-accurate KPI Card width for balanced 2-column mobile layout:
-  // Available width = windowWidth - 32px (margins) - 10px (gap between 2 cards).
+  // Subtle secondary date range string
+  const formattedDateRangeText = useMemo(() => {
+    if (summaryQuery.data?.period) {
+      const p = summaryQuery.data.period;
+      const tz = p.timezone || 'UTC';
+      return `${p.start_date} → ${p.end_date} · ${tz}`;
+    }
+    return '';
+  }, [summaryQuery.data?.period]);
+
+  const lastUpdatedText = useMemo(() => {
+    try {
+      const timeStr = lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return `Updated at ${timeStr}`;
+    } catch {
+      return 'Updated just now';
+    }
+  }, [lastUpdated]);
+
+  // Balanced 2-column mobile KPI width
   const kpiCardWidth = useMemo<DimensionValue>(() => {
     if (isDesktop) return '23.5%';
     if (isSmallPhone) return '100%';
@@ -616,104 +692,86 @@ export default function AnalyticsScreen() {
           />
         }
       >
-        {/* ─── 1. CLUB SUMMARY & DATE RANGE CARD ─── */}
+        {/* ─── 1. SIMPLIFIED TOP SUMMARY CARD ─── */}
         <View style={styles.summaryCard}>
-          <View style={styles.summaryTopRow}>
-            <View style={styles.summaryIdentityCol}>
+          <View style={styles.summaryContentRow}>
+            <View style={styles.summaryIdentityGroup}>
               <View style={styles.clubIconSquircle}>
-                <Building2 size={18} color={Colors.brand.primary} strokeWidth={2.2} />
+                <Building2 size={19} color={Colors.brand.primary} strokeWidth={2.2} />
               </View>
-              <View style={styles.summaryTextGroup}>
-                <AppText style={styles.summaryClubName} numberOfLines={2}>
+              <View style={styles.summaryTextCol}>
+                <AppText style={styles.summaryClubName} numberOfLines={1}>
                   {clubName || 'Pickleball Club'}
                 </AppText>
                 <AppText style={styles.summarySubtitle}>Operational Intelligence & Reports</AppText>
               </View>
             </View>
 
+            <View style={styles.summaryActionsRow}>
+              <TouchableOpacity
+                style={styles.refreshIconButton}
+                onPress={handleRefresh}
+                disabled={isRefreshing}
+                activeOpacity={0.7}
+                accessibilityLabel="Refresh operational analytics"
+                accessibilityRole="button"
+              >
+                <RotateCw
+                  size={14}
+                  color={Colors.brand.primary}
+                  strokeWidth={2.2}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.exportButton}
+                onPress={() => setIsExportModalVisible(true)}
+                activeOpacity={0.75}
+                accessibilityLabel="Export report data as CSV"
+                accessibilityRole="button"
+              >
+                <Download size={13} color={Colors.brand.primary} strokeWidth={2.2} />
+                <AppText style={styles.exportButtonText}>Export CSV</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── 2. COMPACT REPORTING PERIOD SELECTOR ─── */}
+        <View style={styles.periodFilterCard}>
+          <View style={styles.periodFilterHeaderRow}>
+            <View style={styles.periodLabelCol}>
+              <AppText style={styles.periodSectionTitle}>Reporting Period</AppText>
+              <AppText style={styles.periodSubDateRange} numberOfLines={1}>
+                {formattedDateRangeText || presetDisplayLabel}
+              </AppText>
+            </View>
+
             <TouchableOpacity
-              style={styles.exportPillButton}
-              onPress={() => setIsExportModalVisible(true)}
+              style={styles.periodDropdownTrigger}
+              onPress={() => setIsPeriodPickerVisible(true)}
               activeOpacity={0.75}
-              accessibilityLabel="Export report data"
               accessibilityRole="button"
+              accessibilityLabel={`Selected period: ${presetDisplayLabel}. Tap to change.`}
             >
-              <Download size={13} color={Colors.brand.primary} strokeWidth={2.2} />
-              <AppText style={styles.exportPillText}>Export CSV</AppText>
+              <Calendar size={13} color={Colors.brand.primary} strokeWidth={2.2} />
+              <AppText style={styles.periodDropdownTriggerText}>
+                {presetDisplayLabel}
+              </AppText>
+              <ChevronDown size={14} color={Colors.text.secondary} strokeWidth={2.2} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.summaryDivider} />
-
-          {/* Context Badges: Reporting Period & Timezone */}
-          <View style={styles.summaryMetaRow}>
-            <View style={styles.metaChip}>
-              <Calendar size={12} color={Colors.brand.primary} strokeWidth={2} />
-              <AppText style={styles.metaChipText}>
-                {summary?.period
-                  ? `${summary.period.start_date} → ${summary.period.end_date} (${presetLabel})`
-                  : presetLabel}
-              </AppText>
+          <View style={styles.periodMetaFooter}>
+            <View style={styles.periodLiveIndicator}>
+              <View style={styles.periodLiveDot} />
+              <AppText style={styles.periodLiveText}>Live Data</AppText>
             </View>
-
-            <View style={styles.metaChip}>
-              <Globe size={12} color={Colors.text.secondary} strokeWidth={2} />
-              <AppText style={styles.metaChipMutedText}>
-                {summary?.period?.timezone || 'UTC'}
-              </AppText>
-            </View>
+            <AppText style={styles.periodLastUpdatedText}>{lastUpdatedText}</AppText>
           </View>
         </View>
 
-        {/* ─── 2. DATE RANGE FILTERS (Segmented Control) ─── */}
-        <View style={styles.presetFilterContainer}>
-          {(['7d', '30d', '90d'] as PresetType[]).map((p) => {
-            const isSelected = preset === p;
-            return (
-              <TouchableOpacity
-                key={p}
-                style={[styles.presetSegment, isSelected && styles.presetSegmentActive]}
-                onPress={() => setPreset(p)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`Filter by ${p}`}
-              >
-                <AppText
-                  style={[
-                    styles.presetSegmentText,
-                    isSelected && styles.presetSegmentTextActive,
-                  ]}
-                >
-                  {p.toUpperCase()}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-
-          <TouchableOpacity
-            style={[styles.presetSegment, preset === 'custom' && styles.presetSegmentActive]}
-            onPress={() => setIsCustomDateModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Filter by custom date range"
-          >
-            <Calendar
-              size={12}
-              color={preset === 'custom' ? Colors.white : Colors.text.secondary}
-              strokeWidth={2}
-            />
-            <AppText
-              style={[
-                styles.presetSegmentText,
-                preset === 'custom' && styles.presetSegmentTextActive,
-              ]}
-            >
-              Custom
-            </AppText>
-          </TouchableOpacity>
-        </View>
-
-        {/* ─── 3. ANALYTICS NAVIGATION TABS (Horizontally Centered & Scrollable) ─── */}
+        {/* ─── 3. ANALYTICS NAVIGATION TABS ─── */}
         <View style={styles.navTabsOuter}>
           <ScrollView
             ref={tabsScrollRef}
@@ -839,40 +897,74 @@ export default function AnalyticsScreen() {
                 {/* Daily Bookings Trend Chart */}
                 <DailyBookingsChart dailyData={summary.daily_bookings} />
 
-                {/* Court Utilization & Capacity Overview Card */}
+                {/* Court Utilization & Capacity Overview Card (Fixed collisions & wrapping) */}
                 <Card style={styles.sectionCard}>
-                  <View style={styles.sectionCardHeader}>
+                  <View style={styles.utilizationHeaderRow}>
                     <View style={styles.sectionIconTitle}>
-                      <Activity size={16} color={Colors.brand.primary} strokeWidth={2} />
+                      <Activity size={16} color={Colors.brand.primary} strokeWidth={2.2} />
                       <AppText style={styles.cardTitle}>Court Capacity & Utilization</AppText>
                     </View>
-                    <Badge
-                      label={`${summary.bookings.court_utilization_rate}% Utilization`}
-                      variant={summary.bookings.court_utilization_rate > 50 ? 'success' : 'default'}
-                    />
+                    <View style={styles.utilizationBadgeContainer}>
+                      <View
+                        style={[
+                          styles.utilizationBadge,
+                          summary.bookings.court_utilization_rate > 50
+                            ? styles.utilizationBadgeSuccess
+                            : styles.utilizationBadgeDefault,
+                        ]}
+                      >
+                        <AppText
+                          style={[
+                            styles.utilizationBadgeText,
+                            summary.bookings.court_utilization_rate > 50
+                              ? styles.utilizationBadgeTextSuccess
+                              : styles.utilizationBadgeTextDefault,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {summary.bookings.court_utilization_rate.toFixed(1)}% UTILIZATION
+                        </AppText>
+                      </View>
+                    </View>
                   </View>
+
                   <AppText style={styles.sectionSubtitle}>
                     Active facility runtime across {summary.bookings.active_courts_count} operational courts
                   </AppText>
 
-                  {/* Overall Utilization Progress Bar (0% when rate is 0) */}
-                  <View style={styles.progressContainer}>
-                    {summary.bookings.court_utilization_rate > 0 ? (
-                      <View
-                        style={[
-                          styles.progressBarFill,
-                          {
-                            width: `${Math.min(100, summary.bookings.court_utilization_rate)}%`,
-                            backgroundColor:
-                              summary.bookings.court_utilization_rate > 50
-                                ? Colors.status.success
-                                : Colors.brand.primary,
-                          },
-                        ]}
-                      />
-                    ) : null}
+                  {/* Utilization Progress Bar */}
+                  <View style={styles.utilizationProgressSection}>
+                    <View style={styles.progressContainer}>
+                      {summary.bookings.court_utilization_rate > 0 ? (
+                        <View
+                          style={[
+                            styles.progressBarFill,
+                            {
+                              width: `${Math.min(100, Math.max(0, summary.bookings.court_utilization_rate))}%`,
+                              minWidth: 4, // Clean visible sliver even for 0.2%
+                              backgroundColor:
+                                summary.bookings.court_utilization_rate > 50
+                                  ? Colors.status.success
+                                  : Colors.brand.primary,
+                            },
+                          ]}
+                        />
+                      ) : null}
+                    </View>
+
+                    <View style={styles.utilizationDetailRow}>
+                      <AppText style={styles.utilizationDetailText}>
+                        {summary.bookings.court_utilization_rate > 0
+                          ? `${summary.bookings.court_utilization_rate.toFixed(1)}% of operational court-hours utilized`
+                          : '0.0% court runtime utilized in period'}
+                      </AppText>
+                      <AppText style={styles.utilizationCapacityText}>
+                        {((summary.bookings.total_operating_minutes || 0) / 60).toFixed(0)} hrs capacity
+                      </AppText>
+                    </View>
                   </View>
 
+                  {/* Supporting metrics strip */}
                   <View style={styles.metricStatsStrip}>
                     <View style={styles.metricStatBox}>
                       <AppText style={styles.metricStatValue}>
@@ -1501,6 +1593,69 @@ export default function AnalyticsScreen() {
         )}
       </ScrollView>
 
+      {/* ─── COMPACT REPORTING PERIOD SELECTION MODAL SHEET ─── */}
+      <ModalSheet
+        visible={isPeriodPickerVisible}
+        onClose={() => setIsPeriodPickerVisible(false)}
+        title="Reporting Period"
+      >
+        <View style={styles.periodModalContent}>
+          <AppText style={styles.periodModalDesc}>
+            Select the operational time window to filter bookings, player rosters, and revenue records.
+          </AppText>
+
+          <View style={styles.presetOptionsList}>
+            {PRESET_OPTIONS.map((opt) => {
+              const isSelected = preset === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.presetOptionCard, isSelected && styles.presetOptionCardSelected]}
+                  onPress={() => {
+                    if (opt.id === 'custom') {
+                      setIsPeriodPickerVisible(false);
+                      setIsCustomDateModalVisible(true);
+                    } else {
+                      setPreset(opt.id);
+                      setIsPeriodPickerVisible(false);
+                    }
+                  }}
+                  activeOpacity={0.75}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${opt.label}`}
+                >
+                  <View style={styles.presetOptionLeft}>
+                    <View
+                      style={[
+                        styles.presetRadioCircle,
+                        isSelected && styles.presetRadioCircleSelected,
+                      ]}
+                    >
+                      {isSelected && <Check size={12} color={Colors.white} strokeWidth={3} />}
+                    </View>
+                    <View style={styles.presetOptionTextGroup}>
+                      <AppText
+                        style={[
+                          styles.presetOptionLabel,
+                          isSelected && styles.presetOptionLabelSelected,
+                        ]}
+                      >
+                        {opt.label}
+                      </AppText>
+                      <AppText style={styles.presetOptionDesc}>{opt.desc}</AppText>
+                    </View>
+                  </View>
+
+                  {isSelected && (
+                    <Badge label="Active" variant="success" size="sm" />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </ModalSheet>
+
       {/* ─── EXPORT OPTIONS MODAL SHEET ─── */}
       <ModalSheet
         visible={isExportModalVisible}
@@ -1509,8 +1664,8 @@ export default function AnalyticsScreen() {
       >
         <View style={styles.exportModalContent}>
           <AppText style={styles.exportModalDesc}>
-            Export sanitized CSV data for spreadsheet analysis. Data is formatted and shielded
-            against formula injection.
+            Export sanitized CSV data for the selected period ({presetDisplayLabel}). Data is formatted
+            in the club's timezone and shielded against spreadsheet formula injection.
           </AppText>
 
           <Button
@@ -1527,6 +1682,15 @@ export default function AnalyticsScreen() {
             loading={exportLoading}
             onPress={() => handleExport('memberships')}
           />
+          {canManagePayments && (
+            <Button
+              label="Export Financial Payments (CSV)"
+              variant="outline"
+              style={styles.exportActionBtn}
+              loading={exportLoading}
+              onPress={() => handleExport('payments')}
+            />
+          )}
         </View>
       </ModalSheet>
 
@@ -1615,49 +1779,67 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // 1. Executive Summary Card
+  // 1. Simplified Top Summary Card
   summaryCard: {
     backgroundColor: Colors.surface.default,
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.surface.border,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     ...Shadows.sm,
   },
-  summaryTopRow: {
+  summaryContentRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.sm,
   },
-  summaryIdentityCol: {
+  summaryIdentityGroup: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    marginRight: Spacing.xs,
   },
   clubIconSquircle: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: Radius.md,
     backgroundColor: Colors.brand.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  summaryTextGroup: {
+  summaryTextCol: {
     flex: 1,
   },
   summaryClubName: {
-    fontSize: 16,
+    fontSize: 15.5,
     fontWeight: '700',
     color: Colors.text.primary,
+    letterSpacing: -0.2,
   },
   summarySubtitle: {
     fontSize: 11,
     color: Colors.text.secondary,
     marginTop: 1,
   },
-  exportPillButton: {
+  summaryActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.background.primary,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportButton: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.brand.primaryLight,
@@ -1668,76 +1850,86 @@ const styles = StyleSheet.create({
     borderColor: '#C3E7D2',
     gap: 5,
   },
-  exportPillText: {
+  exportButtonText: {
     fontSize: 12,
     fontWeight: '700',
     color: Colors.brand.primary,
   },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: Colors.surface.borderLight,
-    marginVertical: 10,
+
+  // 2. Compact Reporting Period Selector
+  periodFilterCard: {
+    backgroundColor: Colors.surface.default,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    padding: 12,
+    gap: 8,
+    ...Shadows.sm,
   },
-  summaryMetaRow: {
+  periodFilterHeaderRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
+    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: Spacing.sm,
   },
-  metaChip: {
+  periodLabelCol: {
+    flex: 1,
+  },
+  periodSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  periodSubDateRange: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  periodDropdownTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.background.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: Radius.full,
     borderWidth: 1,
     borderColor: Colors.surface.border,
     gap: 6,
   },
-  metaChipText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.text.primary,
-  },
-  metaChipMutedText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: Colors.text.secondary,
-  },
-
-  // 2. Preset Filter Segmented Control
-  presetFilterContainer: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surface.default,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    padding: 3,
-    alignItems: 'center',
-    ...Shadows.sm,
-  },
-  presetSegment: {
-    flex: 1,
-    height: 34,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: Radius.full,
-    gap: 4,
-  },
-  presetSegmentActive: {
-    backgroundColor: Colors.brand.primary,
-    ...Shadows.sm,
-  },
-  presetSegmentText: {
+  periodDropdownTriggerText: {
     fontSize: 12,
-    color: Colors.text.secondary,
-    fontWeight: '600',
-  },
-  presetSegmentTextActive: {
-    color: Colors.white,
     fontWeight: '700',
+    color: Colors.brand.primary,
+  },
+  periodMetaFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surface.borderLight,
+  },
+  periodLiveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  periodLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: Radius.full,
+    backgroundColor: '#10B981',
+  },
+  periodLiveText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+  },
+  periodLastUpdatedText: {
+    fontSize: 10.5,
+    color: Colors.text.tertiary,
+    fontWeight: '500',
   },
 
   // 3. Navigation Tabs
@@ -1867,11 +2059,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 4,
   },
+
+  // Utilization Card Responsive Layout (No collisions)
+  utilizationHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
   sectionIconTitle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 200,
   },
   cardTitle: {
     fontSize: 14.5,
@@ -1882,6 +2085,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.text.secondary,
     marginBottom: Spacing.sm,
+  },
+  utilizationBadgeContainer: {
+    alignSelf: 'flex-start',
+  },
+  utilizationBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  utilizationBadgeDefault: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  utilizationBadgeSuccess: {
+    backgroundColor: Colors.brand.primaryLight,
+    borderColor: '#C3E7D2',
+  },
+  utilizationBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  utilizationBadgeTextDefault: {
+    color: Colors.text.primary,
+  },
+  utilizationBadgeTextSuccess: {
+    color: Colors.brand.primary,
+  },
+  utilizationProgressSection: {
+    marginVertical: Spacing.xs,
+  },
+  utilizationDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  utilizationDetailText: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  utilizationCapacityText: {
+    fontSize: 10.5,
+    color: Colors.text.tertiary,
+    fontWeight: '500',
   },
 
   // 6. Chart Card Styles
@@ -1971,27 +2221,49 @@ const styles = StyleSheet.create({
     height: 20,
     backgroundColor: Colors.surface.border,
   },
+  chartZeroStateWrap: {
+    paddingVertical: Spacing.xs,
+    gap: Spacing.sm,
+  },
   chartZeroBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     backgroundColor: Colors.background.primary,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: Spacing.sm,
     borderRadius: Radius.md,
-    marginBottom: Spacing.xs,
     borderWidth: 1,
     borderColor: Colors.surface.borderLight,
   },
   chartZeroBannerText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '500',
     color: Colors.text.secondary,
   },
-  chartEmptyWrap: {
-    paddingVertical: Spacing.lg,
+  chartZeroDaysGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingVertical: Spacing.xs,
+  },
+  zeroDayCol: {
     alignItems: 'center',
+    width: 38,
+  },
+  zeroDayCount: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.text.tertiary,
+    marginBottom: 4,
+  },
+  zeroDayTrack: {
+    width: 16,
+    height: 4,
+    backgroundColor: Colors.surface.border,
+    borderRadius: Radius.full,
+    marginVertical: 4,
   },
   chartViewport: {
     height: 155,
@@ -2091,11 +2363,10 @@ const styles = StyleSheet.create({
 
   // Progress bars & Strips
   progressContainer: {
-    height: 7,
+    height: 8,
     backgroundColor: Colors.background.primary,
     borderRadius: Radius.full,
     overflow: 'hidden',
-    marginVertical: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.surface.borderLight,
   },
@@ -2274,6 +2545,69 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     fontStyle: 'italic',
     paddingVertical: Spacing.xs,
+  },
+  periodModalContent: {
+    gap: Spacing.md,
+    paddingTop: Spacing.xs,
+  },
+  periodModalDesc: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    lineHeight: 18,
+  },
+  presetOptionsList: {
+    gap: Spacing.sm,
+  },
+  presetOptionCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 13,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface.default,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+  },
+  presetOptionCardSelected: {
+    borderColor: Colors.brand.primary,
+    backgroundColor: Colors.brand.primaryLight,
+  },
+  presetOptionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    flex: 1,
+  },
+  presetRadioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    borderWidth: 1.5,
+    borderColor: Colors.surface.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface.default,
+  },
+  presetRadioCircleSelected: {
+    borderColor: Colors.brand.primary,
+    backgroundColor: Colors.brand.primary,
+  },
+  presetOptionTextGroup: {
+    flex: 1,
+  },
+  presetOptionLabel: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  presetOptionLabelSelected: {
+    fontWeight: '700',
+    color: Colors.brand.primary,
+  },
+  presetOptionDesc: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    marginTop: 1,
   },
   exportModalContent: {
     gap: Spacing.md,
