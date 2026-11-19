@@ -1,16 +1,18 @@
 /**
  * Aught2 Pickleball — TournamentSettingsTab
  *
- * Dedicated, authoritative home for complete tournament configuration across ALL formats:
- * 1. Tournament Details (Name, Description, Format, Category, Skill Level, Gender, Age Group)
- * 2. Registration & Pricing (Entry Fee, Registration Deadline, Capacity & Enrollment, Status)
- * 3. Schedule & Courts (Tournament Dates, Scheduling Engine, Assigned Courts, Stage Configuration)
- * 4. Rules & Scoring (Scoring Chips, Match Rules, Format Rules, Numbered Tiebreaker Hierarchy)
- * 5. Tournament Hero Banner (Responsive Preview, Non-truncated Status Badge, Upload, Reset)
- *
- * Responsive layout:
- * - Mobile (< 768px): Clean stacked field architecture (Label on top, Value below, full width, zero text collisions)
- * - Tablet & Desktop (>= 768px): Polished two-column layout with generous column widths
+ * Dedicated, authoritative home for complete tournament configuration across ALL formats.
+ * Redesigned to follow the exact same UI design system and information-display format as
+ * Club Side → League Management → Overview & Rules tab (PlayerLeagueOverviewTab):
+ * - Clean, premium, light background
+ * - White information cards with subtle borders (#E2EAE5) and soft elevation
+ * - Consistent card padding (16px) and corner radius (14px)
+ * - Section header with 26x26 mint icon wrap (#DEF2E6) and 15px bold title (#102F2A)
+ * - Single-column InfoRow on mobile (muted label on top, bold readable value below)
+ * - Responsive row layout on tablet/desktop (>= 768px)
+ * - Nested, clean tiebreaker hierarchy callout box
+ * - Restrained green accents (#176B57)
+ * - Complete preservation of banner upload/reset and management actions
  */
 
 import React, { useMemo, useState } from 'react';
@@ -26,19 +28,16 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import {
-  Award,
   Calendar,
   Camera,
-  CheckCircle2,
-  ChevronRight,
   CreditCard,
-  Info,
+  FileText,
   Layers,
   RotateCcw,
+  Scale,
   SlidersHorizontal,
-  Target,
+  Tag,
   Trophy,
-  Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -50,12 +49,11 @@ import { getFormatDisplayLabel, normalizeTournamentFormat } from '@/navigation';
 import { clubAssetsApi } from '@/services/api/clubAssets';
 import { queryClient } from '@/services/queryClient';
 import { QUERY_KEYS } from '@/constants';
-import { Colors, Radius, Spacing } from '@/theme';
 import type { ClubBranding, Tournament } from '@/types';
 import { resolveTournamentBanner, resolveTournamentBannerDetails } from '@/utils/imageResolution';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 
-interface TournamentSettingsTabProps {
+export interface TournamentSettingsTabProps {
   tournament: Tournament | null;
   clubBranding?: ClubBranding | null;
   onRefresh?: () => void | Promise<void>;
@@ -113,6 +111,29 @@ function humanizeGameFormat(formatStr?: string | null): string {
   return formatStr.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function InfoRow({
+  label,
+  value,
+  isLast = false,
+  isTablet = false,
+}: {
+  label: string;
+  value: React.ReactNode;
+  isLast?: boolean;
+  isTablet?: boolean;
+}) {
+  return (
+    <View style={[styles.infoRow, isTablet && styles.infoRowTablet, isLast && styles.infoRowLast]}>
+      <AppText style={[styles.infoLabel, isTablet && styles.infoLabelTablet]}>{label}</AppText>
+      {typeof value === 'string' || typeof value === 'number' ? (
+        <AppText style={[styles.infoValue, isTablet && styles.infoValueTablet]}>{value}</AppText>
+      ) : (
+        <View style={isTablet && styles.infoValueTabletWrap}>{value}</View>
+      )}
+    </View>
+  );
+}
+
 export function TournamentSettingsTab({
   tournament,
   clubBranding: passedClubBranding,
@@ -123,7 +144,7 @@ export function TournamentSettingsTab({
   poolCount,
 }: TournamentSettingsTabProps) {
   const { width } = useWindowDimensions();
-  const isDesktop = width >= 768;
+  const isTablet = width >= 768;
 
   const clubId = tournament?.club_id;
   const { branding: fetchedClubBranding } = useClubBranding(clubId);
@@ -163,8 +184,8 @@ export function TournamentSettingsTab({
       const pStructure = parsed.isSingles ? 'Individual Singles' : 'Fixed Partner Doubles';
       return `Round Robin • ${pStructure}`;
     }
-    return `${tournament?.format_label || 'Tournament'} • ${parsed.category || 'Open'}`;
-  }, [format, formatConfig, parsed]);
+    return `${tournament?.format_label || getFormatDisplayLabel(tournament?.format) || 'Tournament'} • ${parsed.category || 'Open'}`;
+  }, [format, formatConfig, parsed, tournament]);
 
   // ─── 2. Age Group ─────────────────────────────────────────────────────────
   const ageDisplay = useMemo(() => {
@@ -276,126 +297,53 @@ export function TournamentSettingsTab({
       ? 'Cancelled'
       : 'Draft';
 
-  const regStatusVariant: 'success' | 'warning' | 'info' | 'default' =
+  const regStatusVariant: 'registration_open' | 'in_progress' | 'completed' | 'cancelled' | 'draft' | 'default' =
     regStatus === 'registration_open' || regStatus === 'open'
-      ? 'success'
+      ? 'registration_open'
       : regStatus === 'in_progress'
-      ? 'info'
-      : regStatus === 'draft' || regStatus === 'cancelled'
-      ? 'warning'
-      : 'default';
+      ? 'in_progress'
+      : regStatus === 'completed'
+      ? 'completed'
+      : regStatus === 'cancelled'
+      ? 'cancelled'
+      : 'draft';
 
-  // ─── 9. Format-Specific Rules (Structured Bullet Points) ───────────────────
-  const formatRulesList = useMemo(() => {
-    switch (format) {
-      case 'round_robin':
-        return [
-          {
-            title: 'Round Robin Structure',
-            text: 'Every player or team competes against every other opponent in their division exactly once.',
-          },
-          {
-            title: 'Scoring & Play',
-            text: 'Each matchup is contested under official tournament scoring rules until the required margin is reached.',
-          },
-          {
-            title: 'Standings Progression',
-            text: 'Match victories and point differential automatically update live standings in real time.',
-          },
-          {
-            title: 'Final Rankings',
-            text: 'Final tournament placement is determined strictly by the official tiebreaker hierarchy.',
-          },
-        ];
-      case 'bracket':
-        return [
-          {
-            title: 'Knockout System',
-            text: 'Single-elimination championship tree. Match winners advance immediately to subsequent rounds.',
-          },
-          {
-            title: 'Progression & Byes',
-            text: 'Deterministic seeding positions entries. Top seeds receive automatic first-round byes when bracket size exceeds registered entries.',
-          },
-          {
-            title: 'Championship Decider',
-            text: 'The final matchup determines the tournament champion, with optional third-place consolation if configured.',
-          },
-        ];
-      case 'pool_play':
-        return [
-          {
-            title: 'Stage 1: Preliminary Pools',
-            text: 'Entries are partitioned into balanced pools for an initial intra-pool round-robin phase.',
-          },
-          {
-            title: 'Stage 2: Championship Bracket',
-            text: 'Top qualifiers from each pool advance to the single-elimination knockout tournament bracket.',
-          },
-          {
-            title: 'Advancement Ties',
-            text: 'Ties in pool standings are resolved using the official tiebreaker hierarchy prior to bracket seeding.',
-          },
-        ];
-      case 'scramble':
-        return [
-          {
-            title: 'Dynamic Partner Rotation',
-            text: 'Individual entries rotate partners dynamically each round, pairing with different peers for fair competition.',
-          },
-          {
-            title: 'Individual Points Accumulation',
-            text: 'Points won in every game accumulate directly onto each player’s personal tournament leaderboard.',
-          },
-          {
-            title: 'Final Standings',
-            text: 'Top individual cumulative point totals determine tournament champions and podium finishers.',
-          },
-        ];
-      default:
-        return [
-          {
-            title: 'Competition Rules',
-            text: 'Standard tournament gameplay rules and division regulations apply.',
-          },
-        ];
-    }
-  }, [format]);
-
-  // ─── 10. Tiebreaker Hierarchy List ────────────────────────────────────────
+  // ─── 9. Tiebreaker Hierarchy List ─────────────────────────────────────────
   const tiebreakers = useMemo(() => {
     if (format === 'scramble') {
       return [
-        { num: 1, title: 'Total Individual Points', desc: 'Cumulative score across all played rounds (Descending)' },
-        { num: 2, title: 'Total Games Played', desc: 'Rounds completed (Descending)' },
-        { num: 3, title: 'Point Differential', desc: 'Points scored minus opponent points allowed (Descending)' },
-        { num: 4, title: 'Player Name (A–Z)', desc: 'Alphabetical order (Ascending)' },
+        { num: 1, title: 'Total Individual Points', desc: 'Cumulative score across all played rounds' },
+        { num: 2, title: 'Total Games Played', desc: 'Rounds completed' },
+        { num: 3, title: 'Point Differential', desc: 'Points scored minus opponent points allowed' },
+        { num: 4, title: 'Player Name (A–Z)', desc: 'Alphabetical order' },
       ];
     }
     if (format === 'bracket') {
       return [
-        { num: 1, title: 'Bracket Progression', desc: 'Furthest round reached in the bracket (Finals > Semis > Quarters)' },
+        { num: 1, title: 'Bracket Progression', desc: 'Furthest round reached in the championship tree' },
         { num: 2, title: 'Initial Tournament Seed', desc: 'Higher tournament seed takes precedence' },
-        { num: 3, title: 'Point Differential', desc: 'Cumulative point differential across all tournament matches' },
+        { num: 3, title: 'Point Differential', desc: 'Cumulative point differential across all matches' },
       ];
     }
     // Round Robin & Pool Play
     return [
-      { num: 1, title: 'Match Wins', desc: 'Total match victories in the tournament (Descending)' },
-      { num: 2, title: 'Head-to-Head', desc: 'Direct match outcome between tied opponents' },
-      { num: 3, title: 'Point Differential', desc: 'Points scored minus points conceded across all rounds (Descending)' },
-      { num: 4, title: 'Total Points Scored', desc: 'Total offensive points scored in all matches (Descending)' },
-      { num: 5, title: 'Participant Name (A–Z)', desc: 'Alphabetical order by player or team name (Ascending)' },
+      { num: 1, title: 'Match Wins', desc: 'Total match victories in the tournament' },
+      { num: 2, title: 'Head-to-Head Record', desc: 'Direct match outcome between tied opponents' },
+      { num: 3, title: 'Point Differential', desc: 'Points scored minus points conceded' },
+      { num: 4, title: 'Total Points Scored', desc: 'Total offensive points scored in all matches' },
+      { num: 5, title: 'Participant Name (A–Z)', desc: 'Alphabetical order by player or team name' },
     ];
   }, [format]);
 
   // Clean description without legacy bracket tags
   const cleanDescription = useMemo(() => {
     if (!tournament?.description) return null;
-    return tournament.description.replace(/^\[.*?\]\s*/s, '').trim();
+    const stripped = tournament.description.replace(/^\[.*?\]\s*/s, '').trim();
+    if (stripped.startsWith('{') || stripped.startsWith('[')) return null;
+    return stripped.length > 0 ? stripped : null;
   }, [tournament?.description]);
 
-  // ─── 11. Hero Banner Details & Concise Description ────────────────────────
+  // ─── 10. Hero Banner Details ──────────────────────────────────────────────
   const bannerBadgeLabel = isCustom
     ? 'Custom Tournament Banner'
     : bannerDetails.level === 'club_default'
@@ -423,7 +371,7 @@ export function TournamentSettingsTab({
     return 'Using the built-in system default banner.';
   }, [isCustom, bannerDetails.level, format]);
 
-  // ─── 12. Banner Actions ───────────────────────────────────────────────────
+  // ─── 11. Banner Actions ───────────────────────────────────────────────────
   const handlePickBanner = async () => {
     if (!clubId || !tournament?.id) {
       Alert.alert('Notice', 'Tournament details are not loaded.');
@@ -523,333 +471,371 @@ export function TournamentSettingsTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Tournament Details ────────────────────────────────────────── */}
+      {/* ─── 1. Optional Custom Description ─── */}
+      {cleanDescription ? (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <FileText size={15} color="#176B57" />
+            </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              About the Tournament
+            </AppText>
+          </View>
+          <AppText style={styles.descriptionText}>{cleanDescription}</AppText>
+        </Card>
+      ) : null}
+
+      {/* ─── 2. Tournament Information Card ─── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
-          <View style={styles.cardIconWrap}>
-            <Info size={17} color="#0F766E" strokeWidth={2.4} />
+          <View style={styles.iconWrap}>
+            <Tag size={15} color="#176B57" />
           </View>
-          <AppText style={styles.cardHeaderTitle}>Tournament Details</AppText>
+          <AppText variant="body" bold style={styles.cardTitle}>
+            Tournament Information
+          </AppText>
         </View>
 
-        <View style={styles.fieldsContainer}>
-          {/* Tournament Name */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>TOURNAMENT NAME</AppText>
-            <AppText style={styles.fieldValueProminent}>{tournament?.name || 'Tournament'}</AppText>
-          </View>
-
-          {/* Description */}
-          {cleanDescription ? (
-            <>
-              <View style={styles.divider} />
-              <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-                <AppText style={styles.fieldLabel}>DESCRIPTION</AppText>
-                <View style={styles.descriptionBox}>
-                  <AppText style={styles.descriptionText}>{cleanDescription}</AppText>
-                </View>
-              </View>
-            </>
-          ) : null}
-
-          <View style={styles.divider} />
-
-          {/* Tournament Format */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>TOURNAMENT FORMAT</AppText>
-            <View style={styles.valueWithBadgeRow}>
-              <AppText style={styles.fieldValue}>{formatDisplay}</AppText>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Competition Category */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>COMPETITION CATEGORY</AppText>
-            <AppText style={styles.fieldValue}>
-              {parsed.category || (parsed.isSingles ? 'Singles (Individual)' : 'Doubles (Fixed Partner)')}
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Skill Level */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>SKILL LEVEL (DUPR / RATING)</AppText>
-            <AppText style={styles.fieldValue}>
-              {parsed.skillLevelDisplay || 'Open / All levels'}
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Gender Eligibility */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>GENDER ELIGIBILITY</AppText>
-            <AppText style={styles.fieldValue}>
-              {parsed.genderEligibility ? `${parsed.genderEligibility} Players` : 'Any (Open to All)'}
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Age Group */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>AGE GROUP</AppText>
-            <AppText style={styles.fieldValue}>{ageDisplay}</AppText>
-          </View>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Tournament Name"
+            value={tournament?.name || 'Tournament'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Competition Format"
+            value={formatDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Division"
+            value={parsed.category || (parsed.isSingles ? 'Singles (Individual)' : 'Doubles (Fixed Partner)')}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Type"
+            value={parsed.isSingles ? 'Individual (Singles)' : 'Fixed Team (Doubles)'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Skill Eligibility"
+            value={parsed.skillLevelDisplay || 'Open / All Levels'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Gender Eligibility"
+            value={parsed.genderEligibility ? `${parsed.genderEligibility} Players` : 'Open / Any'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Age Group"
+            value={ageDisplay}
+            isTablet={isTablet}
+            isLast
+          />
         </View>
       </Card>
 
-      {/* ─── 2. Registration & Pricing ────────────────────────────────────── */}
+      {/* ─── 3. Schedule & Venue Card ─── */}
       <Card style={styles.card}>
-        <View style={styles.cardHeaderResponsive}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconWrap}>
+            <Calendar size={15} color="#176B57" />
+          </View>
+          <AppText variant="body" bold style={styles.cardTitle}>
+            Schedule & Venue
+          </AppText>
+        </View>
+
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Tournament Dates"
+            value={datesDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Registration Deadline"
+            value={deadlineDisplay}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Host Club"
+            value={clubBranding?.name || tournament?.club_name || 'Pickleball Club'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Assigned Courts"
+            value={`${courtsAssigned} dedicated court${courtsAssigned === 1 ? '' : 's'}`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Scheduling Engine"
+            value={schedulingEngineInfo.title}
+            isTablet={isTablet}
+            isLast
+          />
+        </View>
+      </Card>
+
+      {/* ─── 4. Registration & Capacity Card ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeaderWithBadge}>
           <View style={styles.cardHeaderLeft}>
-            <View style={styles.cardIconWrap}>
-              <CreditCard size={17} color="#0F766E" strokeWidth={2.4} />
+            <View style={styles.iconWrap}>
+              <CreditCard size={15} color="#176B57" />
             </View>
-            <AppText style={styles.cardHeaderTitle}>Registration & Pricing</AppText>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Registration & Capacity
+            </AppText>
           </View>
-          <View style={styles.headerBadgeContainer}>
-            <Badge label={regStatusLabel} variant={regStatusVariant} />
-          </View>
+          <Badge label={regStatusLabel} variant={regStatusVariant} />
         </View>
 
-        <View style={styles.fieldsContainer}>
-          {/* Entry Fee */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>ENTRY FEE</AppText>
-            <View style={styles.feeHighlightRow}>
-              <AppText style={styles.feeHighlightValue}>
-                {parsed.entryFeeDisplay || 'Free ($0.00)'}
-              </AppText>
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Registration Status"
+            value={regStatusLabel}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Entry Fee"
+            value={parsed.entryFeeDisplay || 'Free ($0.00)'}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Maximum Capacity"
+            value={`${maxCount} ${entryUnit}`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Minimum Required"
+            value={`${minCount} ${entryUnit}`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Current Enrollment"
+            value={`${registeredCount} / ${maxCount} ${entryUnit} (${isCapacityFull ? 'Full Capacity' : `${spotsAvailable} spots open`})`}
+            isTablet={isTablet}
+            isLast
+          />
+        </View>
+      </Card>
+
+      {/* ─── 5. Format-Specific Configuration Card ─── */}
+      {format === 'pool_play' && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <Layers size={15} color="#176B57" />
             </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Pool & Bracket Configuration
+            </AppText>
           </View>
 
-          <View style={styles.divider} />
+          <View style={styles.rowsList}>
+            <InfoRow
+              label="Preliminary Pools"
+              value={`${poolCount ?? formatConfig.pool_count ?? 2} Pools`}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Advancement Rule"
+              value={`Top ${formatConfig.advancement_count || formatConfig.qualifiers_per_pool || 2} per pool advance to Championship Bracket`}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Playoff Bracket Format"
+              value="Single Elimination Knockout"
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Stage Progression"
+              value="Preliminary Round Robin Pools → Championship Knockout Bracket"
+              isTablet={isTablet}
+              isLast
+            />
+          </View>
+        </Card>
+      )}
 
-          {/* Registration Deadline */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>REGISTRATION DEADLINE</AppText>
-            <AppText style={styles.fieldValue}>{deadlineDisplay}</AppText>
+      {format === 'bracket' && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <Trophy size={15} color="#176B57" />
+            </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Bracket Configuration
+            </AppText>
           </View>
 
-          <View style={styles.divider} />
+          <View style={styles.rowsList}>
+            <InfoRow
+              label="Bracket Format"
+              value={String(formatConfig.bracket_type || formatConfig.bracket_format || 'Single Elimination')}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Elimination Structure"
+              value={roundStageConfig || 'Single Elimination Tree'}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Seeding Method"
+              value={String(formatConfig.seeding_method || 'Random & Skill-Ranked Seeding')}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Consolation Match"
+              value={formatConfig.has_third_place || formatConfig.third_place_match ? 'Bronze Medal (3rd Place) Match Enabled' : 'None (Single Elimination)'}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="First-Round Byes"
+              value="Automatic BYE propagation for top seeds"
+              isTablet={isTablet}
+              isLast
+            />
+          </View>
+        </Card>
+      )}
 
-          {/* Capacity */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>TOURNAMENT CAPACITY & ENROLLMENT</AppText>
-            <View style={styles.capacityBlock}>
-              <View style={styles.capacityStatusRow}>
-                <AppText style={styles.fieldValueBold}>
-                  {registeredCount} / {maxCount} {entryUnit} registered
+      {format === 'scramble' && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <SlidersHorizontal size={15} color="#176B57" />
+            </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Scramble Configuration
+            </AppText>
+          </View>
+
+          <View style={styles.rowsList}>
+            <InfoRow
+              label="Rotation Engine"
+              value="Dynamic Partner Rotation Matrix"
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Planned Rotation Rounds"
+              value={`${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds`}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Pairing Rule"
+              value="Fair round-by-round partner rotation with individual scoring"
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Leaderboard Metric"
+              value="Individual cumulative points scored across all rounds"
+              isTablet={isTablet}
+              isLast
+            />
+          </View>
+        </Card>
+      )}
+
+      {format === 'round_robin' && (
+        <Card style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.iconWrap}>
+              <SlidersHorizontal size={15} color="#176B57" />
+            </View>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Round Robin Configuration
+            </AppText>
+          </View>
+
+          <View style={styles.rowsList}>
+            <InfoRow
+              label="Competition Structure"
+              value="All-play-all intra-division schedule"
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Scheduled Rounds"
+              value={roundStageConfig || 'Balanced round-robin distribution'}
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Scheduling Matrix"
+              value="Berger Tables (balanced round distribution)"
+              isTablet={isTablet}
+            />
+            <InfoRow
+              label="Court Allocation"
+              value="Dedicated court assignment per round with bye handling"
+              isTablet={isTablet}
+              isLast
+            />
+          </View>
+        </Card>
+      )}
+
+      {/* ─── 6. Game Rules & Scoring Card ─── */}
+      <Card style={styles.card}>
+        <View style={styles.cardHeader}>
+          <View style={styles.iconWrap}>
+            <Scale size={15} color="#176B57" />
+          </View>
+          <AppText variant="body" bold style={styles.cardTitle}>
+            Game Rules & Scoring
+          </AppText>
+        </View>
+
+        <View style={styles.rowsList}>
+          <InfoRow
+            label="Match Format"
+            value={humanizeGameFormat(gameFormat)}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Target Score"
+            value={`${targetScore} Points (win by ${winBy})`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Win-by Margin"
+            value={`${winBy} Points`}
+            isTablet={isTablet}
+          />
+          <InfoRow
+            label="Scoring System"
+            value={`Standard pickleball scoring to ${targetScore} points`}
+            isTablet={isTablet}
+            isLast
+          />
+
+          {/* Compact Tiebreaker Order Box (identical to League Overview & Rules) */}
+          <View style={styles.tiebreakerBox}>
+            <AppText style={styles.tiebreakerHeader}>Official Tiebreaker Hierarchy</AppText>
+            <View style={styles.tiebreakerList}>
+              {tiebreakers.map((t) => (
+                <AppText key={t.num} style={styles.tiebreakerItem}>
+                  {t.num}. {t.title}{t.desc ? ` – ${t.desc}` : ''}
                 </AppText>
-                {isCapacityFull ? (
-                  <View style={styles.capacityBadgeFull}>
-                    <AppText style={styles.capacityBadgeTextFull}>Full Capacity</AppText>
-                  </View>
-                ) : (
-                  <View style={styles.capacityBadgeOpen}>
-                    <AppText style={styles.capacityBadgeTextOpen}>{spotsAvailable} spots open</AppText>
-                  </View>
-                )}
-              </View>
-              <AppText style={styles.fieldSubtitle}>
-                Minimum required to play: {minCount} {entryUnit} • Maximum cap: {maxCount} {entryUnit}
-              </AppText>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Registration Status */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>REGISTRATION STATUS</AppText>
-            <View style={styles.statusDisplayRow}>
-              <View style={[styles.statusDot, { backgroundColor: regStatusVariant === 'success' ? '#16A34A' : '#0F766E' }]} />
-              <AppText style={styles.fieldValue}>{regStatusLabel}</AppText>
-            </View>
-          </View>
-        </View>
-      </Card>
-
-      {/* ─── 3. Schedule & Courts ─────────────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardIconWrap}>
-            <Calendar size={17} color="#0F766E" strokeWidth={2.4} />
-          </View>
-          <AppText style={styles.cardHeaderTitle}>Schedule & Courts</AppText>
-        </View>
-
-        <View style={styles.fieldsContainer}>
-          {/* Tournament Dates */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>TOURNAMENT DATES</AppText>
-            <AppText style={styles.fieldValue}>{datesDisplay}</AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Scheduling Engine */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>SCHEDULING ENGINE</AppText>
-            <View style={styles.engineBlock}>
-              <AppText style={styles.fieldValueBold}>{schedulingEngineInfo.title}</AppText>
-              <AppText style={styles.fieldSubtitle}>{schedulingEngineInfo.subtitle}</AppText>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Courts Assigned */}
-          <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>COURTS ASSIGNED</AppText>
-            <AppText style={styles.fieldValue}>
-              {courtsAssigned} dedicated court{courtsAssigned === 1 ? '' : 's'} assigned
-            </AppText>
-          </View>
-
-          {/* Round Configuration */}
-          {roundStageConfig ? (
-            <>
-              <View style={styles.divider} />
-              <View style={isDesktop ? styles.desktopFieldRow : styles.fieldBlock}>
-                <AppText style={styles.fieldLabel}>ROUND CONFIGURATION</AppText>
-                <AppText style={styles.fieldValue}>{roundStageConfig}</AppText>
-              </View>
-            </>
-          ) : null}
-        </View>
-      </Card>
-
-      {/* ─── 4. Rules & Scoring ───────────────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={styles.cardIconWrap}>
-            <Target size={17} color="#0F766E" strokeWidth={2.4} />
-          </View>
-          <AppText style={styles.cardHeaderTitle}>Rules & Scoring</AppText>
-        </View>
-
-        <View style={styles.fieldsContainer}>
-          {/* Scoring Format Chips */}
-          <View style={styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>OFFICIAL SCORING FORMAT</AppText>
-            <View style={styles.scoringChipsContainer}>
-              <View style={styles.scoringChip}>
-                <AppText style={styles.scoringChipLabel}>TARGET SCORE</AppText>
-                <AppText style={styles.scoringChipValue}>{targetScore} points</AppText>
-              </View>
-              <View style={styles.scoringChip}>
-                <AppText style={styles.scoringChipLabel}>WIN MARGIN</AppText>
-                <AppText style={styles.scoringChipValue}>Win by {winBy}</AppText>
-              </View>
-              <View style={styles.scoringChip}>
-                <AppText style={styles.scoringChipLabel}>MATCH LENGTH</AppText>
-                <AppText style={styles.scoringChipValue}>{humanizeGameFormat(gameFormat)}</AppText>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Match Rules as Structured Bullet Points */}
-          <View style={styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>MATCH RULES & GAMEPLAY</AppText>
-            <View style={styles.bulletList}>
-              <View style={styles.bulletItem}>
-                <View style={styles.bulletDot} />
-                <View style={styles.bulletTextCol}>
-                  <AppText style={styles.bulletTitle}>Scoring System</AppText>
-                  <AppText style={styles.bulletBody}>
-                    Standard pickleball scoring ({humanizeGameFormat(gameFormat)} to {targetScore} points).
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.bulletItem}>
-                <View style={styles.bulletDot} />
-                <View style={styles.bulletTextCol}>
-                  <AppText style={styles.bulletTitle}>Winning Condition</AppText>
-                  <AppText style={styles.bulletBody}>
-                    A side must win by a margin of at least {winBy} point{winBy === 1 ? '' : 's'}. Play continues until this condition is met.
-                  </AppText>
-                </View>
-              </View>
-
-              <View style={styles.bulletItem}>
-                <View style={styles.bulletDot} />
-                <View style={styles.bulletTextCol}>
-                  <AppText style={styles.bulletTitle}>Match Flow</AppText>
-                  <AppText style={styles.bulletBody}>
-                    Continuous play with standard changeovers between matches and designated referee or court management.
-                  </AppText>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Format-Specific Rules as Structured Information */}
-          <View style={styles.fieldBlock}>
-            <AppText style={styles.fieldLabel}>
-              {(format || 'tournament').replace('_', ' ').toUpperCase()} COMPETITION RULES
-            </AppText>
-            <View style={styles.bulletList}>
-              {formatRulesList.map((rule, idx) => (
-                <View key={`rule-${idx}`} style={styles.bulletItem}>
-                  <View style={styles.bulletDot} />
-                  <View style={styles.bulletTextCol}>
-                    <AppText style={styles.bulletTitle}>{rule.title}</AppText>
-                    <AppText style={styles.bulletBody}>{rule.text}</AppText>
-                  </View>
-                </View>
               ))}
             </View>
           </View>
         </View>
-
-        {/* Tiebreaker Hierarchy Sub-Section */}
-        <View style={styles.tiebreakerSection}>
-          <View style={styles.tiebreakerHeader}>
-            <Award size={16} color="#0F766E" strokeWidth={2.4} />
-            <AppText style={styles.tiebreakerSectionTitle}>Official Tiebreaker Hierarchy</AppText>
-          </View>
-          <AppText style={styles.tiebreakerSubtext}>
-            Applied sequentially to determine final division rankings and resolve ties:
-          </AppText>
-
-          <View style={styles.tiebreakerList}>
-            {tiebreakers.map((t) => (
-              <View key={t.num} style={styles.tiebreakerRow}>
-                <View style={styles.tiebreakerNumBadge}>
-                  <AppText style={styles.tiebreakerNumText}>{t.num}</AppText>
-                </View>
-                <View style={styles.tiebreakerTextGroup}>
-                  <AppText style={styles.tiebreakerTitle}>{t.title}</AppText>
-                  <AppText style={styles.tiebreakerDesc}>{t.desc}</AppText>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
       </Card>
 
-      {/* ─── 5. Tournament Hero Banner ────────────────────────────────────── */}
+      {/* ─── 7. Tournament Hero Banner Card ─── */}
       <Card style={styles.card}>
-        <View style={styles.cardHeaderResponsive}>
+        <View style={styles.cardHeaderWithBadge}>
           <View style={styles.cardHeaderLeft}>
-            <View style={styles.cardIconWrap}>
-              <Camera size={17} color="#0F766E" strokeWidth={2.4} />
+            <View style={styles.iconWrap}>
+              <Camera size={15} color="#176B57" />
             </View>
-            <AppText style={styles.cardHeaderTitle}>Tournament Hero Banner</AppText>
+            <AppText variant="body" bold style={styles.cardTitle}>
+              Tournament Hero Banner
+            </AppText>
           </View>
-          <View style={styles.headerBadgeContainer}>
-            <Badge label={bannerBadgeLabel} variant={bannerBadgeVariant} />
-          </View>
+          <Badge label={bannerBadgeLabel} variant={bannerBadgeVariant} />
         </View>
 
         <AppText style={styles.bannerDesc}>{conciseBannerDescription}</AppText>
@@ -893,7 +879,7 @@ export function TournamentSettingsTab({
                 disabled={isUploading}
                 activeOpacity={0.8}
               >
-                <RotateCcw size={14} color="#64748B" />
+                <RotateCcw size={14} color="#475569" />
                 <AppText style={styles.bannerResetBtnText}>Reset to Default</AppText>
               </TouchableOpacity>
             )}
@@ -906,314 +892,131 @@ export function TournamentSettingsTab({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[4],
-    gap: Spacing[4],
-    paddingBottom: Spacing[8],
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 12,
+    paddingBottom: 32,
+    maxWidth: 860,
+    alignSelf: 'center',
+    width: '100%',
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    padding: 16,
     borderRadius: 14,
-    padding: Spacing[4],
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: Spacing[3],
+    borderColor: '#E2EAE5',
+    gap: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingBottom: Spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    gap: 8,
+    paddingBottom: 2,
   },
-  cardHeaderResponsive: {
+  cardHeaderWithBadge: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
-    paddingBottom: Spacing[2],
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    paddingBottom: 2,
   },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    flex: 1,
   },
-  headerBadgeContainer: {
-    alignSelf: 'flex-start',
-  },
-  cardIconWrap: {
-    width: 28,
-    height: 28,
+  iconWrap: {
+    width: 26,
+    height: 26,
     borderRadius: 7,
-    backgroundColor: '#E6F4EA',
+    backgroundColor: '#DEF2E6',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardHeaderTitle: {
-    fontSize: 15.5,
+  cardTitle: {
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0F172A',
-  },
-  fieldsContainer: {
-    gap: Spacing[1],
-  },
-  // Mobile Stacked Field Block
-  fieldBlock: {
-    paddingVertical: 7,
-    gap: 4,
-  },
-  // Desktop Two-Column Row
-  desktopFieldRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    gap: 16,
-  },
-  fieldLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  fieldValue: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '600',
-    lineHeight: 20,
-  },
-  fieldValueProminent: {
-    fontSize: 15.5,
-    color: '#0F172A',
-    fontWeight: '700',
-    lineHeight: 22,
-  },
-  fieldValueBold: {
-    fontSize: 14,
-    color: '#0F172A',
-    fontWeight: '700',
-    lineHeight: 20,
-  },
-  fieldSubtitle: {
-    fontSize: 12.5,
-    color: '#64748B',
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  valueWithBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  descriptionBox: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 2,
+    color: '#102F2A',
   },
   descriptionText: {
-    fontSize: 13,
-    color: '#334155',
-    lineHeight: 19,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 2,
-  },
-  // Registration & Pricing Specifics
-  feeHighlightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  feeHighlightValue: {
-    fontSize: 15.5,
-    fontWeight: '700',
-    color: '#0F766E',
-  },
-  capacityBlock: {
-    gap: 4,
-  },
-  capacityStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  capacityBadgeFull: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  capacityBadgeTextFull: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  capacityBadgeOpen: {
-    backgroundColor: '#E6F4EA',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  capacityBadgeTextOpen: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#16A34A',
-  },
-  statusDisplayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  // Schedule Specifics
-  engineBlock: {
-    gap: 2,
-  },
-  // Scoring Chips
-  scoringChipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  scoringChip: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minWidth: 100,
-    gap: 2,
-  },
-  scoringChipLabel: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.3,
-  },
-  scoringChipValue: {
     fontSize: 13.5,
-    fontWeight: '700',
-    color: '#0F766E',
-  },
-  // Structured Bullet List
-  bulletList: {
-    gap: 8,
-    marginTop: 4,
-  },
-  bulletItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-  },
-  bulletDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#0F766E',
-    marginTop: 7,
-  },
-  bulletTextCol: {
-    flex: 1,
-    gap: 1,
-  },
-  bulletTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  bulletBody: {
-    fontSize: 12.5,
     color: '#475569',
-    lineHeight: 18,
+    lineHeight: 20,
   },
-  // Tiebreaker Section
-  tiebreakerSection: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: Spacing[3],
+  rowsList: {
+    gap: 0,
+  },
+  infoRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F2',
+  },
+  infoRowTablet: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  infoRowLast: {
+    borderBottomWidth: 0,
+    paddingBottom: 2,
+  },
+  infoLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    marginBottom: 3,
+  },
+  infoLabelTablet: {
+    marginBottom: 0,
+    flex: 1,
+  },
+  infoValue: {
+    fontSize: 14.5,
+    fontWeight: '600',
+    color: '#111827',
+    lineHeight: 20,
+  },
+  infoValueTablet: {
+    textAlign: 'right',
+    flex: 1,
+  },
+  infoValueTabletWrap: {
+    alignItems: 'flex-end',
+    flex: 1,
+  },
+  tiebreakerBox: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 8,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    gap: Spacing[2],
-    marginTop: Spacing[2],
+    borderColor: '#EBF1EE',
+    marginTop: 10,
   },
   tiebreakerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  tiebreakerSectionTitle: {
-    fontSize: 13.5,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#0F172A',
-  },
-  tiebreakerSubtext: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
+    color: '#176B57',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 6,
   },
   tiebreakerList: {
-    gap: 8,
-    marginTop: 4,
+    gap: 4,
   },
-  tiebreakerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
+  tiebreakerItem: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#334155',
+    lineHeight: 18,
   },
-  tiebreakerNumBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#E6F4EA',
-    borderWidth: 1,
-    borderColor: '#B8E2C8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  tiebreakerNumText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0F766E',
-  },
-  tiebreakerTextGroup: {
-    flex: 1,
-    gap: 1,
-  },
-  tiebreakerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  tiebreakerDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-  },
-  // Hero Banner Specifics
   bannerDesc: {
     fontSize: 13,
     color: '#475569',
@@ -1224,9 +1027,9 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#F8FAF9',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#E2EAE5',
     position: 'relative',
   },
   bannerPreviewImage: {
@@ -1246,7 +1049,7 @@ const styles = StyleSheet.create({
   },
   bannerUploadingOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    backgroundColor: 'rgba(16, 47, 42, 0.75)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
@@ -1260,34 +1063,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 2,
+    marginTop: 4,
   },
   bannerActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#0F766E',
+    backgroundColor: '#176B57',
     paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 8,
   },
   bannerActionBtnText: {
     fontSize: 13,
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
   bannerResetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#D1D5DB',
   },
   bannerResetBtnText: {
     fontSize: 13,
