@@ -194,6 +194,19 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
         queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
       }
+
+      // ─── Promotional Ads & Carousel Slides ──────────────────────────────────
+      else if (
+        eventType.startsWith('promotional_ad.') ||
+        eventType.startsWith('carousel_slide.') ||
+        eventType === 'promotional_ad.updated'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['promotional-ads', 'universal'] });
+        queryClient.invalidateQueries({ queryKey: ['club-carousel-slides'] });
+        if (clubId) {
+          queryClient.invalidateQueries({ queryKey: ['club-carousel-slides', clubId] });
+        }
+      }
     });
 
     // Check connection state

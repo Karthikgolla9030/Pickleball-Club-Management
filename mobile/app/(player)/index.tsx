@@ -201,6 +201,7 @@ export default function PlayerHomeScreen() {
 
     const welcomeSlide: BannerSlide = {
       id: 'welcome-slide',
+      isWelcomeSlide: true,
       tag: welcomeTag,
       title: welcomeTitle,
       description: welcomeDescription,
@@ -219,6 +220,7 @@ export default function PlayerHomeScreen() {
 
       return {
         id: `ad-${ad.id}`,
+        isWelcomeSlide: false,
         tag: (ad.tag || 'SPECIAL OFFER').toUpperCase(),
         title: ad.title || 'Special Promotion',
         description: isDistinctSubtitle ? ad.subtitle! : undefined,
@@ -408,7 +410,6 @@ export default function PlayerHomeScreen() {
         <View style={styles.heroSection}>
           <PlayerHeroBanner
             slides={playerHeroSlides}
-            imageSource={require('../../assets/pickleball_logo_transparent.png')}
             style={{ marginBottom: 0 }}
           />
         </View>

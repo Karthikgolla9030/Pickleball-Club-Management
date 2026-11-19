@@ -85,6 +85,7 @@ export function ClubHeroCarousel({
     // 1. First slide is ALWAYS the Club Welcome banner
     const welcomeSlide: BannerSlide = {
       id: `club-welcome-${effectiveClubId || 'default'}`,
+      isWelcomeSlide: true,
       tag: welcomeData.tag,
       title: welcomeData.title,
       description: welcomeData.supportingText,
@@ -111,6 +112,7 @@ export function ClubHeroCarousel({
 
       return {
         id: `club-ad-${ad.id}`,
+        isWelcomeSlide: false,
         tag: (ad.tag || 'CLUB PROMOTION').toUpperCase(),
         title: ad.title || 'Club Promotion',
         description: isDistinctSubtitle ? ad.subtitle! : undefined,

@@ -210,6 +210,7 @@ def create_app() -> FastAPI:
     # ─── Static Files for Uploads and Defaults ─────────────────────────────────
     import os
     from fastapi.staticfiles import StaticFiles
+    from starlette.responses import FileResponse, Response
 
     backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     uploads_dir = os.path.abspath(settings.UPLOAD_DIR) if settings.UPLOAD_DIR else os.path.join(backend_dir, "uploads")
@@ -226,13 +227,16 @@ def create_app() -> FastAPI:
         "league-banner",
         "event-cover",
         "slides",
+        "carousel_slide",
+        "carousel-slide",
+        "promotional_ad",
+        "promotional-ad",
         "lesson-image",
         "general",
         "platform_banners",
         "defaults",
     ):
         os.makedirs(os.path.join(uploads_dir, category_dir), exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
     static_dir = os.path.join(backend_dir, "static")
     os.makedirs(static_dir, exist_ok=True)
@@ -244,6 +248,34 @@ def create_app() -> FastAPI:
             shutil.copytree(static_defaults, uploads_defaults, dirs_exist_ok=True)
         except Exception as exc:
             logger.warning("Failed to sync default static assets to uploads: %s", exc)
+
+    class ResilientStaticFiles(StaticFiles):
+        """
+        Serves uploaded assets with graceful fallback to static defaults if an
+        ephemeral file was rotated or missing on cloud deployments, avoiding 404s.
+        """
+        async def get_response(self, path: str, scope) -> Response:
+            response = await super().get_response(path, scope)
+            if response.status_code == 404:
+                clean_path = path.lower()
+                defaults_dir = os.path.join(self.directory, "defaults")
+                fallback_file = None
+                if any(kw in clean_path for kw in ("promotional", "carousel", "slide")):
+                    fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
+                elif "tournament" in clean_path:
+                    fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
+                elif "event" in clean_path:
+                    fallback_file = os.path.join(defaults_dir, "events", "hero_events_photo.jpg")
+                elif "league" in clean_path:
+                    fallback_file = os.path.join(defaults_dir, "leagues", "hero_banner.jpg")
+                elif "lesson" in clean_path:
+                    fallback_file = os.path.join(defaults_dir, "lessons", "hero_lessons_photo.jpg")
+
+                if fallback_file and os.path.exists(fallback_file):
+                    return FileResponse(fallback_file, media_type="image/jpeg")
+            return response
+
+    app.mount("/uploads", ResilientStaticFiles(directory=uploads_dir), name="uploads")
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
     # ─── Routers ──────────────────────────────────────────────────────────────

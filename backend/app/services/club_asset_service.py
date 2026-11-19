@@ -221,7 +221,19 @@ class ClubAssetService:
         self.db.add(slide)
         await self.db.commit()
         await self.db.refresh(slide)
+        await self._broadcast_ad_update(club_id)
         return ClubCarouselSlideResponse.model_validate(slide)
+
+    async def _broadcast_ad_update(self, club_id: UUID) -> None:
+        try:
+            from app.services.websocket_manager import ws_manager
+            await ws_manager.broadcast_all({
+                "type": "promotional_ad.updated",
+                "club_id": str(club_id),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            pass
 
     async def get_universal_promotional_ads(self) -> list[UniversalPromotionalAdResponse]:
         """
@@ -292,6 +304,7 @@ class ClubAssetService:
 
         await self.db.commit()
         await self.db.refresh(slide)
+        await self._broadcast_ad_update(club_id)
         return ClubCarouselSlideResponse.model_validate(slide)
 
     async def delete_carousel_slide(
@@ -311,6 +324,7 @@ class ClubAssetService:
 
         await self.db.delete(slide)
         await self.db.commit()
+        await self._broadcast_ad_update(club_id)
 
     async def reorder_carousel_slides(
         self,
@@ -327,6 +341,7 @@ class ClubAssetService:
                 existing_slides[slide_id].display_order = order
 
         await self.db.commit()
+        await self._broadcast_ad_update(club_id)
         return await self.get_carousel_slides(club_id=club_id, active_only=False)
 
     # ─── Centralized Image Upload ─────────────────────────────────────────────

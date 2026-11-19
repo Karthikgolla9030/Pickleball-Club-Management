@@ -47,6 +47,7 @@ export interface BannerSlide {
     text: string;
   } | null;
   rightContent?: React.ReactNode;
+  isWelcomeSlide?: boolean;
 }
 
 export interface PlayerHeroBannerProps {
@@ -214,14 +215,34 @@ export function PlayerHeroBanner({
     touchStartY.current = null;
   };
 
-  // Resolve background photo for current slide
+  // Independent image tracking with resilient fallback for advertisement slides
+  const [slideImgError, setSlideImgError] = useState(false);
+
+  useEffect(() => {
+    setSlideImgError(false);
+  }, [activeSlideIndex, currentSlide?.id, currentSlide?.imageUrl]);
+
+  // Resolve background photo for current slide with strict separation between Welcome and Ad slides
   let resolvedImageSource: any = null;
-  if (currentSlide.imageUrl) {
-    resolvedImageSource = { uri: resolveMediaUrl(currentSlide.imageUrl) };
-  } else if (currentSlide.imageSource) {
-    resolvedImageSource = currentSlide.imageSource;
-  } else if (imageSource) {
-    resolvedImageSource = imageSource;
+  if (currentSlide.isWelcomeSlide) {
+    // Welcome slide: Uses ONLY its own explicit image or banner. NEVER an ad image or club logo fallback.
+    if (currentSlide.imageSource) {
+      resolvedImageSource = currentSlide.imageSource;
+    } else if (currentSlide.imageUrl && !slideImgError) {
+      resolvedImageSource = { uri: resolveMediaUrl(currentSlide.imageUrl) };
+    }
+  } else {
+    // Advertisement slide: Uses its own uploaded ad image URL.
+    if (currentSlide.imageUrl && !slideImgError) {
+      resolvedImageSource = { uri: resolveMediaUrl(currentSlide.imageUrl) };
+    } else if (currentSlide.imageSource && !slideImgError) {
+      resolvedImageSource = currentSlide.imageSource;
+    } else {
+      // Deliberate neutral fallback for promotional ads only (never Welcome banner image or club logo)
+      resolvedImageSource = {
+        uri: resolveMediaUrl('/static/defaults/tournaments/card_round_robin.jpg'),
+      };
+    }
   }
 
   const webHoverProps =
@@ -249,6 +270,7 @@ export function PlayerHeroBanner({
           source={resolvedImageSource}
           style={[styles.bannerImage, { opacity: fadeAnim }]}
           resizeMode="cover"
+          onError={() => setSlideImgError(true)}
           accessibilityLabel={`${currentSlide.tag} banner photo`}
         />
       ) : null}

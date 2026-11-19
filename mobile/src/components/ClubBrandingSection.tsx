@@ -233,6 +233,21 @@ function getAdScheduleStatus(startDate?: string | null, endDate?: string | null,
   return { label: 'Active', type: 'active' };
 }
 
+function AdThumbnail({ imageUrl }: { imageUrl?: string | null }) {
+  const [hasError, setHasError] = useState(false);
+  const fallbackUri = resolveMediaUrl('/static/defaults/tournaments/card_round_robin.jpg');
+  const imageUri = !hasError && imageUrl && imageUrl.trim() ? resolveMediaUrl(imageUrl.trim()) : fallbackUri;
+
+  return (
+    <Image
+      source={{ uri: imageUri }}
+      style={styles.slideThumbnail}
+      resizeMode="cover"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProps) {
   const router = useRouter();
 
@@ -928,87 +943,57 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 
               return (
                 <View key={slide.id} style={styles.slideCard}>
-                  {/* Top Meta Bar: Category, Status, and Reorder Controls */}
+                  {/* Top Row: Category on Left, Status on Right */}
                   <View style={styles.slideCardHeader}>
-                    <View style={styles.slideBadgesRow}>
-                      {slide.tag ? (
-                        <View style={styles.slideCategoryBadge}>
-                          <AppText style={styles.slideCategoryText}>
-                            {slide.tag.toUpperCase()}
-                          </AppText>
-                        </View>
-                      ) : null}
-                      <View
-                        style={[
-                          styles.slideStatusBadge,
-                          scheduleStatus.type === 'active' && styles.slideStatusActive,
-                          scheduleStatus.type === 'disabled' && styles.slideStatusDisabled,
-                          scheduleStatus.type === 'scheduled' && styles.slideStatusScheduled,
-                          scheduleStatus.type === 'expired' && styles.slideStatusExpired,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.slideStatusDot,
-                            scheduleStatus.type === 'active' && styles.slideStatusDotActive,
-                            scheduleStatus.type === 'disabled' && styles.slideStatusDotDisabled,
-                            scheduleStatus.type === 'scheduled' && styles.slideStatusDotScheduled,
-                            scheduleStatus.type === 'expired' && styles.slideStatusDotExpired,
-                          ]}
-                        />
-                        <AppText
-                          style={[
-                            styles.slideStatusBadgeText,
-                            scheduleStatus.type === 'active' && styles.slideStatusTextActive,
-                            scheduleStatus.type === 'disabled' && styles.slideStatusTextDisabled,
-                            scheduleStatus.type === 'scheduled' && styles.slideStatusTextScheduled,
-                            scheduleStatus.type === 'expired' && styles.slideStatusTextExpired,
-                          ]}
-                        >
-                          {scheduleStatus.label}
-                        </AppText>
-                      </View>
+                    <View style={styles.slideCategoryBadge}>
+                      <AppText style={styles.slideCategoryText}>
+                        {(slide.tag || 'PROMOTION').toUpperCase()}
+                      </AppText>
                     </View>
 
-                    {isOwner && (
-                      <View style={styles.slideReorderGroup}>
-                        <TouchableOpacity
-                          style={[styles.slideReorderBtn, index === 0 && styles.slideReorderBtnDisabled]}
-                          disabled={index === 0}
-                          onPress={() => handleMoveSlide(index, 'up')}
-                          hitSlop={6}
-                          accessibilityLabel="Move advertisement up"
-                        >
-                          <ArrowUp size={13} color={index === 0 ? '#CBD5E1' : '#1E293B'} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.slideReorderBtn, index === slides.length - 1 && styles.slideReorderBtnDisabled]}
-                          disabled={index === slides.length - 1}
-                          onPress={() => handleMoveSlide(index, 'down')}
-                          hitSlop={6}
-                          accessibilityLabel="Move advertisement down"
-                        >
-                          <ArrowDown size={13} color={index === slides.length - 1 ? '#CBD5E1' : '#1E293B'} />
-                        </TouchableOpacity>
-                      </View>
-                    )}
+                    <View
+                      style={[
+                        styles.slideStatusBadge,
+                        scheduleStatus.type === 'active' && styles.slideStatusActive,
+                        scheduleStatus.type === 'disabled' && styles.slideStatusDisabled,
+                        scheduleStatus.type === 'scheduled' && styles.slideStatusScheduled,
+                        scheduleStatus.type === 'expired' && styles.slideStatusExpired,
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.slideStatusDot,
+                          scheduleStatus.type === 'active' && styles.slideStatusDotActive,
+                          scheduleStatus.type === 'disabled' && styles.slideStatusDotDisabled,
+                          scheduleStatus.type === 'scheduled' && styles.slideStatusDotScheduled,
+                          scheduleStatus.type === 'expired' && styles.slideStatusDotExpired,
+                        ]}
+                      />
+                      <AppText
+                        style={[
+                          styles.slideStatusBadgeText,
+                          scheduleStatus.type === 'active' && styles.slideStatusTextActive,
+                          scheduleStatus.type === 'disabled' && styles.slideStatusTextDisabled,
+                          scheduleStatus.type === 'scheduled' && styles.slideStatusTextScheduled,
+                          scheduleStatus.type === 'expired' && styles.slideStatusTextExpired,
+                        ]}
+                      >
+                        {scheduleStatus.label}
+                      </AppText>
+                    </View>
                   </View>
 
                   {/* Middle Body: Thumbnail on Left, Title & Details on Right */}
                   <View style={styles.slideCardBody}>
-                    <Image
-                      source={{ uri: resolveMediaUrl(slide.image_url) }}
-                      style={styles.slideThumbnail}
-                      resizeMode="cover"
-                    />
+                    <AdThumbnail imageUrl={slide.image_url} />
 
                     <View style={styles.slideInfoCol}>
-                      <AppText style={styles.slideTitle}>
+                      <AppText style={styles.slideTitle} numberOfLines={2}>
                         {slide.title || 'Untitled Promotional Ad'}
                       </AppText>
 
                       {isDistinctSubtitle ? (
-                        <AppText style={styles.slideSubtitle}>
+                        <AppText style={styles.slideSubtitle} numberOfLines={2}>
                           {slide.subtitle}
                         </AppText>
                       ) : null}
@@ -1026,18 +1011,13 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                             <AppText style={styles.slideCtaPillText}>
                               CTA: "{slide.cta_text}"
                             </AppText>
-                            {slide.cta_route ? (
-                              <AppText style={styles.slideCtaRouteText}>
-                                {' '}→ {slide.cta_route}
-                              </AppText>
-                            ) : null}
                           </View>
                         </View>
                       ) : null}
                     </View>
                   </View>
 
-                  {/* Bottom Footer: Toggle Switch & Actions */}
+                  {/* Bottom Action Area: Carousel Visibility Toggle on Left; Reorder, Edit & Delete on Right */}
                   {isOwner && (
                     <View style={styles.slideCardFooter}>
                       <View style={styles.slideToggleRow}>
@@ -1054,6 +1034,28 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                       </View>
 
                       <View style={styles.slideActionsRow}>
+                        {/* Reorder Buttons */}
+                        <View style={styles.slideReorderGroup}>
+                          <TouchableOpacity
+                            style={[styles.slideReorderBtn, index === 0 && styles.slideReorderBtnDisabled]}
+                            disabled={index === 0}
+                            onPress={() => handleMoveSlide(index, 'up')}
+                            hitSlop={6}
+                            accessibilityLabel="Move advertisement up"
+                          >
+                            <ArrowUp size={13} color={index === 0 ? '#CBD5E1' : '#1E293B'} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.slideReorderBtn, index === slides.length - 1 && styles.slideReorderBtnDisabled]}
+                            disabled={index === slides.length - 1}
+                            onPress={() => handleMoveSlide(index, 'down')}
+                            hitSlop={6}
+                            accessibilityLabel="Move advertisement down"
+                          >
+                            <ArrowDown size={13} color={index === slides.length - 1 ? '#CBD5E1' : '#1E293B'} />
+                          </TouchableOpacity>
+                        </View>
+
                         <TouchableOpacity
                           style={styles.slideActionBtn}
                           onPress={() => openSlideModal(slide)}

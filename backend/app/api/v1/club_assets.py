@@ -150,7 +150,7 @@ async def upload_club_media(
         required_permission = Permission.MANAGE_COURTS
     elif clean_asset_type in ("lesson_image", "lesson_type_image", "lesson", "lesson_type"):
         required_permission = Permission.MANAGE_LESSONS
-    elif clean_asset_type in ("club_logo", "logo", "club_cover", "cover", "carousel_slide", "slide", "general"):
+    elif clean_asset_type in ("club_logo", "logo", "club_cover", "cover", "carousel_slide", "carousel-slide", "slide", "promotional_ad", "promotional-ad", "general"):
         required_permission = Permission.MANAGE_CLUB
     else:
         required_permission = Permission.MANAGE_CLUB

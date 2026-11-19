@@ -135,6 +135,7 @@ export function useCarouselMutations(clubId?: string | null) {
       queryClient.invalidateQueries({ queryKey: ['club-carousel-slides', clubId] });
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_PROMOTIONAL_ADS(clubId) });
     }
+    queryClient.invalidateQueries({ queryKey: ['club-carousel-slides'] });
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.UNIVERSAL_PROMOTIONAL_ADS });
   };
 
