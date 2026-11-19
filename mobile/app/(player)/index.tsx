@@ -38,7 +38,7 @@ import {
   Trophy,
 } from 'lucide-react-native';
 
-import { AppText, LayeredHeroAdBackground } from '@/components';
+import { AppText, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
   useActiveClub,
   useAuth,
@@ -181,6 +181,65 @@ export default function PlayerHomeScreen() {
   } = useUniversalPromotionalAds();
 
   const displayName = profile?.display_name || user?.full_name || 'Player';
+
+  // ─── Multi-Slide Hero Carousel (Slide 1: Welcome Banner; Slides 2+: Universal Promotional Ads) ───
+  const playerHeroSlides = useMemo<BannerSlide[]>(() => {
+    // 1. First slide is ALWAYS the Welcome to Picklora banner
+    const welcomeTag = platformName
+      ? `WELCOME TO ${platformName.trim().toUpperCase()}`
+      : playerBanner?.title && !playerBanner.title.includes('Aught2')
+      ? playerBanner.title.toUpperCase()
+      : 'WELCOME TO PICKLORA';
+
+    const welcomeTitle = `Hello,\n${displayName}`;
+    const welcomeDescription =
+      playerBanner?.subtitle ||
+      'Ready to play, compete and make the most of your game?';
+    const welcomeCta = playerBanner?.cta_text || 'Find a Court';
+    const welcomeDest =
+      playerBanner?.cta_destination || '/(player)/book-court-club';
+
+    const welcomeSlide: BannerSlide = {
+      id: 'welcome-slide',
+      tag: welcomeTag,
+      title: welcomeTitle,
+      description: welcomeDescription,
+      ctaText: welcomeCta,
+      onCtaPress: () => router.push(welcomeDest as any),
+      imageUrl: playerBanner?.image_url || null,
+      topRightBadge: clubName ? { text: clubName } : null,
+    };
+
+    // 2. Subsequent slides are eligible promotional advertisements
+    const adSlides: BannerSlide[] = (universalAds || []).map((ad) => {
+      const isDistinctSubtitle =
+        ad.subtitle &&
+        ad.subtitle.trim().length > 0 &&
+        ad.subtitle.trim().toLowerCase() !== (ad.title || '').trim().toLowerCase();
+
+      return {
+        id: `ad-${ad.id}`,
+        tag: (ad.tag || 'SPECIAL OFFER').toUpperCase(),
+        title: ad.title || 'Special Promotion',
+        description: isDistinctSubtitle ? ad.subtitle! : undefined,
+        ctaText: ad.cta_text || 'View Details',
+        imageUrl: ad.image_url,
+        topRightBadge: ad.club_name ? { text: ad.club_name } : null,
+        onCtaPress: () => {
+          if (ad.cta_route) {
+            router.push(ad.cta_route as any);
+          } else if (ad.club_id) {
+            router.push({
+              pathname: '/(player)/club-details',
+              params: { clubId: ad.club_id },
+            } as any);
+          }
+        },
+      };
+    });
+
+    return [welcomeSlide, ...adSlides];
+  }, [platformName, playerBanner, displayName, clubName, universalAds, router]);
 
   // ─── Compute Next Upcoming Booking ─────────────────────────────────────────
   const nextBooking: Booking | null = useMemo(() => {
@@ -345,63 +404,13 @@ export default function PlayerHomeScreen() {
           </View>
         )}
 
-        {/* ─── 2. LAYERED WELCOME HERO BANNER (With Promotional Ad Carousel in Background) ─── */}
+        {/* ─── 2. EVENTS-STYLE HERO CAROUSEL (Slide 1: Welcome Banner; Slides 2+: Promotional Ads) ─── */}
         <View style={styles.heroSection}>
-          <LayeredHeroAdBackground
-            ads={universalAds}
-            fallbackImageUrl={playerBanner?.image_url}
-            overlayVariant="light-mint"
-            minHeight={195}
-            attributionPosition="top-right"
-            onAdPress={(ad) => {
-              if (ad.cta_route) {
-                router.push(ad.cta_route as any);
-              } else if (ad.club_id) {
-                router.push({
-                  pathname: '/(player)/club-details',
-                  params: { clubId: ad.club_id },
-                } as any);
-              }
-            }}
-          >
-            {/* Content on Left */}
-            <View style={styles.heroContent}>
-              <AppText style={styles.heroTagline}>
-                {platformName
-                  ? `WELCOME TO ${platformName.trim().toUpperCase()}`
-                  : playerBanner?.title && !playerBanner.title.includes('Aught2')
-                  ? playerBanner.title.toUpperCase()
-                  : 'WELCOME'}
-              </AppText>
-              <AppText
-                style={styles.heroGreeting}
-                numberOfLines={2}
-              >
-                {`Hello,\n${displayName}`}
-              </AppText>
-              <AppText style={styles.heroDescription} numberOfLines={2}>
-                {playerBanner?.subtitle || 'Ready to play, compete and make the most of your game?'}
-              </AppText>
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.findCourtButton,
-                  pressed && styles.findCourtButtonPressed,
-                ]}
-                onPress={() => {
-                  const dest = playerBanner?.cta_destination || '/(player)/book-court-club';
-                  router.push(dest as any);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={playerBanner?.cta_text || 'Find a Court'}
-              >
-                <AppText style={styles.findCourtButtonText}>
-                  {playerBanner?.cta_text || 'Find a Court'}
-                </AppText>
-                <ArrowRight size={16} color="#FFFFFF" strokeWidth={2.4} />
-              </Pressable>
-            </View>
-          </LayeredHeroAdBackground>
+          <PlayerHeroBanner
+            slides={playerHeroSlides}
+            imageSource={require('../../assets/pickleball_logo_transparent.png')}
+            style={{ marginBottom: 0 }}
+          />
         </View>
 
         {/* ─── 3. YOUR NEXT BOOKING (Conditional) ────────────────────────────── */}

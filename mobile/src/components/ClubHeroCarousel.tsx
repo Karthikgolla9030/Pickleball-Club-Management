@@ -1,25 +1,21 @@
 /**
  * Aught2 Pickleball — ClubHeroCarousel
  *
- * Layered Club Side Welcome Hero Banner with automatically sliding promotional
- * advertisement carousel in the background:
- * - When the club has active promotional advertisements:
- *     * Displays promotional images belonging exclusively to the currently selected club.
- *     * Automatically transitions with a smooth crossfade every 5 seconds behind the Welcome banner.
- *     * Multi-tenant isolated: switching active clubs refreshes ads so previous club ads are never shown.
- * - When the club has no active advertisements:
- *     * Seamlessly displays the default Club Welcome banner without pagination controls or empty boxes.
- * - The Welcome banner (greetings, title, supporting text, CTA button, motto) remains
- *   visibly prominent, readable, and interactive in the foreground at all times.
+ * Events-style hero carousel for the Club Side Home page.
+ * Implements the approved Events reference design:
+ * - Slide 1: ALWAYS the Club Welcome banner (greetings, title, description, CTA button, motto)
+ * - Slides 2+: Club-specific promotional advertisements (belonging strictly to the selected club)
+ * - Multi-tenant isolated: switching active clubs resets the carousel to Slide 1 and fetches the new club's ads
+ * - When no ads exist: displays only the single Welcome banner without pagination controls or empty boxes
+ * - Automatic sliding every 5 seconds, swipe gestures, pause on user interaction and tab blur
  */
 
 import React, { useMemo } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowRight } from 'lucide-react-native';
 
 import { AppText } from './AppText';
-import { LayeredHeroAdBackground } from './LayeredHeroAdBackground';
+import { BannerSlide, PlayerHeroBanner } from './PlayerHeroBanner';
 import {
   useActiveClub,
   useClubCarouselSlides,
@@ -27,17 +23,6 @@ import {
   usePlatformBranding,
 } from '@/hooks';
 import { resolveOwnerBanner } from '@/utils';
-
-export interface HeroBannerSlide {
-  id: string;
-  tag: string;
-  title: string;
-  supportingText: string;
-  ctaText: string;
-  route: string;
-  scriptLines: string[];
-  image: any;
-}
 
 interface ClubHeroCarouselProps {
   clubId?: string | null;
@@ -65,11 +50,11 @@ export function ClubHeroCarousel({
   const welcomeData = useMemo(() => {
     const ownerBannerImage = resolveOwnerBanner(platformBanner);
 
-    let resolvedTitle = 'Welcome';
+    let resolvedTitle = 'Play Together\nGrow Stronger';
     if (platformBanner?.title && !platformBanner.title.includes('Aught2')) {
       resolvedTitle = platformBanner.title;
-    } else if (platformName && platformName.trim().length > 0) {
-      resolvedTitle = `Welcome to ${platformName.trim()}`;
+    } else if (effectiveClubName) {
+      resolvedTitle = `Welcome to\n${effectiveClubName}`;
     }
 
     let resolvedTag = 'COMMUNITY';
@@ -95,144 +80,79 @@ export function ClubHeroCarousel({
     };
   }, [platformBanner, platformName, effectiveClubName]);
 
-  return (
-    <View style={styles.heroWrapper}>
-      <LayeredHeroAdBackground
-        ads={clubAds}
-        fallbackImageSource={welcomeData.image}
-        overlayVariant="dark-emerald"
-        minHeight={215}
-        attributionPosition="none"
-        onAdPress={(ad) => {
+  // Construct Slides: Slide 1 is ALWAYS the Club Welcome banner!
+  const clubHeroSlides = useMemo<BannerSlide[]>(() => {
+    // 1. First slide is ALWAYS the Club Welcome banner
+    const welcomeSlide: BannerSlide = {
+      id: `club-welcome-${effectiveClubId || 'default'}`,
+      tag: welcomeData.tag,
+      title: welcomeData.title,
+      description: welcomeData.supportingText,
+      ctaText: welcomeData.ctaText,
+      onCtaPress: () => router.push(welcomeData.route as any),
+      imageSource: welcomeData.image,
+      rightContent: (
+        <View style={styles.heroScriptMotto}>
+          {welcomeData.scriptLines.map((line, lIdx) => (
+            <AppText key={lIdx} style={styles.scriptLine}>
+              {line}
+            </AppText>
+          ))}
+        </View>
+      ),
+    };
+
+    // 2. Subsequent slides are the active club's promotional advertisements
+    const adSlides: BannerSlide[] = (clubAds || []).map((ad) => {
+      const isDistinctSubtitle =
+        ad.subtitle &&
+        ad.subtitle.trim().length > 0 &&
+        ad.subtitle.trim().toLowerCase() !== (ad.title || '').trim().toLowerCase();
+
+      return {
+        id: `club-ad-${ad.id}`,
+        tag: (ad.tag || 'CLUB PROMOTION').toUpperCase(),
+        title: ad.title || 'Club Promotion',
+        description: isDistinctSubtitle ? ad.subtitle! : undefined,
+        ctaText: ad.cta_text || 'View Details',
+        imageUrl: ad.image_url,
+        onCtaPress: () => {
           if (ad.cta_route) {
             router.push(ad.cta_route as any);
           }
-        }}
-      >
-        <View style={styles.heroInner}>
-          {/* Upper portion: Category/Eyebrow, Main Heading, Supporting Description */}
-          <View style={styles.heroUpperBlock}>
-            <AppText style={styles.heroTagText}>{welcomeData.tag}</AppText>
-            <AppText style={styles.heroHeading} numberOfLines={2}>
-              {welcomeData.title}
-            </AppText>
-            <AppText style={styles.heroSupportingText} numberOfLines={2}>
-              {welcomeData.supportingText}
-            </AppText>
-          </View>
+        },
+      };
+    });
 
-          {/* Spacer */}
-          <View style={styles.heroSpacer} />
+    return [welcomeSlide, ...adSlides];
+  }, [effectiveClubId, welcomeData, clubAds, router]);
 
-          {/* Lower portion: CTA button on the left, Decorative Script Motto on the right */}
-          <View style={styles.heroBottomRow}>
-            <TouchableOpacity
-              style={styles.heroCtaButton}
-              onPress={() => router.push(welcomeData.route as any)}
-              activeOpacity={0.88}
-              accessibilityLabel={welcomeData.ctaText}
-              accessibilityRole="button"
-            >
-              <AppText style={styles.heroCtaText} numberOfLines={1}>
-                {welcomeData.ctaText}
-              </AppText>
-              <ArrowRight size={13} color="#102F2B" strokeWidth={2.4} />
-            </TouchableOpacity>
-
-            {/* Decorative Script Motto (Right side) */}
-            {welcomeData.scriptLines && welcomeData.scriptLines.length > 0 && (
-              <View style={styles.heroScriptMotto}>
-                {welcomeData.scriptLines.map((line, lIdx) => (
-                  <AppText key={lIdx} style={styles.scriptLine}>
-                    {line}
-                  </AppText>
-                ))}
-              </View>
-            )}
-          </View>
-        </View>
-      </LayeredHeroAdBackground>
+  return (
+    <View style={styles.heroWrapper}>
+      <PlayerHeroBanner
+        slides={clubHeroSlides}
+        resetKey={effectiveClubId}
+        style={{ marginBottom: 0 }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   heroWrapper: {
-    borderRadius: 22,
+    borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
     shadowColor: '#102F2B',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.16,
     shadowRadius: 10,
     elevation: 4,
   },
-  heroInner: {
-    paddingTop: 18,
-    paddingHorizontal: 18,
-    paddingBottom: 22,
-    justifyContent: 'space-between',
-    minHeight: 215,
-  },
-  heroUpperBlock: {
-    gap: 4,
-    alignItems: 'flex-start',
-    width: '100%',
-  },
-  heroTagText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#6EE7B7',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-  heroHeading: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    lineHeight: 26,
-    letterSpacing: -0.4,
-  },
-  heroSupportingText: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.90)',
-    lineHeight: 16.5,
-    maxWidth: '85%',
-  },
-  heroSpacer: {
-    minHeight: 14,
-  },
-  heroBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    width: '100%',
-    gap: 10,
-  },
-  heroCtaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 999,
-    maxWidth: '70%',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  heroCtaText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#102F2B',
-  },
   heroScriptMotto: {
     alignItems: 'flex-end',
-    gap: -2,
-    flexShrink: 0,
+    justifyContent: 'center',
+    gap: 1.5,
   },
   scriptLine: {
     fontSize: 10.5,

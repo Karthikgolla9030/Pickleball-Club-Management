@@ -873,10 +873,10 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
         </View>
         <View style={styles.groupHeaderTextCol}>
           <View style={styles.headerWithAction}>
-            <View style={{ flex: 1 }}>
-              <AppText style={styles.groupTitle}>Group 6: Club Promotional Ads</AppText>
+            <View style={styles.headerTextWrapper}>
+              <AppText style={styles.groupTitle}>Club Promotional Ads</AppText>
               <AppText style={styles.groupSubtitle}>
-                Manage promotional advertisements displayed for your club in the Player App. Eligible active ads are also featured on the universal Player Home carousel.
+                Manage promotional advertisements displayed for your club in the Player App. Eligible active ads appear in the relevant home-page carousel.
               </AppText>
             </View>
             {isOwner && (
@@ -921,40 +921,48 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
             {slides.map((slide: ClubCarouselSlide, index: number) => {
               const scheduleStatus = getAdScheduleStatus(slide.start_date, slide.end_date, slide.is_active);
               const dateRangeLabel = formatAdDateRange(slide.start_date, slide.end_date);
+              const isDistinctSubtitle =
+                slide.subtitle &&
+                slide.subtitle.trim().length > 0 &&
+                slide.subtitle.trim().toLowerCase() !== (slide.title || '').trim().toLowerCase();
 
               return (
-                <View key={slide.id} style={styles.slideItem}>
-                  {/* Thumbnail */}
-                  <Image
-                    source={{ uri: resolveMediaUrl(slide.image_url) }}
-                    style={styles.slideThumbnail}
-                    resizeMode="cover"
-                  />
-
-                  {/* Content */}
-                  <View style={styles.slideDetails}>
-                    <View style={styles.slideTagRow}>
+                <View key={slide.id} style={styles.slideCard}>
+                  {/* Top Meta Bar: Category, Status, and Reorder Controls */}
+                  <View style={styles.slideCardHeader}>
+                    <View style={styles.slideBadgesRow}>
                       {slide.tag ? (
-                        <View style={styles.slideTagBadge}>
-                          <AppText style={styles.slideTagText}>{slide.tag.toUpperCase()}</AppText>
+                        <View style={styles.slideCategoryBadge}>
+                          <AppText style={styles.slideCategoryText}>
+                            {slide.tag.toUpperCase()}
+                          </AppText>
                         </View>
                       ) : null}
                       <View
                         style={[
-                          styles.slideActiveBadge,
-                          scheduleStatus.type === 'active' && styles.slideActiveBadgeOn,
-                          scheduleStatus.type === 'disabled' && styles.slideActiveBadgeOff,
-                          scheduleStatus.type === 'scheduled' && styles.badgeScheduled,
-                          scheduleStatus.type === 'expired' && styles.badgeExpired,
+                          styles.slideStatusBadge,
+                          scheduleStatus.type === 'active' && styles.slideStatusActive,
+                          scheduleStatus.type === 'disabled' && styles.slideStatusDisabled,
+                          scheduleStatus.type === 'scheduled' && styles.slideStatusScheduled,
+                          scheduleStatus.type === 'expired' && styles.slideStatusExpired,
                         ]}
                       >
+                        <View
+                          style={[
+                            styles.slideStatusDot,
+                            scheduleStatus.type === 'active' && styles.slideStatusDotActive,
+                            scheduleStatus.type === 'disabled' && styles.slideStatusDotDisabled,
+                            scheduleStatus.type === 'scheduled' && styles.slideStatusDotScheduled,
+                            scheduleStatus.type === 'expired' && styles.slideStatusDotExpired,
+                          ]}
+                        />
                         <AppText
                           style={[
-                            styles.slideActiveBadgeText,
-                            scheduleStatus.type === 'active' && styles.slideActiveTextOn,
-                            scheduleStatus.type === 'disabled' && styles.slideActiveTextOff,
-                            scheduleStatus.type === 'scheduled' && styles.badgeTextScheduled,
-                            scheduleStatus.type === 'expired' && styles.badgeTextExpired,
+                            styles.slideStatusBadgeText,
+                            scheduleStatus.type === 'active' && styles.slideStatusTextActive,
+                            scheduleStatus.type === 'disabled' && styles.slideStatusTextDisabled,
+                            scheduleStatus.type === 'scheduled' && styles.slideStatusTextScheduled,
+                            scheduleStatus.type === 'expired' && styles.slideStatusTextExpired,
                           ]}
                         >
                           {scheduleStatus.label}
@@ -962,69 +970,106 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                       </View>
                     </View>
 
-                    <AppText style={styles.slideTitle} numberOfLines={2}>
-                      {slide.title || 'Untitled Promotional Ad'}
-                    </AppText>
-                    {slide.subtitle ? (
-                      <AppText style={styles.slideSubtitle} numberOfLines={2}>
-                        {slide.subtitle}
-                      </AppText>
-                    ) : null}
-
-                    {dateRangeLabel ? (
-                      <AppText style={styles.adDateRangeText}>🗓 {dateRangeLabel}</AppText>
-                    ) : null}
-
-                    {slide.cta_text ? (
-                      <AppText style={styles.slideCtaInfo} numberOfLines={2}>
-                        CTA: "{slide.cta_text}" → {slide.cta_route || 'Default'}
-                      </AppText>
-                    ) : null}
-                  </View>
-
-                  {/* Controls */}
-                  {isOwner && (
-                    <View style={styles.slideControls}>
-                      {/* Reorder Up/Down */}
-                      <View style={styles.reorderBtns}>
+                    {isOwner && (
+                      <View style={styles.slideReorderGroup}>
                         <TouchableOpacity
-                          style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
+                          style={[styles.slideReorderBtn, index === 0 && styles.slideReorderBtnDisabled]}
                           disabled={index === 0}
                           onPress={() => handleMoveSlide(index, 'up')}
+                          hitSlop={6}
+                          accessibilityLabel="Move advertisement up"
                         >
                           <ArrowUp size={13} color={index === 0 ? '#CBD5E1' : '#1E293B'} />
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.reorderBtn, index === slides.length - 1 && styles.reorderBtnDisabled]}
+                          style={[styles.slideReorderBtn, index === slides.length - 1 && styles.slideReorderBtnDisabled]}
                           disabled={index === slides.length - 1}
                           onPress={() => handleMoveSlide(index, 'down')}
+                          hitSlop={6}
+                          accessibilityLabel="Move advertisement down"
                         >
                           <ArrowDown size={13} color={index === slides.length - 1 ? '#CBD5E1' : '#1E293B'} />
                         </TouchableOpacity>
                       </View>
+                    )}
+                  </View>
 
-                      {/* Active toggle */}
-                      <Switch
-                        value={slide.is_active}
-                        onValueChange={(val) => handleToggleSlideActive(slide, val)}
-                        trackColor={{ false: '#E2E8F0', true: '#A7F3D0' }}
-                        thumbColor={slide.is_active ? '#10B981' : '#94A3B8'}
-                        style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                      />
+                  {/* Middle Body: Thumbnail on Left, Title & Details on Right */}
+                  <View style={styles.slideCardBody}>
+                    <Image
+                      source={{ uri: resolveMediaUrl(slide.image_url) }}
+                      style={styles.slideThumbnail}
+                      resizeMode="cover"
+                    />
 
-                      {/* Edit & Delete */}
-                      <View style={styles.slideActionBtns}>
+                    <View style={styles.slideInfoCol}>
+                      <AppText style={styles.slideTitle}>
+                        {slide.title || 'Untitled Promotional Ad'}
+                      </AppText>
+
+                      {isDistinctSubtitle ? (
+                        <AppText style={styles.slideSubtitle}>
+                          {slide.subtitle}
+                        </AppText>
+                      ) : null}
+
+                      {dateRangeLabel ? (
+                        <View style={styles.slideMetaRow}>
+                          <Calendar size={13} color="#64748B" />
+                          <AppText style={styles.slideDateText}>{dateRangeLabel}</AppText>
+                        </View>
+                      ) : null}
+
+                      {slide.cta_text ? (
+                        <View style={styles.slideMetaRow}>
+                          <View style={styles.slideCtaPill}>
+                            <AppText style={styles.slideCtaPillText}>
+                              CTA: "{slide.cta_text}"
+                            </AppText>
+                            {slide.cta_route ? (
+                              <AppText style={styles.slideCtaRouteText}>
+                                {' '}→ {slide.cta_route}
+                              </AppText>
+                            ) : null}
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+
+                  {/* Bottom Footer: Toggle Switch & Actions */}
+                  {isOwner && (
+                    <View style={styles.slideCardFooter}>
+                      <View style={styles.slideToggleRow}>
+                        <Switch
+                          value={slide.is_active}
+                          onValueChange={(val) => handleToggleSlideActive(slide, val)}
+                          trackColor={{ false: '#E2E8F0', true: '#A7F3D0' }}
+                          thumbColor={slide.is_active ? '#10B981' : '#94A3B8'}
+                          style={{ transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }] }}
+                        />
+                        <AppText style={styles.slideToggleLabel}>
+                          {slide.is_active ? 'Active in Carousel' : 'Disabled'}
+                        </AppText>
+                      </View>
+
+                      <View style={styles.slideActionsRow}>
                         <TouchableOpacity
-                          style={styles.slideIconBtn}
+                          style={styles.slideActionBtn}
                           onPress={() => openSlideModal(slide)}
+                          activeOpacity={0.7}
                         >
-                          <Sliders size={14} color="#475569" />
+                          <Sliders size={13} color="#334155" />
+                          <AppText style={styles.slideActionBtnText}>Edit</AppText>
                         </TouchableOpacity>
+
                         <TouchableOpacity
-                          style={styles.slideIconBtn}
+                          style={[styles.slideActionBtn, styles.slideDeleteBtn]}
                           onPress={() => handleDeleteSlide(slide)}
+                          activeOpacity={0.7}
                         >
-                          <Trash2 size={14} color="#EF4444" />
+                          <Trash2 size={13} color="#DC2626" />
+                          <AppText style={styles.slideDeleteBtnText}>Delete</AppText>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1524,17 +1569,23 @@ const styles = StyleSheet.create({
   headerWithAction: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: Spacing[2],
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: Spacing[3],
+  },
+  headerTextWrapper: {
+    flex: 1,
+    minWidth: 200,
   },
   addSlideBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#176B57',
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[1.5],
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2],
     borderRadius: Radius.md,
-    gap: Spacing[1],
+    gap: Spacing[1.5],
+    alignSelf: 'flex-start',
   },
   addSlideBtnText: {
     fontSize: 12,
@@ -1569,109 +1620,244 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   slidesList: {
-    gap: Spacing[3],
+    gap: Spacing[3.5],
   },
-  slideItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing[2.5],
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
+  slideCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: Spacing[3],
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
-  slideThumbnail: {
-    width: 64,
-    height: 48,
-    borderRadius: Radius.sm,
-    backgroundColor: '#E2E8F0',
+  slideCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[3.5],
+    paddingTop: Spacing[3],
+    paddingBottom: Spacing[2],
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  slideDetails: {
-    flex: 1,
-  },
-  slideTagRow: {
+  slideBadgesRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[1.5],
-    marginBottom: 2,
+    gap: Spacing[2],
+    flexWrap: 'wrap',
   },
-  slideTagBadge: {
-    backgroundColor: '#E2E8F0',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
+  slideCategoryBadge: {
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#CEEAD6',
   },
-  slideTagText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  slideActiveBadge: {
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
-  },
-  slideActiveBadgeOn: {
-    backgroundColor: '#DCFCE7',
-  },
-  slideActiveBadgeOff: {
-    backgroundColor: '#F1F5F9',
-  },
-  slideActiveBadgeText: {
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  slideActiveTextOn: {
-    color: '#15803D',
-  },
-  slideActiveTextOff: {
-    color: '#64748B',
-  },
-  slideTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  slideSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 1,
-  },
-  slideCtaInfo: {
+  slideCategoryText: {
     fontSize: 10,
-    color: '#176B57',
-    marginTop: 2,
+    fontWeight: '700',
+    color: '#137333',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  slideControls: {
+  slideStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[1.5],
+    gap: 4.5,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+    borderWidth: 1,
   },
-  reorderBtns: {
-    flexDirection: 'column',
-    gap: 2,
-  },
-  reorderBtn: {
-    padding: 3,
-    backgroundColor: '#FFFFFF',
+  slideStatusDot: {
+    width: 6,
+    height: 6,
     borderRadius: 3,
+  },
+  slideStatusBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  slideStatusActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  slideStatusDotActive: {
+    backgroundColor: '#16A34A',
+  },
+  slideStatusTextActive: {
+    color: '#15803D',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  slideStatusDisabled: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  slideStatusDotDisabled: {
+    backgroundColor: '#94A3B8',
+  },
+  slideStatusTextDisabled: {
+    color: '#64748B',
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  slideStatusScheduled: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+  },
+  slideStatusDotScheduled: {
+    backgroundColor: '#3B82F6',
+  },
+  slideStatusTextScheduled: {
+    color: '#1D4ED8',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  slideStatusExpired: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  slideStatusDotExpired: {
+    backgroundColor: '#EF4444',
+  },
+  slideStatusTextExpired: {
+    color: '#B91C1C',
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  slideReorderGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  slideReorderBtn: {
+    padding: 5,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
-  reorderBtnDisabled: {
+  slideReorderBtnDisabled: {
     opacity: 0.35,
+    backgroundColor: '#F1F5F9',
   },
-  slideActionBtns: {
+  slideCardBody: {
     flexDirection: 'row',
+    padding: Spacing[3.5],
+    gap: Spacing[3],
+    alignItems: 'flex-start',
+  },
+  slideThumbnail: {
+    width: 76,
+    height: 76,
+    borderRadius: Radius.md,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  slideInfoCol: {
+    flex: 1,
     gap: 4,
   },
-  slideIconBtn: {
-    padding: 6,
-    backgroundColor: '#FFFFFF',
+  slideTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 19,
+  },
+  slideSubtitle: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  slideMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  slideDateText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '500',
+  },
+  slideCtaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexWrap: 'wrap',
+  },
+  slideCtaPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  slideCtaRouteText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  slideCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2.5],
+    backgroundColor: '#F8FAFC',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  slideToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  slideToggleLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#334155',
+  },
+  slideActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  slideActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: Spacing[1.5],
+    borderRadius: Radius.sm,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  slideActionBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  slideDeleteBtn: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FEF2F2',
+  },
+  slideDeleteBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#DC2626',
   },
   modalOverlay: {
     flex: 1,
