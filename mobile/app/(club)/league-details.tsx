@@ -899,6 +899,31 @@ export default function ClubLeagueDetailsScreen() {
     return m.stage === 'regular_season';
   });
 
+  // Display weeks for Schedule tab week selector (supports <= 4 equal row or > 4 scroll)
+  const displayWeeks = useMemo(() => {
+    if (regularWeeks && regularWeeks.length > 0) {
+      return regularWeeks.map((w) => ({
+        id: w.id,
+        weekNumber: w.week_number,
+        weekObj: w,
+      }));
+    }
+    const count = Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0));
+    return Array.from({ length: count }).map((_, idx) => ({
+      id: `fake-${idx + 1}`,
+      weekNumber: idx + 1,
+      weekObj: null as LeagueWeek | null,
+    }));
+  }, [regularWeeks, league.number_of_weeks, league.playoff_team_count]);
+
+  const getDoublesSubtitle = (team?: LeagueTeam) => {
+    if (!team || !team.members || team.members.length < 2) return null;
+    const p1 = team.members[0]?.user?.full_name || team.members[0]?.user?.display_name || team.members[0]?.display_name;
+    const p2 = team.members[1]?.user?.full_name || team.members[1]?.user?.display_name || team.members[1]?.display_name;
+    if (!p1 && !p2) return null;
+    return `${p1 || 'Player 1'} & ${p2 || 'Player 2'}`;
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#F2F8F5' }]}>
       {/* ─── FIXED TOP BAR (Back button, Centered Title, 3-Dot Menu) ─── */}
@@ -1202,87 +1227,71 @@ export default function ClubLeagueDetailsScreen() {
           {(activeTab === 'schedule' || activeTab === 'matches') && (
             <View style={styles.tabPane}>
               {/* Week Selector */}
-              <View style={styles.weekSelectorContainer}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.weekSelectorScroll}
-                >
-                  {regularWeeks && regularWeeks.length > 0
-                    ? regularWeeks.map((w: LeagueWeek) => {
+              {displayWeeks.length <= 4 ? (
+                <View style={styles.weekSelectorRowEqual}>
+                  {displayWeeks.map((item, idx) => {
+                    const isSelected =
+                      selectedWeekId !== 'all' &&
+                      (selectedWeekId === item.id || (!selectedWeekId && (activeWeek?.id === item.id || idx === 0)));
+                    return (
+                      <TouchableOpacity
+                        key={item.id}
+                        style={[
+                          styles.weekPillEqual,
+                          isSelected ? styles.weekPillSelected : styles.weekPillUnselected,
+                        ]}
+                        onPress={() => item.weekObj && setSelectedWeekId(item.id)}
+                        activeOpacity={item.weekObj ? 0.75 : 1}
+                      >
+                        <AppText
+                          style={[
+                            styles.weekPillText,
+                            isSelected ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          Week {item.weekNumber}
+                        </AppText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.weekSelectorContainer}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.weekSelectorScroll}
+                  >
+                    {displayWeeks.map((item, idx) => {
                       const isSelected =
                         selectedWeekId !== 'all' &&
-                        (selectedWeekId === w.id || (!selectedWeekId && activeWeek?.id === w.id));
+                        (selectedWeekId === item.id || (!selectedWeekId && (activeWeek?.id === item.id || idx === 0)));
                       return (
                         <TouchableOpacity
-                          key={w.id}
+                          key={item.id}
                           style={[
-                            styles.weekPill,
+                            styles.weekPillScrollable,
                             isSelected ? styles.weekPillSelected : styles.weekPillUnselected,
                           ]}
-                          onPress={() => setSelectedWeekId(w.id)}
-                          activeOpacity={0.8}
+                          onPress={() => item.weekObj && setSelectedWeekId(item.id)}
+                          activeOpacity={item.weekObj ? 0.75 : 1}
                         >
                           <AppText
                             style={[
                               styles.weekPillText,
                               isSelected ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
                             ]}
+                            numberOfLines={1}
                           >
-                            Week {w.week_number}
+                            Week {item.weekNumber}
                           </AppText>
                         </TouchableOpacity>
                       );
-                    })
-                    : Array.from({
-                      length: Math.max(1, (league.number_of_weeks || 4) - (league.playoff_team_count > 0 ? 1 : 0)),
-                    }).map((_, idx) => (
-                      <View
-                        key={idx}
-                        style={[
-                          styles.weekPill,
-                          idx === 0 ? styles.weekPillSelected : styles.weekPillUnselected,
-                        ]}
-                      >
-                        <AppText
-                          style={[
-                            styles.weekPillText,
-                            idx === 0 ? styles.weekPillTextSelected : styles.weekPillTextUnselected,
-                          ]}
-                        >
-                          Week {idx + 1}
-                        </AppText>
-                      </View>
-                    ))}
-
-                  {/* Dropdown filter on Match Scores: "All Courts ▾" */}
-                  {scheduleSubView === 'scores' && (
-                    <TouchableOpacity
-                      style={styles.courtFilterPill}
-                      onPress={() => {
-                        const courtIds = clubCourts?.map((c) => c.id) || [];
-                        if (!courtFilterId) {
-                          setCourtFilterId(courtIds[0] || null);
-                        } else {
-                          const currentIdx = courtIds.indexOf(courtFilterId);
-                          if (currentIdx === courtIds.length - 1) {
-                            setCourtFilterId(null);
-                          } else {
-                            setCourtFilterId(courtIds[currentIdx + 1]);
-                          }
-                        }
-                      }}
-                    >
-                      <AppText style={styles.courtFilterPillText}>
-                        {courtFilterId
-                          ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
-                          : 'All Courts'}{' '}
-                        ▾
-                      </AppText>
-                    </TouchableOpacity>
-                  )}
-                </ScrollView>
-              </View>
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
               {!hasSchedule ? (
                 /* SCREEN 3: NO SCHEDULE GENERATED CARD */
@@ -1381,19 +1390,29 @@ export default function ClubLeagueDetailsScreen() {
                         <AppText style={styles.weekScheduleTitle}>
                           Week {activeWeek?.week_number || 1} Schedule
                         </AppText>
-                        <AppText style={styles.weekMatchCountText}>
-                          {matches?.length || 0} Matches
-                        </AppText>
+                        <View style={styles.matchCountBadge}>
+                          <AppText style={styles.matchCountBadgeText}>
+                            {matches?.length || 0} {matches?.length === 1 ? 'Match' : 'Matches'}
+                          </AppText>
+                        </View>
                       </View>
 
-                      {/* Week Date (Optional) Card */}
+                      {/* Week Date Card */}
                       <View style={styles.weekDateCard}>
                         <View style={styles.weekDateLeft}>
-                          <Calendar size={18} color="#6B7280" />
-                          <View>
-                            <AppText style={styles.weekDateLabel}>Week Date (Optional)</AppText>
+                          <View style={styles.calendarIconCircle}>
+                            <Calendar size={18} color="#176B57" strokeWidth={2.2} />
+                          </View>
+                          <View style={styles.weekDateTexts}>
+                            <AppText style={styles.weekDateLabel}>Schedule Dates</AppText>
                             <AppText style={styles.weekDateValue}>
-                              {activeWeek?.start_date ? formatDate(activeWeek.start_date) : 'May 6, 2026'}
+                              {activeWeek?.start_date && activeWeek?.end_date
+                                ? `${formatDate(activeWeek.start_date)} – ${formatDate(activeWeek.end_date)}`
+                                : activeWeek?.start_date
+                                  ? formatDate(activeWeek.start_date)
+                                  : league.start_date
+                                    ? formatDate(league.start_date)
+                                    : 'Dates TBA'}
                             </AppText>
                           </View>
                         </View>
@@ -1401,8 +1420,9 @@ export default function ClubLeagueDetailsScreen() {
                           <TouchableOpacity
                             style={styles.weekDateEditBtn}
                             onPress={() => openWeekDatesModal(activeWeek)}
+                            activeOpacity={0.7}
                           >
-                            <AppText style={styles.weekDateEditBtnText}>Edit</AppText>
+                            <AppText style={styles.weekDateEditBtnText}>Edit Dates</AppText>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1410,76 +1430,140 @@ export default function ClubLeagueDetailsScreen() {
                       {/* Match Cards List */}
                       <View style={styles.matchesList}>
                         {matches?.map((m) => {
-                          const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                          const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                          const teamA = teams?.find((t) => t.id === m.team_a_id);
+                          const teamB = teams?.find((t) => t.id === m.team_b_id);
+                          const nameA = m.team_a_name || m.team_a?.name || teamA?.name || 'Team A';
+                          const nameB = m.is_bye ? 'BYE' : (m.team_b_name || m.team_b?.name || teamB?.name || 'Team B');
+                          const initialsA = getTeamInitials(nameA);
+                          const initialsB = m.is_bye ? '—' : getTeamInitials(nameB);
                           const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
                           const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
                           const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
                           const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
-                          const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
-                          const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+                          const ratingA = teamA?.avg_skill_level ?? 3.8;
+                          const ratingB = teamB?.avg_skill_level ?? 3.5;
 
-                          const timeStr = m.scheduled_start_at
-                            ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                            : '6:00 PM';
+                          const hasScheduledTime = Boolean(m.scheduled_start_at);
+                          const timeStr = hasScheduledTime
+                            ? new Date(m.scheduled_start_at!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                            : 'Time TBA';
+                          const courtAssigned = Boolean(m.court_id || m.court_name || m.court_number);
                           const courtStr = getCourtDisplayLabel(
-                            m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                            courtAssigned ? (m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m) : m,
                             { unassignedLabel: 'Court not assigned' }
                           );
-                          const dateStr = m.scheduled_start_at
-                            ? formatDateTime(m.scheduled_start_at)
+                          const dateStr = hasScheduledTime
+                            ? formatDateTime(m.scheduled_start_at!)
                             : activeWeek?.start_date
-                              ? `${formatDate(activeWeek.start_date)} • ${timeStr}`
-                              : `May 6, 2026 • ${timeStr}`;
+                              ? `${formatDate(activeWeek.start_date)}`
+                              : 'Date TBA';
 
                           return (
                             <TouchableOpacity
                               key={m.id}
-                              style={styles.screen4MatchCard}
+                              style={styles.scheduleMatchCard}
                               onPress={() => canManageLeague && openScheduleModal(m)}
-                              activeOpacity={0.8}
+                              activeOpacity={canManageLeague ? 0.75 : 1}
                             >
-                              <View style={styles.screen4MatchTopRow}>
-                                {/* Left Col: Match X, Time, Court */}
-                                <View style={styles.screen4MatchLeftCol}>
-                                  <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
-                                  <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
-                                  <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
-                                </View>
-
-                                {/* Right Col: Team A vs Team B with avatars and ratings */}
-                                <View style={styles.screen4MatchupCol}>
-                                  <View style={styles.matchupTeamRow}>
-                                    <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                                      <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
-                                    </View>
-                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                      {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                                    </AppText>
-                                    <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
-                                  </View>
-
-                                  <AppText style={styles.matchupVsText}>vs</AppText>
-
-                                  <View style={styles.matchupTeamRow}>
-                                    <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                                      <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
-                                    </View>
-                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                      {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
-                                    </AppText>
-                                    {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
+                              {/* Top Header Row */}
+                              <View style={styles.scheduleMatchHeader}>
+                                <View style={styles.scheduleMatchHeaderLeft}>
+                                  <AppText style={styles.scheduleMatchNumber}>Match {m.match_number}</AppText>
+                                  <View style={styles.scheduleTimeTag}>
+                                    <Clock size={11} color="#4B5563" />
+                                    <AppText style={styles.scheduleTimeTagText}>{timeStr}</AppText>
                                   </View>
                                 </View>
 
-                                {/* Chevron Right */}
-                                <ChevronRight size={18} color="#9CA3AF" />
+                                <View
+                                  style={[
+                                    styles.courtStatusBadge,
+                                    courtAssigned ? styles.courtStatusBadgeAssigned : styles.courtStatusBadgeUnassigned,
+                                  ]}
+                                >
+                                  <AppText
+                                    style={[
+                                      styles.courtStatusBadgeText,
+                                      courtAssigned ? styles.courtStatusBadgeTextAssigned : styles.courtStatusBadgeTextUnassigned,
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {courtStr}
+                                  </AppText>
+                                </View>
                               </View>
 
-                              {/* Bottom Date Row */}
-                              <View style={styles.screen4MatchDateRow}>
-                                <Calendar size={13} color="#6B7280" />
-                                <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
+                              {/* Competitor Matchup Rows */}
+                              <View style={styles.scheduleMatchupSection}>
+                                {/* Competitor A */}
+                                <View style={styles.scheduleCompetitorRow}>
+                                  <View style={[styles.competitorAvatar, { backgroundColor: avatarA.bg }]}>
+                                    <AppText style={[styles.competitorAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                                  </View>
+                                  <View style={styles.scheduleCompetitorInfo}>
+                                    <AppText style={styles.scheduleCompetitorName} numberOfLines={1}>
+                                      {nameA}
+                                    </AppText>
+                                    {!isSingles && getDoublesSubtitle(teamA) ? (
+                                      <AppText style={styles.scheduleDoublesSubtitle} numberOfLines={1}>
+                                        {getDoublesSubtitle(teamA)}
+                                      </AppText>
+                                    ) : null}
+                                  </View>
+                                  <View style={styles.scheduleRatingBadge}>
+                                    <AppText style={styles.scheduleRatingText}>{ratingA.toFixed(1)}</AppText>
+                                  </View>
+                                </View>
+
+                                {/* VS Divider */}
+                                <View style={styles.scheduleVsDivider}>
+                                  <View style={styles.scheduleVsLine} />
+                                  <View style={styles.scheduleVsPill}>
+                                    <AppText style={styles.scheduleVsPillText}>VS</AppText>
+                                  </View>
+                                  <View style={styles.scheduleVsLine} />
+                                </View>
+
+                                {/* Competitor B */}
+                                <View style={styles.scheduleCompetitorRow}>
+                                  <View style={[styles.competitorAvatar, { backgroundColor: m.is_bye ? '#F3F4F6' : avatarB.bg }]}>
+                                    <AppText style={[styles.competitorAvatarText, { color: m.is_bye ? '#9CA3AF' : avatarB.text }]}>
+                                      {initialsB}
+                                    </AppText>
+                                  </View>
+                                  <View style={styles.scheduleCompetitorInfo}>
+                                    <AppText style={[styles.scheduleCompetitorName, m.is_bye && styles.scheduleCompetitorBye]} numberOfLines={1}>
+                                      {nameB}
+                                    </AppText>
+                                    {!isSingles && !m.is_bye && getDoublesSubtitle(teamB) ? (
+                                      <AppText style={styles.scheduleDoublesSubtitle} numberOfLines={1}>
+                                        {getDoublesSubtitle(teamB)}
+                                      </AppText>
+                                    ) : null}
+                                  </View>
+                                  {!m.is_bye && (
+                                    <View style={styles.scheduleRatingBadge}>
+                                      <AppText style={styles.scheduleRatingText}>{ratingB.toFixed(1)}</AppText>
+                                    </View>
+                                  )}
+                                </View>
+                              </View>
+
+                              {/* Card Footer: Date info on left, action affordance on right */}
+                              <View style={styles.scheduleCardFooter}>
+                                <View style={styles.scheduleCardFooterLeft}>
+                                  <Calendar size={12} color="#6B7280" />
+                                  <AppText style={styles.scheduleCardFooterDate}>{dateStr}</AppText>
+                                </View>
+
+                                {canManageLeague && (
+                                  <View style={styles.scheduleManageAffordance}>
+                                    <AppText style={styles.scheduleManageAffordanceText}>
+                                      {courtAssigned && hasScheduledTime ? 'Edit Schedule' : 'Set Time & Court'}
+                                    </AppText>
+                                    <ChevronRight size={13} color="#176B57" />
+                                  </View>
+                                )}
                               </View>
                             </TouchableOpacity>
                           );
@@ -1503,38 +1587,76 @@ export default function ClubLeagueDetailsScreen() {
                   ) : (
                     /* SCREEN 5: MATCH SCORES */
                     <View style={styles.scheduleContent}>
-                      {/* Week Matches Header */}
+                      {/* Week Matches Header + Court Filter */}
                       <View style={styles.weekHeaderRow}>
-                        <AppText style={styles.weekScheduleTitle}>
-                          Week {activeWeek?.week_number || 1} Matches
-                        </AppText>
-                        <AppText style={styles.weekMatchCountText}>
-                          {filteredMatches.length} Matches
-                        </AppText>
+                        <View>
+                          <AppText style={styles.weekScheduleTitle}>
+                            Week {activeWeek?.week_number || 1} Matches
+                          </AppText>
+                          <AppText style={styles.weekMatchCountSubtitle}>
+                            {filteredMatches.length} {filteredMatches.length === 1 ? 'Match' : 'Matches'}
+                          </AppText>
+                        </View>
+
+                        {/* Court Filter dropdown button */}
+                        {clubCourts && clubCourts.length > 0 && (
+                          <TouchableOpacity
+                            style={styles.courtFilterDropdown}
+                            onPress={() => {
+                              const courtIds = clubCourts?.map((c) => c.id) || [];
+                              if (!courtFilterId) {
+                                setCourtFilterId(courtIds[0] || null);
+                              } else {
+                                const currentIdx = courtIds.indexOf(courtFilterId);
+                                if (currentIdx === courtIds.length - 1) {
+                                  setCourtFilterId(null);
+                                } else {
+                                  setCourtFilterId(courtIds[currentIdx + 1]);
+                                }
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <AppText style={styles.courtFilterDropdownText}>
+                              {courtFilterId
+                                ? clubCourts?.find((c) => c.id === courtFilterId)?.display_name || clubCourts?.find((c) => c.id === courtFilterId)?.name || 'Court'
+                                : 'All Courts'}{' '}
+                              ▾
+                            </AppText>
+                          </TouchableOpacity>
+                        )}
                       </View>
 
                       {/* Match Cards List */}
                       <View style={styles.matchesList}>
-                        {filteredMatches.map((m, idx) => {
-                          const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                          const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                        {filteredMatches.map((m) => {
+                          const teamA = teams?.find((t) => t.id === m.team_a_id);
+                          const teamB = teams?.find((t) => t.id === m.team_b_id);
+                          const nameA = m.team_a_name || m.team_a?.name || teamA?.name || 'Team A';
+                          const nameB = m.is_bye ? 'BYE' : (m.team_b_name || m.team_b?.name || teamB?.name || 'Team B');
+                          const initialsA = getTeamInitials(nameA);
+                          const initialsB = m.is_bye ? '—' : getTeamInitials(nameB);
                           const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
                           const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
                           const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
                           const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
-                          const ratingA = teams?.find((t) => t.id === m.team_a_id)?.avg_skill_level ?? 3.8;
-                          const ratingB = teams?.find((t) => t.id === m.team_b_id)?.avg_skill_level ?? 3.5;
+                          const ratingA = teamA?.avg_skill_level ?? 3.8;
+                          const ratingB = teamB?.avg_skill_level ?? 3.5;
 
-                          const timeStr = m.scheduled_start_at
-                            ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                            : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                          const hasScheduledTime = Boolean(m.scheduled_start_at);
+                          const timeStr = hasScheduledTime
+                            ? new Date(m.scheduled_start_at!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                            : 'Time TBA';
+                          const courtAssigned = Boolean(m.court_id || m.court_name || m.court_number);
                           const courtStr = getCourtDisplayLabel(
-                            m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                            courtAssigned ? (m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m) : m,
                             { unassignedLabel: 'Court not assigned' }
                           );
-                          const dateStr = m.scheduled_start_at
-                            ? formatDateTime(m.scheduled_start_at)
-                            : `May 6, 2026 • ${timeStr}`;
+                          const dateStr = hasScheduledTime
+                            ? formatDateTime(m.scheduled_start_at!)
+                            : activeWeek?.start_date
+                              ? `${formatDate(activeWeek.start_date)}`
+                              : 'Date TBA';
 
                           // Status pill config
                           const isCompleted = m.status === 'completed';
@@ -1547,8 +1669,8 @@ export default function ClubLeagueDetailsScreen() {
 
                           if (isCompleted) {
                             statusLabel = '✓ Completed';
-                            statusBg = '#DCFCE7';
-                            statusText = '#15803D';
+                            statusBg = '#DEF2E6';
+                            statusText = '#176B57';
                           } else if (isInProgress) {
                             statusLabel = '● In Progress';
                             statusBg = '#FEF3C7';
@@ -1566,64 +1688,89 @@ export default function ClubLeagueDetailsScreen() {
                           };
 
                           return (
-                            <View key={m.id} style={styles.screen5MatchCard}>
+                            <View key={m.id} style={styles.scheduleMatchCard}>
                               {/* Top Row: Left match meta + Right status badge */}
-                              <View style={styles.screen5TopRow}>
-                                <View style={styles.screen4MatchLeftCol}>
-                                  <AppText style={styles.screen4MatchNum}>Match {m.match_number}</AppText>
-                                  <AppText style={styles.screen4MatchTime}>{timeStr}</AppText>
-                                  <AppText style={styles.screen4MatchCourt}>{courtStr}</AppText>
+                              <View style={styles.scheduleMatchHeader}>
+                                <View style={styles.scheduleMatchHeaderLeft}>
+                                  <AppText style={styles.scheduleMatchNumber}>Match {m.match_number}</AppText>
+                                  <View style={styles.scheduleTimeTag}>
+                                    <Clock size={11} color="#4B5563" />
+                                    <AppText style={styles.scheduleTimeTagText}>{timeStr}</AppText>
+                                  </View>
                                 </View>
 
-                                <View style={[styles.screen5StatusBadge, { backgroundColor: statusBg }]}>
-                                  <AppText style={[styles.screen5StatusText, { color: statusText }]}>
+                                <View style={[styles.courtStatusBadge, { backgroundColor: statusBg }]}>
+                                  <AppText style={[styles.courtStatusBadgeText, { color: statusText }]}>
                                     {statusLabel}
                                   </AppText>
                                 </View>
                               </View>
 
-                              {/* Matchup row */}
+                              {/* Competitor Matchup Rows */}
                               <TouchableOpacity
-                                style={styles.screen5MatchupRow}
+                                style={styles.scheduleMatchupSection}
                                 onPress={() => canManageLeague && openScoreModal(m)}
-                                activeOpacity={0.7}
+                                activeOpacity={canManageLeague ? 0.75 : 1}
                               >
-                                <View style={styles.screen4MatchupCol}>
-                                  <View style={styles.matchupTeamRow}>
-                                    <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                                      <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
-                                    </View>
-                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                      {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                                    </AppText>
-                                    <AppText style={styles.matchupRating}>{ratingA.toFixed(1)}</AppText>
+                                {/* Competitor A */}
+                                <View style={styles.scheduleCompetitorRow}>
+                                  <View style={[styles.competitorAvatar, { backgroundColor: avatarA.bg }]}>
+                                    <AppText style={[styles.competitorAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
                                   </View>
-
-                                  <AppText style={styles.matchupVsText}>vs</AppText>
-
-                                  <View style={styles.matchupTeamRow}>
-                                    <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                                      <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
-                                    </View>
-                                    <AppText style={styles.matchupTeamName} numberOfLines={2}>
-                                      {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
+                                  <View style={styles.scheduleCompetitorInfo}>
+                                    <AppText style={styles.scheduleCompetitorName} numberOfLines={1}>
+                                      {nameA}
                                     </AppText>
-                                    {!m.is_bye && <AppText style={styles.matchupRating}>{ratingB.toFixed(1)}</AppText>}
+                                    {!isSingles && getDoublesSubtitle(teamA) ? (
+                                      <AppText style={styles.scheduleDoublesSubtitle} numberOfLines={1}>
+                                        {getDoublesSubtitle(teamA)}
+                                      </AppText>
+                                    ) : null}
+                                  </View>
+                                  <View style={styles.scheduleRatingBadge}>
+                                    <AppText style={styles.scheduleRatingText}>{ratingA.toFixed(1)}</AppText>
                                   </View>
                                 </View>
 
-                                <ChevronRight size={18} color="#9CA3AF" />
+                                {/* VS Divider */}
+                                <View style={styles.scheduleVsDivider}>
+                                  <View style={styles.scheduleVsLine} />
+                                  <View style={styles.scheduleVsPill}>
+                                    <AppText style={styles.scheduleVsPillText}>
+                                      {isCompleted && m.score_a !== null && m.score_b !== null
+                                        ? `${m.score_a} : ${m.score_b}`
+                                        : 'VS'}
+                                    </AppText>
+                                  </View>
+                                  <View style={styles.scheduleVsLine} />
+                                </View>
+
+                                {/* Competitor B */}
+                                <View style={styles.scheduleCompetitorRow}>
+                                  <View style={[styles.competitorAvatar, { backgroundColor: m.is_bye ? '#F3F4F6' : avatarB.bg }]}>
+                                    <AppText style={[styles.competitorAvatarText, { color: m.is_bye ? '#9CA3AF' : avatarB.text }]}>
+                                      {initialsB}
+                                    </AppText>
+                                  </View>
+                                  <View style={styles.scheduleCompetitorInfo}>
+                                    <AppText style={[styles.scheduleCompetitorName, m.is_bye && styles.scheduleCompetitorBye]} numberOfLines={1}>
+                                      {nameB}
+                                    </AppText>
+                                    {!isSingles && !m.is_bye && getDoublesSubtitle(teamB) ? (
+                                      <AppText style={styles.scheduleDoublesSubtitle} numberOfLines={1}>
+                                        {getDoublesSubtitle(teamB)}
+                                      </AppText>
+                                    ) : null}
+                                  </View>
+                                  {!m.is_bye && (
+                                    <View style={styles.scheduleRatingBadge}>
+                                      <AppText style={styles.scheduleRatingText}>{ratingB.toFixed(1)}</AppText>
+                                    </View>
+                                  )}
+                                </View>
                               </TouchableOpacity>
 
-                              {/* Bottom Date Row (if not in progress score editing) */}
-                              {!isInProgress && (
-                                <View style={styles.screen4MatchDateRow}>
-                                  <Calendar size={13} color="#6B7280" />
-                                  <AppText style={styles.screen4MatchDateText}>{dateStr}</AppText>
-                                </View>
-                              )}
-
-                              {/* Inline Score Entry Row (when in progress or completed) */}
+                              {/* Inline Score Entry Row (when in progress or completed and manager) */}
                               {canManageLeague && (isInProgress || isCompleted) && (
                                 <View style={styles.inlineScoreRow}>
                                   <TextInput
@@ -1664,6 +1811,26 @@ export default function ClubLeagueDetailsScreen() {
                                   </TouchableOpacity>
                                 </View>
                               )}
+
+                              {/* Card Footer: Court & Enter/Edit score affordance */}
+                              <View style={styles.scheduleCardFooter}>
+                                <View style={styles.scheduleCardFooterLeft}>
+                                  <MapPin size={12} color="#6B7280" />
+                                  <AppText style={styles.scheduleCardFooterDate} numberOfLines={1}>{courtStr}</AppText>
+                                </View>
+
+                                {canManageLeague && (
+                                  <TouchableOpacity
+                                    style={styles.scheduleManageAffordance}
+                                    onPress={() => openScoreModal(m)}
+                                  >
+                                    <AppText style={styles.scheduleManageAffordanceText}>
+                                      {isCompleted ? 'Edit Score' : 'Enter Score'}
+                                    </AppText>
+                                    <ChevronRight size={13} color="#176B57" />
+                                  </TouchableOpacity>
+                                )}
+                              </View>
                             </View>
                           );
                         })}
@@ -1936,140 +2103,277 @@ export default function ClubLeagueDetailsScreen() {
 
           {/* ══════════════════════════════════════════════════════════════════════════
             TAB 6: RESULTS (SCREEN 8)
-            - Dropdowns: Regular Season ▾ & Week 1 ▾
-            - Heading: Regular Season Results
-            - Completed Match Cards with Match 1 • May 6, 2026 • 6:00 PM • Court 1 & ✓ Completed badge
-            - Scores: AA Alpha Aces 11 - 9 BB Beta Blasters
+            - Clean filters: Regular Season / Playoffs segmented toggle + Week dropdown
+            - Dedicated Results Section Header with match count badge (no overlap!)
+            - 3-Tier Result Match Cards:
+                Tier 1 (Top): Match # • Date/Time on left, Status badge on right
+                Tier 2 (Main): Team A, Center Score Pill (with winning score bolded) or VS, Team B
+                Tier 3 (Footer): Court assignment info on left + Edit/Enter Score on right
+            - Supports scheduled, in_progress, completed, cancelled cleanly
            ══════════════════════════════════════════════════════════════════════════ */}
           {activeTab === 'results' && (
             <View style={styles.tabPane}>
-              {/* Filter Dropdowns Row */}
+              {/* Filter Row: Stage Selector + Week Dropdown */}
               <View style={styles.resultsFiltersRow}>
-                <TouchableOpacity
-                  style={styles.resultsFilterBtn}
-                  onPress={() =>
-                    setResultStageFilter((prev) =>
-                      prev === 'regular_season' ? 'playoffs' : 'regular_season'
-                    )
-                  }
-                >
-                  <AppText style={styles.resultsFilterBtnText}>
-                    {resultStageFilter === 'regular_season' ? 'Regular Season' : 'Playoffs'} ▾
-                  </AppText>
-                </TouchableOpacity>
+                {/* Stage Segmented Control */}
+                <View style={styles.resultsStageSegment}>
+                  <TouchableOpacity
+                    style={[
+                      styles.resultsStageBtn,
+                      resultStageFilter === 'regular_season' && styles.resultsStageBtnActive,
+                    ]}
+                    onPress={() => setResultStageFilter('regular_season')}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.resultsStageBtnText,
+                        resultStageFilter === 'regular_season' && styles.resultsStageBtnTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Regular Season
+                    </AppText>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.resultsFilterBtn}
-                  onPress={() => {
-                    if (resultWeekFilter === 'all') {
-                      setResultWeekFilter('1');
-                    } else {
-                      const nextWeek = parseInt(resultWeekFilter, 10) + 1;
-                      if (nextWeek > (regularWeeks.length || 4)) {
-                        setResultWeekFilter('all');
+                  <TouchableOpacity
+                    style={[
+                      styles.resultsStageBtn,
+                      resultStageFilter === 'playoffs' && styles.resultsStageBtnActive,
+                    ]}
+                    onPress={() => setResultStageFilter('playoffs')}
+                    activeOpacity={0.8}
+                  >
+                    <AppText
+                      style={[
+                        styles.resultsStageBtnText,
+                        resultStageFilter === 'playoffs' && styles.resultsStageBtnTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      Playoffs
+                    </AppText>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Week Selector Dropdown Button (Regular Season only) */}
+                {resultStageFilter === 'regular_season' && (
+                  <TouchableOpacity
+                    style={styles.resultsWeekDropdownBtn}
+                    onPress={() => {
+                      if (resultWeekFilter === 'all') {
+                        setResultWeekFilter('1');
                       } else {
-                        setResultWeekFilter(String(nextWeek));
+                        const nextWeek = parseInt(resultWeekFilter, 10) + 1;
+                        if (nextWeek > (regularWeeks.length || 4)) {
+                          setResultWeekFilter('all');
+                        } else {
+                          setResultWeekFilter(String(nextWeek));
+                        }
                       }
-                    }
-                  }}
-                >
-                  <AppText style={styles.resultsFilterBtnText}>
-                    {resultWeekFilter === 'all' ? 'All Weeks' : `Week ${resultWeekFilter}`} ▾
-                  </AppText>
-                </TouchableOpacity>
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <AppText style={styles.resultsWeekDropdownBtnText}>
+                      {resultWeekFilter === 'all' ? 'All Weeks' : `Week ${resultWeekFilter}`} ▾
+                    </AppText>
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {/* Results Heading */}
-              <View style={styles.weekHeaderRow}>
-                <AppText style={styles.weekScheduleTitle}>
+              {/* Dedicated Section Heading with Match Count */}
+              <View style={styles.resultsHeaderSection}>
+                <AppText style={styles.resultsHeadingTitle}>
                   {resultStageFilter === 'playoffs' ? 'Playoff Results' : 'Regular Season Results'}
                 </AppText>
+                <View style={styles.matchCountBadge}>
+                  <AppText style={styles.matchCountBadgeText}>
+                    {resultsMatches.length} {resultsMatches.length === 1 ? 'Match' : 'Matches'}
+                  </AppText>
+                </View>
               </View>
 
-              {/* Completed Match Cards List */}
+              {/* Match Cards List */}
               {resultsMatches.length === 0 ? (
                 <EmptyState
-                  title="No Completed Matches"
-                  description="Match results will appear here once games have been scored and completed."
+                  title="No Matches Found"
+                  description={
+                    resultStageFilter === 'playoffs'
+                      ? 'Playoff matches will appear once generated after the regular season concludes.'
+                      : 'Match results will appear here once games have been scheduled or scored.'
+                  }
                 />
               ) : (
                 <View style={styles.matchesList}>
-                  {resultsMatches.map((m, idx) => {
-                    const initialsA = getTeamInitials(m.team_a_name || m.team_a?.name || 'A');
-                    const initialsB = getTeamInitials(m.team_b_name || m.team_b?.name || 'B');
+                  {resultsMatches.map((m) => {
+                    const teamA = teams?.find((t) => t.id === m.team_a_id);
+                    const teamB = teams?.find((t) => t.id === m.team_b_id);
+                    const nameA = m.team_a_name || m.team_a?.name || teamA?.name || 'Team A';
+                    const nameB = m.is_bye ? 'BYE' : (m.team_b_name || m.team_b?.name || teamB?.name || 'Team B');
+                    const initialsA = getTeamInitials(nameA);
+                    const initialsB = m.is_bye ? '—' : getTeamInitials(nameB);
                     const teamAIndex = teams?.findIndex((t) => t.id === m.team_a_id) ?? 0;
                     const teamBIndex = teams?.findIndex((t) => t.id === m.team_b_id) ?? 1;
                     const avatarA = getAvatarColors(teamAIndex >= 0 ? teamAIndex : 0);
                     const avatarB = getAvatarColors(teamBIndex >= 0 ? teamBIndex : 1);
 
                     const isCompleted = m.status === 'completed';
-                    const timeStr = m.scheduled_start_at
-                      ? new Date(m.scheduled_start_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-                      : idx === 0 ? '6:00 PM' : idx === 1 ? '7:00 PM' : '8:00 PM';
+                    const isInProgress = m.status === 'in_progress';
+                    const isBye = m.status === 'bye' || m.is_bye;
+                    const isCancelled = (m.status as string) === 'cancelled';
+
+                    const isWinnerA = isCompleted && m.score_a !== null && m.score_b !== null && m.score_a > m.score_b;
+                    const isWinnerB = isCompleted && m.score_a !== null && m.score_b !== null && m.score_b > m.score_a;
+
+                    const hasScheduledTime = Boolean(m.scheduled_start_at);
+                    const matchWeek = regularWeeks?.find((w) => w.week_number === m.week_number);
+                    const dateStr = hasScheduledTime
+                      ? formatDateTime(m.scheduled_start_at!)
+                      : matchWeek?.start_date
+                        ? formatDate(matchWeek.start_date)
+                        : league.start_date
+                          ? formatDate(league.start_date)
+                          : 'Date TBA';
+
+                    const courtAssigned = Boolean(m.court_id || m.court_name || m.court_number);
                     const courtStr = getCourtDisplayLabel(
-                      m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m,
+                      courtAssigned ? (m.court_name || m.court_number ? m : clubCourts?.find((c) => c.id === m.court_id) || m) : m,
                       { unassignedLabel: 'Court not assigned' }
                     );
-                    const dateLine = `Match ${m.match_number} • May 6, 2026 • ${timeStr} • ${courtStr}`;
+
+                    let statusLabel = 'Scheduled';
+                    let statusBg = '#E0F2FE';
+                    let statusText = '#0284C7';
+
+                    if (isCompleted) {
+                      statusLabel = '✓ Completed';
+                      statusBg = '#DEF2E6';
+                      statusText = '#176B57';
+                    } else if (isInProgress) {
+                      statusLabel = '● In Progress';
+                      statusBg = '#FEF3C7';
+                      statusText = '#D97706';
+                    } else if (isBye) {
+                      statusLabel = 'BYE';
+                      statusBg = '#F3F4F6';
+                      statusText = '#6B7280';
+                    } else if (isCancelled) {
+                      statusLabel = 'Cancelled';
+                      statusBg = '#FEE2E2';
+                      statusText = '#DC2626';
+                    }
 
                     return (
-                      <View key={m.id} style={styles.screen8MatchCard}>
-                        {/* Top Header Line */}
-                        <View style={styles.screen8TopRow}>
-                          <AppText style={styles.screen8DateText} numberOfLines={2}>
-                            {dateLine}
-                          </AppText>
-                          <View
-                            style={[
-                              styles.screen8Badge,
-                              isCompleted ? styles.screen8BadgeCompleted : styles.screen8BadgeScheduled,
-                            ]}
-                          >
-                            <AppText
-                              style={[
-                                styles.screen8BadgeText,
-                                isCompleted
-                                  ? styles.screen8BadgeTextCompleted
-                                  : styles.screen8BadgeTextScheduled,
-                              ]}
-                            >
-                              {isCompleted ? '✓ Completed' : '✓ Scheduled'}
+                      <View key={m.id} style={styles.resultMatchCard}>
+                        {/* Tier 1: Top Header Row */}
+                        <View style={styles.resultCardTopRow}>
+                          <View style={styles.resultCardTopLeft}>
+                            <AppText style={styles.resultMatchNumber}>Match {m.match_number}</AppText>
+                            <AppText style={styles.resultHeaderDot}>•</AppText>
+                            <AppText style={styles.resultHeaderDate} numberOfLines={1}>
+                              {dateStr}
+                            </AppText>
+                          </View>
+
+                          <View style={[styles.resultBadge, { backgroundColor: statusBg }]}>
+                            <AppText style={[styles.resultBadgeText, { color: statusText }]}>
+                              {statusLabel}
                             </AppText>
                           </View>
                         </View>
 
-                        {/* Scores & Matchup Row */}
-                        <View style={styles.screen8MatchupRow}>
+                        {/* Tier 2: Main Matchup & Scores Row */}
+                        <View style={styles.resultMatchupRow}>
                           {/* Team A */}
-                          <View style={styles.screen8TeamBlock}>
-                            <View style={[styles.miniAvatar, { backgroundColor: avatarA.bg }]}>
-                              <AppText style={[styles.miniAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
+                          <View style={styles.resultTeamColLeft}>
+                            <View style={[styles.competitorAvatar, { backgroundColor: avatarA.bg }]}>
+                              <AppText style={[styles.competitorAvatarText, { color: avatarA.text }]}>{initialsA}</AppText>
                             </View>
-                            <AppText style={styles.screen8TeamName} numberOfLines={2}>
-                              {m.team_a_name || m.team_a?.name || 'Alpha Aces'}
-                            </AppText>
+                            <View style={styles.resultTeamTextWrap}>
+                              <AppText
+                                style={[
+                                  styles.resultTeamName,
+                                  isWinnerA && styles.resultTeamNameWinner,
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {nameA}
+                              </AppText>
+                              {isWinnerA && (
+                                <AppText style={styles.resultWinnerTag}>WINNER</AppText>
+                              )}
+                            </View>
                           </View>
 
-                          {/* Scores */}
-                          <View style={styles.screen8ScoresBlock}>
-                            <AppText style={styles.screen8ScoreDigit}>
-                              {m.score_a !== null ? m.score_a : '-'}
-                            </AppText>
-                            <AppText style={styles.screen8ScoreSeparator}>-</AppText>
-                            <AppText style={styles.screen8ScoreDigit}>
-                              {m.score_b !== null ? m.score_b : '-'}
-                            </AppText>
+                          {/* Score Center Pill */}
+                          <View style={styles.resultScoreContainer}>
+                            {isCompleted && m.score_a !== null && m.score_b !== null ? (
+                              <View style={styles.resultScorePill}>
+                                <AppText style={[styles.resultScoreNum, isWinnerA && styles.resultScoreNumWinner]}>
+                                  {m.score_a}
+                                </AppText>
+                                <AppText style={styles.resultScoreColon}>:</AppText>
+                                <AppText style={[styles.resultScoreNum, isWinnerB && styles.resultScoreNumWinner]}>
+                                  {m.score_b}
+                                </AppText>
+                              </View>
+                            ) : isInProgress ? (
+                              <View style={styles.resultScorePillInProgress}>
+                                <AppText style={styles.resultScoreNumInProgress}>
+                                  {m.score_a ?? 0} : {m.score_b ?? 0}
+                                </AppText>
+                              </View>
+                            ) : (
+                              <View style={styles.resultScorePillScheduled}>
+                                <AppText style={styles.resultScoreTextScheduled}>VS</AppText>
+                              </View>
+                            )}
                           </View>
 
                           {/* Team B */}
-                          <View style={[styles.screen8TeamBlock, styles.screen8TeamBlockRight]}>
-                            <AppText style={[styles.screen8TeamName, { textAlign: 'right' }]} numberOfLines={2}>
-                              {m.team_b_name || m.team_b?.name || (m.is_bye ? 'BYE' : 'Beta Blasters')}
-                            </AppText>
-                            <View style={[styles.miniAvatar, { backgroundColor: avatarB.bg }]}>
-                              <AppText style={[styles.miniAvatarText, { color: avatarB.text }]}>{initialsB}</AppText>
+                          <View style={styles.resultTeamColRight}>
+                            <View style={styles.resultTeamTextWrapRight}>
+                              <AppText
+                                style={[
+                                  styles.resultTeamNameRight,
+                                  isWinnerB && styles.resultTeamNameWinner,
+                                  m.is_bye && styles.scheduleCompetitorBye,
+                                ]}
+                                numberOfLines={2}
+                              >
+                                {nameB}
+                              </AppText>
+                              {isWinnerB && (
+                                <AppText style={styles.resultWinnerTagRight}>WINNER</AppText>
+                              )}
+                            </View>
+                            <View style={[styles.competitorAvatar, { backgroundColor: m.is_bye ? '#F3F4F6' : avatarB.bg }]}>
+                              <AppText style={[styles.competitorAvatarText, { color: m.is_bye ? '#9CA3AF' : avatarB.text }]}>
+                                {initialsB}
+                              </AppText>
                             </View>
                           </View>
+                        </View>
+
+                        {/* Tier 3: Footer Row */}
+                        <View style={styles.resultCardFooter}>
+                          <View style={styles.resultCardFooterLeft}>
+                            <MapPin size={12} color="#6B7280" />
+                            <AppText style={styles.resultCourtText} numberOfLines={1}>{courtStr}</AppText>
+                          </View>
+
+                          {canManageLeague && (
+                            <TouchableOpacity
+                              style={styles.resultEditScoreBtn}
+                              onPress={() => openScoreModal(m)}
+                              activeOpacity={0.7}
+                            >
+                              <AppText style={styles.resultEditScoreBtnText}>
+                                {isCompleted ? 'Edit Score' : 'Enter Score'}
+                              </AppText>
+                              <ChevronRight size={13} color="#176B57" />
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
                     );
@@ -2489,31 +2793,33 @@ const styles = StyleSheet.create({
   },
   scheduleViewModeRow: {
     flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
+    width: '100%',
+    marginHorizontal: 0,
+    marginBottom: 14,
+    backgroundColor: '#E5ECE8',
+    borderRadius: 10,
     padding: 3,
+    height: 42,
   },
   scheduleViewModeBtn: {
     flex: 1,
-    paddingVertical: 7,
+    height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
+    borderRadius: 8,
   },
   scheduleViewModeBtnActive: {
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
   },
   scheduleViewModeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#6B7280',
+    color: '#4B5563',
   },
   scheduleViewModeTextActive: {
     color: '#176B57',
@@ -2717,13 +3023,37 @@ const styles = StyleSheet.create({
   },
 
   // ─── Week Selector Strip ───
+  weekSelectorRowEqual: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 8,
+    marginBottom: 14,
+  },
+  weekPillEqual: {
+    flex: 1,
+    height: 38,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
   weekSelectorContainer: {
-    marginBottom: 12,
+    marginBottom: 14,
+    width: '100%',
   },
   weekSelectorScroll: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+  },
+  weekPillScrollable: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 84,
+    height: 38,
   },
   weekPill: {
     paddingVertical: 8,
@@ -2743,7 +3073,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5ECE8',
   },
   weekPillText: {
-    fontSize: 13.5,
+    fontSize: 13,
   },
   weekPillTextSelected: {
     color: '#FFFFFF',
@@ -2751,7 +3081,7 @@ const styles = StyleSheet.create({
   },
   weekPillTextUnselected: {
     color: '#374151',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   courtFilterPill: {
     paddingVertical: 8,
@@ -2991,11 +3321,14 @@ const styles = StyleSheet.create({
   // ─── Schedule Screen 4 Styles ───
   scheduleContent: {
     gap: Spacing[3],
+    width: '100%',
   },
   weekHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+    width: '100%',
   },
   weekScheduleTitle: {
     fontSize: 16,
@@ -3007,134 +3340,265 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6B7280',
   },
+  weekMatchCountSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  matchCountBadge: {
+    backgroundColor: '#DEF2E6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  matchCountBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  courtFilterDropdown: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+  },
+  courtFilterDropdownText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#374151',
+  },
   weekDateCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  weekDateLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  weekDateLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  weekDateValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#111827',
-    marginTop: 1,
-  },
-  weekDateEditBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  weekDateEditBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  matchesList: {
-    gap: Spacing[3],
-  },
-  screen4MatchCard: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    padding: Spacing[3],
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#E5ECE8',
+    width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
     shadowRadius: 2,
     elevation: 1,
   },
-  screen4MatchTopRow: {
+  weekDateLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    flex: 1,
   },
-  screen4MatchLeftCol: {
-    width: 80,
+  calendarIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DEF2E6',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  screen4MatchNum: {
+  weekDateTexts: {
+    gap: 2,
+    flex: 1,
+  },
+  weekDateLabel: {
+    fontSize: 11.5,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  weekDateValue: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  weekDateEditBtn: {
+    backgroundColor: '#F2F8F5',
+    borderWidth: 1,
+    borderColor: '#DEF2E6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  weekDateEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  matchesList: {
+    gap: Spacing[3],
+    width: '100%',
+  },
+  scheduleMatchCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+    width: '100%',
+  },
+  scheduleMatchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  scheduleMatchHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  scheduleMatchNumber: {
     fontSize: 14,
     fontWeight: '800',
     color: '#111827',
   },
-  screen4MatchTime: {
-    fontSize: 12,
+  scheduleTimeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  scheduleTimeTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4B5563',
+  },
+  courtStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    maxWidth: 160,
+  },
+  courtStatusBadgeAssigned: {
+    backgroundColor: '#DEF2E6',
+  },
+  courtStatusBadgeUnassigned: {
+    backgroundColor: '#F3F4F6',
+  },
+  courtStatusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  courtStatusBadgeTextAssigned: {
+    color: '#176B57',
+  },
+  courtStatusBadgeTextUnassigned: {
+    color: '#6B7280',
+  },
+  scheduleMatchupSection: {
+    gap: 6,
+    marginVertical: 4,
+  },
+  scheduleCompetitorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  competitorAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  competitorAvatarText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  scheduleCompetitorInfo: {
+    flex: 1,
+  },
+  scheduleCompetitorName: {
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#111827',
-    marginTop: 2,
   },
-  screen4MatchCourt: {
+  scheduleCompetitorBye: {
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+  },
+  scheduleDoublesSubtitle: {
     fontSize: 11,
     color: '#6B7280',
     marginTop: 1,
   },
-  screen4MatchupCol: {
-    flex: 1,
-    paddingHorizontal: 8,
+  scheduleRatingBadge: {
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
-  matchupTeamRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  miniAvatar: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  miniAvatarText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  matchupTeamName: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  matchupRating: {
+  scheduleRatingText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#6B7280',
+    color: '#4B5563',
   },
-  matchupVsText: {
+  scheduleVsDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 2,
+  },
+  scheduleVsLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  scheduleVsPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: '#F9FAFB',
+  },
+  scheduleVsPillText: {
     fontSize: 10,
     fontWeight: '800',
     color: '#9CA3AF',
-    marginVertical: 2,
-    paddingLeft: 30,
   },
-  screen4MatchDateRow: {
+  scheduleCardFooter: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing[2],
-    paddingTop: Spacing[2],
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
   },
-  screen4MatchDateText: {
-    fontSize: 12,
+  scheduleCardFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    marginRight: 8,
+  },
+  scheduleCardFooterDate: {
+    fontSize: 11.5,
     color: '#6B7280',
     fontWeight: '500',
+  },
+  scheduleManageAffordance: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  scheduleManageAffordanceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#176B57',
   },
   editWeekDatesOutlineBtn: {
     flexDirection: 'row',
@@ -3147,6 +3611,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
     marginTop: Spacing[2],
+    width: '100%',
   },
   editWeekDatesOutlineBtnText: {
     fontSize: 14,
@@ -3489,98 +3954,258 @@ const styles = StyleSheet.create({
   // ─── Results Tab Styles (Screen 8) ───
   resultsFiltersRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
-    marginBottom: Spacing[3],
+    width: '100%',
+    marginBottom: 14,
   },
-  resultsFilterBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  resultsStageSegment: {
+    flexDirection: 'row',
+    flex: 1,
+    backgroundColor: '#E5ECE8',
+    borderRadius: 10,
+    padding: 3,
+    height: 40,
+  },
+  resultsStageBtn: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 7,
+  },
+  resultsStageBtnActive: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  resultsFilterBtnText: {
+  resultsStageBtnText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#4B5563',
+  },
+  resultsStageBtnTextActive: {
+    color: '#176B57',
+    fontWeight: '700',
+  },
+  resultsWeekDropdownBtn: {
+    paddingHorizontal: 12,
+    height: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  resultsWeekDropdownBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  resultsHeaderSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    width: '100%',
+  },
+  resultsHeadingTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  resultMatchCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5ECE8',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+    width: '100%',
+  },
+  resultCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  resultCardTopLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 8,
+  },
+  resultMatchNumber: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  resultHeaderDot: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+  resultHeaderDate: {
+    fontSize: 11.5,
+    color: '#6B7280',
+    fontWeight: '500',
+    flex: 1,
+  },
+  resultBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  resultBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  resultMatchupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  resultTeamColLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  resultTeamColRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flex: 1,
+  },
+  resultTeamTextWrap: {
+    flex: 1,
+  },
+  resultTeamTextWrapRight: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  resultTeamName: {
     fontSize: 13,
     fontWeight: '600',
     color: '#374151',
   },
-  screen8MatchCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+  resultTeamNameRight: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'right',
   },
-  screen8TopRow: {
+  resultTeamNameWinner: {
+    color: '#111827',
+    fontWeight: '800',
+  },
+  resultWinnerTag: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#176B57',
+    marginTop: 1,
+  },
+  resultWinnerTagRight: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#176B57',
+    marginTop: 1,
+    textAlign: 'right',
+  },
+  resultScoreContainer: {
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultScorePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F8F5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#DEF2E6',
+    gap: 4,
+  },
+  resultScoreNum: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#4B5563',
+  },
+  resultScoreNumWinner: {
+    fontWeight: '900',
+    color: '#176B57',
+  },
+  resultScoreColon: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#9CA3AF',
+  },
+  resultScorePillInProgress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  resultScoreNumInProgress: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#D97706',
+  },
+  resultScorePillScheduled: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  resultScoreTextScheduled: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6B7280',
+  },
+  resultCardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
-  screen8DateText: {
-    fontSize: 12,
+  resultCardFooterLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    marginRight: 8,
+  },
+  resultCourtText: {
+    fontSize: 11.5,
     color: '#6B7280',
     fontWeight: '500',
-    flex: 1,
-    marginRight: 6,
   },
-  screen8Badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  screen8BadgeCompleted: {
-    backgroundColor: '#DCFCE7',
-  },
-  screen8BadgeScheduled: {
-    backgroundColor: '#E0F2FE',
-  },
-  screen8BadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  screen8BadgeTextCompleted: {
-    color: '#15803D',
-  },
-  screen8BadgeTextScheduled: {
-    color: '#0284C7',
-  },
-  screen8MatchupRow: {
+  resultEditScoreBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
+    gap: 3,
   },
-  screen8TeamBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-  },
-  screen8TeamBlockRight: {
-    justifyContent: 'flex-end',
-  },
-  screen8TeamName: {
-    fontSize: 14,
+  resultEditScoreBtnText: {
+    fontSize: 12,
     fontWeight: '700',
-    color: '#111827',
-  },
-  screen8ScoresBlock: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-  },
-  screen8ScoreDigit: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#111827',
-  },
-  screen8ScoreSeparator: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#6B7280',
+    color: '#176B57',
   },
   finalizeLeagueBox: {
     marginTop: Spacing[4],
