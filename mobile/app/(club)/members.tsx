@@ -1109,73 +1109,77 @@ export default function ClubMembersScreen() {
 
     return (
       <View style={styles.memberCard}>
-        {/* Top Profile Information Area: Two-Column Header */}
+        {/* Top Header: Avatar + Body (Main row + Secondary row) */}
         <View style={styles.cardHeader}>
-          {/* Left Side: Avatar + Name + ID + Email */}
-          <View style={styles.cardLeftCol}>
-            <MemberAvatar
-              imageUrl={item.profile_image_url}
-              name={playerName}
-              size={40}
-            />
-            <View style={styles.memberInfo}>
-              <View style={styles.nameRow}>
-                <AppText style={styles.memberName}>
-                  {playerName}
-                </AppText>
-                {formattedMemberNumber && (
-                  <View style={styles.idBadge}>
-                    <AppText style={styles.idBadgeText}>{formattedMemberNumber}</AppText>
-                  </View>
-                )}
-              </View>
-              <AppText style={styles.memberEmail}>
-                {item.user_email}
-              </AppText>
-            </View>
-          </View>
+          {/* Avatar (40px) */}
+          <MemberAvatar
+            imageUrl={item.profile_image_url}
+            name={playerName}
+            size={40}
+          />
 
-          {/* Right Side: Badges vertically stacked & right-aligned */}
-          <View style={styles.cardRightCol}>
-            {/* Row 1: Active status */}
-            <View
-              style={[
-                styles.statusBadge,
-                isActive && styles.statusBadgeActive,
-                isInactive && styles.statusBadgeInactive,
-                isSuspended && styles.statusBadgeWarning,
-                isExpired && styles.statusBadgeDanger,
-              ]}
-            >
+          {/* Content area to right of avatar */}
+          <View style={styles.cardBody}>
+            {/* Main Row: Player Name + Email on Left, Status Badge on Far Right */}
+            <View style={styles.cardMainRow}>
+              <View style={styles.memberInfo}>
+                <View style={styles.nameRow}>
+                  <AppText style={styles.memberName}>
+                    {playerName}
+                  </AppText>
+                  {formattedMemberNumber && (
+                    <View style={styles.idBadge}>
+                      <AppText style={styles.idBadgeText}>{formattedMemberNumber}</AppText>
+                    </View>
+                  )}
+                </View>
+                <AppText style={styles.memberEmail}>
+                  {item.user_email}
+                </AppText>
+              </View>
+
+              {/* Status Badge (Independently Right-Aligned) */}
               <View
                 style={[
-                  styles.statusDot,
-                  isActive && styles.statusDotActive,
-                  isInactive && styles.statusDotInactive,
-                  isSuspended && styles.statusDotWarning,
-                  isExpired && styles.statusDotDanger,
-                ]}
-              />
-              <AppText
-                style={[
-                  styles.statusBadgeText,
-                  isActive && styles.statusBadgeTextActive,
-                  isInactive && styles.statusBadgeTextInactive,
-                  isSuspended && styles.statusBadgeTextWarning,
-                  isExpired && styles.statusBadgeTextDanger,
+                  styles.statusBadge,
+                  isActive && styles.statusBadgeActive,
+                  isInactive && styles.statusBadgeInactive,
+                  isSuspended && styles.statusBadgeWarning,
+                  isExpired && styles.statusBadgeDanger,
                 ]}
               >
-                {item.status.toUpperCase()}
-              </AppText>
+                <View
+                  style={[
+                    styles.statusDot,
+                    isActive && styles.statusDotActive,
+                    isInactive && styles.statusDotInactive,
+                    isSuspended && styles.statusDotWarning,
+                    isExpired && styles.statusDotDanger,
+                  ]}
+                />
+                <AppText
+                  style={[
+                    styles.statusBadgeText,
+                    isActive && styles.statusBadgeTextActive,
+                    isInactive && styles.statusBadgeTextInactive,
+                    isSuspended && styles.statusBadgeTextWarning,
+                    isExpired && styles.statusBadgeTextDanger,
+                  ]}
+                >
+                  {item.status.toUpperCase()}
+                </AppText>
+              </View>
             </View>
 
-            {/* Row 2: Membership badge, if applicable */}
+            {/* Secondary Row: Membership badge below email (only when membership info exists) */}
             {subInfo && (
-              <View style={styles.subPlanBadge}>
-                <AppText style={styles.subPlanBadgeText}>
-                  {subInfo.planName}
-                  {subInfo.status === 'scheduled' ? ' · Scheduled' : ''}
-                </AppText>
+              <View style={styles.cardSecondaryRow}>
+                <View style={styles.subPlanBadge}>
+                  <AppText style={styles.subPlanBadgeText}>
+                    {subInfo.planName}
+                    {subInfo.status === 'scheduled' ? ' · Scheduled' : ''}
+                  </AppText>
+                </View>
               </View>
             )}
           </View>
@@ -1276,90 +1280,93 @@ export default function ClubMembersScreen() {
 
     return (
       <View style={styles.memberCard}>
-        {/* Top Information Area: Two-Column Header */}
+        {/* Top Header: Avatar + Body (Main row + Secondary row) */}
         <View style={styles.cardHeader}>
-          {/* Left Side: Avatar + Name + Email */}
-          <View style={styles.cardLeftCol}>
-            <MemberAvatar
-              imageUrl={item.profile_image_url}
-              name={staffName}
-              size={40}
-            />
-            <View style={styles.memberInfo}>
-              <View style={styles.nameRow}>
-                <AppText style={styles.memberName}>
-                  {staffName}
+          {/* Avatar (40px) */}
+          <MemberAvatar
+            imageUrl={item.profile_image_url}
+            name={staffName}
+            size={40}
+          />
+
+          {/* Content area to right of avatar */}
+          <View style={styles.cardBody}>
+            {/* Main Row: Staff Name + Email on Left, Status Badge on Far Right */}
+            <View style={styles.cardMainRow}>
+              <View style={styles.memberInfo}>
+                <View style={styles.nameRow}>
+                  <AppText style={styles.memberName}>
+                    {staffName}
+                  </AppText>
+                </View>
+                <AppText style={styles.memberEmail}>
+                  {item.user_email}
                 </AppText>
               </View>
-              <AppText style={styles.memberEmail}>
-                {item.user_email}
-              </AppText>
-            </View>
-          </View>
 
-          {/* Right Side: Badges vertically stacked & right-aligned */}
-          <View style={styles.cardRightCol}>
-            {/* Row 1: Role badge */}
-            <View
-              style={[
-                styles.roleBadge,
-                {
-                  backgroundColor: roleConfig.bg,
-                  borderColor: roleConfig.border,
-                },
-              ]}
-            >
-              {isCustomRole && (
-                <Shield
-                  size={10}
-                  color="#0F766E"
-                  strokeWidth={2.2}
-                  style={{ marginRight: 3 }}
+              {/* Status Badge (Independently Right-Aligned) */}
+              <View
+                style={[
+                  styles.statusBadge,
+                  item.is_active ? styles.statusBadgeActive : styles.statusBadgeDanger,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    item.is_active ? styles.statusDotActive : styles.statusDotDanger,
+                  ]}
                 />
-              )}
-              <AppText
-                style={[styles.roleBadgeText, { color: roleConfig.text }]}
-              >
-                {roleConfig.label}
-              </AppText>
-            </View>
-
-            {/* Row 2: Active status */}
-            <View
-              style={[
-                styles.statusBadge,
-                item.is_active ? styles.statusBadgeActive : styles.statusBadgeDanger,
-              ]}
-            >
-              <View
-                style={[
-                  styles.statusDot,
-                  item.is_active ? styles.statusDotActive : styles.statusDotDanger,
-                ]}
-              />
-              <AppText
-                style={[
-                  styles.statusBadgeText,
-                  item.is_active ? styles.statusBadgeTextActive : styles.statusBadgeTextDanger,
-                ]}
-              >
-                {item.is_active ? 'ACTIVE' : 'DISABLED'}
-              </AppText>
-            </View>
-
-            {/* Row 3: Legacy Staff indicator if applicable */}
-            {isLegacyStaff && (
-              <View
-                style={[
-                  styles.subPlanBadge,
-                  { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
-                ]}
-              >
-                <AppText style={[styles.subPlanBadgeText, { color: '#92400E' }]}>
-                  0 permissions
+                <AppText
+                  style={[
+                    styles.statusBadgeText,
+                    item.is_active ? styles.statusBadgeTextActive : styles.statusBadgeTextDanger,
+                  ]}
+                >
+                  {item.is_active ? 'ACTIVE' : 'DISABLED'}
                 </AppText>
               </View>
-            )}
+            </View>
+
+            {/* Secondary Row: Role badge below email, aligned with name/email */}
+            <View style={styles.cardSecondaryRow}>
+              <View
+                style={[
+                  styles.roleBadge,
+                  {
+                    backgroundColor: roleConfig.bg,
+                    borderColor: roleConfig.border,
+                  },
+                ]}
+              >
+                {isCustomRole && (
+                  <Shield
+                    size={10}
+                    color="#0F766E"
+                    strokeWidth={2.2}
+                    style={{ marginRight: 3 }}
+                  />
+                )}
+                <AppText
+                  style={[styles.roleBadgeText, { color: roleConfig.text }]}
+                >
+                  {roleConfig.label}
+                </AppText>
+              </View>
+
+              {isLegacyStaff && (
+                <View
+                  style={[
+                    styles.subPlanBadge,
+                    { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+                  ]}
+                >
+                  <AppText style={[styles.subPlanBadgeText, { color: '#92400E' }]}>
+                    0 permissions
+                  </AppText>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -2683,20 +2690,21 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
+    gap: 10,
   },
-  cardLeftCol: {
+  cardBody: {
     flex: 1,
     minWidth: 0,
+  },
+  cardMainRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: 8,
   },
   memberInfo: {
     flex: 1,
     minWidth: 0,
-    justifyContent: 'center',
   },
   nameRow: {
     flexDirection: 'row',
@@ -2730,6 +2738,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 16,
   },
+  cardSecondaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
 
   // ─── Avatar ──────────────────────────────────────────────────────────────────
   avatarContainer: {
@@ -2752,39 +2767,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  // ─── Right Column Badges ─────────────────────────────────────────────────────
-  cardRightCol: {
-    alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-    gap: 4,
-    flexShrink: 0,
-    maxWidth: '48%',
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6.5,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-    alignSelf: 'flex-end',
-    maxWidth: '100%',
-  },
-  roleBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-    textAlign: 'right',
-  },
+  // ─── Badges ──────────────────────────────────────────────────────────────────
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6.5,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 10,
     backgroundColor: '#F1F5F9',
     gap: 4,
-    alignSelf: 'flex-end',
+    flexShrink: 0,
   },
   statusBadgeActive: {
     backgroundColor: '#DEF2E6',
@@ -2834,21 +2826,31 @@ const styles = StyleSheet.create({
   statusBadgeTextInactive: {
     color: '#64748B',
   },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
   subPlanBadge: {
     backgroundColor: '#E0F2FE',
     borderWidth: 1,
     borderColor: '#BAE6FD',
-    paddingHorizontal: 6.5,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: 6,
-    alignSelf: 'flex-end',
-    maxWidth: '100%',
   },
   subPlanBadgeText: {
     color: '#0369A1',
     fontSize: 10,
     fontWeight: '700',
-    textAlign: 'right',
   },
 
   // ─── Divider & Actions ───────────────────────────────────────────────────────
