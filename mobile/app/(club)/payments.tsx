@@ -260,26 +260,13 @@ export default function ClubPaymentsScreen() {
     };
   }, [allPayments, summary]);
 
-  // Responsive 2-column or multi-column grid widths
-  const contentWidth = Math.min(windowWidth - 32, 1200);
-  const cardWidth = useMemo(() => {
-    if (windowWidth >= 1024) {
-      return (contentWidth - 50) / 6;
-    }
-    if (windowWidth >= 640) {
-      return (contentWidth - 20) / 3;
-    }
-    return (contentWidth - 10) / 2;
-  }, [windowWidth, contentWidth]);
-
-  // All 6 supported payment summary cards
+  // All 6 supported payment summary metrics (strictly icon + label + value, no redundant text)
   const metricCards = useMemo(
     () => [
       {
         id: 'net_collected',
         label: 'Net Collected',
         value: formatCurrency(metricsData.netCollectedAmount, 'USD'),
-        subtext: 'After refunds',
         Icon: CreditCard,
         bgColor: '#ECFDF5',
         iconColor: '#059669',
@@ -289,7 +276,6 @@ export default function ClubPaymentsScreen() {
         id: 'total_payments',
         label: 'Total Payments',
         value: String(metricsData.totalPaymentsCount),
-        subtext: 'All transactions',
         Icon: FileText,
         bgColor: '#F1F5F9',
         iconColor: '#475569',
@@ -299,7 +285,6 @@ export default function ClubPaymentsScreen() {
         id: 'successful',
         label: 'Successful',
         value: String(metricsData.successfulCount),
-        subtext: `${formatCurrency(metricsData.successfulAmount, 'USD')} collected`,
         Icon: CheckCircle2,
         bgColor: '#DEF2E6',
         iconColor: '#15803D',
@@ -309,10 +294,6 @@ export default function ClubPaymentsScreen() {
         id: 'pending',
         label: 'Pending',
         value: String(metricsData.pendingCount),
-        subtext:
-          metricsData.pendingAmount > 0
-            ? `${formatCurrency(metricsData.pendingAmount, 'USD')} awaiting`
-            : 'Awaiting payment',
         Icon: Clock,
         bgColor: '#FEF3C7',
         iconColor: '#D97706',
@@ -322,10 +303,6 @@ export default function ClubPaymentsScreen() {
         id: 'failed',
         label: 'Failed',
         value: String(metricsData.failedCount),
-        subtext:
-          metricsData.failedAmount > 0
-            ? `${formatCurrency(metricsData.failedAmount, 'USD')} failed`
-            : 'Declined / aborted',
         Icon: ShieldAlert,
         bgColor: '#FEE2E2',
         iconColor: '#EF4444',
@@ -335,10 +312,6 @@ export default function ClubPaymentsScreen() {
         id: 'refunded',
         label: 'Refunded',
         value: String(metricsData.refundedCount),
-        subtext:
-          metricsData.refundedAmount > 0
-            ? `${formatCurrency(metricsData.refundedAmount, 'USD')} refunded`
-            : 'No refunds',
         Icon: RotateCcw,
         bgColor: '#EDE9FE',
         iconColor: '#7C3AED',
@@ -347,6 +320,16 @@ export default function ClubPaymentsScreen() {
     ],
     [metricsData]
   );
+
+  // Group metrics into balanced rows: exactly 2 columns on mobile, 3 on tablet, 6 on desktop
+  const numCols = windowWidth >= 1024 ? 6 : windowWidth >= 640 ? 3 : 2;
+  const metricRows = useMemo(() => {
+    const rows: (typeof metricCards)[] = [];
+    for (let i = 0; i < metricCards.length; i += numCols) {
+      rows.push(metricCards.slice(i, i + numCols));
+    }
+    return rows;
+  }, [metricCards, numCols]);
 
   const onRefresh = () => {
     refetchSummary();
@@ -451,32 +434,26 @@ export default function ClubPaymentsScreen() {
   // ─── Header: 6 Summary Metrics (2-Column Grid) + Unified Filter Section ────
   const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* ─── 1. Supported Summary Metrics (2-Column Responsive Grid) ─── */}
-      <View style={styles.summaryGrid}>
-        {metricCards.map((card) => (
-          <View
-            key={card.id}
-            style={[styles.summaryCard, { width: cardWidth }]}
-          >
-            <View style={styles.summaryTopRow}>
-              <View style={[styles.summaryIconBox, { backgroundColor: card.bgColor }]}>
-                <card.Icon size={13} color={card.iconColor} strokeWidth={2.2} />
-              </View>
-              <AppText style={styles.summaryLabel}>
-                {card.label}
-              </AppText>
-            </View>
+      {/* ─── 1. Supported Summary Metrics (2-Column Balanced Grid) ─── */}
+      <View style={styles.metricsContainer}>
+        {metricRows.map((row, rIdx) => (
+          <View key={rIdx} style={styles.metricRow}>
+            {row.map((card) => (
+              <View key={card.id} style={styles.metricCard}>
+                <View style={styles.metricTopRow}>
+                  <View style={[styles.metricIconBox, { backgroundColor: card.bgColor }]}>
+                    <card.Icon size={12} color={card.iconColor} strokeWidth={2.2} />
+                  </View>
+                  <AppText style={styles.metricLabel} numberOfLines={1}>
+                    {card.label}
+                  </AppText>
+                </View>
 
-            <View style={styles.summaryValueBlock}>
-              <AppText style={[styles.summaryValue, { color: card.valColor }]}>
-                {card.value}
-              </AppText>
-              {card.subtext ? (
-                <AppText style={styles.summarySubtext}>
-                  {card.subtext}
+                <AppText style={[styles.metricValue, { color: card.valColor }]} numberOfLines={1}>
+                  {card.value}
                 </AppText>
-              ) : null}
-            </View>
+              </View>
+            ))}
           </View>
         ))}
       </View>
@@ -1288,60 +1265,57 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-  // 2. Summary Metrics (Responsive 2-Column Grid on Mobile)
+  // 2. Summary Metrics (Explicit Rows: 2-Column Grid on Mobile, 3 on Tablet, 6 on Desktop)
   listHeaderWrapper: {
     gap: 12,
     marginBottom: 4,
+    width: '100%',
   },
-  summaryGrid: {
+  metricsContainer: {
+    gap: 8,
+    width: '100%',
+  },
+  metricRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
+    width: '100%',
   },
-  summaryCard: {
+  metricCard: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    paddingVertical: 11,
-    paddingHorizontal: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: Colors.surface.border,
     justifyContent: 'space-between',
-    minHeight: 84,
+    minHeight: 64,
     ...Shadows.sm,
   },
-  summaryTopRow: {
+  metricTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 4,
   },
-  summaryIconBox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+  metricIconBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  summaryLabel: {
+  metricLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.text.secondary,
     flex: 1,
-    flexShrink: 1,
   },
-  summaryValueBlock: {
-    gap: 1,
-  },
-  summaryValue: {
-    fontSize: 18,
+  metricValue: {
+    fontSize: 17,
     fontWeight: '800',
     color: Colors.text.primary,
     letterSpacing: -0.3,
-  },
-  summarySubtext: {
-    fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: '500',
   },
 
   // 3. Unified Filter Card
