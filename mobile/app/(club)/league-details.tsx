@@ -749,36 +749,55 @@ export default function ClubLeagueDetailsScreen() {
   const hasPlayoffs = (league.playoff_team_count ?? 0) > 0;
   const playoffSpots = league.playoff_team_count || 4;
 
-  // Subtitle string: "4 Wks | 8 Teams | Singles | Top 4 Playoffs"
-  const subtitleText = `${totalWeeks} Wks | ${maxTeamsCount} ${isSingles ? 'Players' : 'Teams'} | ${isSingles ? 'Singles' : (league.category || 'Doubles')} | ${hasPlayoffs ? `Top ${playoffSpots} Playoffs` : 'Regular Season'}`;
+  const isCancelled = league.status?.toLowerCase() === 'cancelled';
+  const isCompleted = league.status?.toLowerCase() === 'completed';
+  const isInProgress = league.status?.toLowerCase() === 'in_progress';
+  const isPlayoffs = league.status?.toLowerCase() === 'playoffs';
+  const isRegistrationOpen = ['registration_open', 'open'].includes(league.status?.toLowerCase());
+  const isRegistrationClosed = ['registration_closed', 'closed'].includes(league.status?.toLowerCase());
+  const isDraft = league.status?.toLowerCase() === 'draft';
+
+  // Subtitle string: Concise contextual info without repeating division, max capacity, duration, and playoffs
+  const subtitleText = isCancelled
+    ? 'League was cancelled by administrator'
+    : isCompleted
+    ? `Season Completed${league.end_date ? ` · ${formatDate(league.end_date)}` : ''}`
+    : isDraft
+    ? 'Draft League · Not Published'
+    : `${league.start_date ? `Starts ${formatDate(league.start_date)}` : 'Dates TBA'}${league.club_name ? ` · ${league.club_name}` : ''}`;
 
   // Tab definitions (Exact required order: Overview & Rules, Players/Teams, Schedule, Standings, Playoffs, Results)
-  const clubTabs = [
+  const clubTabs: { key: TabKey; label: string }[] = [
     { key: 'overview', label: 'Overview & Rules' },
     { key: 'teams', label: isSingles ? 'Players' : 'Teams' },
     { key: 'schedule', label: 'Schedule' },
     { key: 'standings', label: 'Standings' },
-    { key: 'playoffs', label: 'Playoffs' },
+    ...(hasPlayoffs ? [{ key: 'playoffs' as TabKey, label: 'Playoffs' }] : []),
     { key: 'results', label: 'Results' },
-  ] as const;
+  ];
 
-  // Registration closes calculation
+  // Registration closes calculation (status-aware, no hardcoded fallbacks)
   const regCloseDateStr = league.registration_close_at
     ? formatDate(league.registration_close_at)
-    : 'May 15, 2026';
+    : league.start_date
+    ? `By ${formatDate(league.start_date)}`
+    : 'Before Start';
+
   let daysLeftText = '';
-  if (league.registration_close_at) {
+  if (isRegistrationOpen && league.registration_close_at) {
     const diffTime = new Date(league.registration_close_at).getTime() - Date.now();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays > 0) {
+    if (diffDays > 1) {
       daysLeftText = `${diffDays} days left`;
+    } else if (diffDays === 1) {
+      daysLeftText = '1 day left';
     } else if (diffDays === 0) {
       daysLeftText = 'Closes today';
     } else {
       daysLeftText = 'Registration closed';
     }
-  } else {
-    daysLeftText = '3 days left';
+  } else if (isRegistrationOpen) {
+    daysLeftText = 'Open for entry';
   }
 
   // Filtered matches for Matches tab
@@ -799,7 +818,7 @@ export default function ClubLeagueDetailsScreen() {
   });
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#FFFFFF' }]}>
+    <View style={[styles.container, { paddingTop: insets.top, backgroundColor: '#F2F8F5' }]}>
       {/* ─── FIXED TOP BAR (Back button, Centered Title, 3-Dot Menu) ─── */}
       <View style={styles.fixedTopBar}>
         <View style={styles.headerTopRow}>
@@ -884,7 +903,15 @@ export default function ClubLeagueDetailsScreen() {
             {/* Left Col: Teams/Players Registered */}
             <View style={styles.regStatCol}>
               <AppText style={styles.regStatLabel}>
-                {isSingles ? 'Players Registered' : 'Teams Registered'}
+                {isCancelled
+                  ? 'Past Registrations'
+                  : isCompleted
+                  ? (isSingles ? 'Final Participants' : 'Final Teams')
+                  : isInProgress || isPlayoffs
+                  ? (isSingles ? 'Active Players' : 'Active Teams')
+                  : isDraft
+                  ? 'Capacity Target'
+                  : (isSingles ? 'Players Registered' : 'Teams Registered')}
               </AppText>
               <View style={styles.regStatValueRow}>
                 <AppText style={styles.regStatValue}>
@@ -897,7 +924,14 @@ export default function ClubLeagueDetailsScreen() {
                 <View
                   style={[
                     styles.regProgressBarFill,
-                    { width: `${regPercent}%` },
+                    {
+                      width: `${regPercent}%`,
+                      backgroundColor: isCancelled
+                        ? '#94A3B8'
+                        : isCompleted
+                        ? '#64748B'
+                        : '#176B57',
+                    },
                   ]}
                 />
               </View>
@@ -906,24 +940,48 @@ export default function ClubLeagueDetailsScreen() {
             {/* Vertical Divider */}
             <View style={styles.regStatDivider} />
 
-            {/* Right Col: Registration Closes */}
+            {/* Right Col: Registration Status / Closes */}
             <View style={styles.regStatCol}>
               <AppText style={styles.regStatLabel}>
-                {league.status === 'registration_closed'
-                  ? 'Registration Closed'
-                  : 'Registration Closes'}
+                {isRegistrationOpen
+                  ? 'Registration Closes'
+                  : 'Registration Status'}
               </AppText>
-              <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
-              {daysLeftText ? (
-                <AppText
-                  style={[
-                    styles.regStatDaysLeft,
-                    league.status === 'registration_closed' && styles.regStatClosedText,
-                  ]}
-                >
-                  {daysLeftText}
-                </AppText>
-              ) : null}
+              {isCancelled ? (
+                <>
+                  <AppText style={[styles.regStatValueText, { color: '#DC2626' }]}>Cancelled</AppText>
+                  <AppText style={styles.regStatSubtext}>Registration voided</AppText>
+                </>
+              ) : isCompleted ? (
+                <>
+                  <AppText style={styles.regStatValueText}>Concluded</AppText>
+                  <AppText style={styles.regStatSubtext}>
+                    {league.end_date ? `Ended ${formatDate(league.end_date)}` : 'Season complete'}
+                  </AppText>
+                </>
+              ) : isInProgress || isPlayoffs ? (
+                <>
+                  <AppText style={styles.regStatValueText}>Closed</AppText>
+                  <AppText style={styles.regStatSubtext}>Matches in progress</AppText>
+                </>
+              ) : isDraft ? (
+                <>
+                  <AppText style={styles.regStatValueText}>Draft</AppText>
+                  <AppText style={styles.regStatSubtext}>Not yet published</AppText>
+                </>
+              ) : isRegistrationClosed ? (
+                <>
+                  <AppText style={styles.regStatValueText}>Closed</AppText>
+                  <AppText style={styles.regStatSubtext}>Awaiting season start</AppText>
+                </>
+              ) : (
+                <>
+                  <AppText style={styles.regStatValueText}>{regCloseDateStr}</AppText>
+                  {daysLeftText ? (
+                    <AppText style={styles.regStatDaysLeft}>{daysLeftText}</AppText>
+                  ) : null}
+                </>
+              )}
             </View>
           </View>
 
@@ -2397,7 +2455,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   scrollHeaderWrapper: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F8F5',
   },
   stickyTabsContainer: {
     backgroundColor: '#FFFFFF',
@@ -2447,14 +2505,14 @@ const styles = StyleSheet.create({
   headerContainer: {
     backgroundColor: '#FFFFFF',
     paddingTop: 8,
-    paddingBottom: 6,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5ECE8',
   },
   fixedTopBar: {
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#E5ECE8',
     zIndex: 20,
   },
   headerTopRow: {
@@ -2524,22 +2582,27 @@ const styles = StyleSheet.create({
   regStatsCard: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 15,
     borderWidth: 1,
-    borderColor: '#E5ECE8',
+    borderColor: '#E2EAE5',
     marginHorizontal: 16,
     marginTop: 10,
-    marginBottom: 10,
+    marginBottom: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1.5 },
+    shadowOpacity: 0.03,
+    shadowRadius: 5,
+    elevation: 1,
   },
   regStatCol: {
     flex: 1,
     justifyContent: 'center',
   },
   regStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
+    fontSize: 11.5,
+    color: '#64748B',
     fontWeight: '500',
     marginBottom: 3,
   },
@@ -2549,14 +2612,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   regStatValue: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
   },
   regStatPercent: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: '#64748B',
   },
   regProgressBarTrack: {
     height: 5,
@@ -2572,23 +2635,29 @@ const styles = StyleSheet.create({
   },
   regStatDivider: {
     width: 1,
-    backgroundColor: '#E5ECE8',
-    marginHorizontal: 12,
+    backgroundColor: '#E2EAE5',
+    marginHorizontal: 14,
     alignSelf: 'stretch',
   },
   regStatValueText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#111827',
   },
   regStatDaysLeft: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+    marginTop: 2,
+  },
+  regStatSubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
     marginTop: 2,
   },
   regStatClosedText: {
-    color: '#6B7280',
+    color: '#64748B',
   },
 
   // ─── Compact Management Actions (Teams Tab) ───
@@ -2634,25 +2703,25 @@ const styles = StyleSheet.create({
   // ─── Navigation Tabs Strip with Green Underline ───
   tabsStripContainer: {
     borderBottomWidth: 1,
-    borderBottomColor: '#E5ECE8',
+    borderBottomColor: '#E2EAE5',
     backgroundColor: '#FFFFFF',
     marginBottom: 12,
   },
   tabsStripScroll: {
-    paddingHorizontal: 16,
-    gap: 4,
+    paddingHorizontal: 12,
+    gap: 2,
   },
   tabButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   tabButtonText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
-    color: '#4B5563',
+    color: '#64748B',
   },
   tabButtonTextActive: {
     color: '#176B57',
@@ -2660,7 +2729,7 @@ const styles = StyleSheet.create({
   },
   activeTabIndicator: {
     position: 'absolute',
-    bottom: -1,
+    bottom: 0,
     left: 8,
     right: 8,
     height: 3,
