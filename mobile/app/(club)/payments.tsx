@@ -1,26 +1,15 @@
 /**
- * Aught2 Pickleball — Club Owner Payments Screen
+ * Aught2 Pickleball — Club Payments Screen
  *
- * Redesigned Payments Screen:
- *   - Compact header: [☰ Menu] Payments (Track revenue and transactions)
- *   - Summary metric cards with standard US Dollar currency formatting:
- *       * Net Collected ($)
- *       * Total Payments
- *       * Successful
- *       * Pending
- *       * Refunded
- *   - Multi-facet filters: Search, Service Category Pills, and Status Filter Pills
- *   - Clean, professional transaction cards without raw metadata:
- *       * Row 1: Player Name + Status Badge (Succeeded, Pending, Failed, Cancelled, Refunded)
- *       * Row 2: Transaction Reference + Category Badge + Payment Method Pill
- *       * Row 3: Prominent US Dollar Amount ($36.75)
- *       * Row 4: Structured Service Details (Service Name & Activity Details)
- *       * Row 5: Creation Date + Optional Provider Reference
- *       * Friendly Failure Reason (e.g. 'Payment was not completed by the user')
- *       * Clean User Note (strictly without [META] or raw JSON)
- *   - Comprehensive transaction inspection modal for reconciliation and refunds
- *   - Real-time 15s auto-polling, focus refetch, & pull-to-refresh
- *   - Bottom padding avoiding fixed bottom navigation overlay
+ * SaaS-grade operational payments dashboard for club owners & managers:
+ *   - Compact Header: [☰ Menu] Payments · Revenue and transactions
+ *   - 3 Essential Summary Metrics: Net Collected, Total Payments, Successful
+ *   - Single Unified Filter Section: full-width search + side-by-side Service & Status dropdowns
+ *   - Clean Transaction Cards: Player name, status badge, prominent dollar amount,
+ *     clear service name & description, compact footer with transaction ID & date
+ *   - Zero Visual Repetition: eliminates duplicate service tags and bulky nested boxes
+ *   - Comprehensive Transaction Details Modal Sheet with reconciliation and refund actions
+ *   - Strict multi-tenant isolation, real-time auto-polling, and pull-to-refresh
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -34,6 +23,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -42,11 +32,13 @@ import {
   Calendar,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clock,
   Copy,
   CreditCard,
   Crown,
   FileText,
+  Filter,
   LayoutGrid,
   Menu,
   RotateCcw,
@@ -60,9 +52,13 @@ import {
 
 import {
   AppText,
+  Badge,
+  Button,
+  Card,
   EmptyState,
   ErrorState,
   LoadingState,
+  ModalSheet,
   PlatformButton,
   Screen,
 } from '@/components';
@@ -76,30 +72,29 @@ import {
   useSucceedPayment,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
+import { Colors, Radius, Shadows, Spacing } from '@/theme';
 import { formatCurrency, parsePaymentDetails } from '@/utils';
-import type { Payment, PaymentMethod, PaymentPurpose, PaymentStatus } from '@/types';
+import type { Payment, PaymentPurpose } from '@/types';
 
-type FilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'cancelled' | 'refunded';
-
-const FILTER_TABS: { key: FilterTab; label: string }[] = [
-  { key: 'all', label: 'All Status' },
-  { key: 'succeeded', label: 'Succeeded' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'failed', label: 'Failed' },
-  { key: 'cancelled', label: 'Cancelled' },
-  { key: 'refunded', label: 'Refunded' },
-];
-
+type FilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'refunded';
 type CategoryTab = 'all' | 'membership' | 'court_booking' | 'tournament' | 'league' | 'event' | 'lesson';
 
-const CATEGORY_TABS: { key: CategoryTab; label: string }[] = [
-  { key: 'all', label: 'All Services' },
-  { key: 'membership', label: 'Memberships' },
-  { key: 'court_booking', label: 'Court Bookings' },
-  { key: 'tournament', label: 'Tournaments' },
-  { key: 'league', label: 'Leagues' },
-  { key: 'event', label: 'Events' },
-  { key: 'lesson', label: 'Lessons' },
+const STATUS_OPTIONS: { id: FilterTab; label: string }[] = [
+  { id: 'all', label: 'All Statuses' },
+  { id: 'succeeded', label: 'Succeeded' },
+  { id: 'pending', label: 'Pending' },
+  { id: 'failed', label: 'Failed' },
+  { id: 'refunded', label: 'Refunded' },
+];
+
+const SERVICE_OPTIONS: { id: CategoryTab; label: string }[] = [
+  { id: 'all', label: 'All Services' },
+  { id: 'membership', label: 'Memberships' },
+  { id: 'court_booking', label: 'Court Bookings' },
+  { id: 'tournament', label: 'Tournaments' },
+  { id: 'league', label: 'Leagues' },
+  { id: 'event', label: 'Events' },
+  { id: 'lesson', label: 'Lessons & Coaching' },
 ];
 
 function capitalize(str: string): string {
@@ -109,6 +104,7 @@ function capitalize(str: string): string {
 
 export default function ClubPaymentsScreen() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
 
   const { clubId: activeClubId } = useActiveClub();
@@ -121,12 +117,16 @@ export default function ClubPaymentsScreen() {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [copiedId, setCopiedId] = useState(false);
 
+  // Dropdown modal sheets
+  const [isServiceModalVisible, setIsServiceModalVisible] = useState(false);
+  const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
+
   // Refund dialog state
   const [refundDialogVisible, setRefundDialogVisible] = useState(false);
   const [paymentToRefund, setPaymentToRefund] = useState<Payment | null>(null);
   const [refundReasonInput, setRefundReasonInput] = useState('');
 
-  // Queries: Auto-sync player transactions with 15-second background polling
+  // Queries
   const {
     data: summary,
     isLoading: isSummaryLoading,
@@ -142,7 +142,6 @@ export default function ClubPaymentsScreen() {
     refetch: refetchPayments,
   } = useClubPayments(clubId);
 
-  // Auto-refresh when Club Owner returns to / focuses the screen
   useFocusEffect(
     useCallback(() => {
       refetchSummary();
@@ -150,12 +149,12 @@ export default function ClubPaymentsScreen() {
     }, [refetchSummary, refetchPayments])
   );
 
-  // Mutations for staff reconciliation
+  // Staff mutations
   const succeedPaymentMutation = useSucceedPayment(clubId);
   const cancelPaymentMutation = useCancelPayment(clubId);
   const refundPaymentMutation = useRefundPayment(clubId);
 
-  // Filtered payments list using clean parsed details (not raw metadata)
+  // Filtered payments list
   const filteredPayments = useMemo(() => {
     return allPayments.filter((p) => {
       // 1. Status Filter
@@ -167,12 +166,12 @@ export default function ClubPaymentsScreen() {
         if (p.status !== statusFilter) return false;
       }
 
-      // 2. Category Filter
+      // 2. Service Category Filter
       if (categoryFilter !== 'all') {
         if (p.purpose !== categoryFilter) return false;
       }
 
-      // 3. Search Query Filter (searches clean display values only)
+      // 3. Search Query Filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const details = parsePaymentDetails(p);
@@ -182,8 +181,19 @@ export default function ClubPaymentsScreen() {
         const serviceMatch = details.serviceType.toLowerCase().includes(q);
         const activityMatch = details.activityTitle?.toLowerCase().includes(q);
         const noteMatch = details.cleanNote?.toLowerCase().includes(q);
+        const idMatch = p.id?.toLowerCase().includes(q);
+        const providerIdMatch = p.provider_payment_id?.toLowerCase().includes(q);
 
-        if (!refMatch && !nameMatch && !emailMatch && !serviceMatch && !activityMatch && !noteMatch) {
+        if (
+          !refMatch &&
+          !nameMatch &&
+          !emailMatch &&
+          !serviceMatch &&
+          !activityMatch &&
+          !noteMatch &&
+          !idMatch &&
+          !providerIdMatch
+        ) {
           return false;
         }
       }
@@ -192,21 +202,9 @@ export default function ClubPaymentsScreen() {
     });
   }, [allPayments, statusFilter, categoryFilter, searchQuery]);
 
-  // Metric values calculated from actual payment records in US Dollars
-  const {
-    totalCollectedAmount,
-    totalPaymentsCount,
-    successfulCount,
-    pendingCount,
-    failedCount,
-    refundedCount,
-    totalRefundedAmount,
-  } = useMemo(() => {
+  // Essential summary metrics
+  const { totalCollectedAmount, totalPaymentsCount, successfulCount } = useMemo(() => {
     const succeededList = allPayments.filter((p) => p.status === 'succeeded');
-    const pendingList = allPayments.filter(
-      (p) => p.status === 'pending' || p.status === 'processing'
-    );
-    const failedList = allPayments.filter((p) => p.status === 'failed');
     const refundedList = allPayments.filter(
       (p) => p.status === 'refunded' || p.status === 'partially_refunded'
     );
@@ -228,22 +226,11 @@ export default function ClubPaymentsScreen() {
 
     const totalPayments = summary?.total_count ?? allPayments.length;
     const successful = summary?.succeeded_count ?? succeededList.length;
-    const pending = summary?.pending_count ?? pendingList.length;
-    const failed = summary?.failed_count ?? failedList.length;
-    const refunded = summary?.refunded_count ?? refundedList.length;
-    const totalRefundedAmt =
-      summary?.total_refunded_amount != null
-        ? Number(summary.total_refunded_amount)
-        : refundedSum;
 
     return {
       totalCollectedAmount: Math.max(0, totalCollected),
       totalPaymentsCount: totalPayments,
       successfulCount: successful,
-      pendingCount: pending,
-      failedCount: failed,
-      refundedCount: refunded,
-      totalRefundedAmount: totalRefundedAmt,
     };
   }, [allPayments, summary]);
 
@@ -251,6 +238,24 @@ export default function ClubPaymentsScreen() {
     refetchSummary();
     refetchPayments();
   };
+
+  const hasActiveFilters = searchQuery.trim() !== '' || categoryFilter !== 'all' || statusFilter !== 'all';
+
+  const resetAllFilters = () => {
+    setSearchQuery('');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+  };
+
+  const selectedServiceLabel = useMemo(() => {
+    const found = SERVICE_OPTIONS.find((o) => o.id === categoryFilter);
+    return found ? found.label : 'All Services';
+  }, [categoryFilter]);
+
+  const selectedStatusLabel = useMemo(() => {
+    const found = STATUS_OPTIONS.find((o) => o.id === statusFilter);
+    return found ? found.label : 'All Statuses';
+  }, [statusFilter]);
 
   // Handle Mark as Succeeded
   const handleMarkPaid = (payment: Payment) => {
@@ -307,18 +312,17 @@ export default function ClubPaymentsScreen() {
     );
   };
 
-  // Guard: require manage_payments permission
   if (!canManagePayments) {
     return (
       <Screen style={styles.container}>
-        <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
+        <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
           <View style={styles.headerInner}>
             <TouchableOpacity style={styles.headerMenuBtn} onPress={openDrawer}>
               <Menu size={20} color="#1E293B" strokeWidth={2.2} />
             </TouchableOpacity>
             <View style={styles.headerTitleBlock}>
               <AppText style={styles.headerTitle}>Payments</AppText>
-              <AppText style={styles.headerSubtitle}>Track revenue and transactions</AppText>
+              <AppText style={styles.headerSubtitle}>Revenue and transactions</AppText>
             </View>
           </View>
         </View>
@@ -330,194 +334,201 @@ export default function ClubPaymentsScreen() {
     );
   }
 
-  // Category Icon & Badge Config
-  const getCategoryDetails = (purpose: PaymentPurpose | string) => {
-    switch (purpose) {
-      case 'court_booking':
-        return { label: 'Court Booking', color: '#0369A1', bg: '#E0F2FE', Icon: LayoutGrid };
-      case 'tournament':
-        return { label: 'Tournament', color: '#7C3AED', bg: '#EDE9FE', Icon: Trophy };
-      case 'league':
-        return { label: 'League', color: '#0D9488', bg: '#CCFBF1', Icon: Users };
-      case 'event':
-        return { label: 'Event', color: '#BE185D', bg: '#FCE7F3', Icon: Calendar };
-      case 'lesson':
-        return { label: 'Lesson', color: '#D97706', bg: '#FEF3C7', Icon: UserCheck };
-      case 'membership':
-      default:
-        return { label: 'Membership', color: '#B45309', bg: '#FEF3C7', Icon: Crown };
-    }
-  };
-
-  // ─── Render Page Header, Metrics & Filters ─────────────────────────────────
-  const renderHeader = () => (
+  // ─── Header: 3 Summary Metrics + Unified Filter Section ────────────────────
+  const renderListHeader = () => (
     <View style={styles.listHeaderWrapper}>
-      {/* ─── 1. Summary Metrics Cards (Consistent USD Formatting) ──────────── */}
-      <View style={styles.metricsWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.metricsScrollContent}
-        >
-          {/* Card 1: NET COLLECTED */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#ECFDF5' }]}>
-              <CreditCard size={15} color="#059669" strokeWidth={2.2} />
+      {/* ─── 1. Essential Summary Metrics (3 Compact Cards) ─── */}
+      <View style={styles.summaryRow}>
+        {/* Metric 1: Net Collected */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTopRow}>
+            <View style={[styles.summaryIconBox, { backgroundColor: '#ECFDF5' }]}>
+              <CreditCard size={13} color="#059669" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.metricLabel}>NET COLLECTED</AppText>
-            <AppText style={[styles.metricValue, { color: '#047857' }]} numberOfLines={1}>
-              {formatCurrency(totalCollectedAmount, 'USD')}
+            <AppText style={styles.summaryLabel} numberOfLines={1}>
+              Net Collected
             </AppText>
           </View>
+          <AppText style={[styles.summaryValue, { color: '#047857' }]} numberOfLines={1}>
+            {formatCurrency(totalCollectedAmount, 'USD')}
+          </AppText>
+        </View>
 
-          {/* Card 2: TOTAL PAYMENTS */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#F1F5F9' }]}>
-              <FileText size={15} color="#475569" strokeWidth={2.2} />
+        {/* Metric 2: Total Payments */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTopRow}>
+            <View style={[styles.summaryIconBox, { backgroundColor: '#F1F5F9' }]}>
+              <FileText size={13} color="#475569" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.metricLabel}>TOTAL PAYMENTS</AppText>
-            <AppText style={styles.metricValue} numberOfLines={1}>
-              {totalPaymentsCount}
+            <AppText style={styles.summaryLabel} numberOfLines={1}>
+              Total Payments
             </AppText>
           </View>
+          <AppText style={styles.summaryValue} numberOfLines={1}>
+            {totalPaymentsCount}
+          </AppText>
+        </View>
 
-          {/* Card 3: SUCCESSFUL */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#DEF2E6' }]}>
-              <CheckCircle2 size={15} color="#15803D" strokeWidth={2.2} />
+        {/* Metric 3: Successful */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTopRow}>
+            <View style={[styles.summaryIconBox, { backgroundColor: '#DEF2E6' }]}>
+              <CheckCircle2 size={13} color="#15803D" strokeWidth={2.2} />
             </View>
-            <AppText style={styles.metricLabel}>SUCCESSFUL</AppText>
-            <AppText style={[styles.metricValue, { color: '#15803D' }]} numberOfLines={1}>
-              {successfulCount}
+            <AppText style={styles.summaryLabel} numberOfLines={1}>
+              Successful
             </AppText>
           </View>
-
-          {/* Card 4: PENDING */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#FEF3C7' }]}>
-              <Clock size={15} color="#D97706" strokeWidth={2.2} />
-            </View>
-            <AppText style={styles.metricLabel}>PENDING</AppText>
-            <AppText style={[styles.metricValue, { color: '#B45309' }]} numberOfLines={1}>
-              {pendingCount}
-            </AppText>
-          </View>
-
-          {/* Card 5: REFUNDED */}
-          <View style={styles.metricCard}>
-            <View style={[styles.metricIconBox, { backgroundColor: '#EDE9FE' }]}>
-              <RotateCcw size={15} color="#6D28D9" strokeWidth={2.2} />
-            </View>
-            <AppText style={styles.metricLabel}>REFUNDED ({refundedCount})</AppText>
-            <AppText style={[styles.metricValue, { color: '#6D28D9' }]} numberOfLines={1}>
-              {formatCurrency(totalRefundedAmount, 'USD')}
-            </AppText>
-          </View>
-        </ScrollView>
+          <AppText style={[styles.summaryValue, { color: '#15803D' }]} numberOfLines={1}>
+            {successfulCount}
+          </AppText>
+        </View>
       </View>
 
-      {/* ─── 2. Search Bar ─────────────────────────────────────────────────── */}
-      <View style={styles.searchBarContainer}>
-        <Search size={16} color="#64748B" style={{ marginLeft: 12 }} />
-        <TextInput
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search by player, reference, or service..."
-          placeholderTextColor="#94A3B8"
-          style={styles.searchInput}
-          clearButtonMode="while-editing"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8} style={{ marginRight: 10 }}>
-            <X size={15} color="#94A3B8" />
+      {/* ─── 2. Unified Filter Section (Search + 2 Compact Dropdowns) ─── */}
+      <View style={styles.filterCard}>
+        {/* Full-width Search Input */}
+        <View style={styles.searchInputWrap}>
+          <Search size={15} color="#64748B" />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search by player, ref, or service..."
+            placeholderTextColor="#94A3B8"
+            style={styles.searchInput}
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={8}>
+              <X size={14} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Two Compact Dropdown Selectors */}
+        <View style={styles.dropdownsRow}>
+          {/* Service Dropdown */}
+          <TouchableOpacity
+            style={[
+              styles.dropdownTrigger,
+              categoryFilter !== 'all' && styles.dropdownTriggerActive,
+            ]}
+            onPress={() => setIsServiceModalVisible(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by service: ${selectedServiceLabel}`}
+          >
+            <View style={styles.dropdownTriggerContent}>
+              <AppText style={styles.dropdownLabelPrefix}>Service:</AppText>
+              <AppText
+                style={[
+                  styles.dropdownValueText,
+                  categoryFilter !== 'all' && styles.dropdownValueTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {selectedServiceLabel}
+              </AppText>
+            </View>
+            <ChevronDown
+              size={13}
+              color={categoryFilter !== 'all' ? Colors.brand.primary : '#64748B'}
+              strokeWidth={2}
+            />
           </TouchableOpacity>
+
+          {/* Status Dropdown */}
+          <TouchableOpacity
+            style={[
+              styles.dropdownTrigger,
+              statusFilter !== 'all' && styles.dropdownTriggerActive,
+            ]}
+            onPress={() => setIsStatusModalVisible(true)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by status: ${selectedStatusLabel}`}
+          >
+            <View style={styles.dropdownTriggerContent}>
+              <AppText style={styles.dropdownLabelPrefix}>Status:</AppText>
+              <AppText
+                style={[
+                  styles.dropdownValueText,
+                  statusFilter !== 'all' && styles.dropdownValueTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {selectedStatusLabel}
+              </AppText>
+            </View>
+            <ChevronDown
+              size={13}
+              color={statusFilter !== 'all' ? Colors.brand.primary : '#64748B'}
+              strokeWidth={2}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* Active Filter Indicator & Reset */}
+        {hasActiveFilters && (
+          <View style={styles.activeFiltersRow}>
+            <AppText style={styles.resultsCountText}>
+              Showing {filteredPayments.length} of {allPayments.length} transactions
+            </AppText>
+            <TouchableOpacity
+              style={styles.resetFiltersBtn}
+              onPress={resetAllFilters}
+              activeOpacity={0.7}
+            >
+              <X size={11} color={Colors.brand.primary} />
+              <AppText style={styles.resetFiltersBtnText}>Reset</AppText>
+            </TouchableOpacity>
+          </View>
         )}
-      </View>
-
-      {/* ─── 3. Category Filter Pills ──────────────────────────────────────── */}
-      <View style={styles.filterWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {CATEGORY_TABS.map((tab) => {
-            const isActive = categoryFilter === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.filterPill, isActive && styles.filterPillActive]}
-                onPress={() => setCategoryFilter(tab.key)}
-                activeOpacity={0.8}
-              >
-                <AppText style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                  {tab.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* ─── 4. Status Filter Pills ───────────────────────────────────────── */}
-      <View style={[styles.filterWrapper, { marginTop: 4 }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {FILTER_TABS.map((tab) => {
-            const isActive = statusFilter === tab.key;
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.filterPill, isActive && styles.filterPillActive]}
-                onPress={() => setStatusFilter(tab.key)}
-                activeOpacity={0.8}
-              >
-                <AppText style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                  {tab.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </View>
     </View>
   );
 
-  // ─── Redesigned Clean Transaction Card ─────────────────────────────────────
+  // ─── 3. Redesigned Clean Payment Transaction Card ──────────────────────────
   const renderPaymentCard = ({ item }: { item: Payment }) => {
     const details = parsePaymentDetails(item);
-    const playerName = item.player?.full_name || item.player?.email || 'Unknown Member';
+    const playerName = item.player?.full_name || item.player?.email || 'Unknown Player';
 
-    const isFailed = item.status === 'failed';
-    const isPending = item.status === 'pending' || item.status === 'processing';
     const isSucceeded = item.status === 'succeeded';
+    const isPending = item.status === 'pending' || item.status === 'processing';
+    const isFailed = item.status === 'failed';
     const isCancelled = item.status === 'cancelled';
     const isRefunded = item.status === 'refunded' || item.status === 'partially_refunded';
 
-    const cat = getCategoryDetails(item.purpose);
-    const CategoryIcon = cat.Icon;
+    // Status label and color variant
+    let statusText = 'PENDING';
+    if (isSucceeded) statusText = 'SUCCEEDED';
+    else if (isFailed) statusText = 'FAILED';
+    else if (isCancelled) statusText = 'CANCELLED';
+    else if (isRefunded) statusText = 'REFUNDED';
+
+    // Meaningful secondary item detail (only if distinct from serviceType)
+    const itemDetail = details.activityTitle && details.activityTitle.toLowerCase() !== details.serviceType.toLowerCase()
+      ? details.activityTitle
+      : details.activitySubtitle;
 
     return (
       <TouchableOpacity
         style={styles.paymentCard}
         onPress={() => setSelectedPayment(item)}
-        activeOpacity={0.85}
+        activeOpacity={0.8}
       >
-        {/* Row 1: Player Name & Status Badge */}
+        {/* Top Row: Player Name + Restrained Status Badge */}
         <View style={styles.cardHeaderRow}>
-          <AppText style={styles.playerName} numberOfLines={2}>
+          <AppText style={styles.playerName} numberOfLines={1}>
             {playerName}
           </AppText>
 
           <View
             style={[
               styles.statusBadge,
-              isFailed && styles.statusBadgeFailed,
-              isPending && styles.statusBadgePending,
               isSucceeded && styles.statusBadgeSucceeded,
+              isPending && styles.statusBadgePending,
+              isFailed && styles.statusBadgeFailed,
               isCancelled && styles.statusBadgeCancelled,
               isRefunded && styles.statusBadgeRefunded,
             ]}
@@ -525,98 +536,73 @@ export default function ClubPaymentsScreen() {
             <AppText
               style={[
                 styles.statusBadgeText,
-                isFailed && styles.statusBadgeTextFailed,
-                isPending && styles.statusBadgeTextPending,
                 isSucceeded && styles.statusBadgeTextSucceeded,
+                isPending && styles.statusBadgeTextPending,
+                isFailed && styles.statusBadgeTextFailed,
                 isCancelled && styles.statusBadgeTextCancelled,
                 isRefunded && styles.statusBadgeTextRefunded,
               ]}
             >
-              {item.status.toUpperCase()}
+              {statusText}
             </AppText>
           </View>
         </View>
 
-        {/* Row 2: Reference ID & Badges Group */}
-        <View style={styles.transactionDetailsRow}>
-          <AppText style={styles.referenceText}>{item.reference}</AppText>
-          <View style={styles.badgeGroupRow}>
-            <View style={[styles.categoryBadge, { backgroundColor: cat.bg }]}>
-              <CategoryIcon size={11} color={cat.color} />
-              <AppText style={[styles.categoryBadgeText, { color: cat.color }]}>
-                {details.serviceType}
-              </AppText>
-            </View>
-            <View style={styles.methodBadge}>
-              <AppText style={styles.methodBadgeText}>
-                {details.methodLabel}
-              </AppText>
-            </View>
-          </View>
-        </View>
-
-        {/* Row 3: Prominent Amount in US Dollars */}
-        <View style={styles.amountRow}>
-          <AppText style={styles.amountText}>{details.formattedAmount}</AppText>
-        </View>
-
-        {/* Row 4: Meaningful Service Details (Never Raw JSON or Metadata) */}
-        <View style={styles.serviceDetailsBox}>
-          <AppText style={styles.serviceNameHeading}>
-            {details.serviceType}
+        {/* Middle Section: Prominent Amount + Service Details */}
+        <View style={styles.cardMiddleSection}>
+          <AppText style={styles.amountText}>
+            {details.formattedAmount}
           </AppText>
-          {details.activityTitle ? (
-            <AppText style={styles.activityDetailText}>
-              {details.activityTitle}
-              {details.activitySubtitle ? ` · ${details.activitySubtitle}` : ''}
-            </AppText>
-          ) : details.activitySubtitle ? (
-            <AppText style={styles.activityDetailText}>{details.activitySubtitle}</AppText>
-          ) : null}
-        </View>
 
-        {/* Refund Strip if Refunded */}
-        {isRefunded && (
-          <View style={styles.refundCardStrip}>
-            <RotateCcw size={13} color="#6D28D9" />
-            <AppText style={styles.refundCardStripText}>
-              Refunded: {formatCurrency(item.refunded_amount || item.amount, 'USD')}
-              {item.refund_reason ? ` • ${item.refund_reason}` : ''}
+          <View style={styles.serviceInfoGroup}>
+            <AppText style={styles.serviceNameHeading}>
+              {details.serviceType}
             </AppText>
+            {itemDetail ? (
+              <AppText style={styles.serviceItemDetailText} numberOfLines={1}>
+                {itemDetail}
+              </AppText>
+            ) : null}
           </View>
-        )}
-
-        {/* Thin Divider */}
-        <View style={styles.cardDivider} />
-
-        {/* Row 5: Creation Date and Provider Ref */}
-        <View style={styles.cardBottomRow}>
-          <AppText style={styles.createdDateText}>
-            Created: {details.formattedDate}
-          </AppText>
-          {item.provider_payment_id ? (
-            <AppText style={styles.providerRefText}>
-              Ref: {item.provider_payment_id}
-            </AppText>
-          ) : null}
         </View>
 
-        {/* Failure Explanation (Human-readable, no technical jargon) */}
+        {/* Optional Failure or Refund notice */}
         {details.failureReason ? (
-          <View style={styles.failureReasonRow}>
-            <ShieldAlert size={13} color="#DC2626" />
-            <AppText style={styles.failureReasonText}>
+          <View style={styles.failureNoticeStrip}>
+            <ShieldAlert size={12} color="#DC2626" />
+            <AppText style={styles.failureNoticeText} numberOfLines={1}>
               {details.failureReason}
             </AppText>
           </View>
+        ) : isRefunded ? (
+          <View style={styles.refundNoticeStrip}>
+            <RotateCcw size={12} color="#6D28D9" />
+            <AppText style={styles.refundNoticeText} numberOfLines={1}>
+              Refunded: {formatCurrency(item.refunded_amount || item.amount, 'USD')}
+            </AppText>
+          </View>
         ) : null}
 
-        {/* User Note (Clean, no raw metadata) */}
-        {details.cleanNote && !isRefunded ? (
-          <AppText style={styles.noteText} numberOfLines={2}>
-            Note: {details.cleanNote}
-          </AppText>
-        ) : null}
+        {/* Subtle Divider */}
+        <View style={styles.cardDivider} />
+
+        {/* Bottom Section: Transaction ID, Timestamp, Payment Method */}
+        <View style={styles.cardFooterRow}>
+          <View style={styles.footerLeftCol}>
+            <AppText style={styles.transactionIdText}>
+              Transaction: {item.reference}
+            </AppText>
+            <AppText style={styles.createdDateText}>
+              {details.formattedDate}
+            </AppText>
+          </View>
+
+          <View style={styles.methodBadge}>
+            <AppText style={styles.methodBadgeText}>
+              {details.methodLabel}
+            </AppText>
+          </View>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -626,7 +612,7 @@ export default function ClubPaymentsScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* ─── Compact Header ─────────────────────────────────────────────────── */}
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 6 }]}>
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerInner}>
           <TouchableOpacity
             style={styles.headerMenuBtn}
@@ -641,7 +627,7 @@ export default function ClubPaymentsScreen() {
 
           <View style={styles.headerTitleBlock}>
             <AppText style={styles.headerTitle}>Payments</AppText>
-            <AppText style={styles.headerSubtitle}>Track revenue and transactions</AppText>
+            <AppText style={styles.headerSubtitle}>Revenue and transactions</AppText>
           </View>
         </View>
       </View>
@@ -668,19 +654,17 @@ export default function ClubPaymentsScreen() {
           data={filteredPayments}
           keyExtractor={(item) => item.id}
           renderItem={renderPaymentCard}
-          ListHeaderComponent={renderHeader}
+          ListHeaderComponent={renderListHeader}
           contentContainerStyle={[
             styles.listContent,
-            {
-              paddingBottom: insets.bottom + 96,
-            },
+            { paddingBottom: insets.bottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={onRefresh}
-              tintColor="#176B57"
+              tintColor={Colors.brand.primary}
             />
           }
           ListEmptyComponent={
@@ -688,15 +672,99 @@ export default function ClubPaymentsScreen() {
               <EmptyState
                 title="No Payments Found"
                 description={
-                  statusFilter === 'all'
-                    ? 'No transaction records found for this club.'
-                    : `No payments currently match the "${capitalize(statusFilter)}" filter.`
+                  hasActiveFilters
+                    ? 'No transactions match the selected filters. Try clearing the filters.'
+                    : 'No transaction records found for this club.'
                 }
               />
             </View>
           }
         />
       )}
+
+      {/* ─── Service Filter Modal Sheet ────────────────────────────────────── */}
+      <ModalSheet
+        visible={isServiceModalVisible}
+        onClose={() => setIsServiceModalVisible(false)}
+        title="Filter by Service"
+      >
+        <View style={styles.pickerModalContent}>
+          <AppText style={styles.pickerModalDesc}>
+            Filter transactions by club service category:
+          </AppText>
+
+          <View style={styles.pickerOptionsList}>
+            {SERVICE_OPTIONS.map((opt) => {
+              const isSelected = categoryFilter === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.pickerOptionCard, isSelected && styles.pickerOptionCardSelected]}
+                  onPress={() => {
+                    setCategoryFilter(opt.id);
+                    setIsServiceModalVisible(false);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <AppText
+                    style={[
+                      styles.pickerOptionLabel,
+                      isSelected && styles.pickerOptionLabelSelected,
+                    ]}
+                  >
+                    {opt.label}
+                  </AppText>
+                  {isSelected && (
+                    <CheckCircle2 size={16} color={Colors.brand.primary} strokeWidth={2.2} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </ModalSheet>
+
+      {/* ─── Status Filter Modal Sheet ─────────────────────────────────────── */}
+      <ModalSheet
+        visible={isStatusModalVisible}
+        onClose={() => setIsStatusModalVisible(false)}
+        title="Filter by Status"
+      >
+        <View style={styles.pickerModalContent}>
+          <AppText style={styles.pickerModalDesc}>
+            Filter transactions by current payment status:
+          </AppText>
+
+          <View style={styles.pickerOptionsList}>
+            {STATUS_OPTIONS.map((opt) => {
+              const isSelected = statusFilter === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.pickerOptionCard, isSelected && styles.pickerOptionCardSelected]}
+                  onPress={() => {
+                    setStatusFilter(opt.id);
+                    setIsStatusModalVisible(false);
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <AppText
+                    style={[
+                      styles.pickerOptionLabel,
+                      isSelected && styles.pickerOptionLabelSelected,
+                    ]}
+                  >
+                    {opt.label}
+                  </AppText>
+                  {isSelected && (
+                    <CheckCircle2 size={16} color={Colors.brand.primary} strokeWidth={2.2} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+      </ModalSheet>
 
       {/* ─── Transaction Detail & Reconciliation Modal Sheet ───────────────── */}
       <Modal
@@ -745,7 +813,7 @@ export default function ClubPaymentsScreen() {
                   <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
                     <View style={styles.modalDetailsGrid}>
                       <View style={styles.modalGridRow}>
-                        <AppText style={styles.modalGridKey}>Customer / Player</AppText>
+                        <AppText style={styles.modalGridKey}>Player / Customer</AppText>
                         <AppText style={styles.modalGridVal}>
                           {selectedPayment.player?.full_name || 'Member'}
                         </AppText>
@@ -908,7 +976,7 @@ export default function ClubPaymentsScreen() {
                     </View>
                   </ScrollView>
 
-                  {/* Modal Footer Actions: Staff reconciliation and refunds */}
+                  {/* Modal Footer Actions */}
                   <View style={styles.modalFooter}>
                     {selectedPayment.status === 'pending' ||
                     selectedPayment.status === 'processing' ? (
@@ -1056,8 +1124,6 @@ export default function ClubPaymentsScreen() {
   );
 }
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1069,179 +1135,207 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    gap: 12,
+  },
+  emptyContainer: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
 
-  // ─── Header ────────────────────────────────────────────────────────────────
+  // 1. Compact Header
   headerContainer: {
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#EBEFEA',
+    borderBottomColor: Colors.surface.borderLight,
   },
   headerInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    gap: 12,
   },
   headerMenuBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.background.primary,
     borderWidth: 1,
-    borderColor: '#E2ECE7',
+    borderColor: Colors.surface.border,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
   },
   headerTitleBlock: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0F172A',
-    lineHeight: 26,
-    letterSpacing: -0.4,
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    letterSpacing: -0.2,
   },
   headerSubtitle: {
-    fontSize: 12.5,
-    color: '#64748B',
-    lineHeight: 16,
-    marginTop: 2,
-    fontWeight: '400',
+    fontSize: 11.5,
+    color: Colors.text.secondary,
+    marginTop: 1,
   },
 
-  // ─── List Layout & Wrapper ─────────────────────────────────────────────────
+  // 2. Summary Metrics (3 Compact Cards in 1 Row)
   listHeaderWrapper: {
     gap: 12,
-    paddingTop: 12,
     marginBottom: 4,
   },
-  listContent: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  emptyContainer: {
-    paddingTop: 30,
-    paddingHorizontal: 16,
-  },
-
-  // ─── Summary Metric Cards ──────────────────────────────────────────────────
-  metricsWrapper: {
-    width: '100%',
-  },
-  metricsScrollContent: {
+  summaryRow: {
     flexDirection: 'row',
-    gap: 10,
-    paddingRight: 16,
+    gap: 8,
   },
-  metricCard: {
+  summaryCard: {
+    flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: '#E5ECE8',
-    padding: 12,
-    minWidth: 110,
-    minHeight: 74,
+    borderColor: Colors.surface.border,
     justifyContent: 'space-between',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    minHeight: 74,
+    ...Shadows.sm,
   },
-  metricIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  summaryIconBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginTop: 6,
+  summaryLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    flex: 1,
   },
-  metricValue: {
-    fontSize: 17,
+  summaryValue: {
+    fontSize: 16.5,
     fontWeight: '800',
-    color: '#0F172A',
-    marginTop: 2,
+    color: Colors.text.primary,
+    letterSpacing: -0.3,
   },
 
-  // ─── Search Bar ────────────────────────────────────────────────────────────
-  searchBarContainer: {
+  // 3. Unified Filter Card
+  filterCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    gap: 8,
+    ...Shadows.sm,
+  },
+  searchInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#E5ECE8',
-    height: 42,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 8,
   },
   searchInput: {
     flex: 1,
-    paddingHorizontal: 10,
-    fontSize: 13,
-    color: '#0F172A',
-    height: '100%',
+    fontSize: 12.5,
+    color: Colors.text.primary,
+    paddingVertical: 0,
   },
-
-  // ─── Status & Category Filter Pills ────────────────────────────────────────
-  filterWrapper: {
-    width: '100%',
-  },
-  filterScrollContent: {
+  dropdownsRow: {
     flexDirection: 'row',
     gap: 8,
-    paddingRight: 16,
   },
-  filterPill: {
-    height: 32,
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5ECE8',
+  dropdownTrigger: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: 10,
+    height: 34,
   },
-  filterPillActive: {
-    backgroundColor: '#176B57',
-    borderColor: '#176B57',
+  dropdownTriggerActive: {
+    backgroundColor: Colors.brand.primaryLight,
+    borderColor: '#C3E7D2',
   },
-  filterPillText: {
-    fontSize: 12.5,
+  dropdownTriggerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    marginRight: 4,
+  },
+  dropdownLabelPrefix: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  dropdownValueText: {
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#334155',
+    color: Colors.text.primary,
+    flex: 1,
   },
-  filterPillTextActive: {
-    color: '#FFFFFF',
+  dropdownValueTextActive: {
+    color: Colors.brand.primary,
     fontWeight: '700',
   },
+  activeFiltersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surface.borderLight,
+  },
+  resultsCountText: {
+    fontSize: 10.5,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
+  resetFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.brand.primaryLight,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  resetFiltersBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.brand.primary,
+  },
 
-  // ─── Redesigned Transaction Cards ──────────────────────────────────────────
+  // 4. Redesigned Payment Transaction Cards
   paymentCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: Radius.lg,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E5ECE8',
-    padding: 16,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1.5 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    borderColor: Colors.surface.border,
+    gap: 8,
+    ...Shadows.sm,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -1250,278 +1344,262 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   playerName: {
-    flex: 1,
-    fontSize: 15.5,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    lineHeight: 20,
+    flex: 1,
   },
-
-  // Transaction Details Row
-  transactionDetailsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  referenceText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    fontVariant: ['tabular-nums'],
-  },
-  badgeGroupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
+  statusBadge: {
+    paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
   },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.2,
+  statusBadgeSucceeded: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
-  methodBadge: {
+  statusBadgePending: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  statusBadgeFailed: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  statusBadgeCancelled: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6,
+    borderColor: '#E2E8F0',
   },
-  methodBadgeText: {
-    fontSize: 10.5,
+  statusBadgeRefunded: {
+    backgroundColor: '#EDE9FE',
+    borderColor: '#DDD6FE',
+  },
+  statusBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  statusBadgeTextSucceeded: {
+    color: '#065F46',
+  },
+  statusBadgeTextPending: {
+    color: '#92400E',
+  },
+  statusBadgeTextFailed: {
+    color: '#991B1B',
+  },
+  statusBadgeTextCancelled: {
     color: '#475569',
-    letterSpacing: 0.2,
+  },
+  statusBadgeTextRefunded: {
+    color: '#6D28D9',
   },
 
-  // Amount Row
-  amountRow: {
-    marginTop: 8,
+  // Middle section
+  cardMiddleSection: {
+    flexDirection: 'column',
+    gap: 3,
+    marginTop: 2,
   },
   amountText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     color: '#0F172A',
     letterSpacing: -0.3,
   },
-
-  // Meaningful Service Details Box
-  serviceDetailsBox: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#EDF2EE',
+  serviceInfoGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   serviceNameHeading: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#102B2A',
+    fontWeight: '600',
+    color: '#1E293B',
   },
-  activityDetailText: {
-    fontSize: 12.5,
-    color: '#475569',
-    marginTop: 2,
-    fontWeight: '500',
+  serviceItemDetailText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '400',
   },
 
-  // Refund Strip
-  refundCardStrip: {
+  // Failure & Refund notices
+  failureNoticeStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF2F2',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  failureNoticeText: {
+    fontSize: 11,
+    color: '#B91C1C',
+    fontWeight: '500',
+    flex: 1,
+  },
+  refundNoticeStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#F5F3FF',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#EDE9FE',
   },
-  refundCardStripText: {
-    fontSize: 11.5,
-    fontWeight: '600',
+  refundNoticeText: {
+    fontSize: 11,
     color: '#6D28D9',
+    fontWeight: '600',
+    flex: 1,
   },
 
   // Divider
   cardDivider: {
     height: 1,
     backgroundColor: '#F1F5F9',
-    marginVertical: 10,
+    marginVertical: 2,
   },
 
-  // Date & Provider Bottom Row
-  cardBottomRow: {
+  // Footer row
+  cardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  footerLeftCol: {
+    flex: 1,
+    gap: 2,
+  },
+  transactionIdText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  createdDateText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  methodBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  methodBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  // Picker Modal Sheet Styles
+  pickerModalContent: {
+    paddingBottom: Spacing.md,
+    gap: Spacing.sm,
+  },
+  pickerModalDesc: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    lineHeight: 16,
+  },
+  pickerOptionsList: {
+    gap: 6,
+    marginTop: 4,
+  },
+  pickerOptionCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: Colors.surface.borderLight,
   },
-  createdDateText: {
-    fontSize: 11.5,
-    color: '#64748B',
+  pickerOptionCardSelected: {
+    backgroundColor: Colors.brand.primaryLight,
+    borderColor: '#C3E7D2',
   },
-  providerRefText: {
-    fontSize: 11,
-    color: '#94A3B8',
-  },
-
-  // Failure Reason
-  failureReasonRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 6,
-    backgroundColor: '#FEF2F2',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
-  },
-  failureReasonText: {
-    fontSize: 11.5,
-    color: '#B91C1C',
+  pickerOptionLabel: {
+    fontSize: 13,
     fontWeight: '500',
-    flex: 1,
-    lineHeight: 15,
+    color: Colors.text.primary,
+  },
+  pickerOptionLabelSelected: {
+    fontWeight: '700',
+    color: Colors.brand.primary,
   },
 
-  // Note
-  noteText: {
-    fontSize: 11.5,
-    color: '#64748B',
-    fontStyle: 'italic',
-    lineHeight: 15,
-    marginTop: 4,
-  },
-
-  // ─── Status Badges ─────────────────────────────────────────────────────────
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  statusBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  statusBadgeSucceeded: {
-    backgroundColor: '#DEF2E6',
-  },
-  statusBadgeTextSucceeded: {
-    color: '#15803D',
-  },
-  statusBadgePending: {
-    backgroundColor: '#FEF3C7',
-  },
-  statusBadgeTextPending: {
-    color: '#B45309',
-  },
-  statusBadgeFailed: {
-    backgroundColor: '#FEE2E2',
-  },
-  statusBadgeTextFailed: {
-    color: '#DC2626',
-  },
-  statusBadgeCancelled: {
-    backgroundColor: '#F1F5F9',
-  },
-  statusBadgeTextCancelled: {
-    color: '#64748B',
-  },
-  statusBadgeRefunded: {
-    backgroundColor: '#EDE9FE',
-  },
-  statusBadgeTextRefunded: {
-    color: '#6D28D9',
-  },
-
-  // ─── Modal Sheet ───────────────────────────────────────────────────────────
+  // Transaction Details Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: Radius.xl,
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 480,
     maxHeight: '85%',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
     overflow: 'hidden',
+    ...Shadows.md,
   },
   modalHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
+    alignItems: 'flex-start',
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: Colors.surface.borderLight,
   },
   modalHeaderTitleGroup: {
     flex: 1,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '700',
     color: '#0F172A',
-    letterSpacing: -0.3,
   },
   modalRefRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
+    marginTop: 2,
   },
   modalRefText: {
     fontSize: 12,
     color: '#64748B',
-    fontVariant: ['tabular-nums'],
-    fontWeight: '600',
+    fontWeight: '500',
   },
   modalCloseBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
+    padding: 4,
   },
   modalScroll: {
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    padding: 16,
   },
   modalDetailsGrid: {
-    gap: 12,
+    gap: 10,
   },
   modalGridRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F8FAF9',
+    paddingVertical: 3,
   },
   modalGridKey: {
     fontSize: 12.5,
@@ -1532,51 +1610,46 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A',
     fontWeight: '600',
-    textAlign: 'right',
-    maxWidth: '60%',
   },
   modalAmountVal: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0F172A',
+    color: '#047857',
   },
   modalNoteSection: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: Colors.background.primary,
+    borderRadius: Radius.md,
+    padding: 10,
+    gap: 4,
     marginTop: 4,
   },
   modalNoteLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: '#475569',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginBottom: 4,
   },
   modalNoteContent: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#334155',
-    lineHeight: 17,
+    lineHeight: 16,
   },
   modalFooter: {
-    padding: 16,
+    padding: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    backgroundColor: '#FFFFFF',
+    borderTopColor: Colors.surface.borderLight,
+    backgroundColor: '#FAFAF9',
   },
   modalPendingActions: {
     flexDirection: 'row',
     gap: 10,
-    alignItems: 'center',
   },
   modalCancelPaymentBtn: {
     flex: 1,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
+    height: 40,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#FECACA',
+    backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -1585,13 +1658,13 @@ const styles = StyleSheet.create({
   modalCancelPaymentBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#DC2626',
   },
   modalConfirmPaidBtn: {
-    flex: 2,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: '#15803D',
+    flex: 1,
+    height: 40,
+    borderRadius: Radius.md,
+    backgroundColor: '#059669',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -1604,17 +1677,17 @@ const styles = StyleSheet.create({
   },
   refundInput: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
+    borderColor: '#CBD5E1',
+    borderRadius: Radius.md,
     padding: 10,
     fontSize: 13,
     color: '#0F172A',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   refundDialogBtn: {
     flex: 1,
     height: 40,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
