@@ -517,10 +517,6 @@ export const APP_CONFIG = {
 
 export const PLATFORM_ADMIN_EMAILS: readonly string[] = [
   'admin@pickleball.com',
-  'platform.owner@pickleball.com',
-  'platform@pickleball.com',
-  'platform.owner@aught2.com',
-  'platform@aught2.com',
 ] as const;
 
 export function isPlatformAdminEmail(email?: string | null): boolean {

@@ -1154,7 +1154,7 @@ async def reset_platform_banner(
     "/reset-database",
     status_code=status.HTTP_200_OK,
     summary="Reset database to clean test state",
-    description="Purges all demo/business records (clubs, tournaments, leagues, bookings, events, lessons, non-admin users) while preserving platform admin accounts.",
+    description="Purges all demo/business records (clubs, tournaments, leagues, bookings, events, lessons, non-admin users) while preserving ONLY the single platform admin account.",
     responses={
         403: {"description": "Platform owner authorization required"},
     },
@@ -1163,36 +1163,31 @@ async def reset_database_endpoint(
     current_platform_owner: User = Depends(get_current_platform_owner),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Purge all demo and business records, leaving only platform administrators."""
+    """Purge all demo and business records, leaving ONLY the single platform administrator."""
     from sqlalchemy import select, text
     from app.core.security import hash_password
     from app.models.user import User
 
-    PRESERVED_ADMIN_EMAILS = [
-        "admin@pickleball.com",
-        "platform.owner@pickleball.com",
-        "platform.owner@aught2.com",
-    ]
-    default_admin_pw = "PlatformAdmin2024!"
-    hashed_pw = hash_password(default_admin_pw)
+    PRESERVED_ADMIN_EMAIL = "admin@pickleball.com"
 
-    for admin_email in PRESERVED_ADMIN_EMAILS:
-        res = await db.execute(select(User).where(User.email == admin_email))
-        admin_user = res.scalar_one_or_none()
-        if admin_user:
-            admin_user.hashed_password = hashed_pw
-            admin_user.is_active = True
-            admin_user.is_verified = True
-        elif admin_email in ("admin@pickleball.com", "platform.owner@aught2.com"):
-            new_admin = User(
-                email=admin_email,
-                hashed_password=hashed_pw,
-                full_name="Platform Administrator",
-                is_active=True,
-                is_verified=True,
-            )
-            db.add(new_admin)
-    await db.commit()
+    # Verify admin@pickleball.com exists without changing its existing password hash
+    res = await db.execute(select(User).where(User.email == PRESERVED_ADMIN_EMAIL))
+    admin_user = res.scalar_one_or_none()
+    if not admin_user:
+        new_admin = User(
+            email=PRESERVED_ADMIN_EMAIL,
+            hashed_password=hash_password("PlatformAdmin2024!"),
+            full_name="Platform Administrator",
+            is_active=True,
+            is_verified=True,
+        )
+        db.add(new_admin)
+        await db.commit()
+    else:
+        # Preserve existing password hash, ensure active & verified
+        admin_user.is_active = True
+        admin_user.is_verified = True
+        await db.commit()
 
     tables_to_clear = [
         "match_participants",
@@ -1243,25 +1238,28 @@ async def reset_database_endpoint(
     await db.commit()
 
     try:
-        await db.execute(text("""
+        # Delete player profiles
+        await db.execute(text(f"""
             DELETE FROM player_profiles 
             WHERE user_id NOT IN (
-                SELECT id FROM users WHERE email IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+                SELECT id FROM users WHERE lower(email) = '{PRESERVED_ADMIN_EMAIL}'
             )
         """))
-        await db.execute(text("""
+        # Delete all other users except admin@pickleball.com
+        del_users = await db.execute(text(f"""
             DELETE FROM users 
-            WHERE email NOT IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+            WHERE lower(email) != '{PRESERVED_ADMIN_EMAIL}'
         """))
+        purged_counts["users_deleted"] = del_users.rowcount
         await db.commit()
     except Exception:
         await db.rollback()
 
     return {
         "status": "success",
-        "message": "Database completely purged and reset to clean test state.",
+        "message": "Database completely purged and reset to clean test state. Only admin@pickleball.com preserved.",
         "purged_tables": purged_counts,
-        "platform_admins_preserved": PRESERVED_ADMIN_EMAILS,
+        "platform_admins_preserved": [PRESERVED_ADMIN_EMAIL],
     }
 
 

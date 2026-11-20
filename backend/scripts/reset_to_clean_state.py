@@ -21,11 +21,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
 from app.models.user import User
 
-PRESERVED_ADMIN_EMAILS = [
-    "admin@pickleball.com",
-    "platform.owner@pickleball.com",
-    "platform.owner@aught2.com",
-]
+PRESERVED_ADMIN_EMAIL = "admin@pickleball.com"
 
 async def clean_database():
     print("=" * 60)
@@ -39,28 +35,24 @@ async def clean_database():
         print(f"Connected to database '{db_info[0]}' as user '{db_info[1]}'")
 
         # Ensure platform admin account exists
-        print("\n1. Verifying and configuring Platform Administrator accounts...")
-        default_admin_pw = "PlatformAdmin2024!"
-        hashed_pw = hash_password(default_admin_pw)
-
-        for admin_email in PRESERVED_ADMIN_EMAILS:
-            res = await session.execute(select(User).where(User.email == admin_email))
-            admin_user = res.scalar_one_or_none()
-            if admin_user:
-                admin_user.hashed_password = hashed_pw
-                admin_user.is_active = True
-                admin_user.is_verified = True
-                print(f"  [OK] Updated platform admin: {admin_email} (password: {default_admin_pw})")
-            elif admin_email in ("admin@pickleball.com", "platform.owner@aught2.com"):
-                new_admin = User(
-                    email=admin_email,
-                    hashed_password=hashed_pw,
-                    full_name="Platform Administrator",
-                    is_active=True,
-                    is_verified=True,
-                )
-                session.add(new_admin)
-                print(f"  [OK] Created platform admin: {admin_email} (password: {default_admin_pw})")
+        print("\n1. Verifying and configuring Platform Administrator account...")
+        res = await session.execute(select(User).where(User.email == PRESERVED_ADMIN_EMAIL))
+        admin_user = res.scalar_one_or_none()
+        if admin_user:
+            admin_user.is_active = True
+            admin_user.is_verified = True
+            print(f"  [OK] Preserved existing platform admin: {PRESERVED_ADMIN_EMAIL}")
+        else:
+            default_admin_pw = "PlatformAdmin2024!"
+            new_admin = User(
+                email=PRESERVED_ADMIN_EMAIL,
+                hashed_password=hash_password(default_admin_pw),
+                full_name="Platform Administrator",
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(new_admin)
+            print(f"  [OK] Created platform admin: {PRESERVED_ADMIN_EMAIL}")
 
         await session.commit()
 
@@ -121,7 +113,7 @@ async def clean_database():
         del_profiles = await session.execute(text("""
             DELETE FROM player_profiles 
             WHERE user_id NOT IN (
-                SELECT id FROM users WHERE email IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+                SELECT id FROM users WHERE lower(email) = 'admin@pickleball.com'
             )
         """))
         print(f"  Purged {del_profiles.rowcount} player profiles")
@@ -129,7 +121,7 @@ async def clean_database():
         # Delete non-admin users
         del_users = await session.execute(text("""
             DELETE FROM users 
-            WHERE email NOT IN ('admin@pickleball.com', 'platform.owner@pickleball.com', 'platform.owner@aught2.com')
+            WHERE lower(email) != 'admin@pickleball.com'
         """))
         print(f"  Purged {del_users.rowcount} non-platform-admin users")
 
