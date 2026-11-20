@@ -81,14 +81,6 @@ import type {
   PlayerLessonDetail,
 } from '@/types';
 
-// ─── Thumbnail Assets ────────────────────────────────────────────────────────
-
-const LESSON_CARDS = [
-  require('../../assets/lessons/card1.jpg'),
-  require('../../assets/lessons/card2.jpg'),
-  require('../../assets/lessons/card3.jpg'),
-];
-
 function getLessonThumbnail(
   _title: string,
   _index: number,

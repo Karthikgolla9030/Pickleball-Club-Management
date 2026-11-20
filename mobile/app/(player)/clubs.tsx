@@ -161,7 +161,7 @@ export default function MyClubsScreen() {
   };
 
   const renderClubItem = ({ item }: { item: PlayerClub }) => {
-    const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Facility Location';
+    const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Location not specified';
     const memberSinceStr = formatMemberDate(item.joined_at);
     const memberNumStr = item.membership_number || '—';
 

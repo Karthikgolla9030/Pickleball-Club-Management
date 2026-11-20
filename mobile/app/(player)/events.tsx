@@ -57,14 +57,6 @@ import type { ClubEvent, EventRegistration } from '@/types';
 
 type MainTab = 'discover' | 'my_registrations';
 
-const COURT_IMAGES = [
-  require('../../assets/courts/court_1.jpg'),
-  require('../../assets/courts/court_3.jpg'),
-  require('../../assets/courts/court_4.jpg'),
-  require('../../assets/courts/court_2.jpg'),
-  require('../../assets/courts/court_5.jpg'),
-];
-
 export default function PlayerEventsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();

@@ -71,7 +71,7 @@ export function BookingDetailsModal({
       visible={visible}
       onClose={onClose}
       title="Booking Details"
-      subtitle={booking.id.split('-')[0].toUpperCase() + '-' + booking.id.slice(0, 4)} // Fake friendly ID
+      subtitle={booking.id ? `Ref: #${booking.id.slice(0, 8).toUpperCase()}` : undefined}
       actions={[
         { label: 'Close', variant: 'secondary', onPress: onClose }
       ]}

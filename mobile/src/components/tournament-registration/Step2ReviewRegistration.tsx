@@ -175,22 +175,22 @@ export function Step2ReviewRegistration({
               <View style={styles.playerMetaGrid}>
                 <View style={styles.playerMetaRow}>
                   <AppText style={styles.playerMetaLabel}>Email</AppText>
-                  <AppText style={styles.playerMetaValue}>{formState.email || 'karthik@example.com'}</AppText>
+                  <AppText style={styles.playerMetaValue}>{formState.email || '—'}</AppText>
                 </View>
 
                 <View style={styles.playerMetaRow}>
                   <AppText style={styles.playerMetaLabel}>Phone</AppText>
-                  <AppText style={styles.playerMetaValue}>{formState.phone || '+1 (555) 123-4567'}</AppText>
+                  <AppText style={styles.playerMetaValue}>{formState.phone || '—'}</AppText>
                 </View>
 
                 <View style={styles.playerMetaRow}>
                   <AppText style={styles.playerMetaLabel}>Skill rating</AppText>
-                  <AppText style={styles.playerMetaValue}>{formState.skillLevel || '3.5'}</AppText>
+                  <AppText style={styles.playerMetaValue}>{formState.skillLevel || '—'}</AppText>
                 </View>
 
                 <View style={styles.playerMetaRow}>
                   <AppText style={styles.playerMetaLabel}>Age</AppText>
-                  <AppText style={styles.playerMetaValue}>{formState.age || '28'}</AppText>
+                  <AppText style={styles.playerMetaValue}>{formState.age || '—'}</AppText>
                 </View>
               </View>
             </View>
@@ -205,35 +205,35 @@ export function Step2ReviewRegistration({
 
               <View style={styles.playerDetailsBlock}>
                 <AppText style={styles.playerNameText}>
-                  {formState.partnerFullName || formState.selectedPartner?.full_name || 'Player 2'}
+                  {formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}
                 </AppText>
 
                 <View style={styles.playerMetaGrid}>
                   <View style={styles.playerMetaRow}>
                     <AppText style={styles.playerMetaLabel}>Email</AppText>
                     <AppText style={styles.playerMetaValue}>
-                      {formState.partnerEmail || formState.selectedPartner?.email || 'partner@example.com'}
+                      {formState.partnerEmail || formState.selectedPartner?.email || '—'}
                     </AppText>
                   </View>
 
                   <View style={styles.playerMetaRow}>
                     <AppText style={styles.playerMetaLabel}>Phone</AppText>
                     <AppText style={styles.playerMetaValue}>
-                      {formState.partnerPhone || '+1 (555) 987-6543'}
+                      {formState.partnerPhone || '—'}
                     </AppText>
                   </View>
 
                   <View style={styles.playerMetaRow}>
                     <AppText style={styles.playerMetaLabel}>Skill rating</AppText>
                     <AppText style={styles.playerMetaValue}>
-                      {formState.partnerSkillLevel || '3.5'}
+                      {formState.partnerSkillLevel || '—'}
                     </AppText>
                   </View>
 
                   <View style={styles.playerMetaRow}>
                     <AppText style={styles.playerMetaLabel}>Age</AppText>
                     <AppText style={styles.playerMetaValue}>
-                      {formState.partnerAge || '26'}
+                      {formState.partnerAge || '—'}
                     </AppText>
                   </View>
                 </View>

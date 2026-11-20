@@ -910,7 +910,7 @@ export default function ClubLeagueDetailsScreen() {
       : Array.from({
           length: Math.max(1, (league.number_of_weeks || 4) - ((league.playoff_team_count ?? 0) > 0 ? 1 : 0)),
         }).map((_, idx) => ({
-          id: `fake-${idx + 1}`,
+          id: `week-slot-${idx + 1}`,
           weekNumber: idx + 1,
           weekObj: null as LeagueWeek | null,
         }));

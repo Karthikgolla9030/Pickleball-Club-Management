@@ -139,7 +139,7 @@ export default function ExploreClubsScreen() {
   };
 
   const renderClubCard = ({ item }: { item: Club }) => {
-    const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Facility Location';
+    const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Location not specified';
     const hoursStr = formatClubHours(item.operating_days, item.opening_time, item.closing_time);
 
     const hasMembers = typeof item.member_count === 'number' && item.member_count > 0;
@@ -338,11 +338,15 @@ export default function ExploreClubsScreen() {
                   ? `No clubs found matching "${searchTerm}". Try a different keyword.`
                   : 'No active clubs currently available for discovery.'
               }
-              actionLabel="Clear Search"
-              onAction={() => {
-                setSearchTerm('');
-                setSelectedCity('All');
-              }}
+              actionLabel={searchTerm ? 'Clear Search' : undefined}
+              onAction={
+                searchTerm
+                  ? () => {
+                      setSearchTerm('');
+                      setSelectedCity('All');
+                    }
+                  : undefined
+              }
             />
           }
           contentContainerStyle={[

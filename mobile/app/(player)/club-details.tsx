@@ -307,7 +307,7 @@ export default function PublicClubDetailScreen() {
   const bannerUri = club.cover_image_url ? resolveMediaUrl(club.cover_image_url) : null;
   const bannerSource = bannerUri && !bannerError ? { uri: bannerUri } : null;
 
-  const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Tirupati, AP';
+  const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Location not specified';
   const hoursText = formatOperatingHours(club.opening_time, club.closing_time);
 
   const fullAddress = [

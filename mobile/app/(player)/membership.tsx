@@ -263,11 +263,11 @@ export default function PlayerMembershipScreen() {
   }, [activeSubscription?.payment_status]);
 
   const startDateFormatted = useMemo(() => {
-    return formatMembershipDate(activeSubscription?.start_date || '2026-10-27');
+    return activeSubscription?.start_date ? formatMembershipDate(activeSubscription.start_date) : '—';
   }, [activeSubscription?.start_date]);
 
   const endDateFormatted = useMemo(() => {
-    return formatMembershipDate(activeSubscription?.end_date || '2026-11-26');
+    return activeSubscription?.end_date ? formatMembershipDate(activeSubscription.end_date) : '—';
   }, [activeSubscription?.end_date]);
 
   const benefitsList = useMemo(() => {

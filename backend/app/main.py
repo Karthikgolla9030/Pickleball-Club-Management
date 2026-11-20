@@ -255,25 +255,27 @@ def create_app() -> FastAPI:
         ephemeral file was rotated or missing on cloud deployments, avoiding 404s.
         """
         async def get_response(self, path: str, scope) -> Response:
-            response = await super().get_response(path, scope)
-            if response.status_code == 404:
-                clean_path = path.lower()
-                defaults_dir = os.path.join(self.directory, "defaults")
-                fallback_file = None
-                if any(kw in clean_path for kw in ("promotional", "carousel", "slide")):
-                    fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
-                elif "tournament" in clean_path:
-                    fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
-                elif "event" in clean_path:
-                    fallback_file = os.path.join(defaults_dir, "events", "hero_events_photo.jpg")
-                elif "league" in clean_path:
-                    fallback_file = os.path.join(defaults_dir, "leagues", "hero_banner.jpg")
-                elif "lesson" in clean_path:
-                    fallback_file = os.path.join(defaults_dir, "lessons", "hero_lessons_photo.jpg")
+            try:
+                return await super().get_response(path, scope)
+            except HTTPException as exc:
+                if exc.status_code == 404:
+                    clean_path = path.lower()
+                    defaults_dir = os.path.join(self.directory, "defaults")
+                    fallback_file = None
+                    if any(kw in clean_path for kw in ("promotional", "carousel", "slide")):
+                        fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
+                    elif "tournament" in clean_path:
+                        fallback_file = os.path.join(defaults_dir, "tournaments", "card_round_robin.jpg")
+                    elif "event" in clean_path:
+                        fallback_file = os.path.join(defaults_dir, "events", "hero_events_photo.jpg")
+                    elif "league" in clean_path:
+                        fallback_file = os.path.join(defaults_dir, "leagues", "hero_banner.jpg")
+                    elif "lesson" in clean_path:
+                        fallback_file = os.path.join(defaults_dir, "lessons", "hero_lessons_photo.jpg")
 
-                if fallback_file and os.path.exists(fallback_file):
-                    return FileResponse(fallback_file, media_type="image/jpeg")
-            return response
+                    if fallback_file and os.path.exists(fallback_file):
+                        return FileResponse(fallback_file, media_type="image/jpeg")
+                raise exc
 
     app.mount("/uploads", ResilientStaticFiles(directory=uploads_dir), name="uploads")
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
