@@ -114,9 +114,9 @@ class Settings(BaseSettings):
 
     # ─── Platform Owners (distinct from club staff roles) ─────────
     PLATFORM_OWNER_EMAILS: Union[list[str], str] = [
+        "admin@pickleball.com",
         "platform.owner@pickleball.com",
         "platform@pickleball.com",
-        "admin@pickleball.com",
         "platform.owner@aught2.com",
         "platform@aught2.com",
         "admin@aught2.com",
@@ -128,7 +128,7 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             v = v.strip()
             if not v:
-                return ["platform.owner@pickleball.com", "platform@pickleball.com", "admin@pickleball.com", "platform.owner@aught2.com", "platform@aught2.com"]
+                return ["admin@pickleball.com", "platform.owner@pickleball.com", "platform@pickleball.com", "platform.owner@aught2.com", "platform@aught2.com"]
             if v.startswith("[") and v.endswith("]"):
                 try:
                     return [e.strip().lower() for e in json.loads(v)]
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
             return [e.strip().lower() for e in v.replace(";", ",").split(",") if e.strip()]
         elif isinstance(v, (list, tuple, set)):
             return [str(e).strip().lower() for e in v if str(e).strip()]
-        return ["platform.owner@pickleball.com", "platform@pickleball.com", "admin@pickleball.com", "platform.owner@aught2.com", "platform@aught2.com"]
+        return ["admin@pickleball.com", "platform.owner@pickleball.com", "platform@pickleball.com", "platform.owner@aught2.com", "platform@aught2.com"]
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> Settings:

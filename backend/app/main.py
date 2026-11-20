@@ -104,35 +104,38 @@ async def _ensure_platform_admin_exists() -> None:
         primary_email = admin_emails[0]
         async with AsyncSessionLocal() as session:
             result = await session.execute(
-                select(User).where(User.email == primary_email)
+                select(User).where(User.email.in_(admin_emails))
             )
             existing = result.scalar_one_or_none()
-            if not existing:
-                # Generate a secure 20-char random password:
-                # letters + digits + a handful of safe punctuation
-                alphabet = string.ascii_letters + string.digits + "!@#%^&*"
-                one_time_password = "".join(secrets.choice(alphabet) for _ in range(20))
-                admin = User(
-                    email=primary_email,
-                    hashed_password=hash_password(one_time_password),
-                    full_name="Platform Administrator",
-                    is_active=True,
-                    is_verified=True,
-                )
-                session.add(admin)
-                await session.commit()
-                # Log the generated password exactly once — the operator must capture it now.
-                logger.warning(
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "  Platform administrator account auto-provisioned!\n"
-                    "  Email   : %s\n"
-                    "  Password: %s\n"
-                    "  ⚠  Save this password now — it will NOT be shown again.\n"
-                    "     Change it immediately after first login.\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-                    primary_email,
-                    one_time_password,
-                )
+            if existing:
+                logger.info("Platform administrator account verified: %s", existing.email)
+                return
+
+            # Generate a secure 20-char random password:
+            # letters + digits + a handful of safe punctuation
+            alphabet = string.ascii_letters + string.digits + "!@#%^&*"
+            one_time_password = "".join(secrets.choice(alphabet) for _ in range(20))
+            admin = User(
+                email=primary_email,
+                hashed_password=hash_password(one_time_password),
+                full_name="Platform Administrator",
+                is_active=True,
+                is_verified=True,
+            )
+            session.add(admin)
+            await session.commit()
+            # Log the generated password exactly once — the operator must capture it now.
+            logger.warning(
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                "  Platform administrator account auto-provisioned!\n"
+                "  Email   : %s\n"
+                "  Password: %s\n"
+                "  ⚠  Save this password now — it will NOT be shown again.\n"
+                "     Change it immediately after first login.\n"
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+                primary_email,
+                one_time_password,
+            )
     except Exception as exc:
         logger.warning("Platform administrator auto-provisioning skipped: %s", exc)
 
