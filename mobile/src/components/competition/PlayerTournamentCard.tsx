@@ -349,6 +349,19 @@ export function PlayerTournamentCard({
     return null;
   };
 
+  // Formatted club & venue location string (deduplicated)
+  const venueLocationText = useMemo(() => {
+    const clubName = tournament.club_name?.trim();
+    const rawLocation = tournament.location_name?.trim();
+    if (!clubName && !rawLocation) return '';
+    if (clubName && !rawLocation) return clubName;
+    if (!clubName && rawLocation) return rawLocation;
+    if (rawLocation!.toLowerCase().startsWith(clubName!.toLowerCase())) {
+      return rawLocation!;
+    }
+    return `${clubName} — ${rawLocation}`;
+  }, [tournament.club_name, tournament.location_name]);
+
   const handleCardPress = onActionPress || onPress;
 
   return (
@@ -415,60 +428,61 @@ export function PlayerTournamentCard({
 
       {/* ─── Bottom Info Section: Clean, Minimal & Professional ─── */}
       <View style={styles.infoSection}>
-        {/* Row 1: Tournament Name & Skill Level */}
-        <View style={styles.titleRow}>
-          <AppText variant="body" bold style={styles.titleText} numberOfLines={2}>
-            {tournament.name}
-          </AppText>
-          {parsed.skillLevelDisplay ? (
+        {/* 1. Tournament Title (wraps naturally onto multiple lines) */}
+        <AppText variant="body" bold style={styles.titleText}>
+          {tournament.name}
+        </AppText>
+
+        {/* 2. Skill Level Badge (has its own space, never collides with title) */}
+        {parsed.skillLevelDisplay ? (
+          <View style={styles.skillRow}>
             <View style={styles.skillPill}>
               <AppText style={styles.skillPillText}>
                 Skill Level: {parsed.skillLevelDisplay}
               </AppText>
             </View>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
 
-        {/* Row 1.5: Host Club Row */}
-        {tournament.club_name ? (
+        {/* 3. Hosting Club and Venue / Location (wraps completely, no truncation) */}
+        {venueLocationText ? (
           <TouchableOpacity
             style={styles.clubRow}
             onPress={(e) => {
-              if (onClubPress) {
+              if (onClubPress && tournament.club_id) {
                 e.stopPropagation?.();
                 onClubPress(tournament.club_id);
               }
             }}
-            disabled={!onClubPress}
+            disabled={!onClubPress || !tournament.club_id}
             activeOpacity={0.75}
-            accessibilityLabel={`Hosted by ${tournament.club_name}`}
-            accessibilityRole={onClubPress ? 'button' : undefined}
+            accessibilityLabel={`Hosted by ${venueLocationText}`}
+            accessibilityRole={onClubPress && tournament.club_id ? 'button' : undefined}
           >
-            <Building2 size={13} color="#065F46" strokeWidth={2.2} style={{ marginRight: 5 }} />
-            <AppText style={styles.clubText} numberOfLines={1}>
-              {tournament.club_name}
-              {tournament.location_name ? ` • ${tournament.location_name}` : ''}
+            <Building2 size={14} color="#065F46" strokeWidth={2.2} style={styles.metaIcon} />
+            <AppText style={styles.clubText}>
+              {venueLocationText}
             </AppText>
           </TouchableOpacity>
         ) : null}
 
-        {/* Row 2: Calendar Icon & Date Range */}
-        <View style={styles.dateRow}>
-          <Calendar size={13} color="#64748B" strokeWidth={2} style={{ marginRight: 6 }} />
-          <AppText style={styles.dateText} numberOfLines={1}>
+        {/* 4. Calendar Icon & Date Range */}
+        <View style={styles.metaRow}>
+          <Calendar size={14} color="#64748B" strokeWidth={2} style={styles.metaIcon} />
+          <AppText style={styles.metaText}>
             {formatTournamentDateRange(tournament.start_date, tournament.end_date)}
           </AppText>
         </View>
 
-        {/* Row 2.5: Capacity & Registered Count */}
-        <View style={[styles.dateRow, { marginTop: 4 }]}>
-          <Users size={13} color="#64748B" strokeWidth={2} style={{ marginRight: 6 }} />
-          <AppText style={styles.dateText}>
+        {/* 5. Capacity & Registered Count */}
+        <View style={[styles.metaRow, { marginTop: 4, marginBottom: 14 }]}>
+          <Users size={14} color="#64748B" strokeWidth={2} style={styles.metaIcon} />
+          <AppText style={styles.metaText}>
             {currentCount} / {maxCap} {entryLabel}registered
           </AppText>
         </View>
 
-        {/* Row 3: Action Button */}
+        {/* 6. Registration Action */}
         <View style={styles.actionRow}>
           {renderActionButton()}
         </View>
@@ -649,21 +663,18 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 16,
     backgroundColor: '#FFFFFF',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: 8,
+    width: '100%',
   },
   titleText: {
-    flex: 1,
-    minWidth: 160,
-    fontSize: 16,
+    width: '100%',
+    fontSize: 16.5,
     lineHeight: 22,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  skillRow: {
+    marginTop: 6,
+    flexDirection: 'row',
   },
   skillPill: {
     backgroundColor: '#F1F5F9',
@@ -681,25 +692,33 @@ const styles = StyleSheet.create({
   },
   clubRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 2,
-    alignSelf: 'flex-start',
+    alignItems: 'flex-start',
+    width: '100%',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  metaIcon: {
+    marginTop: 2,
+    marginRight: 6,
+    flexShrink: 0,
   },
   clubText: {
+    flex: 1,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     color: '#065F46',
-    flexShrink: 1,
   },
-  dateRow: {
+  metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 14,
+    alignItems: 'flex-start',
+    width: '100%',
+    marginTop: 4,
   },
-  dateText: {
+  metaText: {
+    flex: 1,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '500',
     color: '#64748B',
   },

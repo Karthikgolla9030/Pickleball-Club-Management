@@ -420,12 +420,13 @@ const styles = StyleSheet.create({
   countryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing[1.5],
+    paddingHorizontal: 6,
     height: '100%',
     gap: 4,
+    flexShrink: 0,
   },
   flagText: {
-    fontSize: 17,
+    fontSize: 16,
   },
   dialCodeText: {
     fontSize: 13.5,
@@ -433,13 +434,15 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
   },
   chevronIcon: {
-    marginLeft: 1,
+    marginLeft: 2,
+    flexShrink: 0,
   },
   divider: {
     width: 1,
     height: 22,
     backgroundColor: Colors.surface.border,
-    marginHorizontal: 4,
+    marginHorizontal: 6,
+    flexShrink: 0,
   },
   textInput: {
     flex: 1,

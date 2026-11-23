@@ -23,6 +23,7 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -71,6 +72,9 @@ export function Step1PlayerTeamDetails({
   const isScramble = tournament.format === 'scramble';
   const isDoubles = !parsed.isSingles && !isScramble;
   const category = parsed.category || (isScramble ? 'Open Scramble' : 'Singles');
+
+  const { width } = useWindowDimensions();
+  const isSmallScreen = width < 380;
 
   // Skill Rating Dropdown state (Player 1 & Player 2)
   const [activeSkillTarget, setActiveSkillTarget] = useState<'player1' | 'player2' | null>(null);
@@ -257,7 +261,7 @@ export function Step1PlayerTeamDetails({
 
         <View style={styles.playerCardBody}>
           {/* Row 1: Full name * & Email * */}
-          <View style={styles.formRow}>
+          <View style={[styles.formRow, isSmallScreen && styles.formRowStacked]}>
             <View style={styles.formCol}>
               <AppText style={styles.fieldLabel}>
                 Full name <AppText style={styles.star}>*</AppText>
@@ -289,19 +293,20 @@ export function Step1PlayerTeamDetails({
             </View>
           </View>
 
-          {/* Row 2: Phone number *, Skill rating *, Age * */}
-          <View style={styles.formRow}>
-            <View style={[styles.formCol, { flex: 1.2 }]}>
-              <InternationalPhoneInput
-                label="Phone number"
-                required
-                value={formState.phone}
-                onChangeText={(text) => onChange({ phone: text })}
-                error={errors.phone}
-              />
-            </View>
+          {/* Row 2: Phone number * (Full width row on mobile for adequate width & visibility) */}
+          <View style={styles.formColFull}>
+            <InternationalPhoneInput
+              label="Phone number"
+              required
+              value={formState.phone}
+              onChangeText={(text) => onChange({ phone: text })}
+              error={errors.phone}
+            />
+          </View>
 
-            <View style={[styles.formCol, { flex: 0.9 }]}>
+          {/* Row 3: Skill rating * & Age * (2 balanced columns) */}
+          <View style={styles.formRow}>
+            <View style={styles.formCol}>
               <AppText style={styles.fieldLabel}>
                 Skill rating <AppText style={styles.star}>*</AppText>
               </AppText>
@@ -313,9 +318,10 @@ export function Step1PlayerTeamDetails({
                 <AppText style={styles.dropdownBtnText}>{formState.skillLevel || parsed.skillLevel}</AppText>
                 <ChevronDown size={14} color="#64748B" />
               </TouchableOpacity>
+              {errors.skillLevel && <AppText style={styles.errorText}>{errors.skillLevel}</AppText>}
             </View>
 
-            <View style={[styles.formCol, { flex: 0.7 }]}>
+            <View style={styles.formCol}>
               <AppText style={styles.fieldLabel}>
                 Age <AppText style={styles.star}>*</AppText>
               </AppText>
@@ -334,7 +340,7 @@ export function Step1PlayerTeamDetails({
 
           {/* Gender Selector (Always asked for all player registrations) */}
           <View style={styles.genderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={styles.genderHeaderRow}>
               <AppText style={styles.fieldLabel}>
                 Gender <AppText style={styles.star}>*</AppText>
               </AppText>
@@ -402,7 +408,7 @@ export function Step1PlayerTeamDetails({
             ) : null}
 
             {/* Row 1: Full name * & Email * */}
-            <View style={styles.formRow}>
+            <View style={[styles.formRow, isSmallScreen && styles.formRowStacked]}>
               <View style={styles.formCol}>
                 <AppText style={styles.fieldLabel}>
                   Full name <AppText style={styles.star}>*</AppText>
@@ -434,18 +440,19 @@ export function Step1PlayerTeamDetails({
               </View>
             </View>
 
-            {/* Row 2: Phone number, Skill rating *, Age * */}
-            <View style={styles.formRow}>
-              <View style={[styles.formCol, { flex: 1.2 }]}>
-                <InternationalPhoneInput
-                  label="Phone number"
-                  value={formState.partnerPhone}
-                  onChangeText={(text) => onChange({ partnerPhone: text })}
-                  error={errors.partnerPhone}
-                />
-              </View>
+            {/* Row 2: Partner Phone number (Full width row on mobile for adequate width & visibility) */}
+            <View style={styles.formColFull}>
+              <InternationalPhoneInput
+                label="Phone number"
+                value={formState.partnerPhone}
+                onChangeText={(text) => onChange({ partnerPhone: text })}
+                error={errors.partnerPhone}
+              />
+            </View>
 
-              <View style={[styles.formCol, { flex: 0.9 }]}>
+            {/* Row 3: Skill rating * & Age (2 balanced columns) */}
+            <View style={styles.formRow}>
+              <View style={styles.formCol}>
                 <AppText style={styles.fieldLabel}>
                   Skill rating <AppText style={styles.star}>*</AppText>
                 </AppText>
@@ -457,9 +464,10 @@ export function Step1PlayerTeamDetails({
                   <AppText style={styles.dropdownBtnText}>{formState.partnerSkillLevel || parsed.skillLevel}</AppText>
                   <ChevronDown size={14} color="#64748B" />
                 </TouchableOpacity>
+                {errors.partnerSkillLevel && <AppText style={styles.errorText}>{errors.partnerSkillLevel}</AppText>}
               </View>
 
-              <View style={[styles.formCol, { flex: 0.7 }]}>
+              <View style={styles.formCol}>
                 <AppText style={styles.fieldLabel}>Age</AppText>
                 <TextInput
                   style={[styles.textInput, errors.partnerAge && styles.inputError]}
@@ -477,9 +485,11 @@ export function Step1PlayerTeamDetails({
             {/* Partner Gender (if relevant for Mixed or Gender-specific doubles) */}
             {(category.includes('Doubles') || parsed.genderEligibility !== 'Any') && (
               <View style={styles.genderRow}>
-                <AppText style={styles.fieldLabel}>
-                  Partner Gender <AppText style={styles.star}>*</AppText>
-                </AppText>
+                <View style={styles.genderHeaderRow}>
+                  <AppText style={styles.fieldLabel}>
+                    Partner Gender <AppText style={styles.star}>*</AppText>
+                  </AppText>
+                </View>
                 <View style={styles.genderPillsRow}>
                   {(['Male', 'Female'] as const).map((g) => (
                     <TouchableOpacity
@@ -900,8 +910,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
   },
+  formRowStacked: {
+    flexDirection: 'column',
+    gap: 12,
+  },
   formCol: {
     flex: 1,
+  },
+  formColFull: {
+    width: '100%',
   },
   dropdownBtn: {
     backgroundColor: '#FFFFFF',
@@ -922,6 +939,14 @@ const styles = StyleSheet.create({
   genderRow: {
     marginTop: 2,
   },
+  genderHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
   genderRequirementHint: {
     fontSize: 11,
     color: '#064E3B',
@@ -930,16 +955,19 @@ const styles = StyleSheet.create({
   genderPillsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
+    marginTop: 2,
   },
   genderPill: {
     flex: 1,
+    minHeight: 38,
     paddingVertical: 7,
+    paddingHorizontal: 8,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   genderPillActive: {
     borderColor: '#064E3B',

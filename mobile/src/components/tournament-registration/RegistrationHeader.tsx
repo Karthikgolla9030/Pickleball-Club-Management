@@ -108,8 +108,13 @@ export function RegistrationHeader({
   // Dates display
   const dateDisplay = formatTournamentDates(tournament.start_date, tournament.end_date);
 
-  // Venue display
-  const locationDisplay = tournament.location_name || 'Center Courts 1–4';
+  // Venue display (deduplicated)
+  const clubName = (tournament as any).club_name?.trim();
+  const rawLocation = tournament.location_name?.trim();
+  let locationDisplay = rawLocation || clubName || 'Center Courts 1–4';
+  if (clubName && rawLocation && !rawLocation.toLowerCase().startsWith(clubName.toLowerCase())) {
+    locationDisplay = `${clubName} — ${rawLocation}`;
+  }
 
   // Category/Division display
   const divisionDisplay = (parsed.category || "Men's Doubles").toUpperCase();
@@ -264,16 +269,18 @@ export function RegistrationHeader({
             </View>
           </View>
 
-          {/* Row 2: Location & Spots */}
+          {/* Row 2: Available Spots */}
           <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <MapPin size={15} color="#064E3B" style={styles.summaryIcon} strokeWidth={2} />
-              <AppText style={styles.summaryText} numberOfLines={1}>{locationDisplay}</AppText>
-            </View>
             <View style={styles.summaryItem}>
               <Users size={15} color="#064E3B" style={styles.summaryIcon} strokeWidth={2} />
               <AppText style={styles.summaryText}>{spotsLeft} spots left</AppText>
             </View>
+          </View>
+
+          {/* Row 3: Dedicated Full-Width Location / Venue Row (wraps completely without cutoffs) */}
+          <View style={styles.summaryLocationRow}>
+            <MapPin size={15} color="#064E3B" style={styles.summaryLocationIcon} strokeWidth={2} />
+            <AppText style={styles.summaryLocationText}>{locationDisplay}</AppText>
           </View>
         </View>
       </View>
@@ -495,6 +502,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
   summaryItem: {
     flexDirection: 'row',
@@ -510,5 +518,25 @@ const styles = StyleSheet.create({
     color: '#102B2A',
     fontWeight: '600',
     flexShrink: 1,
+  },
+  summaryLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    width: '100%',
+    gap: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF3F0',
+  },
+  summaryLocationIcon: {
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  summaryLocationText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#102B2A',
+    fontWeight: '600',
   },
 });
