@@ -20,7 +20,15 @@ export function useUpcomingActivities(params?: UseUpcomingActivitiesParams) {
     queryFn: async () => {
       try {
         return await playerApi.getUpcomingActivities(params);
-      } catch (err) {
+      } catch (err: any) {
+        if (err?.status === 404 || err?.type === 'NOT_FOUND') {
+          // Backend deployment pending on Render; return empty state gracefully without console noise
+          return {
+            items: [],
+            total: 0,
+            has_more: false,
+          };
+        }
         console.warn('[useUpcomingActivities] Failed to fetch upcoming activities:', err);
         return {
           items: [],
