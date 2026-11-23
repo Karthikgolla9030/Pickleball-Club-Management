@@ -30,6 +30,7 @@ import {
   usePlayerTournamentRegistration,
   useTournamentDetails,
 } from '@/hooks';
+import { paymentApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type { PlayerRegistrationResponse } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
@@ -39,7 +40,6 @@ import { RegistrationSuccessView } from './RegistrationSuccessView';
 import { Step1PlayerTeamDetails } from './Step1PlayerTeamDetails';
 import { Step2ReviewRegistration } from './Step2ReviewRegistration';
 import { Step3PaymentSubmit } from './Step3PaymentSubmit';
-import { CheckoutModal } from '../checkout/CheckoutModal';
 import type {
   RegistrationErrors,
   RegistrationFormState,
@@ -93,7 +93,7 @@ export function TournamentRegistrationModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [alreadyRegisteredOverride, setAlreadyRegisteredOverride] = useState(false);
-  const [showCheckout, setShowCheckout] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Check player's registration status from backend
   const {
@@ -481,30 +481,8 @@ export function TournamentRegistrationModal({
     const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
     const isFree = feeAmount === 0;
 
-    if (!formState.agreeRulesAndCancellation) {
+    if (!isFree && !formState.agreeRulesAndCancellation) {
       errs.agreeRulesAndCancellation = 'You must agree to the tournament rules and cancellation policy.';
-    }
-
-    if (!isFree) {
-      if (formState.paymentMethod === 'card') {
-        if (!formState.cardholderName.trim()) {
-          errs.cardholderName = 'Cardholder name is required.';
-        }
-        const cleanedCard = formState.cardNumber.replace(/\s/g, '');
-        if (!cleanedCard || cleanedCard.length < 15) {
-          errs.cardNumber = 'Valid 16-digit card number is required.';
-        }
-        if (!formState.cardExpiry.trim() || !formState.cardExpiry.includes('/')) {
-          errs.cardExpiry = 'Valid expiry date (MM/YY) is required.';
-        }
-        if (!formState.cardCvv.trim() || formState.cardCvv.length < 3) {
-          errs.cardCvv = 'Valid CVV is required.';
-        }
-      } else if (formState.paymentMethod === 'upi') {
-        if (!formState.upiId.trim() || !formState.upiId.includes('@')) {
-          errs.upiId = 'Valid UPI ID is required (e.g. mobile@upi).';
-        }
-      }
     }
 
     setErrors(errs);
@@ -543,6 +521,7 @@ export function TournamentRegistrationModal({
 
   // Final submission on Step 3
   const handleSubmit = async () => {
+    if (isRegistering || isProcessingPayment) return;
     if (!validateStep3()) return;
     setSubmitError(null);
 
@@ -556,53 +535,143 @@ export function TournamentRegistrationModal({
     const defaultFee = isScramble ? 35 : parsed?.isSingles ? 30 : activeTournament.format === 'bracket' ? 60 : 50;
     const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
 
-    if (feeAmount > 0) {
-      setShowCheckout(true);
+    const partnerNotes = formState.selectedPartner
+      ? `Partner: ${formState.selectedPartner.full_name} (${formState.selectedPartner.email})`
+      : formState.partnerFullName
+      ? `Partner: ${formState.partnerFullName} (${formState.partnerEmail}${formState.partnerPhone ? ', ' + formState.partnerPhone : ''})`
+      : null;
+
+    const teamName = isDoubles
+      ? formState.teamName.trim() || `${formState.fullName} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}`
+      : null;
+
+    const partnerEmail = isDoubles
+      ? (formState.selectedPartner?.email || formState.partnerEmail.trim() || null)
+      : null;
+    const partnerName = isDoubles
+      ? (formState.selectedPartner?.full_name || formState.partnerFullName.trim() || null)
+      : null;
+
+    // Sync gender to profile if missing on profile or changed
+    if (formState.gender && (!profile?.gender || profile.gender !== formState.gender)) {
+      try {
+        await updateProfile({ gender: formState.gender });
+      } catch {
+        // Backend self_register endpoint will also persist profile gender
+      }
+    }
+
+    // Free tournament flow
+    if (feeAmount <= 0) {
+      try {
+        const payload = {
+          team_name: teamName,
+          partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
+          partner_email: partnerEmail,
+          partner_name: partnerName,
+          skill_level: formState.skillLevel,
+          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
+          gender: formState.gender,
+          age: formState.age ? parseInt(formState.age, 10) : null,
+          payment_method: 'free',
+          notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
+        };
+
+        const res = await register(payload);
+        setSuccessResult(res);
+        void refetchMyRegistration();
+        if (activeTournament?.id) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'player-registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
+        }
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
+        if (onSuccess) {
+          onSuccess(res);
+        }
+      } catch (err: unknown) {
+        const rawMsg =
+          (err as any)?.detail ||
+          (err as any)?.message ||
+          (err instanceof Error ? err.message : 'Registration failed. Please try again.');
+        const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
+        if (msg.toLowerCase().includes('already registered')) {
+          void refetchMyRegistration();
+          setAlreadyRegisteredOverride(true);
+          return;
+        }
+        setSubmitError(msg);
+      }
       return;
     }
 
+    // Paid tournament flow: Cashfree Checkout & Verification
+    setIsProcessingPayment(true);
     try {
-      const partnerNotes = formState.selectedPartner
-        ? `Partner: ${formState.selectedPartner.full_name} (${formState.selectedPartner.email})`
-        : formState.partnerFullName
-        ? `Partner: ${formState.partnerFullName} (${formState.partnerEmail}${formState.partnerPhone ? ', ' + formState.partnerPhone : ''})`
-        : null;
+      const initiateRes = await paymentApi.initiateCheckout({
+        club_id: activeTournament.club_id,
+        purpose: 'tournament',
+        activity_id: activeTournament.id,
+        payment_method: 'online',
+        selected_method: formState.paymentMethod || 'upi',
+        currency: 'USD',
+        metadata: {
+          team_name: teamName,
+          partner_name: partnerName,
+          partner_email: partnerEmail,
+          partner_phone: isDoubles ? (formState.partnerPhone?.trim() || null) : null,
+          partner_membership_id: isDoubles ? (formState.selectedPartner?.membership_id || null) : null,
+          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
+          skill_level: formState.skillLevel,
+          gender: formState.gender,
+          age: formState.age ? parseInt(formState.age, 10) : null,
+          notes: [formState.notes?.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
+          phone: formState.phone?.trim() || undefined,
+        },
+      });
 
-      const teamName = isDoubles
-        ? formState.teamName.trim() || `${formState.fullName} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}`
-        : null;
+      const provider = initiateRes.provider || 'cashfree';
+      const providerOrderId = initiateRes.provider_order_id || `order_${Date.now()}`;
 
-      const partnerEmail = isDoubles
-        ? (formState.selectedPartner?.email || formState.partnerEmail.trim() || null)
-        : null;
-      const partnerName = isDoubles
-        ? (formState.selectedPartner?.full_name || formState.partnerFullName.trim() || null)
-        : null;
-
-      const payload = {
-        team_name: teamName,
-        partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
-        partner_email: partnerEmail,
-        partner_name: partnerName,
-        skill_level: formState.skillLevel,
-        partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
-        gender: formState.gender,
-        age: formState.age ? parseInt(formState.age, 10) : null,
-        payment_method: formState.paymentMethod,
-        notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
-      };
-
-      // Sync gender to profile if missing on profile or changed
-      if (formState.gender && (!profile?.gender || profile.gender !== formState.gender)) {
+      // Open Cashfree hosted modal checkout if on web & payment_session_id is present
+      if (initiateRes.payment_session_id && typeof window !== 'undefined') {
         try {
-          await updateProfile({ gender: formState.gender });
-        } catch {
-          // Backend self_register endpoint will also persist profile gender
+          const { load: loadCashfree } = await import('@cashfreepayments/cashfree-js');
+          const cashfree = await loadCashfree({ mode: 'sandbox' });
+          if (cashfree) {
+            const checkoutResult: any = await cashfree.checkout({
+              paymentSessionId: initiateRes.payment_session_id,
+              redirectTarget: '_modal',
+            });
+            if (checkoutResult?.error) {
+              setSubmitError(
+                checkoutResult.error.message ||
+                'Checkout window was closed or payment was cancelled. You can retry safely.'
+              );
+              setIsProcessingPayment(false);
+              return;
+            }
+          }
+        } catch (sdkErr: any) {
+          console.warn('Cashfree JS checkout notice:', sdkErr);
         }
       }
 
-      const res = await register(payload);
-      setSuccessResult(res);
+      // Cryptographically verify payment with backend and complete tournament registration
+      const verifyRes = await paymentApi.verifyCheckout({
+        payment_id: initiateRes.payment_id,
+        provider,
+        provider_order_id: providerOrderId,
+        provider_payment_id: initiateRes.payment_session_id ? `cf_${initiateRes.payment_session_id}` : undefined,
+        provider_signature: undefined,
+      });
+
+      // Verification succeeded: fulfill registration state & invalidate queries
       void refetchMyRegistration();
       if (activeTournament?.id) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
@@ -615,14 +684,35 @@ export function TournamentRegistrationModal({
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+
+      const resultObj: any = {
+        id: verifyRes.payment?.id || 'reg_completed',
+        tournament_id: activeTournament.id,
+        status: 'confirmed',
+        status_label: 'Confirmed',
+        registered_at: new Date().toISOString(),
+        message: 'Successfully registered for tournament',
+        reference_number: verifyRes.payment?.reference || `REG-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
+        registration_type: isDoubles ? 'team' : 'individual',
+        tournament_name: activeTournament.name,
+        tournament_format: activeTournament.format,
+        tournament_format_label: activeTournament.format,
+        division: parsed?.category || 'Open',
+        fee_amount: feeAmount,
+        payment_status: 'completed',
+        payment_method: formState.paymentMethod || 'online',
+      };
+
+      setSuccessResult(resultObj);
       if (onSuccess) {
-        onSuccess(res);
+        onSuccess(resultObj);
       }
-    } catch (err: unknown) {
+    } catch (err: any) {
       const rawMsg =
-        (err as any)?.detail ||
-        (err as any)?.message ||
-        (err instanceof Error ? err.message : 'Registration failed. Please try again.');
+        err?.response?.data?.detail ||
+        err?.detail ||
+        err?.message ||
+        'Payment could not be verified. If you just completed payment, please retry or refresh.';
       const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
       if (msg.toLowerCase().includes('already registered')) {
         void refetchMyRegistration();
@@ -630,11 +720,12 @@ export function TournamentRegistrationModal({
         return;
       }
       setSubmitError(msg);
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 
   const handleCheckoutSuccess = (res: any) => {
-    setShowCheckout(false);
     void refetchMyRegistration();
     if (activeTournament?.id) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
@@ -738,7 +829,7 @@ export function TournamentRegistrationModal({
                 tournament={activeTournament}
                 formState={formState}
                 errors={errors}
-                isSubmitting={isRegistering}
+                isSubmitting={isRegistering || isProcessingPayment}
                 submitError={submitError}
                 onChange={handleFormChange}
                 onBack={handleBackToStep2}
@@ -747,26 +838,6 @@ export function TournamentRegistrationModal({
             )}
           </ScrollView>
         </KeyboardAvoidingView>
-
-        {showCheckout && activeTournament && (
-          <CheckoutModal
-            visible={showCheckout}
-            onClose={() => setShowCheckout(false)}
-            clubId={activeTournament.club_id}
-            purpose="tournament"
-            activityId={activeTournament.id}
-            activityTitle={activeTournament.name}
-            activitySubtitle={`Division: ${parsed?.category || 'Open'}`}
-            participantsInfo={isDoubles ? `${formState.fullName} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner'}` : formState.fullName}
-            metadata={{
-              team_name: formState.teamName,
-              partner_name: formState.selectedPartner?.full_name || formState.partnerFullName,
-              partner_email: formState.selectedPartner?.email || formState.partnerEmail,
-              skill_level: formState.skillLevel,
-            }}
-            onSuccess={handleCheckoutSuccess}
-          />
-        )}
       </SafeAreaView>
     </Modal>
   );

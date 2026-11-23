@@ -1826,39 +1826,47 @@ class TournamentService:
             skill_level=payload.skill_level if payload and payload.skill_level else "3.5",
         )
 
-        # Record canonical payment for paid tournament entry
+        # Record canonical payment for paid tournament entry if not already created
         if target_status == RegistrationStatus.CONFIRMED and calc_fee > 0:
             from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
             from app.repositories.payment_repository import PaymentRepository
+            from sqlalchemy import select
             try:
-                pay_repo = PaymentRepository(self.db)
-                reference = await pay_repo.generate_reference()
-                now_dt = datetime.now(timezone.utc)
-                p_method = PaymentMethod.ONLINE
-                if payload and payload.payment_method:
-                    m_str = payload.payment_method.lower().replace("-", "_")
-                    if "cash" in m_str:
-                        p_method = PaymentMethod.CASH
-                    elif "bank" in m_str:
-                        p_method = PaymentMethod.BANK_TRANSFER
-                    elif "upi" in m_str or "card" in m_str or "online" in m_str:
-                        p_method = PaymentMethod.ONLINE
-                payment = Payment(
-                    reference=reference,
-                    club_id=tournament.club_id,
-                    player_id=user_id,
-                    tournament_id=tournament.id,
-                    amount=Decimal(str(calc_fee)).quantize(Decimal("0.01")),
-                    currency="USD",
-                    status=PaymentStatus.SUCCEEDED,
-                    purpose=PaymentPurpose.TOURNAMENT,
-                    payment_method=p_method,
-                    paid_at=now_dt,
-                    notes=f"Tournament entry: {tournament.name}",
-                    created_by_user_id=user_id,
+                stmt = select(Payment).where(
+                    Payment.tournament_id == tournament.id,
+                    Payment.player_id == user_id,
+                    Payment.status == PaymentStatus.SUCCEEDED,
                 )
-                await pay_repo.create(payment)
-                await self.db.commit()
+                existing_p = (await self.db.execute(stmt)).scalars().first()
+                if not existing_p:
+                    pay_repo = PaymentRepository(self.db)
+                    reference = await pay_repo.generate_reference()
+                    now_dt = datetime.now(timezone.utc)
+                    p_method = PaymentMethod.ONLINE
+                    if payload and payload.payment_method:
+                        m_str = payload.payment_method.lower().replace("-", "_")
+                        if "cash" in m_str:
+                            p_method = PaymentMethod.CASH
+                        elif "bank" in m_str:
+                            p_method = PaymentMethod.BANK_TRANSFER
+                        elif "upi" in m_str or "card" in m_str or "online" in m_str:
+                            p_method = PaymentMethod.ONLINE
+                    payment = Payment(
+                        reference=reference,
+                        club_id=tournament.club_id,
+                        player_id=user_id,
+                        tournament_id=tournament.id,
+                        amount=Decimal(str(calc_fee)).quantize(Decimal("0.01")),
+                        currency="USD",
+                        status=PaymentStatus.SUCCEEDED,
+                        purpose=PaymentPurpose.TOURNAMENT,
+                        payment_method=p_method,
+                        paid_at=now_dt,
+                        notes=f"Tournament entry: {tournament.name}",
+                        created_by_user_id=user_id,
+                    )
+                    await pay_repo.create(payment)
+                    await self.db.commit()
             except Exception:
                 pass
 

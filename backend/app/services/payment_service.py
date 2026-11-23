@@ -771,7 +771,13 @@ class PaymentService:
                 raise HTTPException(status_code=400, detail=f"Tournament registration is {tournament.status.value}")
 
             format_config = tournament.format_configuration or {}
-            fee_raw = format_config.get("entry_fee") or format_config.get("registration_fee") or 35.00
+            fee_raw = (
+                getattr(tournament, "registration_fee", None)
+                or format_config.get("entry_fee")
+                or format_config.get("registration_fee")
+                or format_config.get("fee")
+                or 35.00
+            )
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
             summary.update({
@@ -781,12 +787,19 @@ class PaymentService:
                 "format": tournament.format.value,
                 "category": format_config.get("category", "Open"),
             })
+            p_meta = payload.metadata or {}
             meta_dict.update({
                 "tournament_id": str(tournament.id),
-                "partner_name": payload.metadata.get("partner_name") if payload.metadata else None,
-                "team_name": payload.metadata.get("team_name") if payload.metadata else None,
-                "skill_level": payload.metadata.get("skill_level") if payload.metadata else None,
-                "notes": payload.notes,
+                "partner_name": p_meta.get("partner_name"),
+                "partner_email": p_meta.get("partner_email"),
+                "partner_membership_id": p_meta.get("partner_membership_id"),
+                "partner_phone": p_meta.get("partner_phone"),
+                "partner_skill_level": p_meta.get("partner_skill_level"),
+                "team_name": p_meta.get("team_name"),
+                "skill_level": p_meta.get("skill_level"),
+                "gender": p_meta.get("gender"),
+                "age": p_meta.get("age"),
+                "notes": payload.notes or p_meta.get("notes"),
             })
 
         elif payload.purpose == PaymentPurpose.EVENT:
@@ -1253,11 +1266,31 @@ class PaymentService:
             if tournament_id:
                 try:
                     from app.services.tournament_service import TournamentService
-                    from app.schemas.tournament import PlayerSelfRegistrationRequest
+                    from app.schemas.tournament_registration import PlayerSelfRegistrationRequest
+
+                    partner_mem_id = None
+                    if meta.get("partner_membership_id"):
+                        try:
+                            partner_mem_id = UUID(str(meta["partner_membership_id"]))
+                        except (ValueError, TypeError):
+                            partner_mem_id = None
+
+                    age_val = None
+                    if meta.get("age"):
+                        try:
+                            age_val = int(meta["age"])
+                        except (ValueError, TypeError):
+                            age_val = None
+
                     t_payload = PlayerSelfRegistrationRequest(
                         partner_name=meta.get("partner_name"),
+                        partner_email=meta.get("partner_email"),
+                        partner_membership_id=partner_mem_id,
                         team_name=meta.get("team_name"),
                         skill_level=meta.get("skill_level"),
+                        partner_skill_level=meta.get("partner_skill_level"),
+                        gender=meta.get("gender"),
+                        age=age_val,
                         notes=meta.get("notes"),
                         payment_method="online",
                     )
@@ -1267,12 +1300,31 @@ class PaymentService:
                         payload=t_payload,
                     )
                     booking_or_reg.update({
+                        "id": str(t_res.id),
                         "tournament_id": str(tournament_id),
                         "reference_number": t_res.reference_number,
                         "status": t_res.status.value,
+                        "team_name": t_res.team_name,
                     })
                 except Exception as e:
                     logger.warning(f"Tournament auto-registration fulfillment: {e}")
+                    try:
+                        from app.repositories.tournament_registration_repository import TournamentRegistrationRepository
+                        from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
+                        t_obj = await self.tournament_repo.get_by_id(tournament_id)
+                        if t_obj:
+                            cpm = await ClubPlayerMembershipRepository(self.db).get_by_user_and_club(payment.player_id, t_obj.club_id)
+                            if cpm:
+                                reg = await TournamentRegistrationRepository(self.db).get_by_membership_and_tournament(cpm.id, tournament_id)
+                                if reg:
+                                    booking_or_reg.update({
+                                        "id": str(reg.id),
+                                        "tournament_id": str(tournament_id),
+                                        "reference_number": reg.reference_number,
+                                        "status": reg.status.value,
+                                    })
+                    except Exception:
+                        pass
                     booking_or_reg["tournament_id"] = str(tournament_id)
 
         elif payment.purpose == PaymentPurpose.EVENT:
