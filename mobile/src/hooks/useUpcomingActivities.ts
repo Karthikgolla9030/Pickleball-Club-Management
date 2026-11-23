@@ -21,8 +21,13 @@ export function useUpcomingActivities(params?: UseUpcomingActivitiesParams) {
       try {
         return await playerApi.getUpcomingActivities(params);
       } catch (err: any) {
-        if (err?.status === 404 || err?.type === 'NOT_FOUND') {
-          // Backend deployment pending on Render; return empty state gracefully without console noise
+        if (
+          err?.status === 404 ||
+          err?.type === 'NOT_FOUND' ||
+          err?.status === 502 ||
+          err?.type === 'NETWORK_ERROR'
+        ) {
+          // Backend deployment pending on Render or waking up from cold start; return empty state gracefully
           return {
             items: [],
             total: 0,
