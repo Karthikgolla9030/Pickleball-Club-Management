@@ -47,7 +47,11 @@ from app.schemas.club_membership_request import (
     MembershipRequestCreate,
     MembershipRequestResponse,
 )
-from app.schemas.player_activity import PlayerActivityItem
+from app.schemas.player_activity import (
+    PlayerActivityItem,
+    UpcomingActivitiesResponse,
+    UpcomingActivityItem,
+)
 from app.schemas.tournament import TournamentDiscoveryResponse
 from app.services.club_membership_request_service import ClubMembershipRequestService
 from app.services.member_subscription_service import MemberSubscriptionService
@@ -480,6 +484,33 @@ async def get_player_activity(
 ) -> list[PlayerActivityItem]:
     """Retrieve caller's recent activity."""
     return await PlayerService(db).get_recent_activity(user_id=current_user.id)
+
+
+@router.get(
+    "/upcoming-activities",
+    response_model=UpcomingActivitiesResponse,
+    summary="Discover upcoming activities across clubs",
+    description="Returns aggregated upcoming tournaments, leagues, events, and lessons across active clubs with user registration status.",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def get_upcoming_activities(
+    activity_type: str | None = Query(None, description="Filter by type: tournament, league, event, lesson, all"),
+    club_id: UUID | None = Query(None, description="Optional club filter"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> UpcomingActivitiesResponse:
+    """Retrieve upcoming activities for player discovery across multiple clubs."""
+    return await PlayerService(db).get_upcoming_activities(
+        user_id=current_user.id,
+        activity_type=activity_type,
+        club_id=club_id,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

@@ -62,6 +62,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
+import { lessonApi } from '@/services/api';
 import {
   useActiveClub,
   useClubBranding,
@@ -130,7 +131,7 @@ export default function PlayerLessonsScreen() {
   const queryClient = useQueryClient();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, clubName } = useActiveClub();
-  const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
+  const { clubId: paramClubId, id: paramLessonId } = useLocalSearchParams<{ clubId?: string; id?: string }>();
   const effectiveClubId = paramClubId || clubId || '';
   const { data: clubBranding } = useClubBranding(effectiveClubId);
   const { banners: platformBanners } = usePlatformBanners();
@@ -165,6 +166,24 @@ export default function PlayerLessonsScreen() {
   const [registeringLesson, setRegisteringLesson] = useState<PlayerLessonDetail | null>(null);
   const [checkoutLesson, setCheckoutLesson] = useState<PlayerLessonDetail | null>(null);
   const [registrationNotes, setRegistrationNotes] = useState('');
+
+  // Auto-open lesson detail modal if navigated with ?id=<lessonId>
+  React.useEffect(() => {
+    if (!paramLessonId) return;
+    const found = discoverLessons.find((l) => l.id === paramLessonId);
+    if (found) {
+      setSelectedLesson(found);
+    } else {
+      lessonApi
+        .getPlayerLessonDetail(paramLessonId)
+        .then((detail) => {
+          if (detail) {
+            setSelectedLesson(detail);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [paramLessonId, discoverLessons]);
 
   // Register mutation
   const registerMutation = usePlayerRegisterLesson(

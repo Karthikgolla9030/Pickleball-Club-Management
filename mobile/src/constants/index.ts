@@ -100,6 +100,7 @@ export const API_ENDPOINTS = {
   PLAYER_CLUBS: `${API_BASE}/api/v1/player/clubs`,
   PLAYER_TOURNAMENTS: `${API_BASE}/api/v1/player/tournaments`,
   PLAYER_ACTIVITY: `${API_BASE}/api/v1/player/activity`,
+  PLAYER_UPCOMING_ACTIVITIES: `${API_BASE}/api/v1/player/upcoming-activities`,
 
   // Tournaments (Phase 4)
   TOURNAMENTS: `${API_BASE}/api/v1/tournaments`,
@@ -289,6 +290,8 @@ export const QUERY_KEYS = {
   PLAYER_CLUBS: ['player', 'clubs'] as const,
   PLAYER_CLUB_DETAIL: (clubId: string) => ['player', 'clubs', clubId] as const,
   PLAYER_ACTIVITY: ['player', 'activity'] as const,
+  PLAYER_UPCOMING_ACTIVITIES: (filters?: { activity_type?: string; club_id?: string; limit?: number; offset?: number }) =>
+    ['player', 'upcoming-activities', filters] as const,
   CLUB_TOURNAMENTS: (clubId: string) => ['clubs', clubId, 'tournaments'] as const,
   TOURNAMENT_DETAIL: (tournamentId: string) => ['tournaments', tournamentId] as const,
   TOURNAMENT_REGISTRATIONS: (clubId: string, tournamentId: string) =>

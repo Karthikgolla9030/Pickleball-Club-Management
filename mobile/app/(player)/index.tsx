@@ -26,13 +26,17 @@ import {
   AlertTriangle,
   ArrowRight,
   Bell,
+  Building2,
   Calendar,
   CalendarCheck,
+  CalendarHeart,
   CalendarX,
   ChevronRight,
   Clock,
+  GraduationCap,
   Lightbulb,
   MapPin,
+  Medal,
   Menu,
   Sparkles,
   Trophy,
@@ -53,12 +57,13 @@ import {
   usePlatformBanners,
   useUniversalPromotionalAds,
   useUnreadNotificationCount,
+  useUpcomingActivities,
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { Colors } from '@/theme';
 import { BUILTIN_FALLBACKS, formatCurrency, resolveMediaUrl } from '@/utils';
 import { resolveEventCover, resolveTournamentBanner } from '@/utils/imageResolution';
-import type { Booking, PlayerActivityItem, TournamentDiscoveryItem } from '@/types';
+import type { Booking, PlayerActivityItem, TournamentDiscoveryItem, UpcomingActivityItem } from '@/types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,6 +123,60 @@ function formatTimeRange(startStr: string, endStr: string): string {
   }
 }
 
+function getActivityBadgeInfo(type: string) {
+  switch (type) {
+    case 'tournament':
+      return {
+        label: 'Tournament',
+        icon: Trophy,
+        bg: '#FEF3C7',
+        color: '#B45309',
+      };
+    case 'league':
+      return {
+        label: 'League',
+        icon: Medal,
+        bg: '#E0E7FF',
+        color: '#4338CA',
+      };
+    case 'event':
+      return {
+        label: 'Event',
+        icon: CalendarHeart,
+        bg: '#DCFCE7',
+        color: '#15803D',
+      };
+    case 'lesson':
+      return {
+        label: 'Lesson',
+        icon: GraduationCap,
+        bg: '#F3E8FF',
+        color: '#7E22CE',
+      };
+    default:
+      return {
+        label: 'Activity',
+        icon: Sparkles,
+        bg: '#E2ECE6',
+        color: '#176B57',
+      };
+  }
+}
+
+function formatActivityDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    const weekday = d.toLocaleDateString('en-GB', { weekday: 'short' });
+    const day = d.getDate();
+    const month = d.toLocaleDateString('en-GB', { month: 'short' });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${weekday}, ${day} ${month} · ${time}`;
+  } catch {
+    return iso;
+  }
+}
+
 function formatEventDate(dateString: string): string {
   try {
     const d = new Date(dateString);
@@ -150,15 +209,12 @@ export default function PlayerHomeScreen() {
     refetch: refetchBookings,
   } = usePlayerBookings({ upcomingOnly: true });
 
-  // 2. Upcoming Events & Tournaments
+  // 2. Upcoming Activities across clubs
   const {
-    data: clubEvents,
-    refetch: refetchEvents,
-  } = useDiscoverClubEvents(clubId || '');
-  const {
-    tournaments,
-    refetch: refetchTournaments,
-  } = usePlayerTournaments();
+    activities: upcomingActivities,
+    isLoading: isActivitiesLoading,
+    refetch: refetchUpcomingActivities,
+  } = useUpcomingActivities({ limit: 4 });
 
   // 3. Recent Activity
   const {
@@ -259,70 +315,41 @@ export default function PlayerHomeScreen() {
     return valid[0] || null;
   }, [bookings]);
 
-  // ─── Compute Upcoming Events / Tournaments ──────────────────────────────────
-  const upcomingEvent = useMemo(() => {
-    const now = Date.now();
-    const candidates: Array<{
-      id: string;
-      title: string;
-      startDate: string;
-      venue: string;
-      typeBadge: string;
-      skillBadge?: string;
-      statusBadge: string;
-      isTournament: boolean;
-      imageUrl?: string | null;
-      format?: string;
-    }> = [];
-
-    // Tournaments
-    (tournaments || []).forEach((t: TournamentDiscoveryItem) => {
-      const startTime = new Date(t.start_date).getTime();
-      if (t.status !== 'cancelled' && startTime > now) {
-        candidates.push({
-          id: t.id,
-          title: t.name,
-          startDate: t.start_date,
-          venue: t.club_name || clubName || 'Club Court',
-          typeBadge: 'Tournament',
-          skillBadge: t.format_label || 'All Levels',
-          statusBadge: t.is_registration_open ? 'Registration Open' : 'Upcoming',
-          isTournament: true,
-          imageUrl: t.banner_image_url || null,
-          format: t.format,
-        });
-      }
-    });
-
-    // Club Events
-    (clubEvents || []).forEach((e) => {
-      const startTime = new Date(e.start_at).getTime();
-      if (e.status !== 'cancelled' && startTime > now) {
-        candidates.push({
-          id: e.id,
-          title: e.title,
-          startDate: e.start_at,
-          venue: e.club_name || e.location || clubName || 'Club Court',
-          typeBadge: e.event_type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-          skillBadge: undefined,
-          statusBadge: 'Registration Open',
-          isTournament: false,
-          imageUrl: e.cover_image_url || null,
-        });
-      }
-    });
-
-    candidates.sort(
-      (a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-    );
-    return candidates[0] || null;
-  }, [tournaments, clubEvents, clubName]);
+  const handleActivityPress = (activity: UpcomingActivityItem) => {
+    switch (activity.activity_type) {
+      case 'tournament':
+        router.push({
+          pathname: '/(player)/tournament-details',
+          params: { id: activity.id },
+        } as any);
+        break;
+      case 'league':
+        router.push({
+          pathname: '/(player)/league-details',
+          params: { id: activity.id },
+        } as any);
+        break;
+      case 'event':
+        router.push({
+          pathname: '/(player)/events',
+          params: { id: activity.id },
+        } as any);
+        break;
+      case 'lesson':
+        router.push({
+          pathname: '/(player)/lessons',
+          params: { id: activity.id },
+        } as any);
+        break;
+      default:
+        router.push('/(player)/upcoming-activities' as any);
+    }
+  };
 
   const handleRefresh = async () => {
     await Promise.all([
       refetchBookings(),
-      clubId ? refetchEvents() : Promise.resolve(),
-      refetchTournaments(),
+      refetchUpcomingActivities(),
       refetchActivity(),
       refetchPlayerBanner(),
       refetchUniversalAds(),
@@ -518,13 +545,18 @@ export default function PlayerHomeScreen() {
           </View>
         )}
 
-        {/* ─── 4. UPCOMING EVENTS (Conditional) ──────────────────────────────── */}
-        {upcomingEvent && (
+        {/* ─── 4. UPCOMING ACTIVITIES (Multi-Club Discovery) ────────────────── */}
+        {upcomingActivities.length > 0 && (
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
-              <AppText style={styles.sectionTitle}>Upcoming Events</AppText>
+              <View style={styles.sectionTitleBlock}>
+                <AppText style={styles.sectionTitle}>Upcoming Activities</AppText>
+                <AppText style={styles.sectionSubtitle}>
+                  Discover what's happening across your clubs.
+                </AppText>
+              </View>
               <Pressable
-                onPress={() => router.push('/(player)/events' as any)}
+                onPress={() => router.push('/(player)/upcoming-activities' as any)}
                 hitSlop={8}
                 style={styles.viewAllRow}
               >
@@ -533,92 +565,94 @@ export default function PlayerHomeScreen() {
               </Pressable>
             </View>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.eventCard,
-                pressed && styles.cardPressed,
-              ]}
-              onPress={() => router.push('/(player)/events' as any)}
-              accessibilityRole="button"
-            >
-              {/* Event Thumbnail */}
-              {(() => {
-                const imgSource = upcomingEvent.isTournament
-                  ? resolveTournamentBanner(
-                      { banner_image_url: upcomingEvent.imageUrl, format: upcomingEvent.format, resolved_banner_url: (upcomingEvent as any).resolved_banner_url },
-                      clubBranding,
-                      platformBanners
-                    )
-                  : resolveEventCover(
-                      { cover_image_url: upcomingEvent.imageUrl, resolved_cover_image_url: (upcomingEvent as any).resolved_cover_image_url },
-                      clubBranding,
-                      platformBanners
-                    );
-                if (imgSource) {
-                  return (
-                    <Image
-                      source={imgSource}
-                      style={styles.eventThumbnail}
-                      resizeMode="cover"
-                    />
-                  );
-                }
+            <View style={styles.activityListCol}>
+              {upcomingActivities.map((act) => {
+                const badgeInfo = getActivityBadgeInfo(act.activity_type);
+                const BadgeIcon = badgeInfo.icon;
+                const formattedDate = formatActivityDate(act.start_date);
+
                 return (
-                  <View style={styles.eventThumbnailFallback}>
-                    <Calendar size={24} color="#176B57" strokeWidth={1.8} />
-                  </View>
-                );
-              })()}
+                  <Pressable
+                    key={`${act.activity_type}-${act.id}`}
+                    style={({ pressed }) => [
+                      styles.activityDiscoveryCard,
+                      pressed && styles.cardPressed,
+                    ]}
+                    onPress={() => handleActivityPress(act)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${act.title}, ${badgeInfo.label} at ${act.club_name}`}
+                  >
+                    {/* Activity Thumbnail */}
+                    {act.image_url ? (
+                      <Image
+                        source={{ uri: resolveMediaUrl(act.image_url) }}
+                        style={styles.activityThumbnail}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.activityThumbnailFallback, { backgroundColor: badgeInfo.bg }]}>
+                        <BadgeIcon size={24} color={badgeInfo.color} strokeWidth={1.8} />
+                      </View>
+                    )}
 
-              {/* Event Content */}
-              <View style={styles.eventContentCol}>
-                <AppText style={styles.eventTitle} numberOfLines={1}>
-                  {upcomingEvent.title}
-                </AppText>
+                    {/* Activity Content */}
+                    <View style={styles.activityContentCol}>
+                      {/* Top Badges Row */}
+                      <View style={styles.activityBadgesRow}>
+                        <View style={[styles.activityTypeBadge, { backgroundColor: badgeInfo.bg }]}>
+                          <BadgeIcon size={10} color={badgeInfo.color} strokeWidth={2.2} style={{ marginRight: 3 }} />
+                          <AppText style={[styles.activityTypeBadgeText, { color: badgeInfo.color }]}>
+                            {badgeInfo.label}
+                          </AppText>
+                        </View>
 
-                <View style={styles.metaRow}>
-                  <Calendar size={13} color="#718580" strokeWidth={1.9} />
-                  <AppText style={styles.metaText} numberOfLines={1}>
-                    {formatEventDate(upcomingEvent.startDate)}
-                  </AppText>
-                </View>
+                        <View
+                          style={[
+                            styles.activityStatusBadge,
+                            act.is_registered ? styles.badgeRegistered : styles.badgeOpen,
+                          ]}
+                        >
+                          <AppText
+                            style={[
+                              styles.activityStatusText,
+                              act.is_registered ? styles.textRegistered : styles.textOpen,
+                            ]}
+                          >
+                            {act.is_registered ? 'Registered' : act.status_label}
+                          </AppText>
+                        </View>
+                      </View>
 
-                <View style={styles.metaRow}>
-                  <MapPin size={13} color="#718580" strokeWidth={1.9} />
-                  <AppText style={styles.metaText} numberOfLines={1}>
-                    {upcomingEvent.venue}
-                  </AppText>
-                </View>
-
-                {/* Badges */}
-                <View style={styles.eventBadgesRow}>
-                  <View style={styles.eventBadgeBlue}>
-                    <AppText style={styles.eventBadgeBlueText}>
-                      {upcomingEvent.typeBadge}
-                    </AppText>
-                  </View>
-
-                  {upcomingEvent.skillBadge ? (
-                    <View style={styles.eventBadgeGreen}>
-                      <AppText style={styles.eventBadgeGreenText}>
-                        {upcomingEvent.skillBadge}
+                      {/* Title */}
+                      <AppText style={styles.activityItemTitle} numberOfLines={2}>
+                        {act.title}
                       </AppText>
+
+                      {/* Date & Time */}
+                      <View style={styles.metaRow}>
+                        <Calendar size={12} color="#718580" strokeWidth={1.9} />
+                        <AppText style={styles.metaText} numberOfLines={1}>
+                          {formattedDate}
+                        </AppText>
+                      </View>
+
+                      {/* Hosting Club */}
+                      <View style={styles.metaRow}>
+                        <Building2 size={12} color="#718580" strokeWidth={1.9} />
+                        <AppText style={styles.metaText} numberOfLines={1}>
+                          {act.club_name}
+                        </AppText>
+                      </View>
                     </View>
-                  ) : null}
 
-                  <View style={styles.eventBadgeLightBlue}>
-                    <AppText style={styles.eventBadgeLightBlueText}>
-                      {upcomingEvent.statusBadge}
-                    </AppText>
-                  </View>
-                </View>
-              </View>
-
-              {/* Right Chevron */}
-              <View style={styles.chevronSlot}>
-                <ChevronRight size={19} color="#94A3B8" strokeWidth={2} />
-              </View>
-            </Pressable>
+                    {/* Right Chevron */}
+                    <View style={styles.chevronSlot}>
+                      <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         )}
 
@@ -903,10 +937,20 @@ const styles = StyleSheet.create({
     color: '#102B2A',
     letterSpacing: -0.2,
   },
+  sectionTitleBlock: {
+    flex: 1,
+    gap: 2,
+  },
+  sectionSubtitle: {
+    fontSize: 12.5,
+    fontWeight: '500',
+    color: '#64748B',
+  },
   viewAllRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+    marginLeft: 8,
   },
   viewAllText: {
     fontSize: 13,
@@ -1022,6 +1066,91 @@ const styles = StyleSheet.create({
   },
   chevronSlot: {
     paddingLeft: 4,
+  },
+
+  // Upcoming Activities (Discovery)
+  activityListCol: {
+    gap: 12,
+  },
+  activityDiscoveryCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2ECE6',
+    shadowColor: '#102B2A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    gap: 12,
+  },
+  activityThumbnail: {
+    width: 90,
+    height: 86,
+    borderRadius: 12,
+  },
+  activityThumbnailFallback: {
+    width: 90,
+    height: 86,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityContentCol: {
+    flex: 1,
+    gap: 4,
+  },
+  activityItemTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#102B2A',
+    lineHeight: 19,
+  },
+  activityBadgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 2,
+  },
+  activityTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  activityTypeBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  activityStatusBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  activityStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  badgeOpen: {
+    backgroundColor: '#E0F2FE',
+  },
+  textOpen: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  badgeRegistered: {
+    backgroundColor: '#DCFCE7',
+  },
+  textRegistered: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
   },
 
   // Upcoming Event Card

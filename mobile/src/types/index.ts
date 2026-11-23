@@ -564,6 +564,36 @@ export interface PlayerActivityItem {
   entity_id: string;
 }
 
+export type UpcomingActivityType = 'tournament' | 'league' | 'event' | 'lesson';
+
+export interface UpcomingActivityItem {
+  id: string;
+  activity_type: UpcomingActivityType;
+  title: string;
+  description?: string | null;
+  club_id: string;
+  club_name: string;
+  start_date: string;
+  end_date?: string | null;
+  image_url?: string | null;
+  location?: string | null;
+  price?: number | null;
+  currency?: string;
+  status: string;
+  status_label: string;
+  format_label?: string | null;
+  is_registration_open: boolean;
+  is_registered: boolean;
+  available_spots?: number | null;
+  max_participants?: number | null;
+}
+
+export interface UpcomingActivitiesResponse {
+  items: UpcomingActivityItem[];
+  total: number;
+  has_more: boolean;
+}
+
 export interface ClubPlayerMember {
   id: string;
   user_id: string;

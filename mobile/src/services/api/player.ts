@@ -12,6 +12,7 @@ import type {
   PlayerClub,
   PlayerClubDetail,
   PlayerProfile,
+  UpcomingActivitiesResponse,
   UpdatePlayerProfilePayload,
 } from '@/types';
 
@@ -81,6 +82,35 @@ export const playerApi = {
    */
   getActivity(): Promise<PlayerActivityItem[]> {
     return apiClient.get<PlayerActivityItem[]>(API_ENDPOINTS.PLAYER_ACTIVITY);
+  },
+
+  /**
+   * Discover upcoming activities (tournaments, leagues, events, lessons) across all active clubs.
+   */
+  getUpcomingActivities(params?: {
+    activity_type?: string;
+    club_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<UpcomingActivitiesResponse> {
+    const query = new URLSearchParams();
+    if (params?.activity_type && params.activity_type !== 'all') {
+      query.append('activity_type', params.activity_type);
+    }
+    if (params?.club_id) {
+      query.append('club_id', params.club_id);
+    }
+    if (params?.limit !== undefined) {
+      query.append('limit', String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      query.append('offset', String(params.offset));
+    }
+    const qs = query.toString();
+    const url = qs
+      ? `${API_ENDPOINTS.PLAYER_UPCOMING_ACTIVITIES}?${qs}`
+      : API_ENDPOINTS.PLAYER_UPCOMING_ACTIVITIES;
+    return apiClient.get<UpcomingActivitiesResponse>(url);
   },
 
   // ─── Membership Requests ───────────────────────────────────────────────────

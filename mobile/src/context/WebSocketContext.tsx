@@ -82,6 +82,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'tournaments'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         queryClient.invalidateQueries({ queryKey: ['matches'] });
         queryClient.invalidateQueries({ queryKey: ['standings'] });
         queryClient.invalidateQueries({ queryKey: ['bracket'] });
@@ -113,6 +114,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       else if (eventType.startsWith('league.')) {
         queryClient.invalidateQueries({ queryKey: ['leagues'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'leagues'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'leagues'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
@@ -124,6 +126,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['events'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'events'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
@@ -135,6 +138,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['lessons'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         const targetLessonId = (event.data as any)?.lesson_id || (event.data as any)?.id;
         const eventClubId = (event as any)?.club_id || (event.data as any)?.club_id || clubId;
         if (eventClubId) {

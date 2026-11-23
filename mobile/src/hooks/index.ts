@@ -61,4 +61,5 @@ export * from './usePlatformBanners';
 export * from './usePlatformBranding';
 export * from './useUniversalPromotionalAds';
 export * from './useImageResolution';
+export * from './useUpcomingActivities';
 

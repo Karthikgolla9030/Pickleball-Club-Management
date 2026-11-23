@@ -40,6 +40,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
+import { eventApi } from '@/services/api';
 import {
   useActiveClub,
   useClubBranding,
@@ -62,7 +63,7 @@ export default function PlayerEventsScreen() {
   const router = useRouter();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, role } = useActiveClub();
-  const { clubId: paramClubId } = useLocalSearchParams<{ clubId?: string }>();
+  const { clubId: paramClubId, id: paramEventId } = useLocalSearchParams<{ clubId?: string; id?: string }>();
   const effectiveClubId = paramClubId || clubId || '';
   const { data: clubBranding } = useClubBranding(effectiveClubId);
   const { banners: platformBanners } = usePlatformBanners();
@@ -143,6 +144,24 @@ export default function PlayerEventsScreen() {
     error: discoverError,
     refetch: refetchDiscover,
   } = useDiscoverClubEvents(effectiveClubId || '');
+
+  // Auto-open event detail modal if navigated with ?id=<eventId>
+  React.useEffect(() => {
+    if (!paramEventId) return;
+    const found = discoverEvents.find((e) => e.id === paramEventId);
+    if (found) {
+      setSelectedDetailEvent(found);
+    } else {
+      eventApi
+        .getPlayerEventDetail(paramEventId)
+        .then((detail) => {
+          if (detail) {
+            setSelectedDetailEvent(detail);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [paramEventId, discoverEvents]);
 
   // My Events query
   const {
