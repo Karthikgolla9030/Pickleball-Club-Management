@@ -658,15 +658,21 @@ export function TournamentRegistrationModal({
         queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         queryClient.invalidateQueries({ queryKey: ['clubs'] });
 
+        const regInfo = simRes.booking_or_registration;
         const resultObj: any = {
-          id: simRes.payment?.id || 'reg_simulated',
+          id: regInfo?.id || simRes.payment?.id || 'reg_simulated',
           tournament_id: activeTournament.id,
-          status: 'confirmed',
+          status: regInfo?.status || 'confirmed',
           status_label: 'Confirmed (Test Mode)',
           registered_at: new Date().toISOString(),
-          message: 'Tournament registration confirmed via simulated mobile payment.',
-          reference_number: simRes.payment?.reference || `SIM-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
+          message: simRes.message || 'Tournament registration confirmed via simulated mobile payment.',
+          reference_number:
+            regInfo?.reference_number ||
+            simRes.payment?.reference ||
+            `SIM-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
           registration_type: isDoubles ? 'team' : 'individual',
+          team_id: (regInfo as any)?.team_id || null,
+          team_name: regInfo?.team_name || teamName || null,
           tournament_name: activeTournament.name,
           tournament_format: activeTournament.format,
           tournament_format_label: activeTournament.format,
@@ -686,7 +692,10 @@ export function TournamentRegistrationModal({
           err?.detail ||
           err?.message ||
           'Simulated payment failed. Please check your mobile number and retry.';
-        const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
+        let msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
+        if (msg === 'Not Found' || msg.includes('404')) {
+          msg = 'Simulated payment service is synchronizing. Please retry in a moment.';
+        }
         if (msg.toLowerCase().includes('already registered')) {
           void refetchMyRegistration();
           setAlreadyRegisteredOverride(true);

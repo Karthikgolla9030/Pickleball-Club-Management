@@ -158,6 +158,7 @@ export const API_ENDPOINTS = {
   CHECKOUT_INITIATE: `${API_BASE}/api/v1/payments/checkout/initiate`,
   CHECKOUT_VERIFY: `${API_BASE}/api/v1/payments/checkout/verify`,
   CHECKOUT_SIMULATE: `${API_BASE}/api/v1/payments/checkout/simulate-mobile`,
+  TOURNAMENT_SIMULATE_PAYMENT: (tournamentId: string) => `${API_BASE}/api/v1/tournaments/${tournamentId}/simulate-payment`,
 
   // Events (Phase 14)
   CLUB_EVENTS: (clubId: string) => `${API_BASE}/api/v1/clubs/${clubId}/events`,

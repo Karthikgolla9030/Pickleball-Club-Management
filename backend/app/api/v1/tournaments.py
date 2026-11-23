@@ -35,6 +35,7 @@ from app.models.club_membership import ClubMembership
 from app.models.tournament import TournamentStatus
 from app.models.user import User
 from app.permissions import Permission, has_permission
+from app.schemas.payment import CheckoutVerifyResponse, SimulateTournamentPaymentRequest
 from app.schemas.tournament import (
     TournamentCreate,
     TournamentResponse,
@@ -48,6 +49,7 @@ from app.schemas.tournament_registration import (
     TournamentRegistrationResponse,
     UpdateRegistrationRequest,
 )
+from app.services.payment_service import PaymentService
 from app.services.tournament_service import TournamentService
 
 # Router for club-scoped endpoints: /clubs/{club_id}/tournaments
@@ -487,3 +489,31 @@ async def player_cancel_registration(
     return await TournamentService(db).cancel_player_registration(
         tournament_id=tournament_id, user_id=current_user.id
     )
+
+
+@tournaments_router.post(
+    "/{tournament_id}/simulate-payment",
+    response_model=CheckoutVerifyResponse,
+    summary="Simulate payment using mobile number for tournament (Development mode only)",
+    description="Development/testing-only dummy payment flow that validates mobile number, creates a TEST_SUCCESS payment, and fulfills tournament registration atomically.",
+    responses={
+        400: {"description": "Validation error or invalid state"},
+        401: {"description": "Not authenticated"},
+        403: {"description": "Disabled in production"},
+        404: {"description": "Tournament not found"},
+    },
+)
+async def simulate_tournament_payment_endpoint(
+    tournament_id: UUID,
+    payload: SimulateTournamentPaymentRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CheckoutVerifyResponse:
+    """Simulate mobile number payment for a tournament in dev mode."""
+    if payload.tournament_id != tournament_id:
+        payload.tournament_id = tournament_id
+    return await PaymentService(db).simulate_tournament_payment(
+        user_id=current_user.id,
+        payload=payload,
+    )
+

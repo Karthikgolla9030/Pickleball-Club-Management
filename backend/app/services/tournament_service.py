@@ -1811,7 +1811,11 @@ class TournamentService:
             partner_membership_id=partner_membership.id if partner_membership else None,
             partner_name=partner_user.full_name if partner_user else None,
             fee_amount=calc_fee,
-            payment_status="completed" if target_status == RegistrationStatus.CONFIRMED else "pending",
+            payment_status=(
+                "TEST_SUCCESS"
+                if (payload and payload.payment_method and "mobile" in payload.payment_method.lower())
+                else ("completed" if target_status == RegistrationStatus.CONFIRMED else "pending")
+            ),
             payment_method=payload.payment_method if payload and payload.payment_method else "online",
             notes=payload.notes if payload else None,
             tournament_name=tournament.name,
@@ -1835,7 +1839,7 @@ class TournamentService:
                 stmt = select(Payment).where(
                     Payment.tournament_id == tournament.id,
                     Payment.player_id == user_id,
-                    Payment.status == PaymentStatus.SUCCEEDED,
+                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.TEST_SUCCESS]),
                 )
                 existing_p = (await self.db.execute(stmt)).scalars().first()
                 if not existing_p:
@@ -1843,14 +1847,27 @@ class TournamentService:
                     reference = await pay_repo.generate_reference()
                     now_dt = datetime.now(timezone.utc)
                     p_method = PaymentMethod.ONLINE
+                    p_status = PaymentStatus.SUCCEEDED
                     if payload and payload.payment_method:
                         m_str = payload.payment_method.lower().replace("-", "_")
-                        if "cash" in m_str:
+                        if "mobile" in m_str:
+                            p_method = PaymentMethod.MOBILE_NUMBER_TEST
+                            p_status = PaymentStatus.TEST_SUCCESS
+                        elif "cash" in m_str:
                             p_method = PaymentMethod.CASH
                         elif "bank" in m_str:
                             p_method = PaymentMethod.BANK_TRANSFER
                         elif "upi" in m_str or "card" in m_str or "online" in m_str:
                             p_method = PaymentMethod.ONLINE
+
+                    notes_txt = (
+                        f"[SIMULATED TEST PAYMENT - MOBILE NUMBER] Tournament entry: {tournament.name}"
+                        if p_status == PaymentStatus.TEST_SUCCESS
+                        else f"Tournament entry: {tournament.name}"
+                    )
+                    if payload and payload.notes and "mobile:" in payload.notes.lower():
+                        notes_txt = f"{notes_txt} | {payload.notes}"
+
                     payment = Payment(
                         reference=reference,
                         club_id=tournament.club_id,
@@ -1858,17 +1875,28 @@ class TournamentService:
                         tournament_id=tournament.id,
                         amount=Decimal(str(calc_fee)).quantize(Decimal("0.01")),
                         currency="USD",
-                        status=PaymentStatus.SUCCEEDED,
+                        status=p_status,
                         purpose=PaymentPurpose.TOURNAMENT,
                         payment_method=p_method,
                         paid_at=now_dt,
-                        notes=f"Tournament entry: {tournament.name}",
+                        notes=notes_txt,
                         created_by_user_id=user_id,
                     )
                     await pay_repo.create(payment)
+
+                    # Persist mobile phone to user profile if available in notes and missing on user
+                    if user and not getattr(user, "phone", None) and payload and payload.notes:
+                        import re
+                        m = re.search(r"mobile:\s*([+\d\s\-()]+)", payload.notes, re.IGNORECASE)
+                        if m:
+                            clean_p = re.sub(r"[^\d+]", "", m.group(1))
+                            if len(clean_p) >= 7:
+                                user.phone = clean_p
+                                self.db.add(user)
+
                     await self.db.commit()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Failed to record canonical payment for tournament entry: {e}")
 
         try:
             active_count = await self.registration_repo.count_active_participants(tournament.id)

@@ -1621,16 +1621,39 @@ class PaymentService:
         if tournament.status != TournamentStatus.REGISTRATION_OPEN:
             raise HTTPException(status_code=400, detail=f"Tournament registration is {tournament.status.value}")
 
-        # 2. Calculate fee
+        # 2. Calculate fee accurately
         format_config = tournament.format_configuration or {}
-        fee_raw = (
-            getattr(tournament, "registration_fee", None)
-            or format_config.get("entry_fee")
-            or format_config.get("registration_fee")
-            or format_config.get("fee")
-            or 35.00
-        )
-        final_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
+        calc_fee = getattr(tournament, "registration_fee", None)
+        if calc_fee is not None:
+            try:
+                calc_fee = float(calc_fee)
+            except (ValueError, TypeError):
+                calc_fee = None
+
+        if calc_fee is None:
+            fee_from_cfg = (
+                format_config.get("registration_fee")
+                or format_config.get("entry_fee")
+                or format_config.get("fee")
+            )
+            if fee_from_cfg is not None:
+                try:
+                    calc_fee = float(fee_from_cfg)
+                except (ValueError, TypeError):
+                    calc_fee = None
+
+        if calc_fee is None:
+            desc = tournament.description or ""
+            calc_fee = 35.0
+            if "fee:" in desc.lower():
+                import re
+                match = re.search(r'fee:\s*\$?(\d+(?:\.\d+)?)', desc, re.IGNORECASE)
+                if match:
+                    try:
+                        calc_fee = float(match.group(1))
+                    except ValueError:
+                        pass
+        final_amount = Decimal(str(calc_fee)).quantize(Decimal("0.01"))
 
         # 3. Clean and validate phone number
         clean_phone = payload.phone_number.strip()
