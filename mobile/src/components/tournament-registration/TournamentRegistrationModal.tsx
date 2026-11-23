@@ -138,7 +138,8 @@ export function TournamentRegistrationModal({
     partnerSearchQuery: '',
     confirmEligibility: true,
     acknowledgeMembership: true,
-    paymentMethod: 'card',
+    paymentMethod: 'upi',
+    paymentMobileNumber: '',
     cardholderName: '',
     cardNumber: '',
     cardExpiry: '',
@@ -211,7 +212,8 @@ export function TournamentRegistrationModal({
           partnerSearchQuery: '',
           confirmEligibility: true,
           acknowledgeMembership: true,
-          paymentMethod: 'card',
+          paymentMethod: 'upi',
+          paymentMobileNumber: userPhone,
           cardholderName: userFull,
           cardNumber: '',
           cardExpiry: '',
@@ -485,6 +487,14 @@ export function TournamentRegistrationModal({
       errs.agreeRulesAndCancellation = 'You must agree to the tournament rules and cancellation policy.';
     }
 
+    if (!isFree && formState.paymentMethod === 'mobile_number') {
+      const targetPhone = (formState.paymentMobileNumber || formState.phone || '').trim();
+      const cleaned = targetPhone.replace(/[\s\-\(\)\.]/g, '');
+      if (!cleaned || cleaned.length < 7) {
+        errs.paymentMobileNumber = 'Valid mobile number is required for simulated payment.';
+      }
+    }
+
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -606,6 +616,85 @@ export function TournamentRegistrationModal({
           return;
         }
         setSubmitError(msg);
+      }
+      return;
+    }
+
+    // Simulated Dummy Payment Flow (Mobile Number Test Mode)
+    if (formState.paymentMethod === 'mobile_number') {
+      setIsProcessingPayment(true);
+      try {
+        const targetPhone = (formState.paymentMobileNumber || formState.phone || '').trim();
+
+        // Brief delay for realistic UI processing feel
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        const simRes = await paymentApi.simulateTournamentPayment({
+          club_id: activeTournament.club_id,
+          tournament_id: activeTournament.id,
+          phone_number: targetPhone,
+          team_name: teamName,
+          partner_name: partnerName,
+          partner_email: partnerEmail,
+          partner_phone: isDoubles ? (formState.partnerPhone?.trim() || null) : null,
+          partner_membership_id: isDoubles ? (formState.selectedPartner?.membership_id || null) : null,
+          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
+          skill_level: formState.skillLevel,
+          gender: formState.gender,
+          age: formState.age ? parseInt(formState.age, 10) : null,
+          notes: [formState.notes?.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
+        });
+
+        void refetchMyRegistration();
+        if (activeTournament?.id) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'player-registrations'] });
+          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
+        }
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
+
+        const resultObj: any = {
+          id: simRes.payment?.id || 'reg_simulated',
+          tournament_id: activeTournament.id,
+          status: 'confirmed',
+          status_label: 'Confirmed (Test Mode)',
+          registered_at: new Date().toISOString(),
+          message: 'Tournament registration confirmed via simulated mobile payment.',
+          reference_number: simRes.payment?.reference || `SIM-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
+          registration_type: isDoubles ? 'team' : 'individual',
+          tournament_name: activeTournament.name,
+          tournament_format: activeTournament.format,
+          tournament_format_label: activeTournament.format,
+          division: parsed?.category || 'Open',
+          fee_amount: feeAmount,
+          payment_status: 'TEST_SUCCESS',
+          payment_method: 'MOBILE_NUMBER_TEST',
+        };
+
+        setSuccessResult(resultObj);
+        if (onSuccess) {
+          onSuccess(resultObj);
+        }
+      } catch (err: any) {
+        const rawMsg =
+          err?.response?.data?.detail ||
+          err?.detail ||
+          err?.message ||
+          'Simulated payment failed. Please check your mobile number and retry.';
+        const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
+        if (msg.toLowerCase().includes('already registered')) {
+          void refetchMyRegistration();
+          setAlreadyRegisteredOverride(true);
+          return;
+        }
+        setSubmitError(msg);
+      } finally {
+        setIsProcessingPayment(false);
       }
       return;
     }

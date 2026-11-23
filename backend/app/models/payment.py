@@ -87,6 +87,7 @@ class PaymentStatus(str, enum.Enum):
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
     PARTIALLY_REFUNDED = "partially_refunded"
+    TEST_SUCCESS = "TEST_SUCCESS"
 
     @property
     def display_label(self) -> str:
@@ -98,7 +99,9 @@ class PaymentStatus(str, enum.Enum):
             "cancelled": "Cancelled",
             "refunded": "Refunded",
             "partially_refunded": "Partially Refunded",
-        }[self.value]
+            "TEST_SUCCESS": "Test Success",
+            "test_success": "Test Success",
+        }.get(self.value, self.value.replace("_", " ").title())
 
 
 class PaymentMethod(str, enum.Enum):
@@ -110,6 +113,7 @@ class PaymentMethod(str, enum.Enum):
     BANK_TRANSFER = "bank_transfer"
     ONLINE = "online"
     OTHER = "other"
+    MOBILE_NUMBER_TEST = "MOBILE_NUMBER_TEST"
 
     @property
     def display_label(self) -> str:
@@ -118,7 +122,9 @@ class PaymentMethod(str, enum.Enum):
             "bank_transfer": "Bank Transfer",
             "online": "Online",
             "other": "Other",
-        }[self.value]
+            "MOBILE_NUMBER_TEST": "Mobile Number (Test Mode)",
+            "mobile_number_test": "Mobile Number (Test Mode)",
+        }.get(self.value, self.value.replace("_", " ").title())
 
 
 # ─── Payment Model ────────────────────────────────────────────────────────────

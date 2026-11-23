@@ -11,6 +11,7 @@ import type {
   CheckoutInitiateResponse,
   CheckoutVerifyPayload,
   CheckoutVerifyResponse,
+  SimulateTournamentPaymentPayload,
   CreatePaymentPayload,
   Payment,
   PaymentFilters,
@@ -158,5 +159,13 @@ export const paymentApi = {
    */
   verifyCheckout(payload: CheckoutVerifyPayload): Promise<CheckoutVerifyResponse> {
     return apiClient.post<CheckoutVerifyResponse>(API_ENDPOINTS.CHECKOUT_VERIFY, payload);
+  },
+
+  /**
+   * Simulate payment using mobile number in development mode.
+   * Strictly guarded by backend in production.
+   */
+  simulateTournamentPayment(payload: SimulateTournamentPaymentPayload): Promise<CheckoutVerifyResponse> {
+    return apiClient.post<CheckoutVerifyResponse>(API_ENDPOINTS.CHECKOUT_SIMULATE, payload);
   },
 };

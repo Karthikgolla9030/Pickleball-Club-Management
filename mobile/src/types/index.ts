@@ -1966,7 +1966,9 @@ export type PaymentStatus =
   | 'failed'
   | 'cancelled'
   | 'refunded'
-  | 'partially_refunded';
+  | 'partially_refunded'
+  | 'TEST_SUCCESS'
+  | 'test_success';
 
 export type PaymentPurpose =
   | 'membership'
@@ -1976,7 +1978,13 @@ export type PaymentPurpose =
   | 'event'
   | 'lesson';
 
-export type PaymentMethod = 'cash' | 'bank_transfer' | 'online' | 'other';
+export type PaymentMethod =
+  | 'cash'
+  | 'bank_transfer'
+  | 'online'
+  | 'other'
+  | 'MOBILE_NUMBER_TEST'
+  | 'mobile_number_test';
 
 export interface PaymentPlayerInfo {
   id: string;
@@ -2144,6 +2152,22 @@ export interface CheckoutVerifyResponse {
   payment: PlayerPayment;
   message: string;
   booking_or_registration?: Record<string, any> | null;
+}
+
+export interface SimulateTournamentPaymentPayload {
+  club_id: string;
+  tournament_id: string;
+  phone_number: string;
+  team_name?: string | null;
+  partner_name?: string | null;
+  partner_email?: string | null;
+  partner_phone?: string | null;
+  partner_membership_id?: string | null;
+  partner_skill_level?: string | null;
+  skill_level?: string | null;
+  gender?: string | null;
+  age?: number | null;
+  notes?: string | null;
 }
 
 // ─── Phase 14 Events Types ───────────────────────────────────────────────────

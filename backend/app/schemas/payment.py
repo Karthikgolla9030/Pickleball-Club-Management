@@ -515,3 +515,20 @@ class CheckoutVerifyResponse(BaseModel):
     message: str
     booking_or_registration: dict[str, str | int | float | bool | None] | None = None
 
+
+class SimulateTournamentPaymentRequest(BaseModel):
+    club_id: UUID = Field(..., description="Target club for the tournament")
+    tournament_id: UUID = Field(..., description="ID of tournament being registered for")
+    phone_number: str = Field(..., min_length=7, max_length=30, description="Player mobile number for dummy payment")
+    team_name: str | None = Field(default=None, max_length=255)
+    partner_name: str | None = Field(default=None, max_length=255)
+    partner_email: str | None = Field(default=None, max_length=255)
+    partner_phone: str | None = Field(default=None, max_length=30)
+    partner_membership_id: UUID | None = None
+    partner_skill_level: str | None = Field(default=None, max_length=20)
+    skill_level: str | None = Field(default=None, max_length=20)
+    gender: str | None = Field(default=None, max_length=20)
+    age: int | None = Field(default=None, ge=1, le=120)
+    notes: str | None = Field(default=None, max_length=1000)
+
+

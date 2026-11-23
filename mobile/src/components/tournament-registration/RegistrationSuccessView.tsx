@@ -149,10 +149,25 @@ export function RegistrationSuccessView({
           <View style={styles.statusBadge}>
             <CheckCircle2 size={12} color="#15803D" />
             <AppText variant="caption" bold style={styles.statusBadgeText}>
-              {result.payment_status === 'completed' || !isWaitlist ? 'Paid & Confirmed' : 'Pending Spot'}
+              {result.payment_status === 'TEST_SUCCESS'
+                ? 'Test Success (Simulated)'
+                : result.payment_status === 'completed' || !isWaitlist
+                ? 'Paid & Confirmed'
+                : 'Pending Spot'}
             </AppText>
           </View>
         </View>
+
+        {result.payment_method === 'MOBILE_NUMBER_TEST' && (
+          <View style={styles.detailRow}>
+            <AppText variant="caption" style={styles.rowLabel}>
+              Payment Mode
+            </AppText>
+            <AppText variant="caption" bold style={[styles.rowValue, { color: '#B45309' }]}>
+              Mobile Number (Simulated)
+            </AppText>
+          </View>
+        )}
       </View>
 
       {/* ─── Helpful Format Guidance Note ─── */}

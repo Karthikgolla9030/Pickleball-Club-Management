@@ -27,11 +27,15 @@ import {
   CreditCard,
   HelpCircle,
   Lock,
+  QrCode,
   ShieldCheck,
+  Smartphone,
+  Sparkles,
   Zap,
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
+import { InternationalPhoneInput } from '../InternationalPhoneInput';
 import type { Tournament, TournamentDiscoveryItem, TournamentFormat } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import type { RegistrationErrors, RegistrationFormState } from './types';
@@ -131,31 +135,8 @@ export function Step3PaymentSubmit({
         <View style={styles.card}>
           <AppText style={styles.cardTitle}>Payment method</AppText>
 
-          {/* Payment Tabs: Card vs UPI */}
+          {/* Payment Tabs: UPI QR Code vs Pay with Mobile Number vs Card */}
           <View style={styles.tabsRow}>
-            <TouchableOpacity
-              style={[
-                styles.methodTab,
-                formState.paymentMethod === 'card' && styles.methodTabActive,
-              ]}
-              onPress={() => onChange({ paymentMethod: 'card' })}
-              activeOpacity={0.8}
-            >
-              <CreditCard
-                size={16}
-                color={formState.paymentMethod === 'card' ? '#064E3B' : '#64748B'}
-                strokeWidth={2.2}
-              />
-              <AppText
-                style={[
-                  styles.methodTabText,
-                  formState.paymentMethod === 'card' && styles.methodTabTextActive,
-                ]}
-              >
-                Card
-              </AppText>
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.methodTab,
@@ -165,7 +146,7 @@ export function Step3PaymentSubmit({
               activeOpacity={0.8}
             >
               <Zap
-                size={16}
+                size={15}
                 color={formState.paymentMethod === 'upi' ? '#064E3B' : '#64748B'}
                 strokeWidth={2.2}
               />
@@ -174,34 +155,126 @@ export function Step3PaymentSubmit({
                   styles.methodTabText,
                   formState.paymentMethod === 'upi' && styles.methodTabTextActive,
                 ]}
+                numberOfLines={1}
               >
-                UPI
+                UPI QR
+              </AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.methodTab,
+                formState.paymentMethod === 'mobile_number' && styles.methodTabActive,
+              ]}
+              onPress={() => onChange({ paymentMethod: 'mobile_number' })}
+              activeOpacity={0.8}
+            >
+              <Smartphone
+                size={15}
+                color={formState.paymentMethod === 'mobile_number' ? '#064E3B' : '#64748B'}
+                strokeWidth={2.2}
+              />
+              <AppText
+                style={[
+                  styles.methodTabText,
+                  formState.paymentMethod === 'mobile_number' && styles.methodTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                Mobile No.
+              </AppText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.methodTab,
+                formState.paymentMethod === 'card' && styles.methodTabActive,
+              ]}
+              onPress={() => onChange({ paymentMethod: 'card' })}
+              activeOpacity={0.8}
+            >
+              <CreditCard
+                size={15}
+                color={formState.paymentMethod === 'card' ? '#064E3B' : '#64748B'}
+                strokeWidth={2.2}
+              />
+              <AppText
+                style={[
+                  styles.methodTabText,
+                  formState.paymentMethod === 'card' && styles.methodTabTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                Card
               </AppText>
             </TouchableOpacity>
           </View>
 
-          {/* Secure Provider Integration Details */}
-          <View style={styles.providerInfoBox}>
-            <View style={styles.providerInfoRow}>
-              <ShieldCheck size={18} color="#176B57" />
-              <AppText style={styles.providerInfoTitle}>
-                {formState.paymentMethod === 'upi' ? 'UPI Dynamic Verification' : 'Verified Secure Card Gateway'}
-              </AppText>
-            </View>
-            <AppText style={styles.providerInfoDesc}>
-              {formState.paymentMethod === 'upi'
-                ? 'Pay seamlessly via Google Pay, PhonePe, Paytm, BHIM or any UPI application with instant real-time booking confirmation.'
-                : 'Processed through our verified payment gateway with 3-D Secure OTP authentication. Card details are tokenized.'}
-            </AppText>
-          </View>
+          {/* If Mobile Number Test Mode Selected */}
+          {formState.paymentMethod === 'mobile_number' ? (
+            <View style={{ marginBottom: 10 }}>
+              <View style={styles.testModeBanner}>
+                <View style={styles.testModeBannerHeader}>
+                  <Smartphone size={15} color="#92400E" />
+                  <AppText style={styles.testModeBannerTitle}>Development Dummy Payment</AppText>
+                  <View style={styles.testBadge}>
+                    <AppText style={styles.testBadgeText}>DEV MODE</AppText>
+                  </View>
+                </View>
+                <AppText style={styles.testModeBannerDesc}>
+                  Enter your mobile number to simulate instant tournament payment and registration without real bank charges, OTP, or PINs.
+                </AppText>
+              </View>
 
-          {/* Security Banner */}
-          <View style={styles.securityBox}>
-            <ShieldCheck size={16} color="#15803D" style={{ marginTop: 1 }} />
-            <AppText style={styles.securityText}>
-              Your payment information is secure and encrypted.
-            </AppText>
-          </View>
+              <View style={{ marginBottom: 12 }}>
+                <InternationalPhoneInput
+                  label="Mobile number for payment"
+                  required
+                  value={formState.paymentMobileNumber || formState.phone}
+                  onChangeText={(text) => onChange({ paymentMobileNumber: text })}
+                  error={errors.paymentMobileNumber}
+                  placeholder="Enter mobile number"
+                />
+              </View>
+
+              {Boolean(formState.paymentMobileNumber || formState.phone) && (
+                <View style={styles.phoneConfirmationBox}>
+                  <Check size={14} color="#15803D" strokeWidth={2.5} />
+                  <AppText style={styles.phoneConfirmationText}>
+                    Simulated payment will be confirmed for:{' '}
+                    <AppText style={styles.phoneConfirmationNumber}>
+                      {formState.paymentMobileNumber || formState.phone}
+                    </AppText>
+                  </AppText>
+                </View>
+              )}
+            </View>
+          ) : (
+            <>
+              {/* Secure Provider Integration Details for UPI / Card */}
+              <View style={styles.providerInfoBox}>
+                <View style={styles.providerInfoRow}>
+                  <ShieldCheck size={18} color="#176B57" />
+                  <AppText style={styles.providerInfoTitle}>
+                    {formState.paymentMethod === 'upi' ? 'UPI Dynamic Verification' : 'Verified Secure Card Gateway'}
+                  </AppText>
+                </View>
+                <AppText style={styles.providerInfoDesc}>
+                  {formState.paymentMethod === 'upi'
+                    ? 'Pay seamlessly via Google Pay, PhonePe, Paytm, BHIM or any UPI application with instant real-time booking confirmation.'
+                    : 'Processed through our verified payment gateway with 3-D Secure OTP authentication. Card details are tokenized.'}
+                </AppText>
+              </View>
+
+              {/* Security Banner */}
+              <View style={styles.securityBox}>
+                <ShieldCheck size={16} color="#15803D" style={{ marginTop: 1 }} />
+                <AppText style={styles.securityText}>
+                  Your payment information is secure and encrypted.
+                </AppText>
+              </View>
+            </>
+          )}
 
           {/* Terms & Cancellation Checkbox */}
           <TouchableOpacity
@@ -264,26 +337,43 @@ export function Step3PaymentSubmit({
           disabled={isSubmitting}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Submit payment and registration"
+          accessibilityLabel={
+            formState.paymentMethod === 'mobile_number'
+              ? 'Simulate Payment'
+              : 'Submit payment and registration'
+          }
         >
           {isSubmitting ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <AppText style={styles.submitBtnText}>
-              {isFree
+              {formState.paymentMethod === 'mobile_number'
+                ? isFree
+                  ? 'Simulate Payment →'
+                  : `Simulate Payment ($${feeAmount}.00) →`
+                : isFree
                 ? 'Submit registration →'
                 : `Pay $${feeAmount}.00 & submit registration →`}
             </AppText>
           )}
         </TouchableOpacity>
 
-        {/* Lock Subtext */}
-        <View style={styles.lockRow}>
-          <Lock size={12} color="#64748B" />
-          <AppText style={styles.lockText}>
-            Registration is confirmed after successful payment.
-          </AppText>
-        </View>
+        {/* Lock / Dev Subtext */}
+        {formState.paymentMethod === 'mobile_number' ? (
+          <View style={styles.lockRow}>
+            <Sparkles size={12} color="#D97706" />
+            <AppText style={[styles.lockText, { color: '#B45309', fontWeight: '500' }]}>
+              TEST / SIMULATED transaction for development registration testing.
+            </AppText>
+          </View>
+        ) : (
+          <View style={styles.lockRow}>
+            <Lock size={12} color="#64748B" />
+            <AppText style={styles.lockText}>
+              Registration is confirmed after successful payment.
+            </AppText>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -436,6 +526,63 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#DC2626',
     marginTop: 2,
+  },
+  testModeBanner: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    marginBottom: 12,
+  },
+  testModeBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  testModeBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  testBadge: {
+    backgroundColor: '#FDE68A',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 'auto',
+  },
+  testBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  testModeBannerDesc: {
+    fontSize: 12,
+    color: '#92400E',
+    lineHeight: 16,
+  },
+  phoneConfirmationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  phoneConfirmationText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#166534',
+  },
+  phoneConfirmationNumber: {
+    fontWeight: '700',
+    color: '#14532D',
   },
   securityBox: {
     flexDirection: 'row',

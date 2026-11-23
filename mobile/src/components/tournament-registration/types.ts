@@ -43,7 +43,8 @@ export interface RegistrationFormState {
   acknowledgeMembership: boolean;
 
   // Step 3 Payment Details
-  paymentMethod: 'card' | 'upi' | 'club_account' | 'cash';
+  paymentMethod: 'card' | 'upi' | 'mobile_number' | 'club_account' | 'cash';
+  paymentMobileNumber?: string;
   cardholderName: string;
   cardNumber: string;
   cardExpiry: string;
@@ -77,6 +78,7 @@ export interface RegistrationErrors {
   acknowledgeMembership?: string;
 
   payment?: string;
+  paymentMobileNumber?: string;
   cardholderName?: string;
   cardNumber?: string;
   cardExpiry?: string;
