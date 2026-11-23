@@ -217,6 +217,12 @@ export class WebSocketClient {
         this.isConnected = false;
         this.clearTimers();
 
+        // Stop automatic reconnect on policy violation or auth rejection (code 1008 or 4000-4999)
+        if (event.code === 1008 || (event.code >= 4000 && event.code < 5000)) {
+          console.warn(`[WS] Connection closed due to auth or policy rejection (code ${event.code}). Auto-reconnect stopped.`);
+          return;
+        }
+
         if (!this.isExplicitlyClosed && !this.isPaused) {
           this.scheduleReconnect();
         }

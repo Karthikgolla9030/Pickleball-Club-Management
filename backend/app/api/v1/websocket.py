@@ -10,6 +10,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
+from starlette.websockets import WebSocketState
 
 from app.core.database import AsyncSessionLocal
 from app.core.security import decode_access_token
@@ -67,7 +68,12 @@ async def websocket_endpoint(
 
     if not token:
         logger.warning("WebSocket connection rejected: No token provided")
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
+        await websocket.send_text(
+            json.dumps({"type": "auth.failed", "error": "No token provided", "code": "UNAUTHORIZED"})
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="No token provided")
         return
 
     # Authenticate token
@@ -76,7 +82,12 @@ async def websocket_endpoint(
         user_id = UUID(user_id_str)
     except Exception as exc:
         logger.warning("WebSocket connection rejected: Invalid token: %s", exc)
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
+        await websocket.send_text(
+            json.dumps({"type": "auth.failed", "error": "Invalid or expired token", "code": "TOKEN_EXPIRED"})
+        )
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token")
         return
 
     # Verify user exists in database
@@ -85,7 +96,12 @@ async def websocket_endpoint(
         user = res.scalar_one_or_none()
         if not user:
             logger.warning("WebSocket rejected: User %s not found or inactive", user_id)
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            if websocket.client_state == WebSocketState.CONNECTING:
+                await websocket.accept()
+            await websocket.send_text(
+                json.dumps({"type": "auth.failed", "error": "User not found or inactive", "code": "USER_NOT_FOUND"})
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="User not found or inactive")
             return
 
     # Resolve authorized clubs

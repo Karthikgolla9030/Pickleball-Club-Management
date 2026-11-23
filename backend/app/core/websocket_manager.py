@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,8 @@ class WebSocketManager:
         club_ids: list[str] | None = None,
     ) -> None:
         """Register an authenticated WebSocket connection."""
-        await websocket.accept()
+        if websocket.client_state == WebSocketState.CONNECTING:
+            await websocket.accept()
         async with self._lock:
             # Register user connection
             if user_id not in self._user_connections:

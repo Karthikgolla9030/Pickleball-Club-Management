@@ -18,7 +18,7 @@ import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 import { SECURE_STORE_KEYS, isPlatformAdminEmail } from '@/constants';
-import { authApi, setTokenProvider, setTokenRefreshHandler } from '@/services/api';
+import { authApi, isJwtExpired, setTokenProvider, setTokenRefreshHandler } from '@/services/api';
 import type { AuthPortal, AuthSession, MembershipInfo } from '@/types';
 
 interface AuthStoreState extends AuthSession {
@@ -364,8 +364,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       const cachedSession = await getStoredUserCache();
       const storedPortal = await getStoredPortal();
 
-      // 1. Fast Session Restoration: hydrate from cache immediately to prevent login flicker
-      if (accessToken && cachedSession?.user) {
+      const isTokenExpired = !accessToken || isJwtExpired(accessToken);
+
+      // 1. Fast Session Restoration: hydrate from cache immediately ONLY IF access token is currently valid
+      if (accessToken && !isTokenExpired && cachedSession?.user) {
         const isPlatformUser = Boolean(
           cachedSession.user.is_platform_admin || isPlatformAdminEmail(cachedSession.user.email)
         );
@@ -383,7 +385,7 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
       }
 
       // 2. Token refresh if access token missing or expired
-      if (!accessToken && refreshToken) {
+      if ((!accessToken || isTokenExpired) && refreshToken) {
         try {
           const refreshRes = await authApi.refreshToken(refreshToken);
           const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
@@ -391,7 +393,9 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           accessToken = refreshRes.access_token;
         } catch (rErr: any) {
           const status = rErr?.status ?? rErr?.response?.status;
-          if (status === 401 || status === 403 || status === 400) {
+          const msg = String(rErr?.message || '').toLowerCase();
+          const isNetworkError = !status && (msg.includes('network') || msg.includes('timeout') || msg.includes('abort') || msg.includes('offline'));
+          if (status === 401 || status === 403 || (status === 400 && !isNetworkError)) {
             await clearTokens();
             await clearActivePortal();
             await clearUserCache();
@@ -401,7 +405,8 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         }
       }
 
-      if (!accessToken) {
+      if (!accessToken || isJwtExpired(accessToken)) {
+        await clearTokens();
         await clearActivePortal();
         await clearUserCache();
         set({ isLoading: false, isAuthenticated: false, activePortal: null, user: null, memberships: [] });
@@ -447,7 +452,10 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         });
       } catch (getMeErr: any) {
         const status = getMeErr?.status ?? getMeErr?.response?.status;
-        if (status === 401) {
+        const isAuthError =
+          status === 401 || status === 403 || getMeErr?.type === 'UNAUTHORIZED' || getMeErr?.type === 'FORBIDDEN';
+
+        if (isAuthError) {
           if (refreshToken) {
             try {
               const refreshRes = await authApi.refreshToken(refreshToken);
@@ -463,26 +471,25 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
               });
               return;
             } catch (refFail: any) {
-              const refStatus = refFail?.status ?? refFail?.response?.status;
-              if (refStatus === 401 || refStatus === 403 || refStatus === 400) {
-                await clearTokens();
-                await clearActivePortal();
-                await clearUserCache();
-                set({
-                  user: null,
-                  memberships: [],
-                  activeMembership: null,
-                  activePortal: null,
-                  isAuthenticated: false,
-                  isLoading: false,
-                });
-                return;
-              }
+              console.warn('[AUTH] Session refresh failed after auth rejection on getMe:', refFail);
             }
           }
+          // Auth failed and refresh did not succeed: clear stale credentials cleanly
+          await clearTokens();
+          await clearActivePortal();
+          await clearUserCache();
+          set({
+            user: null,
+            memberships: [],
+            activeMembership: null,
+            activePortal: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+          return;
         }
 
-        // If network glitch or 5xx server error occurred but we already restored from cache, keep session alive
+        // If genuine network glitch or 5xx server error occurred and we already restored from cache, keep session alive
         if (cachedSession?.user) {
           console.warn('[AUTH] Offline or server glitch; keeping authenticated cache alive:', getMeErr);
           set({ isLoading: false, isAuthenticated: true });

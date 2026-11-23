@@ -69,26 +69,34 @@ async function extractErrorDetail(response: Response): Promise<string> {
   }
 }
 
-function isJwtExpired(token: string): boolean {
+export function isJwtExpired(token: string): boolean {
   try {
+    if (!token || typeof token !== 'string') return true;
     const parts = token.split('.');
-    if (parts.length !== 3) return false;
-    const base64Url = parts[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const binaryStr = typeof atob === 'function' ? atob(base64) : '';
-    if (!binaryStr) return false;
-    const jsonPayload = decodeURIComponent(
-      binaryStr
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
+    if (parts.length !== 3) return true;
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) {
+      base64 += '=';
+    }
+    let jsonPayload = '';
+    if (typeof atob === 'function') {
+      const binaryStr = atob(base64);
+      jsonPayload = decodeURIComponent(
+        binaryStr
+          .split('')
+          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+          .join('')
+      );
+    } else if (typeof globalThis !== 'undefined' && (globalThis as any).Buffer) {
+      jsonPayload = (globalThis as any).Buffer.from(base64, 'base64').toString('utf8');
+    }
+    if (!jsonPayload) return true;
     const parsed = JSON.parse(jsonPayload);
     if (!parsed.exp) return false;
     // 30s buffer before expiration
     return Date.now() >= (parsed.exp * 1000 - 30000);
   } catch {
-    return false;
+    return true;
   }
 }
 
@@ -113,20 +121,26 @@ export async function getAccessToken(): Promise<string | null> {
 
 export async function getValidAccessToken(): Promise<string | null> {
   let token = _getAccessToken ? await _getAccessToken() : null;
-  if ((!token || isJwtExpired(token)) && _refreshTokenHandler) {
-    try {
-      if (!_refreshPromise) {
-        _refreshPromise = _refreshTokenHandler().finally(() => {
-          _refreshPromise = null;
-        });
+  if (!token) return null;
+
+  if (isJwtExpired(token)) {
+    if (_refreshTokenHandler) {
+      try {
+        if (!_refreshPromise) {
+          _refreshPromise = _refreshTokenHandler().finally(() => {
+            _refreshPromise = null;
+          });
+        }
+        const refreshed = await _refreshPromise;
+        if (refreshed && !isJwtExpired(refreshed)) {
+          return refreshed;
+        }
+      } catch (e) {
+        console.warn('[AUTH] Proactive token refresh failed:', e);
       }
-      const refreshed = await _refreshPromise;
-      if (refreshed) {
-        token = refreshed;
-      }
-    } catch (e) {
-      console.warn('[AUTH] Proactive token refresh failed:', e);
     }
+    // Token is expired and refresh failed: return null so callers don't use an expired token
+    return null;
   }
   return token;
 }
@@ -140,7 +154,7 @@ async function request<T>(
   isRetry = false,
 ): Promise<T> {
   const controller = new AbortController();
-  
+
   if (options.signal) {
     if (options.signal.aborted) {
       controller.abort();
@@ -200,10 +214,14 @@ async function request<T>(
         }
       }
 
+      if (token && isJwtExpired(token)) {
+        token = null;
+      }
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       } else if (!isRetry) {
-        // If auth is strictly required and no token could be obtained, fail early with clear message
+        // If auth is strictly required and no valid token could be obtained, fail early with clear message
         throw new ApiClientError('Not authenticated. Please sign in to continue.', 'UNAUTHORIZED', 401);
       }
     }
@@ -301,9 +319,9 @@ async function request<T>(
       throw error;
     }
 
-    const isCancel = 
-      (error as Error).name === 'AbortError' || 
-      String(error).includes('canceled') || 
+    const isCancel =
+      (error as Error).name === 'AbortError' ||
+      String(error).includes('canceled') ||
       String(error).includes('aborted');
 
     if (isCancel) {
@@ -321,7 +339,7 @@ async function request<T>(
     }
 
     console.warn(`[API FAILED] ${options.method || 'GET'} ${url}:`, error);
-    
+
     throw new ApiClientError(
       'A network error occurred. Please check your connection and try again.',
       'NETWORK_ERROR',
