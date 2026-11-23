@@ -188,7 +188,7 @@ export const competitionApi = {
     tournamentId: string,
     poolId?: string
   ): Promise<Match[]> {
-    const query = poolId ? `?pool_id=${encodeURIComponent(poolId)}` : '';
+    const query = poolId && poolId !== 'all' ? `?pool_id=${encodeURIComponent(poolId)}` : '';
     return apiClient.get<Match[]>(
       `${competitionBase(clubId, tournamentId)}/pools/matches${query}`
     );
@@ -199,7 +199,7 @@ export const competitionApi = {
     tournamentId: string,
     poolId?: string
   ): Promise<AllPoolsStandingsResponse> {
-    const query = poolId ? `?pool_id=${encodeURIComponent(poolId)}` : '';
+    const query = poolId && poolId !== 'all' ? `?pool_id=${encodeURIComponent(poolId)}` : '';
     return apiClient.get<AllPoolsStandingsResponse>(
       `${competitionBase(clubId, tournamentId)}/pools/standings${query}`
     );
@@ -424,7 +424,7 @@ export const competitionApi = {
   },
 
   playerListPoolMatches(tournamentId: string, poolId?: string): Promise<Match[]> {
-    const query = poolId ? `?pool_id=${encodeURIComponent(poolId)}` : '';
+    const query = poolId && poolId !== 'all' ? `?pool_id=${encodeURIComponent(poolId)}` : '';
     return apiClient.get<Match[]>(
       `${API_ENDPOINTS.TOURNAMENTS}/${tournamentId}/pools/matches${query}`
     );
@@ -434,7 +434,7 @@ export const competitionApi = {
     tournamentId: string,
     poolId?: string
   ): Promise<AllPoolsStandingsResponse> {
-    const query = poolId ? `?pool_id=${encodeURIComponent(poolId)}` : '';
+    const query = poolId && poolId !== 'all' ? `?pool_id=${encodeURIComponent(poolId)}` : '';
     return apiClient.get<AllPoolsStandingsResponse>(
       `${API_ENDPOINTS.TOURNAMENTS}/${tournamentId}/pools/standings${query}`
     );

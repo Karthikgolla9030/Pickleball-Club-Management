@@ -37,23 +37,81 @@ export interface PlayerTournamentOverviewTabProps {
   tournament: Tournament;
 }
 
-function formatTournamentDate(dateStr?: string | null): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'];
-    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  } catch {
-    return dateStr;
+function formatTournamentSchedule(
+  startIso?: string | null,
+  endIso?: string | null,
+  timezone?: string | null
+): { datesDisplay: string; timeDisplay: string | null } {
+  if (!startIso) {
+    return { datesDisplay: 'Not configured', timeDisplay: null };
   }
-}
 
-function formatTournamentDateRange(startStr?: string | null, endStr?: string | null): string {
-  if (!startStr) return 'Not configured';
-  const startFmt = formatTournamentDate(startStr);
-  if (!endStr || startStr === endStr) return startFmt;
-  const endFmt = formatTournamentDate(endStr);
-  return `${startFmt} – ${endFmt}`;
+  try {
+    const s = new Date(startIso);
+    if (isNaN(s.getTime())) {
+      return { datesDisplay: startIso, timeDisplay: null };
+    }
+
+    let tzOption: { timeZone?: string } = {};
+    let tzLabel = '';
+    if (timezone) {
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: timezone });
+        tzOption = { timeZone: timezone };
+        tzLabel = ` (${timezone.replace(/_/g, ' ')})`;
+      } catch {
+        tzOption = {};
+        tzLabel = ` (${timezone})`;
+      }
+    }
+
+    const formatDate = (d: Date) => {
+      const weekday = d.toLocaleDateString('en-GB', { weekday: 'short', ...tzOption });
+      const day = d.toLocaleDateString('en-GB', { day: 'numeric', ...tzOption });
+      const month = d.toLocaleDateString('en-GB', { month: 'short', ...tzOption });
+      const year = d.toLocaleDateString('en-GB', { year: 'numeric', ...tzOption });
+      return `${weekday}, ${day} ${month} ${year}`;
+    };
+
+    const formatTime = (d: Date) => {
+      return d.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        ...tzOption,
+      });
+    };
+
+    const startDateStr = formatDate(s);
+    const startTimeStr = formatTime(s);
+
+    if (endIso) {
+      const e = new Date(endIso);
+      if (!isNaN(e.getTime())) {
+        const endDateStr = formatDate(e);
+        const endTimeStr = formatTime(e);
+
+        if (startDateStr === endDateStr) {
+          return {
+            datesDisplay: startDateStr,
+            timeDisplay: `${startTimeStr} – ${endTimeStr}${tzLabel}`,
+          };
+        } else {
+          return {
+            datesDisplay: `${startDateStr} – ${endDateStr}`,
+            timeDisplay: `Starts at ${startTimeStr} · Ends at ${endTimeStr}${tzLabel}`,
+          };
+        }
+      }
+    }
+
+    return {
+      datesDisplay: startDateStr,
+      timeDisplay: `Starts at ${startTimeStr}${tzLabel}`,
+    };
+  } catch {
+    return { datesDisplay: startIso, timeDisplay: null };
+  }
 }
 
 function formatTournamentDeadline(dateStr?: string | null): string {
@@ -190,7 +248,15 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
   }, [parsed]);
 
   // ─── 5. Dates & Deadline ───────────────────────────────────────────────
-  const datesDisplay = formatTournamentDateRange(tournament?.start_date, tournament?.end_date);
+  const tournamentTimezone =
+    (tournament as any)?.timezone ||
+    (tournament as any)?.club_timezone ||
+    (formatConfig as any)?.timezone ||
+    null;
+  const { datesDisplay, timeDisplay } = useMemo(
+    () => formatTournamentSchedule(tournament?.start_date, tournament?.end_date, tournamentTimezone),
+    [tournament?.start_date, tournament?.end_date, tournamentTimezone]
+  );
   const deadlineDisplay = formatTournamentDeadline(tournament?.registration_close_at);
 
   // ─── 6. Assigned Courts & Venue ────────────────────────────────────────
@@ -395,6 +461,13 @@ export function PlayerTournamentOverviewTab({ tournament }: PlayerTournamentOver
             value={datesDisplay}
             isTablet={isTablet}
           />
+          {timeDisplay ? (
+            <InfoRow
+              label="Tournament Time"
+              value={timeDisplay}
+              isTablet={isTablet}
+            />
+          ) : null}
           <InfoRow
             label="Registration Deadline"
             value={deadlineDisplay}

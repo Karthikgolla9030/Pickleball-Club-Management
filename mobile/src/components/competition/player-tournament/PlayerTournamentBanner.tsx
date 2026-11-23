@@ -50,6 +50,13 @@ export function PlayerTournamentBanner({
   const format = tournament.format || 'round_robin';
   const parsedConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
+  const bannerDateText = useMemo(() => {
+    const s = formatDate(tournament.start_date);
+    const e = tournament.end_date ? formatDate(tournament.end_date) : null;
+    if (!e || s === e) return s;
+    return `${s} – ${e}`;
+  }, [tournament.start_date, tournament.end_date]);
+
   // Format label & style
   const getFormatBadge = () => {
     switch (format) {
@@ -152,7 +159,7 @@ export function PlayerTournamentBanner({
             <View style={styles.heroMetaItem}>
               <Calendar size={13} color="#E2E8F0" style={{ marginRight: 4 }} />
               <AppText variant="caption" style={styles.heroMetaText}>
-                {formatDate(tournament.start_date)} – {formatDate(tournament.end_date)}
+                {bannerDateText}
               </AppText>
             </View>
 

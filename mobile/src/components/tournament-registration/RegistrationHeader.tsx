@@ -61,6 +61,7 @@ function formatTournamentDates(startStr?: string | null, endStr?: string | null)
   const startFmt = formatShortDate(startStr);
   if (!endStr || startStr === endStr) return startFmt;
   const endFmt = formatShortDate(endStr);
+  if (startFmt === endFmt) return startFmt;
   return `${startFmt} – ${endFmt}`;
 }
 

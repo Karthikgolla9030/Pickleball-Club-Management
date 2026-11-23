@@ -63,7 +63,7 @@ from __future__ import annotations
 from typing import Union
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_permission
@@ -114,6 +114,18 @@ player_competition_router = APIRouter(
     prefix="/tournaments/{tournament_id}",
     tags=["Competition (Player View)"],
 )
+
+
+def _parse_optional_uuid(val: str | None) -> UUID | None:
+    if not val or val.strip().lower() in ("all", "none", "null", ""):
+        return None
+    try:
+        return UUID(val.strip())
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid UUID: {val}",
+        )
 
 
 # ─── Team Management (Staff) ──────────────────────────────────────────────────
@@ -341,11 +353,11 @@ async def regenerate_pool_play(
 async def get_pool_standings(
     club_id: UUID,
     tournament_id: UUID,
-    pool_id: UUID | None = Query(default=None, description="Optional pool ID filter"),
+    pool_id: str | None = Query(default=None, description="Optional pool ID filter"),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_STANDINGS)),
     db: AsyncSession = Depends(get_db),
 ) -> Union[AllPoolsStandingsResponse, PoolStandingsResponse]:
-    return await CompetitionService(db).get_pool_standings(club_id, tournament_id, pool_id)
+    return await CompetitionService(db).get_pool_standings(club_id, tournament_id, _parse_optional_uuid(pool_id))
 
 
 @club_competition_router.get(
@@ -356,12 +368,12 @@ async def get_pool_standings(
 async def list_pool_matches(
     club_id: UUID,
     tournament_id: UUID,
-    pool_id: UUID | None = Query(default=None, description="Optional pool ID filter"),
+    pool_id: str | None = Query(default=None, description="Optional pool ID filter"),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
     db: AsyncSession = Depends(get_db),
 ) -> list[MatchResponse]:
     return await CompetitionService(db).list_pool_matches(
-        club_id, tournament_id, pool_id
+        club_id, tournament_id, _parse_optional_uuid(pool_id)
     )
 
 
@@ -829,11 +841,11 @@ async def player_list_pools(
 )
 async def player_get_pool_standings(
     tournament_id: UUID,
-    pool_id: UUID | None = Query(default=None, description="Optional pool ID filter"),
+    pool_id: str | None = Query(default=None, description="Optional pool ID filter"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Union[AllPoolsStandingsResponse, PoolStandingsResponse]:
-    return await CompetitionService(db).get_pool_standings_public(tournament_id, pool_id)
+    return await CompetitionService(db).get_pool_standings_public(tournament_id, _parse_optional_uuid(pool_id))
 
 
 @player_competition_router.get(
@@ -843,11 +855,11 @@ async def player_get_pool_standings(
 )
 async def player_list_pool_matches(
     tournament_id: UUID,
-    pool_id: UUID | None = Query(default=None, description="Optional pool ID filter"),
+    pool_id: str | None = Query(default=None, description="Optional pool ID filter"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> list[MatchResponse]:
-    return await CompetitionService(db).list_pool_matches_public(tournament_id, pool_id)
+    return await CompetitionService(db).list_pool_matches_public(tournament_id, _parse_optional_uuid(pool_id))
 
 
 @player_competition_router.get(

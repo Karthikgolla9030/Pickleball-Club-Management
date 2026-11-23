@@ -80,6 +80,7 @@ function formatTournamentDateRange(startStr: string, endStr: string): string {
   const startFmt = formatTournamentDate(startStr);
   if (!endStr || startStr === endStr) return startFmt;
   const endFmt = formatTournamentDate(endStr);
+  if (startFmt === endFmt) return startFmt;
   return `${startFmt} – ${endFmt}`;
 }
 
