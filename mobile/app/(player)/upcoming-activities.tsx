@@ -165,7 +165,7 @@ export default function PlayerUpcomingActivitiesScreen() {
   const insets = useSafeAreaInsets();
 
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
-  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
   const filterParam = selectedFilter === 'all' ? undefined : selectedFilter;
 
@@ -177,15 +177,22 @@ export default function PlayerUpcomingActivitiesScreen() {
     isError,
     refetch,
     isRefetching,
+    isFetching,
   } = useUpcomingActivities({
     activity_type: filterParam,
-    limit: PAGE_SIZE,
+    limit,
     offset: 0,
   });
 
   const handleFilterChange = (filter: FilterType) => {
     setSelectedFilter(filter);
-    setOffset(0);
+    setLimit(PAGE_SIZE);
+  };
+
+  const handleLoadMore = () => {
+    if (hasMore && !isFetching) {
+      setLimit((prev) => prev + PAGE_SIZE);
+    }
   };
 
   const handleBack = () => {
@@ -310,7 +317,7 @@ export default function PlayerUpcomingActivitiesScreen() {
             </View>
 
             {/* Title */}
-            <AppText style={styles.cardTitle} numberOfLines={2}>
+            <AppText style={styles.cardTitle} numberOfLines={3}>
               {item.title}
             </AppText>
 
@@ -456,6 +463,27 @@ export default function PlayerUpcomingActivitiesScreen() {
             styles.listContent,
             { paddingBottom: insets.bottom + 28 },
           ]}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            hasMore ? (
+              <Pressable
+                style={styles.loadMoreButton}
+                onPress={handleLoadMore}
+                disabled={isFetching}
+              >
+                {isFetching ? (
+                  <ActivityIndicator size="small" color="#176B57" />
+                ) : (
+                  <AppText style={styles.loadMoreText}>Load More Activities</AppText>
+                )}
+              </Pressable>
+            ) : activities.length > 0 ? (
+              <View style={styles.endOfListIndicator}>
+                <AppText style={styles.endOfListText}>All upcoming activities loaded</AppText>
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -774,5 +802,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#176B57',
+  },
+  loadMoreButton: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4E5DC',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  loadMoreText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#176B57',
+  },
+  endOfListIndicator: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  endOfListText: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
   },
 });

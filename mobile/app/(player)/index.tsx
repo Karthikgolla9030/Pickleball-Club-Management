@@ -13,6 +13,7 @@
 
 import React, { useMemo } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   RefreshControl,
@@ -33,6 +34,7 @@ import {
   CalendarX,
   ChevronRight,
   Clock,
+  Compass,
   GraduationCap,
   Lightbulb,
   MapPin,
@@ -214,7 +216,7 @@ export default function PlayerHomeScreen() {
     activities: upcomingActivities,
     isLoading: isActivitiesLoading,
     refetch: refetchUpcomingActivities,
-  } = useUpcomingActivities({ limit: 4 });
+  } = useUpcomingActivities({ limit: 3 });
 
   // 3. Recent Activity
   const {
@@ -332,13 +334,13 @@ export default function PlayerHomeScreen() {
       case 'event':
         router.push({
           pathname: '/(player)/events',
-          params: { id: activity.id },
+          params: { id: activity.id, clubId: activity.club_id },
         } as any);
         break;
       case 'lesson':
         router.push({
           pathname: '/(player)/lessons',
-          params: { id: activity.id },
+          params: { id: activity.id, clubId: activity.club_id },
         } as any);
         break;
       default:
@@ -441,7 +443,135 @@ export default function PlayerHomeScreen() {
           />
         </View>
 
-        {/* ─── 3. YOUR NEXT BOOKING (Conditional) ────────────────────────────── */}
+        {/* ─── 3. UPCOMING ACTIVITIES (Multi-Club Discovery Preview) ────────────────── */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={styles.sectionTitleBlock}>
+              <AppText style={styles.sectionTitle}>Upcoming Activities</AppText>
+              <AppText style={styles.sectionSubtitle}>
+                Discover what's happening across your clubs.
+              </AppText>
+            </View>
+            <Pressable
+              onPress={() => router.push('/(player)/upcoming-activities' as any)}
+              hitSlop={8}
+              style={styles.viewAllRow}
+              accessibilityRole="button"
+              accessibilityLabel="View all upcoming activities"
+            >
+              <AppText style={styles.viewAllText}>View All</AppText>
+              <ChevronRight size={15} color="#176B57" strokeWidth={2.2} />
+            </Pressable>
+          </View>
+
+          {isActivitiesLoading ? (
+            <View style={styles.homeActivitiesLoadingCard}>
+              <ActivityIndicator size="small" color="#176B57" />
+              <AppText style={styles.homeActivitiesLoadingText}>Checking upcoming activities...</AppText>
+            </View>
+          ) : upcomingActivities.length === 0 ? (
+            <View style={styles.homeActivitiesEmptyContainer}>
+              <View style={styles.homeActivitiesEmptyIconPill}>
+                <Compass size={24} color="#176B57" strokeWidth={1.9} />
+              </View>
+              <AppText style={styles.homeActivitiesEmptyTitle}>No upcoming activities</AppText>
+              <AppText style={styles.homeActivitiesEmptySubtitle}>
+                There are currently no upcoming activities scheduled across your clubs. Check back soon for tournaments, leagues, events, and lessons!
+              </AppText>
+            </View>
+          ) : (
+            <View style={styles.activityListCol}>
+              {upcomingActivities.slice(0, 3).map((act) => {
+                const badgeInfo = getActivityBadgeInfo(act.activity_type);
+                const BadgeIcon = badgeInfo.icon;
+                const formattedDate = formatActivityDate(act.start_date);
+
+                return (
+                  <Pressable
+                    key={`${act.activity_type}-${act.id}`}
+                    style={({ pressed }) => [
+                      styles.activityDiscoveryCard,
+                      pressed && styles.cardPressed,
+                    ]}
+                    onPress={() => handleActivityPress(act)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${act.title}, ${badgeInfo.label} at ${act.club_name}`}
+                  >
+                    {/* Activity Thumbnail */}
+                    {act.image_url ? (
+                      <Image
+                        source={{ uri: resolveMediaUrl(act.image_url) }}
+                        style={styles.activityThumbnail}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.activityThumbnailFallback, { backgroundColor: badgeInfo.bg }]}>
+                        <BadgeIcon size={24} color={badgeInfo.color} strokeWidth={1.8} />
+                      </View>
+                    )}
+
+                    {/* Activity Content */}
+                    <View style={styles.activityContentCol}>
+                      {/* Top Badges Row */}
+                      <View style={styles.activityBadgesRow}>
+                        <View style={[styles.activityTypeBadge, { backgroundColor: badgeInfo.bg }]}>
+                          <BadgeIcon size={10} color={badgeInfo.color} strokeWidth={2.2} style={{ marginRight: 3 }} />
+                          <AppText style={[styles.activityTypeBadgeText, { color: badgeInfo.color }]}>
+                            {badgeInfo.label}
+                          </AppText>
+                        </View>
+
+                        <View
+                          style={[
+                            styles.activityStatusBadge,
+                            act.is_registered ? styles.badgeRegistered : styles.badgeOpen,
+                          ]}
+                        >
+                          <AppText
+                            style={[
+                              styles.activityStatusText,
+                              act.is_registered ? styles.textRegistered : styles.textOpen,
+                            ]}
+                          >
+                            {act.is_registered ? 'Registered' : act.status_label}
+                          </AppText>
+                        </View>
+                      </View>
+
+                      {/* Title */}
+                      <AppText style={styles.activityItemTitle} numberOfLines={3}>
+                        {act.title}
+                      </AppText>
+
+                      {/* Date & Time */}
+                      <View style={styles.metaRow}>
+                        <Calendar size={12} color="#718580" strokeWidth={1.9} />
+                        <AppText style={styles.metaText} numberOfLines={1}>
+                          {formattedDate}
+                        </AppText>
+                      </View>
+
+                      {/* Hosting Club */}
+                      <View style={styles.metaRow}>
+                        <Building2 size={12} color="#718580" strokeWidth={1.9} />
+                        <AppText style={styles.metaText} numberOfLines={1}>
+                          {act.club_name}
+                        </AppText>
+                      </View>
+                    </View>
+
+                    {/* Right Chevron */}
+                    <View style={styles.chevronSlot}>
+                      <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* ─── 4. YOUR NEXT BOOKING (Conditional) ────────────────────────────── */}
         {nextBooking && (
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
@@ -542,117 +672,6 @@ export default function PlayerHomeScreen() {
                 </Pressable>
               );
             })()}
-          </View>
-        )}
-
-        {/* ─── 4. UPCOMING ACTIVITIES (Multi-Club Discovery) ────────────────── */}
-        {upcomingActivities.length > 0 && (
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleBlock}>
-                <AppText style={styles.sectionTitle}>Upcoming Activities</AppText>
-                <AppText style={styles.sectionSubtitle}>
-                  Discover what's happening across your clubs.
-                </AppText>
-              </View>
-              <Pressable
-                onPress={() => router.push('/(player)/upcoming-activities' as any)}
-                hitSlop={8}
-                style={styles.viewAllRow}
-              >
-                <AppText style={styles.viewAllText}>View All</AppText>
-                <ChevronRight size={15} color="#176B57" strokeWidth={2.2} />
-              </Pressable>
-            </View>
-
-            <View style={styles.activityListCol}>
-              {upcomingActivities.map((act) => {
-                const badgeInfo = getActivityBadgeInfo(act.activity_type);
-                const BadgeIcon = badgeInfo.icon;
-                const formattedDate = formatActivityDate(act.start_date);
-
-                return (
-                  <Pressable
-                    key={`${act.activity_type}-${act.id}`}
-                    style={({ pressed }) => [
-                      styles.activityDiscoveryCard,
-                      pressed && styles.cardPressed,
-                    ]}
-                    onPress={() => handleActivityPress(act)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${act.title}, ${badgeInfo.label} at ${act.club_name}`}
-                  >
-                    {/* Activity Thumbnail */}
-                    {act.image_url ? (
-                      <Image
-                        source={{ uri: resolveMediaUrl(act.image_url) }}
-                        style={styles.activityThumbnail}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.activityThumbnailFallback, { backgroundColor: badgeInfo.bg }]}>
-                        <BadgeIcon size={24} color={badgeInfo.color} strokeWidth={1.8} />
-                      </View>
-                    )}
-
-                    {/* Activity Content */}
-                    <View style={styles.activityContentCol}>
-                      {/* Top Badges Row */}
-                      <View style={styles.activityBadgesRow}>
-                        <View style={[styles.activityTypeBadge, { backgroundColor: badgeInfo.bg }]}>
-                          <BadgeIcon size={10} color={badgeInfo.color} strokeWidth={2.2} style={{ marginRight: 3 }} />
-                          <AppText style={[styles.activityTypeBadgeText, { color: badgeInfo.color }]}>
-                            {badgeInfo.label}
-                          </AppText>
-                        </View>
-
-                        <View
-                          style={[
-                            styles.activityStatusBadge,
-                            act.is_registered ? styles.badgeRegistered : styles.badgeOpen,
-                          ]}
-                        >
-                          <AppText
-                            style={[
-                              styles.activityStatusText,
-                              act.is_registered ? styles.textRegistered : styles.textOpen,
-                            ]}
-                          >
-                            {act.is_registered ? 'Registered' : act.status_label}
-                          </AppText>
-                        </View>
-                      </View>
-
-                      {/* Title */}
-                      <AppText style={styles.activityItemTitle} numberOfLines={2}>
-                        {act.title}
-                      </AppText>
-
-                      {/* Date & Time */}
-                      <View style={styles.metaRow}>
-                        <Calendar size={12} color="#718580" strokeWidth={1.9} />
-                        <AppText style={styles.metaText} numberOfLines={1}>
-                          {formattedDate}
-                        </AppText>
-                      </View>
-
-                      {/* Hosting Club */}
-                      <View style={styles.metaRow}>
-                        <Building2 size={12} color="#718580" strokeWidth={1.9} />
-                        <AppText style={styles.metaText} numberOfLines={1}>
-                          {act.club_name}
-                        </AppText>
-                      </View>
-                    </View>
-
-                    {/* Right Chevron */}
-                    <View style={styles.chevronSlot}>
-                      <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
           </View>
         )}
 
@@ -1153,38 +1172,61 @@ const styles = StyleSheet.create({
     color: '#15803D',
   },
 
-  // Upcoming Event Card
-  eventCard: {
+  // Home Activities Loading & Empty States
+  homeActivitiesLoadingCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2ECE6',
     flexDirection: 'row',
+    gap: 10,
+  },
+  homeActivitiesLoadingText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  homeActivitiesEmptyContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
-    padding: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#E2ECE6',
     shadowColor: '#102B2A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
-    gap: 12,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+    gap: 6,
   },
-  eventThumbnail: {
-    width: 98,
-    height: 80,
-    borderRadius: 12,
-  },
-  eventThumbnailFallback: {
-    width: 98,
-    height: 80,
-    borderRadius: 12,
+  homeActivitiesEmptyIconPill: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#E8F5EE',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
-  eventContentCol: {
-    flex: 1,
-    gap: 4,
+  homeActivitiesEmptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#102B2A',
+    textAlign: 'center',
+  },
+  homeActivitiesEmptySubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 290,
   },
   eventTitle: {
     fontSize: 15,
