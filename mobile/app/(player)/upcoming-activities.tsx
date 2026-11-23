@@ -149,50 +149,7 @@ function formatTournamentCardDate(startIso: string, endIso?: string | null): str
 }
 
 function formatActivitySchedule(startIso: string, endIso?: string | null): string {
-  try {
-    const s = new Date(startIso);
-    if (isNaN(s.getTime())) return startIso;
-
-    const weekday = s.toLocaleDateString('en-GB', { weekday: 'short' });
-    const day = s.getDate();
-    const month = s.toLocaleDateString('en-GB', { month: 'short' });
-    const year = s.getFullYear();
-
-    const formatTime = (d: Date) => {
-      let hours = d.getHours();
-      const minutes = d.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      hours = hours % 12;
-      hours = hours ? hours : 12;
-      const minStr = minutes < 10 ? `0${minutes}` : String(minutes);
-      return `${hours}:${minStr} ${ampm}`;
-    };
-
-    const startTime = formatTime(s);
-
-    if (endIso) {
-      const e = new Date(endIso);
-      if (!isNaN(e.getTime())) {
-        const isSameDay =
-          s.getFullYear() === e.getFullYear() &&
-          s.getMonth() === e.getMonth() &&
-          s.getDate() === e.getDate();
-
-        if (isSameDay) {
-          return `${weekday}, ${day} ${month} ${year} · ${startTime} – ${formatTime(e)}`;
-        } else {
-          const endWeekday = e.toLocaleDateString('en-GB', { weekday: 'short' });
-          const endDay = e.getDate();
-          const endMonth = e.toLocaleDateString('en-GB', { month: 'short' });
-          return `${day} ${month} – ${endDay} ${endMonth} ${year}`;
-        }
-      }
-    }
-
-    return `${weekday}, ${day} ${month} ${year} · ${startTime}`;
-  } catch {
-    return startIso;
-  }
+  return formatTournamentCardDate(startIso, endIso);
 }
 
 const PAGE_SIZE = 25;
