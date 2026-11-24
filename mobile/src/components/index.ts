@@ -62,5 +62,6 @@ export * from './events';
 export * from './lessons';
 export { PlayerClubDetailsPreview } from './PlayerClubDetailsPreview';
 export type { PlayerClubDetailsPreviewProps } from './PlayerClubDetailsPreview';
+export * from './post-registration';
 
 

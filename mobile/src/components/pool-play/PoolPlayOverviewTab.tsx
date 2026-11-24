@@ -69,11 +69,17 @@ export function PoolPlayOverviewTab({
   const participantLabel = isSingles ? 'PLAYERS' : 'TEAMS';
 
   // Determine stage title and button CTA
+  const isAwaitingFormatSetup = tournament?.status === 'registration_closed' && totalPoolMatches === 0;
+
   let currentStageText = 'Registration / Setup';
   let ctaLabel = 'Review ' + (isSingles ? 'Players & Pools' : 'Teams & Pools') + ' →';
   let targetTab: string = 'participants';
 
-  if (matches.length > 0 && !isPoolPlayComplete) {
+  if (isAwaitingFormatSetup) {
+    currentStageText = 'Awaiting Format Setup';
+    ctaLabel = 'Review ' + (isSingles ? 'Confirmed Players' : 'Confirmed Teams') + ' →';
+    targetTab = 'participants';
+  } else if (matches.length > 0 && !isPoolPlayComplete) {
     currentStageText = 'Pool Stage In Progress';
     ctaLabel = 'Enter Pool Match Scores →';
     targetTab = 'matchups';
@@ -109,8 +115,11 @@ export function PoolPlayOverviewTab({
         <View style={styles.progressContainer}>
           <View style={styles.progressTopRow}>
             <AppText style={styles.progressSubText}>
-              {completedPoolMatches} of {totalPoolMatches} pool matches completed
-              {totalChampMatches > 0 ? ` • ${completedChampMatches}/${totalChampMatches} bracket` : ''}
+              {isAwaitingFormatSetup
+                ? 'Roster locked • Configure pools above to schedule matches'
+                : `${completedPoolMatches} of ${totalPoolMatches} pool matches completed${
+                    totalChampMatches > 0 ? ` • ${completedChampMatches}/${totalChampMatches} bracket` : ''
+                  }`}
             </AppText>
             <AppText style={styles.percentText}>{poolPercent}%</AppText>
           </View>
@@ -141,7 +150,9 @@ export function PoolPlayOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>MATCHES</AppText>
             <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{completedPoolMatches}/{totalPoolMatches}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isAwaitingFormatSetup ? 'Pending' : `${completedPoolMatches}/${totalPoolMatches}`}
+            </AppText>
           </View>
 
           <View style={styles.statTile}>
@@ -155,7 +166,12 @@ export function PoolPlayOverviewTab({
         <View style={styles.infoStrip}>
           <Info size={14} color="#0284C7" />
           <AppText style={styles.infoStripText}>
-            Intra-pool round robin stage. Top {Math.max(1, Math.floor(config.qualifierCount / config.numPools))} per pool advance to championship bracket.
+            {isAwaitingFormatSetup
+              ? 'Registration is closed. Configure pool count and playoff qualifiers above to generate schedule.'
+              : `Intra-pool round robin stage. Top ${Math.max(
+                  1,
+                  Math.floor(config.qualifierCount / config.numPools)
+                )} per pool advance to championship bracket.`}
           </AppText>
         </View>
 

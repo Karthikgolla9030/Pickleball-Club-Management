@@ -3,12 +3,13 @@
  *
  * Post-Registration Configuration & Preview card for Pool Play Tournaments:
  * - Rendered after registration closes and before tournament begins.
- * - Displays confirmed team count and pool recommendations.
+ * - Displays confirmed team count, preliminary pools, and playoff qualifiers.
  * - Allows Tournament Director to configure pool count, qualifiers per pool, and playoff bracket type.
  * - Displays live pool allocation preview (serpentine distribution of actual confirmed teams).
  * - Displays qualification structure preview (total bracket size, advancing slots).
  * - Validates pool balance and team assignment before generation.
  * - Confirms configuration and generates pools, matches, and championship bracket.
+ * - Standardized to match Club Side tournament management design system.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,26 +21,27 @@ import {
   View,
 } from 'react-native';
 import {
-  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Info,
   Layers,
-  Minus,
-  Plus,
-  Sliders,
   Sparkles,
   Trophy,
   Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
+import {
+  PostRegistrationChoiceChips,
+  PostRegistrationHeader,
+  PostRegistrationMetrics,
+  PostRegistrationNotice,
+  PostRegistrationStepper,
+} from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 
 interface PoolPlayPostRegistrationCardProps {
@@ -146,7 +148,9 @@ export function PoolPlayPostRegistrationCard({
       <Card style={styles.card}>
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color="#0F766E" />
-          <AppText style={styles.loadingText}>Calculating registered teams and optimal pool recommendations...</AppText>
+          <AppText style={styles.loadingText}>
+            Calculating registered teams and optimal pool recommendations...
+          </AppText>
         </View>
       </Card>
     );
@@ -159,210 +163,146 @@ export function PoolPlayPostRegistrationCard({
   const isReadyToStart = isGenerated && stage === 'ready_to_start';
   const feasiblePoolConfigs = setupData?.feasible_pool_configurations || [];
 
+  const maxPoolsPossible = Math.max(2, Math.floor(teamsCount / 2));
+  const maxQualifiersPossible = Math.max(1, Math.floor(teamsCount / Math.max(1, numPools)));
+
   return (
     <Card style={styles.card}>
-      {/* ─── 1. Header ──────────────────────────────────────────────────────── */}
-      <View style={styles.headerRow}>
-        <View style={styles.titleWrap}>
-          <View style={styles.iconCircle}>
-            <Layers size={18} color="#0F766E" />
-          </View>
-          <View>
-            <AppText style={styles.cardTitle}>Post-Registration Pool Play Setup</AppText>
-            <AppText style={styles.cardSubtitle}>
-              {isReadyToStart
-                ? 'Pools & matches generated • Verified and ready to start'
-                : 'Registration closed • Configure pools, qualifiers, and championship bracket'}
-            </AppText>
-          </View>
+      {/* ─── 1. Standardized Responsive Header ───────────────────────────────── */}
+      <PostRegistrationHeader
+        icon={<Layers size={18} color="#0F766E" />}
+        title="Post-Registration Pool Play Setup"
+        subtitle={
+          isReadyToStart
+            ? 'Pools & matches generated • Verified and ready to start'
+            : isGenerated
+            ? 'Schedule generated • Pool distribution active'
+            : 'Registration closed • Configure pools, qualifiers, and championship bracket'
+        }
+        badgeLabel={
+          isReadyToStart
+            ? 'Ready to Start'
+            : isGenerated
+            ? 'Schedule Generated'
+            : 'Awaiting Configuration'
+        }
+        badgeVariant={isReadyToStart ? 'success' : isGenerated ? 'info' : 'warning'}
+      />
+
+      <View style={styles.divider} />
+
+      {/* ─── 2. Confirmed Teams & Balanced Metrics ───────────────────────────── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <Users size={15} color="#0F766E" />
+          <AppText style={styles.sectionTitle}>Confirmed Registered Teams</AppText>
         </View>
 
-        <Badge
-          label={
-            isReadyToStart
-              ? 'Ready to Start'
-              : isGenerated
-              ? 'Schedule Generated'
-              : 'Awaiting Configuration'
+        <PostRegistrationMetrics
+          metrics={[
+            {
+              label: 'CONFIRMED TEAMS',
+              value: teamsCount,
+            },
+            {
+              label: 'PRELIMINARY POOLS',
+              value: numPools,
+            },
+            {
+              label: 'PLAYOFF QUALIFIERS',
+              value: numPools * qualifiers,
+            },
+          ]}
+        />
+
+        {/* Validation / Feasibility Status Notice */}
+        <PostRegistrationNotice
+          variant={isValid ? 'success' : 'warning'}
+          title={isValid ? 'Pool Play Structure Verified' : 'Pool Balance & Feasibility Constraint'}
+          message={
+            setupData?.validation_error ||
+            `All ${teamsCount} confirmed teams assigned across ${numPools} balanced pools.`
           }
-          variant={isReadyToStart ? 'success' : isGenerated ? 'info' : 'warning'}
         />
       </View>
 
       <View style={styles.divider} />
 
-      {/* ─── 2. Confirmed Teams & Validation ─────────────────────────────────── */}
+      {/* ─── 3. Pool Recommendation & Number of Pools Stepper ─────────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
-          <Users size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Confirmed Registered Teams</AppText>
-        </View>
-
-        <View style={styles.metricRow}>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricNum}>{teamsCount}</AppText>
-            <AppText style={styles.metricLabel}>Confirmed Teams</AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricNum}>{numPools}</AppText>
-            <AppText style={styles.metricLabel}>Preliminary Pools</AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricNum}>{numPools * qualifiers}</AppText>
-            <AppText style={styles.metricLabel}>Playoff Qualifiers</AppText>
-          </View>
-        </View>
-
-        {/* Validation / Status Notice */}
-        <View
-          style={[
-            styles.noticeBox,
-            !isValid ? styles.noticeBoxWarning : styles.noticeBoxSuccess,
-          ]}
-        >
-          {!isValid ? (
-            <AlertTriangle size={18} color="#D97706" style={{ marginTop: 2 }} />
-          ) : (
-            <CheckCircle2 size={18} color="#0F766E" style={{ marginTop: 2 }} />
-          )}
-          <View style={{ flex: 1 }}>
-            <AppText style={styles.noticeTitle}>
-              {!isValid ? 'Pool Balance & Feasibility Constraint' : 'Pool Play Structure Verified'}
-            </AppText>
-            <AppText style={styles.noticeText}>
-              {setupData?.validation_error ||
-                `All ${teamsCount} confirmed teams assigned across ${numPools} balanced pools.`}
-            </AppText>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.divider} />
-
-      {/* ─── 3. Pool Recommendation & Pool Count Selection ─────────────────────── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Sparkles size={16} color="#0F766E" />
+          <Sparkles size={15} color="#0F766E" />
           <AppText style={styles.sectionTitle}>Pool Count & Distribution</AppText>
         </View>
 
         {setupData?.recommendation_reason ? (
-          <View style={styles.recommendationBox}>
-            <Info size={16} color="#0F766E" style={{ marginTop: 2 }} />
-            <AppText style={styles.recommendationText}>
-              <AppText style={{ fontWeight: '700', color: '#0F766E' }}>Recommendation: </AppText>
-              {setupData.recommendation_reason}
-            </AppText>
-          </View>
+          <PostRegistrationNotice
+            variant="info"
+            title="Recommendation"
+            message={setupData.recommendation_reason}
+          />
         ) : null}
 
         {feasiblePoolConfigs.length > 0 ? (
-          <View style={styles.poolsOptionsGrid}>
-            <AppText style={styles.adjusterLabel}>Choose Number of Pools:</AppText>
-            <View style={styles.chipsRow}>
-              {feasiblePoolConfigs.map((cfg: any) => {
-                const isSelected = numPools === cfg.number_of_pools;
-                return (
-                  <TouchableOpacity
-                    key={cfg.number_of_pools}
-                    style={[styles.poolChoiceChip, isSelected && styles.poolChoiceChipActive]}
-                    onPress={() => !isGenerated && handlePoolsChange(cfg.number_of_pools)}
-                    disabled={isGenerated}
-                  >
-                    <AppText style={[styles.poolChoiceTitle, isSelected && styles.poolChoiceTitleActive]}>
-                      {cfg.number_of_pools} Pools
-                    </AppText>
-                    <AppText style={[styles.poolChoiceSub, isSelected && styles.poolChoiceSubActive]}>
-                      {cfg.teams_per_pool_label} teams/pool
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <View style={styles.presetOptionsBox}>
+            <PostRegistrationChoiceChips
+              label="Select Balanced Pool Preset:"
+              options={feasiblePoolConfigs.map((cfg: any) => ({
+                label: `${cfg.number_of_pools} Pools`,
+                value: String(cfg.number_of_pools),
+                subLabel: `${cfg.teams_per_pool_label} teams/pool`,
+              }))}
+              selectedValue={String(numPools)}
+              disabled={isGenerated}
+              onSelect={(val) => handlePoolsChange(parseInt(val, 10))}
+            />
           </View>
-        ) : (
-          <View style={styles.adjusterRow}>
-            <AppText style={styles.adjusterLabel}>Number of Pools:</AppText>
-            <View style={styles.counterWrap}>
-              <TouchableOpacity
-                style={[styles.counterBtn, (numPools <= 2 || isGenerated) && styles.counterBtnDisabled]}
-                onPress={() => handlePoolsChange(numPools - 1)}
-                disabled={numPools <= 2 || isGenerated}
-              >
-                <Minus size={16} color={numPools <= 2 || isGenerated ? '#94A3B8' : '#0F766E'} />
-              </TouchableOpacity>
-              <View style={styles.counterValueBox}>
-                <AppText style={styles.counterValue}>{numPools}</AppText>
-                <AppText style={styles.counterSub}>pools</AppText>
-              </View>
-              <TouchableOpacity
-                style={[styles.counterBtn, (numPools >= Math.max(2, Math.floor(teamsCount / 2)) || isGenerated) && styles.counterBtnDisabled]}
-                onPress={() => handlePoolsChange(numPools + 1)}
-                disabled={numPools >= Math.max(2, Math.floor(teamsCount / 2)) || isGenerated}
-              >
-                <Plus size={16} color={numPools >= Math.max(2, Math.floor(teamsCount / 2)) || isGenerated ? '#94A3B8' : '#0F766E'} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        ) : null}
+
+        <PostRegistrationStepper
+          label="Number of Pools"
+          helperText={`Minimum 2 teams per pool (Max ${maxPoolsPossible} pools)`}
+          value={numPools}
+          unit="pools"
+          min={2}
+          max={maxPoolsPossible}
+          disabled={isGenerated}
+          onChange={handlePoolsChange}
+        />
       </View>
 
       <View style={styles.divider} />
 
-      {/* ─── 4. Qualifiers & Championship Bracket Selection ───────────────────── */}
+      {/* ─── 4. Qualifiers Per Pool & Championship Bracket ───────────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
-          <Trophy size={16} color="#0F766E" />
+          <Trophy size={15} color="#0F766E" />
           <AppText style={styles.sectionTitle}>Advancement & Championship Bracket</AppText>
         </View>
 
-        <View style={styles.adjusterRow}>
-          <AppText style={styles.adjusterLabel}>Qualifiers Per Pool:</AppText>
-          <View style={styles.counterWrap}>
-            <TouchableOpacity
-              style={[styles.counterBtn, (qualifiers <= 1 || isGenerated) && styles.counterBtnDisabled]}
-              onPress={() => handleQualifiersChange(qualifiers - 1)}
-              disabled={qualifiers <= 1 || isGenerated}
-            >
-              <Minus size={16} color={qualifiers <= 1 || isGenerated ? '#94A3B8' : '#0F766E'} />
-            </TouchableOpacity>
-            <View style={styles.counterValueBox}>
-              <AppText style={styles.counterValue}>{qualifiers}</AppText>
-              <AppText style={styles.counterSub}>per pool</AppText>
-            </View>
-            <TouchableOpacity
-              style={[styles.counterBtn, (qualifiers >= Math.floor(teamsCount / numPools) || isGenerated) && styles.counterBtnDisabled]}
-              onPress={() => handleQualifiersChange(qualifiers + 1)}
-              disabled={qualifiers >= Math.floor(teamsCount / numPools) || isGenerated}
-            >
-              <Plus size={16} color={qualifiers >= Math.floor(teamsCount / numPools) || isGenerated ? '#94A3B8' : '#0F766E'} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <PostRegistrationStepper
+          label="Qualifiers Per Pool"
+          helperText={`Top teams advancing to playoff bracket (${numPools * qualifiers} total qualifiers)`}
+          value={qualifiers}
+          unit="per pool"
+          min={1}
+          max={maxQualifiersPossible}
+          disabled={isGenerated}
+          onChange={handleQualifiersChange}
+        />
 
-        <View style={{ marginTop: Spacing[2] }}>
-          <AppText style={styles.adjusterLabel}>Playoff Bracket Type:</AppText>
-          <View style={styles.chipsRow}>
-            {['Single Elimination', 'Double Elimination'].map((bType) => {
-              const isSelected = bracketType === bType;
-              return (
-                <TouchableOpacity
-                  key={bType}
-                  style={[styles.chip, isSelected && styles.chipActive]}
-                  onPress={() => !isGenerated && handleBracketTypeChange(bType)}
-                  disabled={isGenerated}
-                >
-                  <AppText style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                    {bType}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        <View style={styles.bracketChoiceWrap}>
+          <PostRegistrationChoiceChips
+            label="Playoff Bracket Type:"
+            options={['Single Elimination', 'Double Elimination']}
+            selectedValue={bracketType}
+            disabled={isGenerated}
+            onSelect={handleBracketTypeChange}
+          />
         </View>
       </View>
 
-      {/* ─── 5. Pool Allocation Preview Accordion ───────────────────────────────── */}
+      {/* ─── 5. Pool Allocation Preview Accordion ───────────────────────────── */}
       {setupData?.preview_pools && setupData.preview_pools.length > 0 && (
         <>
           <View style={styles.divider} />
@@ -372,19 +312,25 @@ export function PoolPlayPostRegistrationCard({
             activeOpacity={0.7}
           >
             <View style={styles.sectionHeaderRow}>
-              <Layers size={16} color="#0F766E" />
+              <Layers size={15} color="#0F766E" />
               <AppText style={styles.sectionTitle}>
                 Pool Allocation Preview ({setupData.preview_pools.length} Pools)
               </AppText>
             </View>
-            {showPreview ? <ChevronUp size={18} color="#64748B" /> : <ChevronDown size={18} color="#64748B" />}
+            {showPreview ? (
+              <ChevronUp size={18} color="#64748B" />
+            ) : (
+              <ChevronDown size={18} color="#64748B" />
+            )}
           </TouchableOpacity>
 
           {showPreview && (
             <View style={styles.previewContainer}>
-              <AppText style={styles.previewSummaryText}>
-                {setupData.preview_qualification_summary}
-              </AppText>
+              {setupData.preview_qualification_summary ? (
+                <AppText style={styles.previewSummaryText}>
+                  {setupData.preview_qualification_summary}
+                </AppText>
+              ) : null}
               <View style={styles.poolsGrid}>
                 {setupData.preview_pools.map((p: any) => (
                   <View key={p.pool_name} style={styles.previewPoolBox}>
@@ -395,7 +341,9 @@ export function PoolPlayPostRegistrationCard({
                     {p.teams.map((t: any, idx: number) => (
                       <View key={t.id || idx} style={styles.previewTeamRow}>
                         <AppText style={styles.previewTeamSeed}>#{t.seed ?? idx + 1}</AppText>
-                        <AppText style={styles.previewTeamName}>{t.name}</AppText>
+                        <AppText style={styles.previewTeamName} numberOfLines={1}>
+                          {t.name}
+                        </AppText>
                       </View>
                     ))}
                   </View>
@@ -408,7 +356,7 @@ export function PoolPlayPostRegistrationCard({
 
       <View style={styles.divider} />
 
-      {/* ─── 6. Action Controls ──────────────────────────────────────────────── */}
+      {/* ─── 6. Primary Action Controls ──────────────────────────────────────── */}
       <View style={styles.actionsRow}>
         {!isGenerated ? (
           <Button
@@ -432,7 +380,7 @@ export function PoolPlayPostRegistrationCard({
           <View style={styles.completeBox}>
             <CheckCircle2 size={18} color="#0F766E" />
             <AppText style={styles.completeText}>
-              Pool Play is configured across {numPools} pools and {numPools * qualifiers} qualifiers.
+              Pool Play configured: {numPools} pools • {numPools * qualifiers} qualifiers advancing.
             </AppText>
           </View>
         )}
@@ -448,7 +396,7 @@ const styles = StyleSheet.create({
     borderColor: '#DEF2E6',
     borderRadius: Radius.lg,
     padding: Spacing[4],
-    marginBottom: Spacing[4],
+    marginBottom: Spacing[4], // Clear visual separation before Tournament Progress
   },
   loadingBox: {
     padding: Spacing[4],
@@ -459,37 +407,7 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 13,
     color: '#64748B',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: Spacing[2],
-    flexWrap: 'wrap',
-  },
-  titleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[3],
-    flex: 1,
-  },
-  iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#DEF2E6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102F2A',
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
+    textAlign: 'center',
   },
   divider: {
     height: 1,
@@ -497,7 +415,7 @@ const styles = StyleSheet.create({
     marginVertical: Spacing[3],
   },
   section: {
-    gap: Spacing[2],
+    gap: Spacing[2.5],
   },
   sectionHeaderRow: {
     flexDirection: 'row',
@@ -505,177 +423,15 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#1E293B',
   },
-  metricRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
+  presetOptionsBox: {
+    marginBottom: Spacing[1],
+  },
+  bracketChoiceWrap: {
     marginTop: Spacing[1],
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing[2],
-    alignItems: 'center',
-  },
-  metricNum: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F766E',
-  },
-  metricLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  noticeBox: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-    padding: Spacing[3],
-    borderRadius: Radius.md,
-    marginTop: Spacing[2],
-  },
-  noticeBoxWarning: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  noticeBoxSuccess: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  noticeTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  noticeText: {
-    fontSize: 12,
-    color: '#475569',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  recommendationBox: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-    borderRadius: Radius.md,
-    padding: Spacing[2],
-  },
-  recommendationText: {
-    fontSize: 12,
-    color: '#134E4A',
-    flex: 1,
-    lineHeight: 16,
-  },
-  poolsOptionsGrid: {
-    gap: Spacing[2],
-    marginTop: Spacing[1],
-  },
-  adjusterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: Spacing[1],
-  },
-  adjusterLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  counterWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  counterBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  counterBtnDisabled: {
-    opacity: 0.4,
-  },
-  counterValueBox: {
-    alignItems: 'center',
-    minWidth: 48,
-  },
-  counterValue: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F766E',
-  },
-  counterSub: {
-    fontSize: 10,
-    color: '#64748B',
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing[2],
-    marginTop: Spacing[1],
-  },
-  poolChoiceChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.md,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  poolChoiceChipActive: {
-    backgroundColor: '#DEF2E6',
-    borderColor: '#0F766E',
-  },
-  poolChoiceTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  poolChoiceTitleActive: {
-    color: '#0F766E',
-    fontWeight: '800',
-  },
-  poolChoiceSub: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  poolChoiceSubActive: {
-    color: '#134E4A',
-  },
-  chip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  chipActive: {
-    backgroundColor: '#DEF2E6',
-    borderColor: '#0F766E',
-  },
-  chipText: {
-    fontSize: 12,
-    color: '#475569',
-  },
-  chipTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
   },
   previewToggle: {
     flexDirection: 'row',
@@ -696,6 +452,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#0F766E',
     fontWeight: '600',
+    lineHeight: 16,
   },
   poolsGrid: {
     gap: Spacing[2],
@@ -705,7 +462,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    padding: Spacing[2],
+    padding: Spacing[2.5],
     gap: Spacing[1],
   },
   previewPoolHeader: {
@@ -722,6 +479,7 @@ const styles = StyleSheet.create({
   previewPoolCount: {
     fontSize: 11,
     color: '#64748B',
+    fontWeight: '500',
   },
   previewTeamRow: {
     flexDirection: 'row',
@@ -733,12 +491,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#94A3B8',
-    width: 24,
+    width: 26,
   },
   previewTeamName: {
     fontSize: 12,
     fontWeight: '500',
     color: '#1E293B',
+    flex: 1,
   },
   actionsRow: {
     marginTop: Spacing[1],
@@ -753,10 +512,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     padding: Spacing[3],
     borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
   },
   completeText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#0F766E',
+    flex: 1,
   },
 });

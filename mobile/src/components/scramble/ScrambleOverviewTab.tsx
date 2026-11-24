@@ -87,6 +87,10 @@ export function ScrambleOverviewTab({
 
   const isCompleted = state.tournament_status === 'completed' || tournament?.status === 'completed';
   const isRegistrationOpen = tournament?.status === 'registration_open' || state.tournament_status === 'registration_open';
+  const isAwaitingRotationSetup =
+    (tournament?.status === 'registration_closed' || state.tournament_status === 'registration_closed') &&
+    (state.expected_total_games ?? state.total_games ?? 0) === 0;
+
   const currentRound = state.current_round ?? 1;
   const plannedRounds = state.planned_rounds ?? 3;
   const registeredPlayersCount = state.registered_players_count ?? tournament?.participant_count ?? 0;
@@ -130,6 +134,7 @@ export function ScrambleOverviewTab({
 
   const getRoundStatusLabel = () => {
     if (isCompleted) return 'Completed';
+    if (isAwaitingRotationSetup) return 'Awaiting Rotation Setup';
     if (isRegistrationOpen) return 'Registration Open';
     switch (state.round_status) {
       case 'setup':
@@ -144,6 +149,8 @@ export function ScrambleOverviewTab({
         return 'Setup';
     }
   };
+
+  const currentStageText = getRoundStatusLabel();
 
   return (
     <View style={styles.container}>
@@ -169,14 +176,21 @@ export function ScrambleOverviewTab({
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <BarChart2 size={18} color="#0F766E" />
-          <AppText style={styles.cardHeaderTitle}>Tournament Progress</AppText>
+          <View style={styles.headerTitleWrap}>
+            <AppText style={styles.cardHeaderTitle}>Tournament Progress</AppText>
+            <View style={styles.stagePill}>
+              <AppText style={styles.stagePillText}>{currentStageText}</AppText>
+            </View>
+          </View>
         </View>
 
         {/* Progress Bar & Summary */}
         <View style={styles.progressContainer}>
           <View style={styles.progressTopRow}>
             <AppText style={styles.progressSubText}>
-              {expectedTotalGames > 0
+              {isAwaitingRotationSetup
+                ? 'Roster locked • Configure rounds above to generate schedule'
+                : expectedTotalGames > 0
                 ? `${tournamentGamesCompleted} of ${expectedTotalGames} games completed`
                 : '0 of 0 games completed'}
             </AppText>
@@ -209,13 +223,17 @@ export function ScrambleOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>COMPLETED</AppText>
             <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{tournamentGamesCompleted}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isAwaitingRotationSetup ? 'Pending' : tournamentGamesCompleted}
+            </AppText>
           </View>
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>REMAINING</AppText>
             <Clock size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{remainingGames}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isAwaitingRotationSetup ? 'Pending' : remainingGames}
+            </AppText>
           </View>
         </View>
 
@@ -223,7 +241,9 @@ export function ScrambleOverviewTab({
         <View style={styles.infoStrip}>
           <Info size={14} color="#0284C7" />
           <AppText style={styles.infoStripText}>
-            {registeredPlayersCount < 4
+            {isAwaitingRotationSetup
+              ? 'Registration is closed. Configure planned rotation rounds and partner rules above to generate schedule.'
+              : registeredPlayersCount < 4
               ? 'Minimum 4 players required to form official Scramble courts.'
               : isRegistrationOpen
               ? `${registeredPlayersCount} players registered. Close registration to seed players and configure Round 1.`
@@ -237,7 +257,7 @@ export function ScrambleOverviewTab({
           onPress={() => {
             if (isCompleted) {
               onNavigateTab('results');
-            } else if (registeredPlayersCount < 4 || isRegistrationOpen) {
+            } else if (registeredPlayersCount < 4 || isRegistrationOpen || isAwaitingRotationSetup) {
               onNavigateTab('participants');
             } else {
               onNavigateTab('rounds');
@@ -248,6 +268,8 @@ export function ScrambleOverviewTab({
           <AppText style={styles.viewMatchupsBtnText}>
             {isCompleted
               ? 'View Standings & Final Results →'
+              : isAwaitingRotationSetup
+              ? 'Review Confirmed Players →'
               : registeredPlayersCount < 4 || isRegistrationOpen
               ? 'Manage Players & Availability →'
               : 'View Round Schedule & Enter Scores →'}
@@ -255,8 +277,9 @@ export function ScrambleOverviewTab({
         </TouchableOpacity>
       </Card>
 
-      {/* Optional Planned Rounds Adjuster (Pre-match setup only) */}
-      {canManage && !isCompleted && tournamentGamesCompleted === 0 && (
+      {/* Optional Planned Rounds Adjuster (Pre-match setup only, suppressed during awaiting configuration) */}
+      {canManage && !isCompleted && !isAwaitingRotationSetup && tournamentGamesCompleted === 0 && (
+
         <Card style={styles.card}>
           <View style={styles.plannedRoundsHeader}>
             <AppText style={styles.cardHeaderTitle}>Adjust Planned Rounds</AppText>
@@ -442,10 +465,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  headerTitleWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
   cardHeaderTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
+  },
+  stagePill: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  stagePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0F766E',
   },
   progressContainer: {
     gap: 6,
