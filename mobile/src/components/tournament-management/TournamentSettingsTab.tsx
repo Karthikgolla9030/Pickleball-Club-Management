@@ -160,7 +160,7 @@ export function TournamentSettingsTab({
   const winBy = typeof scoringRules.win_by === 'number' ? scoringRules.win_by : 2;
   const gameFormat = typeof scoringRules.game_format === 'string' ? scoringRules.game_format : 'single_game';
 
-  const formatConfig = (tournament?.format_configuration as Record<string, unknown>) || {};
+  const formatConfig = (tournament?.format_configuration as Record<string, any>) || {};
 
   const isCustom = Boolean(tournament?.banner_image_url);
   const bannerSource = resolveTournamentBanner(tournament, clubBranding, platformBanners);
@@ -284,9 +284,16 @@ export function TournamentSettingsTab({
 
   // ─── 8. Registration Status Badge ─────────────────────────────────────────
   const regStatus = tournament?.status?.toLowerCase();
+  const isAwaitingFormatConfig =
+    regStatus === 'registration_closed' &&
+    (format === 'scramble' || format === 'pool_play') &&
+    !formatConfig.is_format_configured;
+
   const regStatusLabel =
     regStatus === 'registration_open' || regStatus === 'open'
       ? 'Registration Open'
+      : isAwaitingFormatConfig
+      ? 'Registration Closed – Awaiting Format Configuration'
       : regStatus === 'registration_closed'
       ? 'Registration Closed'
       : regStatus === 'in_progress'
@@ -637,17 +644,23 @@ export function TournamentSettingsTab({
           <View style={styles.rowsList}>
             <InfoRow
               label="Preliminary Pools"
-              value={`${poolCount ?? formatConfig.pool_count ?? 2} Pools`}
+              value={formatConfig.is_format_configured
+                ? `${poolCount ?? formatConfig.pool_count ?? 2} Pools`
+                : `Configured post-registration based on confirmed teams (Baseline: ${poolCount ?? formatConfig.pool_count ?? 2} Pools)`
+              }
               isTablet={isTablet}
             />
             <InfoRow
               label="Advancement Rule"
-              value={`Top ${formatConfig.advancement_count || formatConfig.qualifiers_per_pool || 2} per pool advance to Championship Bracket`}
+              value={formatConfig.is_format_configured
+                ? `Top ${formatConfig.advancement_count || formatConfig.qualifiers_per_pool || 2} per pool advance to Championship Bracket`
+                : `Selected post-registration (Baseline: Top ${formatConfig.qualifiers_per_pool || 2} per pool)`
+              }
               isTablet={isTablet}
             />
             <InfoRow
               label="Playoff Bracket Format"
-              value="Single Elimination Knockout"
+              value={formatConfig.pool_bracket_type || 'Single Elimination Knockout'}
               isTablet={isTablet}
             />
             <InfoRow
@@ -721,12 +734,15 @@ export function TournamentSettingsTab({
             />
             <InfoRow
               label="Planned Rotation Rounds"
-              value={`${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds`}
+              value={formatConfig.is_format_configured
+                ? `${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds`
+                : `Configured post-registration based on confirmed players (Baseline: ${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds)`
+              }
               isTablet={isTablet}
             />
             <InfoRow
               label="Pairing Rule"
-              value="Fair round-by-round partner rotation with individual scoring"
+              value={formatConfig.rotation_rule || "Fair round-by-round partner rotation with individual scoring"}
               isTablet={isTablet}
             />
             <InfoRow

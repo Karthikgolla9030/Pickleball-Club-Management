@@ -657,9 +657,13 @@ class TournamentService:
     # ─── Tournament Lifecycle State Transitions ────────────────────────────────
 
     async def open_registration(
-        self, club_id: UUID, tournament_id: UUID
+        self, club_id: UUID, tournament_id: UUID, reset_schedule: bool = False
     ) -> TournamentResponse:
-        """Transition tournament status from draft to registration_open."""
+        """Transition tournament status from draft or registration_closed to registration_open.
+
+        If reopening after matches were generated, requires reset_schedule=True to invalidate
+        and clear the affected schedule, ensuring incomplete/stale registration data is not retained.
+        """
         tournament = await self.tournament_repo.get_by_id(
             tournament_id=tournament_id, club_id=club_id
         )
@@ -678,10 +682,31 @@ class TournamentService:
         if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
             matches_count = await self.competition_repo.count_all_matches(tournament_id)
             if matches_count > 0:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot reopen registration: matches have already been generated",
-                )
+                completed_count = await self.competition_repo.count_completed_matches(tournament_id)
+                if completed_count > 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Cannot reopen registration: match results have already been recorded.",
+                    )
+                if not reset_schedule:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            "Matches have already been generated for this tournament. "
+                            "Reopening registration will invalidate the generated schedule. "
+                            "Pass reset_schedule=true to confirm schedule reset and reopen registration."
+                        ),
+                    )
+                # Explicitly invalidate and clear affected schedule
+                await self.competition_repo.delete_pending_matches(tournament_id)
+                if tournament.format == TournamentFormat.POOL_PLAY:
+                    await self.competition_repo.delete_pool_teams_by_tournament(tournament_id)
+                    await self.competition_repo.delete_pools_by_tournament(tournament_id)
+                config = dict(tournament.format_configuration or {})
+                config["configuration_stage"] = "awaiting_format_configuration"
+                config["is_format_configured"] = False
+                await self.tournament_repo.update(tournament, format_configuration=config)
+
 
         updated = await self.tournament_repo.update(
             tournament, status=TournamentStatus.REGISTRATION_OPEN
@@ -844,8 +869,27 @@ class TournamentService:
                 ),
             )
 
+        # Validate that post-registration schedule generation has completed for formats requiring it
+        if tournament.format == TournamentFormat.SCRAMBLE:
+            matches_count = await self.competition_repo.count_all_matches(tournament_id)
+            if matches_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot start Scramble tournament: rotation schedule must be configured and generated first.",
+                )
+        elif tournament.format == TournamentFormat.POOL_PLAY:
+            pools = await self.competition_repo.list_pools_by_tournament(tournament_id)
+            matches_count = await self.competition_repo.count_all_matches(tournament_id)
+            if not pools or matches_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot start Pool Play tournament: pools and match schedule must be configured and generated first.",
+                )
+
+        config = dict(tournament.format_configuration or {})
+        config["configuration_stage"] = "in_progress"
         updated = await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS
+            tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=config
         )
         await self.db.commit()
         resp = _build_tournament_response(updated)
@@ -2024,6 +2068,23 @@ class TournamentService:
             status=RegistrationStatus.CANCELLED,
             cancelled_at=datetime.now(timezone.utc),
         )
+
+        # If registration was closed and schedule had been generated, handle schedule invalidation cleanly
+        if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+            matches_count = await self.competition_repo.count_all_matches(tournament.id)
+            if matches_count > 0:
+                completed = await self.competition_repo.count_completed_matches(tournament.id)
+                if completed == 0:
+                    await self.competition_repo.delete_pending_matches(tournament.id)
+                    if tournament.format == TournamentFormat.POOL_PLAY:
+                        await self.competition_repo.delete_pool_teams_by_tournament(tournament.id)
+                        await self.competition_repo.delete_pools_by_tournament(tournament.id)
+                    config = dict(tournament.format_configuration or {})
+                    config["configuration_stage"] = "awaiting_format_configuration"
+                    config["is_format_configured"] = False
+                    config["schedule_invalidated_notice"] = "Schedule invalidated: player registration was cancelled. Review and regenerate schedule."
+                    await self.tournament_repo.update(tournament, format_configuration=config)
+
         await self.db.commit()
 
         cancel_resp = PlayerSelfRegistrationResponse(

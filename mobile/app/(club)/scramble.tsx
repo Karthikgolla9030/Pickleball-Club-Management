@@ -38,6 +38,7 @@ import {
   ScrambleEndTournamentModal,
   ScrambleOverviewTab,
   ScramblePlayersTab,
+  ScramblePostRegistrationCard,
   ScrambleResultsTab,
   ScrambleRoundsTab,
   ScrambleScoreModal,
@@ -617,14 +618,29 @@ export default function ScrambleWorkspaceScreen() {
           {/* Child 2: Tab Body Content */}
           <View style={styles.tabBodyWrapper}>
             {activeTab === 'overview' && (
-              <ScrambleOverviewTab
-                state={state}
-                tournament={tournament}
-                canManage={canManage}
-                onNavigateTab={handleTabChange}
-                onSetPlannedRounds={setPlannedRounds}
-                isSettingPlannedRounds={isSettingPlannedRounds}
-              />
+              <>
+                {canManage && tournament && clubId && tournamentId && (
+                  <ScramblePostRegistrationCard
+                    clubId={clubId}
+                    tournamentId={tournamentId}
+                    tournament={tournament}
+                    canManage={canManage}
+                    onGenerated={async () => {
+                      await handleRefresh();
+                    }}
+                    onStartTournament={handleStartTournament}
+                    isStartingTournament={isStartingTournament}
+                  />
+                )}
+                <ScrambleOverviewTab
+                  state={state}
+                  tournament={tournament}
+                  canManage={canManage}
+                  onNavigateTab={handleTabChange}
+                  onSetPlannedRounds={setPlannedRounds}
+                  isSettingPlannedRounds={isSettingPlannedRounds}
+                />
+              </>
             )}
 
             {(activeTab === 'participants' || (activeTab as string) === 'players') && (

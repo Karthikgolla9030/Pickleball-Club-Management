@@ -10,3 +10,4 @@ export * from './ScrambleStandingsTab';
 export * from './ScrambleResultsTab';
 export * from './modals/ScrambleScoreModal';
 export * from './modals/ScrambleEndTournamentModal';
+export * from './ScramblePostRegistrationCard';

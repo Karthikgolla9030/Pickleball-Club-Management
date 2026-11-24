@@ -36,21 +36,21 @@ export function ScrambleConfig({ state, club }: ScrambleConfigProps) {
         <AppText variant="bodySmall" bold style={styles.cardTitle}>
           Scramble Settings
         </AppText>
-        <Badge label="Using club settings" variant="success" />
+        <Badge label="Configured post-registration" variant="info" />
       </View>
 
       <View style={styles.bulletsList}>
         <View style={styles.bulletRow}>
           <View style={styles.bulletDot} />
           <AppText variant="caption" style={styles.bulletText}>
-            Planned rounds: <AppText variant="caption" bold>{rounds}</AppText>
+            Rotation rounds: <AppText variant="caption" bold>Configured post-registration based on confirmed players</AppText>
           </AppText>
         </View>
 
         <View style={styles.bulletRow}>
           <View style={styles.bulletDot} />
           <AppText variant="caption" style={styles.bulletText}>
-            Partner rotation: <AppText variant="caption" bold>{rotationText}</AppText>
+            Partner rotation: <AppText variant="caption" bold>Selected post-registration with partner preview</AppText>
           </AppText>
         </View>
 

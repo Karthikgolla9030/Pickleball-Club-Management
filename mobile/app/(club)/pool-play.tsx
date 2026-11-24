@@ -22,6 +22,7 @@ import {
   ChampionshipBracketTab,
   MatchupsTab,
   PoolPlayOverviewTab,
+  PoolPlayPostRegistrationCard,
   PoolPlayResultsTab,
   PoolPlaySetupCourtsTab,
   Screen,
@@ -1042,18 +1043,33 @@ export default function PoolPlayManagementScreen() {
           <View style={styles.tabBodyWrapper}>
           {/* ─── Tab 1: Overview ───────────────────────────────────────── */}
           {activeTab === 'overview' && (
-            <PoolPlayOverviewTab
-              tournament={effectiveTournament ?? tournament!}
-              teams={updatedTeams}
-              matches={matches}
-              championshipMatches={championshipMatches}
-              pools={pools}
-              config={config}
-              isPoolPlayComplete={isPoolPlayComplete}
-              isChampionshipComplete={isChampionshipComplete}
-              isSingles={isSingles}
-              onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
-            />
+            <>
+              {canManage && (effectiveTournament ?? tournament) && clubId && tournamentId && (
+                <PoolPlayPostRegistrationCard
+                  clubId={clubId}
+                  tournamentId={tournamentId}
+                  tournament={(effectiveTournament ?? tournament)!}
+                  canManage={canManage}
+                  onGenerated={async () => {
+                    await handleRefresh();
+                  }}
+                  onStartTournament={handleStartTournament}
+                  isStartingTournament={isStartingTournament}
+                />
+              )}
+              <PoolPlayOverviewTab
+                tournament={effectiveTournament ?? tournament!}
+                teams={updatedTeams}
+                matches={matches}
+                championshipMatches={championshipMatches}
+                pools={pools}
+                config={config}
+                isPoolPlayComplete={isPoolPlayComplete}
+                isChampionshipComplete={isChampionshipComplete}
+                isSingles={isSingles}
+                onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
+              />
+            </>
           )}
 
           {/* ─── Tab 2: Players & Pools / Teams & Pools ─────────────────── */}

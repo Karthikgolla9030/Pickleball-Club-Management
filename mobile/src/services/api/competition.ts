@@ -477,6 +477,59 @@ export const competitionApi = {
     );
   },
 
+  // ─── Post-Registration Setup & Generation ─────────────────────────────────
+
+  getScramblePostRegistrationSetup(
+    clubId: string,
+    tournamentId: string,
+    params?: { rounds?: number; rotation_rule?: string }
+  ): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.rounds) q.append('rounds', String(params.rounds));
+    if (params?.rotation_rule) q.append('rotation_rule', params.rotation_rule);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return apiClient.get(
+      `${competitionBase(clubId, tournamentId)}/scramble/post-registration-setup${qs}`
+    );
+  },
+
+  confirmAndGenerateScramble(
+    clubId: string,
+    tournamentId: string,
+    payload: { rounds: number; rotation_rule?: string; matches_per_player?: number }
+  ): Promise<any> {
+    return apiClient.post(
+      `${competitionBase(clubId, tournamentId)}/scramble/confirm-and-generate`,
+      payload
+    );
+  },
+
+  getPoolPlayPostRegistrationSetup(
+    clubId: string,
+    tournamentId: string,
+    params?: { number_of_pools?: number; qualifiers_per_pool?: number; bracket_type?: string }
+  ): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.number_of_pools) q.append('number_of_pools', String(params.number_of_pools));
+    if (params?.qualifiers_per_pool) q.append('qualifiers_per_pool', String(params.qualifiers_per_pool));
+    if (params?.bracket_type) q.append('bracket_type', params.bracket_type);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return apiClient.get(
+      `${competitionBase(clubId, tournamentId)}/pool-play/post-registration-setup${qs}`
+    );
+  },
+
+  confirmAndGeneratePoolPlay(
+    clubId: string,
+    tournamentId: string,
+    payload: { number_of_pools: number; qualifiers_per_pool: number; bracket_type?: string; pool_names?: string[] }
+  ): Promise<any> {
+    return apiClient.post(
+      `${competitionBase(clubId, tournamentId)}/pool-play/confirm-and-generate`,
+      payload
+    );
+  },
 };
+
 
 

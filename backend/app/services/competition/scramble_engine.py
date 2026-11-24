@@ -144,6 +144,77 @@ class ScrambleEngine:
         }
 
     @staticmethod
+    def calculate_post_registration_recommendation(
+        player_count: int,
+        division: str = "Open Scramble",
+        courts_count: int | None = None,
+    ) -> dict[str, Any]:
+        """
+        Produce a complete post-registration diagnostic and recommendation payload for Scramble.
+        Analyzes participant count, feasibility, court partitions, odd/unbalanced counts, and recommended rounds.
+        """
+        has_sufficient = player_count >= 4
+        is_mult_4 = (player_count % 4 == 0) if player_count > 0 else False
+        is_odd = (player_count % 2 != 0)
+
+        partition = ScrambleEngine.partition_players_into_courts(player_count) if player_count >= 4 else None
+        feasible_matches_per_round = player_count // 4
+        feasible_doubles_pairs = feasible_matches_per_round * 2
+
+        if player_count < 4:
+            odd_handling_message = (
+                f"Insufficient confirmed players ({player_count}). Scramble doubles requires at least 4 players "
+                f"to form 2 doubles pairs on 1 court. Reopen registration or recruit additional players."
+            )
+            is_feasible = False
+        elif is_mult_4:
+            c_count = player_count // 4
+            odd_handling_message = (
+                f"{player_count} confirmed players evenly divide into {c_count} 4-player court(s). "
+                f"Every player participates in every round with no byes."
+            )
+            is_feasible = True
+        elif partition is not None:
+            c4, c5 = partition
+            odd_handling_message = (
+                f"{player_count} confirmed players will be partitioned into {c4} court(s) of 4 and "
+                f"{c5} court(s) of 5. On 5-player court(s), 1 player sits out per game on a balanced rotating bye."
+            )
+            is_feasible = True
+        else:
+            needed = 4 - (player_count % 4)
+            odd_handling_message = (
+                f"Unbalanced participant count ({player_count} players). Scramble doubles requires courts of 4 or 5 players. "
+                f"A count of {player_count} cannot be evenly scheduled. Recommend adding {needed} player(s) to reach "
+                f"{player_count + needed}, or having 1 player sit out."
+            )
+            is_feasible = False
+
+        rec = calculate_recommended_rounds(
+            player_count=player_count,
+            division=division,
+            courts_count=courts_count,
+        )
+        rec_rounds = rec["recommended_rounds"]
+        rec_reason = rec["reason"]
+        rec_details = rec
+
+        return {
+            "player_count": player_count,
+            "has_sufficient_players": has_sufficient,
+            "is_multiple_of_4": is_mult_4,
+            "is_odd": is_odd,
+            "is_schedule_feasible": is_feasible,
+            "partition": {"courts_of_4": partition[0], "courts_of_5": partition[1]} if partition else None,
+            "feasible_matches_per_round": feasible_matches_per_round,
+            "feasible_doubles_pairs": feasible_doubles_pairs,
+            "recommended_rounds": rec_rounds,
+            "recommendation_reason": rec_reason,
+            "recommendation_details": rec_details,
+            "odd_player_handling_message": odd_handling_message,
+        }
+
+    @staticmethod
     def calculate_overall_coverage(
         players: list[dict[str, Any]],
         matches: list[dict[str, Any]],

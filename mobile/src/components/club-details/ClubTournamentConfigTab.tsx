@@ -191,14 +191,14 @@ export function ClubTournamentConfigTab({
     if (isNaN(rrW) || rrW < 1) errs.rrWinBy = 'Win by points must be at least 1.';
 
     // Pool Play validation
-    const pCount = parseInt(poolCount, 10);
-    const tpp = parseInt(teamsPerPool, 10);
-    const qpp = parseInt(qualifiersPerPool, 10);
+    const pCount = poolCount.trim() ? parseInt(poolCount, 10) : 2;
+    const tpp = teamsPerPool.trim() ? parseInt(teamsPerPool, 10) : 4;
+    const qpp = qualifiersPerPool.trim() ? parseInt(qualifiersPerPool, 10) : 2;
     const ppScore = parseInt(ppTargetScore, 10);
     const ppW = parseInt(ppWinBy, 10);
-    if (isNaN(pCount) || pCount < 2) errs.poolCount = 'Must have at least 2 pools.';
-    if (isNaN(tpp) || tpp < 2) errs.teamsPerPool = 'Must have at least 2 teams per pool.';
-    if (isNaN(qpp) || qpp < 1 || qpp > tpp) errs.qualifiersPerPool = 'Qualifiers must be between 1 and teams per pool.';
+    if (!isNaN(pCount) && pCount < 2) errs.poolCount = 'Must have at least 2 pools.';
+    if (!isNaN(tpp) && tpp < 2) errs.teamsPerPool = 'Must have at least 2 teams per pool.';
+    if (!isNaN(qpp) && (qpp < 1 || qpp > tpp)) errs.qualifiersPerPool = 'Qualifiers must be between 1 and teams per pool.';
     if (isNaN(ppScore) || ppScore < 1) errs.ppTargetScore = 'Target score must be at least 1.';
     if (isNaN(ppW) || ppW < 1) errs.ppWinBy = 'Win by points must be at least 1.';
 
@@ -209,10 +209,10 @@ export function ClubTournamentConfigTab({
     if (isNaN(brW) || brW < 1) errs.brWinBy = 'Win by points must be at least 1.';
 
     // Scramble validation
-    const sRounds = parseInt(scrambleRounds, 10);
+    const sRounds = scrambleRounds.trim() ? parseInt(scrambleRounds, 10) : 5;
     const scScore = parseInt(scTargetScore, 10);
     const scW = parseInt(scWinBy, 10);
-    if (isNaN(sRounds) || sRounds < 1 || sRounds > 20) errs.scrambleRounds = 'Rounds must be between 1 and 20.';
+    if (!isNaN(sRounds) && (sRounds < 1 || sRounds > 20)) errs.scrambleRounds = 'Rounds must be between 1 and 20.';
     if (isNaN(scScore) || scScore < 1) errs.scTargetScore = 'Target score must be at least 1.';
     if (isNaN(scW) || scW < 1) errs.scWinBy = 'Win by points must be at least 1.';
 
@@ -554,29 +554,34 @@ export function ClubTournamentConfigTab({
           {/* Section: Pool Setup */}
           <View style={styles.sectionBlock}>
             <AppText style={styles.sectionTitle}>Pool Setup</AppText>
+            <View style={styles.infoCardBox}>
+              <AppText style={styles.infoBoxText}>
+                Post-Registration Workflow: Pool counts, teams per pool, and qualifiers are configured post-registration based on actual confirmed teams. Values below serve as club baseline defaults.
+              </AppText>
+            </View>
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
-                  label="Default Number of Pools *"
+                  label="Baseline Number of Pools"
                   value={poolCount}
                   onChangeText={(v) => setPoolCount(v.replace(/[^0-9]/g, ''))}
                   keyboardType="number-pad"
                   placeholder="2"
                   editable={isOwner}
                   error={errors.poolCount}
-                  hint="Minimum 2 pools"
+                  hint="Baseline default; finalized post-registration"
                 />
               </View>
               <View style={styles.col}>
                 <Input
-                  label="Teams Per Pool *"
+                  label="Baseline Teams Per Pool"
                   value={teamsPerPool}
                   onChangeText={(v) => setTeamsPerPool(v.replace(/[^0-9]/g, ''))}
                   keyboardType="number-pad"
                   placeholder="4"
                   editable={isOwner}
                   error={errors.teamsPerPool}
-                  hint="Minimum 2 entries per pool"
+                  hint="Baseline default; finalized post-registration"
                 />
               </View>
             </View>
@@ -590,14 +595,14 @@ export function ClubTournamentConfigTab({
             <View style={styles.row}>
               <View style={styles.col}>
                 <Input
-                  label="Qualifiers Per Pool *"
+                  label="Baseline Qualifiers Per Pool"
                   value={qualifiersPerPool}
                   onChangeText={(v) => setQualifiersPerPool(v.replace(/[^0-9]/g, ''))}
                   keyboardType="number-pad"
                   placeholder="2"
                   editable={isOwner}
                   error={errors.qualifiersPerPool}
-                  hint="Top entries advancing per pool"
+                  hint="Configured post-registration based on bracket size"
                 />
               </View>
               <View style={styles.col}>
@@ -878,15 +883,20 @@ export function ClubTournamentConfigTab({
           {/* Section: Number of Rounds */}
           <View style={styles.sectionBlock}>
             <AppText style={styles.sectionTitle}>Number of Rounds</AppText>
+            <View style={styles.infoCardBox}>
+              <AppText style={styles.infoBoxText}>
+                Post-Registration Workflow: Rotation rounds are calculated and recommended post-registration based on actual confirmed player count and courts. The value below acts as a baseline default.
+              </AppText>
+            </View>
             <Input
-              label="Planned Rotation Rounds *"
+              label="Baseline Rotation Rounds"
               value={scrambleRounds}
               onChangeText={(v) => setScrambleRounds(v.replace(/[^0-9]/g, ''))}
               keyboardType="number-pad"
               placeholder="5"
               editable={isOwner}
               error={errors.scrambleRounds}
-              hint="Recommended: 4 to 6 rounds"
+              hint="Baseline default; finalized post-registration based on actual roster"
             />
           </View>
 

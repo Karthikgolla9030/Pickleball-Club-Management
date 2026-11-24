@@ -155,7 +155,19 @@ export function TournamentCard({
     Boolean(fc.pool_play_state?.completed) ||
     Boolean(fc.pool_play_state?.winner);
 
-  const statusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
+  const isAwaitingFormatConfig =
+    statusLower === 'registration_closed' &&
+    (tournament.format === 'scramble' || tournament.format === 'pool_play') &&
+    !fc.is_format_configured;
+
+  const baseStatusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
+  const statusBadge = isAwaitingFormatConfig
+    ? {
+        label: 'Registration Closed – Awaiting Format Configuration',
+        bg: 'rgba(217, 119, 6, 0.92)',
+        text: '#FFFFFF',
+      }
+    : baseStatusBadge;
   const formatBadge = getFormatBadgeStyle(tournament.format || '', tournament.format_label);
   const { branding: fetchedClubBranding } = useClubBranding(clubBranding ? null : (tournament as any).club_id);
   const { banners: platformBanners } = usePlatformBanners();
@@ -312,6 +324,20 @@ export function TournamentCard({
               accessibilityLabel={`Close registration for ${tournament.name}`}
             >
               <AppText style={styles.bottomCloseRegBtnText}>Close Reg</AppText>
+            </TouchableOpacity>
+          )}
+
+          {isAwaitingFormatConfig && (
+            <TouchableOpacity
+              style={styles.bottomPublishBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPress();
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel={`Configure format for ${tournament.name}`}
+            >
+              <AppText style={styles.bottomPublishBtnText}>Configure Format →</AppText>
             </TouchableOpacity>
           )}
         </View>

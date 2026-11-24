@@ -66,7 +66,106 @@ class PoolPlayEngine:
     def __init__(self) -> None:
         self._rr_engine = RoundRobinEngine()
 
-    # ─── 1. Pool Configuration Validation ──────────────────────────────────────
+    # ─── 1. Pool Configuration Validation & Recommendation ──────────────────────
+
+    @staticmethod
+    def get_feasible_pool_configurations(teams_count: int) -> list[dict[str, Any]]:
+        """
+        Derive all mathematically valid pool configurations for the given confirmed team count.
+        A configuration is feasible if:
+          - number_of_pools >= 2
+          - min_pool_size >= 2
+          - max_pool_size - min_pool_size <= 1 (balanced)
+        """
+        if teams_count < 4:
+            return []
+
+        feasible = []
+        max_possible_pools = teams_count // 2
+        for p in range(2, max_possible_pools + 1):
+            base_size = teams_count // p
+            rem = teams_count % p
+            min_size = base_size
+            max_size = base_size + (1 if rem > 0 else 0)
+
+            if min_size < 2 or (max_size - min_size) > 1:
+                continue
+
+            # Determine viable qualifier counts per pool (1 .. min_size)
+            viable_qualifiers = list(range(1, min_size + 1))
+            # Optimal recommendation aims for total qualifiers to be power of 2 (2, 4, 8)
+            recommended_q = 2 if 2 in viable_qualifiers and (2 * p in (4, 8, 16)) else (1 if 1 in viable_qualifiers else viable_qualifiers[0])
+
+            pool_names = [f"Pool {chr(65 + i)}" for i in range(p)]
+            feasible.append({
+                "number_of_pools": p,
+                "pool_names": pool_names,
+                "min_teams_per_pool": min_size,
+                "max_teams_per_pool": max_size,
+                "teams_per_pool_label": str(min_size) if min_size == max_size else f"{min_size}–{max_size}",
+                "allowed_qualifiers": viable_qualifiers,
+                "recommended_qualifiers": recommended_q,
+                "total_matches_pool_stage": sum((base_size + (1 if i < rem else 0)) * (base_size + (1 if i < rem else 0) - 1) // 2 for i in range(p)),
+            })
+
+        return feasible
+
+    @staticmethod
+    def calculate_recommended_pool_configuration(
+        teams_count: int,
+    ) -> tuple[int, int, str, str, list[dict[str, Any]]]:
+        """
+        Recommend optimal pool count and qualifiers per pool based on confirmed team count.
+
+        Returns:
+            (recommended_pools, recommended_qualifiers, recommended_bracket_type, reason, feasible_configs)
+        """
+        if teams_count < 4:
+            return (
+                2,
+                1,
+                "Single Elimination",
+                f"Insufficient teams for Pool Play ({teams_count} confirmed). Pool Play requires at least 4 teams (minimum 2 pools of 2).",
+                [],
+            )
+
+        feasible_configs = PoolPlayEngine.get_feasible_pool_configurations(teams_count)
+        if not feasible_configs:
+            return (
+                2,
+                1,
+                "Single Elimination",
+                f"Unable to balance {teams_count} teams across at least 2 pools of 2.",
+                [],
+            )
+
+        # Recommendation logic:
+        # 4 to 7 teams -> 2 pools (e.g. 4 -> 2 pools of 2; 6 -> 2 pools of 3)
+        # 8 to 11 teams -> 2 pools of 4 (or 2 pools of 4 & 5)
+        # 12 to 15 teams -> 3 pools (e.g. 12 -> 3 pools of 4) or 4 pools of 3
+        # 16+ teams -> 4 pools (e.g. 16 -> 4 pools of 4)
+        if teams_count <= 7:
+            target_p = 2
+        elif teams_count <= 11:
+            target_p = 2
+        elif teams_count <= 15:
+            target_p = 3 if any(c["number_of_pools"] == 3 for c in feasible_configs) else 4
+        else:
+            target_p = 4 if any(c["number_of_pools"] == 4 for c in feasible_configs) else 2
+
+        matched = next((c for c in feasible_configs if c["number_of_pools"] == target_p), feasible_configs[0])
+        rec_pools = matched["number_of_pools"]
+        rec_qualifiers = matched["recommended_qualifiers"]
+        total_qualifiers = rec_pools * rec_qualifiers
+        bracket_type = "Single Elimination"
+
+        reason = (
+            f"For {teams_count} confirmed teams, {rec_pools} pools with {matched['teams_per_pool_label']} teams per pool "
+            f"provides balanced round-robin play. Advancing top {rec_qualifiers} per pool creates an optimal {total_qualifiers}-entry "
+            f"championship bracket."
+        )
+
+        return (rec_pools, rec_qualifiers, bracket_type, reason, feasible_configs)
 
     @staticmethod
     def validate_pool_configuration(

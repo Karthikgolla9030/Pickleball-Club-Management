@@ -82,6 +82,8 @@ from app.schemas.competition import (
     PoolConfigureRequest,
     PoolManualAssignRequest,
     PoolPlayGenerationResponse,
+    PoolPlayPostRegistrationConfirmRequest,
+    PoolPlayPostRegistrationSetupResponse,
     PoolResponse,
     PoolStandingsResponse,
     ScrambleAvailabilityRequest,
@@ -89,6 +91,8 @@ from app.schemas.competition import (
     ScrambleConfigureRoundsRequest,
     ScrambleGenerationResponse,
     ScrambleMatchupGenerateRequest,
+    ScramblePostRegistrationConfirmRequest,
+    ScramblePostRegistrationSetupResponse,
     ScrambleStandingsResponse,
     ScrambleStateResponse,
     StandingsResponse,
@@ -342,6 +346,46 @@ async def regenerate_pool_play(
     db: AsyncSession = Depends(get_db),
 ) -> PoolPlayGenerationResponse:
     return await CompetitionService(db).regenerate_pool_play(club_id, tournament_id)
+
+
+@club_competition_router.get(
+    "/pool-play/post-registration-setup",
+    response_model=PoolPlayPostRegistrationSetupResponse,
+    summary="Get post-registration Pool Play configuration setup and preview",
+    description="Calculates confirmed teams, recommends pool counts and qualifiers, previews serpentine distribution, and validates configuration after registration closes.",
+)
+async def get_pool_play_post_registration_setup(
+    club_id: UUID,
+    tournament_id: UUID,
+    number_of_pools: int | None = Query(default=None, description="Optional override for pool count"),
+    qualifiers_per_pool: int | None = Query(default=None, description="Optional override for qualifiers per pool"),
+    bracket_type: str | None = Query(default=None, description="Optional override for bracket type"),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> PoolPlayPostRegistrationSetupResponse:
+    return await CompetitionService(db).get_pool_play_post_registration_setup(
+        club_id, tournament_id, number_of_pools, qualifiers_per_pool, bracket_type
+    )
+
+
+@club_competition_router.post(
+    "/pool-play/confirm-and-generate",
+    response_model=PoolPlayGenerationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Confirm format configuration and generate pools & matches",
+    description="Creates pools, assigns teams serpentine, generates pool matches, and sets tournament to ready_to_start stage.",
+)
+async def confirm_and_generate_pool_play(
+    club_id: UUID,
+    tournament_id: UUID,
+    payload: PoolPlayPostRegistrationConfirmRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> PoolPlayGenerationResponse:
+    return await CompetitionService(db).confirm_and_generate_pool_play(
+        club_id, tournament_id, payload
+    )
+
 
 
 @club_competition_router.get(
@@ -776,6 +820,45 @@ async def set_scramble_planned_rounds(
     return await CompetitionService(db).set_scramble_planned_rounds(
         club_id, tournament_id, payload.planned_rounds
     )
+
+
+@club_competition_router.get(
+    "/scramble/post-registration-setup",
+    response_model=ScramblePostRegistrationSetupResponse,
+    summary="Get post-registration Scramble setup, recommendations and preview",
+    description="Calculates confirmed players, recommends rounds, diagnoses odd player counts, and provides partner rotation preview.",
+)
+async def get_scramble_post_registration_setup(
+    club_id: UUID,
+    tournament_id: UUID,
+    rounds: int | None = Query(default=None, description="Optional override for planned rounds"),
+    rotation_rule: str | None = Query(default=None, description="Optional override for rotation rule"),
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> ScramblePostRegistrationSetupResponse:
+    return await CompetitionService(db).get_scramble_post_registration_setup(
+        club_id, tournament_id, rounds, rotation_rule
+    )
+
+
+@club_competition_router.post(
+    "/scramble/confirm-and-generate",
+    response_model=ScrambleGenerationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Confirm Scramble format configuration and generate rotation schedule",
+    description="Validates feasibility, configures planned rounds & rotation rule, generates matches, and marks tournament ready_to_start.",
+)
+async def confirm_and_generate_scramble(
+    club_id: UUID,
+    tournament_id: UUID,
+    payload: ScramblePostRegistrationConfirmRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> ScrambleGenerationResponse:
+    return await CompetitionService(db).confirm_and_generate_scramble(
+        club_id, tournament_id, payload
+    )
+
 
 
 # ─── Player Read-Only Endpoints ───────────────────────────────────────────────

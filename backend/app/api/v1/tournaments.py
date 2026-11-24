@@ -180,12 +180,13 @@ async def update_tournament(
 async def open_registration(
     club_id: UUID,
     tournament_id: UUID,
+    reset_schedule: bool = Query(default=False, description="Explicitly invalidate and reset generated schedule if reopening after generation"),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_TOURNAMENTS)),
     db: AsyncSession = Depends(get_db),
 ) -> TournamentResponse:
     """Open tournament registration."""
     return await TournamentService(db).open_registration(
-        club_id=club_id, tournament_id=tournament_id
+        club_id=club_id, tournament_id=tournament_id, reset_schedule=reset_schedule
     )
 
 

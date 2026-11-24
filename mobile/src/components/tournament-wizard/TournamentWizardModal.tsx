@@ -461,6 +461,8 @@ export function TournamentWizardModal({
         formatConfig.rounds = plannedRounds;
         formatConfig.rotation_rule = scConfig.rotation_rule || formState.scrambleRotationRule;
         formatConfig.leaderboard_metric = scConfig.leaderboard_metric || formState.scrambleLeaderboardMetric;
+        formatConfig.configuration_stage = 'awaiting_format_configuration';
+        formatConfig.is_format_configured = false;
         scoringRules = {
           game_format: 'single_game',
           target_score: scConfig.target_score || 11,
@@ -488,6 +490,8 @@ export function TournamentWizardModal({
         formatConfig.advancement_rule = ppConfig.advancement_rule || 'top_per_pool';
         formatConfig.courts_count = courtsCount;
         if (assignedCourts) formatConfig.assigned_courts = assignedCourts;
+        formatConfig.configuration_stage = 'awaiting_format_configuration';
+        formatConfig.is_format_configured = false;
         scoringRules = {
           game_format: ppConfig.game_format || 'single_game',
           target_score: ppConfig.target_score || 11,

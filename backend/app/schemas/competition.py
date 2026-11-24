@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -430,3 +431,70 @@ class BracketSummaryResponse(BaseModel):
     current_round: int | None = None
     champion_team_id: uuid.UUID | None = None
     champion_team_name: str | None = None
+
+
+# ─── Post-Registration Workflow Schemas ────────────────────────────────────────
+
+class ScramblePostRegistrationSetupResponse(BaseModel):
+    tournament_id: uuid.UUID
+    tournament_status: str
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_review' | 'schedule_generated' | 'ready_to_start' | 'in_progress'
+    confirmed_player_count: int
+    eligible_players: list[dict[str, Any]]
+    is_schedule_feasible: bool
+    is_multiple_of_4: bool
+    is_odd: bool
+    feasible_matches_per_round: int
+    feasible_doubles_pairs: int
+    recommended_rounds: int
+    recommendation_reason: str
+    recommendation_details: dict[str, Any]
+    odd_player_handling_message: str
+    available_rotation_rules: list[str]
+    selected_rotation_rule: str
+    selected_rounds: int
+    preview_rounds: list[dict[str, Any]] = []
+    is_generated: bool
+    can_start: bool
+    validation_error: str | None = None
+
+
+class ScramblePostRegistrationConfirmRequest(BaseModel):
+    rounds: int = Field(..., ge=1, le=20, description="Confirmed planned rotation rounds")
+    rotation_rule: str = Field(default="Full Rotation (no repeating partners)")
+    matches_per_player: int | None = None
+
+
+class PoolPlayPostRegistrationSetupResponse(BaseModel):
+    tournament_id: uuid.UUID
+    tournament_status: str
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_review' | 'schedule_generated' | 'ready_to_start' | 'in_progress'
+    confirmed_teams_count: int
+    confirmed_teams: list[dict[str, Any]]
+    is_configuration_valid: bool
+    recommended_pools: int
+    recommended_teams_per_pool: int
+    recommended_qualifiers_per_pool: int
+    recommended_bracket_type: str
+    recommendation_reason: str
+    feasible_pool_configurations: list[dict[str, Any]]
+    selected_pools: int
+    selected_qualifiers_per_pool: int
+    selected_bracket_type: str
+    preview_pools: list[dict[str, Any]] = []
+    preview_qualification_summary: str
+    is_generated: bool
+    can_start: bool
+    validation_error: str | None = None
+
+
+class PoolPlayPostRegistrationConfirmRequest(BaseModel):
+    number_of_pools: int = Field(..., ge=2, description="Confirmed number of pools")
+    qualifiers_per_pool: int = Field(..., ge=1, description="Teams advancing per pool to championship bracket")
+    bracket_type: str = Field(default="Single Elimination")
+    pool_names: list[str] | None = None
+
+
+ScramblePostRegistrationSetupResponse.model_rebuild()
+PoolPlayPostRegistrationSetupResponse.model_rebuild()
+

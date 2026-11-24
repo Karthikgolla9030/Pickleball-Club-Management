@@ -15,3 +15,4 @@ export { AddTeamModal } from './modals/AddTeamModal';
 export { EditPlayerRatingModal } from './modals/EditPlayerRatingModal';
 export { SwapPlayersModal } from './modals/SwapPlayersModal';
 export { SetupCourtsModal } from './modals/SetupCourtsModal';
+export { PoolPlayPostRegistrationCard } from './PoolPlayPostRegistrationCard';

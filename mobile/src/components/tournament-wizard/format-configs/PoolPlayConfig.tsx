@@ -35,28 +35,28 @@ export function PoolPlayConfig({ state, club }: PoolPlayConfigProps) {
         <AppText variant="bodySmall" bold style={styles.cardTitle}>
           Pool Play Settings
         </AppText>
-        <Badge label="Using club settings" variant="success" />
+        <Badge label="Configured post-registration" variant="info" />
       </View>
 
       <View style={styles.bulletsList}>
         <View style={styles.bulletRow}>
           <View style={styles.bulletDot} />
           <AppText variant="caption" style={styles.bulletText}>
-            Pool stage: <AppText variant="caption" bold>{poolCount} round-robin pools</AppText>
+            Pool allocation: <AppText variant="caption" bold>Configured post-registration based on confirmed teams</AppText>
           </AppText>
         </View>
 
         <View style={styles.bulletRow}>
           <View style={styles.bulletDot} />
           <AppText variant="caption" style={styles.bulletText}>
-            Advancement: Top <AppText variant="caption" bold>{qualifiers} per pool</AppText> advance to Championship
+            Advancement & bracket: <AppText variant="caption" bold>Qualifiers and playoff bracket selected post-registration</AppText>
           </AppText>
         </View>
 
         <View style={styles.bulletRow}>
           <View style={styles.bulletDot} />
           <AppText variant="caption" style={styles.bulletText}>
-            Playoff bracket: <AppText variant="caption" bold>Single elimination knockout</AppText>
+            Playoff format: <AppText variant="caption" bold>Single or Double Elimination championship</AppText>
           </AppText>
         </View>
 

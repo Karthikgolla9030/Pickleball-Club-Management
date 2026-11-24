@@ -55,6 +55,8 @@ from app.schemas.competition import (
     PoolConfigureRequest,
     PoolManualAssignRequest,
     PoolPlayGenerationResponse,
+    PoolPlayPostRegistrationConfirmRequest,
+    PoolPlayPostRegistrationSetupResponse,
     PoolResponse,
     PoolStandingRow,
     PoolStandingsResponse,
@@ -65,6 +67,8 @@ from app.schemas.competition import (
     ScrambleCourtPlayerInfo,
     ScrambleGenerationResponse,
     ScrambleMatchupGenerateRequest,
+    ScramblePostRegistrationConfirmRequest,
+    ScramblePostRegistrationSetupResponse,
     ScrambleStandingRow,
     ScrambleStandingsResponse,
     ScrambleStateResponse,
@@ -4644,4 +4648,525 @@ class CompetitionService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is already locked")
         await self.tournament_repo.update(tournament, is_competition_locked=True, status=TournamentStatus.IN_PROGRESS)
         await self.db.commit()
+
+    # ─── Post-Registration Setup & Generation (Targeted Workflow) ─────────────
+
+    async def get_scramble_post_registration_setup(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        rounds: int | None = None,
+        rotation_rule: str | None = None,
+    ) -> ScramblePostRegistrationSetupResponse:
+        """
+        Calculates confirmed players, recommends rounds, diagnoses odd player counts,
+        and provides simulated partner rotation preview for post-registration Scramble setup.
+        """
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_scramble(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        # 1. Fetch confirmed active players
+        regs = await self.registration_repo.list_by_tournament(tournament_id)
+        confirmed_regs = [
+            r for r in regs
+            if r.status == RegistrationStatus.CONFIRMED
+            and r.player_membership
+            and r.player_membership.status == PlayerMembershipStatus.ACTIVE
+            and r.player_membership.club_id == club_id
+        ]
+        player_count = len(confirmed_regs)
+
+        eligible_players = []
+        for r in confirmed_regs:
+            user = r.player_membership.user if hasattr(r.player_membership, "user") else None
+            profile = user.player_profile if user and hasattr(user, "player_profile") else None
+            name = (
+                profile.display_name
+                if profile and profile.display_name
+                else (user.full_name if user and user.full_name else (user.email if user else "Player"))
+            )
+            gender = getattr(profile, "gender", None) or getattr(user, "gender", None)
+            rating = float(profile.skill_rating) if profile and profile.skill_rating is not None else 3.5
+            eligible_players.append({
+                "id": str(r.player_membership_id),
+                "player_membership_id": str(r.player_membership_id),
+                "user_id": str(user.id) if user else None,
+                "display_name": name,
+                "name": name,
+                "seed": r.seed,
+                "gender": gender,
+                "rating": rating,
+                "skill_rating": rating,
+            })
+
+        division = (tournament.format_configuration or {}).get("category", "Open Scramble")
+        courts_count = (tournament.format_configuration or {}).get("courts_count")
+
+        # 2. Recommendations & Feasibility
+        engine = ScrambleEngine()
+        diag = engine.calculate_post_registration_recommendation(
+            player_count=player_count,
+            division=division,
+            courts_count=courts_count,
+        )
+
+        config = dict(tournament.format_configuration or {})
+        saved_rounds = config.get("planned_rounds") or config.get("rounds")
+        selected_rounds = rounds or saved_rounds or diag["recommended_rounds"]
+        selected_rotation = rotation_rule or config.get("rotation_rule") or "Full Rotation (no repeating partners)"
+
+        available_rotation_rules = [
+            "Full Rotation (no repeating partners)",
+            "Balanced Pairings (fair partner distribution)",
+            "Skill-Tiered Rotation (similar rating partners)",
+        ]
+
+        # 3. Simulated Partner Rotation Preview
+        preview_rounds = []
+        if player_count >= 4 and player_count % 4 == 0:
+            try:
+                simulated_matchups = engine.generate_matchups(
+                    eligible_players,
+                    num_rounds=min(int(selected_rounds), 10),
+                    matches_per_player=min(int(selected_rounds), 10),
+                    division=division,
+                )
+                rounds_map = {}
+                for m in simulated_matchups:
+                    r_num = m["round_number"]
+                    if r_num not in rounds_map:
+                        rounds_map[r_num] = []
+                    rounds_map[r_num].append({
+                        "match_number": m["match_number"],
+                        "side_a": [p.get("name", "Player") for p in m["side_a"]],
+                        "side_b": [p.get("name", "Player") for p in m["side_b"]],
+                    })
+                for r_num in sorted(rounds_map.keys()):
+                    preview_rounds.append({
+                        "round_number": r_num,
+                        "matches": rounds_map[r_num],
+                    })
+            except Exception:
+                pass
+        elif player_count >= 5 and diag.get("partition"):
+            preview_rounds.append({
+                "round_number": 1,
+                "note": f"Partitioned into {diag['partition']['courts_of_4']} 4-player court(s) and {diag['partition']['courts_of_5']} 5-player court(s). On 5-player court(s), 1 player sits out per game in rotation.",
+                "matches": [],
+            })
+
+        matches_count = await self.competition_repo.count_all_matches(tournament_id)
+        is_generated = matches_count > 0
+
+        # Determine stage
+        stage = config.get("configuration_stage")
+        if tournament.status == TournamentStatus.REGISTRATION_OPEN:
+            stage = "registration_open"
+        elif tournament.status == TournamentStatus.IN_PROGRESS:
+            stage = "in_progress"
+        elif is_generated:
+            stage = "ready_to_start"
+        elif not stage:
+            stage = "awaiting_format_configuration"
+
+        val_err = None
+        if not diag["is_schedule_feasible"]:
+            val_err = diag["odd_player_handling_message"]
+
+        return ScramblePostRegistrationSetupResponse(
+            tournament_id=tournament_id,
+            tournament_status=tournament.status.value,
+            configuration_stage=stage,
+            confirmed_player_count=player_count,
+            eligible_players=eligible_players,
+            is_schedule_feasible=diag["is_schedule_feasible"],
+            is_multiple_of_4=diag["is_multiple_of_4"],
+            is_odd=diag["is_odd"],
+            feasible_matches_per_round=diag["feasible_matches_per_round"],
+            feasible_doubles_pairs=diag["feasible_doubles_pairs"],
+            recommended_rounds=diag["recommended_rounds"],
+            recommendation_reason=diag["recommendation_reason"],
+            recommendation_details=diag["recommendation_details"],
+            odd_player_handling_message=diag["odd_player_handling_message"],
+            available_rotation_rules=available_rotation_rules,
+            selected_rotation_rule=selected_rotation,
+            selected_rounds=int(selected_rounds),
+            preview_rounds=preview_rounds,
+            is_generated=is_generated,
+            can_start=is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED,
+            validation_error=val_err,
+        )
+
+    async def confirm_and_generate_scramble(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        payload: ScramblePostRegistrationConfirmRequest,
+    ) -> ScrambleGenerationResponse:
+        """
+        Tournament Director confirms format configuration and generates the Scramble rotation schedule.
+        Prevents duplicate schedule generation and verifies feasibility.
+        """
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_scramble(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        if tournament.status != TournamentStatus.REGISTRATION_CLOSED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Scramble schedule generation requires tournament status 'registration_closed' (current: '{tournament.status.value}'). Close registration first.",
+            )
+
+        existing_matches = await self.competition_repo.count_all_matches(tournament_id)
+        if existing_matches > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Matches have already been generated for this tournament. Use regenerate-scramble to rebuild or reset before results are entered.",
+            )
+
+        regs = await self.registration_repo.list_by_tournament(tournament_id)
+        eligible_players = []
+        for r in regs:
+            if (
+                r.status == RegistrationStatus.CONFIRMED
+                and r.player_membership
+                and r.player_membership.status == PlayerMembershipStatus.ACTIVE
+                and r.player_membership.club_id == club_id
+            ):
+                user = r.player_membership.user if hasattr(r.player_membership, "user") else None
+                profile = user.player_profile if user and hasattr(user, "player_profile") else None
+                name = (
+                    profile.display_name
+                    if profile and profile.display_name
+                    else (user.full_name if user and user.full_name else (user.email if user else "Player"))
+                )
+                gender = getattr(profile, "gender", None) or getattr(user, "gender", None)
+                eligible_players.append({
+                    "id": r.player_membership_id,
+                    "player_membership_id": r.player_membership_id,
+                    "user_id": user.id if user else None,
+                    "display_name": name,
+                    "name": name,
+                    "seed": r.seed,
+                    "gender": gender,
+                    "registered_at": r.registered_at.isoformat() if r.registered_at else "",
+                })
+
+        engine = ScrambleEngine()
+        division = (tournament.format_configuration or {}).get("category", "Open Scramble")
+        try:
+            engine.validate_scramble_configuration(
+                len(eligible_players), payload.rounds, payload.matches_per_player or payload.rounds
+            )
+            matchups = engine.generate_matchups(
+                eligible_players, payload.rounds, payload.matches_per_player or payload.rounds, division=division
+            )
+        except ScrambleConfigurationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            ) from e
+
+        # Save configuration
+        config = dict(tournament.format_configuration or {})
+        config.update({
+            "planned_rounds": payload.rounds,
+            "rounds": payload.rounds,
+            "rotation_rule": payload.rotation_rule,
+            "matches_per_player": payload.matches_per_player or payload.rounds,
+            "configuration_stage": "ready_to_start",
+            "is_format_configured": True,
+        })
+        await self.tournament_repo.update(tournament, format_configuration=config)
+
+        # Create Match and MatchParticipant records
+        match_dicts = [
+            {
+                "tournament_id": tournament_id,
+                "round_number": m["round_number"],
+                "match_number": m["match_number"],
+                "stage": None,
+                "status": MatchStatus.PENDING,
+            }
+            for m in matchups
+        ]
+        created_matches = await self.competition_repo.create_matches_bulk(match_dicts)
+
+        participant_dicts = []
+        for m_model, m_spec in zip(created_matches, matchups):
+            side_a_players = m_spec["side_a"]
+            side_b_players = m_spec["side_b"]
+            for slot, p in enumerate(side_a_players, start=1):
+                participant_dicts.append({
+                    "match_id": m_model.id,
+                    "player_membership_id": p["id"],
+                    "side": "side_a",
+                    "partner_slot": slot,
+                })
+            for slot, p in enumerate(side_b_players, start=1):
+                participant_dicts.append({
+                    "match_id": m_model.id,
+                    "player_membership_id": p["id"],
+                    "side": "side_b",
+                    "partner_slot": slot,
+                })
+
+        await self.competition_repo.create_match_participants_bulk(participant_dicts)
+        await self.db.commit()
+
+        return ScrambleGenerationResponse(
+            tournament_id=tournament_id,
+            participants_count=len(eligible_players),
+            rounds_count=payload.rounds,
+            matches_generated=len(created_matches),
+            message=(
+                f"Generated {len(created_matches)} Scramble matches across {payload.rounds} rounds "
+                f"for {len(eligible_players)} players. Tournament is Ready to Start!"
+            ),
+        )
+
+    async def get_pool_play_post_registration_setup(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        number_of_pools: int | None = None,
+        qualifiers_per_pool: int | None = None,
+        bracket_type: str | None = None,
+    ) -> PoolPlayPostRegistrationSetupResponse:
+        """
+        Calculates confirmed teams, recommends pool counts and qualifiers,
+        previews serpentine team distribution into pools, and validates qualification structure.
+        """
+        import math
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+        if not teams:
+            regs = await self.registration_repo.list_by_tournament(tournament_id)
+            confirmed_regs = [r for r in regs if r.status == RegistrationStatus.CONFIRMED]
+            if confirmed_regs:
+                teams = await self.finalize_registrations_and_seed(tournament)
+
+        teams_count = len(teams)
+        confirmed_teams_data = [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "seed": t.seed,
+                "members": [
+                    {
+                        "player_membership_id": str(m.player_membership_id),
+                    }
+                    for m in (t.members or [])
+                ],
+            }
+            for t in teams
+        ]
+
+        rec_pools, rec_qualifiers, rec_bracket, rec_reason, feasible_configs = (
+            PoolPlayEngine.calculate_recommended_pool_configuration(teams_count)
+        )
+
+        config = dict(tournament.format_configuration or {})
+        sel_pools = number_of_pools or config.get("pool_count") or rec_pools
+        sel_qualifiers = qualifiers_per_pool or config.get("qualifiers_per_pool") or rec_qualifiers
+        sel_bracket = bracket_type or config.get("pool_bracket_type") or rec_bracket
+
+        val_error = None
+        is_valid = True
+        engine = PoolPlayEngine()
+        if teams_count >= 2:
+            try:
+                engine.validate_pool_configuration(teams_count, sel_pools, sel_qualifiers)
+            except PoolConfigurationError as e:
+                is_valid = False
+                val_error = str(e)
+        else:
+            is_valid = False
+            val_error = f"Pool Play requires at least 4 confirmed teams (currently {teams_count} confirmed)."
+
+        preview_pools = []
+        if is_valid and teams_count >= 2:
+            pool_names = [f"Pool {chr(65 + i)}" for i in range(sel_pools)]
+            team_dicts = [{"id": str(t.id), "name": t.name, "seed": t.seed} for t in teams]
+            dist = engine.distribute_teams_serpentine(team_dicts, pool_names)
+            for p_name in pool_names:
+                assigned = dist.get(p_name, [])
+                preview_pools.append({
+                    "pool_name": p_name,
+                    "teams_count": len(assigned),
+                    "teams": assigned,
+                })
+
+        total_advancing = sel_pools * sel_qualifiers
+        preview_summary = (
+            f"Top {sel_qualifiers} entry/entries from each of the {sel_pools} pools "
+            f"({total_advancing} total) advance to the {sel_bracket} Championship Bracket."
+        )
+
+        existing_matches = await self.competition_repo.count_all_matches(tournament_id)
+        is_generated = existing_matches > 0
+
+        stage = config.get("configuration_stage")
+        if tournament.status == TournamentStatus.REGISTRATION_OPEN:
+            stage = "registration_open"
+        elif tournament.status == TournamentStatus.IN_PROGRESS:
+            stage = "in_progress"
+        elif is_generated:
+            stage = "ready_to_start"
+        elif not stage:
+            stage = "awaiting_format_configuration"
+
+        rec_tpp = math.ceil(teams_count / rec_pools) if rec_pools > 0 else 0
+
+        return PoolPlayPostRegistrationSetupResponse(
+            tournament_id=tournament_id,
+            tournament_status=tournament.status.value,
+            configuration_stage=stage,
+            confirmed_teams_count=teams_count,
+            confirmed_teams=confirmed_teams_data,
+            is_configuration_valid=is_valid,
+            recommended_pools=rec_pools,
+            recommended_teams_per_pool=rec_tpp,
+            recommended_qualifiers_per_pool=rec_qualifiers,
+            recommended_bracket_type=rec_bracket,
+            recommendation_reason=rec_reason,
+            feasible_pool_configurations=feasible_configs,
+            selected_pools=sel_pools,
+            selected_qualifiers_per_pool=sel_qualifiers,
+            selected_bracket_type=sel_bracket,
+            preview_pools=preview_pools,
+            preview_qualification_summary=preview_summary,
+            is_generated=is_generated,
+            can_start=is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED,
+            validation_error=val_error,
+        )
+
+    async def confirm_and_generate_pool_play(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        payload: PoolPlayPostRegistrationConfirmRequest,
+    ) -> PoolPlayGenerationResponse:
+        """
+        Tournament Director confirms format configuration and generates the Pool Play pools,
+        serpentine team distribution, and pool matches.
+        """
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        if tournament.status != TournamentStatus.REGISTRATION_CLOSED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Pool Play generation requires tournament status 'registration_closed' (current: '{tournament.status.value}'). Close registration first.",
+            )
+
+        existing_matches = await self.competition_repo.count_all_matches(tournament_id)
+        if existing_matches > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Matches have already been generated for this tournament. Use regenerate-pool-play to rebuild before match results are entered.",
+            )
+
+        teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+        if not teams:
+            regs = await self.registration_repo.list_by_tournament(tournament_id)
+            confirmed_regs = [r for r in regs if r.status == RegistrationStatus.CONFIRMED]
+            if confirmed_regs:
+                teams = await self.finalize_registrations_and_seed(tournament)
+
+        if len(teams) < 4:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Pool Play requires at least 4 confirmed teams (currently {len(teams)} confirmed).",
+            )
+
+        engine = PoolPlayEngine()
+        try:
+            engine.validate_pool_configuration(
+                len(teams), payload.number_of_pools, payload.qualifiers_per_pool
+            )
+        except PoolConfigurationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            ) from e
+
+        if payload.pool_names:
+            if len(payload.pool_names) != payload.number_of_pools:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Expected {payload.number_of_pools} pool names, got {len(payload.pool_names)}",
+                )
+            pool_names = payload.pool_names
+        else:
+            pool_names = [f"Pool {chr(65 + i)}" for i in range(payload.number_of_pools)]
+
+        # Save configuration
+        config = dict(tournament.format_configuration or {})
+        config.update({
+            "number_of_pools": payload.number_of_pools,
+            "pool_count": payload.number_of_pools,
+            "qualifiers_per_pool": payload.qualifiers_per_pool,
+            "pool_bracket_type": payload.bracket_type,
+            "configuration_stage": "ready_to_start",
+            "is_format_configured": True,
+        })
+        await self.tournament_repo.update(tournament, format_configuration=config)
+
+        # Clean existing pending matches, pool teams, and pools
+        await self.competition_repo.delete_pending_matches(tournament_id)
+        await self.competition_repo.delete_pool_teams_by_tournament(tournament_id)
+        await self.competition_repo.delete_pools_by_tournament(tournament_id)
+
+        # Create pools and distribute teams serpentine
+        pools = await self.competition_repo.create_pools_bulk(tournament_id, pool_names)
+        team_dicts = [{"id": t.id, "name": t.name, "seed": t.seed} for t in teams]
+        pool_names_list = [p.name for p in pools]
+        dist = engine.distribute_teams_serpentine(team_dicts, pool_names_list)
+        pool_name_to_pool = {p.name: p for p in pools}
+        assignments = []
+        for p_name, assigned_teams in dist.items():
+            target_pool = pool_name_to_pool[p_name]
+            for seed_in_pool, t in enumerate(assigned_teams, start=1):
+                assignments.append({
+                    "pool_id": target_pool.id,
+                    "team_id": t["id"],
+                    "seed": seed_in_pool,
+                })
+        await self.competition_repo.assign_teams_to_pools_bulk(assignments)
+
+        # Generate pool matches
+        pool_teams_map = {}
+        for p in pools:
+            pool_teams_map[p.id] = [t["id"] for t in dist[p.name]]
+        slots = engine.generate_pool_matches(pool_teams_map)
+
+        match_dicts = [
+            {
+                "tournament_id": tournament_id,
+                "team_a_id": s.team_a_id,
+                "team_b_id": s.team_b_id,
+                "round_number": s.round_number,
+                "match_number": s.match_number,
+                "stage": MatchStage.POOL,
+                "pool_id": s.pool_id,
+            }
+            for s in slots
+        ]
+        created_matches = await self.competition_repo.create_matches_bulk(match_dicts)
+        await self.db.commit()
+
+        return PoolPlayGenerationResponse(
+            tournament_id=tournament_id,
+            pools_count=len(pools),
+            teams_count=len(teams),
+            matches_generated=len(created_matches),
+            message=f"Configured {len(pools)} pools and generated {len(created_matches)} matches for {len(teams)} teams. Tournament is Ready to Start!",
+        )
+
 
