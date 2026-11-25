@@ -152,7 +152,7 @@ export class WebSocketClient {
     try {
       const token = await this.tokenProvider();
       if (!token) {
-        console.log('[WS] No access token available. Skipping WS connection.');
+        // No access token available yet (unauthenticated or session initializing)
         return;
       }
 

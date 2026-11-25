@@ -700,7 +700,7 @@ class PlayerService:
 
     async def get_upcoming_activities(
         self,
-        user_id: UUID,
+        user_id: UUID | None = None,
         activity_type: str | None = None,
         club_id: UUID | None = None,
         limit: int = 20,
@@ -714,66 +714,68 @@ class PlayerService:
         now = datetime.now(timezone.utc)
         all_activities: list[UpcomingActivityItem] = []
 
-        # 1. Fetch user's registered activity IDs to populate is_registered
+        # 1. Fetch user's registered activity IDs to populate is_registered (if caller is authenticated)
         user_tourney_ids: set[UUID] = set()
-        tr_stmt = (
-            select(TournamentRegistration.tournament_id)
-            .join(
-                ClubPlayerMembership,
-                TournamentRegistration.player_membership_id == ClubPlayerMembership.id,
-            )
-            .where(
-                ClubPlayerMembership.user_id == user_id,
-                TournamentRegistration.status.in_([
-                    RegistrationStatus.CONFIRMED,
-                    RegistrationStatus.PENDING,
-                    RegistrationStatus.WAITLISTED,
-                ]),
-            )
-        )
-        tr_res = await self.db.execute(tr_stmt)
-        user_tourney_ids = set(tr_res.scalars().all())
-
         user_league_ids: set[UUID] = set()
-        lr_stmt = (
-            select(Team.league_id)
-            .join(TeamMember, Team.id == TeamMember.team_id)
-            .join(
-                ClubPlayerMembership,
-                TeamMember.player_membership_id == ClubPlayerMembership.id,
-            )
-            .where(
-                ClubPlayerMembership.user_id == user_id,
-                Team.league_id.isnot(None),
-            )
-        )
-        lr_res = await self.db.execute(lr_stmt)
-        user_league_ids = set(lr_res.scalars().all())
-
         user_event_ids: set[UUID] = set()
-        er_stmt = select(EventRegistration.event_id).where(
-            EventRegistration.user_id == user_id,
-            EventRegistration.status == EventRegistrationStatus.REGISTERED,
-        )
-        er_res = await self.db.execute(er_stmt)
-        user_event_ids = set(er_res.scalars().all())
-
         user_lesson_ids: set[UUID] = set()
-        ls_stmt = select(LessonRegistration.lesson_id).where(
-            LessonRegistration.user_id == user_id,
-            LessonRegistration.status == LessonRegistrationStatus.REGISTERED,
-        )
-        ls_res = await self.db.execute(ls_stmt)
-        user_lesson_ids = set(ls_res.scalars().all())
-
-        # Caller's active club memberships
         user_club_ids: set[UUID] = set()
-        c_stmt = select(ClubPlayerMembership.club_id).where(
-            ClubPlayerMembership.user_id == user_id,
-            ClubPlayerMembership.status == PlayerMembershipStatus.ACTIVE,
-        )
-        c_res = await self.db.execute(c_stmt)
-        user_club_ids = set(c_res.scalars().all())
+
+        if user_id is not None:
+            tr_stmt = (
+                select(TournamentRegistration.tournament_id)
+                .join(
+                    ClubPlayerMembership,
+                    TournamentRegistration.player_membership_id == ClubPlayerMembership.id,
+                )
+                .where(
+                    ClubPlayerMembership.user_id == user_id,
+                    TournamentRegistration.status.in_([
+                        RegistrationStatus.CONFIRMED,
+                        RegistrationStatus.PENDING,
+                        RegistrationStatus.WAITLISTED,
+                    ]),
+                )
+            )
+            tr_res = await self.db.execute(tr_stmt)
+            user_tourney_ids = set(tr_res.scalars().all())
+
+            lr_stmt = (
+                select(Team.league_id)
+                .join(TeamMember, Team.id == TeamMember.team_id)
+                .join(
+                    ClubPlayerMembership,
+                    TeamMember.player_membership_id == ClubPlayerMembership.id,
+                )
+                .where(
+                    ClubPlayerMembership.user_id == user_id,
+                    Team.league_id.isnot(None),
+                )
+            )
+            lr_res = await self.db.execute(lr_stmt)
+            user_league_ids = set(lr_res.scalars().all())
+
+            er_stmt = select(EventRegistration.event_id).where(
+                EventRegistration.user_id == user_id,
+                EventRegistration.status == EventRegistrationStatus.REGISTERED,
+            )
+            er_res = await self.db.execute(er_stmt)
+            user_event_ids = set(er_res.scalars().all())
+
+            ls_stmt = select(LessonRegistration.lesson_id).where(
+                LessonRegistration.user_id == user_id,
+                LessonRegistration.status == LessonRegistrationStatus.REGISTERED,
+            )
+            ls_res = await self.db.execute(ls_stmt)
+            user_lesson_ids = set(ls_res.scalars().all())
+
+            # Caller's active club memberships
+            c_stmt = select(ClubPlayerMembership.club_id).where(
+                ClubPlayerMembership.user_id == user_id,
+                ClubPlayerMembership.status == PlayerMembershipStatus.ACTIVE,
+            )
+            c_res = await self.db.execute(c_stmt)
+            user_club_ids = set(c_res.scalars().all())
 
         norm_type = activity_type.lower().strip() if activity_type else "all"
 

@@ -16,7 +16,17 @@ export function useUniversalPromotionalAds() {
     queryFn: async () => {
       try {
         return await clubAssetsApi.getUniversalPromotionalAds();
-      } catch (err) {
+      } catch (err: any) {
+        if (
+          err?.type === 'TIMEOUT' ||
+          err?.type === 'NETWORK_ERROR' ||
+          err?.status === 502 ||
+          err?.status === 504 ||
+          err?.message?.includes('taking longer than expected')
+        ) {
+          // Server cold start or network timeout: gracefully fallback to empty ads without spamming console
+          return [];
+        }
         console.warn('[PROMOTIONAL ADS] Failed to fetch universal ads:', err);
         return [];
       }

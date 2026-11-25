@@ -22,12 +22,17 @@ export function useUpcomingActivities(params?: UseUpcomingActivitiesParams) {
         return await playerApi.getUpcomingActivities(params);
       } catch (err: any) {
         if (
+          err?.status === 401 ||
+          err?.type === 'AUTH_ERROR' ||
           err?.status === 404 ||
           err?.type === 'NOT_FOUND' ||
           err?.status === 502 ||
-          err?.type === 'NETWORK_ERROR'
+          err?.type === 'NETWORK_ERROR' ||
+          err?.type === 'TIMEOUT' ||
+          err?.message?.includes('Not authenticated') ||
+          err?.message?.includes('taking longer than expected')
         ) {
-          // Backend deployment pending on Render or waking up from cold start; return empty state gracefully
+          // Gracefully handle unauthenticated sessions, cold start, or network delay
           return {
             items: [],
             total: 0,

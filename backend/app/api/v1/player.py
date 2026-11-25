@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_optional_current_user
 from app.core.database import get_db
 from app.models.membership import SubscriptionStatus
 from app.models.payment import PaymentMethod, PaymentPurpose, PaymentStatus
@@ -500,12 +500,12 @@ async def get_upcoming_activities(
     club_id: UUID | None = Query(None, description="Optional club filter"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: User = Depends(get_current_user),
+    current_user: User | None = Depends(get_optional_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UpcomingActivitiesResponse:
     """Retrieve upcoming activities for player discovery across multiple clubs."""
     return await PlayerService(db).get_upcoming_activities(
-        user_id=current_user.id,
+        user_id=current_user.id if current_user else None,
         activity_type=activity_type,
         club_id=club_id,
         limit=limit,
