@@ -191,14 +191,8 @@ export function ClubTournamentConfigTab({
     if (isNaN(rrW) || rrW < 1) errs.rrWinBy = 'Win by points must be at least 1.';
 
     // Pool Play validation
-    const pCount = poolCount.trim() ? parseInt(poolCount, 10) : 2;
-    const tpp = teamsPerPool.trim() ? parseInt(teamsPerPool, 10) : 4;
-    const qpp = qualifiersPerPool.trim() ? parseInt(qualifiersPerPool, 10) : 2;
     const ppScore = parseInt(ppTargetScore, 10);
     const ppW = parseInt(ppWinBy, 10);
-    if (!isNaN(pCount) && pCount < 2) errs.poolCount = 'Must have at least 2 pools.';
-    if (!isNaN(tpp) && tpp < 2) errs.teamsPerPool = 'Must have at least 2 teams per pool.';
-    if (!isNaN(qpp) && (qpp < 1 || qpp > tpp)) errs.qualifiersPerPool = 'Qualifiers must be between 1 and teams per pool.';
     if (isNaN(ppScore) || ppScore < 1) errs.ppTargetScore = 'Target score must be at least 1.';
     if (isNaN(ppW) || ppW < 1) errs.ppWinBy = 'Win by points must be at least 1.';
 
@@ -551,68 +545,13 @@ export function ClubTournamentConfigTab({
 
           <View style={styles.sectionDivider} />
 
-          {/* Section: Pool Setup */}
+          {/* Section: Tournament Pool & Playoff Setup Notice */}
           <View style={styles.sectionBlock}>
-            <AppText style={styles.sectionTitle}>Pool Setup</AppText>
+            <AppText style={styles.sectionTitle}>Tournament Pool & Bracket Setup</AppText>
             <View style={styles.infoCardBox}>
               <AppText style={styles.infoBoxText}>
-                Post-Registration Workflow: Pool counts, teams per pool, and qualifiers are configured post-registration based on actual confirmed teams. Values below serve as club baseline defaults.
+                Pool counts, teams per pool, playoff qualifiers, and championship bracket types are configured dynamically for each tournament in its Setup & Courts section after registration closes, based on actual confirmed participants.
               </AppText>
-            </View>
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Input
-                  label="Baseline Number of Pools"
-                  value={poolCount}
-                  onChangeText={(v) => setPoolCount(v.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder="2"
-                  editable={isOwner}
-                  error={errors.poolCount}
-                  hint="Baseline default; finalized post-registration"
-                />
-              </View>
-              <View style={styles.col}>
-                <Input
-                  label="Baseline Teams Per Pool"
-                  value={teamsPerPool}
-                  onChangeText={(v) => setTeamsPerPool(v.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder="4"
-                  editable={isOwner}
-                  error={errors.teamsPerPool}
-                  hint="Baseline default; finalized post-registration"
-                />
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.sectionDivider} />
-
-          {/* Section: Advancement to Championship Bracket */}
-          <View style={styles.sectionBlock}>
-            <AppText style={styles.sectionTitle}>Advancement to Championship Bracket</AppText>
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Input
-                  label="Baseline Qualifiers Per Pool"
-                  value={qualifiersPerPool}
-                  onChangeText={(v) => setQualifiersPerPool(v.replace(/[^0-9]/g, ''))}
-                  keyboardType="number-pad"
-                  placeholder="2"
-                  editable={isOwner}
-                  error={errors.qualifiersPerPool}
-                  hint="Configured post-registration based on bracket size"
-                />
-              </View>
-              <View style={styles.col}>
-                <Input
-                  label="Playoff Bracket Type"
-                  value={poolBracketType}
-                  editable={false}
-                  hint="Championship playoff stage"
-                />
-              </View>
             </View>
           </View>
 
@@ -688,7 +627,7 @@ export function ClubTournamentConfigTab({
             <AppText style={styles.sectionTitle}>Advancement & Tiebreaker Rules</AppText>
             <View style={styles.infoCardBox}>
               <AppText style={styles.infoBoxText}>
-                Top {qualifiersPerPool || 2} entries from each pool seed into a Single Elimination championship bracket. Ties within a pool are resolved by Total Wins → Point Differential → Total Points Scored → Team Name.
+                Top qualifying entries from each pool seed into the championship playoff bracket. Ties within a pool are resolved by Total Wins → Point Differential → Total Points Scored → Team Name.
               </AppText>
             </View>
           </View>

@@ -61,12 +61,24 @@ export function recalculateStats(
     };
   });
 
-  // Group teams by pool
+  // Group teams by pool for assigned teams only
   const pools: PoolStat[] = [];
-  const numPools = Math.min(config.numPools, POOL_KEYS.length);
+  const assignedTeams = updatedTeams.filter((t) => Boolean(t.pool && t.pool.trim()));
 
-  for (let i = 0; i < numPools; i++) {
-    const key = POOL_KEYS[i];
+  // If there are no teams or no assigned pools, do not invent placeholder pools
+  if (teams.length === 0 || assignedTeams.length === 0) {
+    return {
+      updatedTeams,
+      pools: [],
+      poolDiff: 0,
+      isWithinTolerance: true,
+    };
+  }
+
+  // Derive pool keys from actual assigned teams (sorted)
+  const poolKeys = Array.from(new Set(assignedTeams.map((t) => t.pool))).sort();
+
+  for (const key of poolKeys) {
     const poolTeams = updatedTeams.filter((t) => t.pool === key);
     const teamsCount = poolTeams.length;
     const playerCount = teamsCount * 2;

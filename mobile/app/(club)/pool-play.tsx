@@ -130,6 +130,18 @@ export default function PoolPlayManagementScreen() {
   const [showSetupModal, setShowSetupModal] = useState(false);
   const tournamentConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
 
+  // Derive whether pools and schedule have actually been generated
+  const isPoolsGenerated = useMemo(() => {
+    return (
+      matches.length > 0 ||
+      Boolean((tournament?.format_configuration as any)?.is_format_configured) ||
+      Boolean((tournament?.format_configuration as any)?.is_generated) ||
+      Boolean((tournament?.format_configuration as any)?.pools_generated) ||
+      tournament?.status === 'in_progress' ||
+      tournament?.status === 'completed'
+    );
+  }, [matches.length, tournament?.format_configuration, tournament?.status]);
+
   // Synchronize persisted format configuration from backend
   useEffect(() => {
     if (tournament?.format_configuration) {
@@ -277,7 +289,7 @@ export default function PoolPlayManagementScreen() {
           const p2Name = p2Mem?.display_name || p2Mem?.user_email || `Player 2`;
           const p1Avatar = p1Name.slice(0, 2).toUpperCase();
           const p2Avatar = p2Name.slice(0, 2).toUpperCase();
-          const defaultPool = idx % config.numPools === 0 ? 'A' : 'B';
+          const defaultPool = isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '';
           const pool = existingPoolMap.get(t.id) || defaultPool;
           return {
             id: t.id,
@@ -336,7 +348,7 @@ export default function PoolPlayManagementScreen() {
               avatar: p2Name.slice(0, 2).toUpperCase(),
               color: '#047857',
             },
-            pool: teamIdx % config.numPools === 0 ? 'A' : 'B',
+            pool: isPoolsGenerated ? (teamIdx % config.numPools === 0 ? 'A' : 'B') : '',
             avgRating: 4.0,
             spread: 0.0,
           });
@@ -362,7 +374,7 @@ export default function PoolPlayManagementScreen() {
               avatar: pName.slice(0, 2).toUpperCase(),
               color: '#1E3A8A',
             },
-            pool: idx % config.numPools === 0 ? 'A' : 'B',
+            pool: isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '',
             avgRating: 4.0,
             spread: 0.0,
           });
@@ -372,7 +384,7 @@ export default function PoolPlayManagementScreen() {
     } else {
       setTeams([]);
     }
-  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, matches.length]);
+  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, matches.length, isPoolsGenerated]);
 
   // Calculated Stats
   const { updatedTeams, pools, poolDiff, isWithinTolerance } = useMemo(() => {
@@ -876,9 +888,9 @@ export default function PoolPlayManagementScreen() {
       participantsCount: updatedTeams.length,
       teamsCount: updatedTeams.length,
       matchesCount: matches.length,
-      poolsCount: pools.length || config.numPools,
+      poolsCount: isPoolsGenerated && pools.length > 0 ? pools.length : undefined,
     });
-  }, [effectiveTournament, updatedTeams.length, matches.length, pools.length, config.numPools]);
+  }, [effectiveTournament, updatedTeams.length, matches.length, pools.length, isPoolsGenerated]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;

@@ -142,6 +142,69 @@ export function TeamsPoolsTab({
             </AppText>
           </Card>
         </View>
+      ) : pools.length === 0 ? (
+        <View style={styles.unassignedSection}>
+          <View style={styles.unassignedNotice}>
+            <AppText style={styles.unassignedNoticeTitle}>
+              Confirmed {isSingles ? 'Players' : 'Teams'} ({teams.length})
+            </AppText>
+            <AppText style={styles.unassignedNoticeText}>
+              Pool assignments and balance will be generated in Setup & Courts. Player ratings can be adjusted below.
+            </AppText>
+          </View>
+          <View style={styles.teamCardsContainer}>
+            {teams.map((team, idx) => (
+              <TournamentTeamCard
+                key={team.id}
+                name={team.name}
+                seed={team.teamNum}
+                displayIndex={idx + 1}
+                avgRating={team.avgRating}
+                statusLabel="Confirmed"
+                statusBadgeVariant="success"
+                teamSize={isSingles ? 1 : 2}
+                members={
+                  isSingles
+                    ? [
+                        {
+                          id: team.p1.id,
+                          display_name: team.p1.name,
+                          skill_rating: team.p1.rating,
+                        },
+                      ]
+                    : [
+                        {
+                          id: team.p1.id,
+                          display_name: team.p1.name,
+                          skill_rating: team.p1.rating,
+                        },
+                        {
+                          id: team.p2.id,
+                          display_name: team.p2.name,
+                          skill_rating: team.p2.rating,
+                        },
+                      ]
+                }
+                canDelete={Boolean(onDeleteTeam)}
+                onDelete={() => handleDeletePrompt(team)}
+                onEditMemberRating={(memberIndex) => {
+                  const slot: 'p1' | 'p2' = memberIndex === 0 ? 'p1' : 'p2';
+                  const p = slot === 'p1' ? team.p1 : team.p2;
+                  setEditingPlayer({
+                    player: p,
+                    teamId: team.id,
+                    teamName: team.name,
+                    slot,
+                  });
+                }}
+                onSwapMember={(memberIndex) => {
+                  const slot: 'p1' | 'p2' = memberIndex === 0 ? 'p1' : 'p2';
+                  setSwappingSource({ team, slot });
+                }}
+              />
+            ))}
+          </View>
+        </View>
       ) : (
         <>
           {/* ─── Balance Tolerance Summary Banner ──────────────────────── */}
@@ -312,6 +375,27 @@ const styles = StyleSheet.create({
   // Empty State
   emptyContainer: {
     paddingVertical: Spacing[4],
+  },
+  unassignedSection: {
+    gap: Spacing[3],
+  },
+  unassignedNotice: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: 4,
+  },
+  unassignedNoticeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  unassignedNoticeText: {
+    fontSize: 12.5,
+    color: '#334155',
+    lineHeight: 17,
   },
   emptyCard: {
     backgroundColor: '#FFFFFF',

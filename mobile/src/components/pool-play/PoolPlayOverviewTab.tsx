@@ -68,21 +68,37 @@ export function PoolPlayOverviewTab({
 
   const participantLabel = isSingles ? 'PLAYERS' : 'TEAMS';
 
-  // Determine stage title and button CTA
-  const isAwaitingFormatSetup = tournament?.status === 'registration_closed' && totalPoolMatches === 0;
+  // Check if pools and schedule have actually been generated
+  const isPoolsGenerated =
+    matches.length > 0 ||
+    Boolean((tournament?.format_configuration as any)?.is_format_configured) ||
+    Boolean((tournament?.format_configuration as any)?.is_generated) ||
+    Boolean((tournament?.format_configuration as any)?.pools_generated) ||
+    tournament?.status === 'in_progress' ||
+    tournament?.status === 'completed';
+
+  const isRegistrationClosed = tournament?.status === 'registration_closed';
+  const hasMinTeams = teams.length >= 4;
+  const isAwaitingFormatSetup = isRegistrationClosed && !isPoolsGenerated;
 
   let currentStageText = 'Registration / Setup';
-  let ctaLabel = 'Review ' + (isSingles ? 'Players & Pools' : 'Teams & Pools') + ' →';
+  let ctaLabel = 'Review ' + (isSingles ? 'Players' : 'Teams') + ' →';
   let targetTab: string = 'participants';
 
   if (isAwaitingFormatSetup) {
-    currentStageText = 'Awaiting Format Setup';
-    ctaLabel = 'Configure Pool Play in Setup & Courts →';
-    targetTab = 'setup_courts';
-  } else if (matches.length > 0 && !isPoolPlayComplete) {
+    if (!hasMinTeams) {
+      currentStageText = 'Waiting for Teams';
+      ctaLabel = 'Review Confirmed ' + (isSingles ? 'Players' : 'Teams') + ' →';
+      targetTab = 'participants';
+    } else {
+      currentStageText = 'Awaiting Format Setup';
+      ctaLabel = 'Configure Pool Play in Setup & Courts →';
+      targetTab = 'setup_courts';
+    }
+  } else if (isPoolsGenerated && !isPoolPlayComplete) {
     currentStageText = 'Pool Stage In Progress';
-    ctaLabel = 'Enter Pool Match Scores →';
-    targetTab = 'matchups';
+    ctaLabel = totalPoolMatches > 0 ? 'Enter Pool Match Scores →' : 'View Schedule in Setup & Courts →';
+    targetTab = totalPoolMatches > 0 ? 'matchups' : 'setup_courts';
   } else if (isPoolPlayComplete && championshipMatches.length === 0) {
     currentStageText = 'Pool Stage Complete — Ready for Bracket';
     ctaLabel = 'Open Championship Bracket →';
@@ -115,8 +131,12 @@ export function PoolPlayOverviewTab({
         <View style={styles.progressContainer}>
           <View style={styles.progressTopRow}>
             <AppText style={styles.progressSubText}>
-              {isAwaitingFormatSetup
-                ? 'Roster locked • Configure pools above to schedule matches'
+              {!isPoolsGenerated
+                ? isRegistrationClosed
+                  ? hasMinTeams
+                    ? 'Roster locked • Configure pools in Setup & Courts to schedule matches'
+                    : `Roster locked • Requires at least 4 confirmed teams (${teams.length} confirmed)`
+                  : 'Registration open • Teams will be configured after registration closes'
                 : `${completedPoolMatches} of ${totalPoolMatches} pool matches completed${
                     totalChampMatches > 0 ? ` • ${completedChampMatches}/${totalChampMatches} bracket` : ''
                   }`}
@@ -144,21 +164,27 @@ export function PoolPlayOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>POOLS</AppText>
             <Layers size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{pools.length || config.numPools}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isPoolsGenerated && pools.length > 0 ? pools.length : 'Pending'}
+            </AppText>
           </View>
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>MATCHES</AppText>
             <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {isAwaitingFormatSetup ? 'Pending' : `${completedPoolMatches}/${totalPoolMatches}`}
+              {!isPoolsGenerated || totalPoolMatches === 0
+                ? 'Pending'
+                : `${completedPoolMatches}/${totalPoolMatches}`}
             </AppText>
           </View>
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>QUALIFIERS</AppText>
             <Trophy size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{config.qualifierCount}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isPoolsGenerated ? config.qualifierCount : 'Pending'}
+            </AppText>
           </View>
         </View>
 
@@ -166,11 +192,15 @@ export function PoolPlayOverviewTab({
         <View style={styles.infoStrip}>
           <Info size={14} color="#0284C7" />
           <AppText style={styles.infoStripText}>
-            {isAwaitingFormatSetup
-              ? 'Registration is closed. Configure pool count and playoff qualifiers above to generate schedule.'
+            {!isPoolsGenerated
+              ? isRegistrationClosed
+                ? hasMinTeams
+                  ? 'Registration is closed. Configure pool count and playoff qualifiers in Setup & Courts to generate schedule.'
+                  : `Registration is closed. Pool Play requires at least 4 confirmed teams (currently ${teams.length} confirmed).`
+                : 'Registration is open. Pool count, distribution, and qualifiers will be configured after registration closes.'
               : `Intra-pool round robin stage. Top ${Math.max(
                   1,
-                  Math.floor(config.qualifierCount / config.numPools)
+                  Math.floor(config.qualifierCount / Math.max(1, pools.length || config.numPools))
                 )} per pool advance to championship bracket.`}
           </AppText>
         </View>
@@ -192,34 +222,61 @@ export function PoolPlayOverviewTab({
           <AppText style={styles.cardHeaderTitle}>Pools Configuration</AppText>
         </View>
 
-        <View style={styles.poolsList}>
-          {pools.map((pool) => (
-            <View key={pool.key} style={styles.poolRow}>
-              <View style={styles.poolKeyBadge}>
-                <AppText style={styles.poolKeyText}>Pool {pool.key}</AppText>
+        {isPoolsGenerated && pools.length > 0 ? (
+          <View style={styles.poolsList}>
+            {pools.map((pool) => (
+              <View key={pool.key} style={styles.poolRow}>
+                <View style={styles.poolKeyBadge}>
+                  <AppText style={styles.poolKeyText}>Pool {pool.key}</AppText>
+                </View>
+                <View style={styles.poolDetails}>
+                  <AppText style={styles.poolTeamCount}>
+                    {pool.teams.length} {isSingles ? 'Players' : 'Teams'}
+                  </AppText>
+                  <AppText style={styles.poolRating}>
+                    {pool.avgTeamRating > 0
+                      ? `Avg Rating: ${pool.avgTeamRating.toFixed(2)}`
+                      : 'Avg Rating: —'}
+                  </AppText>
+                </View>
+                <TouchableOpacity
+                  style={styles.poolActionBtn}
+                  onPress={() => onNavigateTab('participants')}
+                >
+                  <ChevronRight size={16} color="#64748B" />
+                </TouchableOpacity>
               </View>
-              <View style={styles.poolDetails}>
-                <AppText style={styles.poolTeamCount}>
-                  {pool.teams.length} {isSingles ? 'Players' : 'Teams'}
-                </AppText>
-                <AppText style={styles.poolRating}>
-                  Avg Rating: {pool.avgTeamRating ? pool.avgTeamRating.toFixed(2) : '4.00'}
-                </AppText>
-              </View>
-              <TouchableOpacity
-                style={styles.poolActionBtn}
-                onPress={() => onNavigateTab('participants')}
-              >
-                <ChevronRight size={16} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-          ))}
-          {pools.length === 0 && (
-            <AppText style={styles.emptyPoolsText}>
-              No teams assigned to pools yet. Configure pools in the {isSingles ? 'Players & Pools' : 'Teams & Pools'} tab.
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyPoolsNoticeBox}>
+            <AppText style={styles.emptyPoolsNoticeTitle}>
+              {!isRegistrationClosed
+                ? 'Pools Configured Post-Registration'
+                : !hasMinTeams
+                ? 'Waiting for Confirmed Teams'
+                : 'Pools Awaiting Generation'}
             </AppText>
-          )}
-        </View>
+            <AppText style={styles.emptyPoolsNoticeDesc}>
+              {!isRegistrationClosed
+                ? 'Pools and team assignments will be configured in Setup & Courts after registration closes and confirmed participants are known.'
+                : !hasMinTeams
+                ? `Pool Play requires at least 4 confirmed teams (currently ${teams.length} confirmed). Pools cannot be configured until the minimum requirement is met.`
+                : 'Confirmed teams are ready. Go to Setup & Courts to configure pool distribution and generate the tournament schedule.'}
+            </AppText>
+            {isRegistrationClosed && hasMinTeams && (
+              <TouchableOpacity
+                style={styles.emptyPoolsActionBtn}
+                onPress={() => onNavigateTab('setup_courts')}
+                activeOpacity={0.8}
+              >
+                <AppText style={styles.emptyPoolsActionBtnText}>
+                  Configure in Setup & Courts →
+                </AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </Card>
     </View>
   );
@@ -413,6 +470,37 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontStyle: 'italic',
     paddingVertical: 8,
+  },
+  emptyPoolsNoticeBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    padding: Spacing[3.5],
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  emptyPoolsNoticeTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  emptyPoolsNoticeDesc: {
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  emptyPoolsActionBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#0F766E',
+    borderRadius: Radius.sm,
+  },
+  emptyPoolsActionBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   infoList: {
     gap: 8,
