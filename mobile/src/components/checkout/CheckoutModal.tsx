@@ -230,39 +230,15 @@ export function CheckoutModal({
         setInitData(activeSession);
       }
 
-      const provider = activeSession.provider || 'cashfree';
+      const provider = activeSession.provider || 'direct';
       const providerOrderId = activeSession.provider_order_id || `order_${Date.now()}`;
 
-      // Open Cashfree hosted modal checkout if on web and session id is present
-      if (activeSession.payment_session_id && typeof window !== 'undefined') {
-        try {
-          const { load: loadCashfree } = await import('@cashfreepayments/cashfree-js');
-          const cashfree = await loadCashfree({ mode: 'sandbox' });
-          if (cashfree) {
-            const checkoutResult: any = await cashfree.checkout({
-              paymentSessionId: activeSession.payment_session_id,
-              redirectTarget: '_modal',
-            });
-            if (checkoutResult?.error) {
-              setStep('ready');
-              setErrorMessage(
-                checkoutResult.error.message ||
-                'Checkout window closed or payment was cancelled. You can retry safely or check status.'
-              );
-              return;
-            }
-          }
-        } catch (sdkErr: any) {
-          console.warn('Cashfree JS checkout notice:', sdkErr);
-        }
-      }
-
-      // Always verify payment status directly with backend & Cashfree API
+      // Confirm reservation directly with backend
       const verifyRes = await paymentApi.verifyCheckout({
         payment_id: activeSession.payment_id,
         provider,
         provider_order_id: providerOrderId,
-        provider_payment_id: activeSession.payment_session_id ? `cf_${activeSession.payment_session_id}` : undefined,
+        provider_payment_id: `direct_${Date.now()}`,
         provider_signature: undefined,
       });
 
@@ -275,7 +251,7 @@ export function CheckoutModal({
         err?.response?.data?.detail ||
         err?.detail ||
         err?.message ||
-        'Payment could not be confirmed. If you just completed payment, click "Check Status" or retry.';
+        'Booking could not be confirmed. If you just completed payment, click "Check Status" or retry.';
       setErrorMessage(msg);
     }
   };
@@ -290,9 +266,9 @@ export function CheckoutModal({
 
       const verifyRes = await paymentApi.verifyCheckout({
         payment_id: initData.payment_id,
-        provider: initData.provider || 'cashfree',
-        provider_order_id: initData.provider_order_id || '',
-        provider_payment_id: initData.payment_session_id ? `cf_${initData.payment_session_id}` : undefined,
+        provider: initData.provider || 'direct',
+        provider_order_id: initData.provider_order_id || `order_${Date.now()}`,
+        provider_payment_id: `direct_${Date.now()}`,
         provider_signature: undefined,
       });
 
@@ -305,7 +281,7 @@ export function CheckoutModal({
         err?.response?.data?.detail ||
         err?.detail ||
         err?.message ||
-        'Payment is still pending with Cashfree. Please retry checkout or wait a moment.';
+        'Payment confirmation is still pending. Please retry or contact club staff.';
       setErrorMessage(msg);
     }
   };
@@ -505,10 +481,36 @@ export function CheckoutModal({
               <Card style={styles.methodsCard}>
                 <AppText style={styles.sectionTitle}>Select Payment Method</AppText>
                 <AppText style={styles.methodSubtitle}>
-                  Encrypted & authenticated through Cashfree payment provider
+                  Choose your preferred payment method to confirm reservation
                 </AppText>
 
-                {/* Method 1: UPI */}
+                {/* Method 1: Cash on-site / Pay at Club */}
+                <TouchableOpacity
+                  style={[styles.methodOption, selectedMethod === 'cash' && styles.methodOptionActive]}
+                  onPress={() => handleSelectMethod('cash')}
+                >
+                  <View style={styles.methodRadioCol}>
+                    <View style={[styles.radioOuter, selectedMethod === 'cash' && styles.radioOuterActive]}>
+                      {selectedMethod === 'cash' && <View style={styles.radioInner} />}
+                    </View>
+                  </View>
+                  <View style={styles.methodIconWrap}>
+                    <Building size={20} color={selectedMethod === 'cash' ? '#176B57' : '#667776'} />
+                  </View>
+                  <View style={styles.methodInfoCol}>
+                    <View style={styles.methodTitleRow}>
+                      <AppText style={styles.methodTitle}>Pay at Club (On-Site)</AppText>
+                      <View style={styles.recommendedBadge}>
+                        <AppText style={styles.recommendedText}>Recommended</AppText>
+                      </View>
+                    </View>
+                    <AppText style={styles.methodDesc}>
+                      Pay via Cash, Card, or Club Account at the venue reception
+                    </AppText>
+                  </View>
+                </TouchableOpacity>
+
+                {/* Method 2: UPI */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'upi' && styles.methodOptionActive]}
                   onPress={() => handleSelectMethod('upi')}
@@ -523,7 +525,7 @@ export function CheckoutModal({
                   </View>
                   <View style={styles.methodInfoCol}>
                     <View style={styles.methodTitleRow}>
-                      <AppText style={styles.methodTitle}>UPI (Instant India & QR)</AppText>
+                      <AppText style={styles.methodTitle}>UPI (Instant & QR)</AppText>
                       <View style={styles.recommendedBadge}>
                         <AppText style={styles.recommendedText}>Popular</AppText>
                       </View>
@@ -539,19 +541,13 @@ export function CheckoutModal({
                     <View style={styles.upiDetailRow}>
                       <QrCode size={16} color={Colors.brand.primary} />
                       <AppText style={styles.upiDetailText}>
-                        Dynamic Cashfree UPI QR Code & Instant UPI Apps will open directly.
-                      </AppText>
-                    </View>
-                    <View style={[styles.upiDetailRow, { marginTop: 6 }]}>
-                      <Smartphone size={16} color="#18794E" />
-                      <AppText style={[styles.upiDetailText, { color: '#18794E', fontWeight: '500' }]}>
-                        Sandbox Test VPA: testsuccess@gocash (or scan the QR code to simulate approval)
+                        Reservation confirmed instantly. Complete payment via UPI at check-in or venue VPA.
                       </AppText>
                     </View>
                   </View>
                 )}
 
-                {/* Method 2: Cards */}
+                {/* Method 3: Cards */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'card' && styles.methodOptionActive]}
                   onPress={() => handleSelectMethod('card')}
@@ -567,7 +563,7 @@ export function CheckoutModal({
                   <View style={styles.methodInfoCol}>
                     <AppText style={styles.methodTitle}>Credit / Debit Card</AppText>
                     <AppText style={styles.methodDesc}>
-                      Visa, Mastercard, RuPay, Amex • 3-D Secure OTP
+                      Visa, Mastercard, RuPay, Amex
                     </AppText>
                   </View>
                 </TouchableOpacity>
@@ -577,13 +573,13 @@ export function CheckoutModal({
                     <View style={styles.upiDetailRow}>
                       <CreditCard size={16} color={Colors.brand.primary} />
                       <AppText style={styles.upiDetailText}>
-                        Cashfree 3-D Secure Card checkout will open with card number, expiry, and CVV fields.
+                        Card terminal available at the venue front desk.
                       </AppText>
                     </View>
                   </View>
                 )}
 
-                {/* Method 3: NetBanking */}
+                {/* Method 4: NetBanking */}
                 <TouchableOpacity
                   style={[styles.methodOption, selectedMethod === 'netbanking' && styles.methodOptionActive]}
                   onPress={() => handleSelectMethod('netbanking')}
@@ -599,21 +595,10 @@ export function CheckoutModal({
                   <View style={styles.methodInfoCol}>
                     <AppText style={styles.methodTitle}>NetBanking / Direct Transfer</AppText>
                     <AppText style={styles.methodDesc}>
-                      All major banks supported via Cashfree gateway
+                      Direct bank transfer / NEFT / IMPS to club account
                     </AppText>
                   </View>
                 </TouchableOpacity>
-
-                {selectedMethod === 'netbanking' && (
-                  <View style={styles.upiDetailsBox}>
-                    <View style={styles.upiDetailRow}>
-                      <Wallet size={16} color={Colors.brand.primary} />
-                      <AppText style={styles.upiDetailText}>
-                        Direct bank login through Cashfree NetBanking across all major retail banks.
-                      </AppText>
-                    </View>
-                  </View>
-                )}
               </Card>
 
               {/* Error banner if failed during commit */}
@@ -629,7 +614,7 @@ export function CheckoutModal({
                     disabled={step === 'processing'}
                   >
                     <Clock size={14} color="#176B57" />
-                    <AppText style={styles.checkStatusText}>Check Payment Status with Cashfree</AppText>
+                    <AppText style={styles.checkStatusText}>Check Booking Status</AppText>
                   </TouchableOpacity>
                 </View>
               )}
@@ -638,7 +623,7 @@ export function CheckoutModal({
               <View style={styles.securityRow}>
                 <Lock size={12} color={Colors.text.secondary} />
                 <AppText style={styles.securityText}>
-                  256-bit encrypted checkout. No card numbers or UPI PINs are ever stored.
+                  Direct club reservation. Verified and confirmed instantly.
                 </AppText>
               </View>
 

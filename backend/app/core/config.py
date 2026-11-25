@@ -97,12 +97,12 @@ class Settings(BaseSettings):
     S3_PUBLIC_URL_PREFIX: str | None = None
 
     # ─── Payment Provider Configuration ─────────────────────────
-    PAYMENT_PROVIDER: str = "cashfree"  # "cashfree", "razorpay", "stripe", or "sandbox"
+    PAYMENT_PROVIDER: str = "direct"  # "direct", "razorpay", "stripe", or "sandbox"
     PAYMENT_SANDBOX_MODE: bool = True
-    # Cashfree Payment Gateway Settings (Sandbox Mode)
+    # Optional / Alternate Gateway Settings
     CASHFREE_APP_ID: str | None = None
     CASHFREE_SECRET_KEY: str | None = None
-    CASHFREE_ENV: str = "sandbox"  # Must remain sandbox for test mode
+    CASHFREE_ENV: str = "sandbox"
     CASHFREE_API_VERSION: str = "2023-08-01"
     # Legacy / Alternate Gateway Settings
     RAZORPAY_KEY_ID: str = "rzp_test_aug2pickleball"

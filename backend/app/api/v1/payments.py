@@ -470,7 +470,7 @@ async def simulate_mobile_payment(
 )
 async def payment_webhook(
     request: Request,
-    provider: str = "cashfree",
+    provider: str = "direct",
     x_webhook_signature: str | None = Header(default=None),
     x_webhook_timestamp: str | None = Header(default=None),
     x_razorpay_signature: str | None = Header(default=None),

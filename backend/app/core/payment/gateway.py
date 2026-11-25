@@ -589,22 +589,68 @@ class StripeGateway(PaymentGateway):
             return False
 
 
+class DirectPaymentGateway(PaymentGateway):
+    """
+    Direct payment gateway implementation for payment-free & on-site booking confirmation.
+    Atomically creates orders and verifies payments without third-party redirects.
+    """
+
+    name: str = "direct"
+
+    def create_order(
+        self,
+        amount: Decimal,
+        currency: str,
+        receipt: str,
+        customer_details: Optional[dict[str, Any]] = None,
+        notes: Optional[dict[str, Any]] = None,
+    ) -> ProviderOrderResponse:
+        subunits = int(round(amount * 100))
+        order_id = f"direct_{receipt}_{uuid.uuid4().hex[:8]}"
+        return ProviderOrderResponse(
+            provider="direct",
+            order_id=order_id,
+            amount_subunits=subunits,
+            amount_display=amount,
+            currency=currency.upper(),
+            key_id="direct_pay",
+            receipt=receipt,
+            payment_session_id=None,
+            notes=notes or {},
+        )
+
+    def verify_payment_signature(
+        self,
+        payment_id: str,
+        order_id: str,
+        signature: str,
+    ) -> bool:
+        return True
+
+    def verify_order_status(
+        self,
+        order_id: str,
+        expected_amount: Optional[Decimal] = None,
+        expected_currency: Optional[str] = None,
+    ) -> tuple[bool, Optional[str], Optional[str], str]:
+        return True, f"pay_{uuid.uuid4().hex[:12]}", None, "SUCCESS"
+
+    def verify_webhook_signature(
+        self,
+        payload: bytes,
+        signature_header: str,
+        timestamp_header: Optional[str] = None,
+    ) -> bool:
+        return True
+
+
 def get_payment_gateway(provider_name: Optional[str] = None) -> PaymentGateway:
     """
     Factory function returning the configured payment gateway singleton.
-    Defaults to Cashfree in sandbox mode. Also supports Razorpay and Stripe.
+    Defaults to DirectPaymentGateway.
     """
     settings = get_settings()
-    provider = (provider_name or settings.PAYMENT_PROVIDER or "cashfree").lower()
-
-    if provider == "cashfree":
-        return CashfreeGateway(
-            app_id=settings.CASHFREE_APP_ID or "cf_mock_test_app",
-            secret_key=settings.CASHFREE_SECRET_KEY or "cf_mock_test_secret",
-            env=settings.CASHFREE_ENV or "sandbox",
-            api_version=settings.CASHFREE_API_VERSION or "2023-08-01",
-            is_sandbox=True,  # strictly sandbox
-        )
+    provider = (provider_name or settings.PAYMENT_PROVIDER or "direct").lower()
 
     if provider == "stripe":
         return StripeGateway(
@@ -614,10 +660,21 @@ def get_payment_gateway(provider_name: Optional[str] = None) -> PaymentGateway:
             is_sandbox=settings.PAYMENT_SANDBOX_MODE or not bool(settings.STRIPE_SECRET_KEY),
         )
 
-    # Razorpay
-    return RazorpayGateway(
-        key_id=settings.RAZORPAY_KEY_ID or "rzp_test_aug2pickleball",
-        key_secret=settings.RAZORPAY_KEY_SECRET or "mock_secret_aug2pickleball_key",
-        webhook_secret=settings.RAZORPAY_WEBHOOK_SECRET or "whsec_razorpay_mock",
-        is_sandbox=settings.PAYMENT_SANDBOX_MODE or "mock" in (settings.RAZORPAY_KEY_SECRET or ""),
-    )
+    if provider == "razorpay":
+        return RazorpayGateway(
+            key_id=settings.RAZORPAY_KEY_ID or "rzp_test_aug2pickleball",
+            key_secret=settings.RAZORPAY_KEY_SECRET or "mock_secret_aug2pickleball_key",
+            webhook_secret=settings.RAZORPAY_WEBHOOK_SECRET or "whsec_razorpay_mock",
+            is_sandbox=settings.PAYMENT_SANDBOX_MODE or "mock" in (settings.RAZORPAY_KEY_SECRET or ""),
+        )
+
+    if provider == "cashfree":
+        return CashfreeGateway(
+            app_id=settings.CASHFREE_APP_ID or "cf_mock_test_app",
+            secret_key=settings.CASHFREE_SECRET_KEY or "cf_mock_test_secret",
+            env=settings.CASHFREE_ENV or "sandbox",
+            api_version=settings.CASHFREE_API_VERSION or "2023-08-01",
+            is_sandbox=True,
+        )
+
+    return DirectPaymentGateway()

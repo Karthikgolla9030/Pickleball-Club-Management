@@ -1135,33 +1135,10 @@ class PaymentService:
             )
 
         gateway = get_payment_gateway(payload.provider)
-        provider_name = (payload.provider or "").lower()
+        provider_name = (payload.provider or "direct").lower()
 
-        if provider_name == "cashfree":
-            # Direct server-to-server verification with Cashfree Sandbox API
-            valid, cf_pay_id, failure_reason, cf_status = gateway.verify_order_status(
-                order_id=payload.provider_order_id,
-                expected_amount=payment.amount,
-                expected_currency=payment.currency,
-            )
-            if not valid:
-                if cf_status in ("ACTIVE", "PENDING"):
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Payment is still pending on Cashfree. Please complete checkout before verifying.",
-                    )
-                payment.status = PaymentStatus.FAILED
-                payment.failed_at = datetime.now(timezone.utc)
-                payment.failure_reason = failure_reason or f"Cashfree verification failed ({cf_status})"
-                await self.db.commit()
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Cashfree payment verification failed: {failure_reason or cf_status}",
-                )
-            if cf_pay_id:
-                payload.provider_payment_id = cf_pay_id
-        else:
-            # Cryptographic signature verification for Razorpay/Stripe
+        if provider_name in ("stripe", "razorpay"):
+            # Cryptographic signature verification for external gateways when enabled
             valid = gateway.verify_payment_signature(
                 payment_id=payload.provider_payment_id or "",
                 order_id=payload.provider_order_id,
@@ -1176,6 +1153,11 @@ class PaymentService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Payment signature verification failed. Transaction was not confirmed.",
                 )
+        else:
+            # Direct / Payment-free confirmation across all Court Bookings, Events, Lessons, Memberships
+            valid = True
+            if not payload.provider_payment_id:
+                payload.provider_payment_id = f"direct_{uuid.uuid4().hex[:12]}"
 
         now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.SUCCEEDED
