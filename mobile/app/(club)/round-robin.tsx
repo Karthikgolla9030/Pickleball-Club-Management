@@ -610,7 +610,6 @@ export default function RoundRobinWorkspaceScreen() {
               teams={teams}
               matchesExist={matches.length > 0}
               canModifyTeams={canModifyTeams}
-              onAddTeamPress={() => setAddTeamModalVisible(true)}
               onDeleteTeam={handleDeleteTeam}
               isDeletingTeam={isDeletingTeam}
               teamSize={teamSize}

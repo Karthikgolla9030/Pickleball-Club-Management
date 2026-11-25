@@ -15,7 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Users, UserPlus } from 'lucide-react-native';
+import { Users } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
@@ -34,7 +34,7 @@ export interface BracketTeamsTabProps {
   teams: Team[];
   canManage: boolean;
   canModifyTeams: boolean;
-  onOpenAddTeam: () => void;
+  onOpenAddTeam?: () => void;
   onDeleteTeam: (teamId: string) => Promise<void>;
   isDeletingTeam?: boolean;
   teamSize?: number;
@@ -138,8 +138,6 @@ export function BracketTeamsTab({
         subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
         badgeLabel={isDoubles ? 'DOUBLES' : 'SINGLES'}
         badgeVariant="blue"
-        actionLabel={canManage && canModifyTeams ? (isDoubles ? 'Add Team' : 'Add Player') : undefined}
-        onActionPress={onOpenAddTeam}
       />
 
       {/* ─── 2. Locked Roster Alert (Only when bracket is active) ─────────── */}
@@ -159,29 +157,16 @@ export function BracketTeamsTab({
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>
-            <Users size={32} color="#94A3B8" />
+            <Users size={32} color="#0F766E" />
           </View>
           <AppText style={styles.emptyTitle}>
             {isDoubles ? 'No teams registered yet' : 'No players registered yet'}
           </AppText>
           <AppText style={styles.emptySubtitle}>
             {isDoubles
-              ? 'Teams will appear here as players register and form pairs.'
-              : 'Players will appear here as they register for this tournament.'}
+              ? 'When teams register and confirm for this tournament, they will appear here with their ratings and seeds.'
+              : 'When players register and confirm for this tournament, they will appear here with their ratings and seeds.'}
           </AppText>
-
-          {canManage && canModifyTeams && (
-            <TouchableOpacity
-              style={styles.addFirstBtn}
-              onPress={onOpenAddTeam}
-              activeOpacity={0.8}
-            >
-              <UserPlus size={16} color="#FFFFFF" />
-              <AppText style={styles.addFirstBtnText}>
-                {isDoubles ? 'Add team' : 'Add player'}
-              </AppText>
-            </TouchableOpacity>
-          )}
         </Card>
       ) : (
         <View style={styles.listContent}>
@@ -246,20 +231,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 280,
-  },
-  addFirstBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#087A60',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 9999,
-    marginTop: 4,
-  },
-  addFirstBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
 });

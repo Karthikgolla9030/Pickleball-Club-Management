@@ -20,7 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { UserPlus, Trash2, CheckCircle2, Shield } from 'lucide-react-native';
+import { Users, Trash2, CheckCircle2, Shield } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
 import { Card } from '@/components/Card';
@@ -37,7 +37,7 @@ interface RoundRobinTeamsTabProps {
   teams: Team[];
   matchesExist: boolean;
   canModifyTeams: boolean;
-  onAddTeamPress: () => void;
+  onAddTeamPress?: () => void;
   onDeleteTeam: (teamId: string, teamName: string) => void;
   isDeletingTeam?: boolean;
   teamSize?: number;
@@ -145,37 +145,22 @@ export function RoundRobinTeamsTab({
         subtitle={isDoubles ? `· ${registeredPlayersCount} Players` : null}
         badgeLabel={isDoubles ? 'DOUBLES' : 'SINGLES'}
         badgeVariant="blue"
-        actionLabel={canModifyTeams ? (isDoubles ? 'Add Team' : 'Add Player') : undefined}
-        onActionPress={onAddTeamPress}
       />
 
       {/* ─── 2. Empty State vs Standardized Teams/Players List ──────────────── */}
       {sortedTeams.length === 0 ? (
         <Card style={styles.emptyCard}>
           <View style={styles.emptyIconCircle}>
-            <UserPlus size={30} color="#94A3B8" />
+            <Users size={32} color="#0F766E" />
           </View>
           <AppText style={styles.emptyHeading}>
             {isDoubles ? 'No teams registered yet' : 'No players registered yet'}
           </AppText>
           <AppText style={styles.emptySubtitle}>
             {isDoubles
-              ? 'Teams will appear here as players register and form pairs.'
-              : 'Players will appear here as they register for this tournament.'}
+              ? 'When teams register and confirm for this tournament, they will appear here with their ratings and seeds.'
+              : 'When players register and confirm for this tournament, they will appear here with their ratings and seeds.'}
           </AppText>
-
-          {canModifyTeams && (
-            <TouchableOpacity
-              style={styles.addPlayerBtn}
-              onPress={onAddTeamPress}
-              activeOpacity={0.8}
-            >
-              <UserPlus size={16} color="#FFFFFF" />
-              <AppText style={styles.addPlayerBtnText}>
-                {isDoubles ? 'Add Team' : 'Add Player'}
-              </AppText>
-            </TouchableOpacity>
-          )}
         </Card>
       ) : (
         /* Populated Team / Player List Ranked by Average Skill Rating */
@@ -322,24 +307,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     maxWidth: 280,
     lineHeight: 18,
-  },
-  addPlayerBtn: {
-    backgroundColor: '#087A60',
-    borderRadius: Radius.full,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 24,
-    width: '100%',
-    maxWidth: 220,
-  },
-  addPlayerBtnText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
   },
   playersList: {
     gap: Spacing[3],

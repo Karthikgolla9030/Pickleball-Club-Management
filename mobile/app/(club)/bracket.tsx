@@ -623,7 +623,6 @@ export default function BracketWorkspaceScreen() {
             teams={teams}
             canManage={canManage}
             canModifyTeams={canModifyTeams}
-            onOpenAddTeam={() => setAddTeamModalVisible(true)}
             onDeleteTeam={handleDeleteTeam}
             isDeletingTeam={isDeletingTeam}
             teamSize={teamSize}
