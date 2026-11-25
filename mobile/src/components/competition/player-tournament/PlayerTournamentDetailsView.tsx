@@ -393,10 +393,11 @@ export function PlayerTournamentDetailsView({
   // Check if player is already registered
   const isUserRegistered = useMemo(() => {
     if (!user) return false;
+    if ((tournament as any)?.is_registered) return true;
     const inReg = registrations.some((r) => r.user_id === user.id);
     const inTeam = teams.some((t) => t.members?.some((m) => m.user_id === user.id));
     return inReg || inTeam;
-  }, [user, registrations, teams]);
+  }, [user, tournament, registrations, teams]);
 
   const canRegister =
     (status === 'registration_open' || status === 'published' || status === 'upcoming') &&
@@ -507,8 +508,8 @@ export function PlayerTournamentDetailsView({
         </View>
       </ScrollView>
 
-      {/* ─── Floating Registration CTA if open and not registered ─── */}
-      {canRegister && (
+      {/* ─── Floating Registration CTA if open, or View Registration if already registered ─── */}
+      {canRegister ? (
         <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
           <TouchableOpacity
             style={styles.registerBtn}
@@ -520,7 +521,19 @@ export function PlayerTournamentDetailsView({
             </AppText>
           </TouchableOpacity>
         </View>
-      )}
+      ) : isUserRegistered && onRegister ? (
+        <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <TouchableOpacity
+            style={[styles.registerBtn, { backgroundColor: '#064E3B' }]}
+            onPress={onRegister}
+            activeOpacity={0.85}
+          >
+            <AppText variant="body" bold style={styles.registerBtnText}>
+              View My Registration
+            </AppText>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }

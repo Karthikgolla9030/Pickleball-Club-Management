@@ -40,6 +40,8 @@ import {
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, BookingDetailsModal } from '@/components';
+import { RegistrationDetailsModal } from '@/components/tournament-registration';
+import { LeagueRegistrationDetailsModal } from '@/components/league-registration';
 import { useActiveClub, useClubBranding, usePlayerAllBookings, usePlayerBookings } from '@/hooks';
 import { Colors } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
@@ -67,6 +69,8 @@ export default function PlayerBookingsScreen() {
   const [selectedActivity, setSelectedActivity] = useState<ActivityCategory>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
   // Unified personal records across court bookings, tournaments, leagues, events, lessons
@@ -223,15 +227,9 @@ export default function PlayerBookingsScreen() {
       setSelectedBooking(compatibleBooking);
       setDetailsModalVisible(true);
     } else if (item.activity_type === 'tournament' && item.activity_id) {
-      (router.push as any)({
-        pathname: '/(player)/tournament-details',
-        params: { id: item.activity_id },
-      });
+      setSelectedTournamentId(item.activity_id);
     } else if (item.activity_type === 'league' && item.activity_id) {
-      (router.push as any)({
-        pathname: '/(player)/league-details',
-        params: { id: item.activity_id },
-      });
+      setSelectedLeagueId(item.activity_id);
     } else if (item.activity_type === 'event') {
       (router.push as any)('/(player)/events');
     } else if (item.activity_type === 'lesson') {
@@ -713,6 +711,28 @@ export default function PlayerBookingsScreen() {
         booking={selectedBooking}
         mode="player"
         clubId={selectedBooking?.club_id || selectedClubId || ''}
+      />
+
+      {/* ─── Tournament Registration Details Modal ─── */}
+      <RegistrationDetailsModal
+        visible={!!selectedTournamentId}
+        tournamentId={selectedTournamentId}
+        onClose={() => setSelectedTournamentId(null)}
+        onCancelled={() => {
+          setSelectedTournamentId(null);
+          refetchBookings();
+        }}
+      />
+
+      {/* ─── League Registration Details Modal ─── */}
+      <LeagueRegistrationDetailsModal
+        visible={!!selectedLeagueId}
+        leagueId={selectedLeagueId}
+        onClose={() => setSelectedLeagueId(null)}
+        onCancelled={() => {
+          setSelectedLeagueId(null);
+          refetchBookings();
+        }}
       />
     </View>
   );

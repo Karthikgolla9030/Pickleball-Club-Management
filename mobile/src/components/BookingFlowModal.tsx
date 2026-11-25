@@ -14,7 +14,8 @@ import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } 
 import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
 import { formatCurrency, formatSlotLabel, parseSlotTime } from '@/utils';
-import type { Booking, BookingPriceCalculation } from '@/types';
+import type { Booking, BookingPriceCalculation, PlayerActivityItem, PlayerBookingItem } from '@/types';
+import { QUERY_KEYS } from '@/constants';
 import { CheckoutModal } from './checkout/CheckoutModal';
 
 export interface BookingFlowModalProps {
@@ -757,7 +758,12 @@ export function BookingFlowModal({
         {showCheckout && (
           <CheckoutModal
             visible={showCheckout}
-            onClose={() => setShowCheckout(false)}
+            onClose={() => {
+              setShowCheckout(false);
+              if (stage === 4 || confirmedBooking) {
+                onSuccess();
+              }
+            }}
             clubId={clubId}
             purpose="court_booking"
             activityId={courtId}
@@ -775,13 +781,111 @@ export function BookingFlowModal({
               player_count: playersCount ? (playersCount === '5+' ? 5 : parseInt(playersCount, 10)) : null,
             }}
             onSuccess={(res) => {
-              setShowCheckout(false);
-              if (res.booking_or_registration) {
-                setConfirmedBooking(res.booking_or_registration as any);
+              const regOrBooking = res.booking_or_registration;
+              if (regOrBooking) {
+                setConfirmedBooking(regOrBooking as any);
               }
               setStage(4);
-              // Immediately invalidate booking caches so My Bookings reflects the new booking
-              // without waiting for the WebSocket event (belt-and-suspenders approach).
+
+              // ─── Direct Authoritative Cache Updates (0 ms UI lag) ───
+              const bookingId = (regOrBooking as any)?.booking_id || res.payment?.id || `booking_${Date.now()}`;
+              const courtObj = availableCourts.find((c) => c.court_id === courtId);
+              const courtTitle = (regOrBooking as any)?.court_name || courtObj?.display_name || courtObj?.court_name || 'Court Reservation';
+              const resolvedStartAt = (regOrBooking as any)?.start_at || slotIso;
+              const resolvedEndAt = (regOrBooking as any)?.end_at || (slotIso ? new Date(new Date(slotIso).getTime() + selectedDuration * 60 * 1000).toISOString() : undefined);
+              const paidAmount = typeof (regOrBooking as any)?.total_price === 'number' ? (regOrBooking as any).total_price : Number(res.payment?.amount || 0);
+              const paidCurrency = (regOrBooking as any)?.currency || res.payment?.currency || 'USD';
+              const resolvedClubName = (regOrBooking as any)?.club_name || res.payment?.club_name || 'Pickleball Club';
+
+              // 1. Direct Cache Update: My Bookings
+              const newBookingItem: PlayerBookingItem = {
+                id: `court_${bookingId}`,
+                activity_type: 'court',
+                record_id: bookingId,
+                activity_id: courtId || bookingId,
+                title: courtTitle,
+                description: notes.trim() || undefined,
+                club_id: clubId || '',
+                club_name: resolvedClubName,
+                status: 'confirmed',
+                status_label: 'Confirmed',
+                start_at: resolvedStartAt,
+                end_at: resolvedEndAt,
+                location: courtTitle,
+                price: paidAmount,
+                currency: paidCurrency,
+                image_url: (courtObj as any)?.image_url || (courtObj as any)?.photo_url || null,
+                details: {
+                  court_type: courtObj?.indoor_outdoor || 'indoor',
+                  duration_minutes: selectedDuration,
+                  notes: notes.trim() || null,
+                },
+                created_at: new Date().toISOString(),
+              };
+
+              queryClient.setQueriesData(
+                { queryKey: ['player', 'my-bookings'] },
+                (old: any) => {
+                  if (!old) return old;
+                  const existingItems = old.items || [];
+                  if (existingItems.some((it: any) => it.record_id === bookingId || it.id === newBookingItem.id)) {
+                    return old;
+                  }
+                  return {
+                    ...old,
+                    total: (old.total ?? existingItems.length) + 1,
+                    items: [newBookingItem, ...existingItems],
+                  };
+                }
+              );
+
+              // 2. Direct Cache Update: Home Recent Activity
+              const newActivityItem: PlayerActivityItem = {
+                id: `activity_${bookingId}`,
+                activity_type: 'booking_created',
+                title: 'Court Booking',
+                description: `Reserved ${courtTitle}`,
+                timestamp: new Date().toISOString(),
+                entity_type: 'booking',
+                entity_id: bookingId,
+              };
+
+              queryClient.setQueryData(
+                QUERY_KEYS.PLAYER_ACTIVITY,
+                (old: PlayerActivityItem[] | undefined) => {
+                  const list = old || [];
+                  if (list.some((it) => it.entity_id === bookingId)) {
+                    return list;
+                  }
+                  return [newActivityItem, ...list];
+                }
+              );
+
+              // 3. Direct Cache Update: Court Availability Slots
+              if (clubId) {
+                queryClient.setQueriesData(
+                  { queryKey: ['clubs', clubId, 'court-availability'] },
+                  (old: any) => {
+                    if (!old || !Array.isArray(old)) return old;
+                    return old.map((court: any) => {
+                      if (court.court_id === courtId || court.id === courtId) {
+                        return {
+                          ...court,
+                          slots: court.slots?.map((s: any) => {
+                            if (s.start_at === resolvedStartAt) {
+                              return { ...s, is_available: false, status: 'BOOKED' };
+                            }
+                            return s;
+                          }),
+                        };
+                      }
+                      return court;
+                    });
+                  }
+                );
+              }
+
+              // Background query invalidations for eventual server consistency
               queryClient.invalidateQueries({ queryKey: ['bookings'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
@@ -791,7 +895,6 @@ export function BookingFlowModal({
                 queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'staff-bookings'] });
                 queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
               }
-              onSuccess();
             }}
           />
         )}

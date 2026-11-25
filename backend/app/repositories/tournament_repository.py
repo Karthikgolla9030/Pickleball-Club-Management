@@ -20,6 +20,7 @@ from app.models.tournament import (
     TournamentStatus,
     TournamentVisibility,
 )
+from app.models.tournament_registration import TournamentRegistration
 
 
 class TournamentRepository:
@@ -38,7 +39,9 @@ class TournamentRepository:
             .where(Tournament.id == tournament_id)
             .options(
                 selectinload(Tournament.club),
-                selectinload(Tournament.registrations),
+                selectinload(Tournament.registrations).selectinload(
+                    TournamentRegistration.player_membership
+                ),
             )
             .execution_options(populate_existing=True)
         )
@@ -61,7 +64,9 @@ class TournamentRepository:
             .with_for_update()
             .options(
                 selectinload(Tournament.club),
-                selectinload(Tournament.registrations),
+                selectinload(Tournament.registrations).selectinload(
+                    TournamentRegistration.player_membership
+                ),
             )
         )
         if club_id is not None:
@@ -101,7 +106,9 @@ class TournamentRepository:
             .where(Tournament.club_id == club_id)
             .options(
                 selectinload(Tournament.club),
-                selectinload(Tournament.registrations),
+                selectinload(Tournament.registrations).selectinload(
+                    TournamentRegistration.player_membership
+                ),
             )
             .order_by(Tournament.start_date.asc())
         )
@@ -138,7 +145,9 @@ class TournamentRepository:
             )
             .options(
                 selectinload(Tournament.club),
-                selectinload(Tournament.registrations),
+                selectinload(Tournament.registrations).selectinload(
+                    TournamentRegistration.player_membership
+                ),
             )
             .order_by(Tournament.start_date.asc())
         )

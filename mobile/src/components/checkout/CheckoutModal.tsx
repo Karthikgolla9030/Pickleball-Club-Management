@@ -171,7 +171,7 @@ export function CheckoutModal({
 
         if (res.is_free) {
           // Free activity immediately verified
-          setVerifyResult({
+          const freeResult: CheckoutVerifyResponse = {
             success: true,
             payment: {
               id: res.payment_id,
@@ -191,8 +191,12 @@ export function CheckoutModal({
             },
             message: 'Complimentary booking confirmed!',
             booking_or_registration: { reference: res.reference, status: 'confirmed' },
-          });
+          };
+          setVerifyResult(freeResult);
           setStep('confirmed');
+          if (onSuccess) {
+            onSuccess(freeResult);
+          }
         } else {
           setStep('ready');
         }

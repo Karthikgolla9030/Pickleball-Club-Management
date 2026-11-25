@@ -51,7 +51,8 @@ import { formatDate, formatCurrency } from '@/utils/formatters';
 export interface LeagueRegistrationDetailsModalProps {
   visible: boolean;
   onClose: () => void;
-  league: LeagueSummary | null;
+  league?: LeagueSummary | null;
+  leagueId?: string | null;
   onCancelled?: () => void;
 }
 
@@ -59,18 +60,19 @@ export function LeagueRegistrationDetailsModal({
   visible,
   onClose,
   league,
+  leagueId: propLeagueId,
   onCancelled,
 }: LeagueRegistrationDetailsModalProps) {
   const { user } = useAuth();
-  const leagueId = league?.id ?? null;
+  const effectiveLeagueId = propLeagueId || league?.id || null;
 
   const {
     data: regStatus,
     isLoading: isLoadingStatus,
     refetch,
-  } = usePlayerLeagueRegistrationStatus(leagueId);
+  } = usePlayerLeagueRegistrationStatus(effectiveLeagueId);
 
-  const cancelMutation = usePlayerCancelLeagueRegistration(leagueId);
+  const cancelMutation = usePlayerCancelLeagueRegistration(effectiveLeagueId);
   const [isConfirmingCancel, setIsConfirmingCancel] = useState(false);
 
   const team = regStatus?.team;

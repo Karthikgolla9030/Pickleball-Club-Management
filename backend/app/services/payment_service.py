@@ -1270,11 +1270,19 @@ class PaymentService:
                     player_count=parsed_player_count,
                 )
                 payment.booking_id = booking.id
+                court_display_name = booking.court.name if booking.court else "Court"
+                club_display_name = payment.club.name if hasattr(payment, "club") and payment.club else "Club"
                 booking_or_reg.update({
                     "booking_id": str(booking.id),
-                    "court_name": booking.court.name if booking.court else "Court",
+                    "court_id": str(booking.court_id),
+                    "court_name": court_display_name,
+                    "club_id": str(payment.club_id),
+                    "club_name": club_display_name,
                     "start_at": booking.start_at.isoformat(),
                     "end_at": booking.end_at.isoformat(),
+                    "total_price": float(payment.amount),
+                    "currency": payment.currency,
+                    "status": "confirmed",
                 })
 
         elif payment.purpose == PaymentPurpose.TOURNAMENT:
@@ -1468,11 +1476,13 @@ class PaymentService:
 
             if payment.purpose == PaymentPurpose.COURT_BOOKING:
                 booking_id = booking_or_reg.get("booking_id")
+                court_id_str = booking_or_reg.get("court_id")
                 await dispatch_event(
                     event_type="booking.created",
                     data={
                         "booking_id": booking_id,
-                        "court_id": booking_or_reg.get("court_name"),
+                        "court_id": court_id_str,
+                        "court_name": booking_or_reg.get("court_name"),
                         "club_id": club_id_str,
                         "player_id": str(payment.player_id),
                         "start_at": booking_or_reg.get("start_at"),
@@ -1481,6 +1491,17 @@ class PaymentService:
                     },
                     club_id=payment.club_id,
                     user_id=payment.player_id,
+                )
+                await dispatch_event(
+                    event_type="court.availability_changed",
+                    data={
+                        "court_id": court_id_str,
+                        "club_id": club_id_str,
+                        "start_at": booking_or_reg.get("start_at"),
+                        "end_at": booking_or_reg.get("end_at"),
+                        "is_available": False,
+                    },
+                    club_id=payment.club_id,
                 )
 
             elif payment.purpose == PaymentPurpose.EVENT:

@@ -1052,7 +1052,7 @@ class TournamentService:
                 my_reg = next(
                     (
                         r for r in t.registrations
-                        if (r.player_membership_id in user_membership_ids or (getattr(r, "player_membership", None) and r.player_membership.user_id == user_id))
+                        if r.player_membership_id in user_membership_ids
                         and r.status in (
                             RegistrationStatus.CONFIRMED,
                             RegistrationStatus.PENDING,
