@@ -2,19 +2,19 @@
  * Aught2 Pickleball — ScrambleSetupRoundsTab
  *
  * Dedicated, consolidated configuration workspace for Scramble Tournaments:
- * - The SINGLE source of editable configuration for Scramble.
- * - Section A: Participant & Match Capacity (confirmed players, feasible pairs, matches/round)
- * - Section B: Planned Rotation Rounds & Recommendations (system recommendation vs organizer selection)
- * - Section C: Partner Rotation Rules (Full Rotation, Balanced Pairings, Skill-Tiered Rotation)
- * - Section D: Court Allocation & Available Courts (concurrent capacity, active club courts)
- * - Section E: Partner Rotation Preview (collapsible simulated schedule across rounds)
- * - Validation & Generation action with regeneration safeguards.
- * - Visual design standardized with Pool Play Setup & Courts workspace.
+ * - Single source of editable configuration for Scramble.
+ * - Simple sections without redundant paragraphs:
+ *   - Scramble Setup header
+ *   - Participant Capacity
+ *   - Rotation Rounds
+ *   - Partner Rotation Rules
+ *   - Court Allocation & Capacity
+ *   - Rotation Preview (collapsible)
+ *   - Single clear primary action at bottom
  */
 
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
   TouchableOpacity,
@@ -26,7 +26,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Info,
   LayoutGrid,
   RotateCcw,
   Sliders,
@@ -38,10 +37,7 @@ import {
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import {
-  PostRegistrationChoiceChips,
-  PostRegistrationStepper,
-} from '@/components/post-registration';
+import { PostRegistrationStepper } from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Court, Tournament } from '@/types';
@@ -50,18 +46,18 @@ import type { ScrambleState } from '@/types/scramble';
 const SCRAMBLE_RULE_OPTIONS = [
   {
     key: 'Full Rotation (no repeating partners)',
-    label: 'Full Rotation (no repeating partners)',
-    desc: 'Maximizes new partner matchups in every round with minimal repeat partners.',
+    label: 'Full Rotation',
+    desc: 'No repeating partners where feasible.',
   },
   {
     key: 'Balanced Pairings (fair partner distribution)',
-    label: 'Balanced Pairings (fair partner distribution)',
-    desc: 'Distributes partners and opponents fairly across all participating players.',
+    label: 'Balanced Pairings',
+    desc: 'Distribute partners fairly.',
   },
   {
     key: 'Skill-Tiered Rotation (similar rating partners)',
-    label: 'Skill-Tiered Rotation (similar rating partners)',
-    desc: 'Pairs players within compatible skill rating tiers for balanced gameplay.',
+    label: 'Skill-Tiered Rotation',
+    desc: 'Pair players using compatible skill levels.',
   },
 ];
 
@@ -81,7 +77,6 @@ interface ScrambleSetupRoundsTabProps {
 export function ScrambleSetupRoundsTab({
   clubId,
   tournamentId,
-  tournament,
   state,
   canManage = true,
   registeredCount = 0,
@@ -132,7 +127,6 @@ export function ScrambleSetupRoundsTab({
   const playerCount = setupData?.confirmed_player_count ?? registeredCount;
   const hasMinPlayers = playerCount >= 4;
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const isFeasible = setupData?.is_schedule_feasible ?? hasMinPlayers;
   const feasiblePairs = setupData?.feasible_doubles_pairs ?? Math.floor(playerCount / 2);
   const feasibleMatches = setupData?.feasible_matches_per_round ?? Math.floor(playerCount / 4);
   const recommendedRounds = setupData?.recommended_rounds ?? 5;
@@ -186,28 +180,37 @@ export function ScrambleSetupRoundsTab({
       <Card style={styles.headerCard}>
         <View style={styles.headerRow}>
           <View style={styles.headerIconCircle}>
-            <SlidersHorizontal size={20} color="#0F766E" />
+            <SlidersHorizontal size={18} color="#0F766E" />
           </View>
           <View style={styles.headerTextCol}>
-            <AppText style={styles.headerTitle}>Scramble Setup & Rounds</AppText>
+            <AppText style={styles.headerTitle}>Scramble Setup</AppText>
             <AppText style={styles.headerSubtitle}>
-              The single configuration workspace for rotation rounds, partner rules, and court schedules.
+              Configure rotation rounds, partner rules and courts.
             </AppText>
           </View>
         </View>
       </Card>
 
-      {/* ─── A. Participant & Match Capacity ───────────────────────────────── */}
+      {/* ─── Single Concise Validation Notice (Only shown when < 4 players) ── */}
+      {!hasMinPlayers && (
+        <View style={styles.validationNotice}>
+          <AlertTriangle size={15} color="#D97706" />
+          <AppText style={styles.validationNoticeText}>
+            At least 4 confirmed players are required.
+          </AppText>
+        </View>
+      )}
+
+      {/* ─── Participant Capacity ─────────────────────────────────────────── */}
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Users size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>A. Participant & Match Capacity</AppText>
+          <AppText style={styles.sectionTitle}>Participant Capacity</AppText>
         </View>
 
-        {/* 3 Metric Cards */}
         <View style={styles.metricsRow}>
           <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>CONFIRMED PLAYERS</AppText>
+            <AppText style={styles.metricLabel}>CONFIRMED</AppText>
             <AppText style={styles.metricValue}>{playerCount}</AppText>
           </View>
           <View style={styles.metricCard}>
@@ -223,72 +226,19 @@ export function ScrambleSetupRoundsTab({
             </AppText>
           </View>
         </View>
-
-        {/* Feasibility Notice */}
-        {!hasMinPlayers ? (
-          <View style={styles.warningBox}>
-            <AlertTriangle size={16} color="#D97706" style={{ marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <AppText style={styles.warningTitle}>Waiting for confirmed players</AppText>
-              <AppText style={styles.warningDesc}>
-                At least 4 confirmed players are required to configure Scramble rotation (currently {playerCount} confirmed). Matches require 4 players per court.
-              </AppText>
-            </View>
-          </View>
-        ) : !isFeasible ? (
-          <View style={styles.warningBox}>
-            <AlertTriangle size={16} color="#D97706" style={{ marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <AppText style={styles.warningTitle}>Participant Count Constraint</AppText>
-              <AppText style={styles.warningDesc}>
-                {setupData?.odd_player_handling_message ||
-                  'Current confirmed count requires adjustment for standard 4-player doubles courts.'}
-              </AppText>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.successBox}>
-            <CheckCircle2 size={16} color="#0F766E" style={{ marginTop: 2 }} />
-            <View style={{ flex: 1 }}>
-              <AppText style={styles.successTitle}>Roster Feasibility Confirmed</AppText>
-              <AppText style={styles.successDesc}>
-                {playerCount} confirmed players allow {feasibleMatches} concurrent doubles match{feasibleMatches > 1 ? 'es' : ''} per round across {courtsNeeded} court{courtsNeeded > 1 ? 's' : ''}.
-              </AppText>
-            </View>
-          </View>
-        )}
       </Card>
 
-      {/* ─── B. Planned Rotation Rounds ─────────────────────────────────────── */}
+      {/* ─── Rotation Rounds ──────────────────────────────────────────────── */}
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Sparkles size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>B. Planned Rotation Rounds</AppText>
+          <AppText style={styles.sectionTitle}>Rotation Rounds</AppText>
         </View>
-        <AppText style={styles.sectionDesc}>
-          Number of rounds each player rotates through with distinct partners.
-        </AppText>
-
-        {/* Recommendation Notice */}
-        {hasMinPlayers && (
-          <View style={styles.recommendationBox}>
-            <Info size={15} color="#0F766E" style={{ marginTop: 2 }} />
-            <AppText style={styles.recommendationText}>
-              <AppText style={{ fontWeight: '700', color: '#0F766E' }}>Recommendation: </AppText>
-              {setupData?.recommendation_reason ||
-                `${recommendedRounds} rounds recommended based on ${playerCount} confirmed players and active courts.`}
-            </AppText>
-          </View>
-        )}
 
         <View style={styles.stepperWrap}>
           <PostRegistrationStepper
-            label="Planned Rotation Rounds"
-            helperText={
-              isGenerated
-                ? `Active schedule finalized at ${rounds} rounds.`
-                : `System recommends ${recommendedRounds} rounds; adjust as needed.`
-            }
+            label="Selected Rounds"
+            helperText={`Recommended: ${recommendedRounds} rounds (based on confirmed players and available courts).`}
             value={rounds}
             unit="rounds"
             min={1}
@@ -299,15 +249,12 @@ export function ScrambleSetupRoundsTab({
         </View>
       </Card>
 
-      {/* ─── C. Partner Rotation Rules ──────────────────────────────────────── */}
+      {/* ─── Partner Rotation Rules ───────────────────────────────────────── */}
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <Sliders size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>C. Partner Rotation Rules</AppText>
+          <AppText style={styles.sectionTitle}>Partner Rotation Rules</AppText>
         </View>
-        <AppText style={styles.sectionDesc}>
-          Select the pairing rule used to assign partners and opponents across rounds.
-        </AppText>
 
         <View style={styles.rulesList}>
           {SCRAMBLE_RULE_OPTIONS.map((opt) => {
@@ -335,41 +282,39 @@ export function ScrambleSetupRoundsTab({
         </View>
       </Card>
 
-      {/* ─── D. Court Assignment & Allocation ────────────────────────────────── */}
+      {/* ─── Court Allocation & Capacity ──────────────────────────────────── */}
       <Card style={styles.sectionCard}>
         <View style={styles.sectionHeader}>
           <LayoutGrid size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>D. Court Allocation & Capacity</AppText>
-        </View>
-        <AppText style={styles.sectionDesc}>
-          Courts utilized concurrently for rotating Scramble doubles games.
-        </AppText>
-
-        <View style={styles.courtsSummaryRow}>
-          <View style={styles.courtBadgeItem}>
-            <AppText style={styles.courtBadgeVal}>{courtsNeeded}</AppText>
-            <AppText style={styles.courtBadgeLbl}>Courts Needed / Round</AppText>
-          </View>
-          <View style={styles.courtBadgeItem}>
-            <AppText style={styles.courtBadgeVal}>{courtsAvailable}</AppText>
-            <AppText style={styles.courtBadgeLbl}>Active Club Courts</AppText>
-          </View>
+          <AppText style={styles.sectionTitle}>Court Allocation & Capacity</AppText>
         </View>
 
-        {activeCourtsList.length > 0 && (
-          <View style={styles.courtsChipsList}>
-            {activeCourtsList.slice(0, 6).map((c) => (
-              <View key={c.id} style={styles.courtChip}>
-                <AppText style={styles.courtChipText}>
-                  {c.name} {c.indoor_outdoor ? `(${c.indoor_outdoor})` : ''}
-                </AppText>
-              </View>
-            ))}
+        <View style={styles.metricsRow}>
+          <View style={styles.metricCard}>
+            <AppText style={styles.metricLabel}>ACTIVE COURTS</AppText>
+            <AppText style={styles.metricValue}>{courtsAvailable}</AppText>
+          </View>
+          <View style={styles.metricCard}>
+            <AppText style={styles.metricLabel}>COURTS / ROUND</AppText>
+            <AppText style={styles.metricValue}>{courtsNeeded}</AppText>
+          </View>
+          <View style={styles.metricCard}>
+            <AppText style={styles.metricLabel}>PLAYERS / COURT</AppText>
+            <AppText style={styles.metricValue}>4</AppText>
+          </View>
+        </View>
+
+        {courtsAvailable < courtsNeeded && (
+          <View style={styles.constraintNotice}>
+            <AlertTriangle size={14} color="#D97706" />
+            <AppText style={styles.constraintNoticeText}>
+              Available courts ({courtsAvailable}) are fewer than matches needed per round ({courtsNeeded}).
+            </AppText>
           </View>
         )}
       </Card>
 
-      {/* ─── E. Partner Rotation Preview Accordion ───────────────────────────── */}
+      {/* ─── Partner Rotation Preview (Collapsible) ───────────────────────── */}
       {setupData?.preview_rounds && setupData.preview_rounds.length > 0 && (
         <Card style={styles.sectionCard}>
           <TouchableOpacity
@@ -380,7 +325,7 @@ export function ScrambleSetupRoundsTab({
             <View style={styles.sectionHeader}>
               <Calendar size={16} color="#0F766E" />
               <AppText style={styles.sectionTitle}>
-                E. Partner Rotation Preview ({setupData.preview_rounds.length} Rounds)
+                Rotation Preview ({setupData.preview_rounds.length} Rounds)
               </AppText>
             </View>
             {showPreview ? (
@@ -420,16 +365,16 @@ export function ScrambleSetupRoundsTab({
         </Card>
       )}
 
-      {/* ─── F. Confirm & Generate Schedule Action ───────────────────────────── */}
+      {/* ─── Clear Primary Generation Action ──────────────────────────────── */}
       <Card style={styles.actionCard}>
         {isGenerated ? (
           <View style={styles.generatedStatusBox}>
             <View style={styles.generatedStatusTop}>
-              <CheckCircle2 size={20} color="#0F766E" />
+              <CheckCircle2 size={18} color="#0F766E" />
               <AppText style={styles.generatedTitle}>Rotation Schedule Generated</AppText>
             </View>
             <AppText style={styles.generatedDesc}>
-              Schedule is active across {rounds} rounds for {playerCount} confirmed players. View and score matches in the Rounds tab.
+              Active across {rounds} rounds for {playerCount} confirmed players. View and score matches in the Rounds tab.
             </AppText>
             {canManage && (
               <TouchableOpacity
@@ -446,25 +391,17 @@ export function ScrambleSetupRoundsTab({
             )}
           </View>
         ) : (
-          <View style={styles.generateActionBox}>
-            <Button
-              label={
-                generating
-                  ? 'Generating Schedule...'
-                  : 'Confirm & Generate Rotation Schedule'
-              }
-              onPress={handleConfirmAndGenerate}
-              disabled={!hasMinPlayers || !isFeasible || generating || !canManage}
-              loading={generating}
-              variant="primary"
-              style={styles.generateBtn}
-            />
-            {!hasMinPlayers && (
-              <AppText style={styles.actionConstraintText}>
-                Requires at least 4 confirmed players before schedule generation is enabled.
-              </AppText>
-            )}
-          </View>
+          <Button
+            label={
+              generating
+                ? 'Generating Schedule...'
+                : 'Confirm & Generate Rotation Schedule'
+            }
+            onPress={handleConfirmAndGenerate}
+            disabled={!hasMinPlayers || generating || !canManage}
+            loading={generating}
+            variant="primary"
+          />
         )}
       </Card>
     </View>
@@ -483,7 +420,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing[4],
     borderWidth: 1,
-    borderColor: '#DCE8E3',
+    borderColor: '#DEF2E6',
   },
   headerRow: {
     flexDirection: 'row',
@@ -491,9 +428,9 @@ const styles = StyleSheet.create({
     gap: Spacing[3],
   },
   headerIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#E6F4F1',
     alignItems: 'center',
     justifyContent: 'center',
@@ -502,23 +439,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F2823',
-    lineHeight: 22,
+    lineHeight: 21,
   },
   headerSubtitle: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#64748B',
-    lineHeight: 18,
+    lineHeight: 17,
     marginTop: 2,
+  },
+  validationNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[2.5],
+    paddingHorizontal: Spacing[3],
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  validationNoticeText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#92400E',
+    flex: 1,
   },
   sectionCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     padding: Spacing[4],
     borderWidth: 1,
-    borderColor: '#DCE8E3',
+    borderColor: '#DEF2E6',
     gap: Spacing[3],
   },
   sectionHeader: {
@@ -527,16 +481,9 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#0F2823',
-    letterSpacing: 0.2,
-  },
-  sectionDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-    marginTop: -4,
   },
   metricsRow: {
     flexDirection: 'row',
@@ -546,87 +493,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAF9',
     borderRadius: Radius.md,
-    paddingVertical: Spacing[3],
+    paddingVertical: Spacing[2.5],
     paddingHorizontal: Spacing[2],
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#E8F0EC',
   },
   metricLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '700',
     color: '#64748B',
-    letterSpacing: 0.5,
-    marginBottom: 4,
+    letterSpacing: 0.4,
+    marginBottom: 3,
     textAlign: 'center',
   },
   metricValue: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0F766E',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing[2],
-    backgroundColor: '#FFFBEB',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  warningTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#92400E',
-    marginBottom: 2,
-  },
-  warningDesc: {
-    fontSize: 12.5,
-    color: '#B45309',
-    lineHeight: 17,
-  },
-  successBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing[2],
-    backgroundColor: '#F0FDF4',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-  },
-  successTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#166534',
-    marginBottom: 2,
-  },
-  successDesc: {
-    fontSize: 12.5,
-    color: '#15803D',
-    lineHeight: 17,
-  },
-  recommendationBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing[2],
-    backgroundColor: '#F0FDF9',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-  },
-  recommendationText: {
-    fontSize: 13,
-    color: '#0F766E',
-    lineHeight: 18,
-    flex: 1,
   },
   stepperWrap: {
     backgroundColor: '#F8FAF9',
     borderRadius: Radius.md,
-    padding: Spacing[3],
+    padding: Spacing[2.5],
     borderWidth: 1,
     borderColor: '#E8F0EC',
   },
@@ -636,10 +525,10 @@ const styles = StyleSheet.create({
   ruleCard: {
     backgroundColor: '#F8FAF9',
     borderRadius: Radius.md,
-    padding: Spacing[3],
+    padding: Spacing[2.5],
     borderWidth: 1,
     borderColor: '#E8F0EC',
-    gap: 4,
+    gap: 2,
   },
   ruleCardSelected: {
     backgroundColor: '#F0FDF9',
@@ -649,12 +538,12 @@ const styles = StyleSheet.create({
   ruleCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    gap: 8,
   },
   radioCircle: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 2,
     borderColor: '#94A3B8',
     alignItems: 'center',
@@ -664,13 +553,13 @@ const styles = StyleSheet.create({
     borderColor: '#0F766E',
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#0F766E',
   },
   ruleTitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#334155',
   },
@@ -678,51 +567,25 @@ const styles = StyleSheet.create({
     color: '#0F766E',
   },
   ruleDesc: {
-    fontSize: 12.5,
+    fontSize: 12,
     color: '#64748B',
-    lineHeight: 17,
-    paddingLeft: 26,
+    lineHeight: 16,
+    paddingLeft: 24,
   },
-  courtsSummaryRow: {
+  constraintNotice: {
     flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  courtBadgeItem: {
-    flex: 1,
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    padding: Spacing[3],
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E8F0EC',
-  },
-  courtBadgeVal: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F766E',
-  },
-  courtBadgeLbl: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 2,
-  },
-  courtsChipsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4,
+    backgroundColor: '#FFFBEB',
+    borderRadius: Radius.sm,
+    padding: Spacing[2],
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  courtChip: {
-    backgroundColor: '#E6F4F1',
-    borderRadius: 100,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  courtChipText: {
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#0F766E',
+  constraintNoticeText: {
+    fontSize: 12,
+    color: '#92400E',
+    flex: 1,
   },
   previewHeaderRow: {
     flexDirection: 'row',
@@ -730,8 +593,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   previewBody: {
-    gap: Spacing[3],
-    marginTop: Spacing[2],
+    gap: Spacing[2],
+    marginTop: 4,
   },
   previewRoundCard: {
     backgroundColor: '#F8FAF9',
@@ -739,53 +602,51 @@ const styles = StyleSheet.create({
     padding: Spacing[3],
     borderWidth: 1,
     borderColor: '#E8F0EC',
-    gap: 6,
+    gap: Spacing[2],
   },
   previewRoundHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 2,
   },
   previewRoundTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#0F766E',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F2823',
   },
   previewNote: {
     fontSize: 11,
-    color: '#B45309',
-    fontWeight: '600',
+    color: '#64748B',
   },
   previewMatchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#FFFFFF',
-    padding: 8,
     borderRadius: Radius.sm,
+    padding: 6,
     borderWidth: 1,
     borderColor: '#E8F0EC',
   },
   courtPill: {
     backgroundColor: '#E6F4F1',
-    borderRadius: 100,
-    paddingHorizontal: 7,
+    borderRadius: 4,
+    paddingHorizontal: 6,
     paddingVertical: 2,
   },
   courtPillText: {
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: '700',
     color: '#0F766E',
   },
   previewPair: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#1E293B',
     flex: 1,
   },
   previewVs: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: '#94A3B8',
   },
@@ -794,52 +655,36 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing[4],
     borderWidth: 1,
-    borderColor: '#DCE8E3',
-  },
-  generateActionBox: {
-    gap: Spacing[2],
-  },
-  generateBtn: {
-    width: '100%',
-  },
-  actionConstraintText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    textAlign: 'center',
-    marginTop: 2,
+    borderColor: '#DEF2E6',
   },
   generatedStatusBox: {
-    gap: Spacing[2],
-    alignItems: 'center',
-    paddingVertical: Spacing[2],
+    gap: 8,
   },
   generatedStatusTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    gap: 8,
   },
   generatedTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#0F766E',
   },
   generatedDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    textAlign: 'center',
-    lineHeight: 18,
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 17,
   },
   regenerateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 100,
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-    backgroundColor: '#F0FDF9',
-    marginTop: 6,
+    backgroundColor: '#E6F4F1',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    marginTop: 4,
   },
   regenerateBtnText: {
     fontSize: 12.5,

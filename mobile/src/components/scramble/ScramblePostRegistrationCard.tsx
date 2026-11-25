@@ -1,20 +1,19 @@
 /**
  * Aught2 Pickleball — ScramblePostRegistrationCard
  *
- * Compact, read-only status card for Scramble Tournaments in the Overview tab:
- * - Shows only high-level configuration status and clear next step.
- * - Standardized card width with identical 16px page margins as neighboring cards.
- * - NO repeated metrics, NO nested warning boxes, NO duplicate configuration controls.
- * - Provides ONE clear action to navigate to the Setup & Rounds workspace.
+ * Compact, lightweight status summary card for Scramble Tournaments in Overview tab.
+ * - Same horizontal margins and visual weight as Tournament Progress card.
+ * - Single row header with status badge.
+ * - Single short status line.
+ * - Single compact navigation link.
  */
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { ChevronRight, Layers, SlidersHorizontal } from 'lucide-react-native';
+import { ChevronRight, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
-import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
@@ -37,8 +36,6 @@ export function ScramblePostRegistrationCard({
   tournament,
   canManage,
   onNavigateToSetup,
-  onStartTournament,
-  isStartingTournament = false,
 }: ScramblePostRegistrationCardProps) {
   const [loading, setLoading] = useState(true);
   const [setupData, setSetupData] = useState<any>(null);
@@ -70,7 +67,7 @@ export function ScramblePostRegistrationCard({
       <Card style={styles.card}>
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color="#0F766E" />
-          <AppText style={styles.loadingText}>Loading configuration status...</AppText>
+          <AppText style={styles.loadingText}>Loading setup status...</AppText>
         </View>
       </Card>
     );
@@ -78,44 +75,25 @@ export function ScramblePostRegistrationCard({
 
   const isGenerated = setupData?.is_generated ?? false;
   const playerCount = setupData?.confirmed_player_count ?? tournament?.participant_count ?? 0;
-  const stage = setupData?.configuration_stage ?? 'awaiting_format_configuration';
-  const isReadyToStart = isGenerated && stage === 'ready_to_start';
   const hasMinPlayers = playerCount >= 4;
 
-  const getBadgeInfo = (): { label: string; variant: 'success' | 'info' | 'warning' } => {
-    if (isReadyToStart) return { label: 'Ready to Start', variant: 'success' };
-    if (isGenerated) return { label: 'Configured', variant: 'info' };
-    if (!hasMinPlayers) return { label: 'Waiting for Players', variant: 'warning' };
-    return { label: 'Awaiting Configuration', variant: 'warning' };
-  };
+  const badgeLabel = !hasMinPlayers
+    ? 'Waiting for players'
+    : isGenerated
+    ? 'Configured'
+    : 'Ready to configure';
 
-  const getStatusText = (): { title: string; desc: string } => {
-    if (isReadyToStart) {
-      return {
-        title: 'Ready to start',
-        desc: 'Scramble rotation matches and court assignments verified.',
-      };
-    }
-    if (isGenerated) {
-      return {
-        title: 'Schedule generated',
-        desc: `Rotation schedule active across ${setupData?.selected_rounds ?? 5} rounds.`,
-      };
-    }
-    if (!hasMinPlayers) {
-      return {
-        title: 'Waiting for confirmed players',
-        desc: 'Scramble rotation configuration will be available when at least 4 players are confirmed.',
-      };
-    }
-    return {
-      title: 'Configuration required',
-      desc: 'Configure rotation rounds and partner rules in Setup & Rounds.',
-    };
-  };
+  const badgeVariant: 'warning' | 'info' | 'success' = !hasMinPlayers
+    ? 'warning'
+    : isGenerated
+    ? 'success'
+    : 'info';
 
-  const badge = getBadgeInfo();
-  const status = getStatusText();
+  const statusMessage = !hasMinPlayers
+    ? 'Waiting for 4 confirmed players.'
+    : isGenerated
+    ? 'Rotation schedule configured.'
+    : 'Ready to configure rotation rounds and partner rules.';
 
   return (
     <Card style={styles.card}>
@@ -123,37 +101,28 @@ export function ScramblePostRegistrationCard({
       <View style={styles.headerRow}>
         <View style={styles.headerLeftCol}>
           <View style={styles.iconCircle}>
-            <Layers size={16} color="#0F766E" />
+            <SlidersHorizontal size={14} color="#0F766E" />
           </View>
           <AppText style={styles.cardTitle}>Scramble Setup</AppText>
         </View>
-        <Badge label={badge.label} variant={badge.variant} size="sm" />
+        <Badge label={badgeLabel} variant={badgeVariant} size="sm" />
       </View>
 
-      {/* ─── Short Status Explanation ───────────────────────────────────── */}
-      <View style={styles.statusBox}>
-        <AppText style={styles.statusTitle}>{status.title}</AppText>
-        <AppText style={styles.statusDesc}>{status.desc}</AppText>
-      </View>
+      {/* ─── One Short Status Line ──────────────────────────────────────── */}
+      <AppText style={styles.statusMessage}>{statusMessage}</AppText>
 
-      {/* ─── Single Action Row ─────────────────────────────────────────── */}
-      <View style={styles.actionRow}>
-        {onNavigateToSetup ? (
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={onNavigateToSetup}
-            activeOpacity={0.8}
-          >
-            <View style={styles.ctaButtonLeft}>
-              <SlidersHorizontal size={15} color="#0F766E" />
-              <AppText style={styles.ctaButtonText}>
-                {isGenerated ? 'View in Setup & Rounds' : 'Configure in Setup & Rounds'}
-              </AppText>
-            </View>
-            <ChevronRight size={16} color="#0F766E" />
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      {/* ─── Compact Navigation Link ───────────────────────────────────── */}
+      {onNavigateToSetup ? (
+        <TouchableOpacity
+          style={styles.ctaLink}
+          onPress={onNavigateToSetup}
+          activeOpacity={0.7}
+        >
+          <AppText style={styles.ctaLinkText}>
+            {isGenerated ? 'View in Setup & Rounds →' : 'Configure Setup & Rounds →'}
+          </AppText>
+        </TouchableOpacity>
+      ) : null}
     </Card>
   );
 }
@@ -161,80 +130,58 @@ export function ScramblePostRegistrationCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
     borderWidth: 1,
-    borderColor: '#DCE8E3',
-    gap: Spacing[3],
+    borderColor: '#DEF2E6',
+    borderRadius: Radius.lg,
+    padding: Spacing[3.5],
+    gap: Spacing[2.5],
   },
   loadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
-    paddingVertical: Spacing[2],
+    paddingVertical: Spacing[1],
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#64748B',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: Spacing[2],
   },
   headerLeftCol: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
+    gap: 8,
+    flexShrink: 1,
   },
   iconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E6F4F1',
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#DEF2E6',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardTitle: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0F2823',
-    letterSpacing: 0.1,
-  },
-  statusBox: {
-    gap: 3,
-  },
-  statusTitle: {
-    fontSize: 14,
     fontWeight: '700',
-    color: '#0F2823',
+    color: '#0F172A',
   },
-  statusDesc: {
+  statusMessage: {
     fontSize: 13,
-    color: '#64748B',
+    color: '#475569',
     lineHeight: 18,
   },
-  actionRow: {
-    marginTop: 2,
+  ctaLink: {
+    alignSelf: 'flex-start',
+    paddingVertical: 2,
   },
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F0FDF9',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-    borderRadius: Radius.md,
-    paddingVertical: 10,
-    paddingHorizontal: Spacing[3],
-  },
-  ctaButtonLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ctaButtonText: {
-    fontSize: 13.5,
+  ctaLinkText: {
+    fontSize: 13,
     fontWeight: '700',
     color: '#0F766E',
   },

@@ -39,8 +39,11 @@ import { Card } from '@/components/Card';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ScrambleState } from '@/types/scramble';
+import { ScramblePostRegistrationCard } from './ScramblePostRegistrationCard';
 
 export interface ScrambleOverviewTabProps {
+  clubId?: string;
+  tournamentId?: string;
   state: ScrambleState | null;
   tournament?: Tournament | null;
   canManage: boolean;
@@ -60,6 +63,8 @@ export interface ScrambleOverviewTabProps {
 }
 
 export function ScrambleOverviewTab({
+  clubId,
+  tournamentId,
   state,
   tournament,
   canManage,
@@ -133,6 +138,17 @@ export function ScrambleOverviewTab({
 
   return (
     <View style={styles.container}>
+      {/* ─── 0. Compact Post-Registration Setup Card ─── */}
+      {canManage && tournament && clubId && tournamentId && (
+        <ScramblePostRegistrationCard
+          clubId={clubId}
+          tournamentId={tournamentId}
+          tournament={tournament}
+          canManage={canManage}
+          onNavigateToSetup={() => onNavigateTab('setup_rounds')}
+        />
+      )}
+
       {/* ─── Champion Banner (Only shown if Tournament is Officially Completed) ─── */}
       {isCompleted && state.champion_player_name && (
         <Card style={styles.championCard}>
@@ -151,7 +167,7 @@ export function ScrambleOverviewTab({
         </Card>
       )}
 
-      {/* ─── 1. Tournament Progress Card (Standardized layout matching Round Robin) ─── */}
+      {/* ─── 1. Tournament Progress Card (Standardized layout) ─── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
           <BarChart2 size={18} color="#0F766E" />
@@ -167,9 +183,7 @@ export function ScrambleOverviewTab({
         <View style={styles.progressContainer}>
           <View style={styles.progressTopRow}>
             <AppText style={styles.progressSubText}>
-              {isAwaitingRotationSetup
-                ? 'Roster locked • Configure rounds above to generate schedule'
-                : expectedTotalGames > 0
+              {expectedTotalGames > 0
                 ? `${tournamentGamesCompleted} of ${expectedTotalGames} games completed`
                 : '0 of 0 games completed'}
             </AppText>
@@ -189,13 +203,13 @@ export function ScrambleOverviewTab({
         <View style={styles.statsGrid}>
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>PLAYERS</AppText>
-            <Users size={15} color="#64748B" style={styles.statTileIcon} />
+            <Users size={14} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>{registeredPlayersCount}</AppText>
           </View>
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>ROUNDS</AppText>
-            <Calendar size={15} color="#64748B" style={styles.statTileIcon} />
+            <Calendar size={14} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
               {isScheduleGenerated && plannedRounds !== null ? plannedRounds : '—'}
             </AppText>
@@ -203,7 +217,7 @@ export function ScrambleOverviewTab({
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>COMPLETED</AppText>
-            <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
+            <CheckCircle2 size={14} color="#0F766E" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
               {!isScheduleGenerated ? '—' : tournamentGamesCompleted}
             </AppText>
@@ -211,53 +225,33 @@ export function ScrambleOverviewTab({
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>REMAINING</AppText>
-            <Clock size={15} color="#64748B" style={styles.statTileIcon} />
+            <Clock size={14} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
               {!isScheduleGenerated ? '—' : remainingGames}
             </AppText>
           </View>
         </View>
 
-        {/* Informational Strip */}
-        <View style={styles.infoStrip}>
-          <Info size={14} color="#0284C7" />
-          <AppText style={styles.infoStripText}>
-            {isAwaitingRotationSetup
-              ? 'Registration is closed. Configure planned rotation rounds and partner rules in Setup & Rounds to generate schedule.'
-              : registeredPlayersCount < 4
-              ? 'Minimum 4 players required to form official Scramble courts.'
-              : isRegistrationOpen
-              ? `${registeredPlayersCount} players registered. Close registration to seed players and configure Round 1.`
-              : 'Rotating doubles scramble: individual scoring with rotating partners and opponents across courts.'}
-          </AppText>
-        </View>
-
-        {/* Quick Action Button */}
-        <TouchableOpacity
-          style={styles.viewMatchupsBtn}
-          onPress={() => {
-            if (isCompleted) {
-              onNavigateTab('results');
-            } else if (isAwaitingRotationSetup) {
-              onNavigateTab('setup_rounds');
-            } else if (registeredPlayersCount < 4 || isRegistrationOpen) {
-              onNavigateTab('participants');
-            } else {
-              onNavigateTab('rounds');
-            }
-          }}
-          activeOpacity={0.8}
-        >
-          <AppText style={styles.viewMatchupsBtnText}>
-            {isCompleted
-              ? 'View Standings & Final Results →'
-              : isAwaitingRotationSetup
-              ? 'Configure in Setup & Rounds →'
-              : registeredPlayersCount < 4 || isRegistrationOpen
-              ? 'Manage Players & Availability →'
-              : 'View Round Schedule & Enter Scores →'}
-          </AppText>
-        </TouchableOpacity>
+        {/* Contextual Action Link when active or completed */}
+        {(isCompleted || (isScheduleGenerated && tournamentGamesCompleted > 0)) && (
+          <TouchableOpacity
+            style={styles.viewMatchupsBtn}
+            onPress={() => {
+              if (isCompleted) {
+                onNavigateTab('results');
+              } else {
+                onNavigateTab('rounds');
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <AppText style={styles.viewMatchupsBtnText}>
+              {isCompleted
+                ? 'View Standings & Final Results →'
+                : 'View Round Schedule & Enter Scores →'}
+            </AppText>
+          </TouchableOpacity>
+        )}
       </Card>
 
       {/* ─── 4. Partner Coverage & Rotation Quality Card (When available) ─── */}
@@ -436,9 +430,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statTile: {
-    flexBasis: '47%',
+    flexBasis: '48%',
     flexGrow: 1,
-    minWidth: 120,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
@@ -450,7 +443,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   statTileLabel: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 0.5,
