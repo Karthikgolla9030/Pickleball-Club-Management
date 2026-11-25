@@ -472,6 +472,25 @@ export default function PlayerHomeScreen() {
           </View>
         )}
 
+        {/* ─── 1. WELCOME SECTION + LOCATION PILL ───────────────────────────── */}
+        <View style={styles.welcomeRow}>
+          <View style={styles.welcomeTextCol}>
+            <AppText style={styles.welcomeSub}>Welcome back,</AppText>
+            <AppText style={styles.welcomeMain}>
+              Let's make today amazing
+            </AppText>
+          </View>
+
+          {/* Right Location Tag Pill */}
+          <View style={styles.locationPill}>
+            <MapPin size={13} color="#18794E" strokeWidth={2.4} />
+            <View style={styles.locationTextStack}>
+              <AppText style={styles.locationTitle}>Good People</AppText>
+              <AppText style={styles.locationSubtitle}>Great Games</AppText>
+            </View>
+          </View>
+        </View>
+
         {/* ─── 2. EVENTS-STYLE HERO CAROUSEL (Slide 1: Welcome Banner; Slides 2+: Promotional Ads) ─── */}
         <View style={styles.heroSection}>
           <PlayerHeroBanner
@@ -898,6 +917,62 @@ const styles = StyleSheet.create({
     backgroundColor: '#EF4444',
     borderWidth: 1.5,
     borderColor: '#F4F9F6',
+  },
+
+  // Welcome Section
+  welcomeRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 2,
+    marginBottom: -4,
+  },
+  welcomeTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  welcomeSub: {
+    fontSize: 14,
+    color: '#5E736E',
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  welcomeMain: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: '#102F2B',
+    lineHeight: 30,
+    letterSpacing: -0.3,
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E6F5EE',
+    borderColor: '#D0EADB',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
+  },
+  locationTextStack: {
+    gap: 0.5,
+  },
+  locationTitle: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#18794E',
+    lineHeight: 12,
+  },
+  locationSubtitle: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#18794E',
+    lineHeight: 12,
   },
 
   // Hero Banner
