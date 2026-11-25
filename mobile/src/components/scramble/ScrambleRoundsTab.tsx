@@ -27,7 +27,6 @@ import {
   ChevronDown,
   Clock,
   Edit2,
-  Lightbulb,
   Play,
   RotateCcw,
   Sparkles,
@@ -301,10 +300,6 @@ export function ScrambleRoundsTab({
                 </AppText>
               </TouchableOpacity>
             )}
-
-            <AppText style={styles.emptyFootnote}>
-              You need at least 4 players and a valid 4/5-player court partition to generate matchups.
-            </AppText>
           </View>
         )
       ) : (
@@ -443,52 +438,6 @@ export function ScrambleRoundsTab({
           )}
         </View>
       )}
-
-      {/* ── 4. Bottom Card: How Scramble Matchups Work ── */}
-      <View style={styles.infoCard}>
-        <View style={styles.infoCardHeader}>
-          <Lightbulb size={20} color="#D97706" />
-          <AppText style={styles.infoCardTitle}>How Scramble Matchups Work</AppText>
-        </View>
-
-        <View style={styles.stepsList}>
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumberCircle}>
-              <AppText style={styles.stepNumberText}>1</AppText>
-            </View>
-            <AppText style={styles.stepDescription}>
-              Players are divided into courts of 4 or 5.
-            </AppText>
-          </View>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumberCircle}>
-              <AppText style={styles.stepNumberText}>2</AppText>
-            </View>
-            <AppText style={styles.stepDescription}>
-              Each court plays all its scheduled games with rotating partners.
-            </AppText>
-          </View>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumberCircle}>
-              <AppText style={styles.stepNumberText}>3</AppText>
-            </View>
-            <AppText style={styles.stepDescription}>
-              4-player court: 3 games (0 sit-outs).
-            </AppText>
-          </View>
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumberCircle}>
-              <AppText style={styles.stepNumberText}>4</AppText>
-            </View>
-            <AppText style={styles.stepDescription}>
-              5-player court: 5 games (each player sits out once).
-            </AppText>
-          </View>
-        </View>
-      </View>
     </View>
   );
 }

@@ -495,13 +495,6 @@ export default function BracketWorkspaceScreen() {
         isLoading: isGenerating,
       };
     }
-    if (tournament?.status === 'registration_closed' && matches.length > 0 && progress.remainingMatches > 0) {
-      return {
-        label: 'Start Tournament',
-        onPress: handleStartTournament,
-        isLoading: isStartingTournament,
-      };
-    }
     if (matches.length > 0 && progress.remainingMatches > 0) {
       return {
         label: 'Enter Scores',

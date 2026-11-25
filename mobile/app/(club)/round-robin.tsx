@@ -474,13 +474,6 @@ export default function RoundRobinWorkspaceScreen() {
         isLoading: isGenerating,
       };
     }
-    if (tournament?.status === 'registration_closed' && matches.length > 0 && remaining > 0) {
-      return {
-        label: 'Start Tournament',
-        onPress: handleStartTournament,
-        isLoading: isStartingTournament,
-      };
-    }
     if (matches.length > 0 && remaining > 0) {
       return {
         label: 'Enter Scores',

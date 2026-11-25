@@ -926,15 +926,6 @@ export default function TournamentDetailsScreen() {
                     })}
                   />
                 )}
-                {tournament.status === 'registration_closed' && (
-                  <Button
-                    label="Start Tournament"
-                    variant="primary"
-                    size="sm"
-                    loading={isStartingTournament}
-                    onPress={handleStartTournament}
-                  />
-                )}
                 {tournament.status !== 'completed' && tournament.status !== 'cancelled' && (
                   <Button
                     label="Cancel Tournament"

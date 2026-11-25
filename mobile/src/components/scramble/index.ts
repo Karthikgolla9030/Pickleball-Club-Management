@@ -8,6 +8,7 @@ export * from './ScramblePlayersTab';
 export * from './ScrambleRoundsTab';
 export * from './ScrambleStandingsTab';
 export * from './ScrambleResultsTab';
+export * from './ScrambleSetupRoundsTab';
 export * from './modals/ScrambleScoreModal';
 export * from './modals/ScrambleEndTournamentModal';
 export * from './ScramblePostRegistrationCard';

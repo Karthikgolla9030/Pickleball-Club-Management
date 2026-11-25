@@ -29,12 +29,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
-  Edit2,
   Info,
-  Layers,
-  Minus,
-  Plus,
-  ShieldCheck,
   Sparkles,
   Trophy,
   Users,
@@ -69,13 +64,7 @@ export function ScrambleOverviewTab({
   tournament,
   canManage,
   onNavigateTab,
-  onSetPlannedRounds,
-  isSettingPlannedRounds = false,
 }: ScrambleOverviewTabProps) {
-  // Planned rounds inline editing state
-  const [isEditingRounds, setIsEditingRounds] = useState(false);
-  const [editingRoundsValue, setEditingRoundsValue] = useState<number>(state?.planned_rounds ?? 3);
-
   if (!state) {
     return (
       <View style={styles.loadingContainer}>
@@ -87,24 +76,24 @@ export function ScrambleOverviewTab({
 
   const isCompleted = state.tournament_status === 'completed' || tournament?.status === 'completed';
   const isRegistrationOpen = tournament?.status === 'registration_open' || state.tournament_status === 'registration_open';
+  const isScheduleGenerated =
+    (state.expected_total_games ?? state.total_games ?? 0) > 0 ||
+    state.tournament_status === 'in_progress' ||
+    state.tournament_status === 'completed';
+
   const isAwaitingRotationSetup =
     (tournament?.status === 'registration_closed' || state.tournament_status === 'registration_closed') &&
-    (state.expected_total_games ?? state.total_games ?? 0) === 0;
+    !isScheduleGenerated;
 
   const currentRound = state.current_round ?? 1;
-  const plannedRounds = state.planned_rounds ?? 3;
+  const plannedRounds = isScheduleGenerated ? (state.planned_rounds ?? 3) : null;
   const registeredPlayersCount = state.registered_players_count ?? tournament?.participant_count ?? 0;
+  const hasMinPlayers = registeredPlayersCount >= 4;
 
   // Games and progress calculations (truthful zero handling)
   const tournamentGamesCompleted = state.tournament_games_completed ?? (state.games_completed ?? 0);
-
-  // If players < 4, no games can exist or be generated yet
-  const hasMinPlayers = registeredPlayersCount >= 4;
-  const expectedTotalGames = hasMinPlayers
-    ? (state.expected_total_games ?? (state.total_games ?? 0))
-    : 0;
-
-  const remainingGames = expectedTotalGames > 0
+  const expectedTotalGames = isScheduleGenerated ? (state.expected_total_games ?? (state.total_games ?? 0)) : 0;
+  const remainingGames = isScheduleGenerated && expectedTotalGames > 0
     ? Math.max(0, expectedTotalGames - tournamentGamesCompleted)
     : 0;
 
@@ -121,20 +110,10 @@ export function ScrambleOverviewTab({
   const formatConfig = (tournament?.format_configuration as Record<string, any>) || {};
   const category = tournament?.competition_category || formatConfig.category || 'Open Scramble';
 
-  const handleSaveRounds = async () => {
-    if (!onSetPlannedRounds) return;
-    try {
-      await onSetPlannedRounds(editingRoundsValue);
-      setIsEditingRounds(false);
-      Alert.alert('Rounds Confirmed', `Planned rotation rounds updated to ${editingRoundsValue}.`);
-    } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to update planned rounds.');
-    }
-  };
-
   const getRoundStatusLabel = () => {
     if (isCompleted) return 'Completed';
-    if (isAwaitingRotationSetup) return 'Awaiting Rotation Setup';
+    if (!hasMinPlayers && tournament?.status === 'registration_closed') return 'Waiting for Players';
+    if (isAwaitingRotationSetup) return 'Awaiting Configuration';
     if (isRegistrationOpen) return 'Registration Open';
     switch (state.round_status) {
       case 'setup':
@@ -217,14 +196,16 @@ export function ScrambleOverviewTab({
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>ROUNDS</AppText>
             <Calendar size={15} color="#64748B" style={styles.statTileIcon} />
-            <AppText style={styles.statTileNum}>{plannedRounds}</AppText>
+            <AppText style={styles.statTileNum}>
+              {isScheduleGenerated && plannedRounds !== null ? plannedRounds : '—'}
+            </AppText>
           </View>
 
           <View style={styles.statTile}>
             <AppText style={styles.statTileLabel}>COMPLETED</AppText>
             <CheckCircle2 size={15} color="#0F766E" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {isAwaitingRotationSetup ? 'Pending' : tournamentGamesCompleted}
+              {!isScheduleGenerated ? '—' : tournamentGamesCompleted}
             </AppText>
           </View>
 
@@ -232,7 +213,7 @@ export function ScrambleOverviewTab({
             <AppText style={styles.statTileLabel}>REMAINING</AppText>
             <Clock size={15} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {isAwaitingRotationSetup ? 'Pending' : remainingGames}
+              {!isScheduleGenerated ? '—' : remainingGames}
             </AppText>
           </View>
         </View>
@@ -242,7 +223,7 @@ export function ScrambleOverviewTab({
           <Info size={14} color="#0284C7" />
           <AppText style={styles.infoStripText}>
             {isAwaitingRotationSetup
-              ? 'Registration is closed. Configure planned rotation rounds and partner rules above to generate schedule.'
+              ? 'Registration is closed. Configure planned rotation rounds and partner rules in Setup & Rounds to generate schedule.'
               : registeredPlayersCount < 4
               ? 'Minimum 4 players required to form official Scramble courts.'
               : isRegistrationOpen
@@ -257,7 +238,9 @@ export function ScrambleOverviewTab({
           onPress={() => {
             if (isCompleted) {
               onNavigateTab('results');
-            } else if (registeredPlayersCount < 4 || isRegistrationOpen || isAwaitingRotationSetup) {
+            } else if (isAwaitingRotationSetup) {
+              onNavigateTab('setup_rounds');
+            } else if (registeredPlayersCount < 4 || isRegistrationOpen) {
               onNavigateTab('participants');
             } else {
               onNavigateTab('rounds');
@@ -269,87 +252,13 @@ export function ScrambleOverviewTab({
             {isCompleted
               ? 'View Standings & Final Results →'
               : isAwaitingRotationSetup
-              ? 'Review Confirmed Players →'
+              ? 'Configure in Setup & Rounds →'
               : registeredPlayersCount < 4 || isRegistrationOpen
               ? 'Manage Players & Availability →'
               : 'View Round Schedule & Enter Scores →'}
           </AppText>
         </TouchableOpacity>
       </Card>
-
-      {/* Optional Planned Rounds Adjuster (Pre-match setup only, suppressed during awaiting configuration) */}
-      {canManage && !isCompleted && !isAwaitingRotationSetup && tournamentGamesCompleted === 0 && (
-
-        <Card style={styles.card}>
-          <View style={styles.plannedRoundsHeader}>
-            <AppText style={styles.cardHeaderTitle}>Adjust Planned Rounds</AppText>
-            {!isEditingRounds ? (
-              <TouchableOpacity
-                onPress={() => {
-                  setEditingRoundsValue(plannedRounds);
-                  setIsEditingRounds(true);
-                }}
-                style={styles.adjustLink}
-                hitSlop={8}
-              >
-                <Edit2 size={13} color="#0F766E" />
-                <AppText style={styles.adjustLinkText}>Edit</AppText>
-              </TouchableOpacity>
-            ) : null}
-          </View>
-          {state.recommendation_reason && !isEditingRounds && (
-            <AppText style={styles.recommendationHint}>
-              {state.recommendation_reason}
-            </AppText>
-          )}
-          {isEditingRounds && (
-            <View style={styles.editStepperBox}>
-              <View style={styles.stepperControlRow}>
-                <TouchableOpacity
-                  style={styles.stepperBtn}
-                  onPress={() => setEditingRoundsValue((v) => Math.max(1, v - 1))}
-                  disabled={editingRoundsValue <= 1}
-                >
-                  <Minus size={16} color="#1E293B" />
-                </TouchableOpacity>
-
-                <View style={styles.stepperValueContainer}>
-                  <AppText style={styles.stepperValueText}>{editingRoundsValue} Rounds</AppText>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.stepperBtn}
-                  onPress={() => setEditingRoundsValue((v) => Math.min(15, v + 1))}
-                  disabled={editingRoundsValue >= 15}
-                >
-                  <Plus size={16} color="#1E293B" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.stepperActionsRow}>
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => setIsEditingRounds(false)}
-                >
-                  <AppText style={styles.cancelBtnText}>Cancel</AppText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.confirmBtn}
-                  onPress={handleSaveRounds}
-                  disabled={isSettingPlannedRounds}
-                >
-                  {isSettingPlannedRounds ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <AppText style={styles.confirmBtnText}>Save Rounds</AppText>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-        </Card>
-      )}
 
       {/* ─── 4. Partner Coverage & Rotation Quality Card (When available) ─── */}
       {state.coverage_summary && (

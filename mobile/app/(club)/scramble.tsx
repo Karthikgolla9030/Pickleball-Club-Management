@@ -42,11 +42,13 @@ import {
   ScrambleResultsTab,
   ScrambleRoundsTab,
   ScrambleScoreModal,
+  ScrambleSetupRoundsTab,
   ScrambleStandingsTab,
 } from '@/components/scramble';
 
 import {
   useActiveClub,
+  useClubCourts,
   usePermission,
   useScramble,
   useTournamentDetails,
@@ -63,6 +65,7 @@ export default function ScrambleWorkspaceScreen() {
   const tournamentId = params.tournamentId ?? null;
 
   const { clubId } = useActiveClub();
+  const { courts: clubCourts } = useClubCourts(clubId);
   const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
   const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
 
@@ -376,13 +379,18 @@ export default function ScrambleWorkspaceScreen() {
     });
   }, [matches, state?.planned_rounds]);
 
+  const isScheduleGenerated =
+    validMatches.length > 0 ||
+    state?.tournament_status === 'in_progress' ||
+    state?.tournament_status === 'completed';
+
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {
       participantsCount: state?.registered_players_count ?? registrations.length,
-      roundsCount: state?.planned_rounds ?? state?.current_round,
+      roundsCount: isScheduleGenerated ? (state?.planned_rounds ?? state?.current_round) : undefined,
       matchesCount: validMatches.length,
     });
-  }, [tournament, state?.registered_players_count, registrations.length, state?.planned_rounds, state?.current_round, validMatches.length]);
+  }, [tournament, state?.registered_players_count, registrations.length, isScheduleGenerated, state?.planned_rounds, state?.current_round, validMatches.length]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
@@ -405,13 +413,6 @@ export default function ScrambleWorkspaceScreen() {
         onPress: handleCloseRegistration,
         isLoading: isCloseRegistrationPending,
         variant: 'secondary' as const,
-      };
-    }
-    if (tournament?.status === 'registration_closed' && (!validMatches.length || state?.round_status === 'setup')) {
-      return {
-        label: 'Start Tournament',
-        onPress: handleStartTournament,
-        isLoading: isStartingTournament,
       };
     }
 
@@ -625,6 +626,7 @@ export default function ScrambleWorkspaceScreen() {
                     tournamentId={tournamentId}
                     tournament={tournament}
                     canManage={canManage}
+                    onNavigateToSetup={() => setActiveTab('setup_rounds')}
                     onGenerated={async () => {
                       await handleRefresh();
                     }}
@@ -637,10 +639,25 @@ export default function ScrambleWorkspaceScreen() {
                   tournament={tournament}
                   canManage={canManage}
                   onNavigateTab={handleTabChange}
-                  onSetPlannedRounds={setPlannedRounds}
-                  isSettingPlannedRounds={isSettingPlannedRounds}
                 />
               </>
+            )}
+
+            {activeTab === 'setup_rounds' && (
+              <ScrambleSetupRoundsTab
+                clubId={clubId ?? ''}
+                tournamentId={tournamentId ?? ''}
+                tournament={tournament}
+                state={state}
+                canManage={canManage}
+                registeredCount={state?.registered_players_count ?? registrations.length}
+                clubCourts={clubCourts}
+                onGenerated={async () => {
+                  await handleRefresh();
+                }}
+                matchesCount={validMatches?.length ?? 0}
+                onSetPlannedRounds={setPlannedRounds}
+              />
             )}
 
             {(activeTab === 'participants' || (activeTab as string) === 'players') && (

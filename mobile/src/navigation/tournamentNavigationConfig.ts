@@ -29,6 +29,7 @@ export type TournamentTabKey =
   | 'standings'
   | 'championship'
   | 'setup_courts'
+  | 'setup_rounds'
   | 'results'
   | 'settings';
 
@@ -123,6 +124,12 @@ export function getTournamentNavigationTabs(
     case 'scramble':
       return [
         { id: 'overview', label: 'Overview', iconName: 'LayoutDashboard' },
+        {
+          id: 'setup_rounds',
+          label: 'Setup & Rounds',
+          iconName: 'SlidersHorizontal',
+          badge: counts?.roundsCount ? `${counts.roundsCount} Rounds` : undefined,
+        },
         {
           id: 'participants',
           label: 'Players',

@@ -915,13 +915,6 @@ export default function PoolPlayManagementScreen() {
         variant: 'secondary' as const,
       };
     }
-    if (effectiveTournament?.status === 'registration_closed' && matches.length > 0 && !isPoolPlayComplete) {
-      return {
-        label: 'Start Tournament',
-        onPress: handleStartTournament,
-        isLoading: isStartingTournament,
-      };
-    }
     if (matches.length > 0 && !isPoolPlayComplete) {
       return {
         label: 'Enter Scores',

@@ -198,8 +198,6 @@ export function ScramblePlayersTab({
       <TournamentSectionHeading
         title={`Players (${confirmedPlayers.length})`}
         subtitle={`· Round ${currentRound} Availability (${selectedIds.length} checked in)`}
-        badgeLabel="SCRAMBLE"
-        badgeVariant="green"
       />
 
       {canManage && confirmedPlayers.length > 0 && (
@@ -284,10 +282,16 @@ export function ScramblePlayersTab({
       )}
 
       {/* ── 4. Court Partition Information Panel ── */}
-      {selectedIds.length > 0 && !partition.isValid ? (
-        // Soft red warning panel for invalid counts
+      {selectedIds.length < 4 ? (
+        <View style={styles.infoPanel}>
+          <Info size={18} color="#08785E" />
+          <AppText style={styles.infoPanelText}>
+            At least 4 players required to generate matchups.
+          </AppText>
+        </View>
+      ) : !partition.isValid ? (
         <View style={styles.invalidPanel}>
-          <AlertCircle size={20} color="#DC2626" />
+          <AlertCircle size={18} color="#DC2626" />
           <View style={{ flex: 1 }}>
             <AppText style={styles.invalidPanelTitle}>Invalid Player Count</AppText>
             <AppText style={styles.invalidPanelDescription}>
@@ -295,10 +299,9 @@ export function ScramblePlayersTab({
             </AppText>
           </View>
         </View>
-      ) : selectedIds.length > 0 && partition.isValid ? (
-        // Positive partition summary panel
+      ) : (
         <View style={styles.validPanel}>
-          <CheckCircle2 size={20} color="#08785E" />
+          <CheckCircle2 size={18} color="#08785E" />
           <View style={{ flex: 1 }}>
             <AppText style={styles.validPanelTitle}>Valid Court Partition</AppText>
             <AppText style={styles.validPanelDescription}>
@@ -309,85 +312,26 @@ export function ScramblePlayersTab({
             </AppText>
           </View>
         </View>
-      ) : (
-        // Default information panel matching Screen 2
-        <View style={styles.infoPanel}>
-          <Info size={20} color="#08785E" />
-          <AppText style={styles.infoPanelText}>
-            You need at least 4 players and a valid 4 or 5-player court partition to generate
-            matchups. Valid counts: 4, 5, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20...
-            (Counts like 6, 7, 11 are not valid.)
-          </AppText>
-        </View>
       )}
 
-      {/* ── 5. Bottom Action Area ── */}
-      {canManage && (
+      {/* ── 5. Bottom Action Area (Only shown when there are unsaved changes) ── */}
+      {canManage && hasUnsavedChanges && (
         <View style={styles.bottomActionsArea}>
-          {/* Save Availability Button */}
           <TouchableOpacity
-            style={[
-              styles.actionPillButton,
-              hasUnsavedChanges ? styles.activeSecondaryButton : styles.inactiveButton,
-            ]}
+            style={[styles.actionPillButton, styles.activeSecondaryButton]}
             onPress={handleSave}
-            disabled={isSavingAvailability || !hasUnsavedChanges}
+            disabled={isSavingAvailability}
             activeOpacity={0.8}
           >
             {isSavingAvailability ? (
               <ActivityIndicator size="small" color="#08785E" />
             ) : (
-              <CheckCircle2
-                size={18}
-                color={hasUnsavedChanges ? '#08785E' : '#71817E'}
-              />
+              <CheckCircle2 size={18} color="#08785E" />
             )}
-            <AppText
-              style={[
-                styles.actionPillText,
-                hasUnsavedChanges ? styles.activeSecondaryText : styles.inactiveButtonText,
-              ]}
-            >
+            <AppText style={[styles.actionPillText, styles.activeSecondaryText]}>
               {isSavingAvailability ? 'Saving...' : 'Save Availability'}
             </AppText>
           </TouchableOpacity>
-
-          {/* Create Matchups Button */}
-          <TouchableOpacity
-            style={[
-              styles.actionPillButton,
-              canCreateMatchups ? styles.activePrimaryButton : styles.inactiveButton,
-            ]}
-            onPress={handleGenerate}
-            disabled={isCreatingMatchups || !canCreateMatchups}
-            activeOpacity={0.8}
-          >
-            {isCreatingMatchups ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <Sparkles
-                size={18}
-                color={canCreateMatchups ? '#FFFFFF' : '#71817E'}
-              />
-            )}
-            <AppText
-              style={[
-                styles.actionPillText,
-                canCreateMatchups ? styles.activePrimaryText : styles.inactiveButtonText,
-              ]}
-            >
-              {isCreatingMatchups ? 'Creating Matchups...' : `Create Round ${currentRound} Matchups`}
-            </AppText>
-          </TouchableOpacity>
-
-          {/* Footnote Caption */}
-          {!canCreateMatchups && (
-            <AppText style={styles.bottomFootnote}>
-              {isMixed
-                ? 'Select players in multiples of 4 (balanced 2 men + 2 women) to create mixed court matchups.'
-                : 'Select at least 4 players and a valid 4/5-player court partition before creating matchups.'}
-            </AppText>
-          )}
         </View>
       )}
     </View>

@@ -195,10 +195,12 @@ export function TournamentManagementInfo({
     }
   }, [tournament?.start_date]);
 
-  // Redundant action filter: Do not show action if user is already on that tab
+  // Redundant action filter: Do not show action if user is already on that tab,
+  // and completely omit prominent "Start Tournament" header buttons across all tournament formats.
   const isRedundant = React.useMemo(() => {
     if (!primaryAction) return true;
     const label = primaryAction.label.toLowerCase();
+    if (label.includes('start tournament') || label.includes('start now')) return true;
     if (activeTab === 'results' && label.includes('result')) return true;
     if ((activeTab === 'matches' || activeTab === 'matchups' || activeTab === 'rounds') && (label.includes('score') || label.includes('match') || label.includes('round'))) return true;
     if (activeTab === 'bracket' && label.includes('bracket')) return true;

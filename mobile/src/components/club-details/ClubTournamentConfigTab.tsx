@@ -203,10 +203,8 @@ export function ClubTournamentConfigTab({
     if (isNaN(brW) || brW < 1) errs.brWinBy = 'Win by points must be at least 1.';
 
     // Scramble validation
-    const sRounds = scrambleRounds.trim() ? parseInt(scrambleRounds, 10) : 5;
     const scScore = parseInt(scTargetScore, 10);
     const scW = parseInt(scWinBy, 10);
-    if (!isNaN(sRounds) && (sRounds < 1 || sRounds > 20)) errs.scrambleRounds = 'Rounds must be between 1 and 20.';
     if (isNaN(scScore) || scScore < 1) errs.scTargetScore = 'Target score must be at least 1.';
     if (isNaN(scW) || scW < 1) errs.scWinBy = 'Win by points must be at least 1.';
 
@@ -815,28 +813,6 @@ export function ClubTournamentConfigTab({
                 Players register individually and rotate partners each round.
               </AppText>
             </View>
-          </View>
-
-          <View style={styles.sectionDivider} />
-
-          {/* Section: Number of Rounds */}
-          <View style={styles.sectionBlock}>
-            <AppText style={styles.sectionTitle}>Number of Rounds</AppText>
-            <View style={styles.infoCardBox}>
-              <AppText style={styles.infoBoxText}>
-                Post-Registration Workflow: Rotation rounds are calculated and recommended post-registration based on actual confirmed player count and courts. The value below acts as a baseline default.
-              </AppText>
-            </View>
-            <Input
-              label="Baseline Rotation Rounds"
-              value={scrambleRounds}
-              onChangeText={(v) => setScrambleRounds(v.replace(/[^0-9]/g, ''))}
-              keyboardType="number-pad"
-              placeholder="5"
-              editable={isOwner}
-              error={errors.scrambleRounds}
-              hint="Baseline default; finalized post-registration based on actual roster"
-            />
           </View>
 
           <View style={styles.sectionDivider} />
