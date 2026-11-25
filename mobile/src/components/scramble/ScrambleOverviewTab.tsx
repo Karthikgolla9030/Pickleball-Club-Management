@@ -39,7 +39,6 @@ import { Card } from '@/components/Card';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { ScrambleState } from '@/types/scramble';
-import { ScramblePostRegistrationCard } from './ScramblePostRegistrationCard';
 
 export interface ScrambleOverviewTabProps {
   clubId?: string;
@@ -81,14 +80,18 @@ export function ScrambleOverviewTab({
 
   const isCompleted = state.tournament_status === 'completed' || tournament?.status === 'completed';
   const isRegistrationOpen = tournament?.status === 'registration_open' || state.tournament_status === 'registration_open';
+  const isRegistrationClosed =
+    tournament?.status === 'registration_closed' || state.tournament_status === 'registration_closed';
+
+  // Schedule is only generated when round_status has moved past 'setup', or matches/games have been completed,
+  // or tournament status is live/completed.
   const isScheduleGenerated =
-    (state.expected_total_games ?? state.total_games ?? 0) > 0 ||
+    (state.round_status !== 'setup' && state.round_status !== undefined) ||
+    (state.tournament_games_completed ?? 0) > 0 ||
     state.tournament_status === 'in_progress' ||
     state.tournament_status === 'completed';
 
-  const isAwaitingRotationSetup =
-    (tournament?.status === 'registration_closed' || state.tournament_status === 'registration_closed') &&
-    !isScheduleGenerated;
+  const isAwaitingRotationSetup = isRegistrationClosed && !isScheduleGenerated;
 
   const currentRound = state.current_round ?? 1;
   const plannedRounds = isScheduleGenerated ? (state.planned_rounds ?? 3) : null;
@@ -117,12 +120,12 @@ export function ScrambleOverviewTab({
 
   const getRoundStatusLabel = () => {
     if (isCompleted) return 'Completed';
-    if (!hasMinPlayers && tournament?.status === 'registration_closed') return 'Waiting for Players';
+    if (!hasMinPlayers && isRegistrationClosed) return 'Waiting for Players';
     if (isAwaitingRotationSetup) return 'Awaiting Configuration';
     if (isRegistrationOpen) return 'Registration Open';
     switch (state.round_status) {
       case 'setup':
-        return 'Setup & Availability';
+        return hasMinPlayers ? 'Awaiting Configuration' : 'Waiting for Players';
       case 'matchups_created':
         return 'Matchups Ready';
       case 'in_progress':
@@ -138,17 +141,6 @@ export function ScrambleOverviewTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 0. Compact Post-Registration Setup Card ─── */}
-      {canManage && tournament && clubId && tournamentId && (
-        <ScramblePostRegistrationCard
-          clubId={clubId}
-          tournamentId={tournamentId}
-          tournament={tournament}
-          canManage={canManage}
-          onNavigateToSetup={() => onNavigateTab('setup_rounds')}
-        />
-      )}
-
       {/* ─── Champion Banner (Only shown if Tournament is Officially Completed) ─── */}
       {isCompleted && state.champion_player_name && (
         <Card style={styles.championCard}>
@@ -183,9 +175,13 @@ export function ScrambleOverviewTab({
         <View style={styles.progressContainer}>
           <View style={styles.progressTopRow}>
             <AppText style={styles.progressSubText}>
-              {expectedTotalGames > 0
-                ? `${tournamentGamesCompleted} of ${expectedTotalGames} games completed`
-                : '0 of 0 games completed'}
+              {!isScheduleGenerated
+                ? isRegistrationClosed
+                  ? hasMinPlayers
+                    ? 'Roster locked • Configure rounds in Setup & Rounds to schedule games'
+                    : `Roster locked • Requires at least 4 confirmed players (${registeredPlayersCount} confirmed)`
+                  : 'Registration open • Players will rotate after registration closes'
+                : `${tournamentGamesCompleted} of ${expectedTotalGames} games completed`}
             </AppText>
             <AppText style={styles.percentText}>{progressPercent}%</AppText>
           </View>
@@ -211,7 +207,7 @@ export function ScrambleOverviewTab({
             <AppText style={styles.statTileLabel}>ROUNDS</AppText>
             <Calendar size={14} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {isScheduleGenerated && plannedRounds !== null ? plannedRounds : '—'}
+              {isScheduleGenerated && plannedRounds !== null ? plannedRounds : 'Pending'}
             </AppText>
           </View>
 
@@ -219,7 +215,7 @@ export function ScrambleOverviewTab({
             <AppText style={styles.statTileLabel}>COMPLETED</AppText>
             <CheckCircle2 size={14} color="#0F766E" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {!isScheduleGenerated ? '—' : tournamentGamesCompleted}
+              {isScheduleGenerated ? tournamentGamesCompleted : 0}
             </AppText>
           </View>
 
@@ -227,7 +223,7 @@ export function ScrambleOverviewTab({
             <AppText style={styles.statTileLabel}>REMAINING</AppText>
             <Clock size={14} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>
-              {!isScheduleGenerated ? '—' : remainingGames}
+              {isScheduleGenerated && expectedTotalGames > 0 ? remainingGames : 'Pending'}
             </AppText>
           </View>
         </View>
@@ -309,7 +305,8 @@ export function ScrambleOverviewTab({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[4],
+    paddingTop: Spacing[2.5],
+    paddingBottom: Spacing[8],
     gap: Spacing[3],
   },
   loadingContainer: {

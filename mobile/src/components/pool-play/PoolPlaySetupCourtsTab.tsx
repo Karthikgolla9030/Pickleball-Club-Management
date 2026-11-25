@@ -236,7 +236,7 @@ export function PoolPlaySetupCourtsTab({
           <View style={styles.headerTextWrap}>
             <AppText style={styles.cardTitle}>Pool Play Setup & Courts</AppText>
             <AppText style={styles.cardSubtitle}>
-              The single configuration workspace for pools, rating balance, qualifiers, and courts.
+              Configure pools, qualifiers and court allocation.
             </AppText>
           </View>
         </View>
@@ -261,18 +261,6 @@ export function PoolPlaySetupCourtsTab({
                 <AppText style={styles.waitingBody}>
                   At least 4 confirmed teams are required to configure Pool Play.
                 </AppText>
-              </View>
-            </View>
-
-            <View style={styles.waitingMetaRow}>
-              <View style={styles.waitingMetaItem}>
-                <AppText style={styles.waitingMetaLabel}>Confirmed teams</AppText>
-                <AppText style={styles.waitingMetaValue}>{confirmedTeams}</AppText>
-              </View>
-              <View style={styles.waitingMetaDivider} />
-              <View style={styles.waitingMetaItem}>
-                <AppText style={styles.waitingMetaLabel}>Required minimum</AppText>
-                <AppText style={styles.waitingMetaValue}>4 teams</AppText>
               </View>
             </View>
           </View>
@@ -354,21 +342,18 @@ export function PoolPlaySetupCourtsTab({
           <Scale size={16} color="#0F766E" />
           <AppText style={styles.sectionTitle}>B. Pool Balance Tolerance</AppText>
         </View>
-        <AppText style={styles.sectionSubtitle}>
-          Maximum allowed difference in average DUPR/rating between pools.
-        </AppText>
 
         <View style={styles.optionsList}>
           {TOLERANCE_OPTIONS.map((opt) => {
             const isSelected = tolerance === opt.value;
             const subtitleText =
               opt.value === 0.3
-                ? 'Strict parity (±0.30 max diff between pools)'
+                ? 'Strict parity'
                 : opt.value === 0.5
-                ? 'Fair division parity (recommended for club play)'
+                ? 'Fair division parity'
                 : opt.value === 0.75
-                ? 'Relaxed parity (accommodates wider rating variance)'
-                : 'Wide tolerance (permits any rating difference)';
+                ? 'Relaxed parity'
+                : 'Wide tolerance';
 
             return (
               <TouchableOpacity
@@ -430,10 +415,9 @@ export function PoolPlaySetupCourtsTab({
           />
         </View>
 
-        <View style={styles.qualificationSummaryBox}>
-          <Info size={14} color="#0F766E" />
-          <AppText style={styles.qualificationSummaryText}>
-            Top {qualifiersPerPool} team(s) from each of the {numPools} pools ({numPools * qualifiersPerPool} total) advance to the {bracketType} Championship Bracket.
+        <View style={styles.qualificationSummaryLineWrap}>
+          <AppText style={styles.qualificationSummaryLine}>
+            {qualifiersPerPool} teams per pool · {numPools * qualifiersPerPool} total qualifiers
           </AppText>
         </View>
       </Card>
@@ -444,9 +428,6 @@ export function PoolPlaySetupCourtsTab({
           <LayoutGrid size={16} color="#0F766E" />
           <AppText style={styles.sectionTitle}>D. Court Assignment</AppText>
         </View>
-        <AppText style={styles.sectionSubtitle}>
-          Concurrent court capacity for pool matches. Matches rotate across available courts.
-        </AppText>
 
         <PostRegistrationStepper
           label="Concurrent court capacity"
@@ -502,6 +483,12 @@ export function PoolPlaySetupCourtsTab({
             variant="primary"
             style={styles.primaryActionBtn}
           />
+
+          {!hasMinTeams && (
+            <AppText style={styles.disabledActionHelper}>
+              Requires at least 4 confirmed teams to generate pools and matches.
+            </AppText>
+          )}
 
           <TouchableOpacity style={styles.secondarySaveBtn} onPress={handleSave} activeOpacity={0.7}>
             <AppText style={styles.secondarySaveText}>
@@ -804,23 +791,14 @@ const styles = StyleSheet.create({
   bracketTypeWrap: {
     marginTop: Spacing[1],
   },
-  qualificationSummaryBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    backgroundColor: '#F0FDFA',
-    borderWidth: 1,
-    borderColor: '#CCFBF1',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[3],
+  qualificationSummaryLineWrap: {
+    paddingTop: Spacing[1],
   },
-  qualificationSummaryText: {
-    fontSize: 11.5,
-    color: '#0F766E',
+  qualificationSummaryLine: {
+    fontSize: 12.5,
     fontWeight: '600',
-    flex: 1,
-    lineHeight: 16,
+    color: '#0F766E',
+    lineHeight: 18,
   },
   clubCourtsSection: {
     marginTop: Spacing[1],
@@ -875,6 +853,12 @@ const styles = StyleSheet.create({
   },
   primaryActionBtn: {
     width: '100%',
+  },
+  disabledActionHelper: {
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 2,
   },
   secondarySaveBtn: {
     alignItems: 'center',
