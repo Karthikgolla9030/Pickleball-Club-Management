@@ -488,14 +488,6 @@ export function TournamentRegistrationModal({
       errs.agreeRulesAndCancellation = 'You must agree to the tournament rules and cancellation policy.';
     }
 
-    if (!isFree && formState.paymentMethod === 'mobile_number') {
-      const targetPhone = (formState.paymentMobileNumber || formState.phone || '').trim();
-      const cleaned = targetPhone.replace(/[\s\-\(\)\.]/g, '');
-      if (!cleaned || cleaned.length < 7) {
-        errs.paymentMobileNumber = 'Valid mobile number is required for simulated payment.';
-      }
-    }
-
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };

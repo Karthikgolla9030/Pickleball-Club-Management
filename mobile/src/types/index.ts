@@ -2154,21 +2154,6 @@ export interface CheckoutVerifyResponse {
   booking_or_registration?: Record<string, any> | null;
 }
 
-export interface SimulateTournamentPaymentPayload {
-  club_id: string;
-  tournament_id: string;
-  phone_number: string;
-  team_name?: string | null;
-  partner_name?: string | null;
-  partner_email?: string | null;
-  partner_phone?: string | null;
-  partner_membership_id?: string | null;
-  partner_skill_level?: string | null;
-  skill_level?: string | null;
-  gender?: string | null;
-  age?: number | null;
-  notes?: string | null;
-}
 
 // ─── Phase 14 Events Types ───────────────────────────────────────────────────
 

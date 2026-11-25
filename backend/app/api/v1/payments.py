@@ -49,7 +49,6 @@ from app.schemas.payment import (
     PaymentResponse,
     PaymentSummaryResponse,
     PlayerPaymentResponse,
-    SimulateTournamentPaymentRequest,
 )
 from app.services.payment_service import PaymentService
 
@@ -435,29 +434,6 @@ async def verify_checkout(
         payload=payload,
     )
 
-
-@player_payments_router.post(
-    "/checkout/simulate-mobile",
-    response_model=CheckoutVerifyResponse,
-    summary="Simulate payment using mobile number (Development mode only)",
-    description="Development/testing-only dummy payment flow that validates mobile number, creates a TEST_SUCCESS payment, and fulfills tournament registration atomically.",
-    responses={
-        400: {"description": "Validation error or invalid state"},
-        401: {"description": "Not authenticated"},
-        403: {"description": "Disabled in production"},
-        404: {"description": "Tournament not found"},
-    },
-)
-async def simulate_mobile_payment(
-    payload: SimulateTournamentPaymentRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-) -> CheckoutVerifyResponse:
-    """Simulate payment using mobile number for dev testing without real transactions."""
-    return await PaymentService(db).simulate_tournament_payment(
-        user_id=current_user.id,
-        payload=payload,
-    )
 
 
 @player_payments_router.post(
