@@ -104,7 +104,12 @@ export function TournamentRegistrationModal({
     refetch: refetchMyRegistration,
   } = usePlayerMyRegistration(visible && activeTournament?.id ? activeTournament.id : null);
 
-  const isAlreadyRegistered = Boolean(
+  // Only treat as "already registered" when there is NO pending successResult.
+  // If the user just completed registration (successResult is set), we must show
+  // the RegistrationSuccessView — not short-circuit to RegistrationDetailsModal.
+  // The refetchMyRegistration() that runs after success will update isRegistered
+  // asynchronously, which must NOT preempt the success screen.
+  const isAlreadyRegistered = !successResult && Boolean(
     alreadyRegisteredOverride ||
     isRegistered ||
     (activeTournament as any)?.is_registered ||
@@ -181,11 +186,6 @@ export function TournamentRegistrationModal({
         const userSkill = parsed?.skillLevel || '3.5';
 
         let defaultTeam = '';
-        if (activeTournament.format === 'pool_play') {
-          defaultTeam = 'SVCE Picklers';
-        } else if (activeTournament.format === 'bracket') {
-          defaultTeam = 'The Smashers';
-        }
 
         // Default partner gender based on category
         let defaultPartnerGender: 'Male' | 'Female' | 'Other' = 'Male';
@@ -620,7 +620,14 @@ export function TournamentRegistrationModal({
         (err instanceof Error ? err.message : 'Registration failed. Please try again.');
       const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
       if (msg.toLowerCase().includes('already registered')) {
-        void refetchMyRegistration();
+        // Await refetch so existingRegistration is populated before switching to
+        // RegistrationDetailsModal. Without this await, the modal shows "No Registration Found"
+        // because existingRegistration is still null while the refetch is in flight.
+        try {
+          await refetchMyRegistration();
+        } catch {
+          // Tolerate refetch failures — the RegistrationDetailsModal will retry
+        }
         setAlreadyRegisteredOverride(true);
         return;
       }

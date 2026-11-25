@@ -61,16 +61,26 @@ export function RegistrationDetailsModal({
   const effectiveTournamentId = tournamentId || tournament?.id || directRegistration?.tournament_id || null;
   const { user } = useAuth();
 
-  // Load registration record from backend if not provided directly
+  // Load registration record from backend if not provided directly.
+  // Also fetch when directRegistration is null/undefined even if the prop was passed —
+  // this handles the alreadyRegisteredOverride path where the parent hasn't received
+  // the fetched data yet (the refetch is still in-flight).
+  const shouldFetch = visible && !!effectiveTournamentId && !directRegistration;
   const {
     registration: fetchedRegistration,
     isLoading,
     refetch,
-  } = usePlayerMyRegistration(visible && !directRegistration ? effectiveTournamentId : null);
+  } = usePlayerMyRegistration(shouldFetch ? effectiveTournamentId : null);
 
   const { cancelRegistration, isCancelling } = usePlayerTournamentRegistration(effectiveTournamentId);
 
   const reg = directRegistration || fetchedRegistration;
+
+  // If this modal was opened without a directRegistration (e.g. from alreadyRegisteredOverride path),
+  // show a loading spinner while the backend fetch is in flight instead of "No Registration Found".
+  // Also show a spinner briefly when directRegistration hasn't arrived yet but we know it's coming
+  // (e.g. the parent just finished registering and is mid-refetch).
+  const isStillLoading = isLoading && !reg;
 
   // Format dates
   const formatDateTime = (dateStr?: string | null) => {
@@ -166,7 +176,7 @@ export function RegistrationDetailsModal({
           <View style={{ width: 36 }} />
         </View>
 
-        {isLoading && !reg ? (
+        {isStillLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#064E3B" />
             <AppText variant="caption" color="secondary" style={{ marginTop: 12 }}>
