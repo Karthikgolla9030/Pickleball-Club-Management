@@ -777,247 +777,259 @@ class PlayerService:
             c_res = await self.db.execute(c_stmt)
             user_club_ids = set(c_res.scalars().all())
 
+        # ─── MEMBERSHIP GATE ─────────────────────────────────────────────────
+        # Upcoming Activities are strictly club-member-only. Unauthenticated
+        # users and authenticated users with no active memberships see nothing.
+        if user_id is None:
+            return UpcomingActivitiesResponse(items=[], total=0, has_more=False)
+
         norm_type = activity_type.lower().strip() if activity_type else "all"
 
         # ─── 2. TOURNAMENTS ──────────────────────────────────────────────────
         if norm_type in ("all", "tournament", "tournaments"):
-            t_query = (
-                select(Tournament, Club)
-                .join(Club, Tournament.club_id == Club.id)
-                .where(
-                    Club.is_active == True,
-                    Tournament.status.in_([
-                        TournamentStatus.REGISTRATION_OPEN,
-                        TournamentStatus.REGISTRATION_CLOSED,
-                        TournamentStatus.IN_PROGRESS,
-                    ]),
-                    Tournament.end_date >= now,
-                )
-            )
-            if club_id:
-                t_query = t_query.where(Tournament.club_id == club_id)
-            t_res = await self.db.execute(t_query)
-            for tourney, club in t_res.all():
-                if tourney.visibility == TournamentVisibility.PRIVATE and tourney.club_id not in user_club_ids:
-                    continue
-
-                reg_open = (
-                    tourney.status == TournamentStatus.REGISTRATION_OPEN
-                    and (tourney.registration_open_at is None or tourney.registration_open_at <= now)
-                    and (tourney.registration_close_at is None or now <= tourney.registration_close_at)
-                )
-
-                if tourney.status == TournamentStatus.REGISTRATION_OPEN:
-                    st_label = "Registration Open"
-                elif tourney.status == TournamentStatus.IN_PROGRESS:
-                    st_label = "In Progress"
-                elif tourney.status == TournamentStatus.REGISTRATION_CLOSED:
-                    st_label = "Registration Closed"
-                else:
-                    st_label = "Upcoming"
-
-                fee = float((tourney.format_configuration or {}).get("registration_fee", 0) or 0)
-                fmt_lbl = (
-                    tourney.format.display_label
-                    if hasattr(tourney.format, "display_label")
-                    else str(tourney.format).replace("_", " ").title()
-                )
-                img = tourney.banner_image_url or club.default_tournament_banner_url or club.cover_image_url
-
-                all_activities.append(
-                    UpcomingActivityItem(
-                        id=tourney.id,
-                        activity_type="tournament",
-                        title=tourney.name,
-                        description=tourney.description,
-                        club_id=club.id,
-                        club_name=club.name,
-                        start_date=tourney.start_date,
-                        end_date=tourney.end_date,
-                        image_url=img,
-                        location=tourney.location_name or club.name,
-                        price=fee if fee > 0 else 0.0,
-                        currency="USD",
-                        status=tourney.status.value,
-                        status_label=st_label,
-                        format_label=fmt_lbl,
-                        is_registration_open=reg_open,
-                        is_registered=tourney.id in user_tourney_ids,
-                        available_spots=None,
-                        max_participants=tourney.max_participants,
+            # Only show tournaments from clubs where the player has an active membership
+            if user_club_ids:
+                t_query = (
+                    select(Tournament, Club)
+                    .join(Club, Tournament.club_id == Club.id)
+                    .where(
+                        Club.is_active == True,
+                        Tournament.status.in_([
+                            TournamentStatus.REGISTRATION_OPEN,
+                            TournamentStatus.REGISTRATION_CLOSED,
+                            TournamentStatus.IN_PROGRESS,
+                        ]),
+                        Tournament.end_date >= now,
+                        Tournament.club_id.in_(user_club_ids),
                     )
                 )
+                if club_id:
+                    t_query = t_query.where(Tournament.club_id == club_id)
+                t_res = await self.db.execute(t_query)
+                for tourney, club in t_res.all():
+                    reg_open = (
+                        tourney.status == TournamentStatus.REGISTRATION_OPEN
+                        and (tourney.registration_open_at is None or tourney.registration_open_at <= now)
+                        and (tourney.registration_close_at is None or now <= tourney.registration_close_at)
+                    )
+
+                    if tourney.status == TournamentStatus.REGISTRATION_OPEN:
+                        st_label = "Registration Open"
+                    elif tourney.status == TournamentStatus.IN_PROGRESS:
+                        st_label = "In Progress"
+                    elif tourney.status == TournamentStatus.REGISTRATION_CLOSED:
+                        st_label = "Registration Closed"
+                    else:
+                        st_label = "Upcoming"
+
+                    fee = float((tourney.format_configuration or {}).get("registration_fee", 0) or 0)
+                    fmt_lbl = (
+                        tourney.format.display_label
+                        if hasattr(tourney.format, "display_label")
+                        else str(tourney.format).replace("_", " ").title()
+                    )
+                    img = tourney.banner_image_url or club.default_tournament_banner_url or club.cover_image_url
+
+                    all_activities.append(
+                        UpcomingActivityItem(
+                            id=tourney.id,
+                            activity_type="tournament",
+                            title=tourney.name,
+                            description=tourney.description,
+                            club_id=club.id,
+                            club_name=club.name,
+                            start_date=tourney.start_date,
+                            end_date=tourney.end_date,
+                            image_url=img,
+                            location=tourney.location_name or club.name,
+                            price=fee if fee > 0 else 0.0,
+                            currency="USD",
+                            status=tourney.status.value,
+                            status_label=st_label,
+                            format_label=fmt_lbl,
+                            is_registration_open=reg_open,
+                            is_registered=tourney.id in user_tourney_ids,
+                            available_spots=None,
+                            max_participants=tourney.max_participants,
+                        )
+                    )
 
         # ─── 3. LEAGUES ──────────────────────────────────────────────────────
         if norm_type in ("all", "league", "leagues"):
-            l_query = (
-                select(League, Club)
-                .join(Club, League.club_id == Club.id)
-                .where(
-                    Club.is_active == True,
-                    League.status.in_([
-                        LeagueStatus.REGISTRATION_OPEN,
-                        LeagueStatus.REGISTRATION_CLOSED,
-                        LeagueStatus.IN_PROGRESS,
-                        LeagueStatus.PLAYOFFS,
-                    ]),
-                )
-            )
-            if club_id:
-                l_query = l_query.where(League.club_id == club_id)
-            l_res = await self.db.execute(l_query)
-            for lg, club in l_res.all():
-                if lg.end_date and lg.end_date < now:
-                    continue
-
-                if lg.status == LeagueStatus.REGISTRATION_OPEN:
-                    st_label = "Registration Open"
-                elif lg.status == LeagueStatus.IN_PROGRESS:
-                    st_label = "In Progress"
-                elif lg.status == LeagueStatus.PLAYOFFS:
-                    st_label = "Playoffs"
-                elif lg.status == LeagueStatus.REGISTRATION_CLOSED:
-                    st_label = "Registration Closed"
-                else:
-                    st_label = "Upcoming"
-
-                reg_open = (
-                    lg.status == LeagueStatus.REGISTRATION_OPEN
-                    and (lg.registration_open_at is None or lg.registration_open_at <= now)
-                    and (lg.registration_close_at is None or now <= lg.registration_close_at)
-                )
-                fee = float(lg.registration_fee or 0)
-                fmt_lbl = f"{lg.number_of_weeks} Weeks League"
-                img = lg.banner_image_url or club.default_league_banner_url or club.cover_image_url
-
-                all_activities.append(
-                    UpcomingActivityItem(
-                        id=lg.id,
-                        activity_type="league",
-                        title=lg.name,
-                        description=lg.description,
-                        club_id=club.id,
-                        club_name=club.name,
-                        start_date=lg.start_date or lg.created_at,
-                        end_date=lg.end_date,
-                        image_url=img,
-                        location=club.name,
-                        price=fee if fee > 0 else 0.0,
-                        currency="USD",
-                        status=lg.status.value,
-                        status_label=st_label,
-                        format_label=fmt_lbl,
-                        is_registration_open=reg_open,
-                        is_registered=lg.id in user_league_ids,
-                        available_spots=None,
-                        max_participants=lg.max_teams * lg.team_size if lg.max_teams else None,
+            # Only show leagues from clubs where the player has an active membership
+            if user_club_ids:
+                l_query = (
+                    select(League, Club)
+                    .join(Club, League.club_id == Club.id)
+                    .where(
+                        Club.is_active == True,
+                        League.status.in_([
+                            LeagueStatus.REGISTRATION_OPEN,
+                            LeagueStatus.REGISTRATION_CLOSED,
+                            LeagueStatus.IN_PROGRESS,
+                            LeagueStatus.PLAYOFFS,
+                        ]),
+                        League.club_id.in_(user_club_ids),
                     )
                 )
+                if club_id:
+                    l_query = l_query.where(League.club_id == club_id)
+                l_res = await self.db.execute(l_query)
+                for lg, club in l_res.all():
+                    if lg.end_date and lg.end_date < now:
+                        continue
+
+                    if lg.status == LeagueStatus.REGISTRATION_OPEN:
+                        st_label = "Registration Open"
+                    elif lg.status == LeagueStatus.IN_PROGRESS:
+                        st_label = "In Progress"
+                    elif lg.status == LeagueStatus.PLAYOFFS:
+                        st_label = "Playoffs"
+                    elif lg.status == LeagueStatus.REGISTRATION_CLOSED:
+                        st_label = "Registration Closed"
+                    else:
+                        st_label = "Upcoming"
+
+                    reg_open = (
+                        lg.status == LeagueStatus.REGISTRATION_OPEN
+                        and (lg.registration_open_at is None or lg.registration_open_at <= now)
+                        and (lg.registration_close_at is None or now <= lg.registration_close_at)
+                    )
+                    fee = float(lg.registration_fee or 0)
+                    fmt_lbl = f"{lg.number_of_weeks} Weeks League"
+                    img = lg.banner_image_url or club.default_league_banner_url or club.cover_image_url
+
+                    all_activities.append(
+                        UpcomingActivityItem(
+                            id=lg.id,
+                            activity_type="league",
+                            title=lg.name,
+                            description=lg.description,
+                            club_id=club.id,
+                            club_name=club.name,
+                            start_date=lg.start_date or lg.created_at,
+                            end_date=lg.end_date,
+                            image_url=img,
+                            location=club.name,
+                            price=fee if fee > 0 else 0.0,
+                            currency="USD",
+                            status=lg.status.value,
+                            status_label=st_label,
+                            format_label=fmt_lbl,
+                            is_registration_open=reg_open,
+                            is_registered=lg.id in user_league_ids,
+                            available_spots=None,
+                            max_participants=lg.max_teams * lg.team_size if lg.max_teams else None,
+                        )
+                    )
 
         # ─── 4. EVENTS ───────────────────────────────────────────────────────
         if norm_type in ("all", "event", "events"):
-            e_query = (
-                select(Event, Club)
-                .join(Club, Event.club_id == Club.id)
-                .where(
-                    Club.is_active == True,
-                    Event.status == EventStatus.PUBLISHED,
-                    Event.end_at >= now,
-                )
-            )
-            if club_id:
-                e_query = e_query.where(Event.club_id == club_id)
-            e_res = await self.db.execute(e_query)
-            for ev, club in e_res.all():
-                if ev.visibility == EventVisibility.PRIVATE and ev.club_id not in user_club_ids:
-                    continue
-
-                reg_open = (
-                    (ev.registration_opens_at is None or ev.registration_opens_at <= now)
-                    and (ev.registration_closes_at is None or now <= ev.registration_closes_at)
-                )
-                st_label = "Registration Open" if reg_open else "Upcoming"
-                fee = float(ev.registration_fee or 0)
-                ev_type_val = (
-                    ev.event_type.value
-                    if hasattr(ev.event_type, "value")
-                    else str(ev.event_type)
-                )
-                fmt_lbl = ev_type_val.replace("_", " ").title()
-                img = ev.cover_image_url or club.default_event_banner_url or club.cover_image_url
-
-                all_activities.append(
-                    UpcomingActivityItem(
-                        id=ev.id,
-                        activity_type="event",
-                        title=ev.title,
-                        description=ev.description,
-                        club_id=club.id,
-                        club_name=club.name,
-                        start_date=ev.start_at,
-                        end_date=ev.end_at,
-                        image_url=img,
-                        location=ev.location or club.name,
-                        price=fee if fee > 0 else 0.0,
-                        currency=ev.currency or "USD",
-                        status=ev.status.value,
-                        status_label=st_label,
-                        format_label=fmt_lbl,
-                        is_registration_open=reg_open,
-                        is_registered=ev.id in user_event_ids,
-                        available_spots=ev.capacity,
-                        max_participants=ev.capacity,
+            # Only show events from clubs where the player has an active membership
+            if user_club_ids:
+                e_query = (
+                    select(Event, Club)
+                    .join(Club, Event.club_id == Club.id)
+                    .where(
+                        Club.is_active == True,
+                        Event.status == EventStatus.PUBLISHED,
+                        Event.end_at >= now,
+                        Event.club_id.in_(user_club_ids),
                     )
                 )
+                if club_id:
+                    e_query = e_query.where(Event.club_id == club_id)
+                e_res = await self.db.execute(e_query)
+                for ev, club in e_res.all():
+                    reg_open = (
+                        (ev.registration_opens_at is None or ev.registration_opens_at <= now)
+                        and (ev.registration_closes_at is None or now <= ev.registration_closes_at)
+                    )
+                    st_label = "Registration Open" if reg_open else "Upcoming"
+                    fee = float(ev.registration_fee or 0)
+                    ev_type_val = (
+                        ev.event_type.value
+                        if hasattr(ev.event_type, "value")
+                        else str(ev.event_type)
+                    )
+                    fmt_lbl = ev_type_val.replace("_", " ").title()
+                    img = ev.cover_image_url or club.default_event_banner_url or club.cover_image_url
+
+                    all_activities.append(
+                        UpcomingActivityItem(
+                            id=ev.id,
+                            activity_type="event",
+                            title=ev.title,
+                            description=ev.description,
+                            club_id=club.id,
+                            club_name=club.name,
+                            start_date=ev.start_at,
+                            end_date=ev.end_at,
+                            image_url=img,
+                            location=ev.location or club.name,
+                            price=fee if fee > 0 else 0.0,
+                            currency=ev.currency or "USD",
+                            status=ev.status.value,
+                            status_label=st_label,
+                            format_label=fmt_lbl,
+                            is_registration_open=reg_open,
+                            is_registered=ev.id in user_event_ids,
+                            available_spots=ev.capacity,
+                            max_participants=ev.capacity,
+                        )
+                    )
 
         # ─── 5. LESSONS ──────────────────────────────────────────────────────
         if norm_type in ("all", "lesson", "lessons"):
-            ls_query = (
-                select(Lesson, Club, LessonType)
-                .join(Club, Lesson.club_id == Club.id)
-                .join(LessonType, Lesson.lesson_type_id == LessonType.id)
-                .where(
-                    Club.is_active == True,
-                    Lesson.status == LessonStatus.PUBLISHED,
-                    Lesson.end_at >= now,
-                )
-            )
-            if club_id:
-                ls_query = ls_query.where(Lesson.club_id == club_id)
-            ls_res = await self.db.execute(ls_query)
-            for ls, club, lt in ls_res.all():
-                reg_open = (
-                    (ls.registration_opens_at is None or ls.registration_opens_at <= now)
-                    and (ls.registration_closes_at is None or now <= ls.registration_closes_at)
-                )
-                st_label = "Registration Open" if reg_open else "Upcoming"
-                fee = float(ls.price or 0)
-                fmt_lbl = "Private Lesson" if lt.is_private else (lt.name or "Group Clinic")
-                img = ls.image_url or lt.image_url or club.default_lesson_banner_url or club.cover_image_url
-
-                all_activities.append(
-                    UpcomingActivityItem(
-                        id=ls.id,
-                        activity_type="lesson",
-                        title=ls.title,
-                        description=ls.description or lt.description,
-                        club_id=club.id,
-                        club_name=club.name,
-                        start_date=ls.start_at,
-                        end_date=ls.end_at,
-                        image_url=img,
-                        location=club.name,
-                        price=fee if fee > 0 else 0.0,
-                        currency=ls.currency or "USD",
-                        status=ls.status.value,
-                        status_label=st_label,
-                        format_label=fmt_lbl,
-                        is_registration_open=reg_open,
-                        is_registered=ls.id in user_lesson_ids,
-                        available_spots=ls.capacity,
-                        max_participants=ls.capacity,
+            # Only show lessons from clubs where the player has an active membership
+            if user_club_ids:
+                ls_query = (
+                    select(Lesson, Club, LessonType)
+                    .join(Club, Lesson.club_id == Club.id)
+                    .join(LessonType, Lesson.lesson_type_id == LessonType.id)
+                    .where(
+                        Club.is_active == True,
+                        Lesson.status == LessonStatus.PUBLISHED,
+                        Lesson.end_at >= now,
+                        Lesson.club_id.in_(user_club_ids),
                     )
                 )
+                if club_id:
+                    ls_query = ls_query.where(Lesson.club_id == club_id)
+                ls_res = await self.db.execute(ls_query)
+                for ls, club, lt in ls_res.all():
+                    reg_open = (
+                        (ls.registration_opens_at is None or ls.registration_opens_at <= now)
+                        and (ls.registration_closes_at is None or now <= ls.registration_closes_at)
+                    )
+                    st_label = "Registration Open" if reg_open else "Upcoming"
+                    fee = float(ls.price or 0)
+                    fmt_lbl = "Private Lesson" if lt.is_private else (lt.name or "Group Clinic")
+                    img = ls.image_url or lt.image_url or club.default_lesson_banner_url or club.cover_image_url
+
+                    all_activities.append(
+                        UpcomingActivityItem(
+                            id=ls.id,
+                            activity_type="lesson",
+                            title=ls.title,
+                            description=ls.description or lt.description,
+                            club_id=club.id,
+                            club_name=club.name,
+                            start_date=ls.start_at,
+                            end_date=ls.end_at,
+                            image_url=img,
+                            location=club.name,
+                            price=fee if fee > 0 else 0.0,
+                            currency=ls.currency or "USD",
+                            status=ls.status.value,
+                            status_label=st_label,
+                            format_label=fmt_lbl,
+                            is_registration_open=reg_open,
+                            is_registered=ls.id in user_lesson_ids,
+                            available_spots=ls.capacity,
+                            max_participants=ls.capacity,
+                        )
+                    )
 
         # ─── 6. DEDUPLICATE & SORT DETERMINISTICALLY ──────────────────────────
         seen = set()

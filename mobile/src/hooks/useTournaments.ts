@@ -429,7 +429,9 @@ export function usePlayerMyRegistration(tournamentId: string | null) {
       return tournamentApi.getMyRegistration(tournamentId);
     },
     enabled: Boolean(tournamentId),
-    staleTime: 10 * 1000,
+    staleTime: 15 * 1000,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1500 * (attempt + 1), 4000),
   });
 
   return {

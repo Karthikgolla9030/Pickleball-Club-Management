@@ -69,6 +69,7 @@ export function RegistrationDetailsModal({
   const {
     registration: fetchedRegistration,
     isLoading,
+    isFetching,
     refetch,
   } = usePlayerMyRegistration(shouldFetch ? effectiveTournamentId : null);
 
@@ -80,7 +81,8 @@ export function RegistrationDetailsModal({
   // show a loading spinner while the backend fetch is in flight instead of "No Registration Found".
   // Also show a spinner briefly when directRegistration hasn't arrived yet but we know it's coming
   // (e.g. the parent just finished registering and is mid-refetch).
-  const isStillLoading = isLoading && !reg;
+  // Show loading while fetching OR during any subsequent refetch to avoid flickering "No Registration Found".
+  const isStillLoading = (isLoading || isFetching) && !reg;
 
   // Format dates
   const formatDateTime = (dateStr?: string | null) => {
@@ -187,12 +189,17 @@ export function RegistrationDetailsModal({
           <View style={styles.emptyContainer}>
             <XCircle size={44} color="#94A3B8" />
             <AppText variant="heading3" style={{ marginTop: 12 }}>
-              No Registration Found
+              Registration Not Found
             </AppText>
             <AppText variant="caption" color="secondary" style={styles.emptySubtitle}>
-              We couldn't locate an active registration record for your account in this tournament.
+              We couldn't load your registration details right now. This can happen when the server is warming up. Please tap Retry.
             </AppText>
-            <TouchableOpacity style={styles.primaryBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => void refetch()}>
+              <AppText variant="bodySmall" bold style={styles.primaryBtnText}>
+                Retry
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.primaryBtn, { marginTop: 10, backgroundColor: '#64748B' }]} onPress={onClose}>
               <AppText variant="bodySmall" bold style={styles.primaryBtnText}>
                 Back to Tournaments
               </AppText>
