@@ -1427,6 +1427,123 @@ class PaymentService:
 
         await self.db.commit()
 
+        # ─── Dispatch real-time WebSocket events after DB commit ─────────────────
+        # This is the single point where all checkout confirmations must trigger
+        # cache invalidation on connected clients (Player Side + Club Side).
+        try:
+            from app.core.events import EventType, dispatch_event
+
+            purpose_val = payment.purpose.value if hasattr(payment.purpose, "value") else str(payment.purpose)
+            club_id_str = str(payment.club_id) if payment.club_id else None
+
+            if payment.purpose == PaymentPurpose.COURT_BOOKING:
+                booking_id = booking_or_reg.get("booking_id")
+                await dispatch_event(
+                    event_type="booking.created",
+                    data={
+                        "booking_id": booking_id,
+                        "court_id": booking_or_reg.get("court_name"),
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "start_at": booking_or_reg.get("start_at"),
+                        "end_at": booking_or_reg.get("end_at"),
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            elif payment.purpose == PaymentPurpose.EVENT:
+                event_id = booking_or_reg.get("event_id") or (str(payment.event_id) if payment.event_id else None)
+                await dispatch_event(
+                    event_type="event.registration_created",
+                    data={
+                        "event_id": event_id,
+                        "registration_id": booking_or_reg.get("registration_id"),
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            elif payment.purpose == PaymentPurpose.LESSON:
+                lesson_id = booking_or_reg.get("lesson_id") or (str(payment.lesson_id) if payment.lesson_id else None)
+                await dispatch_event(
+                    event_type="lesson.booking_created",
+                    data={
+                        "lesson_id": lesson_id,
+                        "registration_id": booking_or_reg.get("registration_id"),
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            elif payment.purpose == PaymentPurpose.TOURNAMENT:
+                tournament_id = booking_or_reg.get("tournament_id") or (str(payment.tournament_id) if payment.tournament_id else None)
+                await dispatch_event(
+                    event_type="tournament.registration_created",
+                    data={
+                        "tournament_id": tournament_id,
+                        "registration_id": booking_or_reg.get("id"),
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            elif payment.purpose == PaymentPurpose.MEMBERSHIP:
+                await dispatch_event(
+                    event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                    data={
+                        "subscription_id": booking_or_reg.get("subscription_id"),
+                        "club_id": club_id_str,
+                        "user_id": str(payment.player_id),
+                        "status": "active",
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            elif payment.purpose == PaymentPurpose.LEAGUE:
+                league_id = booking_or_reg.get("league_id") or (str(payment.league_id) if payment.league_id else None)
+                await dispatch_event(
+                    event_type="league.registration_created",
+                    data={
+                        "league_id": league_id,
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "payment_reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
+
+            # Always broadcast a generic payment.confirmed event for dashboards / analytics
+            await dispatch_event(
+                event_type="payment.confirmed",
+                data={
+                    "payment_id": str(payment.id),
+                    "purpose": purpose_val,
+                    "amount": float(payment.amount),
+                    "club_id": club_id_str,
+                    "player_id": str(payment.player_id),
+                    "reference": payment.reference,
+                },
+                club_id=payment.club_id,
+                user_id=payment.player_id,
+            )
+        except Exception as ws_err:
+            # Never block the checkout response due to WS dispatch failure
+            logger.warning(f"[verify_checkout] WS event dispatch failed (non-blocking): {ws_err}")
+
         full = await self.payment_repo.get_by_id(payment.id)
         return CheckoutVerifyResponse(
             success=True,

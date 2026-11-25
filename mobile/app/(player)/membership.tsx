@@ -50,6 +50,7 @@ import {
   Sparkles,
   Users,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { AppHeader, AppText, Badge, Button, CheckoutModal, ModalSheet } from '@/components';
 import { useActiveClub, usePlayerClubs, usePlayerMemberships, useRenewPlayerSubscription } from '@/hooks';
@@ -215,6 +216,7 @@ function formatMembershipDate(dateStr: string | null | undefined): string {
 export default function PlayerMembershipScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { clubId, clubName } = useActiveClub();
 
   const [manageModalVisible, setManageModalVisible] = useState(false);
@@ -809,6 +811,16 @@ export default function PlayerMembershipScreen() {
           activitySubtitle={`Membership Renewal · ${checkoutMembership.club_name || clubName || 'Club'}`}
           onSuccess={() => {
             setCheckoutMembership(null);
+            // Immediately invalidate membership caches for real-time sync
+            queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'membership'] });
+            queryClient.invalidateQueries({ queryKey: ['my-membership'] });
+            queryClient.invalidateQueries({ queryKey: ['memberships'] });
+            if (clubId) {
+              queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'subscriptions'] });
+              queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'members'] });
+              queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+            }
             refetch();
           }}
         />

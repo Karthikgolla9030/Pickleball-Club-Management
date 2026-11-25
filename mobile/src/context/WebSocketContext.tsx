@@ -69,11 +69,13 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       ) {
         queryClient.invalidateQueries({ queryKey: ['bookings'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'court-availability'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'competition-schedule'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'staff-bookings'] });
         }
       }
 
@@ -216,10 +218,17 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     // Check connection state
     const unsubscribeConnect = wsClient.onConnect(() => {
       setIsConnected(true);
-      // Reconnected! Invalidate essential queries to resynchronize any missed updates
-      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      // Reconnected: invalidate all active queries to resynchronize any missed updates
+      // (bookings, events, lessons, memberships, tournaments, leagues, notifications)
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['leagues'] });
+      queryClient.invalidateQueries({ queryKey: ['memberships'] });
     });
 
     return () => {

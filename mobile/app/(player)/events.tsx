@@ -38,6 +38,7 @@ import {
   Menu,
   Users,
 } from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
 import { eventApi } from '@/services/api';
@@ -61,6 +62,7 @@ type MainTab = 'discover' | 'my_registrations';
 export default function PlayerEventsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { clubId, role } = useActiveClub();
   const { clubId: paramClubId, id: paramEventId } = useLocalSearchParams<{ clubId?: string; id?: string }>();
@@ -867,6 +869,15 @@ export default function PlayerEventsScreen() {
           onSuccess={() => {
             setCheckoutEvent(null);
             setSelectedDetailEvent(null);
+            // Immediately invalidate event caches for real-time sync
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+            if (checkoutEvent?.club_id) {
+              queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'events'] });
+              queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'analytics'] });
+            }
             refetchDiscover();
             refetchMyEvents();
           }}

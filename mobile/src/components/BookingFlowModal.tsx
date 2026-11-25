@@ -9,6 +9,7 @@ import { Calendar } from 'lucide-react-native';
 import { FilterChips } from './FilterChips';
 import { DateCalendar } from './DateCalendar';
 import { Input } from './Input';
+import { useQueryClient } from '@tanstack/react-query';
 import { useClubCourtAvailability, useClubPlayerMembers, useClubStaffBookings } from '@/hooks';
 import { bookingApi } from '@/services/api';
 import { Colors, Radius, Spacing, Typography } from '@/theme';
@@ -37,6 +38,7 @@ export function BookingFlowModal({
   initialDate,
   initialSlot,
 }: BookingFlowModalProps) {
+  const queryClient = useQueryClient();
   const [stage, setStage] = useState<1 | 2 | 3 | 4>(1);
 
   // Stage 1 Form State
@@ -778,6 +780,16 @@ export function BookingFlowModal({
                 setConfirmedBooking(res.booking_or_registration as any);
               }
               setStage(4);
+              // Immediately invalidate booking caches so My Bookings reflects the new booking
+              // without waiting for the WebSocket event (belt-and-suspenders approach).
+              queryClient.invalidateQueries({ queryKey: ['bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+              queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+              if (clubId) {
+                queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'court-availability'] });
+                queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'staff-bookings'] });
+                queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+              }
               onSuccess();
             }}
           />
