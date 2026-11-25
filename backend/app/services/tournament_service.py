@@ -1375,7 +1375,15 @@ class TournamentService:
         is_scramble = tournament.format == TournamentFormat.SCRAMBLE
         is_singles = category == "Singles" or "singles" in category.lower()
 
-        user = player_membership.user if hasattr(player_membership, "user") else None
+        user = None
+        if player_membership:
+            try:
+                user = player_membership.user
+            except Exception:
+                user = None
+        if not user:
+            user = await self.user_repo.get_by_id(user_id)
+
         # Authoritative profile retrieval directly from repository
         profile = await self.profile_repo.get_by_user_id(user_id)
         norm_payload_gender = (
@@ -1515,9 +1523,33 @@ class TournamentService:
                     )
                     await self.db.flush()
                     partner_membership = pm
-            partner_profile = partner_user.player_profile if partner_user and hasattr(partner_user, "player_profile") else None
-            partner_gender = getattr(partner_profile, "gender", None)
-            norm_partner_gender = partner_gender.strip().capitalize() if partner_gender else None
+            partner_profile = None
+            if partner_user:
+                partner_profile = await self.profile_repo.get_by_user_id(partner_user.id)
+                norm_payload_partner_gender = (
+                    payload.partner_gender.strip().capitalize()
+                    if payload and getattr(payload, "partner_gender", None) and isinstance(payload.partner_gender, str) and payload.partner_gender.strip()
+                    else None
+                )
+                if not partner_profile:
+                    partner_full = partner_user.full_name or "Partner"
+                    partner_profile = await self.profile_repo.create(
+                        user_id=partner_user.id,
+                        display_name=partner_full,
+                        gender=norm_payload_partner_gender,
+                    )
+                    self.db.add(partner_profile)
+                    await self.db.flush()
+                elif norm_payload_partner_gender and (not getattr(partner_profile, "gender", None) or not str(partner_profile.gender).strip()):
+                    partner_profile.gender = norm_payload_partner_gender
+                    self.db.add(partner_profile)
+                    await self.db.flush()
+
+            partner_gender = (
+                getattr(partner_profile, "gender", None)
+                or (payload.partner_gender if payload and getattr(payload, "partner_gender", None) else None)
+            )
+            norm_partner_gender = partner_gender.strip().capitalize() if partner_gender and isinstance(partner_gender, str) and partner_gender.strip() else None
 
             # Category-based gender validation for doubles
             if category == "Men's Doubles":
@@ -1749,58 +1781,84 @@ class TournamentService:
             team_name = (payload.team_name if payload and payload.team_name else f"{caller_name} & {partner_name}").strip()
 
             try:
-                created_team = await self.competition_repo.create_team(
-                    tournament_id=tournament.id,
-                    name=team_name,
-                )
-                await self.competition_repo.create_team_member(
-                    team_id=created_team.id,
-                    player_membership_id=player_membership.id,
-                )
-                await self.competition_repo.create_team_member(
-                    team_id=created_team.id,
-                    player_membership_id=partner_membership.id,
-                )
+                async with self.db.begin_nested():
+                    # Check if player already belongs to a team in this tournament
+                    existing_player_team = await self.competition_repo.get_player_team_in_tournament(
+                        tournament.id, player_membership.id
+                    )
+                    if existing_player_team:
+                        created_team = existing_player_team
+                    else:
+                        existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
+                        existing_names = {t.name.lower() for t in existing_teams}
+                        final_team_name = team_name
+                        counter = 2
+                        while final_team_name.lower() in existing_names:
+                            final_team_name = f"{team_name} {counter}"
+                            counter += 1
+
+                        created_team = await self.competition_repo.create_team(
+                            tournament_id=tournament.id,
+                            name=final_team_name,
+                        )
+                        await self.competition_repo.create_team_member(
+                            team_id=created_team.id,
+                            player_membership_id=player_membership.id,
+                        )
+                        await self.competition_repo.create_team_member(
+                            team_id=created_team.id,
+                            player_membership_id=partner_membership.id,
+                        )
                 await self.db.commit()
-            except Exception:
-                # If team creation fails or already exists, rollback gracefully
-                await self.db.rollback()
+            except Exception as e:
+                logger.warning(f"Could not create doubles team for tournament registration: {e}")
 
         elif not is_scramble and not is_singles and target_status == RegistrationStatus.CONFIRMED:
             # Doubles tournament with unpartnered individual registration:
             # Pair with another confirmed unpartnered player if available
             try:
-                existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
-                team_pm_ids = set()
-                for tm in existing_teams:
-                    for member in getattr(tm, "members", []):
-                        team_pm_ids.add(member.player_membership_id)
+                async with self.db.begin_nested():
+                    existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
+                    team_pm_ids = set()
+                    for tm in existing_teams:
+                        for member in getattr(tm, "members", []):
+                            team_pm_ids.add(member.player_membership_id)
 
-                all_regs = await self.registration_repo.list_by_tournament(tournament.id)
-                confirmed_unteamed = [
-                    r for r in all_regs
-                    if r.status == RegistrationStatus.CONFIRMED and r.player_membership_id not in team_pm_ids
-                ]
-                if len(confirmed_unteamed) >= 2:
-                    r1 = confirmed_unteamed[0]
-                    r2 = confirmed_unteamed[1]
-                    p1_name = r1.player_membership.user.full_name if r1.player_membership and r1.player_membership.user else "Player 1"
-                    p2_name = r2.player_membership.user.full_name if r2.player_membership and r2.player_membership.user else "Player 2"
-                    created_team = await self.competition_repo.create_team(
-                        tournament_id=tournament.id,
-                        name=f"{p1_name} & {p2_name}",
-                    )
-                    await self.competition_repo.create_team_member(
-                        team_id=created_team.id,
-                        player_membership_id=r1.player_membership_id,
-                    )
-                    await self.competition_repo.create_team_member(
-                        team_id=created_team.id,
-                        player_membership_id=r2.player_membership_id,
-                    )
-                    await self.db.commit()
-            except Exception:
-                await self.db.rollback()
+                    all_regs = await self.registration_repo.list_by_tournament(tournament.id)
+                    confirmed_unteamed = [
+                        r for r in all_regs
+                        if r.status == RegistrationStatus.CONFIRMED and r.player_membership_id not in team_pm_ids
+                    ]
+                    if len(confirmed_unteamed) >= 2:
+                        r1 = confirmed_unteamed[0]
+                        r2 = confirmed_unteamed[1]
+                        p1_name = "Player 1"
+                        try:
+                            if r1.player_membership and r1.player_membership.user:
+                                p1_name = r1.player_membership.user.full_name or "Player 1"
+                        except Exception:
+                            pass
+                        p2_name = "Player 2"
+                        try:
+                            if r2.player_membership and r2.player_membership.user:
+                                p2_name = r2.player_membership.user.full_name or "Player 2"
+                        except Exception:
+                            pass
+                        created_team = await self.competition_repo.create_team(
+                            tournament_id=tournament.id,
+                            name=f"{p1_name} & {p2_name}",
+                        )
+                        await self.competition_repo.create_team_member(
+                            team_id=created_team.id,
+                            player_membership_id=r1.player_membership_id,
+                        )
+                        await self.competition_repo.create_team_member(
+                            team_id=created_team.id,
+                            player_membership_id=r2.player_membership_id,
+                        )
+                await self.db.commit()
+            except Exception as e:
+                logger.warning(f"Could not auto-pair doubles team: {e}")
 
         elif is_singles and target_status == RegistrationStatus.CONFIRMED:
             caller_name = (
@@ -1810,17 +1868,18 @@ class TournamentService:
             ).strip()
             team_name = (payload.team_name if payload and payload.team_name else caller_name).strip()
             try:
-                created_team = await self.competition_repo.create_team(
-                    tournament_id=tournament.id,
-                    name=team_name,
-                )
-                await self.competition_repo.create_team_member(
-                    team_id=created_team.id,
-                    player_membership_id=player_membership.id,
-                )
+                async with self.db.begin_nested():
+                    created_team = await self.competition_repo.create_team(
+                        tournament_id=tournament.id,
+                        name=team_name,
+                    )
+                    await self.competition_repo.create_team_member(
+                        team_id=created_team.id,
+                        player_membership_id=player_membership.id,
+                    )
                 await self.db.commit()
-            except Exception:
-                await self.db.rollback()
+            except Exception as e:
+                logger.warning(f"Could not create singles team: {e}")
 
         # Calculate configured fee
         fee_raw = format_config.get("entry_fee") or format_config.get("registration_fee")
@@ -1862,11 +1921,26 @@ class TournamentService:
         reg.notes = reg_notes if reg_notes else None
         await self.db.commit()
 
+        loc_name = tournament.location_name
+        if not loc_name:
+            try:
+                loc_name = tournament.club.name if hasattr(tournament, "club") and tournament.club else "Main Courts"
+            except Exception:
+                loc_name = "Main Courts"
+
+        status_label_val = (
+            reg.status.display_label
+            if hasattr(reg.status, "display_label")
+            else str(reg.status.value if hasattr(reg.status, "value") else reg.status).capitalize()
+        )
+        t_format_val = tournament.format.value if hasattr(tournament.format, "value") else str(tournament.format)
+        t_format_lbl = tournament.format.display_label if hasattr(tournament.format, "display_label") else t_format_val.replace("_", " ").title()
+
         resp_obj = PlayerSelfRegistrationResponse(
             id=reg.id,
             tournament_id=tournament.id,
             status=reg.status,
-            status_label=reg.status.display_label,
+            status_label=status_label_val,
             registered_at=reg.registered_at,
             message=msg,
             reference_number=ref_no,
@@ -1880,10 +1954,10 @@ class TournamentService:
             payment_method=pref_method,
             notes=reg.notes,
             tournament_name=tournament.name,
-            tournament_format=tournament.format.value,
-            tournament_format_label=tournament.format.display_label,
+            tournament_format=t_format_val,
+            tournament_format_label=t_format_lbl,
             division=category or "3.5 Division",
-            location_name=tournament.location_name or (tournament.club.name if hasattr(tournament, "club") and tournament.club else "Main Courts"),
+            location_name=loc_name,
             start_date=tournament.start_date,
             end_date=tournament.end_date,
             player_name=user.full_name if user else "Player",
@@ -2040,7 +2114,7 @@ class TournamentService:
             id=updated.id,
             tournament_id=tournament.id,
             status=updated.status,
-            status_label=updated.status.display_label,
+            status_label=updated.status.display_label if hasattr(updated.status, "display_label") else str(updated.status).capitalize(),
             registered_at=updated.registered_at,
             message="Registration successfully cancelled",
         )

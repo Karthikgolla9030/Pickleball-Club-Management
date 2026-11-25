@@ -577,11 +577,16 @@ export function TournamentRegistrationModal({
     setSubmitError(null);
     try {
       const selectedMethod = feeAmount <= 0 ? 'free' : (formState.paymentMethod || 'upi');
+      const partnerGender = isDoubles
+        ? (formState.selectedPartner?.gender || formState.partnerGender || null)
+        : null;
+
       const payload: any = {
         team_name: teamName,
         partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
         partner_email: partnerEmail,
         partner_name: partnerName,
+        partner_gender: partnerGender,
         skill_level: formState.skillLevel,
         partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
         gender: formState.gender,

@@ -55,6 +55,7 @@ class PlayerSelfRegistrationRequest(BaseModel):
     partner_membership_id: UUID | None = None
     partner_email: str | None = Field(default=None, max_length=255)
     partner_name: str | None = Field(default=None, max_length=255)
+    partner_gender: str | None = Field(default=None, max_length=20)
     skill_level: str | None = Field(default=None, max_length=20)
     partner_skill_level: str | None = Field(default=None, max_length=20)
     gender: str | None = Field(default=None, max_length=20)
@@ -62,7 +63,7 @@ class PlayerSelfRegistrationRequest(BaseModel):
     payment_method: str | None = Field(default=None, max_length=50)
     notes: str | None = Field(default=None, max_length=1000)
 
-    @field_validator("team_name", "partner_email", "partner_name", "skill_level", "partner_skill_level", "gender", "notes", mode="before")
+    @field_validator("team_name", "partner_email", "partner_name", "partner_gender", "skill_level", "partner_skill_level", "gender", "notes", mode="before")
     @classmethod
     def strip_text(cls, v: str | None) -> str | None:
         if v is not None and isinstance(v, str):
