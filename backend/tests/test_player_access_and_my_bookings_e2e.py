@@ -596,3 +596,181 @@ async def test_realtime_websocket_events_dispatched(async_client: AsyncClient, d
         assert EventType.LEAGUE_REGISTRATION_CANCELLED in dispatched_event_types, (
             f"Expected LEAGUE_REGISTRATION_CANCELLED, got: {dispatched_event_types}"
         )
+
+
+@pytest.mark.asyncio
+async def test_court_booking_fulfillment_my_bookings_and_recent_activity(
+    async_client: AsyncClient, db_session: AsyncSession, e2e_setup
+):
+    """
+    CRITICAL E2E VERIFICATION:
+    1. A player books a court slot via checkout (free / complimentary zero-dollar checkout).
+    2. Backend immediately fulfills the activity: creates Booking in DB with CONFIRMED status.
+    3. The booking record is committed and persisted with correct court, club, and player.
+    4. GET /api/v1/player/my-bookings immediately returns this booking under upcoming and courts.
+    5. GET /api/v1/player/activity immediately returns an item titled "Court Booking".
+    """
+    p1 = e2e_setup["p1"]
+    club_a = e2e_setup["club_a"]
+    court_a = e2e_setup["court_a"]
+
+    # Active membership
+    mem_a = ClubPlayerMembership(
+        id=uuid.uuid4(),
+        user_id=p1.id,
+        club_id=club_a.id,
+        status=PlayerMembershipStatus.ACTIVE,
+        joined_at=datetime.now(timezone.utc),
+    )
+    db_session.add(mem_a)
+    await db_session.commit()
+
+    headers = make_auth_header(p1.id)
+    slot_start = datetime.now(timezone.utc) + timedelta(days=2, hours=10)
+    slot_end = slot_start + timedelta(hours=1)
+
+    # 1. Initiate checkout for court booking (is_free / zero-dollar complimentary checkout)
+    checkout_payload = {
+        "club_id": str(club_a.id),
+        "purpose": "court_booking",
+        "activity_id": str(court_a.id),
+        "start_at": slot_start.isoformat(),
+        "end_at": slot_end.isoformat(),
+        "currency": "USD",
+        "metadata": {
+            "court_id": str(court_a.id),
+            "start_at": slot_start.isoformat(),
+            "end_at": slot_end.isoformat(),
+            "notes": "Complimentary Member Court Booking",
+            "hourly_rate": "0.00",
+        },
+    }
+
+    # 1. Test Paid Court Booking via Checkout Flow (initiate -> verify)
+    init_resp = await async_client.post(
+        "/api/v1/payments/checkout/initiate",
+        json=checkout_payload,
+        headers=headers,
+    )
+    assert init_resp.status_code in (200, 201), f"Checkout failed: {init_resp.text}"
+    init_data = init_resp.json()
+    assert init_data["status"] == "pending"
+    payment_id = init_data["payment_id"]
+
+    # Verify checkout payment
+    verify_resp = await async_client.post(
+        "/api/v1/payments/checkout/verify",
+        json={
+            "payment_id": payment_id,
+            "provider": init_data["provider"],
+            "provider_order_id": init_data["provider_order_id"],
+            "provider_payment_id": "test_pay_12345",
+        },
+        headers=headers,
+    )
+    assert verify_resp.status_code == 200, f"Verify failed: {verify_resp.text}"
+    verify_data = verify_resp.json()
+    assert verify_data["success"] is True
+    assert "booking_or_registration" in verify_data
+    created_booking_id = verify_data["booking_or_registration"]["booking_id"]
+
+    # 2. Test Free/Complimentary Court Booking via Checkout Flow
+    # Create a $0 court in Club A
+    court_free = Court(
+        id=uuid.uuid4(),
+        club_id=club_a.id,
+        court_number=2,
+        name="Complimentary Court",
+        indoor_outdoor=CourtEnvironment.INDOOR,
+        surface_type="hard",
+        price_per_hour=0.0,
+        status=CourtStatus.ACTIVE,
+        is_active=True,
+    )
+    db_session.add(court_free)
+    await db_session.commit()
+
+    slot_free_start = datetime.now(timezone.utc) + timedelta(days=3, hours=14)
+    slot_free_end = slot_free_start + timedelta(hours=1)
+
+    free_payload = {
+        "club_id": str(club_a.id),
+        "purpose": "court_booking",
+        "activity_id": str(court_free.id),
+        "start_at": slot_free_start.isoformat(),
+        "end_at": slot_free_end.isoformat(),
+        "currency": "USD",
+        "metadata": {
+            "court_id": str(court_free.id),
+            "start_at": slot_free_start.isoformat(),
+            "end_at": slot_free_end.isoformat(),
+            "hourly_rate": "0.00",
+        },
+    }
+    free_init_resp = await async_client.post(
+        "/api/v1/payments/checkout/initiate",
+        json=free_payload,
+        headers=headers,
+    )
+    assert free_init_resp.status_code in (200, 201)
+    free_init_data = free_init_resp.json()
+    assert free_init_data["is_free"] is True
+    assert free_init_data["status"] == "succeeded"
+    assert free_init_data["booking_or_registration"] is not None
+    free_booking_id = free_init_data["booking_or_registration"]["booking_id"]
+
+    # 2. Verify authoritative DB record
+    from app.models.booking import Booking
+    from sqlalchemy import select
+    stmt = select(Booking).where(Booking.id == uuid.UUID(created_booking_id))
+    booking_db = (await db_session.execute(stmt)).scalar_one_or_none()
+    assert booking_db is not None, "Booking must be persisted in database table"
+    assert booking_db.club_id == club_a.id
+    assert booking_db.court_id == court_a.id
+    assert booking_db.player_id == p1.id
+    assert booking_db.status == BookingStatus.CONFIRMED
+
+    # 3. Verify GET /api/v1/player/my-bookings retrieves the court booking
+    my_bookings_resp = await async_client.get(
+        "/api/v1/player/my-bookings",
+        headers=headers,
+    )
+    assert my_bookings_resp.status_code == 200
+    my_bookings_data = my_bookings_resp.json()
+    items = my_bookings_data["items"]
+    found_booking = next((it for it in items if it["record_id"] == created_booking_id), None)
+    assert found_booking is not None, "Newly created court booking must appear in My Bookings"
+    assert found_booking["activity_type"] == "court"
+    assert found_booking["status"] == "confirmed"
+    assert court_a.name in found_booking["title"]
+
+    # Also test courts filter
+    courts_filter_resp = await async_client.get(
+        "/api/v1/player/my-bookings?activity_type=court",
+        headers=headers,
+    )
+    assert courts_filter_resp.status_code == 200
+    assert any(it["record_id"] == created_booking_id for it in courts_filter_resp.json()["items"])
+    assert any(it["record_id"] == free_booking_id for it in courts_filter_resp.json()["items"])
+
+    # 4. Verify GET /api/v1/player/activity retrieves Recent Activity titled "Court Booking"
+    activity_resp = await async_client.get(
+        "/api/v1/player/activity",
+        headers=headers,
+    )
+    assert activity_resp.status_code == 200
+    activities = activity_resp.json()
+    assert len(activities) > 0
+    top_act = activities[0]
+    assert top_act["title"] == "Court Booking"
+    assert "Complimentary Court" in top_act["description"]
+    assert club_a.name in top_act["description"]
+    assert top_act["entity_id"] == free_booking_id
+
+    # Paid court booking is also present in recent activity with title "Court Booking"
+    assert any(
+        act["entity_id"] == created_booking_id
+        and act["title"] == "Court Booking"
+        and court_a.name in act["description"]
+        for act in activities
+    )

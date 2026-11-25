@@ -132,6 +132,9 @@ export function useClubCourtAvailability(
         });
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
     },
   });
 

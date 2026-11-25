@@ -499,6 +499,7 @@ class CheckoutInitiateResponse(BaseModel):
     payment_methods: str | None = None
     activity_summary: dict[str, str | int | float | bool | None]
     is_free: bool = False
+    booking_or_registration: dict[str, Any] | None = None
 
 
 class CheckoutVerifyRequest(BaseModel):

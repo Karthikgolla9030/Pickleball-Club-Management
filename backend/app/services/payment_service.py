@@ -738,7 +738,7 @@ class PaymentService:
             # Calculate price
             duration_minutes = int((payload.end_at - payload.start_at).total_seconds() / 60)
             hours = Decimal(duration_minutes) / Decimal(60)
-            rate = Decimal(str(court.price_per_hour or "40.00"))
+            rate = Decimal(str(court.price_per_hour if court.price_per_hour is not None else "40.00"))
             base_amount = (hours * rate).quantize(Decimal("0.01"))
 
             summary.update({
@@ -968,7 +968,14 @@ class PaymentService:
                 created_by_user_id=user_id,
             )
             created_pay = await self.payment_repo.create(payment)
-            await self.db.commit()
+            await self.db.flush()
+
+            # Fulfill the activity and broadcast real-time events immediately
+            booking_or_reg = await self._fulfill_activity_and_notify(
+                payment=created_pay,
+                meta=meta_dict,
+                user_id=user_id,
+            )
 
             return CheckoutInitiateResponse(
                 payment_id=created_pay.id,
@@ -983,6 +990,7 @@ class PaymentService:
                 payment_methods=None,
                 activity_summary=summary,
                 is_free=True,
+                booking_or_registration=booking_or_reg,
             )
 
         # Get configured payment gateway (Cashfree, Razorpay, or Stripe)
@@ -1173,6 +1181,31 @@ class PaymentService:
             except Exception:
                 meta = {}
 
+        booking_or_reg = await self._fulfill_activity_and_notify(
+            payment=payment,
+            meta=meta,
+            user_id=user_id,
+        )
+
+        full = await self.payment_repo.get_by_id(payment.id)
+        return CheckoutVerifyResponse(
+            success=True,
+            payment=PlayerPaymentResponse.from_orm_model(full),
+            message="Payment successfully verified and booking confirmed.",
+            booking_or_registration=booking_or_reg,
+        )
+
+    async def _fulfill_activity_and_notify(
+        self,
+        payment: Payment,
+        meta: dict[str, Any],
+        user_id: UUID,
+    ) -> dict[str, Any]:
+        """
+        Fulfill the purchased/complimentary activity, persist the corresponding records,
+        send in-app notifications, and dispatch real-time WebSocket events.
+        """
+        now = datetime.now(timezone.utc)
         booking_or_reg: dict[str, Any] = {
             "payment_reference": payment.reference,
             "status": "confirmed",
@@ -1231,7 +1264,7 @@ class PaymentService:
                     end_at=end_dt,
                     status=BookingStatus.CONFIRMED,
                     notes=booking_notes,
-                    price_per_hour=Decimal(str(meta.get("hourly_rate", "40.00"))),
+                    price_per_hour=Decimal(str(meta.get("hourly_rate") if meta.get("hourly_rate") is not None else "40.00")),
                     total_price=payment.amount,
                     currency=payment.currency,
                     player_count=parsed_player_count,
@@ -1427,8 +1460,6 @@ class PaymentService:
         await self.db.commit()
 
         # ─── Dispatch real-time WebSocket events after DB commit ─────────────────
-        # This is the single point where all checkout confirmations must trigger
-        # cache invalidation on connected clients (Player Side + Club Side).
         try:
             from app.core.events import EventType, dispatch_event
 
@@ -1541,7 +1572,9 @@ class PaymentService:
             )
         except Exception as ws_err:
             # Never block the checkout response due to WS dispatch failure
-            logger.warning(f"[verify_checkout] WS event dispatch failed (non-blocking): {ws_err}")
+            logger.warning(f"[_fulfill_activity_and_notify] WS event dispatch failed (non-blocking): {ws_err}")
+
+        return booking_or_reg
 
         full = await self.payment_repo.get_by_id(payment.id)
         return CheckoutVerifyResponse(

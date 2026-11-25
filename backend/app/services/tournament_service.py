@@ -1140,21 +1140,23 @@ class TournamentService:
         is_singles = category == "Singles" or "singles" in category.lower()
 
         # Retrieve player's team and partner if doubles/team
-        team = await self.competition_repo.get_player_team_in_tournament(
-            tournament_id=tournament.id,
-            player_membership_id=player_membership.id,
-        )
+        team = None
+        if player_membership:
+            team = await self.competition_repo.get_player_team_in_tournament(
+                tournament_id=tournament.id,
+                player_membership_id=player_membership.id,
+            )
         partner_membership_id = None
         partner_name = None
         partner_email = None
         team_name = team.name if team else None
         team_id = team.id if team else None
 
-        if team and hasattr(team, "members"):
+        if team and hasattr(team, "members") and team.members:
             for m in team.members:
-                if m.player_membership_id != player_membership.id:
+                if player_membership and m.player_membership_id != player_membership.id:
                     partner_membership_id = m.player_membership_id
-                    pm = m.player_membership
+                    pm = getattr(m, "player_membership", None)
                     if pm and hasattr(pm, "user") and pm.user:
                         partner_name = pm.user.full_name
                         partner_email = pm.user.email
@@ -1181,9 +1183,13 @@ class TournamentService:
 
         ref_no = f"REG-{existing.registered_at.year if existing.registered_at else datetime.now().year}-{existing.id.hex[:6].upper()}"
 
-        user = player_membership.user if hasattr(player_membership, "user") else None
-        player_name = user.full_name if user else "Player"
-        player_email = user.email if user else None
+        user = None
+        if player_membership and hasattr(player_membership, "user") and player_membership.user:
+            user = player_membership.user
+        if not user:
+            user = await self.user_repo.get_by_id(user_id)
+        player_name = user.full_name if user and user.full_name else "Player"
+        player_email = user.email if user and user.email else None
 
         from app.models.payment import Payment, PaymentStatus
         from sqlalchemy import select
@@ -1208,6 +1214,12 @@ class TournamentService:
             elif "upi" in existing.notes.lower():
                 payment_method = "UPI"
 
+        loc_name = tournament.location_name
+        if not loc_name and hasattr(tournament, "club") and tournament.club:
+            loc_name = tournament.club.name
+        if not loc_name:
+            loc_name = "Main Courts"
+
         reg_response = PlayerSelfRegistrationResponse(
             id=existing.id,
             tournament_id=tournament.id,
@@ -1231,7 +1243,7 @@ class TournamentService:
             tournament_format=tournament.format.value,
             tournament_format_label=tournament.format.display_label,
             division=division,
-            location_name=tournament.location_name or (tournament.club.name if hasattr(tournament, "club") and tournament.club else "Main Courts"),
+            location_name=loc_name,
             start_date=tournament.start_date,
             end_date=tournament.end_date,
             player_name=player_name,

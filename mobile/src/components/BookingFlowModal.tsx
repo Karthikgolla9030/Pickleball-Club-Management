@@ -783,6 +783,7 @@ export function BookingFlowModal({
               // Immediately invalidate booking caches so My Bookings reflects the new booking
               // without waiting for the WebSocket event (belt-and-suspenders approach).
               queryClient.invalidateQueries({ queryKey: ['bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
               if (clubId) {

@@ -10,7 +10,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.club import Club
@@ -627,25 +627,25 @@ class PlayerService:
         stmt_b = (
             select(Booking)
             .options(selectinload(Booking.court), selectinload(Booking.club))
-            .where(Booking.player_id == user_id)
-            .order_by(Booking.updated_at.desc())
-            .limit(5)
+            .where(or_(Booking.player_id == user_id, Booking.booked_by_user_id == user_id))
+            .order_by(Booking.created_at.desc())
+            .limit(10)
         )
         res_b = await self.db.execute(stmt_b)
         for b in res_b.scalars().all():
             court_name = b.court.name if b.court else "Court"
-            # Format date e.g. "Tomorrow, 10:00 AM – 11:00 AM" or "Sep 27, 10:00 AM – 11:00 AM"
+            club_name = b.club.name if b.club else "Club"
             start_str = b.start_at.strftime("%I:%M %p")
             end_str = b.end_at.strftime("%I:%M %p")
             date_str = b.start_at.strftime("%b %d")
-            time_desc = f"{court_name} • {date_str}, {start_str} – {end_str}"
+            time_desc = f"{court_name} • {club_name} • {date_str}, {start_str} – {end_str}"
 
             if b.status == BookingStatus.CONFIRMED:
                 items.append(
                     PlayerActivityItem(
                         id=f"booking-{b.id}",
                         activity_type="booking_confirmed",
-                        title="Booking Confirmed",
+                        title="Court Booking",
                         description=time_desc,
                         timestamp=b.created_at,
                         entity_type="booking",
@@ -657,9 +657,9 @@ class PlayerService:
                     PlayerActivityItem(
                         id=f"booking-cancelled-{b.id}",
                         activity_type="booking_cancelled",
-                        title="Booking Cancelled",
+                        title="Court Booking Cancelled",
                         description=time_desc,
-                        timestamp=b.cancelled_at or b.updated_at,
+                        timestamp=b.cancelled_at or b.updated_at or b.created_at,
                         entity_type="booking",
                         entity_id=str(b.id),
                     )
@@ -672,7 +672,7 @@ class PlayerService:
             .options(selectinload(TournamentRegistration.tournament))
             .where(ClubPlayerMembership.user_id == user_id)
             .order_by(TournamentRegistration.registered_at.desc())
-            .limit(5)
+            .limit(10)
         )
         res_tr = await self.db.execute(stmt_tr)
         for tr in res_tr.scalars().all():
@@ -695,7 +695,7 @@ class PlayerService:
             .options(selectinload(EventRegistration.event))
             .where(EventRegistration.user_id == user_id)
             .order_by(EventRegistration.registered_at.desc())
-            .limit(5)
+            .limit(10)
         )
         res_er = await self.db.execute(stmt_er)
         for er in res_er.scalars().all():
@@ -706,15 +706,70 @@ class PlayerService:
                     activity_type="event_registration",
                     title="Event Registration",
                     description=f"You registered for {event_title}",
-                    timestamp=er.registered_at,
+                    timestamp=er.registered_at or er.created_at,
                     entity_type="event",
                     entity_id=str(er.event_id),
                 )
             )
 
-        # Sort all activities by timestamp descending and take up to 5
-        items.sort(key=lambda x: x.timestamp, reverse=True)
-        return items[:5]
+        # 4. League registrations
+        stmt_lr = (
+            select(TeamMember, Team, League)
+            .join(Team, TeamMember.team_id == Team.id)
+            .join(League, Team.league_id == League.id)
+            .join(ClubPlayerMembership, TeamMember.player_membership_id == ClubPlayerMembership.id)
+            .where(ClubPlayerMembership.user_id == user_id)
+            .order_by(TeamMember.created_at.desc())
+            .limit(10)
+        )
+        res_lr = await self.db.execute(stmt_lr)
+        for tm, team, league in res_lr.all():
+            items.append(
+                PlayerActivityItem(
+                    id=f"league-{tm.id}",
+                    activity_type="league_registration",
+                    title="League Registration",
+                    description=f"You registered for {league.name} ({team.name})",
+                    timestamp=tm.created_at,
+                    entity_type="league",
+                    entity_id=str(league.id),
+                )
+            )
+
+        # 5. Lesson bookings
+        stmt_lsr = (
+            select(LessonRegistration)
+            .options(selectinload(LessonRegistration.lesson))
+            .where(LessonRegistration.user_id == user_id)
+            .order_by(LessonRegistration.created_at.desc())
+            .limit(10)
+        )
+        res_lsr = await self.db.execute(stmt_lsr)
+        for lsr in res_lsr.scalars().all():
+            lesson_title = lsr.lesson.title if lsr.lesson else "Coaching Lesson"
+            items.append(
+                PlayerActivityItem(
+                    id=f"lesson-{lsr.id}",
+                    activity_type="lesson_registration",
+                    title="Lesson Booking",
+                    description=f"You booked {lesson_title}",
+                    timestamp=lsr.created_at,
+                    entity_type="lesson",
+                    entity_id=str(lsr.lesson_id),
+                )
+            )
+
+        def _get_sort_time(act: PlayerActivityItem) -> datetime:
+            ts = act.timestamp
+            if ts is None:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            if ts.tzinfo is None:
+                return ts.replace(tzinfo=timezone.utc)
+            return ts.astimezone(timezone.utc)
+
+        # Sort all activities by timestamp descending and take up to 10
+        items.sort(key=_get_sort_time, reverse=True)
+        return items[:10]
 
     async def get_upcoming_activities(
         self,
@@ -1126,7 +1181,7 @@ class PlayerService:
                 select(Booking, Court, Club)
                 .join(Court, Booking.court_id == Court.id)
                 .join(Club, Booking.club_id == Club.id)
-                .where(Booking.player_id == user_id)
+                .where(or_(Booking.player_id == user_id, Booking.booked_by_user_id == user_id))
             )
             if club_id:
                 b_query = b_query.where(Booking.club_id == club_id)

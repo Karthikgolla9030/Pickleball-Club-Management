@@ -35,6 +35,7 @@ class TournamentRegistrationRepository:
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),
             )
+            .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
@@ -55,6 +56,7 @@ class TournamentRegistrationRepository:
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),
             )
+            .execution_options(populate_existing=True)
         )
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
@@ -79,6 +81,7 @@ class TournamentRegistrationRepository:
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),
             )
+            .execution_options(populate_existing=True)
             .order_by(TournamentRegistration.registered_at.desc())
         )
         result = await self.db.execute(query)
