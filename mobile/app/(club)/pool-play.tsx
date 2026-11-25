@@ -1050,6 +1050,7 @@ export default function PoolPlayManagementScreen() {
                   tournamentId={tournamentId}
                   tournament={(effectiveTournament ?? tournament)!}
                   canManage={canManage}
+                  onNavigateToSetup={() => setActiveTab('setup_courts')}
                   onGenerated={async () => {
                     await handleRefresh();
                   }}
@@ -1145,6 +1146,9 @@ export default function PoolPlayManagementScreen() {
           {/* ─── Tab 6: Setup & Courts (Dedicated Tab) ─────────────────── */}
           {activeTab === 'setup_courts' && (
             <PoolPlaySetupCourtsTab
+              clubId={clubId}
+              tournamentId={tournamentId}
+              tournament={effectiveTournament ?? tournament}
               config={config}
               onSaveConfig={handleSavePoolConfig}
               canManage={canManage}
@@ -1152,6 +1156,10 @@ export default function PoolPlayManagementScreen() {
               maxParticipants={tournament?.max_participants}
               clubCourts={activeClubCourts}
               clubName={clubName ?? undefined}
+              onGenerated={async () => {
+                await handleRefresh();
+              }}
+              matchesCount={matches.length}
             />
           )}
 

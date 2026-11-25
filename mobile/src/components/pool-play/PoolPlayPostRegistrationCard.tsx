@@ -1,44 +1,25 @@
 /**
  * Aught2 Pickleball — PoolPlayPostRegistrationCard
  *
- * Post-Registration Configuration & Preview card for Pool Play Tournaments:
- * - Rendered after registration closes and before tournament begins.
- * - Displays confirmed team count, preliminary pools, and playoff qualifiers.
- * - Allows Tournament Director to configure pool count, qualifiers per pool, and playoff bracket type.
- * - Displays live pool allocation preview (serpentine distribution of actual confirmed teams).
- * - Displays qualification structure preview (total bracket size, advancing slots).
- * - Validates pool balance and team assignment before generation.
- * - Confirms configuration and generates pools, matches, and championship bracket.
- * - Standardized to match Club Side tournament management design system.
+ * Read-Only Overview Summary Card for Pool Play Tournaments:
+ * - Rendered in Overview tab after registration closes and before tournament begins.
+ * - Displays confirmed team count, current pool configuration status, and concise summary.
+ * - Shows a simple, single empty/insufficient state when confirmed teams < 4.
+ * - Provides ONE clear action to navigate to the Setup & Courts tab where editable configuration lives.
+ * - Follows strict architectural separation: NO editable steppers or duplicate form controls in Overview.
  */
 
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import {
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Layers,
-  Sparkles,
-  Trophy,
-  Users,
-} from 'lucide-react-native';
+import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ChevronRight, Layers, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import {
-  PostRegistrationChoiceChips,
   PostRegistrationHeader,
   PostRegistrationMetrics,
   PostRegistrationNotice,
-  PostRegistrationStepper,
 } from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
@@ -49,7 +30,8 @@ interface PoolPlayPostRegistrationCardProps {
   tournamentId: string;
   tournament: Tournament;
   canManage: boolean;
-  onGenerated: () => void | Promise<void>;
+  onNavigateToSetup?: () => void;
+  onGenerated?: () => void | Promise<void>;
   onStartTournament?: () => void | Promise<void>;
   isStartingTournament?: boolean;
 }
@@ -59,36 +41,19 @@ export function PoolPlayPostRegistrationCard({
   tournamentId,
   tournament,
   canManage,
+  onNavigateToSetup,
   onGenerated,
   onStartTournament,
   isStartingTournament = false,
 }: PoolPlayPostRegistrationCardProps) {
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [setupData, setSetupData] = useState<any>(null);
-  const [numPools, setNumPools] = useState<number>(2);
-  const [qualifiers, setQualifiers] = useState<number>(2);
-  const [bracketType, setBracketType] = useState<string>('Single Elimination');
-  const [showPreview, setShowPreview] = useState(false);
 
-  const fetchSetup = async (p?: number, q?: number, b?: string) => {
+  const fetchSetup = async () => {
     try {
       setLoading(true);
-      const res = await competitionApi.getPoolPlayPostRegistrationSetup(clubId, tournamentId, {
-        number_of_pools: p ?? numPools,
-        qualifiers_per_pool: q ?? qualifiers,
-        bracket_type: b ?? bracketType,
-      });
+      const res = await competitionApi.getPoolPlayPostRegistrationSetup(clubId, tournamentId);
       setSetupData(res);
-      if (res.selected_pools && !p) {
-        setNumPools(res.selected_pools);
-      }
-      if (res.selected_qualifiers_per_pool && !q) {
-        setQualifiers(res.selected_qualifiers_per_pool);
-      }
-      if (res.selected_bracket_type && !b) {
-        setBracketType(res.selected_bracket_type);
-      }
     } catch (err) {
       console.warn('Failed to fetch pool play post-registration setup:', err);
     } finally {
@@ -106,50 +71,13 @@ export function PoolPlayPostRegistrationCard({
     return null;
   }
 
-  const handlePoolsChange = (p: number) => {
-    setNumPools(p);
-    void fetchSetup(p, qualifiers, bracketType);
-  };
-
-  const handleQualifiersChange = (q: number) => {
-    setQualifiers(q);
-    void fetchSetup(numPools, q, bracketType);
-  };
-
-  const handleBracketTypeChange = (b: string) => {
-    setBracketType(b);
-    void fetchSetup(numPools, qualifiers, b);
-  };
-
-  const handleConfirmAndGenerate = async () => {
-    if (!canManage) return;
-    try {
-      setGenerating(true);
-      await competitionApi.confirmAndGeneratePoolPlay(clubId, tournamentId, {
-        number_of_pools: numPools,
-        qualifiers_per_pool: qualifiers,
-        bracket_type: bracketType,
-      });
-      Alert.alert(
-        'Pools & Matches Generated',
-        `Successfully configured ${numPools} pools and generated matches! The tournament is now Ready to Start.`
-      );
-      await fetchSetup();
-      await onGenerated();
-    } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to generate pools & matches.');
-    } finally {
-      setGenerating(false);
-    }
-  };
-
   if (loading && !setupData) {
     return (
       <Card style={styles.card}>
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color="#0F766E" />
           <AppText style={styles.loadingText}>
-            Calculating registered teams and optimal pool recommendations...
+            Calculating confirmed teams and current pool status...
           </AppText>
         </View>
       </Card>
@@ -157,217 +85,97 @@ export function PoolPlayPostRegistrationCard({
   }
 
   const isGenerated = setupData?.is_generated ?? false;
-  const isValid = setupData?.is_configuration_valid ?? true;
   const teamsCount = setupData?.confirmed_teams_count ?? 0;
   const stage = setupData?.configuration_stage ?? 'awaiting_format_configuration';
   const isReadyToStart = isGenerated && stage === 'ready_to_start';
-  const feasiblePoolConfigs = setupData?.feasible_pool_configurations || [];
+  const numPools = setupData?.selected_pools ?? 2;
+  const qualifiers = setupData?.selected_qualifiers_per_pool ?? 2;
+  const bracketType = setupData?.selected_bracket_type ?? 'Single Elimination';
+  const hasMinTeams = teamsCount >= 4;
 
-  const maxPoolsPossible = Math.max(2, Math.floor(teamsCount / 2));
-  const maxQualifiersPossible = Math.max(1, Math.floor(teamsCount / Math.max(1, numPools)));
+  const getSubtitle = () => {
+    if (isReadyToStart) {
+      return 'Pools & matches generated • Verified and ready to start';
+    }
+    if (isGenerated) {
+      return 'Schedule generated • Pool distribution active';
+    }
+    if (!hasMinTeams) {
+      return 'Registration closed • Waiting for confirmed teams to configure pools';
+    }
+    return 'Registration closed • Configure pools and advancement in Setup & Courts';
+  };
+
+  const getBadgeLabel = () => {
+    if (isReadyToStart) return 'Ready to Start';
+    if (isGenerated) return 'Schedule Generated';
+    if (!hasMinTeams) return 'Waiting for Teams';
+    return 'Awaiting Configuration';
+  };
+
+  const getBadgeVariant = () => {
+    if (isReadyToStart) return 'success';
+    if (isGenerated) return 'info';
+    return 'warning';
+  };
 
   return (
     <Card style={styles.card}>
-      {/* ─── 1. Standardized Responsive Header ───────────────────────────────── */}
+      {/* ─── 1. Read-Only Standardized Header ─────────────────────────────────── */}
       <PostRegistrationHeader
         icon={<Layers size={18} color="#0F766E" />}
-        title="Post-Registration Pool Play Setup"
-        subtitle={
-          isReadyToStart
-            ? 'Pools & matches generated • Verified and ready to start'
-            : isGenerated
-            ? 'Schedule generated • Pool distribution active'
-            : 'Registration closed • Configure pools, qualifiers, and championship bracket'
-        }
-        badgeLabel={
-          isReadyToStart
-            ? 'Ready to Start'
-            : isGenerated
-            ? 'Schedule Generated'
-            : 'Awaiting Configuration'
-        }
-        badgeVariant={isReadyToStart ? 'success' : isGenerated ? 'info' : 'warning'}
+        title="Pool Play Configuration"
+        subtitle={getSubtitle()}
+        badgeLabel={getBadgeLabel()}
+        badgeVariant={getBadgeVariant()}
       />
 
       <View style={styles.divider} />
 
-      {/* ─── 2. Confirmed Teams & Balanced Metrics ───────────────────────────── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Users size={15} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Confirmed Registered Teams</AppText>
-        </View>
+      {/* ─── 2. Confirmed Teams & Configuration Status Summary ────────────────── */}
+      <PostRegistrationMetrics
+        metrics={[
+          {
+            label: 'CONFIRMED TEAMS',
+            value: teamsCount,
+          },
+          {
+            label: 'CONFIGURED POOLS',
+            value: hasMinTeams ? numPools : '—',
+          },
+          {
+            label: 'PLAYOFF QUALIFIERS',
+            value: hasMinTeams ? numPools * qualifiers : '—',
+          },
+        ]}
+      />
 
-        <PostRegistrationMetrics
-          metrics={[
-            {
-              label: 'CONFIRMED TEAMS',
-              value: teamsCount,
-            },
-            {
-              label: 'PRELIMINARY POOLS',
-              value: numPools,
-            },
-            {
-              label: 'PLAYOFF QUALIFIERS',
-              value: numPools * qualifiers,
-            },
-          ]}
-        />
-
-        {/* Validation / Feasibility Status Notice */}
+      {/* ─── 3. Single Consolidated Notice ───────────────────────────────────── */}
+      {!hasMinTeams ? (
         <PostRegistrationNotice
-          variant={isValid ? 'success' : 'warning'}
-          title={isValid ? 'Pool Play Structure Verified' : 'Pool Balance & Feasibility Constraint'}
-          message={
-            setupData?.validation_error ||
-            `All ${teamsCount} confirmed teams assigned across ${numPools} balanced pools.`
-          }
+          variant="warning"
+          title="Waiting for confirmed teams"
+          message={`At least 4 confirmed teams are required to configure Pool Play (currently ${teamsCount} confirmed). When confirmed teams register, pool distribution and qualifiers can be configured in Setup & Courts.`}
         />
-      </View>
-
-      <View style={styles.divider} />
-
-      {/* ─── 3. Pool Recommendation & Number of Pools Stepper ─────────────────── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Sparkles size={15} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Pool Count & Distribution</AppText>
-        </View>
-
-        {setupData?.recommendation_reason ? (
-          <PostRegistrationNotice
-            variant="info"
-            title="Recommendation"
-            message={setupData.recommendation_reason}
-          />
-        ) : null}
-
-        {feasiblePoolConfigs.length > 0 ? (
-          <View style={styles.presetOptionsBox}>
-            <PostRegistrationChoiceChips
-              label="Select Balanced Pool Preset:"
-              options={feasiblePoolConfigs.map((cfg: any) => ({
-                label: `${cfg.number_of_pools} Pools`,
-                value: String(cfg.number_of_pools),
-                subLabel: `${cfg.teams_per_pool_label} teams/pool`,
-              }))}
-              selectedValue={String(numPools)}
-              disabled={isGenerated}
-              onSelect={(val) => handlePoolsChange(parseInt(val, 10))}
-            />
-          </View>
-        ) : null}
-
-        <PostRegistrationStepper
-          label="Number of Pools"
-          helperText={`Minimum 2 teams per pool (Max ${maxPoolsPossible} pools)`}
-          value={numPools}
-          unit="pools"
-          min={2}
-          max={maxPoolsPossible}
-          disabled={isGenerated}
-          onChange={handlePoolsChange}
+      ) : isGenerated ? (
+        <PostRegistrationNotice
+          variant="success"
+          title="Pool Play Structure Active"
+          message={`All ${teamsCount} confirmed teams assigned across ${numPools} pools with ${numPools * qualifiers} qualifiers advancing to the ${bracketType} bracket.`}
         />
-      </View>
-
-      <View style={styles.divider} />
-
-      {/* ─── 4. Qualifiers Per Pool & Championship Bracket ───────────────────── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <Trophy size={15} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Advancement & Championship Bracket</AppText>
-        </View>
-
-        <PostRegistrationStepper
-          label="Qualifiers Per Pool"
-          helperText={`Top teams advancing to playoff bracket (${numPools * qualifiers} total qualifiers)`}
-          value={qualifiers}
-          unit="per pool"
-          min={1}
-          max={maxQualifiersPossible}
-          disabled={isGenerated}
-          onChange={handleQualifiersChange}
+      ) : (
+        <PostRegistrationNotice
+          variant="info"
+          title="Configuration Required"
+          message={`Tournament has ${teamsCount} confirmed teams. Configure pool distribution, balance tolerance, and championship qualification in Setup & Courts.`}
         />
-
-        <View style={styles.bracketChoiceWrap}>
-          <PostRegistrationChoiceChips
-            label="Playoff Bracket Type:"
-            options={['Single Elimination', 'Double Elimination']}
-            selectedValue={bracketType}
-            disabled={isGenerated}
-            onSelect={handleBracketTypeChange}
-          />
-        </View>
-      </View>
-
-      {/* ─── 5. Pool Allocation Preview Accordion ───────────────────────────── */}
-      {setupData?.preview_pools && setupData.preview_pools.length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <TouchableOpacity
-            style={styles.previewToggle}
-            onPress={() => setShowPreview(!showPreview)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sectionHeaderRow}>
-              <Layers size={15} color="#0F766E" />
-              <AppText style={styles.sectionTitle}>
-                Pool Allocation Preview ({setupData.preview_pools.length} Pools)
-              </AppText>
-            </View>
-            {showPreview ? (
-              <ChevronUp size={18} color="#64748B" />
-            ) : (
-              <ChevronDown size={18} color="#64748B" />
-            )}
-          </TouchableOpacity>
-
-          {showPreview && (
-            <View style={styles.previewContainer}>
-              {setupData.preview_qualification_summary ? (
-                <AppText style={styles.previewSummaryText}>
-                  {setupData.preview_qualification_summary}
-                </AppText>
-              ) : null}
-              <View style={styles.poolsGrid}>
-                {setupData.preview_pools.map((p: any) => (
-                  <View key={p.pool_name} style={styles.previewPoolBox}>
-                    <View style={styles.previewPoolHeader}>
-                      <AppText style={styles.previewPoolTitle}>{p.pool_name}</AppText>
-                      <AppText style={styles.previewPoolCount}>{p.teams_count} teams</AppText>
-                    </View>
-                    {p.teams.map((t: any, idx: number) => (
-                      <View key={t.id || idx} style={styles.previewTeamRow}>
-                        <AppText style={styles.previewTeamSeed}>#{t.seed ?? idx + 1}</AppText>
-                        <AppText style={styles.previewTeamName} numberOfLines={1}>
-                          {t.name}
-                        </AppText>
-                      </View>
-                    ))}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-        </>
       )}
 
       <View style={styles.divider} />
 
-      {/* ─── 6. Primary Action Controls ──────────────────────────────────────── */}
+      {/* ─── 4. Clear Action to Setup & Courts Workspace ─────────────────────── */}
       <View style={styles.actionsRow}>
-        {!isGenerated ? (
-          <Button
-            label={generating ? 'Generating Pools & Matches...' : 'Confirm & Generate Pools & Matches'}
-            onPress={handleConfirmAndGenerate}
-            disabled={!isValid || generating || !canManage}
-            loading={generating}
-            variant="primary"
-            style={styles.actionBtn}
-          />
-        ) : isReadyToStart && onStartTournament ? (
+        {isReadyToStart && onStartTournament ? (
           <Button
             label={isStartingTournament ? 'Starting Tournament...' : 'Start Tournament (Ready)'}
             onPress={onStartTournament}
@@ -376,14 +184,21 @@ export function PoolPlayPostRegistrationCard({
             variant="primary"
             style={styles.actionBtn}
           />
-        ) : (
-          <View style={styles.completeBox}>
-            <CheckCircle2 size={18} color="#0F766E" />
-            <AppText style={styles.completeText}>
-              Pool Play configured: {numPools} pools • {numPools * qualifiers} qualifiers advancing.
-            </AppText>
-          </View>
-        )}
+        ) : onNavigateToSetup ? (
+          <TouchableOpacity
+            style={styles.ctaSetupBtn}
+            onPress={onNavigateToSetup}
+            activeOpacity={0.8}
+          >
+            <View style={styles.ctaLeftCol}>
+              <SlidersHorizontal size={16} color="#0F766E" />
+              <AppText style={styles.ctaBtnText}>
+                {isGenerated ? 'View Configuration in Setup & Courts' : 'Configure in Setup & Courts'}
+              </AppText>
+            </View>
+            <ChevronRight size={17} color="#0F766E" />
+          </TouchableOpacity>
+        ) : null}
       </View>
     </Card>
   );
@@ -396,7 +211,7 @@ const styles = StyleSheet.create({
     borderColor: '#DEF2E6',
     borderRadius: Radius.lg,
     padding: Spacing[4],
-    marginBottom: Spacing[4], // Clear visual separation before Tournament Progress
+    marginBottom: Spacing[4],
   },
   loadingBox: {
     padding: Spacing[4],
@@ -414,111 +229,31 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1F5F9',
     marginVertical: Spacing[3],
   },
-  section: {
-    gap: Spacing[2.5],
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  sectionTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#1E293B',
-  },
-  presetOptionsBox: {
-    marginBottom: Spacing[1],
-  },
-  bracketChoiceWrap: {
-    marginTop: Spacing[1],
-  },
-  previewToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing[1],
-  },
-  previewContainer: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing[3],
-    gap: Spacing[3],
-    marginTop: Spacing[2],
-  },
-  previewSummaryText: {
-    fontSize: 12,
-    color: '#0F766E',
-    fontWeight: '600',
-    lineHeight: 16,
-  },
-  poolsGrid: {
-    gap: Spacing[2],
-  },
-  previewPoolBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: Spacing[2.5],
-    gap: Spacing[1],
-  },
-  previewPoolHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  previewPoolTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F766E',
-  },
-  previewPoolCount: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  previewTeamRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    paddingVertical: 2,
-  },
-  previewTeamSeed: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#94A3B8',
-    width: 26,
-  },
-  previewTeamName: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#1E293B',
-    flex: 1,
-  },
   actionsRow: {
-    marginTop: Spacing[1],
+    marginTop: Spacing[0.5],
   },
   actionBtn: {
     width: '100%',
   },
-  completeBox: {
+  ctaSetupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[3],
+    paddingHorizontal: Spacing[3.5],
+  },
+  ctaLeftCol: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
-    backgroundColor: '#F0FDF4',
-    padding: Spacing[3],
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
   },
-  completeText: {
-    fontSize: 12.5,
-    fontWeight: '600',
+  ctaBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: '#0F766E',
-    flex: 1,
   },
 });

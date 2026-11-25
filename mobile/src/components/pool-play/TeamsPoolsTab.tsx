@@ -1,14 +1,17 @@
 /**
- * Aught2 Pickleball — TeamsPoolsTab (Tab 1)
+ * Aught2 Pickleball — TeamsPoolsTab (Tab 2)
  *
- * Provides full rating balancing, team distribution, player editing,
- * partner swapping, and snake-draft seeding for Pool Play Mode.
+ * Displays confirmed tournament teams/players and their pool assignments:
+ * - Focuses strictly on team membership, DUPR ratings, and pool assignments.
+ * - All tournament configuration (pool counts, tolerance, qualifiers, generation)
+ *   has been consolidated into the Setup & Courts tab.
+ * - Manual "+ Add Team" and "+ Add Team Manually" have been completely removed.
+ * - Clean empty state when no teams have registered yet.
  */
 
 import React, { useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   TouchableOpacity,
   View,
@@ -16,7 +19,6 @@ import {
 import { Users } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
-import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import { FilterChips } from '@/components/FilterChips';
 import {
@@ -26,8 +28,6 @@ import {
 import { Colors, Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
 import type { Player, PoolPlayConfig, PoolStat, Team } from '@/types/poolPlay';
-import { TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
-import { AddTeamModal } from './modals/AddTeamModal';
 import { EditPlayerRatingModal } from './modals/EditPlayerRatingModal';
 import { SwapPlayersModal } from './modals/SwapPlayersModal';
 
@@ -39,9 +39,8 @@ interface TeamsPoolsTabProps {
   isWithinTolerance: boolean;
   config: PoolPlayConfig;
   isSingles?: boolean;
-  onBalancePools: () => void;
-  onAddTeam: (team: Team) => void;
-  onDeleteTeam: (teamId: string) => void;
+  onBalancePools?: () => void;
+  onDeleteTeam?: (teamId: string) => void;
   onMoveTeamPool: (teamId: string, targetPool: string) => void;
   onUpdatePlayerRating: (
     teamId: string,
@@ -54,8 +53,10 @@ interface TeamsPoolsTabProps {
     targetTeamId: string,
     targetSlot: 'p1' | 'p2'
   ) => void;
-  onToleranceChange: (tolerance: number) => void;
-  onCreateMatchups: () => void;
+  // Legacy optional props preserved for caller compatibility
+  onAddTeam?: (team: Team) => void;
+  onToleranceChange?: (tolerance: number) => void;
+  onCreateMatchups?: () => void;
 }
 
 export function TeamsPoolsTab({
@@ -67,16 +68,12 @@ export function TeamsPoolsTab({
   config,
   isSingles = false,
   onBalancePools,
-  onAddTeam,
   onDeleteTeam,
   onMoveTeamPool,
   onUpdatePlayerRating,
   onSwapPlayers,
-  onToleranceChange,
-  onCreateMatchups,
 }: TeamsPoolsTabProps) {
   const [selectedPoolKey, setSelectedPoolKey] = useState<string>('all');
-  const [showAddModal, setShowAddModal] = useState(false);
   const [editingPlayer, setEditingPlayer] = useState<{
     player: Player;
     teamId: string;
@@ -97,6 +94,7 @@ export function TeamsPoolsTab({
   const poolB = pools.find((p) => p.key === 'B');
 
   const handleDeletePrompt = (team: Team) => {
+    if (!onDeleteTeam) return;
     Alert.alert(
       'Remove Team',
       `Are you sure you want to remove ${team.name}?`,
@@ -112,97 +110,41 @@ export function TeamsPoolsTab({
   };
 
   const totalPlayersCount = isSingles ? teams.length : teams.length * 2;
-  const maxPlayersCount = tournament?.max_participants ?? totalPlayersCount;
-  const maxTeamsCount = isSingles ? maxPlayersCount : Math.floor(maxPlayersCount / 2);
 
   return (
     <View style={styles.container}>
       {/* ─── 1. Section Heading: Players/Teams (N) [SINGLES/DOUBLES] ───────── */}
       <TournamentSectionHeading
         title={isSingles ? `Players (${teams.length})` : `Teams (${teams.length})`}
-        subtitle={!isSingles ? `· ${totalPlayersCount} Players across ${pools.length} Pools` : `· Across ${pools.length} Pools`}
+        subtitle={
+          teams.length > 0
+            ? !isSingles
+              ? `· ${totalPlayersCount} Players across ${pools.length} Pools`
+              : `· Across ${pools.length} Pools`
+            : '· Registration roster'
+        }
         badgeLabel={isSingles ? 'SINGLES' : 'DOUBLES'}
         badgeVariant="blue"
       />
 
-      {/* ─── Action Bar ────────────────────────────────────────────── */}
-      <View style={styles.actionBar}>
-        <View style={styles.actionBtnRow}>
-          <Button
-            label="↻ Balance Pools"
-            variant="primary"
-            size="sm"
-            onPress={onBalancePools}
-            style={styles.primaryBtn}
-          />
-          <Button
-            label={isSingles ? '+ Add Player' : '+ Add Team'}
-            variant="secondary"
-            size="sm"
-            onPress={() => setShowAddModal(true)}
-            style={styles.outlineBtn}
-          />
-        </View>
-
-        <View style={styles.actionBtnRow}>
-          {/* Tolerance selector chips */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tolScroll}>
-            {TOLERANCE_OPTIONS.map((opt) => (
-              <TouchableOpacity
-                key={opt.value}
-                onPress={() => onToleranceChange(opt.value)}
-                style={[
-                  styles.tolChip,
-                  config.balanceTolerance === opt.value && styles.tolChipActive,
-                ]}
-              >
-                <AppText
-                  variant="caption"
-                  style={[
-                    styles.tolChipText,
-                    config.balanceTolerance === opt.value && styles.tolChipTextActive,
-                  ]}
-                >
-                  ±{opt.value.toFixed(2)}
-                </AppText>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Button
-            label="Create Matchups ➔"
-            variant="primary"
-            size="sm"
-            onPress={onCreateMatchups}
-            style={styles.matchupBtn}
-          />
-        </View>
-      </View>
-
+      {/* ─── 2. Main Content ─────────────────────────────────────────────── */}
       {teams.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Card style={styles.emptyCard}>
             <View style={styles.emptyIconCircle}>
-              <Users size={32} color="#087A60" />
+              <Users size={30} color="#0F766E" />
             </View>
             <AppText style={styles.emptyHeading}>
-              No players have registered yet.
+              Waiting for confirmed teams
             </AppText>
-            <AppText variant="caption" color="secondary" style={styles.emptySubtitle}>
-              When players or teams register for this tournament, they will appear here to be seeded and distributed into pools.
+            <AppText style={styles.emptySubtitle}>
+              When players or teams register and confirm for this tournament, they will appear here with their ratings and pool assignments.
             </AppText>
-            <TouchableOpacity
-              style={styles.emptyAddBtn}
-              onPress={() => setShowAddModal(true)}
-              activeOpacity={0.8}
-            >
-              <AppText style={styles.emptyAddBtnText}>+ Add Team Manually</AppText>
-            </TouchableOpacity>
           </Card>
         </View>
       ) : (
         <>
-          {/* ─── Balance Tolerance Banner ──────────────────────────────── */}
+          {/* ─── Balance Tolerance Summary Banner ──────────────────────── */}
           <View
             style={[
               styles.toleranceBanner,
@@ -226,12 +168,20 @@ export function TeamsPoolsTab({
             <AppText variant="caption" style={styles.bannerDetail}>
               {poolA ? `Pool A Avg: ${poolA.avgTeamRating.toFixed(2)}` : ''}
               {poolB ? ` • Pool B Avg: ${poolB.avgTeamRating.toFixed(2)}` : ''}
-              {` • Limit: ±${config.balanceTolerance.toFixed(2)}`}
+              {` • Limit: ±${config.balanceTolerance.toFixed(2)} (Configured in Setup & Courts)`}
             </AppText>
 
-            <AppText variant="caption" color="tertiary" style={styles.bannerTip}>
-              Tip: Tap "Balance Pools" to auto-balance via Snake Draft, or swap player partners.
-            </AppText>
+            {onBalancePools ? (
+              <View style={styles.rebalanceRow}>
+                <TouchableOpacity
+                  style={styles.rebalanceBtn}
+                  onPress={onBalancePools}
+                  activeOpacity={0.7}
+                >
+                  <AppText style={styles.rebalanceBtnText}>↻ Re-balance Pools via Snake Seeding</AppText>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </View>
 
           {/* ─── Pool Filter Chips ─────────────────────────────────────── */}
@@ -244,113 +194,90 @@ export function TeamsPoolsTab({
             onChipPress={(k) => setSelectedPoolKey(k)}
           />
 
-      {/* ─── Pools & Teams Layout ──────────────────────────────────── */}
-      {displayedPools.map((pool) => (
-        <View key={pool.key} style={styles.poolSection}>
-          {/* Pool Header */}
-          <View style={styles.poolHeader}>
-            <View style={styles.poolTitleLeft}>
-              <AppText variant="heading2" style={styles.poolTitle}>
-                POOL {pool.key}
-              </AppText>
-              <Badge label={`Avg ${pool.avgTeamRating.toFixed(2)}`} variant="info" />
-            </View>
-            <AppText variant="caption" color="secondary">
-              {isSingles
-                ? `${pool.teamsCount} Players`
-                : `${pool.teamsCount} Teams • ${pool.playerCount} Players`}
-            </AppText>
-          </View>
+          {/* ─── Pools & Teams Layout ──────────────────────────────────── */}
+          {displayedPools.map((pool) => (
+            <View key={pool.key} style={styles.poolSection}>
+              {/* Pool Header */}
+              <View style={styles.poolHeader}>
+                <View style={styles.poolTitleLeft}>
+                  <AppText variant="heading2" style={styles.poolTitle}>
+                    POOL {pool.key}
+                  </AppText>
+                  <Badge label={`Avg ${pool.avgTeamRating.toFixed(2)}`} variant="info" />
+                </View>
+                <AppText variant="caption" color="secondary">
+                  {isSingles
+                    ? `${pool.teamsCount} Players`
+                    : `${pool.teamsCount} Teams • ${pool.playerCount} Players`}
+                </AppText>
+              </View>
 
-          {/* Teams List */}
-          <View style={styles.teamCardsContainer}>
-            {pool.teams.map((team, idx) => (
-              <TournamentTeamCard
-                key={team.id}
-                name={team.name}
-                seed={team.teamNum}
-                displayIndex={idx + 1}
-                avgRating={team.avgRating}
-                poolBadge={`Pool ${team.pool}`}
-                statusLabel="Confirmed"
-                statusBadgeVariant="success"
-                teamSize={isSingles ? 1 : 2}
-                members={
-                  isSingles
-                    ? [
-                        {
-                          id: team.p1.id,
-                          display_name: team.p1.name,
-                          skill_rating: team.p1.rating,
-                        },
-                      ]
-                    : [
-                        {
-                          id: team.p1.id,
-                          display_name: team.p1.name,
-                          skill_rating: team.p1.rating,
-                        },
-                        {
-                          id: team.p2.id,
-                          display_name: team.p2.name,
-                          skill_rating: team.p2.rating,
-                        },
-                      ]
-                }
-                canDelete={true}
-                onDelete={() => handleDeletePrompt(team)}
-                onEditMemberRating={(memberIndex) => {
-                  const targetSlot = memberIndex === 0 ? 'p1' : 'p2';
-                  const targetPlayer = memberIndex === 0 ? team.p1 : team.p2;
-                  setEditingPlayer({
-                    player: targetPlayer,
-                    teamId: team.id,
-                    teamName: team.name,
-                    slot: targetSlot,
-                  });
-                }}
-                onSwapMember={(memberIndex) => {
-                  const targetSlot = memberIndex === 0 ? 'p1' : 'p2';
-                  setSwappingSource({ team, slot: targetSlot });
-                }}
-                footer={
-                  <View style={styles.teamCardFooter}>
-                    <AppText variant="caption" color="tertiary">
-                      Move to:
-                    </AppText>
-                    <View style={styles.movePoolButtons}>
-                      {pools
-                        .filter((p) => p.key !== team.pool)
-                        .map((targetP) => (
-                          <TouchableOpacity
-                            key={targetP.key}
-                            onPress={() => onMoveTeamPool(team.id, targetP.key)}
-                            style={styles.movePill}
-                          >
-                            <AppText style={styles.movePillText}>
-                              Pool {targetP.key}
-                            </AppText>
-                          </TouchableOpacity>
-                        ))}
-                    </View>
+              {/* Teams List */}
+              <View style={styles.teamCardsContainer}>
+                {pool.teams.map((team, idx) => (
+                  <TournamentTeamCard
+                    key={team.id}
+                    name={team.name}
+                    seed={team.teamNum}
+                    displayIndex={idx + 1}
+                    avgRating={team.avgRating}
+                    poolBadge={`Pool ${team.pool}`}
+                    statusLabel="Confirmed"
+                    statusBadgeVariant="success"
+                    teamSize={isSingles ? 1 : 2}
+                    members={
+                      isSingles
+                        ? [
+                            {
+                              id: team.p1.id,
+                              display_name: team.p1.name,
+                              skill_rating: team.p1.rating,
+                            },
+                          ]
+                        : [
+                            {
+                              id: team.p1.id,
+                              display_name: team.p1.name,
+                              skill_rating: team.p1.rating,
+                            },
+                            {
+                              id: team.p2.id,
+                              display_name: team.p2.name,
+                              skill_rating: team.p2.rating,
+                            },
+                          ]
+                    }
+                    canDelete={Boolean(onDeleteTeam)}
+                    onDelete={() => handleDeletePrompt(team)}
+                    onEditMemberRating={(memberIndex) => {
+                      const slot: 'p1' | 'p2' = memberIndex === 0 ? 'p1' : 'p2';
+                      const p = slot === 'p1' ? team.p1 : team.p2;
+                      setEditingPlayer({
+                        player: p,
+                        teamId: team.id,
+                        teamName: team.name,
+                        slot,
+                      });
+                    }}
+                    onSwapMember={(memberIndex) => {
+                      const slot: 'p1' | 'p2' = memberIndex === 0 ? 'p1' : 'p2';
+                      setSwappingSource({ team, slot });
+                    }}
+                  />
+                ))}
+
+                {pool.teams.length === 0 && (
+                  <View style={styles.emptyPoolBox}>
+                    <AppText style={styles.emptyPoolText}>No teams currently in Pool {pool.key}</AppText>
                   </View>
-                }
-              />
-            ))}
-          </View>
-        </View>
-      ))}
+                )}
+              </View>
+            </View>
+          ))}
         </>
       )}
 
       {/* ─── Modals ─────────────────────────────────────────────────── */}
-      <AddTeamModal
-        visible={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        nextTeamNum={teams.length + 1}
-        onAdd={onAddTeam}
-      />
-
       <EditPlayerRatingModal
         visible={Boolean(editingPlayer)}
         onClose={() => setEditingPlayer(null)}
@@ -382,227 +309,6 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing[8],
     gap: Spacing[3],
   },
-  actionBar: {
-    gap: Spacing[2],
-  },
-  actionBtnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  primaryBtn: {
-    flex: 1,
-    backgroundColor: '#0F766E',
-    borderColor: '#0F766E',
-  },
-  outlineBtn: {
-    flex: 1,
-    borderColor: '#0F766E',
-  },
-  matchupBtn: {
-    backgroundColor: '#087A60',
-    borderColor: '#087A60',
-    paddingHorizontal: Spacing[3],
-  },
-  tolScroll: {
-    flex: 1,
-  },
-  tolChip: {
-    paddingVertical: Spacing[1],
-    paddingHorizontal: Spacing[2],
-    borderRadius: Radius.full,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginRight: Spacing[1],
-  },
-  tolChipActive: {
-    borderColor: '#0F766E',
-    backgroundColor: '#F0FDFA',
-  },
-  tolChipText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  tolChipTextActive: {
-    color: '#0F766E',
-    fontWeight: '700',
-  },
-  toleranceBanner: {
-    borderRadius: Radius.lg,
-    padding: Spacing[3],
-    borderWidth: 1,
-    gap: Spacing[1],
-  },
-  bannerWithin: {
-    backgroundColor: 'rgba(34, 197, 94, 0.08)',
-    borderColor: '#22C55E',
-  },
-  bannerExceeded: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderColor: '#F59E0B',
-  },
-  bannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  bannerTextWithin: {
-    color: '#22C55E',
-  },
-  bannerTextExceeded: {
-    color: '#F59E0B',
-  },
-  bannerDetail: {
-    color: Colors.text.secondary,
-    fontSize: 12,
-  },
-  bannerTip: {
-    fontSize: 11,
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-
-  poolSection: {
-    gap: Spacing[2],
-  },
-  poolHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[3],
-    borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
-  },
-  poolTitleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  poolTitle: {
-    fontSize: 18,
-    color: Colors.text.primary,
-    fontWeight: '800',
-  },
-  teamCardsContainer: {
-    gap: Spacing[2],
-  },
-  teamCard: {
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.lg,
-    padding: Spacing[3],
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    gap: Spacing[2],
-  },
-  teamCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  teamCardTitleCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-  },
-  gripIcon: {
-    color: Colors.text.tertiary,
-    fontSize: 16,
-  },
-  teamName: {
-    color: Colors.text.primary,
-    fontSize: 15,
-  },
-  teamBadges: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[1],
-  },
-  trashBtn: {
-    padding: 4,
-  },
-  trashIcon: {
-    fontSize: 14,
-  },
-  playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
-    backgroundColor: Colors.surface.default,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[2],
-  },
-  playerAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  playerName: {
-    flex: 1,
-    color: Colors.text.primary,
-  },
-  ratingEditBadge: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-    borderRadius: Radius.sm,
-    paddingVertical: 2,
-    paddingHorizontal: Spacing[2],
-  },
-  ratingBadgeText: {
-    fontSize: 12,
-    color: '#60A5FA',
-    fontWeight: '600',
-  },
-  swapBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: Spacing[2],
-    backgroundColor: Colors.surface.elevated,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-  },
-  swapBtnText: {
-    fontSize: 11,
-    color: Colors.text.tertiary,
-  },
-  teamCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: Spacing[1],
-    borderTopWidth: 0.5,
-    borderTopColor: Colors.surface.borderLight,
-  },
-  movePoolButtons: {
-    flexDirection: 'row',
-    gap: Spacing[1],
-  },
-  movePill: {
-    backgroundColor: Colors.surface.default,
-    borderWidth: 1,
-    borderColor: Colors.surface.border,
-    borderRadius: Radius.full,
-    paddingVertical: 2,
-    paddingHorizontal: Spacing[2],
-  },
-  movePillText: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-    fontWeight: '600',
-  },
-
   // Empty State
   emptyContainer: {
     paddingVertical: Spacing[4],
@@ -614,41 +320,105 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing[6],
     alignItems: 'center',
-    gap: Spacing[2.5],
+    gap: Spacing[2],
   },
   emptyIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#E2F1E8',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#DEF2E6',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing[1],
   },
   emptyHeading: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
     textAlign: 'center',
   },
   emptySubtitle: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: '#64748B',
     textAlign: 'center',
     maxWidth: 320,
   },
-  emptyAddBtn: {
-    marginTop: Spacing[2],
-    backgroundColor: '#087A60',
-    paddingVertical: Spacing[2.5],
-    paddingHorizontal: Spacing[4],
+  // Tolerance Banner
+  toleranceBanner: {
     borderRadius: Radius.md,
+    borderWidth: 1,
+    padding: Spacing[3],
+    gap: 4,
   },
-  emptyAddBtnText: {
-    color: '#FFFFFF',
+  bannerWithin: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  bannerExceeded: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  bannerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  bannerTextWithin: {
+    color: '#15803D',
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 13,
+  },
+  bannerTextExceeded: {
+    color: '#B45309',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  bannerDetail: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  rebalanceRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+  },
+  rebalanceBtn: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: Radius.sm,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  rebalanceBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#0F766E',
+  },
+  // Pool Layout
+  poolSection: {
+    gap: Spacing[2],
+    marginTop: Spacing[1],
+  },
+  poolHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[1],
+  },
+  poolTitleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  poolTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  teamCardsContainer: {
+    gap: Spacing[2],
   },
   emptyPoolBox: {
     padding: Spacing[4],

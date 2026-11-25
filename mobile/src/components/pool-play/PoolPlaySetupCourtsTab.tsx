@@ -1,64 +1,58 @@
 /**
  * Aught2 Pickleball — PoolPlaySetupCourtsTab
  *
- * Dedicated tab for Setup & Courts in Pool Play tournaments:
- * - Persistent configuration page that does NOT disappear on category switch or refresh
- * - Number of Pools selection (2, 3, 4 pools)
- * - Rating balance tolerance controls (Strict, Standard, Relaxed, Open)
- * - Championship qualifiers setting (Top 2, 3, 4 per pool)
- * - Championship elimination format selection (Single Elimination, Double Elimination, Consolation)
- * - Court configuration & assignment
- * - Save button with state updates and visual confirmation
+ * Dedicated, consolidated configuration workspace for Pool Play tournaments:
+ * - The SINGLE source of editable configuration for Pool Play.
+ * - Section A: Pool Distribution (confirmed team count, recommendations, pools stepper, simple preview)
+ * - Section B: Pool Balance (rating tolerance options: Strict, Fair, Relaxed, Wide)
+ * - Section C: Championship Qualification (qualifiers per pool, bracket type, explanation)
+ * - Section D: Court Assignment (concurrent capacity, active club courts)
+ * - Confirm & Generate action with validation and regeneration safeguards.
+ * - Clean empty/insufficient state when confirmed teams < 4: "Waiting for confirmed teams".
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {
-  AlertCircle,
   Check,
+  CheckCircle2,
   GitFork,
   Info,
+  Layers,
   LayoutGrid,
-  Minus,
-  Plus,
   Scale,
   SlidersHorizontal,
+  Sparkles,
   Trophy,
+  Users,
 } from 'lucide-react-native';
-
 
 import { AppText } from '@/components/AppText';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import { Spacing } from '@/theme';
-import type { Court } from '@/types';
-import type { BracketType, CourtConfig, PoolPlayConfig } from '@/types/poolPlay';
+import {
+  PostRegistrationChoiceChips,
+  PostRegistrationHeader,
+  PostRegistrationMetrics,
+  PostRegistrationNotice,
+  PostRegistrationStepper,
+} from '@/components/post-registration';
+import { competitionApi } from '@/services/api/competition';
+import { Radius, Spacing } from '@/theme';
+import type { Court, Tournament } from '@/types';
+import type { BracketType, PoolPlayConfig } from '@/types/poolPlay';
 import { TOLERANCE_OPTIONS } from '@/utils/poolPlayLogic';
 
-const BRACKET_OPTIONS: { type: BracketType; label: string; desc: string }[] = [
-  {
-    type: 'Single Elimination',
-    label: 'Single Elimination',
-    desc: 'Standard knockout bracket — winner advances, loser is eliminated.',
-  },
-  {
-    type: 'Single Elimination + Consolation',
-    label: 'Single Elimination + Consolation',
-    desc: 'Main bracket plus 3rd place consolation playoff match.',
-  },
-  {
-    type: 'Double Elimination',
-    label: 'Double Elimination',
-    desc: 'Winners and losers bracket — requires 2 losses for elimination.',
-  },
-];
-
 interface PoolPlaySetupCourtsTabProps {
+  clubId?: string;
+  tournamentId?: string;
+  tournament?: Tournament | null;
   config: PoolPlayConfig;
   onSaveConfig: (updated: Partial<PoolPlayConfig>) => void;
   canManage?: boolean;
@@ -66,9 +60,14 @@ interface PoolPlaySetupCourtsTabProps {
   maxParticipants?: number | null;
   clubCourts?: Court[];
   clubName?: string;
+  onGenerated?: () => void | Promise<void>;
+  matchesCount?: number;
 }
 
 export function PoolPlaySetupCourtsTab({
+  clubId,
+  tournamentId,
+  tournament,
   config,
   onSaveConfig,
   canManage = true,
@@ -76,201 +75,311 @@ export function PoolPlaySetupCourtsTab({
   maxParticipants = 16,
   clubCourts,
   clubName,
+  onGenerated,
+  matchesCount = 0,
 }: PoolPlaySetupCourtsTabProps) {
+  const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [setupData, setSetupData] = useState<any>(null);
+
+  // Editable configuration state
   const [numPools, setNumPools] = useState<number>(config.numPools || 2);
-  const [tolerance, setTolerance] = useState<number>(config.balanceTolerance);
-  const [qualifiers, setQualifiers] = useState<number>(config.qualifierCount);
-  const [bracketType, setBracketType] = useState<BracketType>(config.bracketType);
+  const [tolerance, setTolerance] = useState<number>(config.balanceTolerance ?? 0.5);
+  const [qualifiersPerPool, setQualifiersPerPool] = useState<number>(
+    Math.max(1, Math.floor((config.qualifierCount || 4) / (config.numPools || 2)))
+  );
+  const [bracketType, setBracketType] = useState<BracketType>(
+    (config.bracketType as BracketType) || 'Single Elimination'
+  );
   const [numCourts, setNumCourts] = useState<number>(config.numCourts || 4);
   const [hasSaved, setHasSaved] = useState(false);
 
-  // Sync if config.numPools updates externally
-  React.useEffect(() => {
-    if (config.numPools && config.numPools !== numPools) {
-      setNumPools(config.numPools);
+  // Fetch server recommendation & status if IDs are present
+  const fetchSetup = async (p?: number, q?: number, b?: string) => {
+    if (!clubId || !tournamentId) return;
+    try {
+      setLoading(true);
+      const res = await competitionApi.getPoolPlayPostRegistrationSetup(clubId, tournamentId, {
+        number_of_pools: p ?? numPools,
+        qualifiers_per_pool: q ?? qualifiersPerPool,
+        bracket_type: b ?? bracketType,
+      });
+      setSetupData(res);
+      if (res.selected_pools && !p) {
+        setNumPools(res.selected_pools);
+      }
+      if (res.selected_qualifiers_per_pool && !q) {
+        setQualifiersPerPool(res.selected_qualifiers_per_pool);
+      }
+      if (res.selected_bracket_type && !b) {
+        setBracketType(res.selected_bracket_type as BracketType);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch pool play setup data:', err);
+    } finally {
+      setLoading(false);
     }
-  }, [config.numPools]);
-
-  // Compute domain bounds:
-  // Minimum pools is always 2 (Pool Play invariant)
-  const minPools = 2;
-  // Maximum pools: each pool requires at least 2 teams by backend engine rules.
-  // If registered teams >= 4, limit max pools to floor(registered / 2).
-  // Otherwise use tournament max_participants / 2 (default max 8 pools).
-  const effectiveCapacity = registeredCount >= 4 ? registeredCount : (maxParticipants || 16);
-  const maxPools = Math.max(minPools, Math.min(12, Math.floor(effectiveCapacity / 2)));
-
-  const handleDecrementPools = () => {
-    if (!canManage || numPools <= minPools) return;
-    setNumPools((prev) => Math.max(minPools, prev - 1));
   };
 
-  const handleIncrementPools = () => {
-    if (!canManage || numPools >= maxPools) return;
-    setNumPools((prev) => Math.min(maxPools, prev + 1));
+  useEffect(() => {
+    if (clubId && tournamentId) {
+      void fetchSetup();
+    }
+  }, [clubId, tournamentId]);
+
+  // Determine confirmed team count from API setupData or prop
+  const confirmedTeams = setupData?.confirmed_teams_count ?? registeredCount;
+  const hasMinTeams = confirmedTeams >= 4;
+  const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
+
+  // Maximum pools possible based on minimum 2 teams per pool
+  const maxPools = hasMinTeams ? Math.max(2, Math.floor(confirmedTeams / 2)) : 2;
+  const maxQualifiers = hasMinTeams ? Math.max(1, Math.floor(confirmedTeams / Math.max(1, numPools))) : 2;
+
+  const handlePoolsChange = (nextPools: number) => {
+    setNumPools(nextPools);
+    // Auto-adjust qualifiers if it exceeds pool size
+    const adjustedQualifiers = Math.min(qualifiersPerPool, Math.max(1, Math.floor(confirmedTeams / nextPools)));
+    if (adjustedQualifiers !== qualifiersPerPool) {
+      setQualifiersPerPool(adjustedQualifiers);
+    }
+    void fetchSetup(nextPools, adjustedQualifiers, bracketType);
   };
 
-  // Validation feedback
-  const teamsPerPool = registeredCount > 0 ? (registeredCount / numPools).toFixed(1) : (effectiveCapacity / numPools).toFixed(1);
-  const hasInvalidTeamRatio = registeredCount > 0 && registeredCount < numPools * 2;
-  const qualifiersPerPool = Math.max(1, Math.floor(qualifiers / numPools));
-  const hasExcessQualifiers = registeredCount > 0 && qualifiersPerPool > Math.floor(registeredCount / numPools);
+  const handleQualifiersChange = (nextQualifiers: number) => {
+    setQualifiersPerPool(nextQualifiers);
+    void fetchSetup(numPools, nextQualifiers, bracketType);
+  };
 
+  const handleBracketTypeChange = (nextType: string) => {
+    setBracketType(nextType as BracketType);
+    void fetchSetup(numPools, qualifiersPerPool, nextType);
+  };
+
+  // Save draft configuration
   const handleSave = () => {
-    if (numPools < minPools) {
-      Alert.alert('Invalid Configuration', `Pool Play requires at least ${minPools} pools.`);
-      return;
-    }
-    if (hasInvalidTeamRatio) {
-      Alert.alert(
-        'Insufficient Teams',
-        `Backend rules require at least 2 teams per pool. You have ${registeredCount} registered teams, which supports at most ${Math.floor(registeredCount / 2)} pools.`
-      );
-      return;
-    }
-
     onSaveConfig({
       numPools,
       balanceTolerance: tolerance,
-      qualifierCount: qualifiers,
+      qualifierCount: numPools * qualifiersPerPool,
       bracketType,
       numCourts,
     });
     setHasSaved(true);
     Alert.alert(
-      'Setup Saved',
-      `Pool Play configuration saved: ${numPools} pools, ${qualifiers} championship qualifiers, and ${numCourts} court capacity.`
+      'Configuration Saved',
+      `Pool Play settings saved: ${numPools} pools, ${qualifiersPerPool} qualifiers per pool, and ${numCourts} courts.`
     );
-    setTimeout(() => setHasSaved(false), 3000);
+    setTimeout(() => setHasSaved(false), 2500);
   };
+
+  // Confirm and Generate Pools & Matches
+  const handleConfirmAndGenerate = async () => {
+    if (!canManage) return;
+
+    if (!hasMinTeams) {
+      Alert.alert(
+        'Insufficient Confirmed Teams',
+        `Pool Play requires at least 4 confirmed teams (currently ${confirmedTeams} confirmed). Please wait for teams to confirm registration before generating.`
+      );
+      return;
+    }
+
+    const executeGeneration = async () => {
+      try {
+        setGenerating(true);
+        if (clubId && tournamentId) {
+          await competitionApi.confirmAndGeneratePoolPlay(clubId, tournamentId, {
+            number_of_pools: numPools,
+            qualifiers_per_pool: qualifiersPerPool,
+            bracket_type: bracketType,
+          });
+        }
+        onSaveConfig({
+          numPools,
+          balanceTolerance: tolerance,
+          qualifierCount: numPools * qualifiersPerPool,
+          bracketType,
+          numCourts,
+        });
+        Alert.alert(
+          'Pools & Matches Generated',
+          `Successfully configured ${numPools} pools and generated matches! The tournament is now Ready to Start.`
+        );
+        if (onGenerated) {
+          await onGenerated();
+        }
+        await fetchSetup();
+      } catch (err: unknown) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to generate pools & matches.');
+      } finally {
+        setGenerating(false);
+      }
+    };
+
+    if (isGenerated) {
+      Alert.alert(
+        'Regenerate Pools & Matches?',
+        'Matches have already been scheduled. Regenerating will rebuild the pool stage and championship bracket. Existing unplayed matchups will be recreated. Are you sure you want to proceed?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Regenerate', style: 'destructive', onPress: executeGeneration },
+        ]
+      );
+    } else {
+      await executeGeneration();
+    }
+  };
+
+  const feasibleConfigs = setupData?.feasible_pool_configurations || [];
 
   return (
     <View style={styles.container}>
-      {/* ─── Header Info Card ────────────────────────────────────────────── */}
+      {/* ─── Header Card ─────────────────────────────────────────────────── */}
       <Card style={styles.card}>
         <View style={styles.cardHeader}>
-          <SlidersHorizontal size={18} color="#0F766E" />
-          <AppText style={styles.cardTitle}>Setup & Court Configuration</AppText>
+          <View style={styles.iconCircle}>
+            <SlidersHorizontal size={18} color="#0F766E" />
+          </View>
+          <View style={styles.headerTextWrap}>
+            <AppText style={styles.cardTitle}>Pool Play Setup & Courts</AppText>
+            <AppText style={styles.cardSubtitle}>
+              The single configuration workspace for pools, rating balance, qualifiers, and courts.
+            </AppText>
+          </View>
         </View>
-        <AppText style={styles.cardSubtitle}>
-          Configure pool stages, balance tolerances, assigned courts, and championship qualification rules.
-        </AppText>
       </Card>
 
-      {/* ─── 1. Number of Pools ───────────────────────────────────────────── */}
+      {/* ─── A. Pool Distribution ────────────────────────────────────────── */}
       <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <LayoutGrid size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Number of Pools</AppText>
-        </View>
-        <AppText style={styles.sectionDesc}>
-          Configure the desired pool partition count. Participants are distributed evenly across pools via snake seeding.
-        </AppText>
-
-        {/* Responsive Numeric Stepper */}
-        <View style={styles.stepperContainer}>
-          <TouchableOpacity
-            style={[styles.stepperBtn, (!canManage || numPools <= minPools) && styles.stepperBtnDisabled]}
-            onPress={handleDecrementPools}
-            disabled={!canManage || numPools <= minPools}
-            activeOpacity={0.7}
-            accessibilityLabel="Decrease number of pools"
-          >
-            <Minus size={18} color={numPools <= minPools ? '#94A3B8' : '#0F766E'} strokeWidth={2.4} />
-          </TouchableOpacity>
-
-          <View style={styles.stepperValueBox}>
-            <AppText style={styles.stepperValueNum}>{numPools}</AppText>
-            <AppText style={styles.stepperValueLabel}>Pools</AppText>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.stepperBtn, (!canManage || numPools >= maxPools) && styles.stepperBtnDisabled]}
-            onPress={handleIncrementPools}
-            disabled={!canManage || numPools >= maxPools}
-            activeOpacity={0.7}
-            accessibilityLabel="Increase number of pools"
-          >
-            <Plus size={18} color={numPools >= maxPools ? '#94A3B8' : '#0F766E'} strokeWidth={2.4} />
-          </TouchableOpacity>
+        <View style={styles.sectionHeaderRow}>
+          <LayoutGrid size={16} color="#0F766E" />
+          <AppText style={styles.sectionTitle}>A. Pool Distribution</AppText>
         </View>
 
-        {/* Quick Selection Presets */}
-        <View style={styles.presetRow}>
-          {Array.from({ length: maxPools - minPools + 1 }, (_, i) => minPools + i).map((n) => {
-            const isSelected = numPools === n;
-            return (
-              <TouchableOpacity
-                key={n}
-                onPress={() => canManage && setNumPools(n)}
-                style={[styles.choiceChip, isSelected && styles.choiceChipActive]}
-                activeOpacity={0.8}
-              >
-                <AppText
-                  style={[styles.choiceChipText, isSelected && styles.choiceChipTextActive]}
-                >
-                  {n} Pools
-                </AppText>
-                {isSelected && <Check size={13} color="#0F766E" strokeWidth={2.5} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {/* Confirmed Team Metric & Status */}
+        <PostRegistrationMetrics
+          metrics={[
+            {
+              label: 'CONFIRMED TEAMS',
+              value: confirmedTeams,
+            },
+            {
+              label: 'SELECTED POOLS',
+              value: hasMinTeams ? numPools : '—',
+            },
+            {
+              label: 'TEAMS / POOL',
+              value: hasMinTeams ? Math.ceil(confirmedTeams / numPools) : '—',
+            },
+          ]}
+        />
 
-        {/* Real-time Guidance & Invariant Validation */}
-        {hasInvalidTeamRatio ? (
-          <View style={styles.warningBox}>
-            <AlertCircle size={15} color="#DC2626" />
-            <AppText style={styles.warningText}>
-              Backend rules require at least 2 teams per pool. You have {registeredCount} teams registered, which supports at most {Math.floor(registeredCount / 2)} pools.
-            </AppText>
-          </View>
+        {!hasMinTeams ? (
+          <PostRegistrationNotice
+            variant="warning"
+            title="Waiting for confirmed teams"
+            message={`At least 4 confirmed teams are required to configure Pool Play (currently ${confirmedTeams} confirmed). Registration must have at least 4 confirmed teams to partition into 2 or more balanced pools.`}
+          />
         ) : (
-          <View style={styles.infoStrip}>
-            <Info size={14} color="#0284C7" />
-            <AppText style={styles.infoStripText}>
-              {registeredCount > 0 ? `${registeredCount} teams registered` : `Capacity: up to ${effectiveCapacity} entries`} • ~{teamsPerPool} teams per pool • Top {qualifiersPerPool} advance ({numPools * qualifiersPerPool} bracket qualifiers)
-            </AppText>
-          </View>
+          <>
+            {setupData?.recommendation_reason ? (
+              <PostRegistrationNotice
+                variant="info"
+                title="Recommendation"
+                message={setupData.recommendation_reason}
+              />
+            ) : null}
+
+            {feasibleConfigs.length > 0 ? (
+              <PostRegistrationChoiceChips
+                label="Balanced Pool Presets:"
+                options={feasibleConfigs.map((cfg: any) => ({
+                  label: `${cfg.number_of_pools} Pools`,
+                  value: String(cfg.number_of_pools),
+                  subLabel: `${cfg.teams_per_pool_label} teams/pool`,
+                }))}
+                selectedValue={String(numPools)}
+                onSelect={(val) => handlePoolsChange(parseInt(val, 10))}
+              />
+            ) : null}
+
+            <PostRegistrationStepper
+              label="Number of Pools"
+              helperText={`Minimum 2 teams per pool (Max ${maxPools} pools)`}
+              value={numPools}
+              unit="pools"
+              min={2}
+              max={maxPools}
+              onChange={handlePoolsChange}
+            />
+
+            {/* Simple Pool Distribution Preview */}
+            <View style={styles.previewBox}>
+              <AppText style={styles.previewTitle}>Pool Distribution Preview:</AppText>
+              <View style={styles.previewGrid}>
+                {Array.from({ length: numPools }, (_, i) => {
+                  const poolLetter = String.fromCharCode(65 + i);
+                  const baseSize = Math.floor(confirmedTeams / numPools);
+                  const remainder = confirmedTeams % numPools;
+                  const poolSize = baseSize + (i < remainder ? 1 : 0);
+                  return (
+                    <View key={poolLetter} style={styles.previewPoolPill}>
+                      <AppText style={styles.previewPoolLetter}>Pool {poolLetter}</AppText>
+                      <AppText style={styles.previewPoolCount}>{poolSize} teams</AppText>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </>
         )}
       </Card>
 
-      {/* ─── 2. Rating Balance Tolerance ──────────────────────────────────── */}
+      {/* ─── B. Pool Balance ─────────────────────────────────────────────── */}
       <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Scale size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Pool Balance Tolerance</AppText>
+        <View style={styles.sectionHeaderRow}>
+          <Scale size={16} color="#0F766E" />
+          <AppText style={styles.sectionTitle}>B. Pool Balance Tolerance</AppText>
         </View>
-        <AppText style={styles.sectionDesc}>
+        <AppText style={styles.sectionSubtitle}>
           Maximum allowed difference in average DUPR/rating between pools.
         </AppText>
 
         <View style={styles.optionsList}>
           {TOLERANCE_OPTIONS.map((opt) => {
             const isSelected = tolerance === opt.value;
+            const subtitleText =
+              opt.value === 0.3
+                ? 'Strict parity (±0.30 max diff between pools)'
+                : opt.value === 0.5
+                ? 'Fair division parity (recommended for club play)'
+                : opt.value === 0.75
+                ? 'Relaxed parity (accommodates wider rating variance)'
+                : 'Wide tolerance (permits any rating difference)';
+
             return (
               <TouchableOpacity
                 key={opt.value}
                 onPress={() => canManage && setTolerance(opt.value)}
-                style={[styles.optionRow, isSelected && styles.optionRowActive]}
+                style={[styles.toleranceOptionRow, isSelected && styles.toleranceOptionActive]}
                 activeOpacity={0.8}
               >
                 <View style={styles.radioOuter}>
                   {isSelected && <View style={styles.radioInner} />}
                 </View>
-                <View style={styles.optionTextContainer}>
-                  <AppText style={[styles.optionTitle, isSelected && styles.optionTitleActive]}>
-                    {opt.label}
-                  </AppText>
-                  <AppText style={styles.optionSubtitle}>
-                    {opt.value === 0.3
-                      ? 'Tightest skill parity between pools (±0.30 max diff)'
-                      : opt.value === 0.5
-                      ? 'Balanced division parity recommended for club tournaments'
-                      : opt.value === 0.75
-                      ? 'Accommodates wider team rating variance'
-                      : 'Permits any rating gap between pools'}
-                  </AppText>
+                <View style={styles.toleranceTextCol}>
+                  <View style={styles.toleranceTitleRow}>
+                    <AppText style={[styles.toleranceTitle, isSelected && styles.toleranceTitleActive]}>
+                      {opt.label}
+                    </AppText>
+                    {opt.value === 0.5 ? (
+                      <View style={styles.recommendedBadge}>
+                        <AppText style={styles.recommendedBadgeText}>DEFAULT</AppText>
+                      </View>
+                    ) : null}
+                  </View>
+                  <AppText style={styles.toleranceSubtitle}>{subtitleText}</AppText>
                 </View>
               </TouchableOpacity>
             );
@@ -278,125 +387,68 @@ export function PoolPlaySetupCourtsTab({
         </View>
       </Card>
 
-      {/* ─── 3. Championship Qualifiers ───────────────────────────────────── */}
+      {/* ─── C. Championship Qualification ───────────────────────────────── */}
       <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Trophy size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Championship Qualifiers</AppText>
-        </View>
-        <AppText style={styles.sectionDesc}>
-          Number of top finishers advancing from pool play to the elimination bracket.
-        </AppText>
-
-        <View style={styles.chipRow}>
-          {[2, 4, 6, 8].map((q) => {
-            const isSelected = qualifiers === q;
-            return (
-              <TouchableOpacity
-                key={q}
-                onPress={() => canManage && setQualifiers(q)}
-                style={[styles.choiceChip, isSelected && styles.choiceChipActive]}
-                activeOpacity={0.8}
-              >
-                <AppText
-                  style={[styles.choiceChipText, isSelected && styles.choiceChipTextActive]}
-                >
-                  Top {q} Teams
-                </AppText>
-                {isSelected && <Check size={14} color="#0F766E" strokeWidth={2.5} />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Card>
-
-      {/* ─── 4. Championship Bracket Format ────────────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <GitFork size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Championship Elimination Type</AppText>
+        <View style={styles.sectionHeaderRow}>
+          <Trophy size={16} color="#0F766E" />
+          <AppText style={styles.sectionTitle}>C. Championship Qualification</AppText>
         </View>
 
-        <View style={styles.optionsList}>
-          {BRACKET_OPTIONS.map((opt) => {
-            const isSelected = bracketType === opt.type;
-            return (
-              <TouchableOpacity
-                key={opt.type}
-                onPress={() => canManage && setBracketType(opt.type)}
-                style={[styles.optionRow, isSelected && styles.optionRowActive]}
-                activeOpacity={0.8}
-              >
-                <View style={styles.radioOuter}>
-                  {isSelected && <View style={styles.radioInner} />}
-                </View>
-                <View style={styles.optionTextContainer}>
-                  <AppText style={[styles.optionTitle, isSelected && styles.optionTitleActive]}>
-                    {opt.label}
-                  </AppText>
-                  <AppText style={styles.optionSubtitle}>{opt.desc}</AppText>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Card>
+        <PostRegistrationStepper
+          label="Qualifiers Per Pool"
+          helperText={`Top teams advancing from each pool (${numPools * qualifiersPerPool} total qualifiers)`}
+          value={qualifiersPerPool}
+          unit="per pool"
+          min={1}
+          max={maxQualifiers}
+          disabled={!hasMinTeams}
+          onChange={handleQualifiersChange}
+        />
 
-      {/* ─── 5. Court Availability & Club Facilities ────────────────────────── */}
-      <Card style={styles.card}>
-        <View style={styles.cardHeader}>
-          <LayoutGrid size={17} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>
-            Courts Available for this Tournament: {numCourts}
+        <View style={styles.bracketTypeWrap}>
+          <PostRegistrationChoiceChips
+            label="Playoff Bracket Type:"
+            options={['Single Elimination', 'Double Elimination']}
+            selectedValue={bracketType}
+            onSelect={handleBracketTypeChange}
+          />
+        </View>
+
+        <View style={styles.qualificationSummaryBox}>
+          <Info size={14} color="#0F766E" />
+          <AppText style={styles.qualificationSummaryText}>
+            Top {qualifiersPerPool} team(s) from each of the {numPools} pools ({numPools * qualifiersPerPool} total) advance to the {bracketType} Championship Bracket.
           </AppText>
         </View>
-        <AppText style={styles.sectionDesc}>
-          This is the configured concurrent court capacity for tournament scheduling, not an assignment to named physical courts. Matches will rotate across available courts.
+      </Card>
+
+      {/* ─── D. Court Assignment ─────────────────────────────────────────── */}
+      <Card style={styles.card}>
+        <View style={styles.sectionHeaderRow}>
+          <LayoutGrid size={16} color="#0F766E" />
+          <AppText style={styles.sectionTitle}>D. Court Assignment</AppText>
+        </View>
+        <AppText style={styles.sectionSubtitle}>
+          Concurrent court capacity for pool matches. Matches rotate across available courts.
         </AppText>
 
-        {canManage && (
-          <View style={styles.courtCapacityBox}>
-            <View style={styles.counterInfo}>
-              <AppText style={styles.counterLabel}>Concurrent Court Capacity</AppText>
-              <AppText style={styles.counterDesc}>
-                Number of matches that can run simultaneously
-              </AppText>
-            </View>
-            <View style={styles.stepperContainerInline}>
-              <TouchableOpacity
-                onPress={() => numCourts > 1 && setNumCourts((prev) => prev - 1)}
-                disabled={numCourts <= 1}
-                style={[styles.smallStepBtn, numCourts <= 1 && styles.smallStepBtnDisabled]}
-                accessibilityLabel="Decrease courts"
-              >
-                <Minus size={15} color={numCourts <= 1 ? '#94A3B8' : '#0F172A'} />
-              </TouchableOpacity>
-              <AppText style={styles.counterValueInline}>{numCourts}</AppText>
-              <TouchableOpacity
-                onPress={() => numCourts < 16 && setNumCourts((prev) => prev + 1)}
-                disabled={numCourts >= 16}
-                style={[styles.smallStepBtn, numCourts >= 16 && styles.smallStepBtnDisabled]}
-                accessibilityLabel="Increase courts"
-              >
-                <Plus size={15} color={numCourts >= 16 ? '#94A3B8' : '#0F172A'} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+        <PostRegistrationStepper
+          label="Concurrent Court Capacity"
+          helperText="Simultaneous matches supported during pool stages"
+          value={numCourts}
+          unit="courts"
+          min={1}
+          max={16}
+          onChange={setNumCourts}
+        />
 
         <View style={styles.clubCourtsSection}>
           <AppText style={styles.clubCourtsTitle}>
             Active Club Courts at {clubName || 'Club'} ({clubCourts?.length || 0})
           </AppText>
-          <AppText style={styles.clubCourtsSub}>
-            Physical courts registered and active in the database for this club facility:
-          </AppText>
-
           {(!clubCourts || clubCourts.length === 0) ? (
             <View style={styles.emptyCourtsBox}>
-              <AppText style={styles.emptyCourtsText}>
-                No active courts found for this club.
-              </AppText>
+              <AppText style={styles.emptyCourtsText}>No physical courts configured for this facility.</AppText>
             </View>
           ) : (
             <View style={styles.courtsGrid}>
@@ -406,7 +458,7 @@ export function PoolPlaySetupCourtsTab({
                 return (
                   <View key={court.id} style={styles.clubCourtPill}>
                     <View style={styles.clubCourtPillDot} />
-                    <AppText style={styles.clubCourtPillText}>
+                    <AppText style={styles.clubCourtPillText} numberOfLines={1}>
                       {courtName}{surface}
                     </AppText>
                   </View>
@@ -417,14 +469,29 @@ export function PoolPlaySetupCourtsTab({
         </View>
       </Card>
 
-      {/* ─── Save Action ──────────────────────────────────────────────────── */}
+      {/* ─── Primary Action: Confirm & Generate Pools & Matches ─────────── */}
       {canManage && (
-        <View style={styles.actionContainer}>
+        <View style={styles.bottomActionsWrap}>
           <Button
-            label={hasSaved ? 'Configuration Saved!' : 'Save Pool Play Setup'}
-            onPress={handleSave}
+            label={
+              generating
+                ? 'Generating Pools & Matches...'
+                : isGenerated
+                ? 'Regenerate Pools & Matches'
+                : 'Confirm & Generate Pools & Matches'
+            }
+            onPress={handleConfirmAndGenerate}
+            disabled={!hasMinTeams || generating}
+            loading={generating}
             variant="primary"
+            style={styles.primaryActionBtn}
           />
+
+          <TouchableOpacity style={styles.secondarySaveBtn} onPress={handleSave} activeOpacity={0.7}>
+            <AppText style={styles.secondarySaveText}>
+              {hasSaved ? '✓ Configuration Saved' : 'Save Configuration Draft'}
+            </AppText>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -436,25 +503,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[4],
     paddingTop: Spacing[4],
     paddingBottom: Spacing[8],
-    gap: Spacing[4],
+    gap: Spacing[3.5],
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     padding: Spacing[4],
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
     gap: Spacing[3],
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: Spacing[3],
+  },
+  iconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DEF2E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   cardTitle: {
     fontSize: 16,
@@ -462,339 +537,216 @@ const styles = StyleSheet.create({
     color: '#0F172A',
   },
   cardSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
-    lineHeight: 18,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  sectionDesc: {
-    fontSize: 12.5,
-    color: '#64748B',
-    lineHeight: 17,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    lineHeight: 16,
     marginTop: 2,
   },
-  choiceChip: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 10,
+    gap: Spacing[2],
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: -Spacing[1],
+  },
+  previewBox: {
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 6,
+    borderRadius: Radius.md,
+    padding: Spacing[2.5],
+    gap: Spacing[2],
   },
-  choiceChipActive: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#0F766E',
-  },
-  choiceChipText: {
-    fontSize: 13,
-    fontWeight: '600',
+  previewTitle: {
+    fontSize: 11.5,
+    fontWeight: '700',
     color: '#475569',
   },
-  choiceChipTextActive: {
-    color: '#0F766E',
+  previewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  previewPoolPill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: Radius.sm,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    minWidth: 72,
+  },
+  previewPoolLetter: {
+    fontSize: 12,
     fontWeight: '700',
+    color: '#0F766E',
+  },
+  previewPoolCount: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
   },
   optionsList: {
-    gap: 8,
-    marginTop: 4,
+    gap: Spacing[2],
   },
-  optionRow: {
+  toleranceOptionRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 12,
-    borderRadius: 10,
+    alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 12,
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[2.5],
+    paddingHorizontal: Spacing[3],
+    gap: Spacing[2.5],
   },
-  optionRowActive: {
+  toleranceOptionActive: {
     backgroundColor: '#F0FDFA',
     borderColor: '#0F766E',
   },
   radioOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
     borderColor: '#94A3B8',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
+    flexShrink: 0,
   },
   radioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
     backgroundColor: '#0F766E',
   },
-  optionTextContainer: {
+  toleranceTextCol: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
   },
-  optionTitle: {
-    fontSize: 14,
+  toleranceTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  toleranceTitle: {
+    fontSize: 13,
     fontWeight: '600',
     color: '#1E293B',
   },
-  optionTitleActive: {
+  toleranceTitleActive: {
     color: '#0F766E',
     fontWeight: '700',
   },
-  optionSubtitle: {
-    fontSize: 12,
+  recommendedBadge: {
+    backgroundColor: '#DEF2E6',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  recommendedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  toleranceSubtitle: {
+    fontSize: 11,
     color: '#64748B',
+    marginTop: 1,
+    lineHeight: 15,
+  },
+  bracketTypeWrap: {
+    marginTop: Spacing[1],
+  },
+  qualificationSummaryBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[2],
+    paddingHorizontal: Spacing[3],
+  },
+  qualificationSummaryText: {
+    fontSize: 11.5,
+    color: '#0F766E',
+    fontWeight: '600',
+    flex: 1,
     lineHeight: 16,
+  },
+  clubCourtsSection: {
+    marginTop: Spacing[1],
+    gap: Spacing[1.5],
+  },
+  clubCourtsTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  emptyCourtsBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: Spacing[2.5],
+  },
+  emptyCourtsText: {
+    fontSize: 11.5,
+    color: '#64748B',
   },
   courtsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-  },
-  courtBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    minWidth: 110,
-    gap: 8,
-  },
-  courtBoxActive: {
-    backgroundColor: '#F0FDFA',
-    borderColor: '#0F766E',
-  },
-  courtName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  courtNameActive: {
-    color: '#0F766E',
-    fontWeight: '700',
-  },
-  courtIndicator: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  courtCapacityBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 4,
-  },
-  counterInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  counterLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  counterDesc: {
-    fontSize: 12,
-    color: '#64748B',
-  },
-  stepperContainerInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  smallStepBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  smallStepBtnDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    opacity: 0.5,
-  },
-  counterValueInline: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F766E',
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  clubCourtsSection: {
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 12,
-  },
-  clubCourtsTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 2,
-  },
-  clubCourtsSub: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 8,
-  },
-  emptyCourtsBox: {
-    padding: 12,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-  },
-  emptyCourtsText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontStyle: 'italic',
+    gap: Spacing[1.5],
   },
   clubCourtPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    backgroundColor: '#F0FDFA',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.sm,
     borderWidth: 1,
-    borderColor: '#99F6E4',
-    borderRadius: 20,
+    borderColor: '#E2E8F0',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
   },
   clubCourtPillDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#0F766E',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
   },
   clubCourtPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F766E',
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '500',
   },
-  actionContainer: {
-    marginTop: Spacing[2],
+  bottomActionsWrap: {
+    gap: Spacing[2],
+    marginTop: Spacing[1],
   },
-  // Stepper Styles
-  stepperContainer: {
-    flexDirection: 'row',
+  primaryActionBtn: {
+    width: '100%',
+  },
+  secondarySaveBtn: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    paddingVertical: 10,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    marginTop: 8,
+    paddingVertical: Spacing[2],
   },
-  stepperBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  stepperBtnDisabled: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-    opacity: 0.5,
-  },
-  stepperValueBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 100,
-  },
-  stepperValueNum: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#0F766E',
-    lineHeight: 30,
-  },
-  stepperValueLabel: {
-    fontSize: 12,
+  secondarySaveText: {
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#64748B',
-    marginTop: 1,
-  },
-  presetRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  infoStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#F0F9FF',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 10,
-  },
-  infoStripText: {
-    fontSize: 12,
-    color: '#0369A1',
-    flex: 1,
-    lineHeight: 16,
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 10,
-  },
-  warningText: {
-    fontSize: 12,
-    color: '#B91C1C',
-    flex: 1,
-    lineHeight: 16,
   },
 });
-

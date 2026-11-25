@@ -77,8 +77,8 @@ export function PoolPlayOverviewTab({
 
   if (isAwaitingFormatSetup) {
     currentStageText = 'Awaiting Format Setup';
-    ctaLabel = 'Review ' + (isSingles ? 'Confirmed Players' : 'Confirmed Teams') + ' →';
-    targetTab = 'participants';
+    ctaLabel = 'Configure Pool Play in Setup & Courts →';
+    targetTab = 'setup_courts';
   } else if (matches.length > 0 && !isPoolPlayComplete) {
     currentStageText = 'Pool Stage In Progress';
     ctaLabel = 'Enter Pool Match Scores →';
