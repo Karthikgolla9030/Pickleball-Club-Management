@@ -1,12 +1,11 @@
 /**
  * Aught2 Pickleball — PoolPlayPostRegistrationCard
  *
- * Read-Only Overview Summary Card for Pool Play Tournaments:
- * - Rendered in Overview tab after registration closes and before tournament begins.
- * - Displays confirmed team count, current pool configuration status, and concise summary.
- * - Shows a simple, single empty/insufficient state when confirmed teams < 4.
- * - Provides ONE clear action to navigate to the Setup & Courts tab where editable configuration lives.
- * - Follows strict architectural separation: NO editable steppers or duplicate form controls in Overview.
+ * Compact, read-only status card for Pool Play Tournaments in the Overview tab:
+ * - Shows only high-level configuration status and clear next step.
+ * - Standardized card width with identical 16px page margins as neighboring cards.
+ * - NO repeated metrics, NO nested warning boxes, NO duplicate configuration controls.
+ * - Provides ONE clear action to navigate to the Setup & Courts workspace.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -14,13 +13,9 @@ import { ActivityIndicator, StyleSheet, TouchableOpacity, View } from 'react-nat
 import { ChevronRight, Layers, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
+import { Badge } from '@/components/Badge';
 import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
-import {
-  PostRegistrationHeader,
-  PostRegistrationMetrics,
-  PostRegistrationNotice,
-} from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
@@ -42,7 +37,6 @@ export function PoolPlayPostRegistrationCard({
   tournament,
   canManage,
   onNavigateToSetup,
-  onGenerated,
   onStartTournament,
   isStartingTournament = false,
 }: PoolPlayPostRegistrationCardProps) {
@@ -76,9 +70,7 @@ export function PoolPlayPostRegistrationCard({
       <Card style={styles.card}>
         <View style={styles.loadingBox}>
           <ActivityIndicator size="small" color="#0F766E" />
-          <AppText style={styles.loadingText}>
-            Calculating confirmed teams and current pool status...
-          </AppText>
+          <AppText style={styles.loadingText}>Loading configuration status...</AppText>
         </View>
       </Card>
     );
@@ -88,93 +80,64 @@ export function PoolPlayPostRegistrationCard({
   const teamsCount = setupData?.confirmed_teams_count ?? 0;
   const stage = setupData?.configuration_stage ?? 'awaiting_format_configuration';
   const isReadyToStart = isGenerated && stage === 'ready_to_start';
-  const numPools = setupData?.selected_pools ?? 2;
-  const qualifiers = setupData?.selected_qualifiers_per_pool ?? 2;
-  const bracketType = setupData?.selected_bracket_type ?? 'Single Elimination';
   const hasMinTeams = teamsCount >= 4;
 
-  const getSubtitle = () => {
+  const getBadgeInfo = (): { label: string; variant: 'success' | 'info' | 'warning' } => {
+    if (isReadyToStart) return { label: 'Ready to Start', variant: 'success' };
+    if (isGenerated) return { label: 'Configured', variant: 'info' };
+    if (!hasMinTeams) return { label: 'Waiting for Teams', variant: 'warning' };
+    return { label: 'Awaiting Configuration', variant: 'warning' };
+  };
+
+  const getStatusText = (): { title: string; desc: string } => {
     if (isReadyToStart) {
-      return 'Pools & matches generated • Verified and ready to start';
+      return {
+        title: 'Ready to start',
+        desc: 'Pool matches and advancement structure verified.',
+      };
     }
     if (isGenerated) {
-      return 'Schedule generated • Pool distribution active';
+      return {
+        title: 'Schedule generated',
+        desc: 'Pool matches and championship bracket are active.',
+      };
     }
     if (!hasMinTeams) {
-      return 'Registration closed • Waiting for confirmed teams to configure pools';
+      return {
+        title: 'Waiting for confirmed teams',
+        desc: 'Pool configuration will be available when at least 4 teams are confirmed.',
+      };
     }
-    return 'Registration closed • Configure pools and advancement in Setup & Courts';
+    return {
+      title: 'Configuration required',
+      desc: 'Configure pool distribution and championship advancement in Setup & Courts.',
+    };
   };
 
-  const getBadgeLabel = () => {
-    if (isReadyToStart) return 'Ready to Start';
-    if (isGenerated) return 'Schedule Generated';
-    if (!hasMinTeams) return 'Waiting for Teams';
-    return 'Awaiting Configuration';
-  };
-
-  const getBadgeVariant = () => {
-    if (isReadyToStart) return 'success';
-    if (isGenerated) return 'info';
-    return 'warning';
-  };
+  const badge = getBadgeInfo();
+  const status = getStatusText();
 
   return (
     <Card style={styles.card}>
-      {/* ─── 1. Read-Only Standardized Header ─────────────────────────────────── */}
-      <PostRegistrationHeader
-        icon={<Layers size={18} color="#0F766E" />}
-        title="Pool Play Configuration"
-        subtitle={getSubtitle()}
-        badgeLabel={getBadgeLabel()}
-        badgeVariant={getBadgeVariant()}
-      />
+      {/* ─── Compact Header ─────────────────────────────────────────────── */}
+      <View style={styles.headerRow}>
+        <View style={styles.headerLeftCol}>
+          <View style={styles.iconCircle}>
+            <Layers size={16} color="#0F766E" />
+          </View>
+          <AppText style={styles.cardTitle}>Pool Play Setup</AppText>
+        </View>
+        <Badge label={badge.label} variant={badge.variant} size="sm" />
+      </View>
 
-      <View style={styles.divider} />
+      {/* ─── Short Status Explanation ───────────────────────────────────── */}
+      <View style={styles.statusBox}>
+        <AppText style={styles.statusTitle}>{status.title}</AppText>
+        <AppText style={styles.statusDesc}>{status.desc}</AppText>
+      </View>
 
-      {/* ─── 2. Confirmed Teams & Configuration Status Summary ────────────────── */}
-      <PostRegistrationMetrics
-        metrics={[
-          {
-            label: 'CONFIRMED TEAMS',
-            value: teamsCount,
-          },
-          {
-            label: 'CONFIGURED POOLS',
-            value: hasMinTeams ? numPools : '—',
-          },
-          {
-            label: 'PLAYOFF QUALIFIERS',
-            value: hasMinTeams ? numPools * qualifiers : '—',
-          },
-        ]}
-      />
-
-      {/* ─── 3. Single Consolidated Notice ───────────────────────────────────── */}
-      {!hasMinTeams ? (
-        <PostRegistrationNotice
-          variant="warning"
-          title="Waiting for confirmed teams"
-          message={`At least 4 confirmed teams are required to configure Pool Play (currently ${teamsCount} confirmed). When confirmed teams register, pool distribution and qualifiers can be configured in Setup & Courts.`}
-        />
-      ) : isGenerated ? (
-        <PostRegistrationNotice
-          variant="success"
-          title="Pool Play Structure Active"
-          message={`All ${teamsCount} confirmed teams assigned across ${numPools} pools with ${numPools * qualifiers} qualifiers advancing to the ${bracketType} bracket.`}
-        />
-      ) : (
-        <PostRegistrationNotice
-          variant="info"
-          title="Configuration Required"
-          message={`Tournament has ${teamsCount} confirmed teams. Configure pool distribution, balance tolerance, and championship qualification in Setup & Courts.`}
-        />
-      )}
-
-      <View style={styles.divider} />
-
-      {/* ─── 4. Clear Action to Setup & Courts Workspace ─────────────────────── */}
-      <View style={styles.actionsRow}>
+      {/* ─── Single Action Row ─────────────────────────────────────────── */}
+      <View style={styles.actionRow}>
         {isReadyToStart && onStartTournament ? (
           <Button
             label={isStartingTournament ? 'Starting Tournament...' : 'Start Tournament (Ready)'}
@@ -186,17 +149,17 @@ export function PoolPlayPostRegistrationCard({
           />
         ) : onNavigateToSetup ? (
           <TouchableOpacity
-            style={styles.ctaSetupBtn}
+            style={styles.ctaButton}
             onPress={onNavigateToSetup}
             activeOpacity={0.8}
           >
-            <View style={styles.ctaLeftCol}>
-              <SlidersHorizontal size={16} color="#0F766E" />
-              <AppText style={styles.ctaBtnText}>
-                {isGenerated ? 'View Configuration in Setup & Courts' : 'Configure in Setup & Courts'}
+            <View style={styles.ctaButtonLeft}>
+              <SlidersHorizontal size={15} color="#0F766E" />
+              <AppText style={styles.ctaButtonText}>
+                {isGenerated ? 'View in Setup & Courts' : 'Configure in Setup & Courts'}
               </AppText>
             </View>
-            <ChevronRight size={17} color="#0F766E" />
+            <ChevronRight size={16} color="#0F766E" />
           </TouchableOpacity>
         ) : null}
       </View>
@@ -206,36 +169,74 @@ export function PoolPlayPostRegistrationCard({
 
 const styles = StyleSheet.create({
   card: {
+    marginHorizontal: Spacing[4],
+    marginTop: Spacing[4],
+    marginBottom: Spacing[1],
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DEF2E6',
     borderRadius: Radius.lg,
-    padding: Spacing[4],
-    marginBottom: Spacing[4],
+    padding: Spacing[3.5],
+    gap: Spacing[2.5],
   },
   loadingBox: {
-    padding: Spacing[4],
+    padding: Spacing[3],
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing[2],
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: '#64748B',
-    textAlign: 'center',
   },
-  divider: {
-    height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: Spacing[3],
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing[2],
   },
-  actionsRow: {
-    marginTop: Spacing[0.5],
+  headerLeftCol: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    minWidth: 0,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DEF2E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  statusBox: {
+    gap: 3,
+  },
+  statusTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+    lineHeight: 18,
+  },
+  statusDesc: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 17,
+  },
+  actionRow: {
+    marginTop: 2,
   },
   actionBtn: {
     width: '100%',
   },
-  ctaSetupBtn: {
+  ctaButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -243,15 +244,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CCFBF1',
     borderRadius: Radius.md,
-    paddingVertical: Spacing[3],
-    paddingHorizontal: Spacing[3.5],
+    paddingVertical: Spacing[2.5],
+    paddingHorizontal: Spacing[3],
   },
-  ctaLeftCol: {
+  ctaButtonLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
   },
-  ctaBtnText: {
+  ctaButtonText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F766E',

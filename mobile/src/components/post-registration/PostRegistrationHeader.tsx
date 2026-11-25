@@ -3,6 +3,7 @@
  *
  * Responsive, standardized header for post-registration format configuration cards.
  * Prevents horizontal overflow and text clipping on mobile viewports (320px - 430px+).
+ * Allows natural wrapping without ellipses.
  */
 
 import React from 'react';
@@ -14,7 +15,7 @@ import { Radius, Spacing } from '@/theme';
 export interface PostRegistrationHeaderProps {
   icon: React.ReactNode;
   title: string;
-  subtitle: string;
+  subtitle?: string;
   badgeLabel: string;
   badgeVariant?: 'success' | 'warning' | 'info' | 'default';
 }
@@ -34,7 +35,7 @@ export function PostRegistrationHeader({
             {icon}
           </View>
           <View style={styles.titleWrap}>
-            <AppText style={styles.title} numberOfLines={2}>
+            <AppText style={styles.title}>
               {title}
             </AppText>
           </View>

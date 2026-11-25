@@ -189,15 +189,15 @@ export function ScramblePostRegistrationCard({
         <PostRegistrationMetrics
           metrics={[
             {
-              label: 'CONFIRMED PLAYERS',
+              label: 'Confirmed players',
               value: playerCount,
             },
             {
-              label: 'DOUBLES PAIRS / RD',
+              label: 'Doubles pairs / round',
               value: feasiblePairs,
             },
             {
-              label: 'MATCHES / ROUND',
+              label: 'Matches / round',
               value: feasibleMatches,
             },
           ]}

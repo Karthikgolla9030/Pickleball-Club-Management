@@ -3,12 +3,13 @@
  *
  * Dedicated, consolidated configuration workspace for Pool Play tournaments:
  * - The SINGLE source of editable configuration for Pool Play.
- * - Section A: Pool Distribution (confirmed team count, recommendations, pools stepper, simple preview)
+ * - Section A: Pool Distribution (clean waiting state when < 4 confirmed teams;
+ *   responsive unclipped metrics and pool stepper when >= 4 confirmed teams)
  * - Section B: Pool Balance (rating tolerance options: Strict, Fair, Relaxed, Wide)
  * - Section C: Championship Qualification (qualifiers per pool, bracket type, explanation)
  * - Section D: Court Assignment (concurrent capacity, active club courts)
  * - Confirm & Generate action with validation and regeneration safeguards.
- * - Clean empty/insufficient state when confirmed teams < 4: "Waiting for confirmed teams".
+ * - Strict UI rules: NO uppercase labels, NO dots/truncation, NO empty dashes.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -20,15 +21,10 @@ import {
   View,
 } from 'react-native';
 import {
-  Check,
-  CheckCircle2,
-  GitFork,
   Info,
-  Layers,
   LayoutGrid,
   Scale,
   SlidersHorizontal,
-  Sparkles,
   Trophy,
   Users,
 } from 'lucide-react-native';
@@ -38,9 +34,6 @@ import { Button } from '@/components/Button';
 import { Card } from '@/components/Card';
 import {
   PostRegistrationChoiceChips,
-  PostRegistrationHeader,
-  PostRegistrationMetrics,
-  PostRegistrationNotice,
   PostRegistrationStepper,
 } from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
@@ -138,7 +131,6 @@ export function PoolPlaySetupCourtsTab({
 
   const handlePoolsChange = (nextPools: number) => {
     setNumPools(nextPools);
-    // Auto-adjust qualifiers if it exceeds pool size
     const adjustedQualifiers = Math.min(qualifiersPerPool, Math.max(1, Math.floor(confirmedTeams / nextPools)));
     if (adjustedQualifiers !== qualifiersPerPool) {
       setQualifiersPerPool(adjustedQualifiers);
@@ -257,43 +249,63 @@ export function PoolPlaySetupCourtsTab({
           <AppText style={styles.sectionTitle}>A. Pool Distribution</AppText>
         </View>
 
-        {/* Confirmed Team Metric & Status */}
-        <PostRegistrationMetrics
-          metrics={[
-            {
-              label: 'CONFIRMED TEAMS',
-              value: confirmedTeams,
-            },
-            {
-              label: 'SELECTED POOLS',
-              value: hasMinTeams ? numPools : '—',
-            },
-            {
-              label: 'TEAMS / POOL',
-              value: hasMinTeams ? Math.ceil(confirmedTeams / numPools) : '—',
-            },
-          ]}
-        />
-
         {!hasMinTeams ? (
-          <PostRegistrationNotice
-            variant="warning"
-            title="Waiting for confirmed teams"
-            message={`At least 4 confirmed teams are required to configure Pool Play (currently ${confirmedTeams} confirmed). Registration must have at least 4 confirmed teams to partition into 2 or more balanced pools.`}
-          />
+          /* Clean, single waiting state: no dummy dashes, no duplicate warning banners */
+          <View style={styles.waitingStateBox}>
+            <View style={styles.waitingStateTop}>
+              <View style={styles.waitingIconCircle}>
+                <Users size={18} color="#0F766E" />
+              </View>
+              <View style={styles.waitingTextCol}>
+                <AppText style={styles.waitingHeading}>Waiting for confirmed teams</AppText>
+                <AppText style={styles.waitingBody}>
+                  At least 4 confirmed teams are required to configure Pool Play.
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.waitingMetaRow}>
+              <View style={styles.waitingMetaItem}>
+                <AppText style={styles.waitingMetaLabel}>Confirmed teams</AppText>
+                <AppText style={styles.waitingMetaValue}>{confirmedTeams}</AppText>
+              </View>
+              <View style={styles.waitingMetaDivider} />
+              <View style={styles.waitingMetaItem}>
+                <AppText style={styles.waitingMetaLabel}>Required minimum</AppText>
+                <AppText style={styles.waitingMetaValue}>4 teams</AppText>
+              </View>
+            </View>
+          </View>
         ) : (
           <>
+            {/* Responsive metrics with unclipped sentence-case labels */}
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricTile}>
+                <AppText style={styles.metricTileLabel}>Confirmed teams</AppText>
+                <AppText style={styles.metricTileValue}>{confirmedTeams}</AppText>
+              </View>
+              <View style={styles.metricTile}>
+                <AppText style={styles.metricTileLabel}>Selected pools</AppText>
+                <AppText style={styles.metricTileValue}>{numPools}</AppText>
+              </View>
+              <View style={styles.metricTile}>
+                <AppText style={styles.metricTileLabel}>Teams per pool</AppText>
+                <AppText style={styles.metricTileValue}>{Math.ceil(confirmedTeams / numPools)}</AppText>
+              </View>
+            </View>
+
             {setupData?.recommendation_reason ? (
-              <PostRegistrationNotice
-                variant="info"
-                title="Recommendation"
-                message={setupData.recommendation_reason}
-              />
+              <View style={styles.recommendationBox}>
+                <Info size={14} color="#0F766E" />
+                <AppText style={styles.recommendationText}>
+                  {setupData.recommendation_reason}
+                </AppText>
+              </View>
             ) : null}
 
             {feasibleConfigs.length > 0 ? (
               <PostRegistrationChoiceChips
-                label="Balanced Pool Presets:"
+                label="Balanced pool presets:"
                 options={feasibleConfigs.map((cfg: any) => ({
                   label: `${cfg.number_of_pools} Pools`,
                   value: String(cfg.number_of_pools),
@@ -305,7 +317,7 @@ export function PoolPlaySetupCourtsTab({
             ) : null}
 
             <PostRegistrationStepper
-              label="Number of Pools"
+              label="Number of pools"
               helperText={`Minimum 2 teams per pool (Max ${maxPools} pools)`}
               value={numPools}
               unit="pools"
@@ -316,7 +328,7 @@ export function PoolPlaySetupCourtsTab({
 
             {/* Simple Pool Distribution Preview */}
             <View style={styles.previewBox}>
-              <AppText style={styles.previewTitle}>Pool Distribution Preview:</AppText>
+              <AppText style={styles.previewTitle}>Pool distribution preview:</AppText>
               <View style={styles.previewGrid}>
                 {Array.from({ length: numPools }, (_, i) => {
                   const poolLetter = String.fromCharCode(65 + i);
@@ -395,8 +407,12 @@ export function PoolPlaySetupCourtsTab({
         </View>
 
         <PostRegistrationStepper
-          label="Qualifiers Per Pool"
-          helperText={`Top teams advancing from each pool (${numPools * qualifiersPerPool} total qualifiers)`}
+          label="Qualifiers per pool"
+          helperText={
+            hasMinTeams
+              ? `Top teams advancing from each pool (${numPools * qualifiersPerPool} total qualifiers)`
+              : 'Top teams advancing to playoff bracket'
+          }
           value={qualifiersPerPool}
           unit="per pool"
           min={1}
@@ -407,7 +423,7 @@ export function PoolPlaySetupCourtsTab({
 
         <View style={styles.bracketTypeWrap}>
           <PostRegistrationChoiceChips
-            label="Playoff Bracket Type:"
+            label="Playoff bracket type:"
             options={['Single Elimination', 'Double Elimination']}
             selectedValue={bracketType}
             onSelect={handleBracketTypeChange}
@@ -433,7 +449,7 @@ export function PoolPlaySetupCourtsTab({
         </AppText>
 
         <PostRegistrationStepper
-          label="Concurrent Court Capacity"
+          label="Concurrent court capacity"
           helperText="Simultaneous matches supported during pool stages"
           value={numCourts}
           unit="courts"
@@ -444,7 +460,7 @@ export function PoolPlaySetupCourtsTab({
 
         <View style={styles.clubCourtsSection}>
           <AppText style={styles.clubCourtsTitle}>
-            Active Club Courts at {clubName || 'Club'} ({clubCourts?.length || 0})
+            Active club courts at {clubName || 'Club'} ({clubCourts?.length || 0})
           </AppText>
           {(!clubCourts || clubCourts.length === 0) ? (
             <View style={styles.emptyCourtsBox}>
@@ -489,7 +505,7 @@ export function PoolPlaySetupCourtsTab({
 
           <TouchableOpacity style={styles.secondarySaveBtn} onPress={handleSave} activeOpacity={0.7}>
             <AppText style={styles.secondarySaveText}>
-              {hasSaved ? '✓ Configuration Saved' : 'Save Configuration Draft'}
+              {hasSaved ? '✓ Configuration saved' : 'Save configuration draft'}
             </AppText>
           </TouchableOpacity>
         </View>
@@ -519,9 +535,9 @@ const styles = StyleSheet.create({
     gap: Spacing[3],
   },
   iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#DEF2E6',
     alignItems: 'center',
     justifyContent: 'center',
@@ -557,6 +573,126 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 16,
     marginTop: -Spacing[1],
+  },
+  // Waiting State
+  waitingStateBox: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
+    gap: Spacing[2.5],
+  },
+  waitingStateTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing[2.5],
+  },
+  waitingIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#DEF2E6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  waitingTextCol: {
+    flex: 1,
+    minWidth: 0,
+  },
+  waitingHeading: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0F172A',
+    lineHeight: 18,
+  },
+  waitingBody: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  waitingMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.sm,
+    paddingVertical: Spacing[2],
+    paddingHorizontal: Spacing[3],
+    justifyContent: 'space-around',
+  },
+  waitingMetaItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  waitingMetaLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  waitingMetaValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  waitingMetaDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#E2E8F0',
+  },
+  // Metrics Grid
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  metricTile: {
+    flex: 1,
+    minWidth: 95,
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: Spacing[2.5],
+    paddingHorizontal: Spacing[2],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricTileLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  metricTileValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F766E',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  recommendationBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: Radius.md,
+    paddingVertical: Spacing[2],
+    paddingHorizontal: Spacing[3],
+  },
+  recommendationText: {
+    fontSize: 11.5,
+    color: '#0F766E',
+    lineHeight: 16,
+    flex: 1,
   },
   previewBox: {
     backgroundColor: '#F8FAFC',

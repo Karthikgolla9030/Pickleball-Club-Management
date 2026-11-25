@@ -228,7 +228,7 @@ export function PoolPlayOverviewTab({
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[4],
+    paddingTop: Spacing[2.5],
     paddingBottom: Spacing[8],
     gap: Spacing[3],
   },
