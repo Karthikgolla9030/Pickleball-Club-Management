@@ -42,8 +42,8 @@ export interface RegistrationFormState {
   confirmEligibility: boolean;
   acknowledgeMembership: boolean;
 
-  // Step 3 Payment Details
-  paymentMethod: 'card' | 'upi' | 'mobile_number' | 'club_account' | 'cash';
+  // Step 3 Payment Details (Preferred Payment Method)
+  paymentMethod: 'card' | 'upi' | 'free' | 'mobile_number' | 'club_account' | 'cash';
   paymentMobileNumber?: string;
   cardholderName: string;
   cardNumber: string;

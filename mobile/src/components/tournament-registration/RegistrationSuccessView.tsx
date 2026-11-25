@@ -146,25 +146,27 @@ export function RegistrationSuccessView({
           <AppText variant="caption" style={styles.rowLabel}>
             Payment Status
           </AppText>
-          <View style={styles.statusBadge}>
-            <CheckCircle2 size={12} color="#15803D" />
-            <AppText variant="caption" bold style={styles.statusBadgeText}>
-              {result.payment_status === 'TEST_SUCCESS'
-                ? 'Test Success (Simulated)'
-                : result.payment_status === 'completed' || !isWaitlist
-                ? 'Paid & Confirmed'
-                : 'Pending Spot'}
+          <View style={[styles.statusBadge, result.payment_status === 'NOT_COLLECTED' && styles.statusBadgeDeferred]}>
+            <CheckCircle2 size={12} color={result.payment_status === 'NOT_COLLECTED' ? '#047857' : '#15803D'} />
+            <AppText variant="caption" bold style={[styles.statusBadgeText, result.payment_status === 'NOT_COLLECTED' && styles.statusBadgeTextDeferred]}>
+              {result.payment_status === 'FREE' || result.fee_amount === 0
+                ? 'Free Entry (No Payment Required)'
+                : result.payment_status === 'NOT_COLLECTED'
+                ? 'Not Collected (Enabled Soon)'
+                : result.payment_status === 'SUCCEEDED' || result.payment_status === 'completed'
+                ? 'Paid'
+                : 'Not Collected'}
             </AppText>
           </View>
         </View>
 
-        {result.payment_method === 'MOBILE_NUMBER_TEST' && (
+        {result.payment_method && result.payment_method !== 'free' && (
           <View style={styles.detailRow}>
             <AppText variant="caption" style={styles.rowLabel}>
-              Payment Mode
+              Payment Preference
             </AppText>
-            <AppText variant="caption" bold style={[styles.rowValue, { color: '#B45309' }]}>
-              Mobile Number (Simulated)
+            <AppText variant="caption" bold style={[styles.rowValue, { color: '#064E3B' }]}>
+              {result.payment_method.toUpperCase()} (Preferred)
             </AppText>
           </View>
         )}
@@ -297,9 +299,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     gap: 4,
   },
+  statusBadgeDeferred: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+  },
   statusBadgeText: {
     fontSize: 11,
     color: '#15803D',
+  },
+  statusBadgeTextDeferred: {
+    color: '#065F46',
   },
   guidanceBox: {
     width: '100%',

@@ -16,9 +16,11 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ArrowLeft, X } from 'lucide-react-native';
 
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -30,7 +32,6 @@ import {
   usePlayerTournamentRegistration,
   useTournamentDetails,
 } from '@/hooks';
-import { paymentApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type { PlayerRegistrationResponse } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
@@ -571,205 +572,26 @@ export function TournamentRegistrationModal({
       }
     }
 
-    // Free tournament flow
-    if (feeAmount <= 0) {
-      try {
-        const payload = {
-          team_name: teamName,
-          partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
-          partner_email: partnerEmail,
-          partner_name: partnerName,
-          skill_level: formState.skillLevel,
-          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
-          gender: formState.gender,
-          age: formState.age ? parseInt(formState.age, 10) : null,
-          payment_method: 'free',
-          notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
-        };
-
-        const res = await register(payload);
-        setSuccessResult(res);
-        void refetchMyRegistration();
-        if (activeTournament?.id) {
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'player-registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
-        }
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
-        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-        queryClient.invalidateQueries({ queryKey: ['clubs'] });
-        if (onSuccess) {
-          onSuccess(res);
-        }
-      } catch (err: unknown) {
-        const rawMsg =
-          (err as any)?.detail ||
-          (err as any)?.message ||
-          (err instanceof Error ? err.message : 'Registration failed. Please try again.');
-        const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
-        if (msg.toLowerCase().includes('already registered')) {
-          void refetchMyRegistration();
-          setAlreadyRegisteredOverride(true);
-          return;
-        }
-        setSubmitError(msg);
-      }
-      return;
-    }
-
-    // Simulated Dummy Payment Flow (Mobile Number Test Mode)
-    if (formState.paymentMethod === 'mobile_number') {
-      setIsProcessingPayment(true);
-      try {
-        const targetPhone = (formState.paymentMobileNumber || formState.phone || '').trim();
-
-        // Brief delay for realistic UI processing feel
-        await new Promise((resolve) => setTimeout(resolve, 800));
-
-        const simRes = await paymentApi.simulateTournamentPayment({
-          club_id: activeTournament.club_id,
-          tournament_id: activeTournament.id,
-          phone_number: targetPhone,
-          team_name: teamName,
-          partner_name: partnerName,
-          partner_email: partnerEmail,
-          partner_phone: isDoubles ? (formState.partnerPhone?.trim() || null) : null,
-          partner_membership_id: isDoubles ? (formState.selectedPartner?.membership_id || null) : null,
-          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
-          skill_level: formState.skillLevel,
-          gender: formState.gender,
-          age: formState.age ? parseInt(formState.age, 10) : null,
-          notes: [formState.notes?.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
-        });
-
-        void refetchMyRegistration();
-        if (activeTournament?.id) {
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'player-registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
-        }
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
-        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-        queryClient.invalidateQueries({ queryKey: ['clubs'] });
-
-        const regInfo = simRes.booking_or_registration;
-        const resultObj: any = {
-          id: regInfo?.id || simRes.payment?.id || 'reg_simulated',
-          tournament_id: activeTournament.id,
-          status: regInfo?.status || 'confirmed',
-          status_label: 'Confirmed (Test Mode)',
-          registered_at: new Date().toISOString(),
-          message: simRes.message || 'Tournament registration confirmed via simulated mobile payment.',
-          reference_number:
-            regInfo?.reference_number ||
-            simRes.payment?.reference ||
-            `SIM-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
-          registration_type: isDoubles ? 'team' : 'individual',
-          team_id: (regInfo as any)?.team_id || null,
-          team_name: regInfo?.team_name || teamName || null,
-          tournament_name: activeTournament.name,
-          tournament_format: activeTournament.format,
-          tournament_format_label: activeTournament.format,
-          division: parsed?.category || 'Open',
-          fee_amount: feeAmount,
-          payment_status: 'TEST_SUCCESS',
-          payment_method: 'MOBILE_NUMBER_TEST',
-        };
-
-        setSuccessResult(resultObj);
-        if (onSuccess) {
-          onSuccess(resultObj);
-        }
-      } catch (err: any) {
-        const rawMsg =
-          err?.response?.data?.detail ||
-          err?.detail ||
-          err?.message ||
-          'Simulated payment failed. Please check your mobile number and retry.';
-        let msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
-        if (msg === 'Not Found' || msg.includes('404')) {
-          msg = 'Simulated payment service is synchronizing. Please retry in a moment.';
-        }
-        if (msg.toLowerCase().includes('already registered')) {
-          void refetchMyRegistration();
-          setAlreadyRegisteredOverride(true);
-          return;
-        }
-        setSubmitError(msg);
-      } finally {
-        setIsProcessingPayment(false);
-      }
-      return;
-    }
-
-    // Paid tournament flow: Cashfree Checkout & Verification
+    // Unified payment-free registration submission
     setIsProcessingPayment(true);
+    setSubmitError(null);
     try {
-      const initiateRes = await paymentApi.initiateCheckout({
-        club_id: activeTournament.club_id,
-        purpose: 'tournament',
-        activity_id: activeTournament.id,
-        payment_method: 'online',
-        selected_method: formState.paymentMethod || 'upi',
-        currency: 'USD',
-        metadata: {
-          team_name: teamName,
-          partner_name: partnerName,
-          partner_email: partnerEmail,
-          partner_phone: isDoubles ? (formState.partnerPhone?.trim() || null) : null,
-          partner_membership_id: isDoubles ? (formState.selectedPartner?.membership_id || null) : null,
-          partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
-          skill_level: formState.skillLevel,
-          gender: formState.gender,
-          age: formState.age ? parseInt(formState.age, 10) : null,
-          notes: [formState.notes?.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
-          phone: formState.phone?.trim() || undefined,
-        },
-      });
+      const selectedMethod = feeAmount <= 0 ? 'free' : (formState.paymentMethod || 'upi');
+      const payload: any = {
+        team_name: teamName,
+        partner_membership_id: isDoubles ? formState.selectedPartner?.membership_id : null,
+        partner_email: partnerEmail,
+        partner_name: partnerName,
+        skill_level: formState.skillLevel,
+        partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
+        gender: formState.gender,
+        age: formState.age ? parseInt(formState.age, 10) : null,
+        payment_method: selectedMethod,
+        notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
+      };
 
-      const provider = initiateRes.provider || 'cashfree';
-      const providerOrderId = initiateRes.provider_order_id || `order_${Date.now()}`;
-
-      // Open Cashfree hosted modal checkout if on web & payment_session_id is present
-      if (initiateRes.payment_session_id && typeof window !== 'undefined') {
-        try {
-          const { load: loadCashfree } = await import('@cashfreepayments/cashfree-js');
-          const cashfree = await loadCashfree({ mode: 'sandbox' });
-          if (cashfree) {
-            const checkoutResult: any = await cashfree.checkout({
-              paymentSessionId: initiateRes.payment_session_id,
-              redirectTarget: '_modal',
-            });
-            if (checkoutResult?.error) {
-              setSubmitError(
-                checkoutResult.error.message ||
-                'Checkout window was closed or payment was cancelled. You can retry safely.'
-              );
-              setIsProcessingPayment(false);
-              return;
-            }
-          }
-        } catch (sdkErr: any) {
-          console.warn('Cashfree JS checkout notice:', sdkErr);
-        }
-      }
-
-      // Cryptographically verify payment with backend and complete tournament registration
-      const verifyRes = await paymentApi.verifyCheckout({
-        payment_id: initiateRes.payment_id,
-        provider,
-        provider_order_id: providerOrderId,
-        provider_payment_id: initiateRes.payment_session_id ? `cf_${initiateRes.payment_session_id}` : undefined,
-        provider_signature: undefined,
-      });
-
-      // Verification succeeded: fulfill registration state & invalidate queries
+      const res = await register(payload);
+      setSuccessResult(res);
       void refetchMyRegistration();
       if (activeTournament?.id) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
@@ -782,35 +604,15 @@ export function TournamentRegistrationModal({
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
-
-      const resultObj: any = {
-        id: verifyRes.payment?.id || 'reg_completed',
-        tournament_id: activeTournament.id,
-        status: 'confirmed',
-        status_label: 'Confirmed',
-        registered_at: new Date().toISOString(),
-        message: 'Successfully registered for tournament',
-        reference_number: verifyRes.payment?.reference || `REG-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
-        registration_type: isDoubles ? 'team' : 'individual',
-        tournament_name: activeTournament.name,
-        tournament_format: activeTournament.format,
-        tournament_format_label: activeTournament.format,
-        division: parsed?.category || 'Open',
-        fee_amount: feeAmount,
-        payment_status: 'completed',
-        payment_method: formState.paymentMethod || 'online',
-      };
-
-      setSuccessResult(resultObj);
       if (onSuccess) {
-        onSuccess(resultObj);
+        onSuccess(res);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const rawMsg =
-        err?.response?.data?.detail ||
-        err?.detail ||
-        err?.message ||
-        'Payment could not be verified. If you just completed payment, please retry or refresh.';
+        (err as any)?.detail ||
+        (err as any)?.response?.data?.detail ||
+        (err as any)?.message ||
+        (err instanceof Error ? err.message : 'Registration failed. Please try again.');
       const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
       if (msg.toLowerCase().includes('already registered')) {
         void refetchMyRegistration();
@@ -820,50 +622,6 @@ export function TournamentRegistrationModal({
       setSubmitError(msg);
     } finally {
       setIsProcessingPayment(false);
-    }
-  };
-
-  const handleCheckoutSuccess = (res: any) => {
-    void refetchMyRegistration();
-    if (activeTournament?.id) {
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
-      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id] });
-      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'teams'] });
-      queryClient.invalidateQueries({ queryKey: ['tournaments', activeTournament.id, 'registrations'] });
-      queryClient.invalidateQueries({ queryKey: ['tournament-registrations', activeTournament.id] });
-    }
-    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
-    queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-    queryClient.invalidateQueries({ queryKey: ['clubs'] });
-
-    const rawFee = (activeTournament as any).registration_fee != null
-      ? Number((activeTournament as any).registration_fee)
-      : (activeTournament as any).format_configuration?.entry_fee != null
-      ? Number((activeTournament as any).format_configuration.entry_fee)
-      : null;
-    const defaultFee = isScramble ? 35 : parsed?.isSingles ? 30 : 50;
-    const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
-
-    const resultObj: any = {
-      id: res.payment?.id || 'reg_completed',
-      tournament_id: activeTournament.id,
-      status: 'confirmed',
-      status_label: 'Confirmed',
-      registered_at: new Date().toISOString(),
-      message: 'Successfully registered for tournament',
-      reference_number: res.payment?.reference || `REG-2026-${activeTournament.id.slice(0, 6).toUpperCase()}`,
-      registration_type: isDoubles ? 'team' : 'individual',
-      tournament_name: activeTournament.name,
-      tournament_format: activeTournament.format,
-      tournament_format_label: activeTournament.format,
-      division: parsed?.category || 'Open',
-      fee_amount: feeAmount,
-      payment_status: 'completed',
-      payment_method: 'online',
-    };
-    setSuccessResult(resultObj);
-    if (onSuccess) {
-      onSuccess(resultObj);
     }
   };
 
@@ -879,27 +637,51 @@ export function TournamentRegistrationModal({
           style={styles.keyboardContainer}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-          {/* Header with Top Nav, Metadata Card & 3-Step Progress */}
+          {/* ─── Minimal Sticky Top Bar with Back [←] and Close [✕] ─── */}
           {!successResult && (
-            <RegistrationHeader
-              tournament={activeTournament}
-              currentStep={currentStep}
-              onBack={() => {
-                if (currentStep === 1) onClose();
-                else if (currentStep === 2) setCurrentStep(1);
-                else if (currentStep === 3) setCurrentStep(2);
-              }}
-              onClose={onClose}
-            />
+            <View style={styles.topNavBar}>
+              <TouchableOpacity
+                onPress={() => {
+                  if (currentStep === 1) onClose();
+                  else if (currentStep === 2) setCurrentStep(1);
+                  else if (currentStep === 3) setCurrentStep(2);
+                }}
+                style={styles.navBarBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Back"
+                accessibilityRole="button"
+              >
+                <ArrowLeft size={22} color="#0F2E28" strokeWidth={2.4} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.navBarBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                accessibilityLabel="Close registration"
+                accessibilityRole="button"
+              >
+                <X size={20} color="#64748B" strokeWidth={2} />
+              </TouchableOpacity>
+            </View>
           )}
 
-          {/* Scrollable Step Content */}
+          {/* ─── Single Page Continuous Scroll Container ─── */}
           <ScrollView
             style={styles.scrollContainer}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
           >
+            {/* Header Content: Title, Badges, 3-Step Progress, Subheading, Summary Card */}
+            {!successResult && (
+              <RegistrationHeader
+                tournament={activeTournament}
+                currentStep={currentStep}
+                hideNavBar={true}
+              />
+            )}
+
             {successResult ? (
               <RegistrationSuccessView
                 tournament={activeTournament}
@@ -949,12 +731,30 @@ const styles = StyleSheet.create({
   keyboardContainer: {
     flex: 1,
   },
+  topNavBar: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    backgroundColor: '#F8FAF9',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    zIndex: 10,
+  },
+  navBarBtn: {
+    padding: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   scrollContainer: {
     flex: 1,
     backgroundColor: '#F8FAF9',
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 48,
   },
   loadingModalOverlay: {
     flex: 1,

@@ -1158,19 +1158,28 @@ class TournamentService:
         player_name = user.full_name if user else "Player"
         player_email = user.email if user else None
 
-        payment_status = (
-            "completed" if existing.status == RegistrationStatus.CONFIRMED
-            else "pending" if existing.status == RegistrationStatus.PENDING
-            else "waitlisted" if existing.status == RegistrationStatus.WAITLISTED
-            else "cancelled"
+        from app.models.payment import Payment, PaymentStatus
+        from sqlalchemy import select
+        stmt = select(Payment).where(
+            Payment.tournament_id == tournament.id,
+            Payment.player_id == user_id,
+            Payment.status == PaymentStatus.SUCCEEDED,
         )
+        existing_p = (await self.db.execute(stmt)).scalars().first()
 
-        payment_method = "Card"
-        if existing.notes and "payment" in existing.notes.lower():
-            if "upi" in existing.notes.lower():
-                payment_method = "UPI"
-            elif "card" in existing.notes.lower():
+        if existing_p:
+            payment_status = "SUCCEEDED"
+        elif calc_fee == 0:
+            payment_status = "FREE"
+        else:
+            payment_status = "NOT_COLLECTED"
+
+        payment_method = "UPI"
+        if existing.notes:
+            if "card" in existing.notes.lower():
                 payment_method = "Card"
+            elif "upi" in existing.notes.lower():
+                payment_method = "UPI"
 
         reg_response = PlayerSelfRegistrationResponse(
             id=existing.id,
@@ -1841,6 +1850,18 @@ class TournamentService:
             if target_status == RegistrationStatus.WAITLISTED
             else "Successfully registered for tournament"
         )
+        calc_payment_status = "FREE" if calc_fee == 0 else "NOT_COLLECTED"
+        pref_method = payload.payment_method if payload and payload.payment_method else ("free" if calc_fee == 0 else "upi")
+
+        # Record preferred payment method in registration notes if provided
+        reg_notes = payload.notes if payload and payload.notes else ""
+        if payload and payload.payment_method and calc_fee > 0:
+            pref_tag = f"[Payment Preference: {payload.payment_method.upper()}]"
+            if pref_tag not in reg_notes:
+                reg_notes = f"{pref_tag} {reg_notes}".strip()
+        reg.notes = reg_notes if reg_notes else None
+        await self.db.commit()
+
         resp_obj = PlayerSelfRegistrationResponse(
             id=reg.id,
             tournament_id=tournament.id,
@@ -1855,13 +1876,9 @@ class TournamentService:
             partner_membership_id=partner_membership.id if partner_membership else None,
             partner_name=partner_user.full_name if partner_user else None,
             fee_amount=calc_fee,
-            payment_status=(
-                "TEST_SUCCESS"
-                if (payload and payload.payment_method and "mobile" in payload.payment_method.lower())
-                else ("completed" if target_status == RegistrationStatus.CONFIRMED else "pending")
-            ),
-            payment_method=payload.payment_method if payload and payload.payment_method else "online",
-            notes=payload.notes if payload else None,
+            payment_status=calc_payment_status,
+            payment_method=pref_method,
+            notes=reg.notes,
             tournament_name=tournament.name,
             tournament_format=tournament.format.value,
             tournament_format_label=tournament.format.display_label,
@@ -1873,74 +1890,6 @@ class TournamentService:
             player_email=user.email if user else None,
             skill_level=payload.skill_level if payload and payload.skill_level else "3.5",
         )
-
-        # Record canonical payment for paid tournament entry if not already created
-        if target_status == RegistrationStatus.CONFIRMED and calc_fee > 0:
-            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
-            from app.repositories.payment_repository import PaymentRepository
-            from sqlalchemy import select
-            try:
-                stmt = select(Payment).where(
-                    Payment.tournament_id == tournament.id,
-                    Payment.player_id == user_id,
-                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.TEST_SUCCESS]),
-                )
-                existing_p = (await self.db.execute(stmt)).scalars().first()
-                if not existing_p:
-                    pay_repo = PaymentRepository(self.db)
-                    reference = await pay_repo.generate_reference()
-                    now_dt = datetime.now(timezone.utc)
-                    p_method = PaymentMethod.ONLINE
-                    p_status = PaymentStatus.SUCCEEDED
-                    if payload and payload.payment_method:
-                        m_str = payload.payment_method.lower().replace("-", "_")
-                        if "mobile" in m_str:
-                            p_method = PaymentMethod.MOBILE_NUMBER_TEST
-                            p_status = PaymentStatus.TEST_SUCCESS
-                        elif "cash" in m_str:
-                            p_method = PaymentMethod.CASH
-                        elif "bank" in m_str:
-                            p_method = PaymentMethod.BANK_TRANSFER
-                        elif "upi" in m_str or "card" in m_str or "online" in m_str:
-                            p_method = PaymentMethod.ONLINE
-
-                    notes_txt = (
-                        f"[SIMULATED TEST PAYMENT - MOBILE NUMBER] Tournament entry: {tournament.name}"
-                        if p_status == PaymentStatus.TEST_SUCCESS
-                        else f"Tournament entry: {tournament.name}"
-                    )
-                    if payload and payload.notes and "mobile:" in payload.notes.lower():
-                        notes_txt = f"{notes_txt} | {payload.notes}"
-
-                    payment = Payment(
-                        reference=reference,
-                        club_id=tournament.club_id,
-                        player_id=user_id,
-                        tournament_id=tournament.id,
-                        amount=Decimal(str(calc_fee)).quantize(Decimal("0.01")),
-                        currency="USD",
-                        status=p_status,
-                        purpose=PaymentPurpose.TOURNAMENT,
-                        payment_method=p_method,
-                        paid_at=now_dt,
-                        notes=notes_txt,
-                        created_by_user_id=user_id,
-                    )
-                    await pay_repo.create(payment)
-
-                    # Persist mobile phone to user profile if available in notes and missing on user
-                    if user and not getattr(user, "phone", None) and payload and payload.notes:
-                        import re
-                        m = re.search(r"mobile:\s*([+\d\s\-()]+)", payload.notes, re.IGNORECASE)
-                        if m:
-                            clean_p = re.sub(r"[^\d+]", "", m.group(1))
-                            if len(clean_p) >= 7:
-                                user.phone = clean_p
-                                self.db.add(user)
-
-                    await self.db.commit()
-            except Exception as e:
-                logger.warning(f"Failed to record canonical payment for tournament entry: {e}")
 
         try:
             active_count = await self.registration_repo.count_active_participants(tournament.id)

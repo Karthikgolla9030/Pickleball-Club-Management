@@ -1,22 +1,19 @@
 /**
  * Aught2 Pickleball — Step 3: Payment & Submit
  *
- * Exact recreation of Screen 3 from reference designs:
- * - Card 1: Registration summary (Division, Players, Entry fee, Service fee, Total due)
- * - Card 2: Payment method (Tabs for Card vs UPI)
- *     * Card: Cardholder name, Card number with card icon, Expiry date, CVV with (?)
- *     * UPI: UPI ID / VPA
- *     * Security callout: "Your payment information is secure and encrypted."
- *     * Checkbox: "I agree to the tournament rules and cancellation policy. *"
- * - Primary Action Button: "Pay $XX.00 & submit registration →"
- * - Subtext: "🔒 Registration is confirmed after successful payment."
+ * Clean, payment-free tournament registration final step:
+ * - Card 1: Registration summary (Division, Players, Fee, Preferred method)
+ * - Card 2: Preferred payment method selection (UPI vs Card)
+ *     * Concise notice: "Payment collection will be enabled soon. No payment is required right now."
+ *     * Terms checkbox: "I agree to the tournament rules and cancellation policy. *"
+ * - Primary Action Button: "Complete Registration"
+ * - Subtext: "Instant registration confirmation upon submission."
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -24,19 +21,14 @@ import { useRouter } from 'expo-router';
 import {
   AlertCircle,
   Check,
+  CheckCircle2,
   CreditCard,
-  HelpCircle,
-  Lock,
-  QrCode,
   ShieldCheck,
-  Smartphone,
-  Sparkles,
   Zap,
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
-import { InternationalPhoneInput } from '../InternationalPhoneInput';
-import type { Tournament, TournamentDiscoveryItem, TournamentFormat } from '@/types';
+import type { Tournament, TournamentDiscoveryItem } from '@/types';
 import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 import type { RegistrationErrors, RegistrationFormState } from './types';
 
@@ -87,12 +79,25 @@ export function Step3PaymentSubmit({
   const feeAmount: number = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
   const isFree = feeAmount === 0;
 
-  const feeLabel = isDoubles ? 'Entry fee (per team)' : 'Entry fee (per player)';
+  const feeLabel = isDoubles ? 'Registration fee (per team)' : 'Registration fee (per player)';
+
+  // Default preferred payment method to 'upi' or 'card' (never 'mobile_number')
+  useEffect(() => {
+    if (formState.paymentMethod === 'mobile_number' || !formState.paymentMethod) {
+      onChange({ paymentMethod: 'upi' });
+    }
+  }, []);
 
   // Players display string
   const playersDisplay = isDoubles
     ? `${formState.fullName || 'Player 1'} & ${formState.partnerFullName || formState.selectedPartner?.full_name || 'Partner 2'}`
     : formState.fullName || 'Player';
+
+  const preferredMethodLabel = isFree
+    ? 'Free Entry'
+    : formState.paymentMethod === 'card'
+    ? 'Card (Preferred)'
+    : 'UPI (Preferred)';
 
   return (
     <View style={styles.container}>
@@ -101,6 +106,11 @@ export function Step3PaymentSubmit({
         <AppText style={styles.cardTitle}>Registration summary</AppText>
 
         <View style={styles.cardBody}>
+          <View style={styles.summaryRow}>
+            <AppText style={styles.summaryLabel}>Tournament</AppText>
+            <AppText style={styles.summaryValue} numberOfLines={1}>{tournament.name}</AppText>
+          </View>
+
           <View style={styles.summaryRow}>
             <AppText style={styles.summaryLabel}>Division</AppText>
             <AppText style={styles.summaryValue}>{category}</AppText>
@@ -113,195 +123,148 @@ export function Step3PaymentSubmit({
 
           <View style={styles.summaryRow}>
             <AppText style={styles.summaryLabel}>{feeLabel}</AppText>
-            <AppText style={styles.summaryValue}>${feeAmount}.00</AppText>
+            <AppText style={styles.summaryValue}>{isFree ? 'Free' : `$${feeAmount}.00`}</AppText>
           </View>
 
-          <View style={styles.summaryRow}>
-            <AppText style={styles.summaryLabel}>Service fee</AppText>
-            <AppText style={styles.summaryValue}>$0.00</AppText>
-          </View>
+          {!isFree && (
+            <View style={styles.summaryRow}>
+              <AppText style={styles.summaryLabel}>Payment preference</AppText>
+              <AppText style={[styles.summaryValue, { color: '#065F46' }]}>
+                {preferredMethodLabel}
+              </AppText>
+            </View>
+          )}
 
           <View style={styles.divider} />
 
           <View style={styles.totalRow}>
-            <AppText style={styles.totalLabel}>Total due</AppText>
-            <AppText style={styles.totalValue}>${feeAmount}.00</AppText>
+            <View>
+              <AppText style={styles.totalLabel}>Due today</AppText>
+              <AppText style={styles.dueSubtext}>
+                {isFree ? 'Free tournament entry' : 'Payment collection enabled soon'}
+              </AppText>
+            </View>
+            <AppText style={styles.totalValue}>$0.00</AppText>
           </View>
         </View>
       </View>
 
-      {/* ─── Card 2: Payment Method ─── */}
-      {!isFree && (
-        <View style={styles.card}>
-          <AppText style={styles.cardTitle}>Payment method</AppText>
+      {/* ─── Card 2: Preferred Payment Method / Terms ─── */}
+      <View style={styles.card}>
+        <AppText style={styles.cardTitle}>
+          {isFree ? 'Rules & agreement' : 'Preferred payment method'}
+        </AppText>
 
-          {/* Payment Tabs: UPI QR Code vs Pay with Mobile Number vs Card */}
-          <View style={styles.tabsRow}>
-            <TouchableOpacity
-              style={[
-                styles.methodTab,
-                formState.paymentMethod === 'upi' && styles.methodTabActive,
-              ]}
-              onPress={() => onChange({ paymentMethod: 'upi' })}
-              activeOpacity={0.8}
-            >
-              <Zap
-                size={15}
-                color={formState.paymentMethod === 'upi' ? '#064E3B' : '#64748B'}
-                strokeWidth={2.2}
-              />
-              <AppText
-                style={[
-                  styles.methodTabText,
-                  formState.paymentMethod === 'upi' && styles.methodTabTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                UPI QR
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.methodTab,
-                formState.paymentMethod === 'mobile_number' && styles.methodTabActive,
-              ]}
-              onPress={() => onChange({ paymentMethod: 'mobile_number' })}
-              activeOpacity={0.8}
-            >
-              <Smartphone
-                size={15}
-                color={formState.paymentMethod === 'mobile_number' ? '#064E3B' : '#64748B'}
-                strokeWidth={2.2}
-              />
-              <AppText
-                style={[
-                  styles.methodTabText,
-                  formState.paymentMethod === 'mobile_number' && styles.methodTabTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                Mobile No.
-              </AppText>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.methodTab,
-                formState.paymentMethod === 'card' && styles.methodTabActive,
-              ]}
-              onPress={() => onChange({ paymentMethod: 'card' })}
-              activeOpacity={0.8}
-            >
-              <CreditCard
-                size={15}
-                color={formState.paymentMethod === 'card' ? '#064E3B' : '#64748B'}
-                strokeWidth={2.2}
-              />
-              <AppText
-                style={[
-                  styles.methodTabText,
-                  formState.paymentMethod === 'card' && styles.methodTabTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                Card
-              </AppText>
-            </TouchableOpacity>
-          </View>
-
-          {/* If Mobile Number Test Mode Selected */}
-          {formState.paymentMethod === 'mobile_number' ? (
-            <View style={{ marginBottom: 10 }}>
-              <View style={styles.testModeBanner}>
-                <View style={styles.testModeBannerHeader}>
-                  <Smartphone size={15} color="#92400E" />
-                  <AppText style={styles.testModeBannerTitle}>Development Dummy Payment</AppText>
-                  <View style={styles.testBadge}>
-                    <AppText style={styles.testBadgeText}>DEV MODE</AppText>
-                  </View>
-                </View>
-                <AppText style={styles.testModeBannerDesc}>
-                  Enter your mobile number to simulate instant tournament payment and registration without real bank charges, OTP, or PINs.
-                </AppText>
-              </View>
-
-              <View style={{ marginBottom: 12 }}>
-                <InternationalPhoneInput
-                  label="Mobile number for payment"
-                  required
-                  value={formState.paymentMobileNumber || formState.phone}
-                  onChangeText={(text) => onChange({ paymentMobileNumber: text })}
-                  error={errors.paymentMobileNumber}
-                  placeholder="Enter mobile number"
-                />
-              </View>
-
-              {Boolean(formState.paymentMobileNumber || formState.phone) && (
-                <View style={styles.phoneConfirmationBox}>
-                  <Check size={14} color="#15803D" strokeWidth={2.5} />
-                  <AppText style={styles.phoneConfirmationText}>
-                    Simulated payment will be confirmed for:{' '}
-                    <AppText style={styles.phoneConfirmationNumber}>
-                      {formState.paymentMobileNumber || formState.phone}
-                    </AppText>
-                  </AppText>
-                </View>
-              )}
-            </View>
-          ) : (
-            <>
-              {/* Secure Provider Integration Details for UPI / Card */}
-              <View style={styles.providerInfoBox}>
-                <View style={styles.providerInfoRow}>
-                  <ShieldCheck size={18} color="#176B57" />
-                  <AppText style={styles.providerInfoTitle}>
-                    {formState.paymentMethod === 'upi' ? 'UPI Dynamic Verification' : 'Verified Secure Card Gateway'}
-                  </AppText>
-                </View>
-                <AppText style={styles.providerInfoDesc}>
-                  {formState.paymentMethod === 'upi'
-                    ? 'Pay seamlessly via Google Pay, PhonePe, Paytm, BHIM or any UPI application with instant real-time booking confirmation.'
-                    : 'Processed through our verified payment gateway with 3-D Secure OTP authentication. Card details are tokenized.'}
-                </AppText>
-              </View>
-
-              {/* Security Banner */}
-              <View style={styles.securityBox}>
-                <ShieldCheck size={16} color="#15803D" style={{ marginTop: 1 }} />
-                <AppText style={styles.securityText}>
-                  Your payment information is secure and encrypted.
-                </AppText>
-              </View>
-            </>
-          )}
-
-          {/* Terms & Cancellation Checkbox */}
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => onChange({ agreeRulesAndCancellation: !formState.agreeRulesAndCancellation })}
-            activeOpacity={0.8}
-          >
-            <View
-              style={[
-                styles.checkboxBox,
-                formState.agreeRulesAndCancellation && styles.checkboxBoxActive,
-              ]}
-            >
-              {formState.agreeRulesAndCancellation && (
-                <Check size={12} color="#FFFFFF" strokeWidth={3} />
-              )}
-            </View>
-            <AppText style={styles.checkboxLabel}>
-              I agree to the <AppText style={styles.linkText}>tournament rules</AppText> and{' '}
-              <AppText style={styles.linkText}>cancellation policy</AppText>. <AppText style={{ color: '#DC2626' }}>*</AppText>
+        {!isFree ? (
+          <>
+            <AppText style={styles.sectionSubtitle}>
+              Select your preferred method for future payment collection.
             </AppText>
-          </TouchableOpacity>
-          {errors.agreeRulesAndCancellation && (
-            <AppText style={styles.errorText}>{errors.agreeRulesAndCancellation}</AppText>
-          )}
-        </View>
-      )}
+
+            {/* Payment Method Selection: UPI vs Card */}
+            <View style={styles.tabsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.methodTab,
+                  formState.paymentMethod === 'upi' && styles.methodTabActive,
+                ]}
+                onPress={() => onChange({ paymentMethod: 'upi' })}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Select UPI preferred payment method"
+              >
+                <Zap
+                  size={16}
+                  color={formState.paymentMethod === 'upi' ? '#064E3B' : '#64748B'}
+                  strokeWidth={2.4}
+                />
+                <AppText
+                  style={[
+                    styles.methodTabText,
+                    formState.paymentMethod === 'upi' && styles.methodTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  UPI
+                </AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.methodTab,
+                  formState.paymentMethod === 'card' && styles.methodTabActive,
+                ]}
+                onPress={() => onChange({ paymentMethod: 'card' })}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Select Card preferred payment method"
+              >
+                <CreditCard
+                  size={16}
+                  color={formState.paymentMethod === 'card' ? '#064E3B' : '#64748B'}
+                  strokeWidth={2.2}
+                />
+                <AppText
+                  style={[
+                    styles.methodTabText,
+                    formState.paymentMethod === 'card' && styles.methodTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  Card
+                </AppText>
+              </TouchableOpacity>
+            </View>
+
+            {/* Concise Payment Notice */}
+            <View style={styles.noticeBox}>
+              <CheckCircle2 size={16} color="#065F46" style={{ marginTop: 2 }} />
+              <View style={styles.noticeTextCol}>
+                <AppText style={styles.noticeTitle}>
+                  Payment collection will be enabled soon. No payment is required right now.
+                </AppText>
+                <AppText style={styles.noticeDesc}>
+                  Your preference will be saved for upcoming payment support. No card details, UPI PIN, or banking credentials are required today.
+                </AppText>
+              </View>
+            </View>
+          </>
+        ) : (
+          <View style={styles.freeNoticeBox}>
+            <ShieldCheck size={16} color="#065F46" style={{ marginTop: 1 }} />
+            <AppText style={styles.freeNoticeText}>
+              This tournament offers free registration. No payment is required.
+            </AppText>
+          </View>
+        )}
+
+        {/* Terms & Cancellation Checkbox */}
+        <TouchableOpacity
+          style={styles.checkboxRow}
+          onPress={() => onChange({ agreeRulesAndCancellation: !formState.agreeRulesAndCancellation })}
+          activeOpacity={0.8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: formState.agreeRulesAndCancellation }}
+        >
+          <View
+            style={[
+              styles.checkboxBox,
+              formState.agreeRulesAndCancellation && styles.checkboxBoxActive,
+            ]}
+          >
+            {formState.agreeRulesAndCancellation && (
+              <Check size={12} color="#FFFFFF" strokeWidth={3} />
+            )}
+          </View>
+          <AppText style={styles.checkboxLabel}>
+            I agree to the <AppText style={styles.linkText}>tournament rules</AppText> and{' '}
+            <AppText style={styles.linkText}>cancellation policy</AppText>. <AppText style={{ color: '#DC2626' }}>*</AppText>
+          </AppText>
+        </TouchableOpacity>
+        {errors.agreeRulesAndCancellation && (
+          <AppText style={styles.errorText}>{errors.agreeRulesAndCancellation}</AppText>
+        )}
+      </View>
 
       {/* ─── Submit Error Display ─── */}
       {submitError && (
@@ -337,43 +300,25 @@ export function Step3PaymentSubmit({
           disabled={isSubmitting}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={
-            formState.paymentMethod === 'mobile_number'
-              ? 'Simulate Payment'
-              : 'Submit payment and registration'
-          }
+          accessibilityLabel="Complete Registration"
         >
           {isSubmitting ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <View style={styles.submittingRow}>
+              <ActivityIndicator size="small" color="#FFFFFF" />
+              <AppText style={styles.submitBtnText}>Completing registration...</AppText>
+            </View>
           ) : (
-            <AppText style={styles.submitBtnText}>
-              {formState.paymentMethod === 'mobile_number'
-                ? isFree
-                  ? 'Simulate Payment →'
-                  : `Simulate Payment ($${feeAmount}.00) →`
-                : isFree
-                ? 'Submit registration →'
-                : `Pay $${feeAmount}.00 & submit registration →`}
-            </AppText>
+            <AppText style={styles.submitBtnText}>Complete Registration</AppText>
           )}
         </TouchableOpacity>
 
-        {/* Lock / Dev Subtext */}
-        {formState.paymentMethod === 'mobile_number' ? (
-          <View style={styles.lockRow}>
-            <Sparkles size={12} color="#D97706" />
-            <AppText style={[styles.lockText, { color: '#B45309', fontWeight: '500' }]}>
-              TEST / SIMULATED transaction for development registration testing.
-            </AppText>
-          </View>
-        ) : (
-          <View style={styles.lockRow}>
-            <Lock size={12} color="#64748B" />
-            <AppText style={styles.lockText}>
-              Registration is confirmed after successful payment.
-            </AppText>
-          </View>
-        )}
+        {/* Reassurance Subtext */}
+        <View style={styles.lockRow}>
+          <CheckCircle2 size={13} color="#065F46" />
+          <AppText style={styles.lockText}>
+            Instant registration confirmation upon submission.
+          </AppText>
+        </View>
       </View>
     </View>
   );
@@ -397,10 +342,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#0F2E28',
-    marginBottom: 12,
+    marginBottom: 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
   },
   cardBody: {
     gap: 8,
@@ -437,6 +387,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0F2E28',
   },
+  dueSubtext: {
+    fontSize: 11,
+    color: '#059669',
+    marginTop: 1,
+    fontWeight: '500',
+  },
   totalValue: {
     fontSize: 18,
     fontWeight: '800',
@@ -445,7 +401,7 @@ const styles = StyleSheet.create({
   tabsRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   methodTab: {
     flex: 1,
@@ -472,139 +428,54 @@ const styles = StyleSheet.create({
     color: '#064E3B',
     fontWeight: '700',
   },
-  fieldsContainer: {
-    gap: 10,
-    marginBottom: 12,
-  },
-  fieldItem: {
-    gap: 4,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    fontSize: 13.5,
-    color: '#0F2E28',
-  },
-  inputWithIcon: {
+  noticeBox: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  innerInput: {
-    flex: 1,
-    fontSize: 13.5,
-    color: '#0F2E28',
-    padding: 0,
-  },
-  rowFields: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  halfField: {
-    flex: 1,
-    gap: 4,
-  },
-  inputError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  errorText: {
-    fontSize: 11,
-    color: '#DC2626',
-    marginTop: 2,
-  },
-  testModeBanner: {
-    backgroundColor: '#FEF3C7',
+    borderColor: '#A7F3D0',
     borderRadius: 10,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  testModeBannerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
+  noticeTextCol: {
+    flex: 1,
+    gap: 3,
   },
-  testModeBannerTitle: {
-    fontSize: 13,
+  noticeTitle: {
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#92400E',
+    color: '#065F46',
+    lineHeight: 17,
   },
-  testBadge: {
-    backgroundColor: '#FDE68A',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 'auto',
-  },
-  testBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#78350F',
-  },
-  testModeBannerDesc: {
-    fontSize: 12,
-    color: '#92400E',
+  noticeDesc: {
+    fontSize: 11.5,
+    color: '#047857',
     lineHeight: 16,
   },
-  phoneConfirmationBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 12,
-  },
-  phoneConfirmationText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#166534',
-  },
-  phoneConfirmationNumber: {
-    fontWeight: '700',
-    color: '#14532D',
-  },
-  securityBox: {
+  freeNoticeBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#F0FDF4',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 10,
+    padding: 10,
     marginBottom: 12,
   },
-  securityText: {
-    flex: 1,
-    fontSize: 11.5,
+  freeNoticeText: {
+    fontSize: 12,
     color: '#15803D',
-    fontWeight: '500',
+    fontWeight: '600',
+    flex: 1,
   },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    marginTop: 4,
+    marginTop: 2,
   },
   checkboxBox: {
     width: 18,
@@ -630,6 +501,11 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#064E3B',
     textDecorationLine: 'underline',
+  },
+  errorText: {
+    fontSize: 11,
+    color: '#DC2626',
+    marginTop: 4,
   },
   submitErrorCard: {
     backgroundColor: '#FEF2F2',
@@ -677,6 +553,11 @@ const styles = StyleSheet.create({
   submitBtnDisabled: {
     opacity: 0.7,
   },
+  submittingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   submitBtnText: {
     fontSize: 15,
     fontWeight: '700',
@@ -691,30 +572,7 @@ const styles = StyleSheet.create({
   },
   lockText: {
     fontSize: 11.5,
-    color: '#64748B',
-  },
-  providerInfoBox: {
-    backgroundColor: '#F0F9F5',
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#D1E7DD',
-    marginBottom: 12,
-    gap: 6,
-  },
-  providerInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  providerInfoTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#102B2A',
-  },
-  providerInfoDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 18,
+    color: '#065F46',
+    fontWeight: '500',
   },
 });

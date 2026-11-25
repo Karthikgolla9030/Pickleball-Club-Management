@@ -124,36 +124,62 @@ export function InternationalPhoneInput({
   const [focused, setFocused] = useState<boolean>(false);
 
   const inputRef = useRef<TextInput>(null);
+  const lastEmittedValueRef = useRef<string | null>(null);
+  const userExplicitlySelectedCountryRef = useRef<boolean>(false);
 
-  // Sync incoming value with internal state
+  // Sync incoming value with internal state only on external prop changes
   useEffect(() => {
+    // If the change was emitted by our own handleTextChange, do not re-process
+    if (value === lastEmittedValueRef.current) {
+      return;
+    }
+
     if (!value || !value.trim()) {
       setNationalNumber('');
       return;
     }
 
     const trimmed = value.trim();
+    const currentDialCode = `+${getCountryCallingCode(selectedCountry)}`;
+
+    // If incoming value begins with current country's dial code, KEEP current country!
+    // Never auto-switch country (e.g. US <-> CA) when they share the same dial code or while typing.
+    if (trimmed.startsWith(currentDialCode)) {
+      const rawDigits = trimmed.slice(currentDialCode.length).replace(/\D/g, '');
+      const ayt = new AsYouType(selectedCountry);
+      setNationalNumber(ayt.input(rawDigits));
+      return;
+    }
+
+    // If the user explicitly chose a country from the dropdown, preserve their choice
+    if (userExplicitlySelectedCountryRef.current) {
+      const ayt = new AsYouType(selectedCountry);
+      setNationalNumber(ayt.input(trimmed.replace(/\D/g, '')));
+      return;
+    }
+
+    // Only for external numbers that start with a DIFFERENT dial code, parse country
     const parsed = parsePhoneNumberFromString(trimmed);
     if (parsed && parsed.country) {
       setSelectedCountry(parsed.country);
       setNationalNumber(parsed.formatNational());
     } else if (trimmed.startsWith('+')) {
-      // Fallback: search country calling code
-      for (const c of ALL_COUNTRIES) {
-        if (trimmed.startsWith(c.dialCode)) {
-          setSelectedCountry(c.code);
-          const raw = trimmed.slice(c.dialCode.length);
-          const ayt = new AsYouType(c.code);
-          setNationalNumber(ayt.input(raw));
-          return;
-        }
+      // Find matching country by longest matching dial code
+      const matching = ALL_COUNTRIES.filter((c) => trimmed.startsWith(c.dialCode))
+        .sort((a, b) => b.dialCode.length - a.dialCode.length);
+      if (matching.length > 0) {
+        setSelectedCountry(matching[0].code);
+        const raw = trimmed.slice(matching[0].dialCode.length).replace(/\D/g, '');
+        const ayt = new AsYouType(matching[0].code);
+        setNationalNumber(ayt.input(raw));
+        return;
       }
       setNationalNumber(trimmed);
     } else {
       const ayt = new AsYouType(selectedCountry);
       setNationalNumber(ayt.input(trimmed));
     }
-  }, [value]);
+  }, [value, selectedCountry]);
 
   const countryItem = useMemo(() => {
     return ALL_COUNTRIES.find((c) => c.code === selectedCountry) || ALL_COUNTRIES[0];
@@ -165,9 +191,16 @@ export function InternationalPhoneInput({
     if (text.startsWith('+')) {
       const parsed = parsePhoneNumberFromString(text);
       if (parsed && parsed.country) {
-        setSelectedCountry(parsed.country);
+        // If current selected country shares dial code with parsed country (e.g. US and CA), keep selected country
+        const currentDialCode = `+${getCountryCallingCode(selectedCountry)}`;
+        const parsedDialCode = `+${getCountryCallingCode(parsed.country)}`;
+        const targetCountry = currentDialCode === parsedDialCode ? selectedCountry : parsed.country;
+
+        setSelectedCountry(targetCountry);
+        userExplicitlySelectedCountryRef.current = true;
         const formatted = parsed.formatNational();
         setNationalNumber(formatted);
+        lastEmittedValueRef.current = parsed.number;
         onChangeText?.(parsed.number);
         return;
       }
@@ -177,6 +210,7 @@ export function InternationalPhoneInput({
     const rawDigits = text.replace(/\D/g, '');
     if (!rawDigits) {
       setNationalNumber('');
+      lastEmittedValueRef.current = '';
       onChangeText?.('');
       return;
     }
@@ -188,12 +222,14 @@ export function InternationalPhoneInput({
     // Compute E.164 value
     const dialCode = `+${getCountryCallingCode(selectedCountry)}`;
     const fullE164 = `${dialCode}${rawDigits}`;
+    lastEmittedValueRef.current = fullE164;
     onChangeText?.(fullE164);
   };
 
   // Handle changing country
   const handleSelectCountry = (country: CountryItem) => {
     setSelectedCountry(country.code);
+    userExplicitlySelectedCountryRef.current = true;
     setModalVisible(false);
     setSearchQuery('');
 
@@ -204,6 +240,7 @@ export function InternationalPhoneInput({
       const formatted = ayt.input(rawDigits);
       setNationalNumber(formatted);
       const fullE164 = `${country.dialCode}${rawDigits}`;
+      lastEmittedValueRef.current = fullE164;
       onChangeText?.(fullE164);
     }
   };

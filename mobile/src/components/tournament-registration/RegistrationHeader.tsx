@@ -41,8 +41,9 @@ import { parseTournamentConfig } from '@/utils/tournamentCapacity';
 interface RegistrationHeaderProps {
   tournament: TournamentDiscoveryItem | Tournament;
   currentStep: RegistrationStep;
-  onBack: () => void;
+  onBack?: () => void;
   onClose?: () => void;
+  hideNavBar?: boolean;
 }
 
 function formatShortDate(dateStr?: string | null): string {
@@ -70,6 +71,7 @@ export function RegistrationHeader({
   currentStep,
   onBack,
   onClose,
+  hideNavBar = false,
 }: RegistrationHeaderProps) {
   const parsed = parseTournamentConfig(tournament);
   const isDoubles = !parsed.isSingles;
@@ -150,31 +152,33 @@ export function RegistrationHeader({
   return (
     <View style={styles.headerRoot}>
       {/* ─── 1. Top Bar: Back [←] and Close [✕] ─── */}
-      <View style={styles.navBar}>
-        <TouchableOpacity
-          onPress={onBack}
-          style={styles.backButton}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityLabel="Back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={22} color="#0F2E28" strokeWidth={2.4} />
-        </TouchableOpacity>
-
-        {onClose ? (
+      {!hideNavBar && onBack && (
+        <View style={styles.navBar}>
           <TouchableOpacity
-            onPress={onClose}
-            style={styles.closeButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityLabel="Close registration"
+            onPress={onBack}
+            style={styles.backButton}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityLabel="Back"
             accessibilityRole="button"
           >
-            <X size={20} color="#64748B" strokeWidth={2} />
+            <ArrowLeft size={22} color="#0F2E28" strokeWidth={2.4} />
           </TouchableOpacity>
-        ) : (
-          <View style={styles.backButtonPlaceholder} />
-        )}
-      </View>
+
+          {onClose ? (
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="Close registration"
+              accessibilityRole="button"
+            >
+              <X size={20} color="#64748B" strokeWidth={2} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.backButtonPlaceholder} />
+          )}
+        </View>
+      )}
 
       <View style={styles.mainContent}>
         {/* ─── 2. Tournament Title & Format Badges ─── */}
