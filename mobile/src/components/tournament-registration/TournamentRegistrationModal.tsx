@@ -94,6 +94,7 @@ export function TournamentRegistrationModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [alreadyRegisteredOverride, setAlreadyRegisteredOverride] = useState(false);
+  const [overrideRegistration, setOverrideRegistration] = useState<PlayerRegistrationResponse | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Check player's registration status from backend
@@ -168,6 +169,7 @@ export function TournamentRegistrationModal({
         setSubmitError(null);
         setErrors({});
         setAlreadyRegisteredOverride(false);
+        setOverrideRegistration(null);
 
         const userFull = user?.full_name || profile?.display_name || 'Player';
         const userEmail = user?.email || (profile as any)?.email || '';
@@ -239,7 +241,7 @@ export function TournamentRegistrationModal({
         visible={visible}
         tournamentId={activeTournament?.id}
         tournament={activeTournament}
-        registration={existingRegistration}
+        registration={overrideRegistration || existingRegistration}
         onClose={onClose}
         onCancelled={() => {
           setAlreadyRegisteredOverride(false);
@@ -617,7 +619,10 @@ export function TournamentRegistrationModal({
         // RegistrationDetailsModal. Without this await, the modal shows "No Registration Found"
         // because existingRegistration is still null while the refetch is in flight.
         try {
-          await refetchMyRegistration();
+          const refetchRes = await refetchMyRegistration();
+          if (refetchRes?.data?.registration) {
+            setOverrideRegistration(refetchRes.data.registration);
+          }
         } catch {
           // Tolerate refetch failures — the RegistrationDetailsModal will retry
         }
