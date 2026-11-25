@@ -220,20 +220,26 @@ export default function BookCourtClubScreen() {
           onRetry={refetch}
         />
       ) : sortedClubs.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <EmptyState
-            title="No Club Memberships"
-            description="You haven't joined any clubs yet. Explore clubs, request membership, and come back to book courts."
-          />
-          <TouchableOpacity
-            style={styles.exploreButton}
-            onPress={() => router.push('/(player)/explore-clubs' as any)}
-            activeOpacity={0.82}
-            accessibilityRole="button"
-          >
-            <Compass size={16} color="#FFFFFF" />
-            <AppText style={styles.exploreButtonText}>Explore Clubs</AppText>
-          </TouchableOpacity>
+        <View style={[styles.emptyContainer, { paddingBottom: insets.bottom + 80 }]}>
+          <View style={styles.emptyCard}>
+            <View style={styles.emptyIconCircle}>
+              <Building2 size={34} color="#176B57" strokeWidth={2} />
+            </View>
+            <AppText style={styles.emptyTitle}>No Club Memberships</AppText>
+            <AppText style={styles.emptyDescription}>
+              You haven't joined any clubs yet. Explore clubs and request membership to start booking courts.
+            </AppText>
+            <TouchableOpacity
+              style={styles.exploreButton}
+              onPress={() => router.push('/(player)/explore-clubs' as any)}
+              activeOpacity={0.84}
+              accessibilityRole="button"
+              accessibilityLabel="Explore Clubs"
+            >
+              <Compass size={18} color="#FFFFFF" strokeWidth={2.2} />
+              <AppText style={styles.exploreButtonText}>Explore Clubs</AppText>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <FlatList
@@ -295,17 +301,58 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyCard: {
+    width: '100%',
+    maxWidth: 380,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingVertical: 32,
     paddingHorizontal: 24,
-    gap: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E8F0EC',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  emptyIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#E8F5F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F2823',
+    textAlign: 'center',
+    marginBottom: 10,
+    lineHeight: 26,
+  },
+  emptyDescription: {
+    fontSize: 14.5,
+    color: '#4B5563',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
   },
   exploreButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     backgroundColor: '#176B57',
-    paddingVertical: 13,
+    paddingVertical: 14,
     paddingHorizontal: 28,
-    borderRadius: 100,
+    borderRadius: 12,
+    width: '100%',
     shadowColor: '#176B57',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -316,6 +363,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+    letterSpacing: 0.2,
   },
 
   // List

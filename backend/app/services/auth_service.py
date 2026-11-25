@@ -162,12 +162,16 @@ class AuthService:
             )
 
         user_id_str = str(user.id)
+        # Authoritative backend identity: Preserve active club memberships if user is a club owner or staff member
+        memberships = await self.membership_repo.get_user_memberships(user.id)
+        active_memberships = [m for m in memberships if m.is_active]
+
         return AuthResponse(
             access_token=create_access_token(user_id_str),
             refresh_token=create_refresh_token(user_id_str),
             token_type="bearer",
             user=UserResponse.model_validate(user),
-            memberships=[],  # Players have no club staff access
+            memberships=[_build_membership_info(m) for m in active_memberships],
         )
 
     async def login_platform(self, email: str, password: str) -> AuthResponse:

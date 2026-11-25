@@ -56,7 +56,7 @@ export default function ClubLayout() {
       return;
     }
 
-    if (memberships.length === 0 || !activeMembership) {
+    if (memberships.length === 0) {
       // Unauthorized: player accounts cannot access club management
       router.replace('/(player)');
       return;

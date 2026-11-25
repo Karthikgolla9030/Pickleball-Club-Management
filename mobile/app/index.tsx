@@ -39,6 +39,7 @@ export default function IndexScreen() {
     const isPlatformAdmin = Boolean(
       user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
     );
+    const hasClubStaff = Boolean(memberships && memberships.length > 0);
 
     // Route based on authenticated portal and backend-verified credentials
     if (isPlatformAdmin) {
@@ -46,22 +47,12 @@ export default function IndexScreen() {
       return;
     }
 
-    if (activePortal === 'club' && memberships.length > 0) {
+    if (hasClubStaff) {
       router.replace('/(club)');
       return;
     }
 
-    if (activePortal === 'player') {
-      router.replace('/(player)');
-      return;
-    }
-
-    // Role-based authoritative fallback
-    if (memberships.length > 0) {
-      router.replace('/(club)');
-    } else {
-      router.replace('/(player)');
-    }
+    router.replace('/(player)');
   }, [isLoading, isAuthenticated, user, memberships, activePortal, router, rootNavigationState?.key]);
 
   return (

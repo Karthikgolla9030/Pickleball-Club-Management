@@ -68,8 +68,8 @@ export default function LoginScreen() {
       );
       if (isPlatformAdmin) {
         router.replace('/platform' as any);
-      } else if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
-        const target = getClubRedirectTarget(activeMembership);
+      } else if (memberships.length > 0 || activePortal === 'club') {
+        const target = getClubRedirectTarget(activeMembership || memberships[0]);
         router.replace(target as any);
       } else {
         router.replace('/(player)');
@@ -119,7 +119,13 @@ export default function LoginScreen() {
         router.replace(target as any);
       } else {
         await loginPlayer(normalizedEmail, password);
-        router.replace('/(player)');
+        const state = useAuthStore.getState();
+        if (state.memberships.length > 0) {
+          const target = getClubRedirectTarget(state.activeMembership || state.memberships[0]);
+          router.replace(target as any);
+        } else {
+          router.replace('/(player)');
+        }
       }
     } catch {
       // Error is stored in Zustand state and rendered in errorBanner

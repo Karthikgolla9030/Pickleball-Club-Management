@@ -41,6 +41,13 @@ export default function PlayerLayout() {
       router.replace('/platform' as any);
       return;
     }
+
+    // Club staff and Club Owners belong in the Club Management Portal and must not be treated as Players
+    const hasClubStaff = Boolean(memberships && memberships.length > 0);
+    if (hasClubStaff) {
+      router.replace('/(club)');
+      return;
+    }
   }, [isAuthenticated, isLoading, user, activePortal, memberships, router]);
 
   return (

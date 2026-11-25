@@ -371,8 +371,15 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         const isPlatformUser = Boolean(
           cachedSession.user.is_platform_admin || isPlatformAdminEmail(cachedSession.user.email)
         );
-        let resolvedPortal = storedPortal || (isPlatformUser ? 'platform' : (cachedSession.memberships?.length > 0 ? 'club' : 'player'));
-        if (isPlatformUser) resolvedPortal = 'platform';
+        const hasClubStaff = Boolean(cachedSession.memberships && cachedSession.memberships.length > 0);
+        let resolvedPortal: AuthPortal = 'player';
+        if (isPlatformUser) {
+          resolvedPortal = 'platform';
+        } else if (hasClubStaff) {
+          resolvedPortal = 'club';
+        } else {
+          resolvedPortal = 'player';
+        }
 
         set({
           user: cachedSession.user,
@@ -425,15 +432,12 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
         const isPlatformUser = Boolean(
           response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
         );
+        const hasClubStaff = Boolean(response.memberships && response.memberships.length > 0);
 
         let resolvedPortal: AuthPortal = 'player';
         if (isPlatformUser) {
           resolvedPortal = 'platform';
-        } else if (storedPortal === 'club' && response.memberships.length > 0) {
-          resolvedPortal = 'club';
-        } else if (storedPortal === 'player') {
-          resolvedPortal = 'player';
-        } else if (response.memberships.length > 0) {
+        } else if (hasClubStaff) {
           resolvedPortal = 'club';
         } else {
           resolvedPortal = 'player';
@@ -583,14 +587,26 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
     try {
       const response = await authApi.loginPlayer(email, password);
       await saveTokens(response.access_token, response.refresh_token);
-      await saveActivePortal('player');
-      await saveUserCache(response.user, []);
+
+      const isPlatformUser = Boolean(
+        response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+      );
+      const hasClubStaff = Boolean(response.memberships && response.memberships.length > 0);
+      const portal: AuthPortal = isPlatformUser
+        ? 'platform'
+        : hasClubStaff
+          ? 'club'
+          : 'player';
+      const activeMembership = hasClubStaff ? response.memberships[0] ?? null : null;
+
+      await saveActivePortal(portal);
+      await saveUserCache(response.user, response.memberships || []);
 
       set({
         user: response.user,
-        memberships: [],
-        activeMembership: null,
-        activePortal: 'player',
+        memberships: response.memberships || [],
+        activeMembership,
+        activePortal: portal,
         isAuthenticated: true,
         isLoading: false,
         error: null,
@@ -703,15 +719,27 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           ? currentActive
           : response.memberships[0] ?? null;
 
+      const isPlatformUser = Boolean(
+        response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+      );
+      const hasClubStaff = Boolean(response.memberships && response.memberships.length > 0);
+      const resolvedPortal: AuthPortal = isPlatformUser
+        ? 'platform'
+        : hasClubStaff
+          ? 'club'
+          : 'player';
+
       const currentUser = get().user || response.user;
       if (currentUser) {
         await saveUserCache(currentUser, response.memberships);
       }
+      await saveActivePortal(resolvedPortal);
 
       set({
         user: response.user,
         memberships: response.memberships,
         activeMembership: validActive,
+        activePortal: resolvedPortal,
       });
     } catch {
       // Ignore background refresh errors

@@ -81,12 +81,13 @@ function RootLayoutContent() {
     const isPlatformAdmin = Boolean(
       user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
     );
+    const hasClubStaffMembership = Boolean(memberships && memberships.length > 0);
 
     // A. Already-authenticated users must NEVER be stuck on login screens (e.g. after mobile browser Back)
     if (inAuthGroup || (rootSegment === 'platform' && segments[1] === 'login')) {
       if (isPlatformAdmin) {
         router.replace('/platform' as any);
-      } else if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
+      } else if (hasClubStaffMembership || activePortal === 'club') {
         router.replace('/(club)');
       } else {
         router.replace('/(player)');
@@ -97,7 +98,7 @@ function RootLayoutContent() {
     // B. Platform portal is strictly reserved for authorized platform administrators
     if (rootSegment === 'platform' && segments[1] !== 'login') {
       if (!isPlatformAdmin) {
-        if (memberships.length > 0) {
+        if (hasClubStaffMembership) {
           router.replace('/(club)');
         } else {
           router.replace('/(player)');
@@ -106,7 +107,7 @@ function RootLayoutContent() {
       }
     }
 
-    // B. Platform Admin must NEVER be placed in Player or Club portals
+    // C. Platform Admin must NEVER be placed in Player or Club portals
     if (isPlatformAdmin) {
       if (rootSegment === '(player)' || rootSegment === '(club)') {
         router.replace('/platform' as any);
@@ -114,9 +115,17 @@ function RootLayoutContent() {
       }
     }
 
-    // C. Non-staff players cannot enter club management screens
+    // D. Club Staff & Club Owners must NEVER be placed into Player portal
+    if (hasClubStaffMembership && !isPlatformAdmin) {
+      if (rootSegment === '(player)') {
+        router.replace('/(club)');
+        return;
+      }
+    }
+
+    // E. Non-staff players cannot enter club management screens
     if (rootSegment === '(club)') {
-      if (memberships.length === 0 || !activeMembership) {
+      if (!hasClubStaffMembership) {
         router.replace('/(player)');
         return;
       }
