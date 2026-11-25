@@ -46,9 +46,7 @@ import {
 
 import { AppText, PlayerHeroBanner, BannerSlide } from '@/components';
 import {
-  useActiveClub,
   useAuth,
-  useClubBranding,
   useDiscoverClubEvents,
   usePlatformBanner,
   usePlatformBranding,
@@ -237,8 +235,6 @@ export default function PlayerHomeScreen() {
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
   const { platformName, maintenanceMode } = usePlatformBranding();
-  const { clubId, clubName } = useActiveClub();
-  const { branding: clubBranding } = useClubBranding(clubId);
   const { banners: platformBanners } = usePlatformBanners();
 
   // 1. Next Booking (real authenticated player bookings)
@@ -303,7 +299,7 @@ export default function PlayerHomeScreen() {
       ctaText: welcomeCta,
       onCtaPress: () => router.push(welcomeDest as any),
       imageUrl: playerBanner?.image_url || null,
-      topRightBadge: clubName ? { text: clubName } : null,
+      topRightBadge: null, // Global player home welcome banner must not display club-specific branding
     };
 
     // 2. Subsequent slides are eligible promotional advertisements
@@ -336,7 +332,7 @@ export default function PlayerHomeScreen() {
     });
 
     return [welcomeSlide, ...adSlides];
-  }, [platformName, playerBanner, displayName, clubName, universalAds, router]);
+  }, [platformName, playerBanner, displayName, universalAds, router]);
 
   // ─── Compute Next Upcoming Booking ─────────────────────────────────────────
   const nextBooking: Booking | null = useMemo(() => {
@@ -656,7 +652,7 @@ export default function PlayerHomeScreen() {
                 nextBooking.court?.display_name ||
                 'Court';
               const clubTitle =
-                nextBooking.club_name || clubName || 'Club Court';
+                nextBooking.club_name || 'Club Court';
               const venueText = `${courtTitle} • ${clubTitle}`;
 
               return (

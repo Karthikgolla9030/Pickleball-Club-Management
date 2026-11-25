@@ -302,7 +302,12 @@ export function PlayerHeroBanner({
 
       {/* ─── Content Layer ─── */}
       <Animated.View style={[styles.contentLayer, { opacity: fadeAnim }]}>
-        <View style={styles.topTextBlock}>
+        <View
+          style={[
+            styles.topTextBlock,
+            !currentSlide.topRightBadge && styles.topTextBlockFullWidth,
+          ]}
+        >
           {/* Eyebrow Label */}
           <AppText style={styles.eyebrowText}>{currentSlide.tag}</AppText>
 
@@ -317,7 +322,10 @@ export function PlayerHeroBanner({
           {/* Supporting Text */}
           {currentSlide.description ? (
             <AppText
-              style={styles.descriptionText}
+              style={[
+                styles.descriptionText,
+                !currentSlide.topRightBadge && styles.descriptionTextFullWidth,
+              ]}
               numberOfLines={2}
             >
               {currentSlide.description}
@@ -450,6 +458,9 @@ const styles = StyleSheet.create({
     gap: 3,
     maxWidth: '78%',
   },
+  topTextBlockFullWidth: {
+    maxWidth: '100%',
+  },
   eyebrowText: {
     color: '#A7F3D0', // Mint/light green
     fontSize: 10.5,
@@ -471,6 +482,9 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 2,
     maxWidth: 260,
+  },
+  descriptionTextFullWidth: {
+    maxWidth: 440,
   },
   bottomBlock: {
     gap: 10,
