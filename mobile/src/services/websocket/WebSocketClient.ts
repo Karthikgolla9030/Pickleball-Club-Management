@@ -205,15 +205,19 @@ export class WebSocketClient {
           // Expected when browser enters bfcache or background
           return;
         }
-        // Log cleanly to console without triggering React Native LogBox warning banner
-        console.log('[WS] Socket error (connection recovery handled in onclose):', (error as any)?.message || error);
+        // Browser WebSocket onerror events on Web are bare Events without details; onclose handles reconnection
+        if (__DEV__) {
+          console.debug('[WS] Socket error (connection recovery handled in onclose):', (error as any)?.message || error);
+        }
       };
 
       ws.onclose = (event) => {
         if (this.socket === ws) {
           this.socket = null;
         }
-        console.log('[WS] Disconnected, code:', event.code, 'reason:', event.reason);
+        if (__DEV__) {
+          console.log('[WS] Disconnected, code:', event.code, 'reason:', event.reason);
+        }
         this.isConnected = false;
         this.clearTimers();
 
@@ -228,7 +232,9 @@ export class WebSocketClient {
         }
       };
     } catch (err) {
-      console.log('[WS] Connection initialization issue:', err);
+      if (__DEV__) {
+        console.log('[WS] Connection initialization issue:', err);
+      }
       if (!this.isExplicitlyClosed && !this.isPaused) {
         this.scheduleReconnect();
       }
@@ -239,16 +245,21 @@ export class WebSocketClient {
     if (this.isExplicitlyClosed || this.isPaused) return;
 
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('[WS] Max reconnect attempts reached. Backing off to max delay.');
+      if (__DEV__) {
+        console.log('[WS] Max reconnect attempts reached. Backing off to max delay.');
+      }
     }
 
+    const jitter = Math.floor(Math.random() * 500);
     const delay = Math.min(
-      this.baseReconnectDelayMs * Math.pow(1.5, this.reconnectAttempts),
+      this.baseReconnectDelayMs * Math.pow(1.5, this.reconnectAttempts) + jitter,
       this.maxReconnectDelayMs
     );
     this.reconnectAttempts++;
 
-    console.log(`[WS] Scheduling reconnect in ${delay}ms (attempt #${this.reconnectAttempts})`);
+    if (__DEV__) {
+      console.log(`[WS] Scheduling reconnect in ${delay}ms (attempt #${this.reconnectAttempts})`);
+    }
     this.reconnectTimeoutId = setTimeout(() => {
       this.initiateConnection();
     }, delay);

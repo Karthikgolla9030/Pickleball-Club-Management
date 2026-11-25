@@ -338,6 +338,20 @@ async function request<T>(
       );
     }
 
+    // Transient network connection drops / resets (e.g. Render container recycling, ERR_CONNECTION_RESET, Failed to fetch)
+    const isNetworkFetchError =
+      error instanceof TypeError ||
+      String(error).includes('Failed to fetch') ||
+      String(error).includes('NetworkError') ||
+      String(error).includes('Network request failed') ||
+      String(error).includes('Load failed');
+
+    if (isNetworkFetchError && !isRetry && !timedOut) {
+      console.log(`[API NETWORK RETRY] Transient network connection reset on ${options.method || 'GET'} ${url}. Retrying in 2.5s...`);
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      return await request<T>(url, options, requireAuth, true);
+    }
+
     console.warn(`[API FAILED] ${options.method || 'GET'} ${url}:`, error);
 
     throw new ApiClientError(

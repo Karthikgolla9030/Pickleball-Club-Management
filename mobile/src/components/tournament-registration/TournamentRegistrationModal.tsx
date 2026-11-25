@@ -503,15 +503,15 @@ export function TournamentRegistrationModal({
   const handleNextFromStep1 = async () => {
     if (!validateStep1()) return;
 
-    // Immediately persist player gender and phone to backend profile so it's verified BEFORE review & payment
+    // Persist player gender and phone to backend profile if available
     if (formState.gender) {
       try {
         await updateProfile({
           gender: formState.gender,
           phone: formState.phone?.trim() || undefined,
         });
-      } catch (err) {
-        console.warn('[REGISTRATION] Profile pre-save failed:', err);
+      } catch {
+        // Silently tolerate if offline or server restarting; backend tournament self_register endpoint also persists profile gender and phone
       }
     }
 
