@@ -34,6 +34,13 @@ async def test_engine():
         poolclass=StaticPool,
         echo=False,
     )
+    import app.core.database as app_db
+    app_db.engine = engine
+    app_db.AsyncSessionLocal = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine

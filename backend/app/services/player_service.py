@@ -49,8 +49,12 @@ from app.schemas.club_player_membership import (
     PlayerClubResponse,
     UpdateClubPlayerMembershipRequest,
 )
+from app.models.booking import Booking, BookingStatus
+from app.models.court import Court
 from app.schemas.player_activity import (
     PlayerActivityItem,
+    PlayerBookingItem,
+    PlayerBookingsResponse,
     UpcomingActivitiesResponse,
     UpcomingActivityItem,
 )
@@ -584,6 +588,20 @@ class PlayerService:
                 club_id=club_id,
                 user_id=target.user_id,
             )
+            if payload.status == PlayerMembershipStatus.ACTIVE:
+                await dispatch_event(
+                    event_type=EventType.MEMBERSHIP_APPROVED,
+                    data=event_payload,
+                    club_id=club_id,
+                    user_id=target.user_id,
+                )
+            elif payload.status in (PlayerMembershipStatus.SUSPENDED, PlayerMembershipStatus.TERMINATED, PlayerMembershipStatus.INACTIVE):
+                await dispatch_event(
+                    event_type=EventType.MEMBERSHIP_REVOKED,
+                    data=event_payload,
+                    club_id=club_id,
+                    user_id=target.user_id,
+                )
             await NotificationService(self.db).create_notification(
                 user_id=target.user_id,
                 club_id=club_id,
@@ -777,10 +795,20 @@ class PlayerService:
             c_res = await self.db.execute(c_stmt)
             user_club_ids = set(c_res.scalars().all())
 
+            # Also include active staff club memberships
+            from app.models.club_membership import ClubMembership
+            sm_stmt = select(ClubMembership.club_id).where(
+                ClubMembership.user_id == user_id,
+                ClubMembership.is_active == True,
+            )
+            sm_res = await self.db.execute(sm_stmt)
+            for cid in sm_res.scalars().all():
+                user_club_ids.add(cid)
+
         # ─── MEMBERSHIP GATE ─────────────────────────────────────────────────
         # Upcoming Activities are strictly club-member-only. Unauthenticated
         # users and authenticated users with no active memberships see nothing.
-        if user_id is None:
+        if user_id is None or not user_club_ids:
             return UpcomingActivitiesResponse(items=[], total=0, has_more=False)
 
         norm_type = activity_type.lower().strip() if activity_type else "all"
@@ -941,6 +969,10 @@ class PlayerService:
                     e_query = e_query.where(Event.club_id == club_id)
                 e_res = await self.db.execute(e_query)
                 for ev, club in e_res.all():
+                    # Private events are visible only to players who are registered for them
+                    if ev.visibility == EventVisibility.PRIVATE and ev.id not in user_event_ids:
+                        continue
+
                     reg_open = (
                         (ev.registration_opens_at is None or ev.registration_opens_at <= now)
                         and (ev.registration_closes_at is None or now <= ev.registration_closes_at)
@@ -1054,6 +1086,289 @@ class PlayerService:
         has_more = (offset + limit) < total
 
         return UpcomingActivitiesResponse(
+            items=paginated,
+            total=total,
+            has_more=has_more,
+        )
+
+    async def get_my_bookings(
+        self,
+        user_id: UUID,
+        club_id: UUID | None = None,
+        activity_type: str | None = None,
+        status_filter: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PlayerBookingsResponse:
+        """
+        Aggregated personal bookings & registrations for the authenticated player.
+        Covers:
+          - Court Bookings (Court reservations)
+          - Tournament Registrations
+          - League Registrations
+          - Event Registrations
+          - Lesson Registrations
+        """
+        now = datetime.now(timezone.utc)
+        items: list[PlayerBookingItem] = []
+        norm_type = activity_type.lower().strip() if activity_type else "all"
+
+        def to_utc(dt: datetime | None) -> datetime:
+            if dt is None:
+                return datetime.now(timezone.utc)
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
+        # ─── 1. COURT BOOKINGS ────────────────────────────────────────────────
+        if norm_type in ("all", "court", "courts"):
+            b_query = (
+                select(Booking, Court, Club)
+                .join(Court, Booking.court_id == Court.id)
+                .join(Club, Booking.club_id == Club.id)
+                .where(Booking.player_id == user_id)
+            )
+            if club_id:
+                b_query = b_query.where(Booking.club_id == club_id)
+            b_res = await self.db.execute(b_query)
+            for b, court, club in b_res.all():
+                st_val = b.status.value if hasattr(b.status, "value") else str(b.status)
+                items.append(
+                    PlayerBookingItem(
+                        id=f"court_{b.id}",
+                        activity_type="court",
+                        record_id=b.id,
+                        activity_id=court.id,
+                        title=f"{court.name} Reservation",
+                        description=f"Court booking at {club.name}",
+                        club_id=club.id,
+                        club_name=club.name,
+                        status=st_val,
+                        status_label=st_val.title(),
+                        start_at=b.start_at,
+                        end_at=b.end_at,
+                        location=court.name,
+                        price=float(b.total_price or 0.0),
+                        currency="USD",
+                        image_url=court.photo_url or club.cover_image_url,
+                        details={
+                            "court_name": court.name,
+                            "court_type": court.indoor_outdoor.value if hasattr(court, "indoor_outdoor") and court.indoor_outdoor else getattr(court, "court_type", "indoor"),
+                            "booking_type": b.booking_type.value if hasattr(b.booking_type, "value") else str(b.booking_type),
+                            "notes": b.notes,
+                            "player_count": b.player_count,
+                        },
+                        created_at=b.created_at,
+                    )
+                )
+
+        # ─── 2. TOURNAMENT REGISTRATIONS ───────────────────────────────────────
+        if norm_type in ("all", "tournament", "tournaments"):
+            t_query = (
+                select(TournamentRegistration, Tournament, Club)
+                .join(Tournament, TournamentRegistration.tournament_id == Tournament.id)
+                .join(Club, Tournament.club_id == Club.id)
+                .join(ClubPlayerMembership, TournamentRegistration.player_membership_id == ClubPlayerMembership.id)
+                .where(ClubPlayerMembership.user_id == user_id)
+            )
+            if club_id:
+                t_query = t_query.where(Tournament.club_id == club_id)
+            t_res = await self.db.execute(t_query)
+            for reg, t, club in t_res.all():
+                st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                cfg = t.format_configuration or {}
+                fee = float(cfg.get("registration_fee", 0.0) or 0.0)
+                img = t.banner_image_url or club.default_tournament_banner_url or club.cover_image_url
+                items.append(
+                    PlayerBookingItem(
+                        id=f"tournament_{reg.id}",
+                        activity_type="tournament",
+                        record_id=reg.id,
+                        activity_id=t.id,
+                        title=t.name,
+                        description=t.description,
+                        club_id=club.id,
+                        club_name=club.name,
+                        status=st_val,
+                        status_label=reg.status.display_label if hasattr(reg.status, "display_label") else st_val.title(),
+                        start_at=t.start_date,
+                        end_at=t.end_date,
+                        location=t.location_name or club.name,
+                        price=fee,
+                        currency="USD",
+                        image_url=img,
+                        details={
+                            "format": t.format.value if hasattr(t.format, "value") else str(t.format),
+                            "format_label": t.format.display_label if hasattr(t.format, "display_label") else str(t.format),
+                            "category": cfg.get("category"),
+                            "seed": reg.seed,
+                            "notes": reg.notes,
+                        },
+                        created_at=reg.created_at or reg.registered_at,
+                    )
+                )
+
+        # ─── 3. LEAGUE REGISTRATIONS ───────────────────────────────────────────
+        if norm_type in ("all", "league", "leagues"):
+            l_query = (
+                select(TeamMember, Team, League, Club)
+                .join(Team, TeamMember.team_id == Team.id)
+                .join(League, Team.league_id == League.id)
+                .join(Club, League.club_id == Club.id)
+                .join(ClubPlayerMembership, TeamMember.player_membership_id == ClubPlayerMembership.id)
+                .where(ClubPlayerMembership.user_id == user_id)
+            )
+            if club_id:
+                l_query = l_query.where(League.club_id == club_id)
+            l_res = await self.db.execute(l_query)
+            for tm, team, lg, club in l_res.all():
+                st_val = lg.status.value if hasattr(lg.status, "value") else str(lg.status)
+                fee = float(lg.registration_fee or 0.0)
+                img = lg.banner_image_url or club.default_league_banner_url or club.cover_image_url
+                items.append(
+                    PlayerBookingItem(
+                        id=f"league_{tm.id}",
+                        activity_type="league",
+                        record_id=tm.id,
+                        activity_id=lg.id,
+                        title=lg.name,
+                        description=lg.description,
+                        club_id=club.id,
+                        club_name=club.name,
+                        status=st_val,
+                        status_label=st_val.replace("_", " ").title(),
+                        start_at=lg.start_date or tm.created_at,
+                        end_at=lg.end_date,
+                        location=club.name,
+                        price=fee,
+                        currency="USD",
+                        image_url=img,
+                        details={
+                            "team_name": team.name,
+                            "team_id": str(team.id),
+                            "number_of_weeks": lg.number_of_weeks,
+                        },
+                        created_at=tm.created_at,
+                    )
+                )
+
+        # ─── 4. EVENT REGISTRATIONS ────────────────────────────────────────────
+        if norm_type in ("all", "event", "events"):
+            e_query = (
+                select(EventRegistration, Event, Club)
+                .join(Event, EventRegistration.event_id == Event.id)
+                .join(Club, Event.club_id == Club.id)
+                .where(EventRegistration.user_id == user_id)
+            )
+            if club_id:
+                e_query = e_query.where(Event.club_id == club_id)
+            e_res = await self.db.execute(e_query)
+            for reg, ev, club in e_res.all():
+                st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                fee = float(ev.registration_fee or 0.0)
+                img = ev.cover_image_url or club.default_event_banner_url or club.cover_image_url
+                items.append(
+                    PlayerBookingItem(
+                        id=f"event_{reg.id}",
+                        activity_type="event",
+                        record_id=reg.id,
+                        activity_id=ev.id,
+                        title=ev.title,
+                        description=ev.description,
+                        club_id=club.id,
+                        club_name=club.name,
+                        status=st_val,
+                        status_label=st_val.title(),
+                        start_at=ev.start_at,
+                        end_at=ev.end_at,
+                        location=ev.location or club.name,
+                        price=fee,
+                        currency=ev.currency or "USD",
+                        image_url=img,
+                        details={
+                            "event_type": ev.event_type.value if hasattr(ev.event_type, "value") else str(ev.event_type),
+                        },
+                        created_at=reg.created_at or reg.registered_at,
+                    )
+                )
+
+        # ─── 5. LESSON REGISTRATIONS ───────────────────────────────────────────
+        if norm_type in ("all", "lesson", "lessons"):
+            ls_query = (
+                select(LessonRegistration, Lesson, Club, LessonType)
+                .join(Lesson, LessonRegistration.lesson_id == Lesson.id)
+                .join(Club, Lesson.club_id == Club.id)
+                .join(LessonType, Lesson.lesson_type_id == LessonType.id)
+                .where(LessonRegistration.user_id == user_id)
+            )
+            if club_id:
+                ls_query = ls_query.where(Lesson.club_id == club_id)
+            ls_res = await self.db.execute(ls_query)
+            for reg, ls, club, lt in ls_res.all():
+                st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                fee = float(ls.price or 0.0)
+                img = ls.image_url or lt.image_url or club.default_lesson_banner_url or club.cover_image_url
+                items.append(
+                    PlayerBookingItem(
+                        id=f"lesson_{reg.id}",
+                        activity_type="lesson",
+                        record_id=reg.id,
+                        activity_id=ls.id,
+                        title=ls.title,
+                        description=ls.description or lt.description,
+                        club_id=club.id,
+                        club_name=club.name,
+                        status=st_val,
+                        status_label=st_val.title(),
+                        start_at=ls.start_at,
+                        end_at=ls.end_at,
+                        location=club.name,
+                        price=fee,
+                        currency="USD",
+                        image_url=img,
+                        details={
+                            "lesson_type": lt.name,
+                            "is_private": lt.is_private,
+                        },
+                        created_at=reg.created_at or reg.registered_at,
+                    )
+                )
+
+        # ─── 6. STATUS FILTERING & DEDUPLICATION ──────────────────────────────
+        seen = set()
+        unique_items: list[PlayerBookingItem] = []
+        for it in items:
+            key = (it.activity_type, str(it.record_id))
+            if key in seen:
+                continue
+            seen.add(key)
+
+            it_end = to_utc(it.end_at or it.start_at)
+
+            norm_status = (status_filter or "").lower().strip()
+            if norm_status == "cancelled":
+                if it.status.lower() in ("cancelled", "canceled", "rejected", "withdrawn"):
+                    unique_items.append(it)
+            elif norm_status == "past":
+                if it.status.lower() not in ("cancelled", "canceled", "rejected", "withdrawn") and it_end < now:
+                    unique_items.append(it)
+            elif norm_status == "upcoming":
+                if it.status.lower() not in ("cancelled", "canceled", "rejected", "withdrawn") and it_end >= now:
+                    unique_items.append(it)
+            else:
+                unique_items.append(it)
+
+        # Sort order: for upcoming sort by start_at ascending, otherwise created_at/start_at descending
+        if (status_filter or "").lower() == "upcoming":
+            unique_items.sort(key=lambda x: to_utc(x.start_at))
+        else:
+            unique_items.sort(key=lambda x: to_utc(x.created_at or x.start_at), reverse=True)
+
+        total = len(unique_items)
+        paginated = unique_items[offset : offset + limit]
+        has_more = (offset + limit) < total
+
+        return PlayerBookingsResponse(
             items=paginated,
             total=total,
             has_more=has_more,

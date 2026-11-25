@@ -780,7 +780,13 @@ class EventService:
                 )
         elif event.visibility == EventVisibility.MEMBERS_ONLY:
             membership = await self.cpm_repo.get_by_user_and_club(user.id, event.club_id)
-            if not membership or membership.status != PlayerMembershipStatus.ACTIVE:
+            is_active_member = membership is not None and membership.status == PlayerMembershipStatus.ACTIVE
+            if not is_active_member:
+                from app.repositories.club_membership_repository import ClubMembershipRepository
+                sm = await ClubMembershipRepository(self.db).get_by_user_and_club(user.id, event.club_id)
+                if sm and sm.is_active:
+                    is_active_member = True
+            if not is_active_member:
                 # Allowed to view only if already registered (edge case), else 403
                 active_reg = await self.event_repo.get_active_registration_for_user(event_id, user.id)
                 if not active_reg:

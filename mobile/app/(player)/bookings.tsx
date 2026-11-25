@@ -1,22 +1,24 @@
 /**
- * Aught2 Pickleball — Player Bookings Screen
+ * Aught2 Pickleball — Player Bookings & Registrations Screen
  *
- * Implements the exact Player Side "Bookings" UI matching the reference design:
- *   - Top header with hamburger menu button and bold "Bookings" title
- *   - 3 filter pills: Upcoming | Past | Cancelled
- *   - Upcoming Bookings section with count and date-box cards
- *   - Past Bookings section with count and court-thumbnail cards
- *   - Cancelled Bookings section with count and status badges
- *   - Fixed display logic: "No bookings yet" only appears when upcoming bookings is genuinely 0
- *   - Tapping any card opens BookingDetailsModal for full details and cancellation
- *   - Auto-refreshes when screen gains focus
+ * Implements the comprehensive Player Side "My Bookings" UI:
+ *   - Unified experience for all 5 activity types:
+ *       1. Court bookings
+ *       2. Tournament registrations
+ *       3. League registrations
+ *       4. Event registrations
+ *       5. Lesson bookings
+ *   - Status filter pills: Upcoming | Past | Cancelled
+ *   - Activity category pills: All | Courts | Tournaments | Leagues | Events | Lessons
+ *   - Real-time synchronization and auto-refresh on focus
+ *   - Tapping court booking opens BookingDetailsModal for full details & cancellation
+ *   - Tapping tournament/league/event/lesson navigates directly to activity details
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -24,45 +26,65 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calendar,
   Clock,
   MapPin,
-  Menu,
   ChevronRight,
   LayoutGrid,
+  Trophy,
+  Award,
+  GraduationCap,
+  Sparkles,
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, BookingDetailsModal } from '@/components';
-import { useActiveClub, useClubBranding, usePlayerBookings } from '@/hooks';
-import { useDrawerStore } from '@/navigation';
+import { useActiveClub, useClubBranding, usePlayerAllBookings, usePlayerBookings } from '@/hooks';
 import { Colors } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
-import type { Booking } from '@/types';
+import type { Booking, PlayerBookingActivityType, PlayerBookingItem } from '@/types';
 
 type FilterTab = 'upcoming' | 'past' | 'cancelled';
+type ActivityCategory = 'all' | PlayerBookingActivityType;
+
+const ACTIVITY_CATEGORIES: { key: ActivityCategory; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'court', label: 'Courts' },
+  { key: 'tournament', label: 'Tournaments' },
+  { key: 'league', label: 'Leagues' },
+  { key: 'event', label: 'Events' },
+  { key: 'lesson', label: 'Lessons' },
+];
 
 export default function PlayerBookingsScreen() {
   const insets = useSafeAreaInsets();
-  const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const router = useRouter();
   const { clubId: selectedClubId } = useActiveClub();
   const { data: clubBranding } = useClubBranding(selectedClubId ?? '');
 
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
+  const [selectedActivity, setSelectedActivity] = useState<ActivityCategory>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
-  // Fetch all player bookings across this club (or all clubs if not specified)
+  // Unified personal records across court bookings, tournaments, leagues, events, lessons
   const {
     bookings,
-    isLoading,
-    isRefetching,
+    isLoading: isLoadingBookings,
+    isRefetching: isRefetchingBookings,
     isError,
     error,
-    refetch: refetchBookings,
-  } = usePlayerBookings({
+    refetchBookings,
+  } = usePlayerAllBookings({
+    clubId: selectedClubId ?? undefined,
+    status: activeTab,
+    activityType: selectedActivity !== 'all' ? selectedActivity : undefined,
+  });
+
+  // Keep player court bookings hook for modal cancellation handler
+  const { refetch: refetchCourtBookings } = usePlayerBookings({
     clubId: selectedClubId ?? undefined,
   });
 
@@ -73,56 +95,57 @@ export default function PlayerBookingsScreen() {
     }, [refetchBookings])
   );
 
-  // Current timestamp for accurate time comparison
   const now = Date.now();
 
   // ─── Filter & Categorize Bookings ──────────────────────────────────────────
+  const filteredBookings = useMemo(() => {
+    return (bookings || []).filter((item) => {
+      if (selectedActivity !== 'all' && item.activity_type !== selectedActivity) {
+        return false;
+      }
+      return true;
+    });
+  }, [bookings, selectedActivity]);
+
   const upcomingBookings = useMemo(() => {
-    return (bookings || [])
+    return filteredBookings
       .filter((b) => {
-        const isCancelled = b.status?.toLowerCase() === 'cancelled';
-        const isFuture = new Date(b.start_at).getTime() > now;
-        return !isCancelled && isFuture;
+        const isCancelled = ['cancelled', 'canceled', 'rejected', 'withdrawn'].includes(
+          b.status?.toLowerCase()
+        );
+        const endTime = b.end_at ? new Date(b.end_at).getTime() : new Date(b.start_at).getTime();
+        return !isCancelled && endTime >= now;
       })
-      .sort(
-        (a, b) =>
-          new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
-      );
-  }, [bookings, now]);
+      .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+  }, [filteredBookings, now]);
 
   const pastBookings = useMemo(() => {
-    return (bookings || [])
+    return filteredBookings
       .filter((b) => {
-        const isCancelled = b.status?.toLowerCase() === 'cancelled';
-        const isPassed = new Date(b.start_at).getTime() <= now;
-        return !isCancelled && isPassed;
+        const isCancelled = ['cancelled', 'canceled', 'rejected', 'withdrawn'].includes(
+          b.status?.toLowerCase()
+        );
+        const endTime = b.end_at ? new Date(b.end_at).getTime() : new Date(b.start_at).getTime();
+        return !isCancelled && endTime < now;
       })
-      .sort(
-        (a, b) =>
-          new Date(b.start_at).getTime() - new Date(a.start_at).getTime()
-      );
-  }, [bookings, now]);
+      .sort((a, b) => new Date(b.start_at).getTime() - new Date(a.start_at).getTime());
+  }, [filteredBookings, now]);
 
   const cancelledBookings = useMemo(() => {
-    return (bookings || [])
-      .filter((b) => b.status?.toLowerCase() === 'cancelled')
-      .sort(
-        (a, b) =>
-          new Date(b.start_at).getTime() - new Date(a.start_at).getTime()
-      );
-  }, [bookings]);
+    return filteredBookings
+      .filter((b) =>
+        ['cancelled', 'canceled', 'rejected', 'withdrawn'].includes(b.status?.toLowerCase())
+      )
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [filteredBookings]);
 
   // ─── Date & Time Formatting Helpers ────────────────────────────────────────
   const parseDateBox = (isoString: string) => {
     try {
       const d = new Date(isoString);
-      const weekday = d
-        .toLocaleDateString('en-US', { weekday: 'short' })
-        .toUpperCase();
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
       const day = d.getDate().toString();
-      const month = d
-        .toLocaleDateString('en-US', { month: 'short' })
-        .toUpperCase();
+      const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
       const year = d.getFullYear().toString();
       return { weekday, day, monthYear: `${month} ${year}` };
     } catch {
@@ -143,15 +166,16 @@ export default function PlayerBookingsScreen() {
     }
   };
 
-  const formatTimeRange = (startIso: string, endIso: string) => {
+  const formatTimeRange = (startIso: string, endIso?: string | null) => {
     try {
       const s = new Date(startIso);
-      const e = new Date(endIso);
       const startStr = s.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
         hour12: true,
       });
+      if (!endIso) return startStr;
+      const e = new Date(endIso);
       const endStr = e.toLocaleTimeString('en-US', {
         hour: 'numeric',
         minute: '2-digit',
@@ -163,32 +187,112 @@ export default function PlayerBookingsScreen() {
     }
   };
 
-  const getCourtImage = (booking: Booking, _index: number) => {
-    if (booking.court?.photo_url && !courtImageErrors[booking.id]) {
-      return { uri: resolveMediaUrl(booking.court.photo_url) };
+  // ─── Navigation & Action Handling ──────────────────────────────────────────
+  const handleItemPress = (item: PlayerBookingItem) => {
+    if (item.activity_type === 'court') {
+      // Build compatible Booking object for Modal
+      const compatibleBooking: Booking = {
+        id: item.record_id,
+        court_id: item.activity_id || item.record_id,
+        player_id: '',
+        created_by_user_id: '',
+        duration_minutes: 60,
+        cancelled_at: null,
+        cancelled_by_user_id: null,
+        cancellation_reason: null,
+        club_id: item.club_id,
+        club_name: item.club_name,
+        court: {
+          id: item.activity_id || item.record_id,
+          club_id: item.club_id,
+          name: item.title.replace(' Reservation', ''),
+          surface_type: (item.details?.court_type as any) || 'hard',
+          court_type: (item.details?.court_type as any) || 'indoor',
+          is_active: true,
+          photo_url: item.image_url || null,
+        } as any,
+        start_at: item.start_at,
+        end_at: item.end_at || item.start_at,
+        status: (item.status as any) || 'confirmed',
+        booking_type: (item.details?.booking_type as any) || 'casual',
+        total_price: item.price,
+        notes: item.details?.notes || null,
+        created_at: item.created_at,
+        updated_at: item.created_at,
+      };
+      setSelectedBooking(compatibleBooking);
+      setDetailsModalVisible(true);
+    } else if (item.activity_type === 'tournament' && item.activity_id) {
+      (router.push as any)({
+        pathname: '/(player)/tournament-details',
+        params: { id: item.activity_id },
+      });
+    } else if (item.activity_type === 'league' && item.activity_id) {
+      (router.push as any)({
+        pathname: '/(player)/league-details',
+        params: { id: item.activity_id },
+      });
+    } else if (item.activity_type === 'event') {
+      (router.push as any)('/(player)/events');
+    } else if (item.activity_type === 'lesson') {
+      (router.push as any)('/(player)/lessons');
     }
-    return null;
   };
 
-  const handleCardPress = (booking: Booking) => {
-    setSelectedBooking(booking);
-    setDetailsModalVisible(true);
+  // ─── Render Activity Badge ─────────────────────────────────────────────────
+  const renderActivityBadge = (type: PlayerBookingActivityType) => {
+    switch (type) {
+      case 'court':
+        return (
+          <View style={[styles.typeBadge, styles.typeBadgeCourt]}>
+            <LayoutGrid size={11} color="#065F46" />
+            <AppText style={[styles.typeBadgeText, styles.typeBadgeTextCourt]}>Court</AppText>
+          </View>
+        );
+      case 'tournament':
+        return (
+          <View style={[styles.typeBadge, styles.typeBadgeTournament]}>
+            <Trophy size={11} color="#6B21A8" />
+            <AppText style={[styles.typeBadgeText, styles.typeBadgeTextTournament]}>Tournament</AppText>
+          </View>
+        );
+      case 'league':
+        return (
+          <View style={[styles.typeBadge, styles.typeBadgeLeague]}>
+            <Award size={11} color="#1E40AF" />
+            <AppText style={[styles.typeBadgeText, styles.typeBadgeTextLeague]}>League</AppText>
+          </View>
+        );
+      case 'event':
+        return (
+          <View style={[styles.typeBadge, styles.typeBadgeEvent]}>
+            <Sparkles size={11} color="#92400E" />
+            <AppText style={[styles.typeBadgeText, styles.typeBadgeTextEvent]}>Event</AppText>
+          </View>
+        );
+      case 'lesson':
+        return (
+          <View style={[styles.typeBadge, styles.typeBadgeLesson]}>
+            <GraduationCap size={11} color="#166534" />
+            <AppText style={[styles.typeBadgeText, styles.typeBadgeTextLesson]}>Lesson</AppText>
+          </View>
+        );
+      default:
+        return null;
+    }
   };
 
   // ─── Render Cards ──────────────────────────────────────────────────────────
-  const renderUpcomingCard = (booking: Booking) => {
-    const { weekday, day, monthYear } = parseDateBox(booking.start_at);
-    const timeRange = formatTimeRange(booking.start_at, booking.end_at);
-    const courtName =
-      booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Club';
-    const venueText = `${courtName} • ${clubName}`;
+  const renderUpcomingCard = (item: PlayerBookingItem) => {
+    const { weekday, day, monthYear } = parseDateBox(item.start_at);
+    const timeRange = formatTimeRange(item.start_at, item.end_at);
+    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
 
     return (
       <TouchableOpacity
-        key={booking.id}
+        key={item.id}
         style={styles.upcomingCard}
-        onPress={() => handleCardPress(booking)}
+        onPress={() => handleItemPress(item)}
         activeOpacity={0.88}
       >
         {/* Left Date Panel */}
@@ -200,7 +304,16 @@ export default function PlayerBookingsScreen() {
 
         {/* Right Details */}
         <View style={styles.cardDetails}>
-          <AppText style={styles.cardTitle}>Court Booking</AppText>
+          <View style={styles.cardHeaderRow}>
+            {renderActivityBadge(item.activity_type)}
+            <View style={styles.confirmedBadge}>
+              <AppText style={styles.confirmedBadgeText}>{item.status_label}</AppText>
+            </View>
+          </View>
+
+          <AppText style={styles.cardTitle} numberOfLines={1}>
+            {item.title}
+          </AppText>
 
           <View style={styles.cardMetaRow}>
             <Clock size={13} color="#718279" strokeWidth={2} />
@@ -215,16 +328,9 @@ export default function PlayerBookingsScreen() {
           </View>
 
           <View style={styles.badgeRow}>
-            <View style={styles.confirmedBadge}>
-              <AppText style={styles.confirmedBadgeText}>Confirmed</AppText>
-            </View>
             <View style={styles.playerPriceBadge}>
               <AppText style={styles.playerPriceBadgeText}>
-                {booking.total_price != null
-                  ? formatCurrency(booking.total_price)
-                  : booking.court?.price_per_hour != null
-                    ? `${formatCurrency(booking.court.price_per_hour)}/hr`
-                    : 'Free'}
+                {item.price > 0 ? formatCurrency(item.price) : 'Free'}
               </AppText>
             </View>
           </View>
@@ -238,52 +344,56 @@ export default function PlayerBookingsScreen() {
     );
   };
 
-  const renderPastCard = (booking: Booking, index: number) => {
-    const dateFormatted = formatPastDate(booking.start_at);
-    const timeRange = formatTimeRange(booking.start_at, booking.end_at);
-    const courtName =
-      booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Club';
-    const venueText = `${courtName} • ${clubName}`;
-    const courtImage = getCourtImage(booking, index);
+  const renderPastCard = (item: PlayerBookingItem) => {
+    const dateFormatted = formatPastDate(item.start_at);
+    const timeRange = formatTimeRange(item.start_at, item.end_at);
+    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
 
     return (
       <TouchableOpacity
-        key={booking.id}
+        key={item.id}
         style={styles.pastCard}
-        onPress={() => handleCardPress(booking)}
+        onPress={() => handleItemPress(item)}
         activeOpacity={0.88}
       >
-        {/* Left Image Thumbnail */}
-        {courtImage ? (
+        {/* Left Thumbnail or Icon */}
+        {item.image_url && !courtImageErrors[item.id] ? (
           <Image
-            key={`${booking.id}-${booking.court?.photo_url || 'custom'}`}
-            source={courtImage}
+            source={{ uri: resolveMediaUrl(item.image_url) }}
             style={styles.courtThumbnail}
             onError={() => {
-              if (booking.id && !courtImageErrors[booking.id]) {
-                setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
-              }
+              setCourtImageErrors((prev) => ({ ...prev, [item.id]: true }));
             }}
           />
         ) : (
           <View style={styles.courtThumbnailFallback}>
-            <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
+            {item.activity_type === 'tournament' ? (
+              <Trophy size={22} color="#6B21A8" strokeWidth={1.8} />
+            ) : item.activity_type === 'league' ? (
+              <Award size={22} color="#1E40AF" strokeWidth={1.8} />
+            ) : item.activity_type === 'lesson' ? (
+              <GraduationCap size={22} color="#166534" strokeWidth={1.8} />
+            ) : item.activity_type === 'event' ? (
+              <Sparkles size={22} color="#92400E" strokeWidth={1.8} />
+            ) : (
+              <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
+            )}
           </View>
         )}
 
         {/* Details */}
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
-            <AppText style={styles.cardTitle}>Court Booking</AppText>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              {renderActivityBadge(item.activity_type)}
+              <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
+                {item.title}
+              </AppText>
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <View style={styles.playerPriceBadge}>
                 <AppText style={styles.playerPriceBadgeText}>
-                  {booking.total_price != null
-                    ? formatCurrency(booking.total_price)
-                    : booking.court?.price_per_hour != null
-                      ? `${formatCurrency(booking.court.price_per_hour)}/hr`
-                      : 'Free'}
+                  {item.price > 0 ? formatCurrency(item.price) : 'Free'}
                 </AppText>
               </View>
               <View style={styles.completedBadge}>
@@ -310,7 +420,6 @@ export default function PlayerBookingsScreen() {
           </View>
         </View>
 
-        {/* Chevron */}
         <View style={styles.chevronWrapper}>
           <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
         </View>
@@ -318,52 +427,37 @@ export default function PlayerBookingsScreen() {
     );
   };
 
-  const renderCancelledCard = (booking: Booking, index: number) => {
-    const dateFormatted = formatPastDate(booking.start_at);
-    const timeRange = formatTimeRange(booking.start_at, booking.end_at);
-    const courtName =
-      booking.court?.display_name || booking.court?.name || 'Court';
-    const clubName = booking.club_name || 'Club';
-    const venueText = `${courtName} • ${clubName}`;
-    const courtImage = getCourtImage(booking, index);
+  const renderCancelledCard = (item: PlayerBookingItem) => {
+    const dateFormatted = formatPastDate(item.start_at);
+    const timeRange = formatTimeRange(item.start_at, item.end_at);
+    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
 
     return (
       <TouchableOpacity
-        key={booking.id}
+        key={item.id}
         style={styles.pastCard}
-        onPress={() => handleCardPress(booking)}
+        onPress={() => handleItemPress(item)}
         activeOpacity={0.88}
       >
-        {courtImage ? (
-          <Image
-            key={`${booking.id}-${booking.court?.photo_url || 'custom'}`}
-            source={courtImage}
-            style={styles.courtThumbnail}
-            onError={() => {
-              if (booking.id && !courtImageErrors[booking.id]) {
-                setCourtImageErrors((prev) => ({ ...prev, [booking.id]: true }));
-              }
-            }}
-          />
-        ) : (
-          <View style={styles.courtThumbnailFallback}>
-            <LayoutGrid size={22} color="#18794E" strokeWidth={1.8} />
-          </View>
-        )}
+        <View style={styles.courtThumbnailFallback}>
+          {item.activity_type === 'tournament' ? (
+            <Trophy size={22} color="#94A3B8" strokeWidth={1.8} />
+          ) : item.activity_type === 'league' ? (
+            <Award size={22} color="#94A3B8" strokeWidth={1.8} />
+          ) : (
+            <LayoutGrid size={22} color="#94A3B8" strokeWidth={1.8} />
+          )}
+        </View>
 
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
-            <AppText style={styles.cardTitle}>Court Booking</AppText>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              {renderActivityBadge(item.activity_type)}
+              <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
+                {item.title}
+              </AppText>
+            </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={styles.playerPriceBadge}>
-                <AppText style={styles.playerPriceBadgeText}>
-                  {booking.total_price != null
-                    ? formatCurrency(booking.total_price)
-                    : booking.court?.price_per_hour != null
-                      ? `${formatCurrency(booking.court.price_per_hour)}/hr`
-                      : 'Free'}
-                </AppText>
-              </View>
               <View style={styles.cancelledBadge}>
                 <AppText style={styles.cancelledBadgeText}>Cancelled</AppText>
               </View>
@@ -398,9 +492,9 @@ export default function PlayerBookingsScreen() {
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
-      <AppHeader title="Bookings" showMenu borderless />
+      <AppHeader title="My Bookings" showMenu borderless />
 
-      {/* ─── 3 Filter Tabs / Pills ─── */}
+      {/* ─── Status Tabs / Pills ─── */}
       <View style={styles.filterTabsRow}>
         {(['upcoming', 'past', 'cancelled'] as const).map((tab) => {
           const isActive = activeTab === tab;
@@ -415,23 +509,50 @@ export default function PlayerBookingsScreen() {
             <TouchableOpacity
               key={tab}
               onPress={() => setActiveTab(tab)}
-              style={[
-                styles.filterTabPill,
-                isActive && styles.filterTabPillActive,
-              ]}
+              style={[styles.filterTabPill, isActive && styles.filterTabPillActive]}
               activeOpacity={0.8}
             >
               <AppText
-                style={[
-                  styles.filterTabText,
-                  isActive && styles.filterTabTextActive,
-                ]}
+                style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
               >
                 {label}
               </AppText>
             </TouchableOpacity>
           );
         })}
+      </View>
+
+      {/* ─── Activity Category Filter Chips ─── */}
+      <View style={styles.categoryContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryScrollContent}
+        >
+          {ACTIVITY_CATEGORIES.map((cat) => {
+            const isCatActive = selectedActivity === cat.key;
+            return (
+              <TouchableOpacity
+                key={cat.key}
+                onPress={() => setSelectedActivity(cat.key)}
+                style={[
+                  styles.categoryPill,
+                  isCatActive && styles.categoryPillActive,
+                ]}
+                activeOpacity={0.8}
+              >
+                <AppText
+                  style={[
+                    styles.categoryPillText,
+                    isCatActive && styles.categoryPillTextActive,
+                  ]}
+                >
+                  {cat.label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ─── Bookings Content ─── */}
@@ -441,10 +562,11 @@ export default function PlayerBookingsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={isRefetchingBookings}
             onRefresh={() => {
               setCourtImageErrors({});
               refetchBookings();
+              refetchCourtBookings();
             }}
             colors={[Colors.brand.primary]}
             tintColor={Colors.brand.primary}
@@ -452,17 +574,17 @@ export default function PlayerBookingsScreen() {
         }
       >
         {/* Loading State */}
-        {isLoading ? (
+        {isLoadingBookings ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#114D3F" />
-            <AppText style={styles.loadingText}>Loading bookings...</AppText>
+            <AppText style={styles.loadingText}>Loading your bookings & registrations...</AppText>
           </View>
         ) : isError ? (
           /* Error State */
           <View style={styles.errorContainer}>
             <AppText style={styles.errorText}>
               {error?.message ||
-                'Unable to load bookings. Please check your connection and try again.'}
+                'Unable to load your bookings. Please check your connection and try again.'}
             </AppText>
             <TouchableOpacity
               style={styles.retryButton}
@@ -476,52 +598,42 @@ export default function PlayerBookingsScreen() {
             {/* ════════════ TAB: UPCOMING ════════════ */}
             {activeTab === 'upcoming' && (
               <>
-                {/* Section Header */}
                 <View style={styles.sectionHeaderRow}>
-                  <AppText style={styles.sectionTitle}>
-                    Upcoming Bookings
-                  </AppText>
+                  <AppText style={styles.sectionTitle}>Upcoming Bookings & Events</AppText>
                   {upcomingBookings.length > 0 && (
                     <AppText style={styles.sectionCount}>
                       {upcomingBookings.length}{' '}
-                      {upcomingBookings.length === 1 ? 'Booking' : 'Bookings'}
+                      {upcomingBookings.length === 1 ? 'Record' : 'Records'}
                     </AppText>
                   )}
                 </View>
 
-                {/* Upcoming List or Empty State */}
                 {upcomingBookings.length > 0 ? (
                   upcomingBookings.map((b) => renderUpcomingCard(b))
                 ) : (
-                  /* "No bookings yet" appears ONLY when upcoming bookings is 0 */
                   <View style={styles.emptyCard}>
                     <View style={styles.emptyIconContainer}>
                       <Calendar size={22} color="#176B57" strokeWidth={2.2} />
                     </View>
                     <View style={styles.emptyTextContainer}>
-                      <AppText style={styles.emptyTitle}>
-                        No bookings yet
-                      </AppText>
+                      <AppText style={styles.emptyTitle}>No upcoming bookings yet</AppText>
                       <AppText style={styles.emptySubtitle}>
-                        Your court bookings will appear here.
+                        Your court bookings, tournament registrations, and league entries will appear here.
                       </AppText>
                     </View>
                   </View>
                 )}
 
-                {/* Past Bookings Section (displayed if player has past bookings) */}
+                {/* Secondary: Show past records if they exist in upcoming tab */}
                 {pastBookings.length > 0 && (
                   <>
-                    <View style={[styles.sectionHeaderRow, { marginTop: 24 }]}>
-                      <AppText style={styles.sectionTitle}>
-                        Past Bookings
-                      </AppText>
+                    <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+                      <AppText style={styles.sectionTitle}>Past Records</AppText>
                       <AppText style={styles.sectionCount}>
-                        {pastBookings.length}{' '}
-                        {pastBookings.length === 1 ? 'Booking' : 'Bookings'}
+                        {pastBookings.length} {pastBookings.length === 1 ? 'Record' : 'Records'}
                       </AppText>
                     </View>
-                    {pastBookings.map((b, idx) => renderPastCard(b, idx))}
+                    {pastBookings.map((b) => renderPastCard(b))}
                   </>
                 )}
               </>
@@ -531,28 +643,25 @@ export default function PlayerBookingsScreen() {
             {activeTab === 'past' && (
               <>
                 <View style={styles.sectionHeaderRow}>
-                  <AppText style={styles.sectionTitle}>Past Bookings</AppText>
+                  <AppText style={styles.sectionTitle}>Completed Activities</AppText>
                   {pastBookings.length > 0 && (
                     <AppText style={styles.sectionCount}>
-                      {pastBookings.length}{' '}
-                      {pastBookings.length === 1 ? 'Booking' : 'Bookings'}
+                      {pastBookings.length} {pastBookings.length === 1 ? 'Record' : 'Records'}
                     </AppText>
                   )}
                 </View>
 
                 {pastBookings.length > 0 ? (
-                  pastBookings.map((b, idx) => renderPastCard(b, idx))
+                  pastBookings.map((b) => renderPastCard(b))
                 ) : (
                   <View style={styles.emptyCard}>
                     <View style={styles.emptyIconContainer}>
                       <Calendar size={22} color="#176B57" strokeWidth={2.2} />
                     </View>
                     <View style={styles.emptyTextContainer}>
-                      <AppText style={styles.emptyTitle}>
-                        No past bookings
-                      </AppText>
+                      <AppText style={styles.emptyTitle}>No completed bookings</AppText>
                       <AppText style={styles.emptySubtitle}>
-                        Your completed court bookings will appear here.
+                        Past court sessions and completed competitions will appear here.
                       </AppText>
                     </View>
                   </View>
@@ -564,30 +673,26 @@ export default function PlayerBookingsScreen() {
             {activeTab === 'cancelled' && (
               <>
                 <View style={styles.sectionHeaderRow}>
-                  <AppText style={styles.sectionTitle}>
-                    Cancelled Bookings
-                  </AppText>
+                  <AppText style={styles.sectionTitle}>Cancelled Bookings</AppText>
                   {cancelledBookings.length > 0 && (
                     <AppText style={styles.sectionCount}>
                       {cancelledBookings.length}{' '}
-                      {cancelledBookings.length === 1 ? 'Booking' : 'Bookings'}
+                      {cancelledBookings.length === 1 ? 'Record' : 'Records'}
                     </AppText>
                   )}
                 </View>
 
                 {cancelledBookings.length > 0 ? (
-                  cancelledBookings.map((b, idx) => renderCancelledCard(b, idx))
+                  cancelledBookings.map((b) => renderCancelledCard(b))
                 ) : (
                   <View style={styles.emptyCard}>
                     <View style={styles.emptyIconContainer}>
                       <Calendar size={22} color="#176B57" strokeWidth={2.2} />
                     </View>
                     <View style={styles.emptyTextContainer}>
-                      <AppText style={styles.emptyTitle}>
-                        No cancelled bookings
-                      </AppText>
+                      <AppText style={styles.emptyTitle}>No cancelled bookings</AppText>
                       <AppText style={styles.emptySubtitle}>
-                        You have no cancelled court reservations.
+                        Cancelled reservations or registrations will appear here.
                       </AppText>
                     </View>
                   </View>
@@ -598,16 +703,16 @@ export default function PlayerBookingsScreen() {
         )}
       </ScrollView>
 
-      {/* ─── Booking Details Modal ─── */}
+      {/* ─── Booking Details Modal (for court reservations) ─── */}
       <BookingDetailsModal
         visible={detailsModalVisible}
         onClose={() => {
           setDetailsModalVisible(false);
-          refetchBookings();
+          setSelectedBooking(null);
         }}
         booking={selectedBooking}
         mode="player"
-        clubId={selectedClubId || selectedBooking?.club_id || ''}
+        clubId={selectedBooking?.club_id || selectedClubId || ''}
       />
     </View>
   );
@@ -616,100 +721,129 @@ export default function PlayerBookingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAF9',
+    backgroundColor: '#F7F9F8',
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    backgroundColor: '#F8FAF9',
-  },
-  menuButton: {
-    padding: 4,
-    marginRight: 14,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F2922',
-    letterSpacing: -0.3,
-  },
-  // ─── Filter Tabs / Pills ───
   filterTabsRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 6,
     gap: 8,
-    marginBottom: 16,
+    backgroundColor: '#F7F9F8',
   },
   filterTabPill: {
-    flex: 1,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: '#EAEFEA',
   },
   filterTabPillActive: {
-    backgroundColor: Colors.brand.primary,
-    borderColor: Colors.brand.primary,
-    shadowColor: Colors.brand.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: '#114D3F',
   },
   filterTabText: {
     fontSize: 13,
-    fontWeight: '500',
-    color: '#63756E',
+    fontWeight: '600',
+    color: '#4B6358',
   },
   filterTabTextActive: {
     color: '#FFFFFF',
+  },
+  categoryContainer: {
+    backgroundColor: '#F7F9F8',
+    paddingBottom: 8,
+  },
+  categoryScrollContent: {
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  categoryPill: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  categoryPillActive: {
+    backgroundColor: '#064E3B',
+    borderColor: '#064E3B',
+  },
+  categoryPillText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  categoryPillTextActive: {
+    color: '#FFFFFF',
     fontWeight: '600',
   },
-  // ─── Content ───
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 18,
-    paddingBottom: 100,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#718279',
+    fontWeight: '500',
+  },
+  errorContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingVertical: 9,
+    paddingHorizontal: 22,
+    backgroundColor: '#114D3F',
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   sectionHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
+    marginTop: 4,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#0F2922',
-    letterSpacing: -0.2,
+    color: '#132A21',
   },
   sectionCount: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#135C48',
+    color: '#718279',
   },
-  // ─── Upcoming Card ───
   upcomingCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
     flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EEF3F0',
+    borderColor: '#E8ECE9',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -717,169 +851,206 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   dateBox: {
-    width: 74,
-    height: 84,
-    borderRadius: 12,
-    backgroundColor: '#EDF7F2',
+    width: 68,
+    height: 76,
+    backgroundColor: '#EBF4F0',
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
   },
   dateBoxWeekday: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#5C7A6F',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#176B57',
     letterSpacing: 0.5,
   },
   dateBoxDay: {
-    fontSize: 25,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#0F2922',
-    lineHeight: 29,
-    marginVertical: 1,
+    color: '#114D3F',
+    lineHeight: 26,
   },
   dateBoxMonthYear: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '600',
-    color: '#5C7A6F',
-    letterSpacing: 0.5,
+    color: '#52796F',
+    letterSpacing: 0.2,
   },
   cardDetails: {
     flex: 1,
-    paddingLeft: 14,
+    marginLeft: 12,
     justifyContent: 'center',
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F2922',
-    marginBottom: 5,
+    color: '#132A21',
+    marginBottom: 4,
   },
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 5,
+    marginTop: 2,
   },
   cardMetaText: {
-    fontSize: 12.5,
-    color: '#5E6E66',
-    marginLeft: 6,
+    fontSize: 12,
+    color: '#5C7065',
+    fontWeight: '500',
     flexShrink: 1,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
+    marginTop: 6,
   },
-  playerPriceBadge: {
-    backgroundColor: '#F0FDF4',
+  typeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
+  },
+  typeBadgeCourt: {
+    backgroundColor: '#ECFDF5',
+  },
+  typeBadgeTextCourt: {
+    color: '#065F46',
+  },
+  typeBadgeTournament: {
+    backgroundColor: '#FAF5FF',
+  },
+  typeBadgeTextTournament: {
+    color: '#6B21A8',
+  },
+  typeBadgeLeague: {
+    backgroundColor: '#EFF6FF',
+  },
+  typeBadgeTextLeague: {
+    color: '#1E40AF',
+  },
+  typeBadgeEvent: {
+    backgroundColor: '#FEF3C7',
+  },
+  typeBadgeTextEvent: {
+    color: '#92400E',
+  },
+  typeBadgeLesson: {
+    backgroundColor: '#F0FDF4',
+  },
+  typeBadgeTextLesson: {
+    color: '#166534',
+  },
+  typeBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  confirmedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#E8F5E9',
+  },
+  confirmedBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+  playerPriceBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F3',
   },
   playerPriceBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#15803D',
+    color: '#114D3F',
   },
-  confirmedBadge: {
-    backgroundColor: '#E5F5EC',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
+  completedBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: 6,
-    alignSelf: 'flex-start',
+    backgroundColor: '#F3F4F6',
   },
-  confirmedBadgeText: {
+  completedBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#176B57',
+    color: '#4B5563',
+  },
+  cancelledBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+  },
+  cancelledBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   chevronWrapper: {
-    paddingLeft: 6,
-    paddingRight: 4,
+    paddingLeft: 4,
   },
-  // ─── Past Card ───
   pastCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
     flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#EEF3F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: '#E8ECE9',
   },
   courtThumbnail: {
-    width: 72,
+    width: 68,
     height: 72,
-    borderRadius: 12,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
   },
   courtThumbnailFallback: {
-    width: 72,
+    width: 68,
     height: 72,
-    borderRadius: 12,
-    backgroundColor: '#E8F5EE',
+    borderRadius: 10,
+    backgroundColor: '#EBF4F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pastCardDetails: {
     flex: 1,
-    paddingLeft: 12,
-    justifyContent: 'center',
+    marginLeft: 12,
   },
   pastTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 5,
+    marginBottom: 3,
   },
-  completedBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 12,
-  },
-  completedBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '500',
-    color: '#64748B',
-  },
-  cancelledBadge: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 12,
-  },
-  cancelledBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '600',
-    color: '#DC2626',
-  },
-  // ─── Empty State ───
   emptyCard: {
-    backgroundColor: '#EDF7F2',
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E8ECE9',
     gap: 14,
     marginTop: 4,
-    marginBottom: 12,
   },
   emptyIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#D7EFE3',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#EBF4F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -887,49 +1058,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F2922',
+    color: '#132A21',
+    marginBottom: 2,
   },
   emptySubtitle: {
-    fontSize: 12.5,
-    color: '#5E7A6E',
-    marginTop: 2,
-  },
-  // ─── Loading & Error ───
-  loadingContainer: {
-    paddingVertical: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#5E6E66',
-  },
-  errorContainer: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  errorText: {
-    fontSize: 14,
-    color: Colors.status.error || '#DC2626',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  retryButton: {
-    backgroundColor: Colors.brand.primary,
-    paddingHorizontal: 24,
-    height: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 14,
+    fontSize: 12,
+    color: '#718279',
+    lineHeight: 16,
   },
 });

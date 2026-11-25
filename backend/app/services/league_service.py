@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.events import EventType, dispatch_event, serialize_for_event
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.competition import Match, MatchStage, MatchStatus, Team
 from app.models.league import (
@@ -25,6 +26,7 @@ from app.models.league import (
     LeagueWeeklyStanding,
 )
 from app.models.user import User
+from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_player_membership_repository import ClubPlayerMembershipRepository
 from app.repositories.league_repository import LeagueRepository
 from app.schemas.league import (
@@ -62,6 +64,7 @@ class LeagueService:
         self.db = db
         self.league_repo = LeagueRepository(db)
         self.member_repo = ClubPlayerMembershipRepository(db)
+        self.staff_member_repo = ClubMembershipRepository(db)
         self.engine = LeagueEngine()
         self.bracket_engine = BracketEngine()
 
@@ -145,6 +148,21 @@ class LeagueService:
         await self.league_repo.create_league_weeks_bulk(weeks_data)
         await self.db.commit()
 
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_PUBLISHED,
+                data=serialize_for_event({
+                    "id": str(league.id),
+                    "league_id": str(league.id),
+                    "club_id": str(club_id),
+                    "name": league.name,
+                    "status": league.status.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league.id)
 
     async def _format_league_response(
@@ -225,6 +243,19 @@ class LeagueService:
         current_user: User | None = None,
     ) -> LeagueResponse:
         league = await self._get_league_or_404(league_id, club_id=club_id)
+        if current_user:
+            pm = await self.member_repo.get_by_user_and_club(current_user.id, league.club_id)
+            sm = await self.staff_member_repo.get_by_user_and_club(current_user.id, league.club_id)
+            is_active_member = (
+                (pm is not None and pm.status == PlayerMembershipStatus.ACTIVE)
+                or (sm is not None and sm.is_active)
+            )
+            if not is_active_member:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access restricted to active club members",
+                )
+
         m_counts = await self.league_repo.get_match_counts(league_id)
         is_reg = False
         my_tid = None
@@ -269,6 +300,22 @@ class LeagueService:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[LeagueResponse]:
+        active_club_ids: set[uuid.UUID] = set()
+        if current_user:
+            pms = await self.member_repo.get_user_player_memberships(current_user.id)
+            for m in pms:
+                if m.status == PlayerMembershipStatus.ACTIVE:
+                    active_club_ids.add(m.club_id)
+            sms = await self.staff_member_repo.get_user_memberships(current_user.id)
+            for s in sms:
+                if s.is_active:
+                    active_club_ids.add(s.club_id)
+
+            if not active_club_ids:
+                return []
+            if club_id and club_id not in active_club_ids:
+                return []
+
         leagues = await self.league_repo.list_public_leagues(
             club_id=club_id,
             search=search,
@@ -276,6 +323,9 @@ class LeagueService:
             limit=limit,
             offset=offset,
         )
+        if current_user and not club_id:
+            leagues = [l for l in leagues if l.club_id in active_club_ids]
+
         l_ids = [l.id for l in leagues]
         counts = await self.league_repo.get_team_counts_for_leagues(l_ids)
         m_counts = await self.league_repo.get_match_counts_for_leagues(l_ids)
@@ -361,6 +411,21 @@ class LeagueService:
 
         league = await self.league_repo.update_league(league, **updates)
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_UPDATED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": league.status.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     async def open_registration(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
@@ -375,6 +440,21 @@ class LeagueService:
 
         league = await self.league_repo.update_league(league, status=LeagueStatus.REGISTRATION_OPEN)
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_UPDATED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": LeagueStatus.REGISTRATION_OPEN.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     async def close_registration(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
@@ -382,6 +462,21 @@ class LeagueService:
         self._assert_status(league, [LeagueStatus.REGISTRATION_OPEN], "close registration")
         league = await self.league_repo.update_league(league, status=LeagueStatus.REGISTRATION_CLOSED)
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_UPDATED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": LeagueStatus.REGISTRATION_CLOSED.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     async def start_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
@@ -420,6 +515,21 @@ class LeagueService:
             )
 
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_UPDATED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": LeagueStatus.IN_PROGRESS.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     async def complete_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
@@ -483,6 +593,21 @@ class LeagueService:
                 await self.league_repo.update_league_week(w, status=LeagueWeekStatus.COMPLETED)
 
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_UPDATED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": LeagueStatus.COMPLETED.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     async def cancel_league(self, club_id: uuid.UUID, league_id: uuid.UUID) -> LeagueResponse:
@@ -512,6 +637,21 @@ class LeagueService:
         await self.db.flush()
 
         await self.db.commit()
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_CANCELLED,
+                data=serialize_for_event({
+                    "id": str(league_id),
+                    "league_id": str(league_id),
+                    "club_id": str(club_id),
+                    "status": LeagueStatus.CANCELLED.value,
+                }),
+                club_id=club_id,
+            )
+        except Exception:
+            pass
+
         return await self.get_league(club_id, league_id)
 
     # ─── Team Management ──────────────────────────────────────────────────────
@@ -1727,6 +1867,22 @@ class LeagueService:
             await self.db.commit()
         except Exception:
             pass
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_REGISTRATION_CREATED,
+                data=serialize_for_event({
+                    "league_id": str(league.id),
+                    "team_id": str(team.id),
+                    "user_id": str(user.id),
+                    "club_id": str(league.club_id),
+                }),
+                club_id=league.club_id,
+                user_id=user.id,
+            )
+        except Exception:
+            pass
+
         return self._format_team_response(team)
 
     async def cancel_player_registration(
@@ -1767,6 +1923,21 @@ class LeagueService:
                 },
             )
             await self.db.commit()
+        except Exception:
+            pass
+
+        try:
+            await dispatch_event(
+                EventType.LEAGUE_REGISTRATION_CANCELLED,
+                data=serialize_for_event({
+                    "league_id": str(league.id),
+                    "team_id": str(team.id),
+                    "user_id": str(user.id),
+                    "club_id": str(league.club_id),
+                }),
+                club_id=league.club_id,
+                user_id=user.id,
+            )
         except Exception:
             pass
 

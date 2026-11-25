@@ -6,17 +6,50 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { bookingApi } from '@/services/api';
+import { bookingApi, playerApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type {
   Booking,
   BookingCancelPayload,
   BookingCreatePayload,
   ClubAvailabilityResponse,
+  PlayerBookingItem,
+  PlayerBookingsResponse,
   StaffBookingCreatePayload,
 } from '@/types';
 
 // ─── Player Booking Hooks ────────────────────────────────────────────────────
+
+export function usePlayerAllBookings(params?: {
+  clubId?: string;
+  activityType?: string;
+  status?: string;
+}) {
+  const query = useQuery<PlayerBookingsResponse, Error>({
+    queryKey: QUERY_KEYS.PLAYER_MY_BOOKINGS({
+      activity_type: params?.activityType,
+      status: params?.status,
+      club_id: params?.clubId,
+    }),
+    queryFn: () =>
+      playerApi.getMyBookings({
+        club_id: params?.clubId,
+        activity_type: params?.activityType,
+        status: params?.status,
+        limit: 100,
+      }),
+    staleTime: 10 * 1000,
+  });
+
+  return {
+    ...query,
+    bookings: query.data?.items ?? [],
+    total: query.data?.total ?? 0,
+    refetchBookings: query.refetch,
+    isLoadingBookings: query.isLoading,
+    isRefetchingBookings: query.isRefetching,
+  };
+}
 
 export function usePlayerBookings(params?: {
   clubId?: string;
@@ -51,6 +84,7 @@ export function usePlayerBookings(params?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
     },
   });
 

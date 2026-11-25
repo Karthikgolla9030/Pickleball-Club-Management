@@ -9,6 +9,7 @@ import type {
   CreatePlayerProfilePayload,
   MembershipRequest,
   PlayerActivityItem,
+  PlayerBookingsResponse,
   PlayerClub,
   PlayerClubDetail,
   PlayerProfile,
@@ -154,6 +155,38 @@ export const playerApi = {
       `${API_ENDPOINTS.BASE}/api/v1/player/membership-requests/${requestId}/withdraw`,
       {},
     );
+  },
+
+  /**
+   * Get caller's personal bookings and registrations across all activity types
+   * (court bookings, tournaments, leagues, events, lessons).
+   */
+  getMyBookings(params?: {
+    activity_type?: string;
+    status?: string;
+    club_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<PlayerBookingsResponse> {
+    const query = new URLSearchParams();
+    if (params?.activity_type && params.activity_type !== 'all') {
+      query.append('activity_type', params.activity_type);
+    }
+    if (params?.status && params.status !== 'all') {
+      query.append('status', params.status);
+    }
+    if (params?.club_id) {
+      query.append('club_id', params.club_id);
+    }
+    if (params?.limit) {
+      query.append('limit', String(params.limit));
+    }
+    if (params?.offset) {
+      query.append('offset', String(params.offset));
+    }
+    const qs = query.toString();
+    const url = qs ? `${API_ENDPOINTS.PLAYER_MY_BOOKINGS}?${qs}` : API_ENDPOINTS.PLAYER_MY_BOOKINGS;
+    return apiClient.get<PlayerBookingsResponse>(url);
   },
 };
 

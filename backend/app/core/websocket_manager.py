@@ -41,7 +41,7 @@ class WebSocketManager:
         club_ids: list[str] | None = None,
     ) -> None:
         """Register an authenticated WebSocket connection."""
-        if websocket.client_state == WebSocketState.CONNECTING:
+        if getattr(websocket, "client_state", None) == WebSocketState.CONNECTING:
             await websocket.accept()
         async with self._lock:
             # Register user connection

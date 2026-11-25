@@ -594,6 +594,35 @@ export interface UpcomingActivitiesResponse {
   has_more: boolean;
 }
 
+export type PlayerBookingActivityType = 'court' | 'tournament' | 'league' | 'event' | 'lesson';
+
+export interface PlayerBookingItem {
+  id: string;
+  activity_type: PlayerBookingActivityType;
+  record_id: string;
+  activity_id?: string | null;
+  title: string;
+  description?: string | null;
+  club_id: string;
+  club_name: string;
+  status: string;
+  status_label: string;
+  start_at: string;
+  end_at?: string | null;
+  location?: string | null;
+  price: number;
+  currency: string;
+  image_url?: string | null;
+  details?: Record<string, any>;
+  created_at: string;
+}
+
+export interface PlayerBookingsResponse {
+  items: PlayerBookingItem[];
+  total: number;
+  has_more: boolean;
+}
+
 export interface ClubPlayerMember {
   id: string;
   user_id: string;

@@ -601,6 +601,7 @@ export function TournamentRegistrationModal({
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
       if (onSuccess) {
         onSuccess(res);
       }

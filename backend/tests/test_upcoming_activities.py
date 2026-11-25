@@ -172,6 +172,20 @@ async def test_upcoming_activities_multi_club_and_filters(async_client, db_sessi
     )
     db_session.add(e_private)
 
+    from app.models.club_player_membership import ClubPlayerMembership, PlayerMembershipStatus
+    mem_a = ClubPlayerMembership(
+        user_id=user.id,
+        club_id=club_a_id,
+        status=PlayerMembershipStatus.ACTIVE,
+    )
+    mem_b = ClubPlayerMembership(
+        user_id=user.id,
+        club_id=club_b_id,
+        status=PlayerMembershipStatus.ACTIVE,
+    )
+    db_session.add(mem_a)
+    db_session.add(mem_b)
+
     await db_session.commit()
 
     headers = make_auth_header(user.id)

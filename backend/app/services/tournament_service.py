@@ -311,37 +311,43 @@ class TournamentService:
                 detail="Tournament not found",
             )
         tournament = await self._auto_close_registration_if_deadline_passed(tournament)
-        if tournament.visibility == TournamentVisibility.PRIVATE and current_user_id:
+        if current_user_id:
             player_mem = await self.player_membership_repo.get_by_user_and_club(
                 user_id=current_user_id, club_id=tournament.club_id
             )
             staff_mem = await self.club_membership_repo.get_by_user_and_club(
                 user_id=current_user_id, club_id=tournament.club_id
             )
-            if not player_mem and not staff_mem:
+            is_active_member = (
+                (player_mem is not None and player_mem.status == PlayerMembershipStatus.ACTIVE)
+                or (staff_mem is not None and staff_mem.is_active)
+                or (tournament.created_by_user_id == current_user_id)
+            )
+            if not is_active_member:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Tournament not found",
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access restricted to active club members",
                 )
+        elif tournament.visibility == TournamentVisibility.PRIVATE:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tournament not found",
+            )
         is_reg = False
         reg_id = None
         reg_status = None
         if current_user_id:
-            player_mem = await self.player_membership_repo.get_by_user_and_club(
-                user_id=current_user_id, club_id=tournament.club_id
+            existing = await self.registration_repo.get_by_tournament_and_user(
+                tournament_id=tournament.id, user_id=current_user_id
             )
-            if player_mem:
-                existing = await self.registration_repo.get_by_tournament_and_player(
-                    tournament_id=tournament.id, player_membership_id=player_mem.id
-                )
-                if existing and existing.status in (
-                    RegistrationStatus.CONFIRMED,
-                    RegistrationStatus.PENDING,
-                    RegistrationStatus.WAITLISTED,
-                ):
-                    is_reg = True
-                    reg_id = existing.id
-                    reg_status = existing.status.value
+            if existing and existing.status in (
+                RegistrationStatus.CONFIRMED,
+                RegistrationStatus.PENDING,
+                RegistrationStatus.WAITLISTED,
+            ):
+                is_reg = True
+                reg_id = existing.id
+                reg_status = existing.status.value
 
         # Authoritative registration counts directly from persisted DB records
         all_regs = await self.registration_repo.list_by_tournament(tournament.id)
@@ -986,7 +992,27 @@ class TournamentService:
         limit: int | None = None,
         offset: int | None = None,
     ) -> list[TournamentDiscoveryResponse]:
-        """List all discoverable public tournaments with caller's registration status."""
+        """List all discoverable public tournaments with caller's registration status.
+        For authenticated players, only tournaments from clubs where the player holds an active membership are returned.
+        """
+        user_membership_ids: set[UUID] = set()
+        user_active_club_ids: set[UUID] = set()
+        if user_id:
+            user_memberships = await self.player_membership_repo.get_user_player_memberships(user_id)
+            for m in user_memberships:
+                if m.status == PlayerMembershipStatus.ACTIVE:
+                    user_active_club_ids.add(m.club_id)
+                    user_membership_ids.add(m.id)
+            staff_memberships = await self.club_membership_repo.get_user_memberships(user_id)
+            for sm in staff_memberships:
+                if sm.is_active:
+                    user_active_club_ids.add(sm.club_id)
+
+            if not user_active_club_ids:
+                return []
+            if club_id and club_id not in user_active_club_ids:
+                return []
+
         tournaments = await self.tournament_repo.list_public_discoverable(
             club_id=club_id,
             search=search,
@@ -997,10 +1023,9 @@ class TournamentService:
             limit=limit,
             offset=offset,
         )
-        user_membership_ids: set[UUID] = set()
-        if user_id:
-            user_memberships = await self.player_membership_repo.get_user_player_memberships(user_id)
-            user_membership_ids = {m.id for m in user_memberships}
+
+        if user_id and not club_id:
+            tournaments = [t for t in tournaments if t.club_id in user_active_club_ids]
 
         responses: list[TournamentDiscoveryResponse] = []
         for t in tournaments:
@@ -1023,11 +1048,11 @@ class TournamentService:
             )
 
             my_reg = None
-            if user_membership_ids:
+            if user_id:
                 my_reg = next(
                     (
                         r for r in t.registrations
-                        if r.player_membership_id in user_membership_ids
+                        if (r.player_membership_id in user_membership_ids or (getattr(r, "player_membership", None) and r.player_membership.user_id == user_id))
                         and r.status in (
                             RegistrationStatus.CONFIRMED,
                             RegistrationStatus.PENDING,
@@ -1081,21 +1106,23 @@ class TournamentService:
                 detail="Tournament not found",
             )
 
-        player_membership = await self.player_membership_repo.get_by_user_and_club(
-            user_id=user_id, club_id=tournament.club_id
-        )
-        if not player_membership:
-            return PlayerTournamentRegistrationStatusResponse(
-                is_registered=False,
-                status=None,
-                status_label=None,
-                registration=None,
-            )
-
-        existing = await self.registration_repo.get_by_tournament_and_player(
+        existing = await self.registration_repo.get_by_tournament_and_user(
             tournament_id=tournament.id,
-            player_membership_id=player_membership.id,
+            user_id=user_id,
         )
+
+        player_membership = None
+        if existing and getattr(existing, "player_membership", None):
+            player_membership = existing.player_membership
+        else:
+            player_membership = await self.player_membership_repo.get_by_user_and_club(
+                user_id=user_id, club_id=tournament.club_id
+            )
+            if not existing and player_membership:
+                existing = await self.registration_repo.get_by_tournament_and_player(
+                    tournament_id=tournament.id,
+                    player_membership_id=player_membership.id,
+                )
 
         if not existing:
             return PlayerTournamentRegistrationStatusResponse(

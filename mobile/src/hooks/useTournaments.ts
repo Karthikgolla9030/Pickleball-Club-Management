@@ -384,6 +384,7 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
     },
   });
 
@@ -405,6 +406,7 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
     },
   });
 

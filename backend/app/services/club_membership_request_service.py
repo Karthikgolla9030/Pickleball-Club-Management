@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.events import EventType, dispatch_event
 from app.models.club import Club
 from app.models.club_membership_request import (
     ClubMembershipRequest,
@@ -318,6 +319,26 @@ class ClubMembershipRequestService:
                 mandatory=True,
             )
             await self.db.commit()
+
+            # Dispatch real-time events for membership approval
+            event_payload = {
+                "user_id": str(req.user_id),
+                "club_id": str(club_id),
+                "request_id": str(req.id),
+                "status": "active",
+            }
+            await dispatch_event(
+                event_type=EventType.PLAYER_MEMBERSHIP_UPDATED,
+                data=event_payload,
+                club_id=club_id,
+                user_id=req.user_id,
+            )
+            await dispatch_event(
+                event_type=EventType.MEMBERSHIP_APPROVED,
+                data=event_payload,
+                club_id=club_id,
+                user_id=req.user_id,
+            )
         except Exception:
             pass
 

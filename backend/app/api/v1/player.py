@@ -49,6 +49,8 @@ from app.schemas.club_membership_request import (
 )
 from app.schemas.player_activity import (
     PlayerActivityItem,
+    PlayerBookingItem,
+    PlayerBookingsResponse,
     UpcomingActivitiesResponse,
     UpcomingActivityItem,
 )
@@ -508,6 +510,81 @@ async def get_upcoming_activities(
         user_id=current_user.id if current_user else None,
         activity_type=activity_type,
         club_id=club_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/my-bookings",
+    response_model=PlayerBookingsResponse,
+    summary="Get caller's bookings and registrations across all activities",
+    description="Returns court bookings, tournament registrations, league registrations, event registrations, and lesson bookings.",
+    responses={
+        401: {"description": "Not authenticated"},
+    },
+)
+async def get_my_bookings(
+    activity_type: str | None = Query(None, description="Filter by type: court, tournament, league, event, lesson, all"),
+    status: str | None = Query(None, description="Filter by status: upcoming, past, cancelled, all"),
+    club_id: UUID | None = Query(None, description="Optional club filter"),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlayerBookingsResponse:
+    """Retrieve caller's bookings and registrations across all activity types."""
+    return await PlayerService(db).get_my_bookings(
+        user_id=current_user.id,
+        club_id=club_id,
+        activity_type=activity_type,
+        status_filter=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/tournaments/my-registrations",
+    response_model=PlayerBookingsResponse,
+    summary="Get caller's tournament registrations",
+)
+async def get_my_tournament_registrations(
+    club_id: UUID | None = Query(None),
+    status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlayerBookingsResponse:
+    return await PlayerService(db).get_my_bookings(
+        user_id=current_user.id,
+        club_id=club_id,
+        activity_type="tournament",
+        status_filter=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/leagues/my-registrations",
+    response_model=PlayerBookingsResponse,
+    summary="Get caller's league registrations",
+)
+async def get_my_league_registrations(
+    club_id: UUID | None = Query(None),
+    status: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PlayerBookingsResponse:
+    return await PlayerService(db).get_my_bookings(
+        user_id=current_user.id,
+        club_id=club_id,
+        activity_type="league",
+        status_filter=status,
         limit=limit,
         offset=offset,
     )

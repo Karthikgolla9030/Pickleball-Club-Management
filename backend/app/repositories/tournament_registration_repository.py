@@ -59,6 +59,31 @@ class TournamentRegistrationRepository:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_by_tournament_and_user(
+        self, tournament_id: UUID, user_id: UUID
+    ) -> TournamentRegistration | None:
+        """Fetch registration by tournament ID and user ID directly through ClubPlayerMembership."""
+        query = (
+            select(TournamentRegistration)
+            .join(
+                ClubPlayerMembership,
+                TournamentRegistration.player_membership_id == ClubPlayerMembership.id,
+            )
+            .where(
+                TournamentRegistration.tournament_id == tournament_id,
+                ClubPlayerMembership.user_id == user_id,
+            )
+            .options(
+                selectinload(TournamentRegistration.tournament),
+                selectinload(TournamentRegistration.player_membership).selectinload(
+                    ClubPlayerMembership.user
+                ).selectinload(User.player_profile),
+            )
+            .order_by(TournamentRegistration.registered_at.desc())
+        )
+        result = await self.db.execute(query)
+        return result.scalars().first()
+
     async def list_by_tournament(
         self, tournament_id: UUID
     ) -> list[TournamentRegistration]:

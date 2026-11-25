@@ -70,6 +70,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['bookings'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'courts'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'court-availability'] });
@@ -85,6 +86,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['player', 'tournaments'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
         queryClient.invalidateQueries({ queryKey: ['matches'] });
         queryClient.invalidateQueries({ queryKey: ['standings'] });
         queryClient.invalidateQueries({ queryKey: ['bracket'] });
@@ -117,6 +119,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['leagues'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'leagues'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'leagues'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
@@ -129,6 +132,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
         queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'events'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
@@ -138,6 +142,10 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       // ─── Lessons & Coaching ────────────────────────────────────────────────
       else if (eventType.startsWith('lesson.')) {
         queryClient.invalidateQueries({ queryKey: ['lessons'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
@@ -223,6 +231,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['notifications', 'unread-count'] });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['events'] });

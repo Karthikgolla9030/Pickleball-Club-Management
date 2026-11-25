@@ -1199,6 +1199,14 @@ class LessonService:
         # Check if player has membership to this club
         membership = await self.cpm_repo.get_by_user_and_club(user_id, club_id)
         is_member = membership is not None and membership.status == PlayerMembershipStatus.ACTIVE
+        if not is_member:
+            from app.repositories.club_membership_repository import ClubMembershipRepository
+            staff_mem = await ClubMembershipRepository(self.db).get_by_user_and_club(user_id, club_id)
+            if staff_mem and staff_mem.is_active:
+                is_member = True
+
+        if not is_member:
+            return []
 
         lessons = await self.lesson_repo.list_player_discover(
             club_id=club_id,
@@ -1272,6 +1280,11 @@ class LessonService:
             staff_mem = await club_mem_repo.get_by_user_and_club(user_id, lesson.club_id)
             if staff_mem and staff_mem.is_active:
                 is_eligible = True
+        if not is_eligible and not my_reg:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access restricted to active club members",
+            )
         eligibility_reason = None if is_eligible else "Requires active club player membership"
 
         return PlayerLessonDetailResponse(

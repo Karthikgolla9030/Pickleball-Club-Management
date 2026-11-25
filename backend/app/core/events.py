@@ -37,8 +37,14 @@ class EventType(str, Enum):
     # Leagues
     LEAGUE_PUBLISHED = "league.published"
     LEAGUE_UPDATED = "league.updated"
+    LEAGUE_CANCELLED = "league.cancelled"
     LEAGUE_REGISTRATION_CREATED = "league.registration.created"
+    LEAGUE_REGISTRATION_CANCELLED = "league.registration.cancelled"
     LEAGUE_STANDINGS_UPDATED = "league.standings.updated"
+
+    # Memberships
+    MEMBERSHIP_APPROVED = "membership.approved"
+    MEMBERSHIP_REVOKED = "membership.revoked"
 
     # Events
     EVENT_PUBLISHED = "event.published"
