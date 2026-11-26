@@ -16,7 +16,6 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Clipboard,
   Modal,
   ScrollView,
@@ -34,22 +33,18 @@ import {
   Clock,
   Copy,
   CreditCard,
-  Lock,
-  QrCode,
   ShieldCheck,
   Smartphone,
-  Sparkles,
-  Users,
+  Timer,
   Wallet,
   X,
-  Zap,
 } from 'lucide-react-native';
 
 import { AppText } from '../AppText';
 import { Button } from '../Button';
 import { Card } from '../Card';
 import { paymentApi } from '@/services/api';
-import { Colors, Radius, Spacing } from '@/theme';
+import { Colors, Radius, Shadows } from '@/theme';
 import type {
   CheckoutInitiateResponse,
   CheckoutPriceBreakdown,
@@ -80,6 +75,19 @@ export interface CheckoutModalProps {
 type CheckoutStep = 'loading' | 'ready' | 'processing' | 'confirmed' | 'error';
 type SelectedMethodType = 'upi' | 'card' | 'netbanking' | 'cash';
 
+interface PaymentMethodOption {
+  key: SelectedMethodType;
+  label: string;
+  badge?: string;
+}
+
+const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
+  { key: 'cash', label: 'Pay at Club (On-Site)', badge: 'Recommended' },
+  { key: 'upi', label: 'UPI (Instant & QR)', badge: 'Popular' },
+  { key: 'card', label: 'Credit / Debit Card' },
+  { key: 'netbanking', label: 'NetBanking / Direct Transfer' },
+];
+
 export function CheckoutModal({
   visible,
   onClose,
@@ -100,10 +108,10 @@ export function CheckoutModal({
   const [step, setStep] = useState<CheckoutStep>('loading');
   const [initData, setInitData] = useState<CheckoutInitiateResponse | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<SelectedMethodType>('upi');
-  const [upiVpa, setUpiVpa] = useState<string>('player@upi');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<CheckoutVerifyResponse | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Helper to fetch session for a given method
   const fetchCheckoutSession = async (method: SelectedMethodType) => {
@@ -217,7 +225,7 @@ export function CheckoutModal({
     return () => {
       isMounted = false;
     };
-  }, [visible, clubId, purpose, activityId, startAt, endAt]);
+  }, [visible, clubId, purpose, activityId, startAt, endAt, retryCount]);
 
   // Execute payment commit & verification
   const handleCommitPayment = async () => {
@@ -315,20 +323,54 @@ export function CheckoutModal({
   };
 
   const finalFormatted = formatCurrency(Number(breakdown.final_amount), breakdown.currency || 'USD');
+  const currency = breakdown.currency || 'USD';
+  const hasDiscount = Number(breakdown.discount_amount) > 0;
+  const hasServiceFee = Number(breakdown.service_fee) > 0;
+
+  const resolvedClubName =
+    (clubName && clubName !== 'Club'
+      ? clubName
+      : (initData?.activity_summary?.club_name as string | undefined)) || clubName;
+
+  const resolvedDurationMinutes =
+    durationMinutes ??
+    (typeof initData?.activity_summary?.duration_minutes === 'number'
+      ? initData.activity_summary.duration_minutes
+      : startAt && endAt
+      ? Math.max(0, Math.round((new Date(endAt).getTime() - new Date(startAt).getTime()) / 60000))
+      : undefined);
+
+  const renderMethodIcon = (methodKey: SelectedMethodType, isSelected: boolean) => {
+    const color = isSelected ? Colors.brand.primary : Colors.text.secondary;
+    switch (methodKey) {
+      case 'cash':
+        return <Building size={16} color={color} />;
+      case 'upi':
+        return <Smartphone size={16} color={color} />;
+      case 'card':
+        return <CreditCard size={16} color={color} />;
+      case 'netbanking':
+        return <Wallet size={16} color={color} />;
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <SafeAreaView style={styles.safeArea}>
-        {/* Header */}
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        {/* Fixed Compact Header */}
         <View style={styles.header}>
           <View style={styles.headerTextCol}>
             <View style={styles.badgeRow}>
               <View style={styles.purposeBadge}>
-                <AppText style={styles.purposeBadgeText}>{purposeLabels[purpose]}</AppText>
+                <AppText style={styles.purposeBadgeText} numberOfLines={1}>
+                  {purposeLabels[purpose]}
+                </AppText>
               </View>
               <View style={styles.verifiedBadge}>
-                <ShieldCheck size={12} color="#18794E" />
-                <AppText style={styles.verifiedBadgeText}>Protected</AppText>
+                <ShieldCheck size={11} color={Colors.status.success} />
+                <AppText style={styles.verifiedBadgeText} numberOfLines={1}>
+                  Protected
+                </AppText>
               </View>
             </View>
             <AppText style={styles.headerTitle} numberOfLines={1}>
@@ -337,6 +379,9 @@ export function CheckoutModal({
           </View>
           <TouchableOpacity
             style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close checkout"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             onPress={() => {
               if (step === 'confirmed') {
                 onClose();
@@ -346,19 +391,21 @@ export function CheckoutModal({
               }
             }}
           >
-            <X size={20} color={Colors.text.primary} />
+            <X size={18} color={Colors.text.primary} />
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           {/* STEP: LOADING */}
           {step === 'loading' && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={Colors.brand.primary} />
-              <AppText style={styles.loadingText}>Verifying availability & pricing...</AppText>
-              <AppText style={styles.loadingSub}>
-                Rechecking court slots, membership privileges, and applicable taxes.
-              </AppText>
+              <AppText style={styles.loadingText}>Preparing checkout...</AppText>
             </View>
           )}
 
@@ -366,16 +413,17 @@ export function CheckoutModal({
           {step === 'error' && (
             <View style={styles.errorContainer}>
               <View style={styles.errorIconWrap}>
-                <AlertCircle size={40} color="#B42318" />
+                <AlertCircle size={32} color={Colors.status.error} />
               </View>
-              <AppText style={styles.errorTitle}>Availability or Checkout Issue</AppText>
+              <AppText style={styles.errorTitle}>Checkout Unavailable</AppText>
               <AppText style={styles.errorDesc}>{errorMessage}</AppText>
               <Button
                 label="Retry Checkout"
                 variant="primary"
                 onPress={() => {
+                  setErrorMessage(null);
                   setStep('loading');
-                  // Re-trigger by toggling step
+                  setRetryCount((c) => c + 1);
                 }}
                 style={styles.retryBtn}
               />
@@ -386,268 +434,176 @@ export function CheckoutModal({
           {/* STEP: READY OR PROCESSING */}
           {(step === 'ready' || step === 'processing') && (
             <View style={styles.bodyContainer}>
-              {/* Card 1: Booking Summary */}
-              <Card style={styles.summaryCard}>
-                <View style={styles.cardHeaderRow}>
-                  <Building size={16} color={Colors.brand.primary} />
-                  <AppText style={styles.clubNameText}>{clubName}</AppText>
+              {/* Card 1: Compact Booking Summary */}
+              <Card variant="default" style={styles.card}>
+                <View style={styles.clubRow}>
+                  <Building size={13} color={Colors.brand.primary} />
+                  <AppText style={styles.clubNameText} numberOfLines={1}>
+                    {resolvedClubName}
+                  </AppText>
                 </View>
 
-                <AppText style={styles.activityTitle}>{activityTitle}</AppText>
-                {activitySubtitle ? (
-                  <AppText style={styles.activitySubtitle}>{activitySubtitle}</AppText>
-                ) : null}
+                <View style={styles.courtRow}>
+                  <AppText style={styles.activityTitle} numberOfLines={1}>
+                    {activityTitle}
+                  </AppText>
+                  {activitySubtitle ? (
+                    <View style={styles.courtTypePill}>
+                      <AppText style={styles.courtTypeText} numberOfLines={1}>
+                        {activitySubtitle}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
 
-                <View style={styles.infoDivider} />
+                {(startAt || resolvedDurationMinutes) ? <View style={styles.cardDivider} /> : null}
 
-                {startAt ? (
-                  <View style={styles.infoRow}>
-                    <Calendar size={14} color={Colors.text.secondary} />
-                    <AppText style={styles.infoText}>
-                      {new Date(startAt).toLocaleDateString(undefined, {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric',
-                      })}
-                    </AppText>
-                  </View>
-                ) : null}
+                <View style={styles.metaList}>
+                  {startAt ? (
+                    <View style={styles.infoRow}>
+                      <Calendar size={13} color={Colors.text.secondary} />
+                      <AppText style={styles.infoText} numberOfLines={1}>
+                        {new Date(startAt).toLocaleDateString(undefined, {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </AppText>
+                    </View>
+                  ) : null}
 
-                {startAt && endAt ? (
-                  <View style={styles.infoRow}>
-                    <Clock size={14} color={Colors.text.secondary} />
-                    <AppText style={styles.infoText}>
-                      {new Date(startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} –{' '}
-                      {new Date(endAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {durationMinutes ? ` (${durationMinutes} mins)` : ''}
-                    </AppText>
-                  </View>
-                ) : null}
+                  {startAt && endAt ? (
+                    <View style={styles.infoRow}>
+                      <Clock size={13} color={Colors.text.secondary} />
+                      <AppText style={styles.infoText} numberOfLines={1}>
+                        {new Date(startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} –{' '}
+                        {new Date(endAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </AppText>
+                    </View>
+                  ) : null}
 
-                {participantsInfo ? (
-                  <View style={styles.infoRow}>
-                    <Users size={14} color={Colors.text.secondary} />
-                    <AppText style={styles.infoText}>{participantsInfo}</AppText>
-                  </View>
-                ) : null}
+                  {resolvedDurationMinutes ? (
+                    <View style={styles.infoRow}>
+                      <Timer size={13} color={Colors.text.secondary} />
+                      <AppText style={styles.infoText} numberOfLines={1}>
+                        {resolvedDurationMinutes} mins
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
               </Card>
 
-              {/* Card 2: Price Breakdown */}
-              <Card style={styles.breakdownCard}>
+              {/* Card 2: Compact Price Breakdown */}
+              <Card variant="default" style={styles.card}>
                 <AppText style={styles.sectionTitle}>Price Breakdown</AppText>
 
-                <View style={styles.breakdownRow}>
-                  <AppText style={styles.breakdownLabel}>Base booking fee</AppText>
-                  <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.base_amount), breakdown.currency || 'USD')}
-                  </AppText>
-                </View>
-
-                {Number(breakdown.discount_amount) > 0 ? (
+                <View style={styles.breakdownList}>
                   <View style={styles.breakdownRow}>
-                    <View style={styles.discountBadgeRow}>
-                      <Sparkles size={12} color="#18794E" />
-                      <AppText style={styles.discountLabel}>Member privilege discount</AppText>
-                    </View>
-                    <AppText style={styles.discountValue}>
-                      -{formatCurrency(Number(breakdown.discount_amount), breakdown.currency || 'USD')}
+                    <AppText style={styles.breakdownLabel}>Base booking fee</AppText>
+                    <AppText style={styles.breakdownValue}>
+                      {formatCurrency(Number(breakdown.base_amount), currency)}
                     </AppText>
                   </View>
-                ) : null}
 
-                <View style={styles.breakdownRow}>
-                  <AppText style={styles.breakdownLabel}>Estimated taxes (5% Tax)</AppText>
-                  <AppText style={styles.breakdownValue}>
-                    {formatCurrency(Number(breakdown.tax_amount), breakdown.currency || 'USD')}
-                  </AppText>
+                  {hasDiscount ? (
+                    <View style={styles.breakdownRow}>
+                      <AppText style={styles.discountLabel}>Member discount</AppText>
+                      <AppText style={styles.discountValue}>
+                        -{formatCurrency(Number(breakdown.discount_amount), currency)}
+                      </AppText>
+                    </View>
+                  ) : null}
+
+                  <View style={styles.breakdownRow}>
+                    <AppText style={styles.breakdownLabel}>Estimated taxes</AppText>
+                    <AppText style={styles.breakdownValue}>
+                      {formatCurrency(Number(breakdown.tax_amount), currency)}
+                    </AppText>
+                  </View>
+
+                  {hasServiceFee ? (
+                    <View style={styles.breakdownRow}>
+                      <AppText style={styles.breakdownLabel}>Service fee</AppText>
+                      <AppText style={styles.breakdownValue}>
+                        {formatCurrency(Number(breakdown.service_fee), currency)}
+                      </AppText>
+                    </View>
+                  ) : null}
                 </View>
 
-                <View style={styles.breakdownRow}>
-                  <AppText style={styles.breakdownLabel}>Service / Platform fee</AppText>
-                  <AppText style={styles.breakdownFree}>
-                    {formatCurrency(0, breakdown.currency || 'USD')} (Transparent)
-                  </AppText>
-                </View>
-
-                <View style={styles.breakdownDivider} />
+                <View style={styles.cardDivider} />
 
                 <View style={styles.totalRow}>
-                  <View>
-                    <AppText style={styles.totalLabel}>Total Payable</AppText>
-                    <AppText style={styles.currencyNote}>Including all taxes & privileges</AppText>
-                  </View>
+                  <AppText style={styles.totalLabel}>Total payable</AppText>
                   <AppText style={styles.totalAmountText}>{finalFormatted}</AppText>
                 </View>
               </Card>
 
-              {/* Card 3: Payment Method Selection */}
-              <Card style={styles.methodsCard}>
-                <AppText style={styles.sectionTitle}>Select Payment Method</AppText>
-                <AppText style={styles.methodSubtitle}>
-                  Choose your preferred payment method to confirm reservation
-                </AppText>
+              {/* Card 3: Compact Payment Method Selection */}
+              <Card variant="default" style={styles.card}>
+                <AppText style={styles.sectionTitle}>Payment Method</AppText>
 
-                {/* Method 1: Cash on-site / Pay at Club */}
-                <TouchableOpacity
-                  style={[styles.methodOption, selectedMethod === 'cash' && styles.methodOptionActive]}
-                  onPress={() => handleSelectMethod('cash')}
-                >
-                  <View style={styles.methodRadioCol}>
-                    <View style={[styles.radioOuter, selectedMethod === 'cash' && styles.radioOuterActive]}>
-                      {selectedMethod === 'cash' && <View style={styles.radioInner} />}
-                    </View>
-                  </View>
-                  <View style={styles.methodIconWrap}>
-                    <Building size={20} color={selectedMethod === 'cash' ? '#176B57' : '#667776'} />
-                  </View>
-                  <View style={styles.methodInfoCol}>
-                    <View style={styles.methodTitleRow}>
-                      <AppText style={styles.methodTitle}>Pay at Club (On-Site)</AppText>
-                      <View style={styles.recommendedBadge}>
-                        <AppText style={styles.recommendedText}>Recommended</AppText>
-                      </View>
-                    </View>
-                    <AppText style={styles.methodDesc}>
-                      Pay via Cash, Card, or Club Account at the venue reception
-                    </AppText>
-                  </View>
-                </TouchableOpacity>
+                <View style={styles.methodsList}>
+                  {PAYMENT_METHOD_OPTIONS.map((option) => {
+                    const isSelected = selectedMethod === option.key;
+                    return (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[styles.methodRow, isSelected && styles.methodRowActive]}
+                        onPress={() => handleSelectMethod(option.key)}
+                        activeOpacity={0.8}
+                        accessibilityRole="radio"
+                        accessibilityLabel={option.label}
+                        accessibilityState={{ selected: isSelected }}
+                      >
+                        <View style={[styles.radioOuter, isSelected && styles.radioOuterActive]}>
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
 
-                {/* Method 2: UPI */}
-                <TouchableOpacity
-                  style={[styles.methodOption, selectedMethod === 'upi' && styles.methodOptionActive]}
-                  onPress={() => handleSelectMethod('upi')}
-                >
-                  <View style={styles.methodRadioCol}>
-                    <View style={[styles.radioOuter, selectedMethod === 'upi' && styles.radioOuterActive]}>
-                      {selectedMethod === 'upi' && <View style={styles.radioInner} />}
-                    </View>
-                  </View>
-                  <View style={styles.methodIconWrap}>
-                    <Smartphone size={20} color={selectedMethod === 'upi' ? '#176B57' : '#667776'} />
-                  </View>
-                  <View style={styles.methodInfoCol}>
-                    <View style={styles.methodTitleRow}>
-                      <AppText style={styles.methodTitle}>UPI (Instant & QR)</AppText>
-                      <View style={styles.recommendedBadge}>
-                        <AppText style={styles.recommendedText}>Popular</AppText>
-                      </View>
-                    </View>
-                    <AppText style={styles.methodDesc}>
-                      Google Pay, PhonePe, Paytm, BHIM & UPI Apps
-                    </AppText>
-                  </View>
-                </TouchableOpacity>
+                        <View style={[styles.methodIconWrap, isSelected && styles.methodIconWrapActive]}>
+                          {renderMethodIcon(option.key, isSelected)}
+                        </View>
 
-                {selectedMethod === 'upi' && (
-                  <View style={styles.upiDetailsBox}>
-                    <View style={styles.upiDetailRow}>
-                      <QrCode size={16} color={Colors.brand.primary} />
-                      <AppText style={styles.upiDetailText}>
-                        Reservation confirmed instantly. Complete payment via UPI at check-in or venue VPA.
-                      </AppText>
-                    </View>
-                  </View>
-                )}
+                        <View style={styles.methodContentCol}>
+                          <AppText
+                            style={[styles.methodTitle, isSelected && styles.methodTitleActive]}
+                          >
+                            {option.label}
+                          </AppText>
 
-                {/* Method 3: Cards */}
-                <TouchableOpacity
-                  style={[styles.methodOption, selectedMethod === 'card' && styles.methodOptionActive]}
-                  onPress={() => handleSelectMethod('card')}
-                >
-                  <View style={styles.methodRadioCol}>
-                    <View style={[styles.radioOuter, selectedMethod === 'card' && styles.radioOuterActive]}>
-                      {selectedMethod === 'card' && <View style={styles.radioInner} />}
-                    </View>
-                  </View>
-                  <View style={styles.methodIconWrap}>
-                    <CreditCard size={20} color={selectedMethod === 'card' ? '#176B57' : '#667776'} />
-                  </View>
-                  <View style={styles.methodInfoCol}>
-                    <AppText style={styles.methodTitle}>Credit / Debit Card</AppText>
-                    <AppText style={styles.methodDesc}>
-                      Visa, Mastercard, RuPay, Amex
-                    </AppText>
-                  </View>
-                </TouchableOpacity>
-
-                {selectedMethod === 'card' && (
-                  <View style={styles.upiDetailsBox}>
-                    <View style={styles.upiDetailRow}>
-                      <CreditCard size={16} color={Colors.brand.primary} />
-                      <AppText style={styles.upiDetailText}>
-                        Card terminal available at the venue front desk.
-                      </AppText>
-                    </View>
-                  </View>
-                )}
-
-                {/* Method 4: NetBanking */}
-                <TouchableOpacity
-                  style={[styles.methodOption, selectedMethod === 'netbanking' && styles.methodOptionActive]}
-                  onPress={() => handleSelectMethod('netbanking')}
-                >
-                  <View style={styles.methodRadioCol}>
-                    <View style={[styles.radioOuter, selectedMethod === 'netbanking' && styles.radioOuterActive]}>
-                      {selectedMethod === 'netbanking' && <View style={styles.radioInner} />}
-                    </View>
-                  </View>
-                  <View style={styles.methodIconWrap}>
-                    <Wallet size={20} color={selectedMethod === 'netbanking' ? '#176B57' : '#667776'} />
-                  </View>
-                  <View style={styles.methodInfoCol}>
-                    <AppText style={styles.methodTitle}>NetBanking / Direct Transfer</AppText>
-                    <AppText style={styles.methodDesc}>
-                      Direct bank transfer / NEFT / IMPS to club account
-                    </AppText>
-                  </View>
-                </TouchableOpacity>
+                          {option.badge ? (
+                            <View style={styles.methodBadge}>
+                              <AppText style={styles.methodBadgeText} numberOfLines={1}>
+                                {option.badge}
+                              </AppText>
+                            </View>
+                          ) : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </Card>
 
-              {/* Error banner if failed during commit */}
+              {/* Inline error banner if failed during commit */}
               {errorMessage && (
                 <View style={styles.errorSection}>
                   <View style={styles.inlineErrorBox}>
-                    <AlertCircle size={16} color="#B42318" />
+                    <AlertCircle size={15} color={Colors.status.error} />
                     <AppText style={styles.inlineErrorText}>{errorMessage}</AppText>
                   </View>
                   <TouchableOpacity
                     style={styles.checkStatusBtn}
                     onPress={handleCheckStatus}
                     disabled={step === 'processing'}
+                    activeOpacity={0.8}
                   >
-                    <Clock size={14} color="#176B57" />
+                    <Clock size={13} color={Colors.brand.primary} />
                     <AppText style={styles.checkStatusText}>Check Booking Status</AppText>
                   </TouchableOpacity>
                 </View>
               )}
-
-              {/* Security badge */}
-              <View style={styles.securityRow}>
-                <Lock size={12} color={Colors.text.secondary} />
-                <AppText style={styles.securityText}>
-                  Direct club reservation. Verified and confirmed instantly.
-                </AppText>
-              </View>
-
-              {/* Primary Action Button */}
-              <View style={styles.footerAction}>
-                <Button
-                  label={
-                    step === 'processing'
-                      ? 'Processing & Verifying Payment...'
-                      : errorMessage
-                      ? `Retry Payment (${finalFormatted})`
-                      : `Pay ${finalFormatted} & Confirm Booking`
-                  }
-                  variant="primary"
-                  size="lg"
-                  disabled={step === 'processing'}
-                  onPress={handleCommitPayment}
-                  style={styles.payBtn}
-                />
-              </View>
             </View>
           )}
 
@@ -655,12 +611,12 @@ export function CheckoutModal({
           {step === 'confirmed' && verifyResult && (
             <View style={styles.confirmedContainer}>
               <View style={styles.successIconWrap}>
-                <CheckCircle2 size={56} color="#18794E" />
+                <CheckCircle2 size={52} color={Colors.status.success} />
               </View>
 
               <AppText style={styles.successTitle}>Booking & Payment Confirmed!</AppText>
               <AppText style={styles.successSubtitle}>
-                Your reservation at {clubName} is secured and synchronized.
+                Your reservation at {resolvedClubName} is secured and synchronized.
               </AppText>
 
               {/* Receipt Card */}
@@ -672,7 +628,7 @@ export function CheckoutModal({
                     onPress={() => handleCopyReference(verifyResult.payment.reference)}
                   >
                     {copiedRef ? (
-                      <Check size={14} color="#18794E" />
+                      <Check size={14} color={Colors.status.success} />
                     ) : (
                       <Copy size={14} color={Colors.brand.primary} />
                     )}
@@ -691,7 +647,7 @@ export function CheckoutModal({
 
                 <View style={styles.receiptRow}>
                   <AppText style={styles.receiptRowLabel}>Facility</AppText>
-                  <AppText style={styles.receiptRowValue}>{clubName}</AppText>
+                  <AppText style={styles.receiptRowValue}>{resolvedClubName}</AppText>
                 </View>
 
                 {startAt ? (
@@ -740,6 +696,50 @@ export function CheckoutModal({
             </View>
           )}
         </ScrollView>
+
+        {/* Compact Sticky Footer */}
+        {(step === 'ready' || step === 'processing') && (
+          <View style={styles.stickyFooter}>
+            <View style={styles.stickyTotalCol}>
+              <AppText style={styles.stickyTotalLabel} numberOfLines={1}>
+                Total
+              </AppText>
+              <AppText style={styles.stickyTotalValue} numberOfLines={1}>
+                {finalFormatted}
+              </AppText>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.stickyCtaBtn,
+                step === 'processing' && styles.stickyCtaBtnDisabled,
+              ]}
+              onPress={handleCommitPayment}
+              disabled={step === 'processing'}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={
+                step === 'processing'
+                  ? 'Processing payment'
+                  : errorMessage
+                  ? 'Retry Payment'
+                  : 'Pay & Confirm Booking'
+              }
+            >
+              {step === 'processing' ? (
+                <View style={styles.stickyCtaLoadingRow}>
+                  <ActivityIndicator size="small" color={Colors.text.inverse} />
+                  <AppText style={styles.stickyCtaText} numberOfLines={1}>
+                    Confirming...
+                  </AppText>
+                </View>
+              ) : (
+                <AppText style={styles.stickyCtaText} numberOfLines={1}>
+                  {errorMessage ? 'Retry Payment' : 'Pay & Confirm Booking'}
+                </AppText>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -748,365 +748,361 @@ export function CheckoutModal({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F4F8F5',
+    backgroundColor: Colors.background.primary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: Spacing[4],
-    paddingVertical: Spacing[3],
-    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.surface.default,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2EAE6',
+    borderBottomColor: Colors.surface.border,
   },
   headerTextCol: {
     flex: 1,
+    minWidth: 0,
+    marginRight: 12,
   },
   badgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 3,
   },
   purposeBadge: {
-    backgroundColor: '#E5F6EC',
-    paddingHorizontal: 8,
+    backgroundColor: Colors.brand.primaryLight,
+    paddingHorizontal: 7,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 5,
   },
   purposeBadgeText: {
-    fontSize: 11,
+    fontSize: 10,
+    lineHeight: 13,
     fontWeight: '700',
-    color: '#176B57',
+    color: Colors.brand.primary,
     textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     backgroundColor: '#F0FDF4',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1,
     borderColor: '#DCFCE7',
   },
   verifiedBadgeText: {
     fontSize: 10,
+    lineHeight: 13,
     fontWeight: '600',
-    color: '#18794E',
+    color: Colors.status.success,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '700',
-    color: '#102B2A',
+    color: Colors.text.primary,
   },
   closeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#F4F8F5',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.background.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
-    padding: Spacing[4],
-    paddingBottom: Spacing[8],
+    padding: 16,
+    paddingBottom: 20,
   },
   loadingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: 56,
   },
   loadingText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#102B2A',
-    marginTop: 16,
-  },
-  loadingSub: {
-    fontSize: 13,
-    color: '#667776',
-    textAlign: 'center',
-    marginTop: 6,
-    maxWidth: 280,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+    marginTop: 12,
   },
   errorContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 36,
     paddingHorizontal: 16,
   },
   errorIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FDE8E8',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.status.errorBg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   errorTitle: {
-    fontSize: 18,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '700',
-    color: '#B42318',
-    marginBottom: 8,
+    color: Colors.status.error,
+    marginBottom: 6,
+    textAlign: 'center',
   },
   errorDesc: {
-    fontSize: 14,
-    color: '#667776',
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: Colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
+    marginBottom: 20,
   },
   retryBtn: {
     width: '100%',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   secondaryBtn: {
     width: '100%',
   },
   bodyContainer: {
-    gap: 16,
+    gap: 12,
   },
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
+  card: {
+    backgroundColor: Colors.surface.default,
     borderRadius: Radius.lg,
-    padding: Spacing[4],
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E2EAE6',
+    borderColor: Colors.surface.border,
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
-  cardHeaderRow: {
+  clubRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 8,
-  },
-  clubNameText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#176B57',
-  },
-  activityTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#102B2A',
     marginBottom: 4,
   },
-  activitySubtitle: {
-    fontSize: 13,
-    color: '#667776',
-    marginBottom: 8,
+  clubNameText: {
+    fontSize: 12.5,
+    lineHeight: 17,
+    fontWeight: '600',
+    color: Colors.brand.primary,
+    flex: 1,
   },
-  infoDivider: {
+  courtRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  activityTitle: {
+    fontSize: 15.5,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    flexShrink: 1,
+  },
+  courtTypePill: {
+    backgroundColor: Colors.background.primary,
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  courtTypeText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+  },
+  cardDivider: {
     height: 1,
-    backgroundColor: '#EDF2F7',
+    backgroundColor: Colors.surface.borderLight,
     marginVertical: 10,
+  },
+  metaList: {
+    gap: 6,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 6,
   },
   infoText: {
     fontSize: 13,
-    color: '#102B2A',
+    lineHeight: 18,
+    color: Colors.text.primary,
     fontWeight: '500',
-  },
-  breakdownCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
+    flex: 1,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 14,
+    lineHeight: 19,
     fontWeight: '700',
-    color: '#102B2A',
-    marginBottom: 12,
+    color: Colors.text.primary,
+    marginBottom: 10,
   },
-  methodSubtitle: {
-    fontSize: 12,
-    color: '#667776',
-    marginTop: -8,
-    marginBottom: 12,
+  breakdownList: {
+    gap: 7,
   },
   breakdownRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    gap: 12,
   },
   breakdownLabel: {
     fontSize: 13,
-    color: '#667776',
+    lineHeight: 18,
+    color: Colors.text.secondary,
+    flex: 1,
   },
   breakdownValue: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
-    color: '#102B2A',
-  },
-  breakdownFree: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#18794E',
-  },
-  discountBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    color: Colors.text.primary,
   },
   discountLabel: {
     fontSize: 13,
-    color: '#18794E',
+    lineHeight: 18,
+    color: Colors.status.success,
     fontWeight: '600',
+    flex: 1,
   },
   discountValue: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '700',
-    color: '#18794E',
-  },
-  breakdownDivider: {
-    height: 1,
-    backgroundColor: '#E2EAE6',
-    marginVertical: 12,
+    color: Colors.status.success,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 4,
+    gap: 12,
   },
   totalLabel: {
-    fontSize: 16,
+    fontSize: 14.5,
+    lineHeight: 20,
     fontWeight: '700',
-    color: '#102B2A',
-  },
-  currencyNote: {
-    fontSize: 11,
-    color: '#667776',
-    marginTop: 2,
+    color: Colors.text.primary,
   },
   totalAmountText: {
-    fontSize: 22,
+    fontSize: 18,
+    lineHeight: 24,
     fontWeight: '800',
-    color: '#176B57',
+    color: Colors.brand.primary,
   },
-  methodsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    borderWidth: 1,
-    borderColor: '#E2EAE6',
-    gap: 10,
+  methodsList: {
+    gap: 8,
   },
-  methodOption: {
+  methodRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    minHeight: 46,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: '#E2EAE6',
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Colors.surface.border,
+    backgroundColor: Colors.surface.default,
+    gap: 8,
   },
-  methodOptionActive: {
-    borderColor: '#176B57',
+  methodRowActive: {
+    borderWidth: 1.5,
+    borderColor: Colors.brand.primary,
     backgroundColor: '#F0F9F5',
   },
-  methodRadioCol: {
-    marginRight: 10,
-  },
   radioOuter: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#9CA3AF',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 1.75,
+    borderColor: Colors.text.tertiary,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   radioOuterActive: {
-    borderColor: '#176B57',
+    borderColor: Colors.brand.primary,
   },
   radioInner: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#176B57',
+    backgroundColor: Colors.brand.primary,
   },
   methodIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#F4F8F5',
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: Colors.background.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    flexShrink: 0,
   },
-  methodInfoCol: {
+  methodIconWrapActive: {
+    backgroundColor: Colors.brand.primaryLight,
+  },
+  methodContentCol: {
     flex: 1,
-  },
-  methodTitleRow: {
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   methodTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#102B2A',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: Colors.text.primary,
   },
-  recommendedBadge: {
-    backgroundColor: '#E5F6EC',
+  methodTitleActive: {
+    fontWeight: '700',
+    color: Colors.brand.primaryDark,
+  },
+  methodBadge: {
+    backgroundColor: Colors.brand.primaryLight,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    flexShrink: 0,
   },
-  recommendedText: {
-    fontSize: 10,
+  methodBadgeText: {
+    fontSize: 9.5,
+    lineHeight: 13,
     fontWeight: '700',
-    color: '#18794E',
-  },
-  methodDesc: {
-    fontSize: 12,
-    color: '#667776',
-    marginTop: 2,
-  },
-  upiDetailsBox: {
-    backgroundColor: '#F4F8F5',
-    padding: 10,
-    borderRadius: 8,
-    marginLeft: 30,
-    marginTop: -4,
-    borderLeftWidth: 3,
-    borderLeftColor: '#176B57',
-  },
-  upiDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  upiDetailText: {
-    fontSize: 12,
-    color: '#102B2A',
-    fontWeight: '500',
-    flex: 1,
+    color: Colors.status.success,
   },
   inlineErrorBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#FDE8E8',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: Colors.status.errorBg,
+    padding: 11,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#FCA5A5',
   },
   inlineErrorText: {
-    fontSize: 13,
-    color: '#B42318',
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: Colors.status.error,
     fontWeight: '500',
     flex: 1,
   },
@@ -1121,69 +1117,112 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#E6F4EA',
-    borderRadius: 8,
+    backgroundColor: Colors.brand.primaryLight,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: '#CEEAD6',
   },
   checkStatusText: {
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
-    color: '#137333',
+    color: Colors.status.success,
   },
-  securityRow: {
+  stickyFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: Colors.surface.default,
+    borderTopWidth: 1,
+    borderTopColor: Colors.surface.border,
+    shadowColor: '#101828',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  stickyTotalCol: {
+    flexShrink: 0,
+  },
+  stickyTotalLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+  },
+  stickyTotalValue: {
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: Colors.text.primary,
+  },
+  stickyCtaBtn: {
+    flex: 1,
+    minWidth: 0,
+    height: 44,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.brand.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    ...Shadows.brand,
+  },
+  stickyCtaBtnDisabled: {
+    opacity: 0.65,
+  },
+  stickyCtaLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+    gap: 8,
   },
-  securityText: {
-    fontSize: 11,
-    color: '#667776',
+  stickyCtaText: {
+    fontSize: 13.5,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: Colors.text.inverse,
     textAlign: 'center',
-  },
-  footerAction: {
-    marginTop: 8,
-  },
-  payBtn: {
-    width: '100%',
   },
   confirmedContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
   },
   successIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#E5F6EC',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.brand.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   successTitle: {
-    fontSize: 20,
+    fontSize: 19,
+    lineHeight: 24,
     fontWeight: '800',
-    color: '#102B2A',
+    color: Colors.text.primary,
     textAlign: 'center',
     marginBottom: 6,
   },
   successSubtitle: {
-    fontSize: 14,
-    color: '#667776',
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: Colors.text.secondary,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     maxWidth: 300,
   },
   receiptCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface.default,
     borderRadius: Radius.lg,
-    padding: Spacing[4],
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E2EAE6',
-    marginBottom: 16,
+    borderColor: Colors.surface.border,
+    marginBottom: 14,
   },
   receiptHeader: {
     flexDirection: 'row',
@@ -1191,16 +1230,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   receiptLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#667776',
+    color: Colors.text.secondary,
     textTransform: 'uppercase',
   },
   copyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#E5F6EC',
+    backgroundColor: Colors.brand.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -1208,37 +1247,37 @@ const styles = StyleSheet.create({
   copyBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#176B57',
+    color: Colors.brand.primary,
   },
   receiptDivider: {
     height: 1,
-    backgroundColor: '#EDF2F7',
-    marginVertical: 12,
+    backgroundColor: Colors.surface.borderLight,
+    marginVertical: 10,
   },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
   receiptRowLabel: {
     fontSize: 13,
-    color: '#667776',
+    color: Colors.text.secondary,
   },
   receiptRowValue: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#102B2A',
+    color: Colors.text.primary,
     maxWidth: '60%',
     textAlign: 'right',
   },
   receiptRowAmount: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#176B57',
+    color: Colors.brand.primary,
   },
   statusConfirmedBadge: {
-    backgroundColor: '#E5F6EC',
+    backgroundColor: Colors.brand.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
@@ -1246,21 +1285,21 @@ const styles = StyleSheet.create({
   statusConfirmedText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#18794E',
+    color: Colors.status.success,
   },
   confirmedNoticeBox: {
     width: '100%',
     backgroundColor: '#F0F9F5',
     padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
+    borderRadius: Radius.md,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#D1E7DD',
   },
   confirmedNoticeText: {
     fontSize: 12,
-    color: '#102B2A',
-    lineHeight: 18,
+    color: Colors.text.primary,
+    lineHeight: 17,
     textAlign: 'center',
   },
   doneBtn: {
