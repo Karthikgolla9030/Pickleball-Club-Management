@@ -273,6 +273,17 @@ export function Step3PaymentSubmit({
             <AlertCircle size={16} color="#DC2626" style={{ marginTop: 1 }} />
             <AppText style={styles.submitErrorText}>{submitError}</AppText>
           </View>
+          {submitError.toLowerCase().includes('partner') ? (
+            <TouchableOpacity
+              style={styles.errorClubActionBtn}
+              onPress={onBack}
+              activeOpacity={0.8}
+            >
+              <AppText style={styles.errorClubActionBtnText}>
+                ← Go back to change partner
+              </AppText>
+            </TouchableOpacity>
+          ) : null}
           {(submitError.toLowerCase().includes('member') || submitError.toLowerCase().includes('membership')) && (tournament as any).club_id ? (
             <TouchableOpacity
               style={styles.errorClubActionBtn}

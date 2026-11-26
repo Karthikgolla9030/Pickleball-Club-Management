@@ -1191,21 +1191,20 @@ class TournamentService:
         player_name = user.full_name if user and user.full_name else "Player"
         player_email = user.email if user and user.email else None
 
-        from app.models.payment import Payment, PaymentStatus
-        from sqlalchemy import select
-        stmt = select(Payment).where(
-            Payment.tournament_id == tournament.id,
-            Payment.player_id == user_id,
-            Payment.status == PaymentStatus.SUCCEEDED,
-        )
-        existing_p = (await self.db.execute(stmt)).scalars().first()
-
-        if existing_p:
-            payment_status = "SUCCEEDED"
-        elif calc_fee == 0:
-            payment_status = "FREE"
-        else:
-            payment_status = "NOT_COLLECTED"
+        payment_status = "FREE" if calc_fee == 0 else "NOT_COLLECTED"
+        try:
+            from app.models.payment import Payment, PaymentStatus
+            from sqlalchemy import select
+            stmt = select(Payment).where(
+                Payment.tournament_id == tournament.id,
+                Payment.player_id == user_id,
+                Payment.status == PaymentStatus.SUCCEEDED,
+            )
+            existing_p = (await self.db.execute(stmt)).scalars().first()
+            if existing_p:
+                payment_status = "SUCCEEDED"
+        except Exception as e:
+            logger.warning(f"Error checking payment in get_player_registration_status: {e}")
 
         payment_method = "UPI"
         if existing.notes:
@@ -1220,14 +1219,24 @@ class TournamentService:
         if not loc_name:
             loc_name = "Main Courts"
 
+        status_val = existing.status.value if hasattr(existing.status, "value") else str(existing.status)
+        status_label_val = (
+            existing.status.display_label
+            if hasattr(existing.status, "display_label")
+            else status_val.capitalize()
+        )
+        t_format_val = tournament.format.value if hasattr(tournament.format, "value") else str(tournament.format)
+        t_format_lbl = tournament.format.display_label if hasattr(tournament.format, "display_label") else t_format_val.replace("_", " ").title()
+        reg_registered_at = existing.registered_at or getattr(existing, "created_at", None) or datetime.now(timezone.utc)
+
         reg_response = PlayerSelfRegistrationResponse(
             id=existing.id,
             tournament_id=tournament.id,
             status=existing.status,
-            status_label=existing.status.display_label,
-            registered_at=existing.registered_at,
+            status_label=status_label_val,
+            registered_at=reg_registered_at,
             cancelled_at=existing.cancelled_at,
-            message=f"Registration status: {existing.status.display_label}",
+            message=f"Registration status: {status_label_val}",
             reference_number=ref_no,
             registration_type="individual" if (is_scramble or is_singles) else "team",
             team_id=team_id,
@@ -1240,8 +1249,8 @@ class TournamentService:
             payment_method=payment_method,
             notes=existing.notes,
             tournament_name=tournament.name,
-            tournament_format=tournament.format.value,
-            tournament_format_label=tournament.format.display_label,
+            tournament_format=t_format_val,
+            tournament_format_label=t_format_lbl,
             division=division,
             location_name=loc_name,
             start_date=tournament.start_date,
@@ -1251,16 +1260,19 @@ class TournamentService:
             skill_level=skill_level,
         )
 
-        is_active_reg = existing.status in (
-            RegistrationStatus.CONFIRMED,
-            RegistrationStatus.PENDING,
-            RegistrationStatus.WAITLISTED,
+        is_active_reg = status_val in (
+            RegistrationStatus.CONFIRMED.value,
+            RegistrationStatus.PENDING.value,
+            RegistrationStatus.WAITLISTED.value,
+            "confirmed",
+            "pending",
+            "waitlisted",
         )
 
         return PlayerTournamentRegistrationStatusResponse(
             is_registered=is_active_reg,
             status=existing.status,
-            status_label=existing.status.display_label,
+            status_label=status_label_val,
             registration=reg_response,
         )
 

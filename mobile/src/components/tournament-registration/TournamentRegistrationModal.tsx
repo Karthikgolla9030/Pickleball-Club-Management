@@ -242,7 +242,10 @@ export function TournamentRegistrationModal({
         tournamentId={activeTournament?.id}
         tournament={activeTournament}
         registration={overrideRegistration || existingRegistration}
-        onClose={onClose}
+        onClose={() => {
+          setAlreadyRegisteredOverride(false);
+          onClose();
+        }}
         onCancelled={() => {
           setAlreadyRegisteredOverride(false);
           void refetchMyRegistration();
@@ -614,21 +617,44 @@ export function TournamentRegistrationModal({
         (err as any)?.message ||
         (err instanceof Error ? err.message : 'Registration failed. Please try again.');
       const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
-      if (msg.toLowerCase().includes('already registered')) {
-        // Await refetch so existingRegistration is populated before switching to
-        // RegistrationDetailsModal. Without this await, the modal shows "No Registration Found"
-        // because existingRegistration is still null while the refetch is in flight.
+
+      const lowerMsg = msg.toLowerCase();
+      const isPartnerAlreadyRegistered =
+        lowerMsg.includes('partner') && lowerMsg.includes('already registered');
+      const isPlayerAlreadyRegistered =
+        !isPartnerAlreadyRegistered && lowerMsg.includes('already registered');
+
+      if (isPartnerAlreadyRegistered) {
+        // Partner is already registered — this is a validation error for the partner field,
+        // NOT a registration for the caller. Keep the form active so the user can fix it!
+        setSubmitError(msg);
+        setErrors((prev) => ({
+          ...prev,
+          partnerFullName: msg,
+          partnerEmail: msg,
+        }));
+        return;
+      }
+
+      if (isPlayerAlreadyRegistered) {
+        // Caller is already registered. Attempt to load their registration record.
         try {
           const refetchRes = await refetchMyRegistration();
           if (refetchRes?.data?.registration) {
             setOverrideRegistration(refetchRes.data.registration);
+            setAlreadyRegisteredOverride(true);
+            return;
           }
         } catch {
-          // Tolerate refetch failures — the RegistrationDetailsModal will retry
+          // Tolerate refetch failures
         }
-        setAlreadyRegisteredOverride(true);
+        // If no registration object was found or refetch failed, do NOT switch to
+        // RegistrationDetailsModal (which would display "Registration Not Found").
+        // Instead, show the clear error message directly on the screen.
+        setSubmitError(msg);
         return;
       }
+
       setSubmitError(msg);
     } finally {
       setIsProcessingPayment(false);

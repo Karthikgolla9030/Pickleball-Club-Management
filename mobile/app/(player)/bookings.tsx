@@ -492,32 +492,38 @@ export default function PlayerBookingsScreen() {
       {/* ─── Top Header ─── */}
       <AppHeader title="My Bookings" showMenu borderless />
 
-      {/* ─── Status Tabs / Pills ─── */}
-      <View style={styles.filterTabsRow}>
-        {(['upcoming', 'past', 'cancelled'] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          const label =
-            tab === 'upcoming'
-              ? 'Upcoming'
-              : tab === 'past'
-              ? 'Past'
-              : 'Cancelled';
+      {/* ─── Status Segmented Control ─── */}
+      <View style={styles.segmentedWrapper}>
+        <View style={styles.segmentedTrack} accessibilityRole="tablist">
+          {(['upcoming', 'past', 'cancelled'] as const).map((tab) => {
+            const isActive = activeTab === tab;
+            const label =
+              tab === 'upcoming'
+                ? 'Upcoming'
+                : tab === 'past'
+                ? 'Past'
+                : 'Cancelled';
 
-          return (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => setActiveTab(tab)}
-              style={[styles.filterTabPill, isActive && styles.filterTabPillActive]}
-              activeOpacity={0.8}
-            >
-              <AppText
-                style={[styles.filterTabText, isActive && styles.filterTabTextActive]}
+            return (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => setActiveTab(tab)}
+                style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
+                activeOpacity={0.85}
+                accessibilityRole="tab"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: isActive }}
               >
-                {label}
-              </AppText>
-            </TouchableOpacity>
-          );
-        })}
+                <AppText
+                  numberOfLines={1}
+                  style={[styles.segmentText, isActive && styles.segmentTextActive]}
+                >
+                  {label}
+                </AppText>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       {/* ─── Activity Category Filter Chips ─── */}
@@ -525,6 +531,8 @@ export default function PlayerBookingsScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          bounces={false}
+          style={styles.categoryScroll}
           contentContainerStyle={styles.categoryScrollContent}
         >
           {ACTIVITY_CATEGORIES.map((cat) => {
@@ -537,9 +545,13 @@ export default function PlayerBookingsScreen() {
                   styles.categoryPill,
                   isCatActive && styles.categoryPillActive,
                 ]}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={cat.label}
+                accessibilityState={{ selected: isCatActive }}
               >
                 <AppText
+                  numberOfLines={1}
                   style={[
                     styles.categoryPillText,
                     isCatActive && styles.categoryPillTextActive,
@@ -743,55 +755,86 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7F9F8',
   },
-  filterTabsRow: {
-    flexDirection: 'row',
+  segmentedWrapper: {
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
-    gap: 8,
+    paddingTop: 12,
+    paddingBottom: 10,
     backgroundColor: '#F7F9F8',
   },
-  filterTabPill: {
-    paddingVertical: 7,
-    paddingHorizontal: 18,
-    borderRadius: 20,
+  segmentedTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
     backgroundColor: '#EAEFEA',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#DCE5E0',
+    padding: 4,
+    gap: 4,
   },
-  filterTabPillActive: {
+  segmentButton: {
+    flex: 1,
+    minWidth: 0,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  segmentButtonActive: {
     backgroundColor: '#114D3F',
+    shadowColor: '#114D3F',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.16,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  filterTabText: {
+  segmentText: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     color: '#4B6358',
+    textAlign: 'center',
+    includeFontPadding: false,
   },
-  filterTabTextActive: {
+  segmentTextActive: {
     color: '#FFFFFF',
   },
   categoryContainer: {
     backgroundColor: '#F7F9F8',
     paddingBottom: 8,
+    width: '100%',
+  },
+  categoryScroll: {
+    width: '100%',
   },
   categoryScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 6,
+    gap: 8,
   },
   categoryPill: {
-    paddingVertical: 5,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DCE5E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   categoryPillActive: {
-    backgroundColor: '#064E3B',
-    borderColor: '#064E3B',
+    backgroundColor: '#114D3F',
+    borderColor: '#114D3F',
   },
   categoryPillText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748B',
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: '#4B6358',
+    includeFontPadding: false,
   },
   categoryPillTextActive: {
     color: '#FFFFFF',

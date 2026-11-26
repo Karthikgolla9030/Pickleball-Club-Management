@@ -235,6 +235,17 @@ export function RegistrationDetailsModal({
                 Retry
               </AppText>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.primaryBtn, { marginTop: 10, backgroundColor: '#064E3B' }]}
+              onPress={() => {
+                if (onCancelled) onCancelled();
+                onClose();
+              }}
+            >
+              <AppText variant="bodySmall" bold style={styles.primaryBtnText}>
+                Back to Registration
+              </AppText>
+            </TouchableOpacity>
             <TouchableOpacity style={[styles.primaryBtn, { marginTop: 10, backgroundColor: '#64748B' }]} onPress={onClose}>
               <AppText variant="bodySmall" bold style={styles.primaryBtnText}>
                 Back to Tournaments
