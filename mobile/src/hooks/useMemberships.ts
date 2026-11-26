@@ -19,6 +19,7 @@ import type {
   CancelSubscriptionPayload,
   CreateMembershipPlanPayload,
   CreateSubscriptionPayload,
+  PlayerMembershipView,
   PlayerSubscribePayload,
   UpdateMembershipPlanPayload,
   UpdateSubscriptionPayload,
@@ -209,18 +210,21 @@ export function useRenewSubscription(clubId: string, subscriptionId: string) {
 
 /**
  * Player-facing: fetch active membership for a specific club.
- * Returns undefined if no active subscription exists.
+ * Uses GET /api/v1/player/memberships (200 OK) and filters by clubId
+ * so missing paid subscriptions return null cleanly without a 404 network error.
  */
 export function usePlayerMembership(clubId: string) {
-  return useQuery({
+  return useQuery<PlayerMembershipView | null, Error>({
     queryKey: QUERY_KEYS.PLAYER_MEMBERSHIP(clubId),
-    queryFn: () => membershipApi.getPlayerMembership(clubId),
-    enabled: !!clubId,
-    retry: (failureCount, error: any) => {
-      // Don't retry on 404 — no active membership is an expected state
-      if (error?.status === 404) return false;
-      return failureCount < 3;
+    queryFn: async () => {
+      const allSubs = await membershipApi.listPlayerMemberships();
+      const clubSubs = (allSubs || []).filter((s) => s.club_id === clubId);
+      const active = clubSubs.find(
+        (s) => s.status === 'active' || s.effective_status === 'active'
+      );
+      return active ?? clubSubs[0] ?? null;
     },
+    enabled: !!clubId,
     staleTime: 2 * 60 * 1000, // 2 min
   });
 }
@@ -272,6 +276,7 @@ export function useRenewPlayerSubscription() {
     mutationFn: (subscriptionId: string) =>
       membershipApi.renewPlayerSubscription(subscriptionId),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['player', 'membership'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
     },

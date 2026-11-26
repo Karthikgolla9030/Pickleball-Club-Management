@@ -19,6 +19,8 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Modal,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -30,6 +32,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calendar,
   Clock,
+  Filter,
   MapPin,
   ChevronRight,
   LayoutGrid,
@@ -37,6 +40,7 @@ import {
   Award,
   GraduationCap,
   Sparkles,
+  X,
 } from 'lucide-react-native';
 
 import { AppHeader, AppText, BookingDetailsModal } from '@/components';
@@ -67,6 +71,8 @@ export default function PlayerBookingsScreen() {
 
   const [activeTab, setActiveTab] = useState<FilterTab>('upcoming');
   const [selectedActivity, setSelectedActivity] = useState<ActivityCategory>('all');
+  const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
+  const [draftActivity, setDraftActivity] = useState<ActivityCategory>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
@@ -487,6 +493,26 @@ export default function PlayerBookingsScreen() {
     );
   };
 
+  const selectedCategoryLabel =
+    ACTIVITY_CATEGORIES.find((cat) => cat.key === selectedActivity)?.label || 'All';
+  const hasActiveCategoryFilter = selectedActivity !== 'all';
+
+  const handleOpenFilters = () => {
+    setDraftActivity(selectedActivity);
+    setIsFilterSheetVisible(true);
+  };
+
+  const handleApplyFilter = () => {
+    setSelectedActivity(draftActivity);
+    setIsFilterSheetVisible(false);
+  };
+
+  const handleClearFilter = () => {
+    setDraftActivity('all');
+    setSelectedActivity('all');
+    setIsFilterSheetVisible(false);
+  };
+
   return (
     <View style={styles.container}>
       {/* ─── Top Header ─── */}
@@ -526,43 +552,41 @@ export default function PlayerBookingsScreen() {
         </View>
       </View>
 
-      {/* ─── Activity Category Filter Chips ─── */}
-      <View style={styles.categoryContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          bounces={false}
-          style={styles.categoryScroll}
-          contentContainerStyle={styles.categoryScrollContent}
-        >
-          {ACTIVITY_CATEGORIES.map((cat) => {
-            const isCatActive = selectedActivity === cat.key;
-            return (
-              <TouchableOpacity
-                key={cat.key}
-                onPress={() => setSelectedActivity(cat.key)}
-                style={[
-                  styles.categoryPill,
-                  isCatActive && styles.categoryPillActive,
-                ]}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={cat.label}
-                accessibilityState={{ selected: isCatActive }}
-              >
-                <AppText
-                  numberOfLines={1}
-                  style={[
-                    styles.categoryPillText,
-                    isCatActive && styles.categoryPillTextActive,
-                  ]}
-                >
-                  {cat.label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+      {/* ─── Category Filter Control ─── */}
+      <View style={styles.filtersBar}>
+        <View style={styles.filtersLeftGroup}>
+          <TouchableOpacity
+            style={styles.filtersPillBtn}
+            onPress={handleOpenFilters}
+            activeOpacity={0.8}
+            accessibilityLabel="Filter bookings by category"
+            accessibilityRole="button"
+          >
+            <Filter size={15} color="#0D5C46" strokeWidth={2} />
+            <AppText style={styles.filtersPillText}>Filters</AppText>
+            {hasActiveCategoryFilter && (
+              <View style={styles.filtersCountBadge}>
+                <AppText style={styles.filtersCountText}>1</AppText>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <AppText style={styles.appliedFilterText} numberOfLines={1}>
+            {hasActiveCategoryFilter ? `Category: ${selectedCategoryLabel}` : 'Showing: All'}
+          </AppText>
+        </View>
+
+        {hasActiveCategoryFilter && (
+          <TouchableOpacity
+            onPress={handleClearFilter}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+            accessibilityLabel="Clear category filter"
+            accessibilityRole="button"
+          >
+            <AppText style={styles.clearFilterText}>Clear</AppText>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ─── Bookings Content ─── */}
@@ -746,6 +770,96 @@ export default function PlayerBookingsScreen() {
           refetchBookings();
         }}
       />
+
+      {/* ─── Category Filter Bottom Sheet ─── */}
+      <Modal
+        visible={isFilterSheetVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsFilterSheetVisible(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable
+            style={styles.sheetBackdrop}
+            onPress={() => setIsFilterSheetVisible(false)}
+          />
+          <View
+            style={[
+              styles.sheetContainer,
+              { paddingBottom: Math.max(insets.bottom, 20) },
+            ]}
+          >
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <AppText style={styles.sheetTitle}>Filters</AppText>
+              <TouchableOpacity
+                onPress={() => setIsFilterSheetVisible(false)}
+                style={styles.sheetCloseBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel="Close filters"
+                accessibilityRole="button"
+              >
+                <X size={18} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetBody}>
+              <AppText style={styles.sheetSectionTitle}>Booking Category</AppText>
+              <View style={styles.sheetPillGrid}>
+                {ACTIVITY_CATEGORIES.map((cat) => {
+                  const isSelected = draftActivity === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[
+                        styles.sheetFilterPill,
+                        isSelected && styles.sheetFilterPillActive,
+                      ]}
+                      onPress={() => setDraftActivity(cat.key)}
+                      activeOpacity={0.75}
+                      accessibilityRole="radio"
+                      accessibilityLabel={cat.label}
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <AppText
+                        style={[
+                          styles.sheetFilterPillText,
+                          isSelected && styles.sheetFilterPillTextActive,
+                        ]}
+                      >
+                        {cat.label}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.sheetActionsRow}>
+              <TouchableOpacity
+                style={styles.sheetClearActionBtn}
+                onPress={handleClearFilter}
+                activeOpacity={0.75}
+                accessibilityRole="button"
+                accessibilityLabel="Clear"
+              >
+                <AppText style={styles.sheetClearActionText}>Clear</AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetApplyActionBtn}
+                onPress={handleApplyFilter}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel="Apply"
+              >
+                <AppText style={styles.sheetApplyActionText}>Apply</AppText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -800,45 +914,184 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: '#FFFFFF',
   },
-  categoryContainer: {
-    backgroundColor: '#F7F9F8',
-    paddingBottom: 8,
-    width: '100%',
-  },
-  categoryScroll: {
-    width: '100%',
-  },
-  categoryScrollContent: {
+  filtersBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    gap: 8,
+    paddingBottom: 10,
+    backgroundColor: '#F7F9F8',
+    gap: 10,
   },
-  categoryPill: {
-    height: 34,
+  filtersLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  filtersPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: 14,
-    borderRadius: 17,
+    paddingVertical: 7,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#DCE5E0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: '#D1D5DB',
     flexShrink: 0,
   },
-  categoryPillActive: {
-    backgroundColor: '#114D3F',
-    borderColor: '#114D3F',
-  },
-  categoryPillText: {
-    fontSize: 12.5,
-    lineHeight: 16,
+  filtersPillText: {
+    fontSize: 13.5,
+    lineHeight: 18,
     fontWeight: '600',
-    color: '#4B6358',
+    color: '#0D5C46',
     includeFontPadding: false,
   },
-  categoryPillTextActive: {
+  filtersCountBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: '#0D5C46',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filtersCountText: {
+    fontSize: 11,
+    fontWeight: '700',
     color: '#FFFFFF',
+  },
+  appliedFilterText: {
+    fontSize: 12.5,
+    lineHeight: 16,
+    fontWeight: '500',
+    color: '#667776',
+    flexShrink: 1,
+  },
+  clearFilterText: {
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
+    color: '#0D5C46',
+    flexShrink: 0,
+  },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(16, 43, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    flex: 1,
+  },
+  sheetContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    maxHeight: '85%',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF4F1',
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#102B2A',
+  },
+  sheetCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetBody: {
+    paddingVertical: 16,
+  },
+  sheetSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#102B2A',
+    marginBottom: 12,
+  },
+  sheetPillGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  sheetFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  sheetFilterPillActive: {
+    backgroundColor: '#E5F6EC',
+    borderColor: '#176B57',
+    borderWidth: 1.5,
+  },
+  sheetFilterPillText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  sheetFilterPillTextActive: {
+    color: '#176B57',
+    fontWeight: '700',
+  },
+  sheetActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF4F1',
+  },
+  sheetClearActionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  sheetClearActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  sheetApplyActionBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#176B57',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetApplyActionText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
