@@ -135,11 +135,11 @@ export function RegistrationHeader({
       case 2:
         return {
           title: 'Review registration',
-          subtitle: 'Check your details before payment.',
+          subtitle: 'Check your details before checkout.',
         };
       case 3:
         return {
-          title: 'Payment',
+          title: 'Checkout & Payment',
           subtitle: 'Complete your tournament registration.',
         };
       default:
@@ -249,7 +249,7 @@ export function RegistrationHeader({
               <AppText style={currentStep === 3 ? styles.stepNumberActive : styles.stepNumberInactive}>3</AppText>
             </View>
             <AppText style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>
-              Payment
+              Checkout
             </AppText>
           </View>
         </View>

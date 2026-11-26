@@ -54,7 +54,7 @@ import {
   X,
 } from 'lucide-react-native';
 
-import { AppText, Button, Card, ErrorState, LoadingState, PromotionalAdsCarousel, Screen } from '@/components';
+import { AppText, Button, Card, CheckoutModal, ErrorState, LoadingState, PromotionalAdsCarousel, Screen } from '@/components';
 import {
   useClubCarouselSlides,
   usePlayerClubMembershipRequest,
@@ -181,7 +181,6 @@ export default function PublicClubDetailScreen() {
   const [joinChoiceModalVisible, setJoinChoiceModalVisible] = useState(false);
   const [applicationMessage, setApplicationMessage] = useState('');
   const [selectedPlanForSubscribe, setSelectedPlanForSubscribe] = useState<MembershipPlan | null>(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'upi' | 'card' | 'bank_transfer' | 'cash'>('upi');
   const [isAboutModalVisible, setIsAboutModalVisible] = useState(false);
 
   const handleJoinClub = async () => {
@@ -244,42 +243,6 @@ export default function PublicClubDetailScreen() {
         },
       ],
     );
-  };
-
-  const handleConfirmSubscribe = async () => {
-    if (!clubId || !selectedPlanForSubscribe || isSubscribing) return;
-    try {
-      await subscribeToPlan({
-        clubId,
-        planId: selectedPlanForSubscribe.id,
-        payload: {
-          payment_method: selectedPaymentMethod,
-        },
-      });
-      const planName = selectedPlanForSubscribe.name;
-      const isFree = Number(selectedPlanForSubscribe.price) === 0;
-      setSelectedPlanForSubscribe(null);
-      setJoinChoiceModalVisible(false);
-      await refetchMyClubs();
-      await refetchPlayerMembership();
-      await refetchClub();
-      Alert.alert(
-        isFree ? 'Subscription Activated!' : 'Subscription Created',
-        isFree
-          ? `You have successfully enrolled in ${planName}. Your privileges are now active!`
-          : `You have enrolled in ${planName}. A pending payment record has been generated. Once confirmed by the club, your privileges will be activated.`,
-        [
-          { text: 'OK' },
-          {
-            text: 'View Memberships',
-            onPress: () => router.push('/(player)/membership' as any),
-          },
-        ]
-      );
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || 'Failed to enroll in membership plan';
-      Alert.alert('Subscription Error', msg);
-    }
   };
 
   if (isLoadingClub && !club) {
@@ -963,103 +926,76 @@ export default function PublicClubDetailScreen() {
         </View>
       </Modal>
 
-      {/* ─── Modal: Membership Plan Subscription ────────────────────────────── */}
-      <Modal
-        visible={Boolean(selectedPlanForSubscribe)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPlanForSubscribe(null)}
-      >
-        <View style={styles.modalOverlay}>
-          <Card style={styles.modalDialog}>
-            <View style={styles.modalHeader}>
-              <View>
-                <AppText variant="heading3" color="primary">
-                  Subscribe to Plan
-                </AppText>
-                <AppText variant="caption" color="secondary">
-                  {club.name} • {selectedPlanForSubscribe?.name}
-                </AppText>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedPlanForSubscribe(null)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <X size={20} color="#667776" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.subscribePriceBox}>
-                <AppText variant="caption" color="secondary">
-                  Plan Rate
-                </AppText>
-                <AppText variant="heading2" color="primary">
-                  {formatCurrency(selectedPlanForSubscribe?.price)}
-                  <AppText variant="bodySmall" color="secondary">
-                    {' '}/ {selectedPlanForSubscribe?.duration_label || selectedPlanForSubscribe?.duration_unit}
-                  </AppText>
-                </AppText>
-              </View>
-
-              {Number(selectedPlanForSubscribe?.price || 0) === 0 ? (
-                <View style={styles.noticeBoxGreen}>
-                  <Info size={16} color="#18794E" />
-                  <AppText variant="caption" style={{ color: '#18794E', flex: 1 }}>
-                    This is a complimentary plan. Your subscription will activate immediately upon confirmation.
-                  </AppText>
-                </View>
-              ) : (
-                <View style={styles.paymentMethodSection}>
-                  <AppText variant="label" color="primary">
-                    Select Payment Method
-                  </AppText>
-                  <View style={styles.paymentMethodOptions}>
-                    {(['upi', 'card', 'bank_transfer', 'cash'] as const).map((method) => {
-                      const isSelected = selectedPaymentMethod === method;
-                      const labels = {
-                        upi: 'UPI',
-                        card: 'Card',
-                        bank_transfer: 'Bank Transfer',
-                        cash: 'Cash / Front Desk',
-                      };
-                      return (
-                        <TouchableOpacity
-                          key={method}
-                          style={[
-                            styles.paymentMethodOption,
-                            isSelected && styles.paymentMethodOptionActive,
-                          ]}
-                          onPress={() => setSelectedPaymentMethod(method)}
-                        >
-                          <AppText
-                            variant="bodySmall"
-                            style={isSelected ? styles.paymentMethodTextActive : styles.paymentMethodText}
-                          >
-                            {labels[method]}
-                          </AppText>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <AppText variant="caption" color="secondary">
-                    A pending payment record will be created. Once confirmed by the club, your subscription will be marked active.
-                  </AppText>
-                </View>
-              )}
-            </View>
-
-            <View style={styles.modalFooter}>
-              <Button
-                label={isSubscribing ? 'Enrolling...' : 'Confirm Subscription'}
-                onPress={handleConfirmSubscribe}
-                disabled={isSubscribing}
-                style={{ width: '100%' }}
-              />
-            </View>
-          </Card>
-        </View>
-      </Modal>
+      {/* ─── Shared Checkout: Membership Plan Subscription ─────────────────── */}
+      {selectedPlanForSubscribe && clubId && (
+        <CheckoutModal
+          visible={Boolean(selectedPlanForSubscribe)}
+          onClose={() => {
+            setSelectedPlanForSubscribe(null);
+            setJoinChoiceModalVisible(false);
+          }}
+          showBackButton
+          onBack={() => setSelectedPlanForSubscribe(null)}
+          clubId={clubId}
+          clubName={club.name}
+          purpose="membership"
+          activityId={selectedPlanForSubscribe.id}
+          activityTitle={selectedPlanForSubscribe.name}
+          activitySubtitle={`Membership Plan · ${selectedPlanForSubscribe.duration_label || selectedPlanForSubscribe.duration_unit || 'Standard'}`}
+          summaryDetails={[
+            {
+              key: 'club',
+              label: 'Club',
+              value: club.name,
+              icon: 'map',
+            },
+            {
+              key: 'plan',
+              label: 'Plan',
+              value: selectedPlanForSubscribe.name,
+              icon: 'award',
+            },
+            {
+              key: 'cycle',
+              label: 'Billing Cycle',
+              value: String(selectedPlanForSubscribe.duration_label || selectedPlanForSubscribe.duration_unit || 'Standard'),
+              icon: 'calendar',
+            },
+          ]}
+          onConfirmSubmit={async ({ isFree, gatewayReady }) => {
+            const sub = await subscribeToPlan({
+              clubId,
+              planId: selectedPlanForSubscribe.id,
+              payload: {
+                payment_method: isFree ? 'free' : 'other',
+              },
+            });
+            await refetchMyClubs();
+            await refetchPlayerMembership();
+            await refetchClub();
+            return {
+              reference: `SUB-${String(sub?.id || selectedPlanForSubscribe.id).slice(0, 8).toUpperCase()}`,
+              status: sub?.status || (isFree || gatewayReady ? 'active' : 'pending'),
+              paymentStatus: isFree
+                ? 'free'
+                : gatewayReady
+                ? 'succeeded'
+                : 'pending',
+              title: isFree ? 'Subscription Activated' : 'Subscription Recorded',
+              subtitle: isFree
+                ? `You are enrolled in ${selectedPlanForSubscribe.name}. Your privileges are now active.`
+                : `Your subscription to ${selectedPlanForSubscribe.name} is saved with a pending payment record.`,
+              noticeText: !isFree && !gatewayReady
+                ? 'Once payment is collected by the club or online gateway, your membership privileges will be activated.'
+                : undefined,
+              rawResult: sub,
+            };
+          }}
+          onSuccess={() => {
+            // Shared CheckoutModal renders Confirmation until the user taps Done
+          }}
+        />
+      )}
 
       {/* ─── Modal: Join Club Choice Modal ───────────────────────────────── */}
       <Modal

@@ -804,13 +804,36 @@ export default function PlayerMembershipScreen() {
         <CheckoutModal
           visible={!!checkoutMembership}
           onClose={() => setCheckoutMembership(null)}
+          showBackButton
+          onBack={() => setCheckoutMembership(null)}
           clubId={checkoutMembership.club_id || clubId || ''}
+          clubName={checkoutMembership.club_name || clubName || undefined}
           purpose="membership"
           activityId={checkoutMembership.plan_id || checkoutMembership.subscription_id || checkoutMembership.id || ''}
           activityTitle={checkoutMembership.plan_name}
           activitySubtitle={`Membership Renewal · ${checkoutMembership.club_name || clubName || 'Club'}`}
+          summaryDetails={[
+            {
+              key: 'club',
+              label: 'Club',
+              value: checkoutMembership.club_name || clubName || 'Club',
+              icon: 'map',
+            },
+            {
+              key: 'plan',
+              label: 'Plan',
+              value: checkoutMembership.plan_name,
+              icon: 'award',
+            },
+            {
+              key: 'type',
+              label: 'Transaction',
+              value: 'Membership Renewal',
+              icon: 'tag',
+            },
+          ]}
           onSuccess={() => {
-            setCheckoutMembership(null);
+            // Keep CheckoutModal open on Confirmation screen until user taps Done
             // Immediately invalidate membership caches for real-time sync
             queryClient.invalidateQueries({ queryKey: ['player', 'memberships'] });
             queryClient.invalidateQueries({ queryKey: ['player', 'membership'] });

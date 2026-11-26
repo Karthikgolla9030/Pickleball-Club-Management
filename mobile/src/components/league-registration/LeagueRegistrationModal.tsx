@@ -43,6 +43,7 @@ import {
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
+import { CheckoutModal, type CheckoutSummaryDetail } from '@/components/checkout';
 import {
   useAuth,
   useLeagueEligiblePartners,
@@ -76,7 +77,9 @@ export function LeagueRegistrationModal({
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
 
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [confirmedTeam, setConfirmedTeam] = useState<LeagueTeam | null>(null);
   const [teamName, setTeamName] = useState('');
   const [partnerType, setPartnerType] = useState<'club_member' | 'guest'>('club_member');
   const [selectedPartner, setSelectedPartner] = useState<LeagueEligiblePartner | null>(null);
@@ -108,6 +111,8 @@ export function LeagueRegistrationModal({
   useEffect(() => {
     if (visible && league) {
       setStep(1);
+      setIsCheckoutOpen(false);
+      setConfirmedTeam(null);
       setFormError(null);
       setAgreedToTerms(false);
       const defaultRating = profile?.skill_rating ? Number(profile.skill_rating) : 3.5;
@@ -180,51 +185,71 @@ export function LeagueRegistrationModal({
     if (step === 1) {
       if (validateStep1()) setStep(2);
     } else if (step === 2) {
-      if (validateStep2()) setStep(3);
+      if (!validateStep2()) return;
+      if (league.status !== 'registration_open') {
+        setFormError('Registration has closed for this league.');
+        return;
+      }
+      if (isFull) {
+        setFormError('This league has reached maximum team capacity.');
+        return;
+      }
+      setIsCheckoutOpen(true);
     }
   };
 
   const handleBack = () => {
     setFormError(null);
     if (step === 2) setStep(1);
-    if (step === 3) setStep(2);
   };
 
-  const handleSubmit = async () => {
+  const handleCheckoutConfirm = async ({
+    isFree,
+    gatewayReady,
+  }: {
+    isFree: boolean;
+    gatewayReady: boolean;
+  }) => {
     setFormError(null);
     if (league.status !== 'registration_open') {
-      setFormError('Registration has closed for this league.');
-      return;
+      throw new Error('Registration has closed for this league.');
     }
     if (isFull) {
-      setFormError('This league has reached maximum team capacity.');
-      return;
+      throw new Error('This league has reached maximum team capacity.');
     }
-    if (!agreedToTerms) {
-      setFormError('Please confirm the agreement to complete registration.');
-      return;
-    }
+
+    const payload = {
+      teamName: teamName.trim(),
+      partnerMembershipId: isSingles ? null : (partnerType === 'club_member' ? selectedPartner?.membership_id : null),
+      partnerName: isSingles ? null : (partnerType === 'guest' ? manualPartnerName.trim() : null),
+      skillRating: skillRating,
+      paymentCollected: isFree || gatewayReady,
+    };
 
     try {
-      const payload = {
-        teamName: teamName.trim(),
-        partnerMembershipId: isSingles ? null : (partnerType === 'club_member' ? selectedPartner?.membership_id : null),
-        partnerName: isSingles ? null : (partnerType === 'guest' ? manualPartnerName.trim() : null),
-        skillRating: skillRating,
-      };
-
       const team = await registerTeam(payload);
-      Alert.alert(
-        'Registration Confirmed! 🎉',
-        `You have successfully registered "${team.name}" for ${league.name}.`,
-        [{ text: 'OK', onPress: () => {
-          onSuccess?.(team);
-          onClose();
-        }}]
-      );
+      setConfirmedTeam(team);
+      return {
+        reference: `LG-${String(team.id || '').slice(0, 8).toUpperCase()}`,
+        status: 'confirmed',
+        paymentStatus: isFree
+          ? ('free' as const)
+          : gatewayReady
+          ? ('succeeded' as const)
+          : ('pending' as const),
+        title: 'Registration Confirmed',
+        subtitle: `"${team.name}" is registered for ${league.name}.`,
+        noticeText: isFree
+          ? 'Your complimentary league entry has been confirmed.'
+          : !gatewayReady
+          ? 'Your team entry is saved. Entry fee collection is pending.'
+          : undefined,
+        rawResult: team,
+      };
     } catch (err: any) {
       const msg = err?.response?.data?.detail || err?.message || 'Failed to complete registration.';
       setFormError(msg);
+      throw new Error(msg);
     }
   };
 
@@ -274,12 +299,12 @@ export function LeagueRegistrationModal({
               </View>
               <AppText style={[styles.stepLabel, step >= 2 && styles.stepLabelActive]}>Rating</AppText>
             </View>
-            <View style={[styles.stepLine, step >= 3 && styles.stepLineActive]} />
+            <View style={[styles.stepLine, isCheckoutOpen && styles.stepLineActive]} />
             <View style={styles.stepItem}>
-              <View style={[styles.stepCircle, step >= 3 && styles.stepCircleActive]}>
-                <AppText style={[styles.stepNum, step >= 3 && styles.stepNumActive]}>3</AppText>
+              <View style={[styles.stepCircle, isCheckoutOpen && styles.stepCircleActive]}>
+                <AppText style={[styles.stepNum, isCheckoutOpen && styles.stepNumActive]}>3</AppText>
               </View>
-              <AppText style={[styles.stepLabel, step >= 3 && styles.stepLabelActive]}>Review</AppText>
+              <AppText style={[styles.stepLabel, isCheckoutOpen && styles.stepLabelActive]}>Checkout</AppText>
             </View>
           </View>
 
@@ -565,105 +590,6 @@ export function LeagueRegistrationModal({
                     Pre-filled from your player profile. You can adjust if your rating has recently updated.
                   </AppText>
                 </View>
-
-                {/* Fee & Payment Breakdown */}
-                <View style={styles.feeBreakdownCard}>
-                  <View style={styles.feeHeaderRow}>
-                    <CreditCard size={18} color="#0F172A" />
-                    <AppText style={styles.feeCardTitle}>Registration Fee</AppText>
-                  </View>
-
-                  <View style={styles.feeRow}>
-                    <AppText style={styles.feeItemLabel}>League Entry Fee</AppText>
-                    <AppText style={styles.feeItemVal}>{feeDisplay}</AppText>
-                  </View>
-
-                  <View style={styles.feeRow}>
-                    <AppText style={styles.feeItemLabel}>Facility & Referee Fees</AppText>
-                    <AppText style={styles.feeItemVal}>Included</AppText>
-                  </View>
-
-                  <View style={styles.feeDivider} />
-
-                  <View style={styles.feeTotalRow}>
-                    <AppText style={styles.feeTotalLabel}>Total Due</AppText>
-                    <AppText style={styles.feeTotalVal}>{feeDisplay}</AppText>
-                  </View>
-
-                  <View style={styles.paymentTermsBox}>
-                    <Info size={14} color="#64748B" />
-                    <AppText style={styles.paymentTermsText}>
-                      {isFree
-                        ? 'This league is free for club members.'
-                        : 'Entry fees are payable at the club desk prior to Week 1 or billed to your active club account.'}
-                    </AppText>
-                  </View>
-                </View>
-              </View>
-            )}
-
-            {/* ─── STEP 3: Review & Submit ─── */}
-            {step === 3 && (
-              <View style={styles.stepSection}>
-                <View style={styles.reviewCard}>
-                  <View style={styles.reviewHeader}>
-                    <Trophy size={20} color="#0D9488" />
-                    <View style={{ marginLeft: 10, flex: 1 }}>
-                      <AppText style={styles.reviewLeagueTitle}>{league.name}</AppText>
-                      <AppText style={styles.reviewLeagueSub}>
-                        {league.number_of_weeks} Weeks • {isSingles ? 'Singles' : 'Doubles'} • Top {league.playoff_team_count} Playoffs
-                      </AppText>
-                    </View>
-                  </View>
-
-                  <View style={styles.reviewDivider} />
-
-                  <View style={styles.reviewGrid}>
-                    <View style={styles.reviewRow}>
-                      <AppText style={styles.reviewRowLabel}>Team / Entry</AppText>
-                      <AppText style={styles.reviewRowVal}>{teamName}</AppText>
-                    </View>
-
-                    <View style={styles.reviewRow}>
-                      <AppText style={styles.reviewRowLabel}>Registered Player(s)</AppText>
-                      <AppText style={styles.reviewRowVal}>
-                        {isSingles
-                          ? user?.full_name || 'Player'
-                          : `${user?.full_name || 'Player'} & ${
-                              partnerType === 'club_member'
-                                ? selectedPartner?.full_name || 'Partner'
-                                : manualPartnerName
-                            }`}
-                      </AppText>
-                    </View>
-
-                    <View style={styles.reviewRow}>
-                      <AppText style={styles.reviewRowLabel}>Declared Rating</AppText>
-                      <AppText style={styles.reviewRowVal}>{skillRating.toFixed(1)}</AppText>
-                    </View>
-
-                    <View style={styles.reviewRow}>
-                      <AppText style={styles.reviewRowLabel}>Total Entry Fee</AppText>
-                      <AppText style={[styles.reviewRowVal, { color: isFree ? '#16A34A' : '#0F172A', fontWeight: '700' }]}>
-                        {feeDisplay}
-                      </AppText>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Agreement Checkbox */}
-                <TouchableOpacity
-                  style={styles.termsRow}
-                  activeOpacity={0.8}
-                  onPress={() => setAgreedToTerms(!agreedToTerms)}
-                >
-                  <View style={[styles.checkbox, agreedToTerms && styles.checkboxActive]}>
-                    {agreedToTerms && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
-                  </View>
-                  <AppText style={styles.termsText}>
-                    I confirm that the roster and rating information submitted above is accurate, and I agree to participate in scheduled matches according to league rules.
-                  </AppText>
-                </TouchableOpacity>
               </View>
             )}
           </ScrollView>
@@ -707,35 +633,83 @@ export function LeagueRegistrationModal({
               </TouchableOpacity>
             ) : null}
 
-            {step < 3 ? (
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={handleNext}
-              >
-                <AppText style={styles.primaryBtnText}>Continue</AppText>
-                <ChevronRight size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[
-                  styles.primaryBtn,
-                  (!agreedToTerms || isSubmitting) && styles.primaryBtnDisabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={!agreedToTerms || isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <>
-                    <AppText style={styles.primaryBtnText}>Confirm Registration</AppText>
-                    <CheckCircle2 size={18} color="#FFFFFF" />
-                  </>
-                )}
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleNext}
+              disabled={isSubmitting}
+            >
+              <AppText style={styles.primaryBtnText}>
+                {step < 2 ? 'Continue' : 'Continue to Checkout'}
+              </AppText>
+              <ChevronRight size={18} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
+        {isCheckoutOpen && (
+          <CheckoutModal
+            visible={isCheckoutOpen}
+            onClose={() => {
+              setIsCheckoutOpen(false);
+              if (confirmedTeam) {
+                onSuccess?.(confirmedTeam);
+              }
+              onClose();
+            }}
+            showBackButton
+            onBack={() => setIsCheckoutOpen(false)}
+            clubId={league.club_id || ''}
+            clubName={league.club_name || undefined}
+            purpose="league"
+            activityId={league.id}
+            activityTitle={league.name}
+            activitySubtitle={`${isSingles ? 'Singles' : 'Doubles'} League · ${league.number_of_weeks} Weeks`}
+            requiresAgreement
+            agreementLabel="I confirm that the roster and rating information submitted above is accurate, and I agree to participate in scheduled matches according to league rules."
+            summaryDetails={[
+              {
+                key: 'division',
+                label: 'Format',
+                value: `${isSingles ? 'Singles' : 'Doubles'} League`,
+                icon: 'trophy',
+              },
+              {
+                key: 'season',
+                label: 'Season',
+                value: `${league.number_of_weeks} Weeks · Top ${league.playoff_team_count} Playoffs`,
+                icon: 'calendar',
+              },
+              {
+                key: 'team',
+                label: isSingles ? 'Entry Name' : 'Team Name',
+                value: teamName.trim(),
+                icon: 'award',
+              },
+              {
+                key: 'players',
+                label: 'Player(s)',
+                value: isSingles
+                  ? user?.full_name || 'Player'
+                  : `${user?.full_name || 'Player'} & ${
+                      partnerType === 'club_member'
+                        ? selectedPartner?.full_name || 'Partner'
+                        : manualPartnerName.trim()
+                    }`,
+                icon: 'users',
+              },
+              {
+                key: 'rating',
+                label: 'Declared Rating',
+                value: skillRating.toFixed(1),
+                icon: 'tag',
+              },
+            ] as CheckoutSummaryDetail[]}
+            onConfirmSubmit={handleCheckoutConfirm}
+            onSuccess={() => {
+              // Shared CheckoutModal displays confirmation until user taps Done
+            }}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

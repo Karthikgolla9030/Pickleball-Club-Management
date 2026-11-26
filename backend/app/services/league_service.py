@@ -625,14 +625,18 @@ class LeagueService:
         now_dt = datetime.now(timezone.utc)
         stmt = select(Payment).where(
             Payment.league_id == league_id,
-            Payment.status == PaymentStatus.SUCCEEDED,
+            Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
         )
         league_pmts = (await self.db.execute(stmt)).scalars().all()
         for pmt in league_pmts:
-            pmt.status = PaymentStatus.REFUNDED
-            pmt.refunded_amount = pmt.amount
-            pmt.refund_reason = "League cancelled by club"
-            pmt.refunded_at = now_dt
+            if pmt.status == PaymentStatus.SUCCEEDED:
+                pmt.status = PaymentStatus.REFUNDED
+                pmt.refunded_amount = pmt.amount
+                pmt.refund_reason = "League cancelled by club"
+                pmt.refunded_at = now_dt
+            else:
+                pmt.status = PaymentStatus.CANCELLED
+                pmt.cancelled_at = now_dt
             pmt.updated_at = now_dt
         await self.db.flush()
 
@@ -1813,6 +1817,7 @@ class LeagueService:
                 pay_repo = PaymentRepository(self.db)
                 reference = await pay_repo.generate_reference()
                 now_dt = datetime.now(timezone.utc)
+                is_collected = payload.payment_collected is not False
                 payment = Payment(
                     reference=reference,
                     club_id=league.club_id,
@@ -1820,10 +1825,10 @@ class LeagueService:
                     league_id=league.id,
                     amount=Decimal(str(league.registration_fee)),
                     currency="USD",
-                    status=PaymentStatus.SUCCEEDED,
+                    status=PaymentStatus.SUCCEEDED if is_collected else PaymentStatus.PENDING,
                     purpose=PaymentPurpose.LEAGUE,
-                    payment_method=PaymentMethod.ONLINE,
-                    paid_at=now_dt,
+                    payment_method=PaymentMethod.ONLINE if is_collected else PaymentMethod.OTHER,
+                    paid_at=now_dt if is_collected else None,
                     notes=f"League registration: {league.name} (Team: {clean_name})",
                     created_by_user_id=user.id,
                 )

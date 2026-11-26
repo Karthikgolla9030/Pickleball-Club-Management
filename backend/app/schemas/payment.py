@@ -477,6 +477,7 @@ class CheckoutInitiateRequest(BaseModel):
     selected_method: str | None = Field(default=None, description="Requested checkout payment method: upi, card, netbanking")
     currency: str = Field(default="USD", min_length=3, max_length=3)
     notes: str | None = Field(default=None, max_length=1000)
+    preview_only: bool = Field(default=False, description="Validate & compute server pricing without creating a transaction or fulfilling free registration")
     metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
     @field_validator("currency")
@@ -499,6 +500,7 @@ class CheckoutInitiateResponse(BaseModel):
     payment_methods: str | None = None
     activity_summary: dict[str, str | int | float | bool | None]
     is_free: bool = False
+    gateway_ready: bool = False
     booking_or_registration: dict[str, Any] | None = None
 
 
@@ -508,6 +510,7 @@ class CheckoutVerifyRequest(BaseModel):
     provider_payment_id: str | None = None
     provider_order_id: str
     provider_signature: str | None = None
+    collect_payment: bool = Field(default=True, description="False when confirming booking/registration without an active payment gateway")
 
 
 class CheckoutVerifyResponse(BaseModel):

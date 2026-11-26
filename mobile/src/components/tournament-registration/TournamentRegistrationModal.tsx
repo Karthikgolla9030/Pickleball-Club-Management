@@ -25,6 +25,8 @@ import { ArrowLeft, X } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { AppText } from '../AppText';
+import { CheckoutModal, type CheckoutSummaryDetail } from '../checkout';
+import { formatDate } from '@/utils';
 import {
   useAuth,
   usePlayerMyRegistration,
@@ -91,6 +93,7 @@ export function TournamentRegistrationModal({
   const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState<RegistrationStep>(1);
   const [successResult, setSuccessResult] = useState<PlayerRegistrationResponse | null>(null);
+  const [confirmedRegResult, setConfirmedRegResult] = useState<PlayerRegistrationResponse | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [errors, setErrors] = useState<RegistrationErrors>({});
   const [alreadyRegisteredOverride, setAlreadyRegisteredOverride] = useState(false);
@@ -110,7 +113,7 @@ export function TournamentRegistrationModal({
   // the RegistrationSuccessView — not short-circuit to RegistrationDetailsModal.
   // The refetchMyRegistration() that runs after success will update isRegistered
   // asynchronously, which must NOT preempt the success screen.
-  const isAlreadyRegistered = !successResult && Boolean(
+  const isAlreadyRegistered = currentStep !== 3 && !successResult && Boolean(
     alreadyRegisteredOverride ||
     isRegistered ||
     (activeTournament as any)?.is_registered ||
@@ -166,6 +169,7 @@ export function TournamentRegistrationModal({
         initializedTournamentIdRef.current = activeTournament.id;
         setCurrentStep(1);
         setSuccessResult(null);
+        setConfirmedRegResult(null);
         setSubmitError(null);
         setErrors({});
         setAlreadyRegisteredOverride(false);
@@ -516,6 +520,7 @@ export function TournamentRegistrationModal({
   };
 
   const handleNextFromStep2 = () => {
+    setSubmitError(null);
     setCurrentStep(3);
   };
 
@@ -524,25 +529,18 @@ export function TournamentRegistrationModal({
   };
 
   const handleBackToStep2 = () => {
+    setSubmitError(null);
     setCurrentStep(2);
   };
 
-  // Final submission on Step 3
-  const handleSubmit = async () => {
-    if (isRegistering || isProcessingPayment) return;
-    if (!validateStep3()) return;
-    setSubmitError(null);
-
-    const rawFee = (activeTournament as any).registration_fee != null
-      ? Number((activeTournament as any).registration_fee)
-      : (activeTournament as any).format_configuration?.entry_fee != null
-      ? Number((activeTournament as any).format_configuration.entry_fee)
-      : (activeTournament as any).format_configuration?.registration_fee != null
-      ? Number((activeTournament as any).format_configuration.registration_fee)
-      : null;
-    const defaultFee = isScramble ? 35 : parsed?.isSingles ? 30 : activeTournament.format === 'bracket' ? 60 : 50;
-    const feeAmount = rawFee !== null && !isNaN(rawFee) ? rawFee : defaultFee;
-
+  // Final submission invoked via shared CheckoutModal
+  const handleCheckoutConfirm = async ({
+    isFree,
+    gatewayReady,
+  }: {
+    isFree: boolean;
+    gatewayReady: boolean;
+  }) => {
     const partnerNotes = formState.selectedPartner
       ? `Partner: ${formState.selectedPartner.full_name} (${formState.selectedPartner.email})`
       : formState.partnerFullName
@@ -560,7 +558,6 @@ export function TournamentRegistrationModal({
       ? (formState.selectedPartner?.full_name || formState.partnerFullName.trim() || null)
       : null;
 
-    // Sync gender to profile if missing on profile or changed
     if (formState.gender && (!profile?.gender || profile.gender !== formState.gender)) {
       try {
         await updateProfile({ gender: formState.gender });
@@ -569,11 +566,9 @@ export function TournamentRegistrationModal({
       }
     }
 
-    // Unified payment-free registration submission
     setIsProcessingPayment(true);
     setSubmitError(null);
     try {
-      const selectedMethod = feeAmount <= 0 ? 'free' : (formState.paymentMethod || 'upi');
       const partnerGender = isDoubles
         ? (formState.selectedPartner?.gender || formState.partnerGender || null)
         : null;
@@ -588,12 +583,11 @@ export function TournamentRegistrationModal({
         partner_skill_level: isDoubles ? formState.partnerSkillLevel : null,
         gender: formState.gender,
         age: formState.age ? parseInt(formState.age, 10) : null,
-        payment_method: selectedMethod,
+        payment_method: isFree ? 'free' : 'other',
         notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
       };
 
       const res = await register(payload);
-      setSuccessResult(res);
       void refetchMyRegistration();
       if (activeTournament?.id) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(activeTournament.id) });
@@ -607,9 +601,29 @@ export function TournamentRegistrationModal({
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
-      if (onSuccess) {
-        onSuccess(res);
-      }
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      setConfirmedRegResult(res);
+
+      const isWaitlisted = String(res.status || '').toLowerCase() === 'waitlisted';
+      return {
+        reference: res.reference_number || `REG-${String(res.id || '').slice(0, 8).toUpperCase()}`,
+        status: res.status || 'confirmed',
+        paymentStatus: isFree
+          ? ('free' as const)
+          : gatewayReady
+          ? ('succeeded' as const)
+          : ('pending' as const),
+        title: isWaitlisted ? 'Added to Waitlist' : 'Registration Confirmed',
+        subtitle: res.message || `You are registered for ${activeTournament.name}.`,
+        noticeText: isWaitlisted
+          ? 'This tournament is currently full. You have been added to the waitlist.'
+          : isFree
+          ? 'Your complimentary tournament entry has been confirmed.'
+          : !gatewayReady
+          ? 'Your registration is saved. Online payment will be collected once payment gateway setup is complete or at the club.'
+          : undefined,
+        rawResult: res,
+      };
     } catch (err: unknown) {
       const rawMsg =
         (err as any)?.detail ||
@@ -617,7 +631,6 @@ export function TournamentRegistrationModal({
         (err as any)?.message ||
         (err instanceof Error ? err.message : 'Registration failed. Please try again.');
       const msg = typeof rawMsg === 'string' ? rawMsg : JSON.stringify(rawMsg);
-
       const lowerMsg = msg.toLowerCase();
       const isPartnerAlreadyRegistered =
         lowerMsg.includes('partner') && lowerMsg.includes('already registered');
@@ -625,37 +638,37 @@ export function TournamentRegistrationModal({
         !isPartnerAlreadyRegistered && lowerMsg.includes('already registered');
 
       if (isPartnerAlreadyRegistered) {
-        // Partner is already registered — this is a validation error for the partner field,
-        // NOT a registration for the caller. Keep the form active so the user can fix it!
         setSubmitError(msg);
         setErrors((prev) => ({
           ...prev,
           partnerFullName: msg,
           partnerEmail: msg,
         }));
-        return;
+        setCurrentStep(1);
+        throw new Error(msg);
       }
 
       if (isPlayerAlreadyRegistered) {
-        // Caller is already registered. Attempt to load their registration record.
         try {
           const refetchRes = await refetchMyRegistration();
           if (refetchRes?.data?.registration) {
             setOverrideRegistration(refetchRes.data.registration);
             setAlreadyRegisteredOverride(true);
-            return;
+            setCurrentStep(1);
+            return {
+              reference: refetchRes.data.registration.reference_number || 'REGISTERED',
+              status: refetchRes.data.registration.status || 'confirmed',
+              paymentStatus: isFree ? ('free' as const) : ('pending' as const),
+              title: 'Already Registered',
+            };
           }
         } catch {
           // Tolerate refetch failures
         }
-        // If no registration object was found or refetch failed, do NOT switch to
-        // RegistrationDetailsModal (which would display "Registration Not Found").
-        // Instead, show the clear error message directly on the screen.
-        setSubmitError(msg);
-        return;
       }
 
       setSubmitError(msg);
+      throw new Error(msg);
     } finally {
       setIsProcessingPayment(false);
     }
@@ -733,27 +746,90 @@ export function TournamentRegistrationModal({
                 onChange={handleFormChange}
                 onNext={handleNextFromStep1}
               />
-            ) : currentStep === 2 ? (
+            ) : (
               <Step2ReviewRegistration
                 tournament={activeTournament}
                 formState={formState}
                 onBack={handleBackToStep1}
                 onNext={handleNextFromStep2}
               />
-            ) : (
-              <Step3PaymentSubmit
-                tournament={activeTournament}
-                formState={formState}
-                errors={errors}
-                isSubmitting={isRegistering || isProcessingPayment}
-                submitError={submitError}
-                onChange={handleFormChange}
-                onBack={handleBackToStep2}
-                onSubmit={handleSubmit}
-              />
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {currentStep === 3 && (
+          <CheckoutModal
+            visible={currentStep === 3}
+            onClose={() => {
+              if (confirmedRegResult && onSuccess) {
+                onSuccess(confirmedRegResult);
+              }
+              onClose();
+            }}
+            showBackButton
+            onBack={handleBackToStep2}
+            clubId={(activeTournament as any).club_id || ''}
+            clubName={(activeTournament as any).club_name || undefined}
+            purpose="tournament"
+            activityId={activeTournament.id}
+            activityTitle={activeTournament.name}
+            activitySubtitle={`${activeTournament.format_label || String(activeTournament.format).replace('_', ' ').toUpperCase()} · ${parsed?.category || 'Open Division'}`}
+            startAt={activeTournament.start_date}
+            endAt={activeTournament.end_date}
+            requiresAgreement
+            agreementLabel="I agree to the tournament rules and cancellation policy."
+            summaryDetails={[
+              {
+                key: 'format',
+                label: 'Format',
+                value: activeTournament.format_label || String(activeTournament.format).replace('_', ' ').toUpperCase(),
+                icon: 'trophy',
+              },
+              {
+                key: 'division',
+                label: 'Division',
+                value: parsed?.category || 'Open',
+                icon: 'award',
+              },
+              ...(activeTournament.start_date
+                ? [
+                    {
+                      key: 'dates',
+                      label: 'Event Dates',
+                      value:
+                        activeTournament.end_date && activeTournament.end_date !== activeTournament.start_date
+                          ? `${formatDate(activeTournament.start_date)} – ${formatDate(activeTournament.end_date)}`
+                          : formatDate(activeTournament.start_date),
+                      icon: 'calendar' as const,
+                    },
+                  ]
+                : []),
+              ...((activeTournament as any).location_name
+                ? [
+                    {
+                      key: 'venue',
+                      label: 'Venue',
+                      value: String((activeTournament as any).location_name),
+                      icon: 'map' as const,
+                    },
+                  ]
+                : []),
+              {
+                key: 'entry',
+                label: isDoubles ? 'Team' : 'Player',
+                value: isDoubles
+                  ? formState.teamName.trim() ||
+                    `${formState.fullName} & ${formState.selectedPartner?.full_name || formState.partnerFullName || 'Partner'}`
+                  : formState.fullName,
+                icon: 'users',
+              },
+            ] as CheckoutSummaryDetail[]}
+            onConfirmSubmit={handleCheckoutConfirm}
+            onSuccess={() => {
+              // CheckoutModal stays open to display the confirmed screen; user taps Done to close
+            }}
+          />
+        )}
       </SafeAreaView>
     </Modal>
   );

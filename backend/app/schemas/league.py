@@ -99,6 +99,7 @@ class PlayerLeagueRegisterRequest(BaseModel):
     partner_membership_id: uuid.UUID | None = Field(None, description="Active club player membership ID if selected from club")
     partner_name: str | None = Field(None, max_length=255, description="Manual doubles partner name if not selecting an existing member")
     skill_rating: float | None = Field(None, ge=1.0, le=7.0, description="Submitted or confirmed skill rating")
+    payment_collected: bool | None = Field(None, description="False when confirmed via standardized checkout without an active gateway")
 
 
 class LeagueEligiblePartnerResponse(BaseModel):

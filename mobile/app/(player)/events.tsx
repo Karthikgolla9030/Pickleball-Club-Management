@@ -859,6 +859,8 @@ export default function PlayerEventsScreen() {
         <CheckoutModal
           visible={!!checkoutEvent}
           onClose={() => setCheckoutEvent(null)}
+          showBackButton
+          onBack={() => setCheckoutEvent(null)}
           clubId={checkoutEvent.club_id}
           purpose="event"
           activityId={checkoutEvent.id}
@@ -866,8 +868,18 @@ export default function PlayerEventsScreen() {
           activitySubtitle={checkoutEvent.location || 'Club Event'}
           startAt={checkoutEvent.start_at}
           endAt={checkoutEvent.end_at}
+          summaryDetails={[
+            {
+              key: 'date',
+              label: 'Date',
+              value: parseEventDate(checkoutEvent.start_at).formattedDate,
+              icon: 'calendar',
+            },
+            ...(checkoutEvent.location
+              ? [{ key: 'venue', label: 'Venue', value: checkoutEvent.location, icon: 'map' as const }]
+              : []),
+          ]}
           onSuccess={() => {
-            setCheckoutEvent(null);
             setSelectedDetailEvent(null);
             // Immediately invalidate event caches for real-time sync
             queryClient.invalidateQueries({ queryKey: ['events'] });

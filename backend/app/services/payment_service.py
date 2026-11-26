@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
@@ -63,6 +64,30 @@ from app.schemas.payment import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _first_non_none(*values: Any) -> Any:
+    """Return the first value that is not None and not an empty string (preserves 0 / Decimal('0'))."""
+    for val in values:
+        if val is not None and str(val).strip() != "":
+            return val
+    return None
+
+
+def _is_gateway_configured(settings: Any) -> bool:
+    """Return True only when an external payment gateway with real credentials is active."""
+    provider = (getattr(settings, "PAYMENT_PROVIDER", None) or "direct").strip().lower()
+    if provider == "cashfree":
+        app_id = getattr(settings, "CASHFREE_APP_ID", None) or ""
+        secret = getattr(settings, "CASHFREE_SECRET_KEY", None) or ""
+        return bool(app_id and secret and "mock" not in app_id.lower() and "mock" not in secret.lower())
+    if provider == "stripe":
+        return bool(getattr(settings, "STRIPE_SECRET_KEY", None) and getattr(settings, "STRIPE_PUBLISHABLE_KEY", None))
+    if provider == "razorpay":
+        key_id = getattr(settings, "RAZORPAY_KEY_ID", None) or ""
+        key_secret = getattr(settings, "RAZORPAY_KEY_SECRET", None) or ""
+        return bool(key_id and key_secret and "mock" not in key_secret.lower())
+    return False
 
 
 class PaymentService:
@@ -772,12 +797,16 @@ class PaymentService:
                 raise HTTPException(status_code=400, detail=f"Tournament registration is {tournament.status.value}")
 
             format_config = tournament.format_configuration or {}
-            fee_raw = (
-                getattr(tournament, "registration_fee", None)
-                or format_config.get("entry_fee")
-                or format_config.get("registration_fee")
-                or format_config.get("fee")
-                or 35.00
+            t_cat = str(format_config.get("category", "") or "")
+            is_scramble = tournament.format.value == "scramble"
+            is_singles = t_cat == "Singles" or "singles" in t_cat.lower()
+            default_t_fee = 35.0 if is_scramble else (30.0 if is_singles else (60.0 if tournament.format.value == "bracket" else 50.0))
+            fee_raw = _first_non_none(
+                getattr(tournament, "registration_fee", None),
+                format_config.get("entry_fee"),
+                format_config.get("registration_fee"),
+                format_config.get("fee"),
+                default_t_fee,
             )
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
@@ -809,11 +838,11 @@ class PaymentService:
             event = await self.event_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
             if not event:
                 raise HTTPException(status_code=404, detail="Event not found in this club")
-            fee_raw = (
-                getattr(event, "registration_fee", None)
-                or getattr(event, "price", None)
-                or getattr(event, "fee", None)
-                or Decimal("25.00")
+            fee_raw = _first_non_none(
+                getattr(event, "registration_fee", None),
+                getattr(event, "price", None),
+                getattr(event, "fee", None),
+                Decimal("0.00"),
             )
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
@@ -862,7 +891,7 @@ class PaymentService:
             if lesson.capacity is not None and active_count >= lesson.capacity:
                 raise HTTPException(status_code=409, detail="Lesson is full")
 
-            fee_raw = getattr(lesson, "price", None) or Decimal("0.00")
+            fee_raw = _first_non_none(getattr(lesson, "price", None), Decimal("0.00"))
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
             coach_display = "Head Coach"
@@ -888,7 +917,7 @@ class PaymentService:
             league = await self.league_repo.get_by_id(payload.activity_id, club_id=payload.club_id)
             if not league:
                 raise HTTPException(status_code=404, detail="League not found in this club")
-            fee_raw = getattr(league, "registration_fee", None) or Decimal("40.00")
+            fee_raw = _first_non_none(getattr(league, "registration_fee", None), Decimal("0.00"))
             base_amount = Decimal(str(fee_raw)).quantize(Decimal("0.01"))
 
             summary.update({
@@ -950,10 +979,33 @@ class PaymentService:
             currency=payload.currency,
         )
 
+        settings = get_settings()
+        is_gateway_ready = _is_gateway_configured(settings)
+        configured_provider = (getattr(settings, "PAYMENT_PROVIDER", None) or "direct").strip().lower()
+        is_free = final_amount <= Decimal("0.00")
+
+        # Preview mode returns authoritative pricing and gateway readiness without DB writes
+        if payload.preview_only:
+            return CheckoutInitiateResponse(
+                payment_id=uuid.UUID(int=0),
+                reference="PREVIEW",
+                status=PaymentStatus.SUCCEEDED if is_free else PaymentStatus.PENDING,
+                breakdown=breakdown,
+                provider="free" if is_free else configured_provider,
+                provider_order_id=None,
+                provider_key_id=None,
+                supported_methods=["free"] if is_free else ["upi", "card", "netbanking", "cash"],
+                selected_method="free" if is_free else (payload.selected_method or "direct"),
+                payment_methods=None,
+                activity_summary=summary,
+                is_free=is_free,
+                gateway_ready=is_gateway_ready,
+            )
+
         reference = await self.payment_repo.generate_reference()
 
         # Handle zero-dollar or free activity
-        if final_amount <= Decimal("0.00"):
+        if is_free:
             payment = Payment(
                 reference=reference,
                 club_id=payload.club_id,
@@ -990,6 +1042,7 @@ class PaymentService:
                 payment_methods=None,
                 activity_summary=summary,
                 is_free=True,
+                gateway_ready=is_gateway_ready,
                 booking_or_registration=booking_or_reg,
             )
 
@@ -1077,6 +1130,7 @@ class PaymentService:
             payment_methods=cf_methods,
             activity_summary=summary,
             is_free=False,
+            gateway_ready=is_gateway_ready,
         )
 
     async def verify_checkout(
@@ -1141,6 +1195,36 @@ class PaymentService:
                 booking_or_registration=booking_or_reg,
             )
 
+        now = datetime.now(timezone.utc)
+        # Parse metadata
+        meta: dict[str, Any] = {}
+        if payment.notes and "[META]" in payment.notes:
+            try:
+                meta_str = payment.notes.split("[META]", 1)[1]
+                meta = json.loads(meta_str)
+            except Exception:
+                meta = {}
+
+        if not payload.collect_payment:
+            # No active payment gateway connected: preserve PENDING status without faking payment completion
+            payment.status = PaymentStatus.PENDING
+            payment.paid_at = None
+            payment.provider_payment_id = None
+            payment.payment_method = PaymentMethod.OTHER
+            payment.updated_at = now
+            booking_or_reg = await self._fulfill_activity_and_notify(
+                payment=payment,
+                meta=meta,
+                user_id=user_id,
+            )
+            full = await self.payment_repo.get_by_id(payment.id)
+            return CheckoutVerifyResponse(
+                success=True,
+                payment=PlayerPaymentResponse.from_orm_model(full),
+                message="Confirmed. Payment is pending collection.",
+                booking_or_registration=booking_or_reg,
+            )
+
         gateway = get_payment_gateway(payload.provider)
         provider_name = (payload.provider or "direct").lower()
 
@@ -1161,25 +1245,15 @@ class PaymentService:
                     detail="Payment signature verification failed. Transaction was not confirmed.",
                 )
         else:
-            # Direct / Payment-free confirmation across all Court Bookings, Events, Lessons, Memberships
+            # Direct / explicit verified confirmation
             valid = True
             if not payload.provider_payment_id:
                 payload.provider_payment_id = f"direct_{uuid.uuid4().hex[:12]}"
 
-        now = datetime.now(timezone.utc)
         payment.status = PaymentStatus.SUCCEEDED
         payment.paid_at = now
         payment.provider_payment_id = payload.provider_payment_id
         payment.updated_at = now
-
-        # Parse metadata
-        meta: dict[str, Any] = {}
-        if payment.notes and "[META]" in payment.notes:
-            try:
-                meta_str = payment.notes.split("[META]", 1)[1]
-                meta = json.loads(meta_str)
-            except Exception:
-                meta = {}
 
         booking_or_reg = await self._fulfill_activity_and_notify(
             payment=payment,
@@ -1448,12 +1522,21 @@ class PaymentService:
         try:
             from app.services.notification_service import NotificationService
             notif_svc = NotificationService(self.db)
+            if payment.status == PaymentStatus.SUCCEEDED and payment.amount > Decimal("0.00"):
+                notif_title = "Payment Confirmed!"
+                notif_msg = f"Your payment of {payment.currency} {payment.amount} (Ref: {payment.reference}) has been confirmed."
+            elif payment.status == PaymentStatus.SUCCEEDED:
+                notif_title = "Booking Confirmed!"
+                notif_msg = f"Your complimentary booking/registration (Ref: {payment.reference}) is confirmed."
+            else:
+                notif_title = "Confirmed (Payment Pending)"
+                notif_msg = f"Your reservation (Ref: {payment.reference}) is recorded. Payment of {payment.currency} {payment.amount} is pending collection."
             await notif_svc.create_notification(
                 user_id=payment.player_id,
                 club_id=payment.club_id,
                 category="payment",
-                title="Payment Confirmed!",
-                message=f"Your payment of {payment.currency} {payment.amount} (Ref: {payment.reference}) has been confirmed.",
+                title=notif_title,
+                message=notif_msg,
                 data={
                     "payment_id": str(payment.id),
                     "reference": payment.reference,
@@ -1577,20 +1660,21 @@ class PaymentService:
                     user_id=payment.player_id,
                 )
 
-            # Always broadcast a generic payment.confirmed event for dashboards / analytics
-            await dispatch_event(
-                event_type="payment.confirmed",
-                data={
-                    "payment_id": str(payment.id),
-                    "purpose": purpose_val,
-                    "amount": float(payment.amount),
-                    "club_id": club_id_str,
-                    "player_id": str(payment.player_id),
-                    "reference": payment.reference,
-                },
-                club_id=payment.club_id,
-                user_id=payment.player_id,
-            )
+            # Broadcast payment.confirmed only when payment was actually collected/succeeded
+            if payment.status == PaymentStatus.SUCCEEDED:
+                await dispatch_event(
+                    event_type="payment.confirmed",
+                    data={
+                        "payment_id": str(payment.id),
+                        "purpose": purpose_val,
+                        "amount": float(payment.amount),
+                        "club_id": club_id_str,
+                        "player_id": str(payment.player_id),
+                        "reference": payment.reference,
+                    },
+                    club_id=payment.club_id,
+                    user_id=payment.player_id,
+                )
         except Exception as ws_err:
             # Never block the checkout response due to WS dispatch failure
             logger.warning(f"[_fulfill_activity_and_notify] WS event dispatch failed (non-blocking): {ws_err}")

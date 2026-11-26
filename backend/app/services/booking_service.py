@@ -956,7 +956,7 @@ class BookingService:
             cancelled_by_user_id=user_id,
             cancellation_reason=payload.cancellation_reason,
         )
-        # If booking had a paid transaction, mark it refunded
+        # If booking had a paid transaction, mark it refunded; if pending, cancel it
         from sqlalchemy import select
         from app.models.payment import Payment, PaymentStatus
         stmt = select(Payment).where(Payment.booking_id == booking.id)
@@ -966,6 +966,12 @@ class BookingService:
             pmt.refunded_amount = pmt.amount
             pmt.refund_reason = payload.cancellation_reason or "Booking cancelled by player"
             pmt.refunded_at = now
+            pmt.status_changed_by_user_id = user_id
+            pmt.updated_at = now
+            await self.db.flush()
+        elif pmt and pmt.status == PaymentStatus.PENDING:
+            pmt.status = PaymentStatus.CANCELLED
+            pmt.cancelled_at = now
             pmt.status_changed_by_user_id = user_id
             pmt.updated_at = now
             await self.db.flush()

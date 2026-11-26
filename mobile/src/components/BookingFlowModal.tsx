@@ -203,12 +203,7 @@ export function BookingFlowModal({
   };
 
   const handleConfirmSummary = () => {
-    setFormError(null);
-    setStage(3); // Go to Payment
-  };
-
-  const handleCompletePayment = async () => {
-    if (isSubmitting) return; // Prevent duplicate submissions
+    if (isSubmitting) return;
     setFormError(null);
     setShowCheckout(true);
   };
@@ -648,12 +643,12 @@ export function BookingFlowModal({
       case 2:
         return [
           { label: 'Back', variant: 'secondary' as const, onPress: () => setStage(1) },
-          { label: 'Continue to Payment', variant: 'primary' as const, onPress: handleConfirmSummary }
+          { label: 'Continue to Checkout', variant: 'primary' as const, onPress: handleConfirmSummary }
         ];
       case 3:
         return [
           { label: 'Back', variant: 'secondary' as const, onPress: () => setStage(2), disabled: isSubmitting },
-          { label: isSubmitting ? 'Booking...' : 'Confirm & Book', variant: 'primary' as const, onPress: handleCompletePayment, loading: isSubmitting, disabled: isSubmitting }
+          { label: 'Continue to Checkout', variant: 'primary' as const, onPress: handleConfirmSummary }
         ];
       case 4:
         return [
@@ -679,7 +674,7 @@ export function BookingFlowModal({
       {stage !== 4 && (
         <View style={styles.stepTitleRow}>
           <AppText variant="heading3" style={styles.stepTitle}>
-            {stage === 1 ? 'Step 1 — Details' : stage === 2 ? 'Step 2 — Summary' : 'Step 3 — Payment'}
+            {stage === 1 ? 'Step 1 — Details' : 'Step 2 — Review'}
           </AppText>
         </View>
       )}
@@ -712,6 +707,27 @@ export function BookingFlowModal({
     );
   };
 
+  const selectedCourtObj = availableCourts.find((c) => c.court_id === courtId);
+  const selectedSlotObj = selectedCourtSlots.find(
+    (s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime()
+  );
+  const resolvedStartAt = selectedSlotObj?.start_at || slotIso;
+  const resolvedEndAt = resolvedStartAt
+    ? new Date(new Date(resolvedStartAt).getTime() + selectedDuration * 60 * 1000).toISOString()
+    : undefined;
+  const formattedCourtDate = dateStr
+    ? new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : undefined;
+  const formattedCourtTime =
+    resolvedStartAt && resolvedEndAt
+      ? `${formatSlotLabel(resolvedStartAt)} – ${formatSlotLabel(resolvedEndAt)}`
+      : undefined;
+
   return (
     <Modal
       visible={visible}
@@ -729,12 +745,12 @@ export function BookingFlowModal({
 
           {stage !== 4 && (
             <View style={styles.progressRow}>
-              {[1, 2, 3, 4].map(s => (
+              {[1, 2, 3].map(s => (
                 <View key={s} style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                   <View style={[styles.progressBubble, stage >= s && styles.progressBubbleActive]}>
                     <AppText variant="caption" color={stage >= s ? 'inverse' : 'secondary'} bold>{s}</AppText>
                   </View>
-                  {s !== 4 && <View style={[styles.progressLine, stage > s && styles.progressLineActive]} />}
+                  {s !== 3 && <View style={[styles.progressLine, stage > s && styles.progressLineActive]} />}
                 </View>
               ))}
             </View>
@@ -748,7 +764,6 @@ export function BookingFlowModal({
           >
             {stage === 1 && renderStage1()}
             {stage === 2 && renderStage2()}
-            {stage === 3 && renderStage3()}
             {stage === 4 && renderStage4()}
           </ScrollView>
 
@@ -764,15 +779,40 @@ export function BookingFlowModal({
                 onSuccess();
               }
             }}
+            showBackButton
+            onBack={() => setShowCheckout(false)}
             clubId={clubId}
             purpose="court_booking"
             activityId={courtId}
-            activityTitle={availableCourts.find((c) => c.court_id === courtId)?.display_name || availableCourts.find((c) => c.court_id === courtId)?.court_name || 'Court Reservation'}
-            activitySubtitle={availableCourts.find((c) => c.court_id === courtId)?.indoor_outdoor === 'indoor' ? 'Indoor Court' : 'Outdoor Court'}
-            startAt={selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso}
-            endAt={slotIso ? new Date(new Date(selectedCourtSlots.find((s) => s.start_at === slotIso || new Date(s.start_at).getTime() === new Date(slotIso).getTime())?.start_at || slotIso).getTime() + selectedDuration * 60 * 1000).toISOString() : undefined}
+            activityTitle={selectedCourtObj?.display_name || selectedCourtObj?.court_name || 'Court Reservation'}
+            activitySubtitle={selectedCourtObj?.indoor_outdoor === 'indoor' ? 'Indoor Court' : 'Outdoor Court'}
+            startAt={resolvedStartAt}
+            endAt={resolvedEndAt}
             durationMinutes={selectedDuration}
             participantsInfo={playersCount ? `${playersCount} players` : undefined}
+            summaryDetails={[
+              {
+                key: 'court',
+                label: 'Court',
+                value: selectedCourtObj?.display_name || selectedCourtObj?.court_name || 'Court',
+                icon: 'map',
+              },
+              ...(formattedCourtDate
+                ? [{ key: 'date', label: 'Date', value: formattedCourtDate, icon: 'calendar' as const }]
+                : []),
+              ...(formattedCourtTime
+                ? [{ key: 'time', label: 'Time', value: formattedCourtTime, icon: 'clock' as const }]
+                : []),
+              {
+                key: 'duration',
+                label: 'Duration',
+                value: `${selectedDuration} minutes`,
+                icon: 'timer',
+              },
+              ...(playersCount
+                ? [{ key: 'players', label: 'Players', value: `${playersCount} players`, icon: 'users' as const }]
+                : []),
+            ]}
             metadata={{
               notes: notes.trim(),
               staff_booking: mode === 'staff',

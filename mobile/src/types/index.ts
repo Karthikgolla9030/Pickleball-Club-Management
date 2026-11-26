@@ -2149,6 +2149,7 @@ export interface CheckoutInitiatePayload {
   selected_method?: string | null;
   currency?: string;
   notes?: string | null;
+  preview_only?: boolean;
   metadata?: Record<string, any>;
 }
 
@@ -2166,6 +2167,8 @@ export interface CheckoutInitiateResponse {
   payment_methods?: string | null;
   activity_summary: Record<string, any>;
   is_free: boolean;
+  gateway_ready?: boolean;
+  booking_or_registration?: Record<string, any> | null;
 }
 
 export interface CheckoutVerifyPayload {
@@ -2174,6 +2177,7 @@ export interface CheckoutVerifyPayload {
   provider_payment_id?: string;
   provider_order_id: string;
   provider_signature?: string;
+  collect_payment?: boolean;
 }
 
 export interface CheckoutVerifyResponse {

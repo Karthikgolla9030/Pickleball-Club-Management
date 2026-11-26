@@ -199,12 +199,7 @@ export default function PlayerLessonsScreen() {
   );
 
   const handleOpenRegister = (lesson: PlayerLessonDetail) => {
-    if (Number(lesson.price) > 0) {
-      setCheckoutLesson(lesson);
-    } else {
-      setRegisteringLesson(lesson);
-      setRegistrationNotes('');
-    }
+    setCheckoutLesson(lesson);
   };
 
   const handleConfirmRegister = async () => {
@@ -766,97 +761,6 @@ export default function PlayerLessonsScreen() {
         )}
       </ScrollView>
 
-      {/* ─── Registration Modal Sheet ─── */}
-      <ModalSheet
-        visible={!!registeringLesson}
-        onClose={() => setRegisteringLesson(null)}
-        title="Register for Lesson"
-        subtitle={registeringLesson?.title}
-      >
-        {registeringLesson && (
-          <View style={styles.modalBody}>
-            <View style={styles.modalInfoRow}>
-              <AppText style={styles.modalInfoLabel}>Lesson</AppText>
-              <AppText style={styles.modalInfoValue}>
-                {registeringLesson.title}
-              </AppText>
-            </View>
-
-            <View style={styles.modalInfoRow}>
-              <AppText style={styles.modalInfoLabel}>Fee</AppText>
-              <AppText style={[styles.modalInfoValue, { color: '#114D3F', fontWeight: '800' }]}>
-                {Number(registeringLesson.price) === 0
-                  ? 'Free'
-                  : formatCurrency(registeringLesson.price)}
-              </AppText>
-            </View>
-
-            <View style={styles.modalInfoRow}>
-              <AppText style={styles.modalInfoLabel}>Coach</AppText>
-              <AppText style={styles.modalInfoValue}>
-                {registeringLesson.coach_name || 'Club Certified Pro'}
-              </AppText>
-            </View>
-
-            <View style={styles.modalInfoRow}>
-              <AppText style={styles.modalInfoLabel}>Schedule</AppText>
-              <AppText style={styles.modalInfoValue}>
-                {formatLessonSchedule(
-                  registeringLesson.start_at,
-                  registeringLesson.duration_minutes
-                )}
-              </AppText>
-            </View>
-
-            <View style={styles.modalInfoRow}>
-              <AppText style={styles.modalInfoLabel}>Court / Venue</AppText>
-              <AppText style={styles.modalInfoValue}>
-                {registeringLesson.court_name || 'Club Courts'}
-              </AppText>
-            </View>
-
-            {/* Notes input */}
-            <View style={styles.notesContainer}>
-              <AppText style={styles.notesLabel}>Notes for Coach (Optional)</AppText>
-              <TextInput
-                style={styles.notesInput}
-                placeholder="e.g. Focus on third shot drop, rating 3.5, backhand reset..."
-                placeholderTextColor="#9CA3AF"
-                value={registrationNotes}
-                onChangeText={setRegistrationNotes}
-                multiline
-                numberOfLines={2}
-              />
-            </View>
-
-            {/* Action buttons */}
-            <View style={styles.modalActionsRow}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setRegisteringLesson(null)}
-                disabled={registerMutation.isPending}
-                activeOpacity={0.8}
-              >
-                <AppText style={styles.modalCancelBtnText}>Cancel</AppText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalConfirmBtn}
-                onPress={handleConfirmRegister}
-                disabled={registerMutation.isPending}
-                activeOpacity={0.85}
-              >
-                {registerMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <AppText style={styles.modalConfirmBtnText}>Confirm Registration</AppText>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      </ModalSheet>
-
       {/* ─── Lesson Details Modal Sheet ─── */}
       <ModalSheet
         visible={!!selectedLesson}
@@ -948,15 +852,45 @@ export default function PlayerLessonsScreen() {
         <CheckoutModal
           visible={!!checkoutLesson}
           onClose={() => setCheckoutLesson(null)}
+          showBackButton
+          onBack={() => setCheckoutLesson(null)}
           clubId={checkoutLesson.club_id || effectiveClubId}
           purpose="lesson"
           activityId={checkoutLesson.id}
           activityTitle={checkoutLesson.title}
-          activitySubtitle={`${checkoutLesson.coach_name ? `Coach ${checkoutLesson.coach_name} · ` : ''}${checkoutLesson.court_name || 'Club Courts'}`}
+          activitySubtitle={`${
+            checkoutLesson.coach_name
+              ? `${
+                  checkoutLesson.coach_name.toLowerCase().startsWith('coach')
+                    ? checkoutLesson.coach_name
+                    : `Coach ${checkoutLesson.coach_name}`
+                } · `
+              : ''
+          }${checkoutLesson.court_name || 'Club Courts'}`}
           startAt={checkoutLesson.start_at}
           endAt={checkoutLesson.end_at}
+          durationMinutes={checkoutLesson.duration_minutes}
+          summaryDetails={[
+            {
+              key: 'coach',
+              label: 'Coach',
+              value: checkoutLesson.coach_name || 'Club Certified Pro',
+              icon: 'coach',
+            },
+            {
+              key: 'schedule',
+              label: 'Schedule',
+              value: formatLessonSchedule(checkoutLesson.start_at, checkoutLesson.duration_minutes),
+              icon: 'calendar',
+            },
+            {
+              key: 'venue',
+              label: 'Venue',
+              value: checkoutLesson.court_name || 'Club Courts',
+              icon: 'map',
+            },
+          ]}
           onSuccess={() => {
-            setCheckoutLesson(null);
             setSelectedLesson(null);
             setActiveTab('my_registrations');
             refetchDiscover();

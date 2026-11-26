@@ -548,21 +548,25 @@ class EventService:
                     await self.event_repo.update_registration(next_waitlisted)
                     promoted_user = next_waitlisted
 
-        # Refund canonical payment if paid
+        # Refund canonical payment if paid, or cancel if still pending
         from sqlalchemy import select
         from app.models.payment import Payment, PaymentStatus
         stmt = select(Payment).where(
             Payment.event_id == event_id,
             Payment.player_id == registration.user_id,
-            Payment.status == PaymentStatus.SUCCEEDED,
-        )
+            Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
+        ).order_by(Payment.created_at.desc())
         pmt = (await self.db.execute(stmt)).scalars().first()
         if pmt:
             now_dt = datetime.now(timezone.utc)
-            pmt.status = PaymentStatus.REFUNDED
-            pmt.refunded_amount = pmt.amount
-            pmt.refund_reason = "Event registration cancelled by player"
-            pmt.refunded_at = now_dt
+            if pmt.status == PaymentStatus.SUCCEEDED:
+                pmt.status = PaymentStatus.REFUNDED
+                pmt.refunded_amount = pmt.amount
+                pmt.refund_reason = "Event registration cancelled by player"
+                pmt.refunded_at = now_dt
+            else:
+                pmt.status = PaymentStatus.CANCELLED
+                pmt.cancelled_at = now_dt
             pmt.status_changed_by_user_id = actor_user_id
             pmt.updated_at = now_dt
             await self.db.flush()

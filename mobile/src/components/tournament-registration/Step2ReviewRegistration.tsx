@@ -292,9 +292,9 @@ export function Step2ReviewRegistration({
           onPress={onNext}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Continue to payment"
+          accessibilityLabel="Continue to checkout"
         >
-          <AppText style={styles.continueBtnText}>Continue to payment →</AppText>
+          <AppText style={styles.continueBtnText}>Continue to Checkout →</AppText>
         </TouchableOpacity>
 
         <TouchableOpacity
