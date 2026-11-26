@@ -406,15 +406,7 @@ export default function PlayerPaymentsScreen() {
   // Header Component for FlatList
   const renderListHeader = () => (
     <View style={styles.listHeader}>
-      {/* 2. My Payments Heading */}
-      <View style={styles.titleBlock}>
-        <AppText style={styles.mainHeading}>My Payments</AppText>
-        <AppText style={styles.subHeading}>
-          View your financial transactions across memberships, bookings, tournaments, and events.
-        </AppText>
-      </View>
-
-      {/* 3. Filters Row */}
+      {/* Filters Row */}
       <View style={styles.filtersContainer}>
         <View style={styles.filtersTopRow}>
           <TouchableOpacity
@@ -505,7 +497,12 @@ export default function PlayerPaymentsScreen() {
   return (
     <Screen style={styles.container}>
       {/* 1. Header */}
-      <AppHeader borderless />
+      <AppHeader
+        title="My Payments"
+        subtitle="View your financial transactions across memberships, bookings, tournaments, and events."
+        showMenu
+        borderless
+      />
 
       {/* Payment List with Integrated Header */}
       {isLoading ? (
@@ -901,24 +898,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  // 2. My Payments Heading
-  titleBlock: {
-    marginBottom: 16,
-  },
-  mainHeading: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#102B2A',
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  subHeading: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#667776',
-  },
-
-  // 3. Filters
+  // Filters
   filtersContainer: {
     marginBottom: 16,
   },
