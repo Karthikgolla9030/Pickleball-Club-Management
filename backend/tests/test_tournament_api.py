@@ -927,3 +927,56 @@ async def test_18_format_first_registration_types_and_scramble_validation(
     assert singles_fc["registration_type"] == "individual"
     assert singles_fc["team_size"] == 1
 
+
+@pytest.mark.asyncio
+async def test_19_get_tournament_auto_closes_expired_registration_without_500(
+    async_client: AsyncClient, db_session: AsyncSession
+):
+    """
+    Regression test: GET /tournaments/{id} when registration_close_at has passed
+    must auto-close registration cleanly and return 200 (never MissingGreenlet 500).
+    """
+    owner = await create_user(db_session, full_name="Owner Deadline")
+    player = await create_user(db_session, full_name="Player Deadline")
+    club = await create_club(db_session, name="Deadline Club")
+    await create_staff_membership(db_session, owner, club, ClubRole.CLUB_OWNER)
+    pm = await create_player_membership(db_session, player, club)
+
+    now = datetime.now(timezone.utc)
+    tournament = Tournament(
+        club_id=club.id,
+        created_by_user_id=owner.id,
+        name="Expired Reg Open Tourney",
+        format=TournamentFormat.SCRAMBLE,
+        status=TournamentStatus.REGISTRATION_OPEN,
+        visibility=TournamentVisibility.PUBLIC,
+        min_participants=4,
+        max_participants=8,
+        registration_open_at=now - timedelta(days=3),
+        registration_close_at=now - timedelta(minutes=5),
+        start_date=now + timedelta(days=1),
+        end_date=now + timedelta(days=2),
+        format_configuration={"category": "Open Scramble", "team_size": 1},
+    )
+    db_session.add(tournament)
+    await db_session.flush()
+
+    reg = TournamentRegistration(
+        tournament_id=tournament.id,
+        player_membership_id=pm.id,
+        status=RegistrationStatus.CONFIRMED,
+    )
+    db_session.add(reg)
+    await db_session.commit()
+
+    res = await async_client.get(
+        f"/api/v1/tournaments/{tournament.id}",
+        headers=make_auth_header(player.id),
+    )
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["status"] == "registration_closed"
+    assert data["club_name"] == "Deadline Club"
+    assert data["is_registered"] is True
+
+

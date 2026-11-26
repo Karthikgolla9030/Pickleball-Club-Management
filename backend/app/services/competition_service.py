@@ -3392,6 +3392,8 @@ class CompetitionService:
             profile = user.player_profile if user else None
             rating = float(profile.skill_rating) if profile and profile.skill_rating is not None else 3.5
             reg_time = r.registered_at or datetime.min.replace(tzinfo=timezone.utc)
+            if reg_time.tzinfo is None:
+                reg_time = reg_time.replace(tzinfo=timezone.utc)
             return (-rating, reg_time, str(r.player_membership_id))
 
         sorted_regs = sorted(confirmed_regs, key=_get_sort_key)

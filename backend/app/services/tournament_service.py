@@ -7,6 +7,7 @@ configuration locking rules, and player eligibility.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -14,6 +15,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.tournament import (
@@ -96,15 +99,22 @@ def _build_tournament_response(
             count = 0
             conf_count = 0
             t_count = None
-    club_name = t.club.name if getattr(t, "club", None) else None
-    club_slug = t.club.slug if getattr(t, "club", None) else None
+    club = None
+    try:
+        from sqlalchemy.orm import attributes
+        state = attributes.instance_state(t)
+        if "club" in state.dict:
+            club = state.dict["club"]
+    except Exception:
+        club = getattr(t, "__dict__", {}).get("club")
+    club_name = club.name if club else None
+    club_slug = club.slug if club else None
     custom_banner = getattr(t, "banner_image_url", None)
     resolved_banner = custom_banner.strip() if (custom_banner and custom_banner.strip()) else None
     from app.services.image_resolution_service import normalize_tournament_format
     fmt = normalize_tournament_format(getattr(t, "format", None))
 
     # Priority 2: Club Format Default -> Club General Default
-    club = getattr(t, "club", None)
     if not resolved_banner and club:
         if fmt == "round_robin" and club.default_tournament_round_robin_url:
             resolved_banner = club.default_tournament_round_robin_url.strip()
@@ -133,6 +143,22 @@ def _build_tournament_response(
         if not resolved_banner:
             resolved_banner = resolve_platform_default("default_tournament_banner")
 
+    status_lbl = (
+        t.status.display_label
+        if hasattr(t.status, "display_label")
+        else str(getattr(t.status, "value", t.status)).replace("_", " ").title()
+    )
+    format_lbl = (
+        t.format.display_label
+        if hasattr(t.format, "display_label")
+        else str(getattr(t.format, "value", t.format)).replace("_", " ").title()
+    )
+    visibility_lbl = (
+        t.visibility.display_label
+        if hasattr(t.visibility, "display_label")
+        else str(getattr(t.visibility, "value", t.visibility)).replace("_", " ").title()
+    )
+
     return TournamentResponse(
         id=t.id,
         club_id=t.club_id,
@@ -144,11 +170,11 @@ def _build_tournament_response(
         banner_image_url=custom_banner,
         resolved_banner_url=resolved_banner,
         status=t.status,
-        status_label=t.status.display_label,
+        status_label=status_lbl,
         format=t.format,
-        format_label=t.format.display_label,
+        format_label=format_lbl,
         visibility=t.visibility,
-        visibility_label=t.visibility.display_label,
+        visibility_label=visibility_lbl,
         start_date=t.start_date,
         end_date=t.end_date,
         registration_open_at=t.registration_open_at,
@@ -156,8 +182,8 @@ def _build_tournament_response(
         location_name=t.location_name,
         min_participants=t.min_participants,
         max_participants=t.max_participants,
-        scoring_rules=t.scoring_rules,
-        tiebreaker_rules=t.tiebreaker_rules,
+        scoring_rules=t.scoring_rules if isinstance(t.scoring_rules, dict) else {},
+        tiebreaker_rules=t.tiebreaker_rules if isinstance(t.tiebreaker_rules, list) else [],
         format_configuration=t.format_configuration,
         participant_count=count,
         teams_count=t_count,
@@ -219,7 +245,7 @@ class TournamentService:
         self, tournament: Tournament
     ) -> Tournament:
         """If tournament is in registration_open and registration_close_at has passed, close registration."""
-        if tournament.status == TournamentStatus.REGISTRATION_OPEN:
+        if tournament.status == TournamentStatus.REGISTRATION_OPEN and tournament.registration_close_at:
             now = datetime.now(timezone.utc)
             reg_close = (
                 tournament.registration_close_at.replace(tzinfo=timezone.utc)
@@ -227,13 +253,19 @@ class TournamentService:
                 else tournament.registration_close_at
             )
             if reg_close <= now:
+                t_id = tournament.id
+                c_id = tournament.club_id
                 try:
-                    await self.close_registration(tournament.club_id, tournament.id)
-                    refreshed = await self.tournament_repo.get_by_id(tournament.id, tournament.club_id)
-                    if refreshed:
-                        return refreshed
-                except Exception:
-                    pass
+                    await self.close_registration(c_id, t_id)
+                except Exception as e:
+                    logger.warning(f"Auto-close registration failed for tournament {t_id}: {e}")
+                    try:
+                        await self.db.rollback()
+                    except Exception:
+                        pass
+                refreshed = await self.tournament_repo.get_by_id(t_id, c_id)
+                if refreshed:
+                    return refreshed
         return tournament
 
     # ─── Club-Scoped Tournament Management ─────────────────────────────────────
@@ -347,7 +379,7 @@ class TournamentService:
             ):
                 is_reg = True
                 reg_id = existing.id
-                reg_status = existing.status.value
+                reg_status = existing.status.value if hasattr(existing.status, "value") else str(existing.status)
 
         # Authoritative registration counts directly from persisted DB records
         all_regs = await self.registration_repo.list_by_tournament(tournament.id)
@@ -767,8 +799,10 @@ class TournamentService:
             await comp_svc.finalize_scramble_registrations_and_seed(updated)
 
         await self.db.commit()
-        await self.db.refresh(updated)
-        resp = _build_tournament_response(updated)
+        refreshed = await self.tournament_repo.get_by_id(
+            tournament_id=updated.id, club_id=club_id
+        )
+        resp = _build_tournament_response(refreshed or updated)
         try:
             await dispatch_event(
                 event_type=EventType.TOURNAMENT_UPDATED,

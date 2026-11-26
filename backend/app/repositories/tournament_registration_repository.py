@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.club_player_membership import ClubPlayerMembership
+from app.models.tournament import Tournament
 from app.models.tournament_registration import (
     RegistrationStatus,
     TournamentRegistration,
@@ -30,7 +31,7 @@ class TournamentRegistrationRepository:
             select(TournamentRegistration)
             .where(TournamentRegistration.id == registration_id)
             .options(
-                selectinload(TournamentRegistration.tournament),
+                selectinload(TournamentRegistration.tournament).selectinload(Tournament.club),
                 selectinload(TournamentRegistration.player_membership).selectinload(
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),
@@ -51,7 +52,7 @@ class TournamentRegistrationRepository:
                 TournamentRegistration.player_membership_id == player_membership_id,
             )
             .options(
-                selectinload(TournamentRegistration.tournament),
+                selectinload(TournamentRegistration.tournament).selectinload(Tournament.club),
                 selectinload(TournamentRegistration.player_membership).selectinload(
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),
@@ -76,7 +77,7 @@ class TournamentRegistrationRepository:
                 ClubPlayerMembership.user_id == user_id,
             )
             .options(
-                selectinload(TournamentRegistration.tournament),
+                selectinload(TournamentRegistration.tournament).selectinload(Tournament.club),
                 selectinload(TournamentRegistration.player_membership).selectinload(
                     ClubPlayerMembership.user
                 ).selectinload(User.player_profile),

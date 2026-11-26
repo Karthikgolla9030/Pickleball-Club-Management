@@ -501,8 +501,8 @@ export default function PlayerBookingsScreen() {
               tab === 'upcoming'
                 ? 'Upcoming'
                 : tab === 'past'
-                ? 'Past'
-                : 'Cancelled';
+                  ? 'Past'
+                  : 'Cancelled';
 
             return (
               <TouchableOpacity
