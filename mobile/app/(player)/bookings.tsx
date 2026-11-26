@@ -27,7 +27,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Calendar,
@@ -388,13 +388,13 @@ export default function PlayerBookingsScreen() {
         {/* Details */}
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
-            <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={styles.pastTitleBlock}>
               {renderActivityBadge(item.activity_type)}
               <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
                 {item.title}
               </AppText>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.pastBadgesGroup}>
               <View style={styles.playerPriceBadge}>
                 <AppText style={styles.playerPriceBadgeText}>
                   {item.price > 0 ? formatCurrency(item.price) : 'Free'}
@@ -455,13 +455,13 @@ export default function PlayerBookingsScreen() {
 
         <View style={styles.pastCardDetails}>
           <View style={styles.pastTitleRow}>
-            <View style={{ flex: 1, marginRight: 8 }}>
+            <View style={styles.pastTitleBlock}>
               {renderActivityBadge(item.activity_type)}
               <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
                 {item.title}
               </AppText>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={styles.pastBadgesGroup}>
               <View style={styles.cancelledBadge}>
                 <AppText style={styles.cancelledBadgeText}>Cancelled</AppText>
               </View>
@@ -514,85 +514,17 @@ export default function PlayerBookingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['left', 'right']}>
       {/* ─── Top Header ─── */}
       <AppHeader title="My Bookings" showMenu borderless />
 
-      {/* ─── Status Segmented Control ─── */}
-      <View style={styles.segmentedWrapper}>
-        <View style={styles.segmentedTrack} accessibilityRole="tablist">
-          {(['upcoming', 'past', 'cancelled'] as const).map((tab) => {
-            const isActive = activeTab === tab;
-            const label =
-              tab === 'upcoming'
-                ? 'Upcoming'
-                : tab === 'past'
-                  ? 'Past'
-                  : 'Cancelled';
-
-            return (
-              <TouchableOpacity
-                key={tab}
-                onPress={() => setActiveTab(tab)}
-                style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
-                activeOpacity={0.85}
-                accessibilityRole="tab"
-                accessibilityLabel={label}
-                accessibilityState={{ selected: isActive }}
-              >
-                <AppText
-                  numberOfLines={1}
-                  style={[styles.segmentText, isActive && styles.segmentTextActive]}
-                >
-                  {label}
-                </AppText>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ─── Category Filter Control ─── */}
-      <View style={styles.filtersBar}>
-        <View style={styles.filtersLeftGroup}>
-          <TouchableOpacity
-            style={styles.filtersPillBtn}
-            onPress={handleOpenFilters}
-            activeOpacity={0.8}
-            accessibilityLabel="Filter bookings by category"
-            accessibilityRole="button"
-          >
-            <Filter size={15} color="#0D5C46" strokeWidth={2} />
-            <AppText style={styles.filtersPillText}>Filters</AppText>
-            {hasActiveCategoryFilter && (
-              <View style={styles.filtersCountBadge}>
-                <AppText style={styles.filtersCountText}>1</AppText>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <AppText style={styles.appliedFilterText} numberOfLines={1}>
-            {hasActiveCategoryFilter ? `Category: ${selectedCategoryLabel}` : 'Showing: All'}
-          </AppText>
-        </View>
-
-        {hasActiveCategoryFilter && (
-          <TouchableOpacity
-            onPress={handleClearFilter}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            activeOpacity={0.7}
-            accessibilityLabel="Clear category filter"
-            accessibilityRole="button"
-          >
-            <AppText style={styles.clearFilterText}>Clear</AppText>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ─── Bookings Content ─── */}
+      {/* ─── Shared Page Content ScrollView ─── */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 24) + 24 },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -607,8 +539,78 @@ export default function PlayerBookingsScreen() {
           />
         }
       >
-        {/* Loading State */}
-        {isLoadingBookings ? (
+        <View style={styles.pageContainer}>
+          {/* ─── Status Segmented Control ─── */}
+          <View style={styles.segmentedTrack} accessibilityRole="tablist">
+            {(['upcoming', 'past', 'cancelled'] as const).map((tab) => {
+              const isActive = activeTab === tab;
+              const label =
+                tab === 'upcoming'
+                  ? 'Upcoming'
+                  : tab === 'past'
+                    ? 'Past'
+                    : 'Cancelled';
+
+              return (
+                <TouchableOpacity
+                  key={tab}
+                  onPress={() => setActiveTab(tab)}
+                  style={[styles.segmentButton, isActive && styles.segmentButtonActive]}
+                  activeOpacity={0.85}
+                  accessibilityRole="tab"
+                  accessibilityLabel={label}
+                  accessibilityState={{ selected: isActive }}
+                >
+                  <AppText
+                    numberOfLines={1}
+                    style={[styles.segmentText, isActive && styles.segmentTextActive]}
+                  >
+                    {label}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* ─── Category Filter Control ─── */}
+          <View style={styles.filtersBar}>
+            <View style={styles.filtersLeftGroup}>
+              <TouchableOpacity
+                style={styles.filtersPillBtn}
+                onPress={handleOpenFilters}
+                activeOpacity={0.8}
+                accessibilityLabel="Filter bookings by category"
+                accessibilityRole="button"
+              >
+                <Filter size={15} color="#0D5C46" strokeWidth={2} />
+                <AppText style={styles.filtersPillText}>Filters</AppText>
+                {hasActiveCategoryFilter && (
+                  <View style={styles.filtersCountBadge}>
+                    <AppText style={styles.filtersCountText}>1</AppText>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <AppText style={styles.appliedFilterText} numberOfLines={1}>
+                {hasActiveCategoryFilter ? `Category: ${selectedCategoryLabel}` : 'Showing: All'}
+              </AppText>
+            </View>
+
+            {hasActiveCategoryFilter && (
+              <TouchableOpacity
+                onPress={handleClearFilter}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+                accessibilityLabel="Clear category filter"
+                accessibilityRole="button"
+              >
+                <AppText style={styles.clearFilterText}>Clear</AppText>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Loading State */}
+          {isLoadingBookings ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#114D3F" />
             <AppText style={styles.loadingText}>Loading your bookings & registrations...</AppText>
@@ -735,6 +737,7 @@ export default function PlayerBookingsScreen() {
             )}
           </>
         )}
+        </View>
       </ScrollView>
 
       {/* ─── Booking Details Modal (for court reservations) ─── */}
@@ -860,7 +863,7 @@ export default function PlayerBookingsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -869,11 +872,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7F9F8',
   },
-  segmentedWrapper: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 10,
-    backgroundColor: '#F7F9F8',
+  pageContainer: {
+    width: '100%',
+    maxWidth: 648,
+    alignSelf: 'center',
   },
   segmentedTrack: {
     flexDirection: 'row',
@@ -885,9 +887,11 @@ const styles = StyleSheet.create({
     borderColor: '#DCE5E0',
     padding: 4,
     gap: 4,
+    marginBottom: 12,
   },
   segmentButton: {
     flex: 1,
+    flexBasis: 0,
     minWidth: 0,
     height: 36,
     borderRadius: 18,
@@ -913,15 +917,15 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
   filtersBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: '#F7F9F8',
+    width: '100%',
     gap: 10,
+    marginBottom: 16,
   },
   filtersLeftGroup: {
     flexDirection: 'row',
@@ -968,7 +972,8 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     fontWeight: '500',
     color: '#667776',
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
   },
   clearFilterText: {
     fontSize: 13,
@@ -1098,10 +1103,11 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 40,
+    paddingTop: 12,
+    flexGrow: 1,
   },
   loadingContainer: {
+    width: '100%',
     paddingVertical: 60,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1113,9 +1119,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   errorContainer: {
+    width: '100%',
     paddingVertical: 40,
     alignItems: 'center',
-    paddingHorizontal: 20,
   },
   errorText: {
     fontSize: 14,
@@ -1138,20 +1144,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    width: '100%',
+    gap: 12,
     marginBottom: 12,
-    marginTop: 4,
   },
   sectionTitle: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 16,
+    lineHeight: 22,
     fontWeight: '700',
     color: '#132A21',
   },
   sectionCount: {
+    flexShrink: 0,
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: '600',
     color: '#718279',
+    textAlign: 'right',
   },
   upcomingCard: {
+    width: '100%',
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1195,6 +1209,7 @@ const styles = StyleSheet.create({
   },
   cardDetails: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
     justifyContent: 'center',
   },
@@ -1318,6 +1333,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   pastCard: {
+    width: '100%',
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1343,6 +1359,7 @@ const styles = StyleSheet.create({
   },
   pastCardDetails: {
     flex: 1,
+    minWidth: 0,
     marginLeft: 12,
   },
   pastTitleRow: {
@@ -1350,8 +1367,22 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 3,
+    gap: 8,
+  },
+  pastTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  pastBadgesGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 0,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
   },
   emptyCard: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -1360,7 +1391,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E8ECE9',
     gap: 14,
-    marginTop: 4,
   },
   emptyIconContainer: {
     width: 44,
@@ -1369,9 +1399,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#EBF4F0',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   emptyTextContainer: {
     flex: 1,
+    minWidth: 0,
   },
   emptyTitle: {
     fontSize: 14,

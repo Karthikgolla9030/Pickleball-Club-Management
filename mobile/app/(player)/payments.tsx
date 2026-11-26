@@ -505,7 +505,7 @@ export default function PlayerPaymentsScreen() {
   return (
     <Screen style={styles.container}>
       {/* 1. Header */}
-      <AppHeader title="Payments" borderless />
+      <AppHeader borderless />
 
       {/* Payment List with Integrated Header */}
       {isLoading ? (

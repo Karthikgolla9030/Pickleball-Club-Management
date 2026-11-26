@@ -19,7 +19,7 @@ import { useDrawerStore } from '@/navigation';
 import { Colors, Spacing } from '@/theme';
 
 interface AppHeaderProps {
-  title: string;
+  title?: string;
   /** Optional subtitle rendered below the title */
   subtitle?: string;
   /** Show hamburger menu button (default true) */
@@ -37,7 +37,7 @@ interface AppHeaderProps {
 }
 
 export function AppHeader({
-  title,
+  title = '',
   subtitle,
   showMenu = true,
   showBack = false,
@@ -96,16 +96,18 @@ export function AppHeader({
 
         {/* Title + optional subtitle */}
         <View style={styles.titleBlock}>
-          <AppText
-            variant="title"
-            numberOfLines={2}
-            style={[
-              styles.title,
-              { fontSize: titleFontSize, lineHeight: titleLineHeight },
-            ]}
-          >
-            {title}
-          </AppText>
+          {title ? (
+            <AppText
+              variant="title"
+              numberOfLines={2}
+              style={[
+                styles.title,
+                { fontSize: titleFontSize, lineHeight: titleLineHeight },
+              ]}
+            >
+              {title}
+            </AppText>
+          ) : null}
           {subtitle ? (
             <AppText
               variant="caption"
