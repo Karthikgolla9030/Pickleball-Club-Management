@@ -12,6 +12,7 @@ import { AppState, type AppStateStatus, Platform } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { API_ENDPOINTS } from '@/constants';
+import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
 import { useAuthStore } from '@/store';
 import { getValidAccessToken } from '@/services/api';
 import { WebSocketClient, type WebSocketEvent } from '@/services/websocket/WebSocketClient';
@@ -82,36 +83,42 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
 
       // ─── Tournaments & Matches ─────────────────────────────────────────────
       else if (eventType.startsWith('tournament.') || eventType.startsWith('match.')) {
-        queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-        queryClient.invalidateQueries({ queryKey: ['player', 'tournaments'] });
-        queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
-        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
-        queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+        const eventData = (event.data as Record<string, any>) || {};
+        const targetTournamentId = eventData.tournament_id || eventData.id;
+        const eventClubId = (event as any)?.club_id || eventData.club_id || clubId;
+
+        if (targetTournamentId) {
+          const tId = String(targetTournamentId);
+          if (
+            eventData.participant_count !== undefined ||
+            eventData.teams_count !== undefined ||
+            eventData.confirmed_players_count !== undefined ||
+            eventData.status !== undefined
+          ) {
+            syncTournamentCountInCaches(queryClient, tId, {
+              participant_count: eventData.participant_count,
+              teams_count: eventData.teams_count,
+              confirmed_players_count: eventData.confirmed_players_count,
+              status: eventData.status,
+            });
+          }
+          invalidateAllTournamentQueries(
+            queryClient,
+            tId,
+            eventClubId ? String(eventClubId) : null
+          );
+        } else {
+          invalidateAllTournamentQueries(
+            queryClient,
+            null,
+            eventClubId ? String(eventClubId) : null
+          );
+        }
+        queryClient.invalidateQueries({ queryKey: ['pool-play'] });
         queryClient.invalidateQueries({ queryKey: ['matches'] });
         queryClient.invalidateQueries({ queryKey: ['standings'] });
         queryClient.invalidateQueries({ queryKey: ['bracket'] });
         queryClient.invalidateQueries({ queryKey: ['scramble'] });
-        queryClient.invalidateQueries({ queryKey: ['clubs'] });
-        const targetTournamentId = (event.data as any)?.tournament_id || (event.data as any)?.id;
-        if (targetTournamentId) {
-          const tId = String(targetTournamentId);
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'my-registration'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'player-registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'teams'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'registrations'] });
-          queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tId] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'pools'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'standings'] });
-          queryClient.invalidateQueries({ queryKey: ['tournaments', tId, 'matches'] });
-        }
-        if (clubId) {
-          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
-          queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
-          if (targetTournamentId) {
-            queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments', String(targetTournamentId)] });
-          }
-        }
       }
 
       // ─── Leagues ────────────────────────────────────────────────────────────

@@ -112,6 +112,9 @@ class PlayerSelfRegistrationResponse(BaseModel):
     player_email: str | None = None
     skill_level: str | None = None
     cancelled_at: datetime | None = None
+    participant_count: int | None = None
+    teams_count: int | None = None
+    confirmed_players_count: int | None = None
 
     model_config = {"from_attributes": True}
 

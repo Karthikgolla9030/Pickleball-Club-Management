@@ -590,7 +590,7 @@ export default function BracketWorkspaceScreen() {
           {tournament.status === 'registration_open' && (
             <RegistrationOpenBanner
               tournamentName={tournament.name}
-              participantCount={tournament.participant_count ?? (teamSize > 1 ? teams.length * teamSize : teams.length)}
+              participantCount={tournament.teams_count ?? tournament.participant_count ?? teams.length}
               maxParticipants={tournament.max_participants}
               onCloseRegistration={handleCloseRegistration}
               isClosing={isCloseRegistrationPending}

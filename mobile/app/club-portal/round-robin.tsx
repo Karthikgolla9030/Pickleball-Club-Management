@@ -576,7 +576,11 @@ export default function RoundRobinWorkspaceScreen() {
             {tournament?.status === 'registration_open' && (
               <RegistrationOpenBanner
                 tournamentName={tournament?.name}
-                participantCount={totalRegisteredPlayers}
+                participantCount={
+                  isSingles
+                    ? (tournament?.participant_count ?? totalRegisteredPlayers)
+                    : (tournament?.teams_count ?? tournament?.participant_count ?? teams.length)
+                }
                 maxParticipants={tournament?.max_participants}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}

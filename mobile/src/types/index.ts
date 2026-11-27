@@ -1011,6 +1011,9 @@ export interface PlayerRegistrationResponse {
   player_email?: string | null;
   skill_level?: string | null;
   cancelled_at?: string | null;
+  participant_count?: number | null;
+  teams_count?: number | null;
+  confirmed_players_count?: number | null;
 }
 
 export interface PlayerTournamentRegistrationStatus {

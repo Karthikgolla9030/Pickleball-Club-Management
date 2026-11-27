@@ -1029,7 +1029,11 @@ export default function PoolPlayManagementScreen() {
             {effectiveTournament?.status === 'registration_open' && (
               <RegistrationOpenBanner
                 tournamentName={effectiveTournament?.name}
-                participantCount={registrations.length}
+                participantCount={
+                  effectiveTournament?.teams_count ??
+                  effectiveTournament?.participant_count ??
+                  teams.length
+                }
                 maxParticipants={effectiveTournament?.max_participants}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}

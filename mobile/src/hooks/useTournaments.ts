@@ -4,12 +4,13 @@
  * participant administration, and player discovery/registration.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { tournamentApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type {
   CreateTournamentPayload,
   EligiblePartnerItem,
+  PlayerRegistrationResponse,
   PlayerSelfRegistrationPayload,
   PlayerTournamentRegistrationStatus,
   Tournament,
@@ -20,6 +21,113 @@ import type {
   UpdateRegistrationPayload,
   UpdateTournamentPayload,
 } from '@/types';
+
+/**
+ * Apply authoritative backend registration counts (and optional status/registration flags)
+ * immediately across all tournament caches so Player Side and Club Side stay in lockstep.
+ */
+export function syncTournamentCountInCaches(
+  queryClient: QueryClient,
+  tournamentId: string,
+  patch: {
+    participant_count?: number | null;
+    teams_count?: number | null;
+    confirmed_players_count?: number | null;
+    status?: TournamentStatus | string | null;
+    is_registered?: boolean;
+    my_registration_id?: string | null;
+    my_registration_status?: string | null;
+  }
+) {
+  const applyPatch = <T extends Record<string, any>>(item: T): T => {
+    if (!item || item.id !== tournamentId) return item;
+    const next: Record<string, any> = { ...item };
+    if (patch.participant_count !== undefined && patch.participant_count !== null) {
+      next.participant_count = patch.participant_count;
+    }
+    if (patch.teams_count !== undefined) {
+      next.teams_count = patch.teams_count;
+    }
+    if (patch.confirmed_players_count !== undefined) {
+      next.confirmed_players_count = patch.confirmed_players_count;
+    }
+    if (patch.status) {
+      next.status = patch.status;
+    }
+    if (patch.is_registered !== undefined) {
+      next.is_registered = patch.is_registered;
+    }
+    if (patch.my_registration_id !== undefined) {
+      next.my_registration_id = patch.my_registration_id;
+    }
+    if (patch.my_registration_status !== undefined) {
+      next.my_registration_status = patch.my_registration_status;
+    }
+    return next as T;
+  };
+
+  queryClient.setQueryData<Tournament>(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), (old) =>
+    old ? applyPatch(old) : old
+  );
+
+  queryClient.setQueriesData<TournamentDiscoveryItem[]>(
+    { queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS },
+    (old) => (Array.isArray(old) ? old.map((t) => applyPatch(t)) : old)
+  );
+
+  queryClient.setQueriesData<any>(
+    { queryKey: ['clubs'] },
+    (old: any) => {
+      if (Array.isArray(old)) {
+        return old.map((item) => (item && item.id === tournamentId ? applyPatch(item) : item));
+      }
+      if (old && typeof old === 'object' && old.id === tournamentId) {
+        return applyPatch(old);
+      }
+      return old;
+    }
+  );
+}
+
+/**
+ * Invalidate all tournament, club, competition, and player queries affected by registration changes.
+ */
+export function invalidateAllTournamentQueries(
+  queryClient: QueryClient,
+  tournamentId?: string | null,
+  clubId?: string | null
+) {
+  if (tournamentId) {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'my-registration'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'player-registrations'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'registrations'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'eligible-partners'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'pools'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'standings'] });
+    queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'matches'] });
+    queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['scramble', 'state', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['scramble', 'matches', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['scramble', 'standings', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['standings', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['bracket', tournamentId] });
+  }
+  if (clubId) {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+    queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
+    queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+  }
+  queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+  queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+  queryClient.invalidateQueries({ queryKey: ['clubs'] });
+  queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+  queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+  queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+}
 
 /**
  * Hook for club staff listing and creating tournaments.
@@ -36,7 +144,9 @@ export function useClubTournaments(clubId: string | null, status?: TournamentSta
       return tournamentApi.listClubTournaments(clubId, status);
     },
     enabled: Boolean(clubId),
-    staleTime: 30 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const createTournamentMutation = useMutation({
@@ -59,15 +169,13 @@ export function useClubTournaments(clubId: string | null, status?: TournamentSta
     },
     onSuccess: (updated: Tournament, tournamentId: string) => {
       if (clubId) {
-        queryClient.setQueryData<Tournament[]>(QUERY_KEYS.CLUB_TOURNAMENTS(clubId), (old) => {
-          if (!old) return old;
-          return old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t));
-        });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        queryClient.setQueriesData<Tournament[]>(
+          { queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) },
+          (old) => (Array.isArray(old) ? old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t)) : old)
+        );
       }
       queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
     },
   });
 
@@ -78,15 +186,13 @@ export function useClubTournaments(clubId: string | null, status?: TournamentSta
     },
     onSuccess: (updated: Tournament, tournamentId: string) => {
       if (clubId) {
-        queryClient.setQueryData<Tournament[]>(QUERY_KEYS.CLUB_TOURNAMENTS(clubId), (old) => {
-          if (!old) return old;
-          return old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t));
-        });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        queryClient.setQueriesData<Tournament[]>(
+          { queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) },
+          (old) => (Array.isArray(old) ? old.map((t) => (t.id === tournamentId ? { ...t, ...updated } : t)) : old)
+        );
       }
       queryClient.setQueryData(QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId), updated);
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
     },
   });
 
@@ -263,7 +369,9 @@ export function useTournamentRegistrations(clubId: string | null, tournamentId: 
       return tournamentApi.listRegistrations(clubId, tournamentId);
     },
     enabled: Boolean(clubId && tournamentId),
-    staleTime: 15 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const updateRegistrationMutation = useMutation({
@@ -282,8 +390,8 @@ export function useTournamentRegistrations(clubId: string | null, tournamentId: 
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.TOURNAMENT_REGISTRATIONS(clubId, tournamentId),
         });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
       }
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
     },
   });
 
@@ -302,15 +410,15 @@ export function useTournamentRegistrations(clubId: string | null, tournamentId: 
 export function usePlayerTournaments(
   params?:
     | {
-        clubId?: string;
-        search?: string;
-        format?: TournamentFormat;
-        status?: TournamentStatus;
-        startDateFrom?: string;
-        startDateTo?: string;
-        limit?: number;
-        offset?: number;
-      }
+      clubId?: string;
+      search?: string;
+      format?: TournamentFormat;
+      status?: TournamentStatus;
+      startDateFrom?: string;
+      startDateTo?: string;
+      limit?: number;
+      offset?: number;
+    }
     | string
 ) {
   const clubId = typeof params === 'string' ? params : params?.clubId;
@@ -371,20 +479,18 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
       if (!tournamentId) throw new Error('Tournament ID required');
       return tournamentApi.registerPlayer(tournamentId, payload);
     },
-    onSuccess: () => {
+    onSuccess: (data: PlayerRegistrationResponse) => {
       if (tournamentId) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'my-registration'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'player-registrations'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'registrations'] });
-        queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          participant_count: data.participant_count,
+          teams_count: data.teams_count,
+          confirmed_players_count: data.confirmed_players_count,
+          is_registered: data.status !== 'cancelled',
+          my_registration_id: data.id,
+          my_registration_status: data.status,
+        });
       }
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
-      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-      queryClient.invalidateQueries({ queryKey: ['clubs'] });
-      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      invalidateAllTournamentQueries(queryClient, tournamentId, null);
     },
   });
 
@@ -393,20 +499,18 @@ export function usePlayerTournamentRegistration(tournamentId: string | null) {
       if (!tournamentId) throw new Error('Tournament ID required');
       return tournamentApi.cancelRegistration(tournamentId);
     },
-    onSuccess: () => {
+    onSuccess: (data: PlayerRegistrationResponse) => {
       if (tournamentId) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'my-registration'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'player-registrations'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'teams'] });
-        queryClient.invalidateQueries({ queryKey: ['tournaments', tournamentId, 'registrations'] });
-        queryClient.invalidateQueries({ queryKey: ['tournament-registrations', tournamentId] });
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          participant_count: data.participant_count,
+          teams_count: data.teams_count,
+          confirmed_players_count: data.confirmed_players_count,
+          is_registered: false,
+          my_registration_id: null,
+          my_registration_status: null,
+        });
       }
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
-      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
-      queryClient.invalidateQueries({ queryKey: ['clubs'] });
-      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      invalidateAllTournamentQueries(queryClient, tournamentId, null);
     },
   });
 
@@ -431,7 +535,9 @@ export function usePlayerMyRegistration(tournamentId: string | null) {
       return tournamentApi.getMyRegistration(tournamentId);
     },
     enabled: Boolean(tournamentId),
-    staleTime: 15 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     retry: 2,
     retryDelay: (attempt) => Math.min(1500 * (attempt + 1), 4000),
   });
@@ -510,7 +616,9 @@ export function usePlayerTournamentRegistrations(tournamentId: string | null) {
       return tournamentApi.getPlayerRegistrations(tournamentId);
     },
     enabled: Boolean(tournamentId),
-    staleTime: 15 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   return { ...query, registrations: query.data ?? [] };

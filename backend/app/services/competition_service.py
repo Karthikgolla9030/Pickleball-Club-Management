@@ -33,7 +33,7 @@ from app.models.competition import (
     PoolTeam,
     Team,
 )
-from app.models.tournament import TournamentFormat, TournamentStatus
+from app.models.tournament import Tournament, TournamentFormat, TournamentStatus
 from app.models.tournament_registration import RegistrationStatus
 from app.repositories.club_player_membership_repository import (
     ClubPlayerMembershipRepository,
@@ -43,6 +43,10 @@ from app.repositories.tournament_registration_repository import (
     TournamentRegistrationRepository,
 )
 from app.repositories.tournament_repository import TournamentRepository
+from app.services.tournament_counting import (
+    compute_tournament_counts,
+    resolve_tournament_registration_model,
+)
 from app.schemas.competition import (
     AllPoolsStandingsResponse,
     BracketGenerationResponse,
@@ -447,11 +451,38 @@ class CompetitionService:
 
     # ─── Team Operations ─────────────────────────────────────────────────────
 
+    async def _get_valid_confirmed_teams(
+        self, tournament: Tournament, teams: list[Team] | None = None
+    ) -> list[Team]:
+        """Return teams whose members all hold active confirmed registrations."""
+        if teams is None:
+            teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
+        if not teams:
+            return []
+        expected_size = self._get_tournament_team_size(tournament)
+        regs = await self.registration_repo.list_by_tournament(tournament.id)
+        confirmed_pm_ids = {
+            r.player_membership_id
+            for r in regs
+            if r.status == RegistrationStatus.CONFIRMED
+            and r.player_membership
+            and r.player_membership.status == PlayerMembershipStatus.ACTIVE
+            and r.player_membership.club_id == tournament.club_id
+        }
+        return [
+            t for t in teams
+            if len(t.members or []) == expected_size
+            and all(m.player_membership_id in confirmed_pm_ids for m in (t.members or []))
+        ]
+
     async def list_teams(
         self, club_id: uuid.UUID, tournament_id: uuid.UUID
     ) -> list[TeamResponse]:
-        await self._get_tournament_or_404(tournament_id, club_id)
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
         teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+        matches_count = await self.competition_repo.count_all_matches(tournament_id)
+        if matches_count == 0:
+            teams = await self._get_valid_confirmed_teams(tournament, teams)
         return [_build_team_response(t) for t in teams]
 
     async def create_team(
@@ -751,6 +782,8 @@ class CompetitionService:
 
             for i in range(0, len(unassigned), expected_size):
                 group = unassigned[i:i + expected_size]
+                if len(group) < expected_size:
+                    continue
                 names = []
                 for r in group:
                     pm = await self.player_membership_repo.get_by_id(r.player_membership_id)
@@ -2753,7 +2786,12 @@ class CompetitionService:
     async def list_teams_public(
         self, tournament_id: uuid.UUID
     ) -> list[TeamResponse]:
+        tournament = await self.tournament_repo.get_by_id_minimal(tournament_id)
         teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+        if tournament:
+            matches_count = await self.competition_repo.count_all_matches(tournament_id)
+            if matches_count == 0:
+                teams = await self._get_valid_confirmed_teams(tournament, teams)
         return [_build_team_response(t) for t in teams]
 
     async def list_matches_public(
@@ -3458,8 +3496,10 @@ class CompetitionService:
             if r.status == RegistrationStatus.CONFIRMED
             and r.player_membership
             and r.player_membership.status == PlayerMembershipStatus.ACTIVE
+            and r.player_membership.club_id == tournament.club_id
         ]
-        registered_count = len(confirmed_regs)
+        counts = await compute_tournament_counts(self.db, tournament)
+        registered_count = counts.participant_count
 
         # Sort confirmed regs by rating descending for stable ordering
         def _get_reg_rating(r):
@@ -4552,6 +4592,8 @@ class CompetitionService:
 
         teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
         matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        counts = await compute_tournament_counts(self.db, tournament)
+        effective_teams_count = len(teams) if matches else counts.participant_count
         format_cfg = tournament.format_configuration or {}
         bracket_meta = format_cfg.get("bracket_data", {}).get("matches", {})
 
@@ -4574,7 +4616,7 @@ class CompetitionService:
 
         summary = BracketEngine.calculate_bracket_summary(
             tournament_id=tournament_id,
-            teams_count=len(teams),
+            teams_count=effective_teams_count,
             matches=matches_dicts,
         )
 
@@ -4952,7 +4994,9 @@ class CompetitionService:
             if confirmed_regs:
                 teams = await self.finalize_registrations_and_seed(tournament)
 
-        teams_count = len(teams)
+        teams = await self._get_valid_confirmed_teams(tournament, teams)
+        counts = await compute_tournament_counts(self.db, tournament)
+        teams_count = counts.participant_count if len(teams) != counts.participant_count else len(teams)
         confirmed_teams_data = [
             {
                 "id": str(t.id),

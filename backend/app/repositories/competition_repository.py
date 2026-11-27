@@ -101,6 +101,7 @@ class CompetitionRepository:
             select(Team)
             .where(Team.tournament_id == tournament_id)
             .options(_team_member_options())
+            .execution_options(populate_existing=True)
             .order_by(Team.seed.asc().nullslast(), Team.name.asc())
         )
         return list(result.scalars().all())
@@ -152,6 +153,34 @@ class CompetitionRepository:
         )
         for member in result.scalars().all():
             await self.db.delete(member)
+        await self.db.flush()
+
+    async def remove_player_from_teams(
+        self, tournament_id: uuid.UUID, player_membership_id: uuid.UUID
+    ) -> None:
+        """
+        Remove a player's TeamMember entries in a tournament (when cancelling prior to
+        match generation) and delete any Team left completely empty.
+        """
+        teams_res = await self.db.execute(
+            select(Team)
+            .join(Team.members)
+            .where(
+                Team.tournament_id == tournament_id,
+                TeamMember.player_membership_id == player_membership_id,
+            )
+            .options(_team_member_options())
+        )
+        for team in teams_res.scalars().all():
+            for member in list(team.members or []):
+                if member.player_membership_id == player_membership_id:
+                    await self.db.delete(member)
+            await self.db.flush()
+            remaining_res = await self.db.execute(
+                select(TeamMember).where(TeamMember.team_id == team.id)
+            )
+            if not remaining_res.scalars().all():
+                await self.db.delete(team)
         await self.db.flush()
 
     # ─── Match ────────────────────────────────────────────────────────────────

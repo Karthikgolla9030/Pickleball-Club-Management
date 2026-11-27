@@ -889,11 +889,25 @@ class PlayerService:
                 if club_id:
                     t_query = t_query.where(Tournament.club_id == club_id)
                 t_res = await self.db.execute(t_query)
-                for tourney, club in t_res.all():
+                tourney_rows = t_res.all()
+                from app.services.tournament_counting import compute_tournaments_counts
+                tourney_objs = [tourney for tourney, _ in tourney_rows]
+                counts_map = await compute_tournaments_counts(self.db, tourney_objs)
+                for tourney, club in tourney_rows:
+                    t_open_at = (
+                        tourney.registration_open_at.replace(tzinfo=timezone.utc)
+                        if tourney.registration_open_at and tourney.registration_open_at.tzinfo is None
+                        else tourney.registration_open_at
+                    )
+                    t_close_at = (
+                        tourney.registration_close_at.replace(tzinfo=timezone.utc)
+                        if tourney.registration_close_at and tourney.registration_close_at.tzinfo is None
+                        else tourney.registration_close_at
+                    )
                     reg_open = (
                         tourney.status == TournamentStatus.REGISTRATION_OPEN
-                        and (tourney.registration_open_at is None or tourney.registration_open_at <= now)
-                        and (tourney.registration_close_at is None or now <= tourney.registration_close_at)
+                        and (t_open_at is None or t_open_at <= now)
+                        and (t_close_at is None or now <= t_close_at)
                     )
 
                     if tourney.status == TournamentStatus.REGISTRATION_OPEN:
@@ -912,6 +926,12 @@ class PlayerService:
                         else str(tourney.format).replace("_", " ").title()
                     )
                     img = tourney.banner_image_url or club.default_tournament_banner_url or club.cover_image_url
+                    t_counts = counts_map.get(tourney.id)
+                    avail_spots = (
+                        max(0, tourney.max_participants - t_counts.participant_count)
+                        if (tourney.max_participants is not None and t_counts is not None)
+                        else None
+                    )
 
                     all_activities.append(
                         UpcomingActivityItem(
@@ -932,7 +952,7 @@ class PlayerService:
                             format_label=fmt_lbl,
                             is_registration_open=reg_open,
                             is_registered=tourney.id in user_tourney_ids,
-                            available_spots=None,
+                            available_spots=avail_spots,
                             max_participants=tourney.max_participants,
                         )
                     )
