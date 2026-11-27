@@ -1,17 +1,15 @@
 /**
  * Aught2 Pickleball — My Clubs Screen (Player Experience)
  *
- * Pixel-accurate implementation matching the reference design:
- * - Header with hamburger menu, "My Clubs" title, and circular Compass explore action
- * - Section header "Enrolled Clubs (N)" with "Explore More Clubs >" action
+ * - Compact AppHeader with hamburger menu and "My Clubs" title
+ * - Section header "Enrolled Clubs (N)" with single "Explore More Clubs >" action
  * - Enrolled club cards with:
  *     * Actual club logo (authoritative from backend)
  *     * Club name and location
- *     * ACTIVE status badge
- *     * Light-mint information panel: "Member Since" (DD/MM/YYYY) and "Member #"
- *     * Clear outlined button: "View Club Profile >"
- * - Promotional invitation card "Love more clubs?" with paddle illustration and "Explore Clubs >"
- * - Clean empty state when player has no enrolled clubs
+ *     * PAID / FREE status badge
+ *     * Light-mint information panel: "Member Since" and "Membership Type"
+ *     * "View Club" action and "Get Membership" action when applicable
+ * - Single "Explore Clubs" CTA in empty state when player has no enrolled clubs
  * - Preserves pending applications without breaking existing workflows
  */
 
@@ -23,6 +21,7 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -90,6 +89,8 @@ function ClubLogoView({ url, name, size = 56 }: { url?: string | null; name: str
 export default function MyClubsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompactWidth = width < 360;
 
   const {
     clubs,
@@ -163,7 +164,6 @@ export default function MyClubsScreen() {
   const renderClubItem = ({ item }: { item: PlayerClub }) => {
     const locationStr = [item.city, item.state].filter(Boolean).join(', ') || 'Location not specified';
     const memberSinceStr = formatMemberDate(item.joined_at);
-    const memberNumStr = item.membership_number || '—';
 
     const paidSub = playerMemberships.find(
       (m) => m.club_id === item.club_id && (m.status === 'active' || m.effective_status === 'active')
@@ -287,70 +287,32 @@ export default function MyClubsScreen() {
         </View>
       ) : null}
 
-      {/* Enrolled Clubs Heading + Explore More Clubs Pill */}
-      <View style={styles.sectionHeaderRow}>
-        <AppText style={styles.sectionTitle}>
-          Enrolled Clubs ({activeEnrolledClubs.length})
-        </AppText>
+      {/* Enrolled Clubs Heading + Single Explore More Clubs Pill (hidden in empty state so EmptyState stays single CTA) */}
+      {activeEnrolledClubs.length > 0 ? (
+        <View style={styles.sectionHeaderRow}>
+          <AppText
+            style={[styles.sectionTitle, isCompactWidth && { fontSize: 15 }]}
+            numberOfLines={1}
+          >
+            Enrolled Clubs ({activeEnrolledClubs.length})
+          </AppText>
 
-        <TouchableOpacity
-          onPress={handleExploreClubs}
-          style={styles.exploreMorePill}
-          activeOpacity={0.78}
-          accessibilityRole="button"
-          accessibilityLabel="Explore More Clubs"
-        >
-          <Compass size={13} color="#176B57" strokeWidth={2} />
-          <AppText style={styles.exploreMoreText}>Explore More Clubs</AppText>
-          <ChevronRight size={13} color="#176B57" strokeWidth={2.2} />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            onPress={handleExploreClubs}
+            style={[styles.exploreMorePill, isCompactWidth && { paddingHorizontal: 8 }]}
+            activeOpacity={0.78}
+            accessibilityRole="button"
+            accessibilityLabel="Explore More Clubs"
+          >
+            <Compass size={13} color="#176B57" strokeWidth={2} />
+            <AppText style={[styles.exploreMoreText, isCompactWidth && { fontSize: 11 }]}>
+              Explore More Clubs
+            </AppText>
+            <ChevronRight size={13} color="#176B57" strokeWidth={2.2} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
-  );
-
-  const renderFooter = () => {
-    // Only display the promotional card if the user has enrolled clubs
-    // (If 0 clubs, the EmptyState handles the prompt)
-    if (activeEnrolledClubs.length === 0) return null;
-
-    return (
-      <View style={styles.promoCard}>
-        <Image
-          source={require('@/../assets/pickleball_paddle_card.jpg')}
-          style={styles.promoImage}
-          resizeMode="contain"
-        />
-
-        <AppText style={styles.promoTitle}>Love more clubs?</AppText>
-        <AppText style={styles.promoSubtitle}>
-          Discover new clubs, meet new players{'\n'}and grow your pickleball journey.
-        </AppText>
-
-        <TouchableOpacity
-          onPress={handleExploreClubs}
-          style={styles.promoBtn}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Explore Clubs"
-        >
-          <Compass size={16} color="#FFFFFF" strokeWidth={2} />
-          <AppText style={styles.promoBtnText}>Explore Clubs</AppText>
-          <ChevronRight size={14} color="#FFFFFF" strokeWidth={2.4} />
-        </TouchableOpacity>
-      </View>
-    );
-  };
-
-  const headerRightCompass = (
-    <TouchableOpacity
-      onPress={handleExploreClubs}
-      style={styles.headerCompassBtn}
-      accessibilityLabel="Explore Clubs"
-      activeOpacity={0.75}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-    >
-      <Compass size={18} color="#176B57" strokeWidth={2.2} />
-    </TouchableOpacity>
   );
 
   const isInitialLoading = (isLoadingClubs || isLoadingRequests) && clubs.length === 0;
@@ -358,7 +320,7 @@ export default function MyClubsScreen() {
   if (isInitialLoading) {
     return (
       <Screen style={styles.screen}>
-        <AppHeader title="My Clubs" minimalIcon borderless rightElement={headerRightCompass} />
+        <AppHeader title="My Clubs" minimalIcon borderless />
         <LoadingState message="Loading your club memberships..." />
       </Screen>
     );
@@ -367,7 +329,7 @@ export default function MyClubsScreen() {
   if (clubsError && clubs.length === 0) {
     return (
       <Screen style={styles.screen}>
-        <AppHeader title="My Clubs" minimalIcon borderless rightElement={headerRightCompass} />
+        <AppHeader title="My Clubs" minimalIcon borderless />
         <ErrorState
           title="Unable to Load Clubs"
           message={clubsError.message || 'Network error occurred while fetching memberships.'}
@@ -382,21 +344,22 @@ export default function MyClubsScreen() {
 
   return (
     <Screen style={styles.screen}>
-      <AppHeader title="My Clubs" minimalIcon borderless rightElement={headerRightCompass} />
+      <AppHeader title="My Clubs" minimalIcon borderless />
 
       <FlatList
         data={activeEnrolledClubs}
         keyExtractor={(item) => item.membership_id || item.club_id}
         renderItem={renderClubItem}
         ListHeaderComponent={renderHeader}
-        ListFooterComponent={renderFooter}
         ListEmptyComponent={
-          <EmptyState
-            title="You're not part of a club yet"
-            description="Explore clubs to find your pickleball community."
-            actionLabel="Explore Clubs"
-            onAction={handleExploreClubs}
-          />
+          <View style={styles.emptyStateContainer}>
+            <EmptyState
+              title="You're not part of a club yet"
+              description="Explore clubs to find your pickleball community."
+              actionLabel="Explore Clubs"
+              onAction={handleExploreClubs}
+            />
+          </View>
         }
         contentContainerStyle={[
           styles.listContent,
@@ -425,7 +388,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingTop: 4,
     maxWidth: 680,
     width: '100%',
     alignSelf: 'center',
@@ -433,22 +396,8 @@ const styles = StyleSheet.create({
   listHeaderContainer: {
     marginBottom: 4,
   },
-
-  // ─── Header Compass Icon ───────────────────────────────────────────────────
-  headerCompassBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D1E7DD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+  emptyStateContainer: {
+    paddingTop: 12,
   },
 
   // ─── Section Header Row ────────────────────────────────────────────────────
@@ -456,26 +405,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '700',
     color: '#102B2A',
     letterSpacing: -0.2,
+    flexShrink: 1,
   },
   exploreMorePill: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 0,
     backgroundColor: '#E6F4EA',
     borderRadius: 16,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 5,
-    gap: 4,
+    gap: 3,
   },
   exploreMoreText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#176B57',
   },
@@ -640,61 +592,6 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '600',
     color: '#176B57',
-  },
-
-  // ─── Promotional Card ("Love more clubs?") ─────────────────────────────────
-  promoCard: {
-    backgroundColor: '#F4F9F6',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E2ECE7',
-    padding: 24,
-    alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 5,
-    elevation: 1,
-  },
-  promoImage: {
-    width: 76,
-    height: 76,
-    marginBottom: 12,
-  },
-  promoTitle: {
-    fontSize: 17.5,
-    fontWeight: '700',
-    color: '#102B2A',
-    marginBottom: 6,
-    letterSpacing: -0.2,
-  },
-  promoSubtitle: {
-    fontSize: 12.5,
-    color: '#667776',
-    textAlign: 'center',
-    lineHeight: 18,
-    marginBottom: 16,
-  },
-  promoBtn: {
-    backgroundColor: '#0F4738',
-    borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: '#0F4738',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  promoBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#FFFFFF',
   },
 
   // ─── Pending Applications Section ──────────────────────────────────────────
