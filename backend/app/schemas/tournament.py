@@ -317,6 +317,18 @@ class TournamentUpdate(BaseModel):
         return self
 
 
+class ClosureEligibilityResponse(BaseModel):
+    can_close: bool
+    confirmed_count: int
+    minimum_required: int
+    unit_label: str
+    unit_label_plural: str
+    is_even: bool
+    pending_count: int = 0
+    incomplete_teams_count: int = 0
+    blocking_reason: str | None = None
+
+
 class TournamentResponse(BaseModel):
     id: UUID
     club_id: UUID
@@ -329,6 +341,12 @@ class TournamentResponse(BaseModel):
     resolved_banner_url: str | None = None
     status: TournamentStatus
     status_label: str
+    workflow_state: str | None = None
+    workflow_state_label: str | None = None
+    configuration_saved: bool = False
+    configuration_saved_at: str | None = None
+    structure_generated: bool = False
+    closure_eligibility: ClosureEligibilityResponse | None = None
     format: TournamentFormat
     format_label: str
     visibility: TournamentVisibility
@@ -368,6 +386,8 @@ class TournamentDiscoveryResponse(BaseModel):
     format_label: str
     status: TournamentStatus
     status_label: str
+    workflow_state: str | None = None
+    workflow_state_label: str | None = None
     start_date: datetime
     end_date: datetime
     registration_open_at: datetime

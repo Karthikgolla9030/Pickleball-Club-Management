@@ -22,7 +22,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.core.events import EventType, dispatch_event
+from app.core.events import EventType, dispatch_event, serialize_for_event
+from app.core.websocket_manager import ws_manager
 from app.models.club_player_membership import PlayerMembershipStatus
 from app.models.competition import (
     Match,
@@ -46,6 +47,11 @@ from app.repositories.tournament_repository import TournamentRepository
 from app.services.tournament_counting import (
     compute_tournament_counts,
     resolve_tournament_registration_model,
+)
+from app.services.tournament_workflow import (
+    compute_tournament_workflow_meta,
+    resolve_and_validate_courts,
+    serialize_court_summary,
 )
 from app.schemas.competition import (
     AllPoolsStandingsResponse,
@@ -76,12 +82,15 @@ from app.schemas.competition import (
     ScrambleStandingRow,
     ScrambleStandingsResponse,
     ScrambleStateResponse,
+    SetupCourtItem,
     StandingRow,
     StandingsResponse,
     TeamCreate,
     TeamMemberResponse,
     TeamResponse,
     TeamUpdate,
+    TournamentConfigurationSaveRequest,
+    TournamentSetupResponse,
 )
 from app.repositories.court_repository import CourtRepository
 from app.services.competition.bracket_engine import (
@@ -393,17 +402,9 @@ class CompetitionService:
             )
 
     def _get_tournament_team_size(self, tournament) -> int:
-        """Return expected team size (1 for Singles, 2 for Doubles)."""
-        config = tournament.format_configuration or {}
-        if "team_size" in config and config["team_size"] is not None:
-            return int(config["team_size"])
-        category = str(config.get("category", "")).lower()
-        if "singles" in category:
-            return 1
-        desc = (tournament.description or "").lower()
-        if "singles" in desc:
-            return 1
-        return 2
+        """Return expected team size (1 for Singles, 2 for Doubles) via authoritative resolver."""
+        _, team_size = resolve_tournament_registration_model(tournament)
+        return team_size
 
     def _assert_supports_match_scoring(self, tournament) -> None:
         if tournament.format not in (
@@ -780,6 +781,7 @@ class CompetitionService:
             expected_size = self._get_tournament_team_size(tournament)
             unassigned.sort(key=lambda x: x.registered_at.timestamp() if x.registered_at else 0.0)
 
+            existing_names = {t.name for t in teams}
             for i in range(0, len(unassigned), expected_size):
                 group = unassigned[i:i + expected_size]
                 if len(group) < expected_size:
@@ -795,7 +797,13 @@ class CompetitionService:
                         else (user.full_name if user and user.full_name else "Player")
                     )
                     names.append(name)
-                team_name = " & ".join(names) if len(names) > 1 else names[0]
+                base_name = " & ".join(names) if len(names) > 1 else names[0]
+                team_name = base_name
+                suffix = 2
+                while team_name in existing_names:
+                    team_name = f"{base_name} ({suffix})"
+                    suffix += 1
+                existing_names.add(team_name)
                 new_team = await self.competition_repo.create_team(
                     tournament_id=tournament.id,
                     name=team_name,
@@ -817,9 +825,16 @@ class CompetitionService:
         self,
         club_id: uuid.UUID,
         tournament_id: uuid.UUID,
+        require_saved_config: bool = False,
     ) -> GenerationResponse:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_round_robin(tournament)
+
+        if require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Save Round Robin configuration before generating matchups.",
+            )
 
         if tournament.status != TournamentStatus.REGISTRATION_CLOSED:
             raise HTTPException(
@@ -850,7 +865,14 @@ class CompetitionService:
         engine = RoundRobinEngine()
         slots = engine.generate_schedule(team_ids)
 
-        active_courts = await self.court_repo.list_by_club(club_id, is_active=True)
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
         match_dicts = [
             {
                 "tournament_id": tournament_id,
@@ -859,8 +881,8 @@ class CompetitionService:
                 "round_number": s.round_number,
                 "match_number": s.match_number,
                 "court_id": (
-                    active_courts[(s.match_number - 1) % len(active_courts)].id
-                    if active_courts
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts
                     else None
                 ),
             }
@@ -868,8 +890,11 @@ class CompetitionService:
         ]
         await self.competition_repo.create_matches_bulk(match_dicts)
 
+        updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
+        updated_cfg["configuration_stage"] = "in_progress"
         await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS
+            tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
         )
         await self.db.commit()
 
@@ -921,7 +946,14 @@ class CompetitionService:
         engine = RoundRobinEngine()
         slots = engine.generate_schedule(team_ids)
 
-        active_courts = await self.court_repo.list_by_club(club_id, is_active=True)
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
         match_dicts = [
             {
                 "tournament_id": tournament_id,
@@ -930,8 +962,8 @@ class CompetitionService:
                 "round_number": s.round_number,
                 "match_number": s.match_number,
                 "court_id": (
-                    active_courts[(s.match_number - 1) % len(active_courts)].id
-                    if active_courts
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts
                     else None
                 ),
             }
@@ -939,10 +971,15 @@ class CompetitionService:
         ]
         await self.competition_repo.create_matches_bulk(match_dicts)
 
+        updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
         if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+            updated_cfg["configuration_stage"] = "in_progress"
             await self.tournament_repo.update(
-                tournament, status=TournamentStatus.IN_PROGRESS
+                tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
             )
+        else:
+            await self.tournament_repo.update(tournament, format_configuration=updated_cfg)
         await self.db.commit()
 
         rounds_count = max(s.round_number for s in slots) if slots else 0
@@ -1277,6 +1314,15 @@ class CompetitionService:
         engine = PoolPlayEngine()
         slots = engine.generate_pool_matches(pool_teams_map)
 
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         match_dicts = [
             {
                 "tournament_id": tournament_id,
@@ -1286,13 +1332,21 @@ class CompetitionService:
                 "match_number": s.match_number,
                 "stage": MatchStage.POOL,
                 "pool_id": s.pool_id,
+                "court_id": (
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
             }
             for s in slots
         ]
         await self.competition_repo.create_matches_bulk(match_dicts)
 
+        updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
+        updated_cfg["configuration_stage"] = "in_progress"
         await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS
+            tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
         )
         await self.db.commit()
 
@@ -1358,6 +1412,15 @@ class CompetitionService:
         engine = PoolPlayEngine()
         slots = engine.generate_pool_matches(pool_teams_map)
 
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         match_dicts = [
             {
                 "tournament_id": tournament_id,
@@ -1367,15 +1430,25 @@ class CompetitionService:
                 "match_number": s.match_number,
                 "stage": MatchStage.POOL,
                 "pool_id": s.pool_id,
+                "court_id": (
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
             }
             for s in slots
         ]
         await self.competition_repo.create_matches_bulk(match_dicts)
 
+        updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
         if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+            updated_cfg["configuration_stage"] = "in_progress"
             await self.tournament_repo.update(
-                tournament, status=TournamentStatus.IN_PROGRESS
+                tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
             )
+        else:
+            await self.tournament_repo.update(tournament, format_configuration=updated_cfg)
         await self.db.commit()
 
         return PoolPlayGenerationResponse(
@@ -4233,6 +4306,7 @@ class CompetitionService:
         self,
         club_id: uuid.UUID,
         tournament_id: uuid.UUID,
+        require_saved_config: bool = False,
     ) -> BracketGenerationResponse:
         """Generate a standalone single-elimination bracket.
 
@@ -4243,6 +4317,12 @@ class CompetitionService:
         """
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_bracket(tournament)
+
+        if require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Save Bracket configuration before generating the bracket.",
+            )
 
         # Check for existing matches first (already generated)
         existing = await self.competition_repo.count_all_matches(tournament_id)
@@ -4298,7 +4378,14 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
-        active_courts = await self.court_repo.list_by_club(club_id, is_active=True)
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
         match_dicts = [
             {
                 "id": s.id,
@@ -4317,8 +4404,8 @@ class CompetitionService:
                 "stage": None,
                 "pool_id": None,
                 "court_id": (
-                    active_courts[(s.match_number - 1) % len(active_courts)].id
-                    if active_courts and not s.is_bye
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts and not s.is_bye
                     else None
                 ),
             }
@@ -4341,6 +4428,8 @@ class CompetitionService:
             for s in slots
         }
         updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
+        updated_cfg["configuration_stage"] = "in_progress"
         updated_cfg["bracket_data"] = {
             "format": bracket_type,
             "matches": bracket_matches_meta,
@@ -4448,7 +4537,14 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
-        active_courts = await self.court_repo.list_by_club(club_id, is_active=True)
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
         match_dicts = [
             {
                 "id": s.id,
@@ -4467,8 +4563,8 @@ class CompetitionService:
                 "stage": None,
                 "pool_id": None,
                 "court_id": (
-                    active_courts[(s.match_number - 1) % len(active_courts)].id
-                    if active_courts and not s.is_bye
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts and not s.is_bye
                     else None
                 ),
             }
@@ -4491,6 +4587,8 @@ class CompetitionService:
             for s in slots
         }
         updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["is_format_configured"] = True
+        updated_cfg["configuration_stage"] = "in_progress"
         updated_cfg["bracket_data"] = {
             "format": bracket_type,
             "matches": bracket_matches_meta,
@@ -4802,16 +4900,18 @@ class CompetitionService:
 
         matches_count = await self.competition_repo.count_all_matches(tournament_id)
         is_generated = matches_count > 0
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament)
+        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
 
         # Determine stage
-        stage = config.get("configuration_stage")
-        if tournament.status == TournamentStatus.REGISTRATION_OPEN:
-            stage = "registration_open"
-        elif tournament.status == TournamentStatus.IN_PROGRESS:
-            stage = "in_progress"
-        elif is_generated:
+        stage = workflow_meta.workflow_state
+        if is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
             stage = "ready_to_start"
-        elif not stage:
+        elif workflow_meta.configuration_saved:
+            stage = "configuration_saved"
+        elif tournament.status == TournamentStatus.REGISTRATION_CLOSED and not is_generated:
             stage = "awaiting_format_configuration"
 
         val_err = None
@@ -4821,7 +4921,11 @@ class CompetitionService:
         return ScramblePostRegistrationSetupResponse(
             tournament_id=tournament_id,
             tournament_status=tournament.status.value,
+            workflow_state=workflow_meta.workflow_state,
             configuration_stage=stage,
+            configuration_saved=workflow_meta.configuration_saved,
+            configuration_saved_at=workflow_meta.configuration_saved_at,
+            closure_eligibility=workflow_meta.closure_eligibility.to_dict(),
             confirmed_player_count=player_count,
             eligible_players=eligible_players,
             is_schedule_feasible=diag["is_schedule_feasible"],
@@ -4836,6 +4940,9 @@ class CompetitionService:
             available_rotation_rules=available_rotation_rules,
             selected_rotation_rule=selected_rotation,
             selected_rounds=int(selected_rounds),
+            available_courts=[SetupCourtItem(**serialize_court_summary(c)) for c in all_active_courts],
+            selected_court_ids=[str(c.id) for c in selected_courts],
+            courts_count=effective_courts,
             preview_rounds=preview_rounds,
             is_generated=is_generated,
             can_start=is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED,
@@ -4912,13 +5019,38 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
+        if payload.require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Save Scramble configuration before generating the rotation schedule.",
+            )
+
+        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            requested_court_ids=payload.selected_court_ids,
+            requested_courts_count=payload.courts_count,
+            require_at_least_one_when_courts_exist=payload.require_saved_config,
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         # Save configuration
         config = dict(tournament.format_configuration or {})
+        now_iso = datetime.now(timezone.utc).isoformat()
         config.update({
             "planned_rounds": payload.rounds,
             "rounds": payload.rounds,
             "rotation_rule": payload.rotation_rule,
             "matches_per_player": payload.matches_per_player or payload.rounds,
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
+            "configuration_saved": True,
+            "configuration_saved_at": config.get("configuration_saved_at") or now_iso,
             "configuration_stage": "ready_to_start",
             "is_format_configured": True,
         })
@@ -4932,6 +5064,11 @@ class CompetitionService:
                 "match_number": m["match_number"],
                 "stage": None,
                 "status": MatchStatus.PENDING,
+                "court_id": (
+                    usable_courts[(m["match_number"] - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
             }
             for m in matchups
         ]
@@ -5055,15 +5192,22 @@ class CompetitionService:
 
         existing_matches = await self.competition_repo.count_all_matches(tournament_id)
         is_generated = existing_matches > 0
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament)
+        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        raw_tol = config.get("balance_tolerance", 0.5)
+        try:
+            balance_tolerance = float(raw_tol)
+        except (TypeError, ValueError):
+            balance_tolerance = 0.5
 
-        stage = config.get("configuration_stage")
-        if tournament.status == TournamentStatus.REGISTRATION_OPEN:
-            stage = "registration_open"
-        elif tournament.status == TournamentStatus.IN_PROGRESS:
-            stage = "in_progress"
-        elif is_generated:
+        stage = workflow_meta.workflow_state
+        if is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
             stage = "ready_to_start"
-        elif not stage:
+        elif workflow_meta.configuration_saved:
+            stage = "configuration_saved"
+        elif tournament.status == TournamentStatus.REGISTRATION_CLOSED and not is_generated:
             stage = "awaiting_format_configuration"
 
         rec_tpp = math.ceil(teams_count / rec_pools) if rec_pools > 0 else 0
@@ -5071,7 +5215,11 @@ class CompetitionService:
         return PoolPlayPostRegistrationSetupResponse(
             tournament_id=tournament_id,
             tournament_status=tournament.status.value,
+            workflow_state=workflow_meta.workflow_state,
             configuration_stage=stage,
+            configuration_saved=workflow_meta.configuration_saved,
+            configuration_saved_at=workflow_meta.configuration_saved_at,
+            closure_eligibility=workflow_meta.closure_eligibility.to_dict(),
             confirmed_teams_count=teams_count,
             confirmed_teams=confirmed_teams_data,
             is_configuration_valid=is_valid,
@@ -5084,6 +5232,10 @@ class CompetitionService:
             selected_pools=sel_pools,
             selected_qualifiers_per_pool=sel_qualifiers,
             selected_bracket_type=sel_bracket,
+            balance_tolerance=balance_tolerance,
+            available_courts=[SetupCourtItem(**serialize_court_summary(c)) for c in all_active_courts],
+            selected_court_ids=[str(c.id) for c in selected_courts],
+            courts_count=effective_courts,
             preview_pools=preview_pools,
             preview_qualification_summary=preview_summary,
             is_generated=is_generated,
@@ -5152,13 +5304,45 @@ class CompetitionService:
         else:
             pool_names = [f"Pool {chr(65 + i)}" for i in range(payload.number_of_pools)]
 
+        if payload.require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Save Pool Play configuration before generating pools and matches.",
+            )
+
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            requested_court_ids=payload.selected_court_ids,
+            requested_courts_count=payload.courts_count,
+            require_at_least_one_when_courts_exist=payload.require_saved_config,
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         # Save configuration
         config = dict(tournament.format_configuration or {})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if "pool_play_state" in config and isinstance(config["pool_play_state"], dict):
+            pps = dict(config["pool_play_state"])
+            pps.pop("teams", None)
+            pps.pop("pools", None)
+            pps.pop("matches", None)
+            config["pool_play_state"] = pps
         config.update({
             "number_of_pools": payload.number_of_pools,
             "pool_count": payload.number_of_pools,
             "qualifiers_per_pool": payload.qualifiers_per_pool,
             "pool_bracket_type": payload.bracket_type,
+            "balance_tolerance": payload.balance_tolerance if payload.balance_tolerance is not None else config.get("balance_tolerance", 0.5),
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
+            "configuration_saved": True,
+            "configuration_saved_at": config.get("configuration_saved_at") or now_iso,
             "configuration_stage": "ready_to_start",
             "is_format_configured": True,
         })
@@ -5201,11 +5385,21 @@ class CompetitionService:
                 "match_number": s.match_number,
                 "stage": MatchStage.POOL,
                 "pool_id": s.pool_id,
+                "court_id": (
+                    usable_courts[(s.match_number - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
             }
             for s in slots
         ]
         created_matches = await self.competition_repo.create_matches_bulk(match_dicts)
         await self.db.commit()
+
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
 
         return PoolPlayGenerationResponse(
             tournament_id=tournament_id,
@@ -5214,5 +5408,352 @@ class CompetitionService:
             matches_generated=len(created_matches),
             message=f"Configured {len(pools)} pools and generated {len(created_matches)} matches for {len(teams)} teams. Tournament is Ready to Start!",
         )
+
+    # ─── Unified Post-Registration Setup & Configuration Persistence ────────────
+
+    async def _broadcast_competition_state(
+        self,
+        tournament: Tournament,
+        club_id: uuid.UUID,
+    ) -> None:
+        counts = await compute_tournament_counts(self.db, tournament)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
+        payload = {
+            "tournament_id": str(tournament.id),
+            "name": tournament.name,
+            "status": tournament.status.value,
+            "workflow_state": workflow_meta.workflow_state,
+            "configuration_saved": workflow_meta.configuration_saved,
+            "participant_count": counts.participant_count,
+            "teams_count": counts.teams_count,
+            "confirmed_players_count": counts.confirmed_players_count,
+        }
+        await dispatch_event(
+            event_type=EventType.TOURNAMENT_UPDATED,
+            data=payload,
+            club_id=club_id,
+        )
+        await ws_manager.broadcast_all({
+            "type": EventType.TOURNAMENT_UPDATED.value,
+            "data": serialize_for_event(payload),
+            "club_id": str(club_id),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+    async def get_tournament_setup(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+    ) -> TournamentSetupResponse:
+        """Return unified setup diagnostics and persisted config across all 4 tournament formats."""
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        counts = await compute_tournament_counts(self.db, tournament)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
+        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
+        cfg = dict(tournament.format_configuration or {})
+        unit_label = "team" if counts.is_doubles else "player"
+        unit_plural = "teams" if counts.is_doubles else "players"
+
+        base_kwargs: dict[str, Any] = {
+            "tournament_id": tournament_id,
+            "format": tournament.format.value,
+            "tournament_status": tournament.status.value,
+            "workflow_state": workflow_meta.workflow_state,
+            "configuration_stage": workflow_meta.workflow_state,
+            "configuration_saved": workflow_meta.configuration_saved,
+            "configuration_saved_at": workflow_meta.configuration_saved_at,
+            "is_generated": workflow_meta.structure_generated,
+            "can_start": workflow_meta.structure_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED,
+            "closure_eligibility": workflow_meta.closure_eligibility.to_dict(),
+            "confirmed_count": counts.participant_count,
+            "confirmed_players_count": counts.confirmed_players_count,
+            "is_doubles": counts.is_doubles,
+            "unit_label": unit_label,
+            "available_courts": [SetupCourtItem(**serialize_court_summary(c)) for c in all_active_courts],
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
+        }
+
+        if tournament.format == TournamentFormat.POOL_PLAY:
+            pp = await self.get_pool_play_post_registration_setup(club_id, tournament_id)
+            return TournamentSetupResponse(
+                **{
+                    **base_kwargs,
+                    "configuration_stage": pp.configuration_stage,
+                    "is_generated": pp.is_generated,
+                    "can_start": pp.can_start,
+                    "is_valid": pp.is_configuration_valid and len(all_active_courts) > 0 and len(selected_courts) > 0,
+                    "validation_error": pp.validation_error or (
+                        "No active club courts available. Add or activate at least 1 court."
+                        if not all_active_courts
+                        else None
+                    ),
+                    "recommended_summary": f"Recommended: {pp.recommended_pools} pools × ~{pp.recommended_teams_per_pool} teams",
+                    "selected_pools": pp.selected_pools,
+                    "selected_qualifiers_per_pool": pp.selected_qualifiers_per_pool,
+                    "bracket_type": pp.selected_bracket_type,
+                    "balance_tolerance": pp.balance_tolerance,
+                    "pool_play_setup": pp,
+                }
+            )
+
+        if tournament.format == TournamentFormat.SCRAMBLE:
+            sc = await self.get_scramble_post_registration_setup(club_id, tournament_id)
+            return TournamentSetupResponse(
+                **{
+                    **base_kwargs,
+                    "configuration_stage": sc.configuration_stage,
+                    "is_generated": sc.is_generated,
+                    "can_start": sc.can_start,
+                    "is_valid": sc.is_schedule_feasible and len(all_active_courts) > 0 and len(selected_courts) > 0,
+                    "validation_error": sc.validation_error or (
+                        "No active club courts available. Add or activate at least 1 court."
+                        if not all_active_courts
+                        else None
+                    ),
+                    "recommended_summary": f"Recommended: {sc.recommended_rounds} rounds • {sc.feasible_matches_per_round} matches/round",
+                    "selected_rounds": sc.selected_rounds,
+                    "selected_rotation_rule": sc.selected_rotation_rule,
+                    "scramble_setup": sc,
+                }
+            )
+
+        if tournament.format == TournamentFormat.ROUND_ROBIN:
+            n = counts.participant_count
+            rounds_cnt = (n if n % 2 != 0 else max(0, n - 1)) if n >= 2 else 0
+            est_matches = (n * (n - 1)) // 2 if n >= 2 else 0
+            val_err = None
+            is_valid = True
+            if n < 2:
+                is_valid = False
+                val_err = f"Round Robin requires at least 2 confirmed {unit_plural} (currently {n})."
+            elif not all_active_courts:
+                is_valid = False
+                val_err = "No active club courts available. Add or activate at least 1 court."
+            elif not selected_courts:
+                is_valid = False
+                val_err = "Select at least 1 active court."
+            return TournamentSetupResponse(
+                **{
+                    **base_kwargs,
+                    "is_valid": is_valid,
+                    "validation_error": val_err,
+                    "recommended_summary": f"{n} {unit_plural} • {rounds_cnt} rounds • {est_matches} total matches",
+                    "rounds_count": rounds_cnt,
+                    "estimated_matches": est_matches,
+                }
+            )
+
+        # Bracket
+        n = counts.participant_count
+        bracket_type = cfg.get("bracket_type") or cfg.get("bracket_format") or "Single Elimination"
+        bracket_size = BracketEngine.calculate_bracket_size(max(2, n)) if n >= 2 else 0
+        rounds_cnt = int(math.log2(bracket_size)) if bracket_size >= 2 else 0
+        byes_cnt = max(0, bracket_size - n) if n >= 2 else 0
+        val_err = None
+        is_valid = True
+        if n < 2:
+            is_valid = False
+            val_err = f"Bracket requires at least 2 confirmed {unit_plural} (currently {n})."
+        elif not all_active_courts:
+            is_valid = False
+            val_err = "No active club courts available. Add or activate at least 1 court."
+        elif not selected_courts:
+            is_valid = False
+            val_err = "Select at least 1 active court."
+        return TournamentSetupResponse(
+            **{
+                **base_kwargs,
+                "is_valid": is_valid,
+                "validation_error": val_err,
+                "recommended_summary": f"{n} {unit_plural} • {bracket_size}-slot {bracket_type} • {byes_cnt} bye(s)",
+                "bracket_type": bracket_type,
+                "bracket_size": bracket_size,
+                "rounds_count": rounds_cnt,
+                "byes_count": byes_cnt,
+            }
+        )
+
+    async def save_tournament_configuration(
+        self,
+        club_id: uuid.UUID,
+        tournament_id: uuid.UUID,
+        payload: TournamentConfigurationSaveRequest,
+    ) -> TournamentSetupResponse:
+        """
+        Stage 4/5: Validate and durably persist format & court configuration in the DB
+        after registration has closed. Replaces any fake frontend saved state.
+        """
+        tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
+
+        if tournament.status not in (
+            TournamentStatus.REGISTRATION_CLOSED,
+            TournamentStatus.IN_PROGRESS,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Close registration before saving tournament setup.",
+            )
+
+        all_matches = await self.competition_repo.list_matches_by_tournament(tournament_id)
+        if tournament.format == TournamentFormat.BRACKET:
+            completed_matches = sum(
+                1 for m in all_matches if m.status == MatchStatus.COMPLETED and m.score_a is not None
+            )
+        else:
+            completed_matches = sum(1 for m in all_matches if m.status == MatchStatus.COMPLETED)
+        if completed_matches > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot change configuration: {completed_matches} match result(s) already recorded.",
+            )
+
+        counts = await compute_tournament_counts(self.db, tournament)
+        min_req = 4 if tournament.format in (TournamentFormat.POOL_PLAY, TournamentFormat.SCRAMBLE) else 2
+        if counts.participant_count < min_req:
+            unit = "teams" if counts.is_doubles else "players"
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"At least {min_req} confirmed {unit} are required (currently {counts.participant_count}).",
+            )
+
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            requested_court_ids=payload.selected_court_ids,
+            requested_courts_count=payload.courts_count,
+            require_at_least_one_when_courts_exist=True,
+        )
+
+        config = dict(tournament.format_configuration or {})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_matches = len(all_matches)
+        if existing_matches > 0:
+            # Safe reset of unplayed schedule when configuration is updated prior to match scoring
+            for m in list(all_matches):
+                await self.db.delete(m)
+            await self.db.flush()
+            existing_matches = 0
+
+        if tournament.format == TournamentFormat.POOL_PLAY:
+            teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+            if not teams:
+                teams = await self.finalize_registrations_and_seed(tournament)
+            teams = await self._get_valid_confirmed_teams(tournament, teams)
+            num_pools = payload.number_of_pools or config.get("pool_count") or config.get("number_of_pools") or 2
+            qualifiers = payload.qualifiers_per_pool or config.get("qualifiers_per_pool") or 1
+            bracket_type = payload.bracket_type or config.get("pool_bracket_type") or "Single Elimination"
+            if bracket_type not in ("Single Elimination", "Double Elimination"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Playoff bracket type must be 'Single Elimination' or 'Double Elimination'.",
+                )
+            engine = PoolPlayEngine()
+            try:
+                engine.validate_pool_configuration(len(teams), num_pools, qualifiers)
+            except PoolConfigurationError as e:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+            if "pool_play_state" in config and isinstance(config["pool_play_state"], dict):
+                pps = dict(config["pool_play_state"])
+                pps.pop("teams", None)
+                pps.pop("pools", None)
+                pps.pop("matches", None)
+                config["pool_play_state"] = pps
+
+            config.update({
+                "number_of_pools": int(num_pools),
+                "pool_count": int(num_pools),
+                "qualifiers_per_pool": int(qualifiers),
+                "pool_bracket_type": bracket_type,
+                "balance_tolerance": (
+                    float(payload.balance_tolerance)
+                    if payload.balance_tolerance is not None
+                    else float(config.get("balance_tolerance", 0.5))
+                ),
+            })
+
+            # Sync pools + balanced serpentine team assignments cleanly when no matches exist yet
+            if existing_matches == 0:
+                await self.competition_repo.delete_pool_teams_by_tournament(tournament_id)
+                await self.competition_repo.delete_pools_by_tournament(tournament_id)
+                pool_names = [f"Pool {chr(65 + i)}" for i in range(int(num_pools))]
+                pools = await self.competition_repo.create_pools_bulk(tournament_id, pool_names)
+                team_dicts = [{"id": t.id, "name": t.name, "seed": t.seed} for t in teams]
+                dist = engine.distribute_teams_serpentine(team_dicts, [p.name for p in pools])
+                pool_name_to_pool = {p.name: p for p in pools}
+                assignments = []
+                for p_name, assigned_teams in dist.items():
+                    target_pool = pool_name_to_pool[p_name]
+                    for seed_in_pool, t in enumerate(assigned_teams, start=1):
+                        assignments.append({
+                            "pool_id": target_pool.id,
+                            "team_id": t["id"],
+                            "seed": seed_in_pool,
+                        })
+                if assignments:
+                    await self.competition_repo.assign_teams_to_pools_bulk(assignments)
+
+        elif tournament.format == TournamentFormat.SCRAMBLE:
+            rounds = payload.rounds or config.get("planned_rounds") or config.get("rounds") or 5
+            rotation_rule = payload.rotation_rule or config.get("rotation_rule") or "Full Rotation (no repeating partners)"
+            mpp = payload.matches_per_player or rounds
+            engine = ScrambleEngine()
+            try:
+                engine.validate_scramble_configuration(counts.participant_count, int(rounds), int(mpp))
+            except ScrambleConfigurationError as e:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+            config.update({
+                "planned_rounds": int(rounds),
+                "rounds": int(rounds),
+                "rotation_rule": rotation_rule,
+                "matches_per_player": int(mpp),
+            })
+
+        elif tournament.format == TournamentFormat.BRACKET:
+            bracket_type = payload.bracket_type or config.get("bracket_type") or config.get("bracket_format") or "Single Elimination"
+            if bracket_type not in ("Single Elimination", "Double Elimination"):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Bracket type must be 'Single Elimination' or 'Double Elimination'.",
+                )
+            config.update({
+                "bracket_type": bracket_type,
+                "bracket_format": bracket_type,
+            })
+
+        elif tournament.format == TournamentFormat.ROUND_ROBIN:
+            if payload.scheduling_mode:
+                config["scheduling_mode"] = payload.scheduling_mode
+
+        config.update({
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
+            "configuration_saved": True,
+            "configuration_saved_at": now_iso,
+            "is_format_configured": False,
+            "configuration_stage": "configuration_saved",
+        })
+        next_status = (
+            TournamentStatus.REGISTRATION_CLOSED
+            if (len(all_matches) > 0 and tournament.status == TournamentStatus.IN_PROGRESS)
+            else tournament.status
+        )
+        await self.tournament_repo.update(tournament, status=next_status, format_configuration=config)
+        await self.db.commit()
+
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
+        return await self.get_tournament_setup(club_id, tournament_id)
+
 
 

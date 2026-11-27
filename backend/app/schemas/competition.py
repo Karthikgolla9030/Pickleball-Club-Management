@@ -435,10 +435,23 @@ class BracketSummaryResponse(BaseModel):
 
 # ─── Post-Registration Workflow Schemas ────────────────────────────────────────
 
+class SetupCourtItem(BaseModel):
+    id: str
+    name: str
+    court_number: int | None = None
+    surface_type: str | None = None
+    indoor_outdoor: str = "indoor"
+    is_active: bool = True
+
+
 class ScramblePostRegistrationSetupResponse(BaseModel):
     tournament_id: uuid.UUID
     tournament_status: str
-    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_review' | 'schedule_generated' | 'ready_to_start' | 'in_progress'
+    workflow_state: str = "configuration_required"
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress'
+    configuration_saved: bool = False
+    configuration_saved_at: str | None = None
+    closure_eligibility: dict[str, Any] | None = None
     confirmed_player_count: int
     eligible_players: list[dict[str, Any]]
     is_schedule_feasible: bool
@@ -453,6 +466,9 @@ class ScramblePostRegistrationSetupResponse(BaseModel):
     available_rotation_rules: list[str]
     selected_rotation_rule: str
     selected_rounds: int
+    available_courts: list[SetupCourtItem] = []
+    selected_court_ids: list[str] = []
+    courts_count: int = 0
     preview_rounds: list[dict[str, Any]] = []
     is_generated: bool
     can_start: bool
@@ -463,12 +479,19 @@ class ScramblePostRegistrationConfirmRequest(BaseModel):
     rounds: int = Field(..., ge=1, le=20, description="Confirmed planned rotation rounds")
     rotation_rule: str = Field(default="Full Rotation (no repeating partners)")
     matches_per_player: int | None = None
+    selected_court_ids: list[str] | None = None
+    courts_count: int | None = Field(default=None, ge=1, le=64)
+    require_saved_config: bool = False
 
 
 class PoolPlayPostRegistrationSetupResponse(BaseModel):
     tournament_id: uuid.UUID
     tournament_status: str
-    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_review' | 'schedule_generated' | 'ready_to_start' | 'in_progress'
+    workflow_state: str = "configuration_required"
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress'
+    configuration_saved: bool = False
+    configuration_saved_at: str | None = None
+    closure_eligibility: dict[str, Any] | None = None
     confirmed_teams_count: int
     confirmed_teams: list[dict[str, Any]]
     is_configuration_valid: bool
@@ -481,6 +504,10 @@ class PoolPlayPostRegistrationSetupResponse(BaseModel):
     selected_pools: int
     selected_qualifiers_per_pool: int
     selected_bracket_type: str
+    balance_tolerance: float = 0.5
+    available_courts: list[SetupCourtItem] = []
+    selected_court_ids: list[str] = []
+    courts_count: int = 0
     preview_pools: list[dict[str, Any]] = []
     preview_qualification_summary: str
     is_generated: bool
@@ -492,9 +519,69 @@ class PoolPlayPostRegistrationConfirmRequest(BaseModel):
     number_of_pools: int = Field(..., ge=2, description="Confirmed number of pools")
     qualifiers_per_pool: int = Field(..., ge=1, description="Teams advancing per pool to championship bracket")
     bracket_type: str = Field(default="Single Elimination")
+    balance_tolerance: float | None = Field(default=0.5, ge=0.0, le=5.0)
+    selected_court_ids: list[str] | None = None
+    courts_count: int | None = Field(default=None, ge=1, le=64)
     pool_names: list[str] | None = None
+    require_saved_config: bool = False
+
+
+class TournamentSetupResponse(BaseModel):
+    """Unified post-registration setup diagnostics & configuration state across all 4 formats."""
+    tournament_id: uuid.UUID
+    format: str
+    tournament_status: str
+    workflow_state: str
+    configuration_stage: str
+    configuration_saved: bool = False
+    configuration_saved_at: str | None = None
+    is_generated: bool = False
+    can_start: bool = False
+    is_valid: bool = True
+    validation_error: str | None = None
+    closure_eligibility: dict[str, Any] | None = None
+    confirmed_count: int = 0
+    confirmed_players_count: int = 0
+    is_doubles: bool = False
+    unit_label: str = "team"
+    recommended_summary: str = ""
+    available_courts: list[SetupCourtItem] = []
+    selected_court_ids: list[str] = []
+    courts_count: int = 0
+    # Format-specific configuration fields
+    rounds_count: int | None = None
+    estimated_matches: int | None = None
+    bracket_type: str | None = None
+    bracket_size: int | None = None
+    byes_count: int | None = None
+    selected_pools: int | None = None
+    selected_qualifiers_per_pool: int | None = None
+    balance_tolerance: float | None = None
+    selected_rounds: int | None = None
+    selected_rotation_rule: str | None = None
+    pool_play_setup: PoolPlayPostRegistrationSetupResponse | None = None
+    scramble_setup: ScramblePostRegistrationSetupResponse | None = None
+
+
+class TournamentConfigurationSaveRequest(BaseModel):
+    """Unified request to validate and persist tournament configuration across all 4 formats."""
+    selected_court_ids: list[str] | None = None
+    courts_count: int | None = Field(default=None, ge=1, le=64)
+    # Pool Play fields
+    number_of_pools: int | None = Field(default=None, ge=2, le=32)
+    qualifiers_per_pool: int | None = Field(default=None, ge=1, le=16)
+    balance_tolerance: float | None = Field(default=None, ge=0.0, le=5.0)
+    # Bracket / Pool Play shared field
+    bracket_type: str | None = None
+    # Scramble fields
+    rounds: int | None = Field(default=None, ge=1, le=20)
+    rotation_rule: str | None = None
+    matches_per_player: int | None = Field(default=None, ge=1, le=20)
+    # Optional Round Robin notes/preference
+    scheduling_mode: str | None = None
 
 
 ScramblePostRegistrationSetupResponse.model_rebuild()
 PoolPlayPostRegistrationSetupResponse.model_rebuild()
+TournamentSetupResponse.model_rebuild()
 

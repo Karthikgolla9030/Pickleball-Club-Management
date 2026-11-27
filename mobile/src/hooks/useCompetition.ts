@@ -121,9 +121,9 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
   });
 
   const generateMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (requireSavedConfig: boolean | void = false) => {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
-      return competitionApi.generateRoundRobin(clubId, tournamentId);
+      return competitionApi.generateRoundRobin(clubId, tournamentId, Boolean(requireSavedConfig));
     },
     onSuccess: () => {
       if (clubId && tournamentId) {
@@ -1004,9 +1004,9 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
   });
 
   const generateBracketMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (requireSavedConfig: boolean | void = false) => {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
-      return competitionApi.generateBracket(clubId, tournamentId);
+      return competitionApi.generateBracket(clubId, tournamentId, Boolean(requireSavedConfig));
     },
     onSuccess: () => {
       if (clubId && tournamentId) {

@@ -168,9 +168,11 @@ export default function ScrambleWorkspaceScreen() {
                   'Registration is now closed. Player seeds have been assigned by skill rating and Round 1 is ready for setup.'
                 );
                 void handleRefresh();
-              } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'Failed to close registration';
-                Alert.alert('Error', msg);
+              } catch (err: any) {
+                const msg =
+                  err?.data?.detail ||
+                  (err instanceof Error ? err.message : 'Failed to close registration');
+                Alert.alert('Cannot Close Registration', msg);
               } finally {
                 resolve();
               }
@@ -603,6 +605,7 @@ export default function ScrambleWorkspaceScreen() {
                 tournamentName={tournament?.name}
                 participantCount={state?.registered_players_count ?? registrations.length}
                 maxParticipants={tournament?.max_participants}
+                closureEligibility={tournament?.closure_eligibility}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}
               />

@@ -16,14 +16,16 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Lock, Users } from 'lucide-react-native';
+import { AlertTriangle, Users } from 'lucide-react-native';
 import { AppText } from '@/components/AppText';
 import { Radius, Spacing } from '@/theme';
+import type { ClosureEligibility } from '@/types';
 
 interface RegistrationOpenBannerProps {
   tournamentName?: string;
   participantCount?: number;
   maxParticipants?: number | null;
+  closureEligibility?: ClosureEligibility | null;
   onCloseRegistration?: () => void | Promise<void>;
   isClosing?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -33,22 +35,28 @@ export function RegistrationOpenBanner({
   tournamentName,
   participantCount = 0,
   maxParticipants,
+  closureEligibility,
   style,
 }: RegistrationOpenBannerProps) {
   const countText = maxParticipants ? `${participantCount} / ${maxParticipants}` : `${participantCount}`;
+  const isClosureBlocked = Boolean(closureEligibility && !closureEligibility.can_close);
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, isClosureBlocked && styles.containerBlocked, style]}>
       <View style={styles.contentRow}>
-        <View style={styles.iconWrap}>
-          <Users size={18} color="#087A60" />
+        <View style={[styles.iconWrap, isClosureBlocked && styles.iconWrapBlocked]}>
+          {isClosureBlocked ? (
+            <AlertTriangle size={18} color="#B45309" />
+          ) : (
+            <Users size={18} color="#087A60" />
+          )}
         </View>
 
         <View style={styles.textWrap}>
           <View style={styles.badgeRow}>
-            <View style={styles.statusBadge}>
-              <View style={styles.liveDot} />
-              <AppText variant="caption" style={styles.statusBadgeText}>
+            <View style={[styles.statusBadge, isClosureBlocked && styles.statusBadgeBlocked]}>
+              <View style={[styles.liveDot, isClosureBlocked && styles.liveDotBlocked]} />
+              <AppText variant="caption" style={[styles.statusBadgeText, isClosureBlocked && styles.statusBadgeTextBlocked]}>
                 REGISTRATION OPEN
               </AppText>
             </View>
@@ -59,7 +67,9 @@ export function RegistrationOpenBanner({
             </View>
           </View>
           <AppText variant="caption" style={styles.descText}>
-            Players can register in the Player App. Use the Close Registration action above when rosters are finalized.
+            {isClosureBlocked && closureEligibility?.blocking_reason
+              ? closureEligibility.blocking_reason
+              : 'Players can register in the Player App. Registration can be closed once ready.'}
           </AppText>
         </View>
       </View>
@@ -97,6 +107,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+  containerBlocked: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  iconWrapBlocked: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusBadgeBlocked: {
+    backgroundColor: '#FEF3C7',
+  },
+  liveDotBlocked: {
+    backgroundColor: '#D97706',
+  },
+  statusBadgeTextBlocked: {
+    color: '#B45309',
   },
   textWrap: {
     flex: 1,

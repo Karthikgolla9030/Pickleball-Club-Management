@@ -65,9 +65,14 @@ export const competitionApi = {
 
   // ─── Match Generation ────────────────────────────────────────────────────────
 
-  generateRoundRobin(clubId: string, tournamentId: string): Promise<GenerationResponse> {
+  generateRoundRobin(
+    clubId: string,
+    tournamentId: string,
+    requireSavedConfig = false
+  ): Promise<GenerationResponse> {
+    const query = requireSavedConfig ? '?require_saved_config=true' : '';
     return apiClient.post<GenerationResponse>(
-      `${competitionBase(clubId, tournamentId)}/generate-round-robin`,
+      `${competitionBase(clubId, tournamentId)}/generate-round-robin${query}`,
       {}
     );
   },
@@ -370,10 +375,12 @@ export const competitionApi = {
 
   generateBracket(
     clubId: string,
-    tournamentId: string
+    tournamentId: string,
+    requireSavedConfig = false
   ): Promise<BracketGenerationResponse> {
+    const query = requireSavedConfig ? '?require_saved_config=true' : '';
     return apiClient.post<BracketGenerationResponse>(
-      `${competitionBase(clubId, tournamentId)}/generate-bracket`,
+      `${competitionBase(clubId, tournamentId)}/generate-bracket${query}`,
       {}
     );
   },
@@ -479,6 +486,26 @@ export const competitionApi = {
 
   // ─── Post-Registration Setup & Generation ─────────────────────────────────
 
+  getTournamentSetup(
+    clubId: string,
+    tournamentId: string
+  ): Promise<import('@/types').TournamentSetupResponse> {
+    return apiClient.get(
+      `${competitionBase(clubId, tournamentId)}/setup`
+    );
+  },
+
+  saveTournamentConfiguration(
+    clubId: string,
+    tournamentId: string,
+    payload: import('@/types').TournamentConfigurationSavePayload
+  ): Promise<import('@/types').TournamentSetupResponse> {
+    return apiClient.post(
+      `${competitionBase(clubId, tournamentId)}/configuration`,
+      payload
+    );
+  },
+
   getScramblePostRegistrationSetup(
     clubId: string,
     tournamentId: string,
@@ -496,7 +523,14 @@ export const competitionApi = {
   confirmAndGenerateScramble(
     clubId: string,
     tournamentId: string,
-    payload: { rounds: number; rotation_rule?: string; matches_per_player?: number }
+    payload: {
+      rounds: number;
+      rotation_rule?: string;
+      matches_per_player?: number;
+      selected_court_ids?: string[];
+      courts_count?: number;
+      require_saved_config?: boolean;
+    }
   ): Promise<any> {
     return apiClient.post(
       `${competitionBase(clubId, tournamentId)}/scramble/confirm-and-generate`,
@@ -522,7 +556,16 @@ export const competitionApi = {
   confirmAndGeneratePoolPlay(
     clubId: string,
     tournamentId: string,
-    payload: { number_of_pools: number; qualifiers_per_pool: number; bracket_type?: string; pool_names?: string[] }
+    payload: {
+      number_of_pools: number;
+      qualifiers_per_pool: number;
+      bracket_type?: string;
+      balance_tolerance?: number;
+      selected_court_ids?: string[];
+      courts_count?: number;
+      pool_names?: string[];
+      require_saved_config?: boolean;
+    }
   ): Promise<any> {
     return apiClient.post(
       `${competitionBase(clubId, tournamentId)}/pool-play/confirm-and-generate`,

@@ -838,6 +838,75 @@ export interface ScoringRules {
   win_by: number;
 }
 
+export interface ClosureEligibility {
+  can_close: boolean;
+  confirmed_count: number;
+  minimum_required: number;
+  unit_label: string;
+  unit_label_plural: string;
+  is_even: boolean;
+  pending_count: number;
+  incomplete_teams_count: number;
+  blocking_reason: string | null;
+}
+
+export interface SetupCourtItem {
+  id: string;
+  name: string;
+  court_number?: number | null;
+  surface_type?: string | null;
+  indoor_outdoor?: string;
+  is_active: boolean;
+}
+
+export interface TournamentSetupResponse {
+  tournament_id: string;
+  format: TournamentFormat | string;
+  tournament_status: string;
+  workflow_state: string;
+  configuration_stage: string;
+  configuration_saved: boolean;
+  configuration_saved_at?: string | null;
+  is_generated: boolean;
+  can_start: boolean;
+  is_valid: boolean;
+  validation_error?: string | null;
+  closure_eligibility?: ClosureEligibility | null;
+  confirmed_count: number;
+  confirmed_players_count: number;
+  is_doubles: boolean;
+  unit_label: string;
+  recommended_summary: string;
+  available_courts: SetupCourtItem[];
+  selected_court_ids: string[];
+  courts_count: number;
+  rounds_count?: number | null;
+  estimated_matches?: number | null;
+  bracket_type?: string | null;
+  bracket_size?: number | null;
+  byes_count?: number | null;
+  selected_pools?: number | null;
+  selected_qualifiers_per_pool?: number | null;
+  balance_tolerance?: number | null;
+  selected_rounds?: number | null;
+  selected_rotation_rule?: string | null;
+  pool_play_setup?: any;
+  scramble_setup?: any;
+}
+
+export interface TournamentConfigurationSavePayload {
+  selected_court_ids?: string[];
+  courts_count?: number;
+  number_of_pools?: number;
+  qualifiers_per_pool?: number;
+  balance_tolerance?: number;
+  bracket_type?: string;
+  rounds?: number;
+  rotation_rule?: string;
+  matches_per_player?: number;
+  scheduling_mode?: string;
+}
+
 export interface Tournament {
   id: string;
   club_id: string;
@@ -850,6 +919,12 @@ export interface Tournament {
   resolved_banner_url?: string | null;
   status: TournamentStatus;
   status_label: string;
+  workflow_state?: string | null;
+  workflow_state_label?: string | null;
+  configuration_saved?: boolean;
+  configuration_saved_at?: string | null;
+  structure_generated?: boolean;
+  closure_eligibility?: ClosureEligibility | null;
   format: TournamentFormat;
   format_label: string;
   visibility: TournamentVisibility;

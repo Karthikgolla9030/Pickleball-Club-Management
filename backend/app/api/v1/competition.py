@@ -99,6 +99,8 @@ from app.schemas.competition import (
     TeamCreate,
     TeamResponse,
     TeamUpdate,
+    TournamentConfigurationSaveRequest,
+    TournamentSetupResponse,
     CustomizeTeamsRequest,
     CustomizePoolsRequest,
     CustomizeMatchupsRequest,
@@ -221,10 +223,13 @@ async def delete_team(
 async def generate_round_robin(
     club_id: UUID,
     tournament_id: UUID,
+    require_saved_config: bool = Query(default=False),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
     db: AsyncSession = Depends(get_db),
 ) -> GenerationResponse:
-    return await CompetitionService(db).generate_round_robin(club_id, tournament_id)
+    return await CompetitionService(db).generate_round_robin(
+        club_id, tournament_id, require_saved_config=require_saved_config
+    )
 
 
 @club_competition_router.post(
@@ -1015,10 +1020,13 @@ async def player_get_scramble_state(
 async def generate_bracket(
     club_id: UUID,
     tournament_id: UUID,
+    require_saved_config: bool = Query(default=False),
     _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
     db: AsyncSession = Depends(get_db),
 ) -> BracketGenerationResponse:
-    return await CompetitionService(db).generate_bracket(club_id, tournament_id)
+    return await CompetitionService(db).generate_bracket(
+        club_id, tournament_id, require_saved_config=require_saved_config
+    )
 
 
 @club_competition_router.post(
@@ -1175,3 +1183,35 @@ async def lock_competition(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     await CompetitionService(db).lock_competition(club_id, tournament_id)
+
+
+# ─── Unified Post-Registration Setup & Configuration Persistence ─────────────
+
+
+@club_competition_router.get(
+    "/setup",
+    response_model=TournamentSetupResponse,
+    summary="Get unified tournament post-registration setup state",
+)
+async def get_tournament_setup(
+    club_id: UUID,
+    tournament_id: UUID,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> TournamentSetupResponse:
+    return await CompetitionService(db).get_tournament_setup(club_id, tournament_id)
+
+
+@club_competition_router.post(
+    "/configuration",
+    response_model=TournamentSetupResponse,
+    summary="Validate and save tournament setup & court configuration",
+)
+async def save_tournament_configuration(
+    club_id: UUID,
+    tournament_id: UUID,
+    payload: TournamentConfigurationSaveRequest,
+    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
+    db: AsyncSession = Depends(get_db),
+) -> TournamentSetupResponse:
+    return await CompetitionService(db).save_tournament_configuration(club_id, tournament_id, payload)

@@ -4,6 +4,7 @@
 
 export * from './BracketHeader';
 export * from './BracketOverviewTab';
+export * from './BracketSetupCourtsTab';
 export * from './BracketTeamsTab';
 export * from './BracketViewTab';
 export * from './BracketMatchesTab';

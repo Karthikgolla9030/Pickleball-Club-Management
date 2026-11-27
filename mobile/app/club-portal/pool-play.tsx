@@ -42,6 +42,7 @@ import {
   useActiveClub,
   useClubCourts,
   usePermission,
+  usePools,
   useTeams,
   useTournamentDetails,
   useTournamentRegistrations,
@@ -103,6 +104,11 @@ export default function PoolPlayManagementScreen() {
     refetch: refetchTeams,
   } = useTeams(clubId, tournamentId ?? null);
 
+  const {
+    pools: backendPools,
+    refetch: refetchPools,
+  } = usePools(clubId, tournamentId ?? null);
+
   // Active Tab: defaults to 'overview' unless tab param provided
   const [activeTab, setActiveTab] = useState<TournamentTabKey>((tab as TournamentTabKey) || 'overview');
 
@@ -142,35 +148,21 @@ export default function PoolPlayManagementScreen() {
     );
   }, [matches.length, tournament?.format_configuration, tournament?.status]);
 
-  // Synchronize persisted format configuration from backend
+  // Synchronize persisted matches/bracket from legacy pool_play_state if present
   useEffect(() => {
-    if (tournament?.format_configuration) {
-      const fc = tournament.format_configuration as Record<string, any>;
-      setConfig((prev) => ({
-        ...prev,
-        numPools: typeof fc.pool_count === 'number' && fc.pool_count >= 2 ? fc.pool_count : prev.numPools,
-        numCourts: typeof fc.courts_count === 'number' && fc.courts_count >= 1 ? fc.courts_count : prev.numCourts,
-        qualifierCount: typeof fc.qualifier_count === 'number' && fc.qualifier_count >= 2 ? fc.qualifier_count : prev.qualifierCount,
-        bracketType: (fc.bracket_type as BracketType) || prev.bracketType,
-        balanceTolerance: typeof fc.balance_tolerance === 'number' ? fc.balance_tolerance : prev.balanceTolerance,
-      }));
-
-      const pps = fc.pool_play_state;
-      if (pps) {
-        if (Array.isArray(pps.teams) && pps.teams.length > 0) {
-          setTeams((prev) => (prev.length === 0 ? pps.teams : prev));
-        }
-        if (Array.isArray(pps.matches) && pps.matches.length > 0) {
-          setMatches((prev) => (prev.length === 0 ? pps.matches : prev));
-        }
-        if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
-          setChampionshipMatches((prev) => (prev.length === 0 ? pps.championshipMatches : prev));
-        }
+    const fc = tournament?.format_configuration as Record<string, any> | undefined;
+    const pps = fc?.pool_play_state;
+    if (pps) {
+      if (Array.isArray(pps.matches) && pps.matches.length > 0) {
+        setMatches((prev) => (prev.length === 0 ? pps.matches : prev));
+      }
+      if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+        setChampionshipMatches((prev) => (prev.length === 0 ? pps.championshipMatches : prev));
       }
     }
   }, [tournament?.format_configuration]);
 
-  // Fetch full runtime pool-play state from server API endpoint to survive browser refreshes
+  // Fetch runtime pool-play matches/bracket from server state endpoint to survive refreshes
   useEffect(() => {
     if (!clubId || !tournamentId) return;
 
@@ -181,17 +173,11 @@ export default function PoolPlayManagementScreen() {
         if (!isMounted) return;
         const pps = res?.pool_play_state;
         if (pps) {
-          if (Array.isArray(pps.teams) && pps.teams.length > 0) {
-            setTeams(pps.teams);
-          }
           if (Array.isArray(pps.matches) && pps.matches.length > 0) {
             setMatches(pps.matches);
           }
           if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
             setChampionshipMatches(pps.championshipMatches);
-          }
-          if (pps.config) {
-            setConfig((prev) => ({ ...prev, ...pps.config }));
           }
         }
       } catch {
@@ -235,53 +221,70 @@ export default function PoolPlayManagementScreen() {
     const nextConfig = { ...config, ...updated };
     setConfig(nextConfig);
     if (clubId && tournamentId) {
-      try {
-        const nextPoolCount = updated.numPools ?? config.numPools;
-        const nextCourts = updated.courts ?? config.courts;
-        const nextQualifierCount = updated.qualifierCount ?? config.qualifierCount;
-        const nextBracketType = updated.bracketType ?? config.bracketType;
-        const nextTolerance = updated.balanceTolerance ?? config.balanceTolerance;
-
-        await tournamentApi.updateTournament(clubId, tournamentId, {
-          format_configuration: {
-            ...(tournament?.format_configuration || {}),
-            pool_count: nextPoolCount,
-            courts_count: nextCourts?.length || config.numCourts,
-            qualifier_count: nextQualifierCount,
-            bracket_type: nextBracketType,
-            balance_tolerance: nextTolerance,
-          },
-        });
-
-        void persistPoolPlayState({ config: nextConfig });
-
-        try {
-          await competitionApi.configurePools(clubId, tournamentId, {
-            number_of_pools: nextPoolCount,
-            qualifiers_per_pool: Math.max(1, Math.floor(nextQualifierCount / nextPoolCount)),
-          });
-        } catch {
-          // non-critical if pool stage hasn't reached configuration
-        }
-        void refetchTournament();
-      } catch (err) {
-        console.warn('Failed to persist pool configuration:', err);
-      }
+      await Promise.all([refetchTournament(), refetchPools(), refetchTeams()]);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
     }
+  };
+
+  const backendPoolByTeamId = useMemo(() => {
+    const map = new Map<string, string>();
+    (backendPools || []).forEach((p, poolIdx) => {
+      const cleaned = p.name?.replace(/^Pool\s+/i, '').trim() || String.fromCharCode(65 + poolIdx);
+      (p.pool_teams || []).forEach((pt) => {
+        map.set(pt.team_id, cleaned);
+      });
+    });
+    return map;
+  }, [backendPools]);
+
+  // Sync config cleanly from authoritative backend tournament.format_configuration and backendPools
+  useEffect(() => {
+    const fc = (tournament?.format_configuration || {}) as Record<string, any>;
+    const savedPoolsCount =
+      (backendPools && backendPools.length >= 2 ? backendPools.length : 0) ||
+      Number(fc.pool_count || fc.number_of_pools || 0);
+    if (savedPoolsCount >= 2 || fc.qualifiers_per_pool || fc.pool_bracket_type || fc.balance_tolerance !== undefined) {
+      setConfig((prev) => {
+        const nextNumPools = savedPoolsCount >= 2 ? savedPoolsCount : prev.numPools;
+        const qualPerPool = Number(fc.qualifiers_per_pool || 0);
+        const nextQualCount =
+          qualPerPool > 0
+            ? nextNumPools * qualPerPool
+            : Number(fc.qualifier_count || prev.qualifierCount);
+        return {
+          ...prev,
+          numPools: nextNumPools,
+          qualifierCount: nextQualCount,
+          bracketType: (fc.pool_bracket_type || fc.bracket_type || prev.bracketType) as BracketType,
+          balanceTolerance:
+            typeof fc.balance_tolerance === 'number'
+              ? fc.balance_tolerance
+              : prev.balanceTolerance,
+          numCourts:
+            typeof fc.courts_count === 'number' && fc.courts_count > 0
+              ? fc.courts_count
+              : prev.numCourts,
+        };
+      });
+    }
+  }, [tournament?.format_configuration, backendPools]);
+
+  // Helper: balanced serpentine fallback pool letter (supports N pools >= 2, never hardcoded A/B)
+  const getSnakePoolLetter = (index: number, poolCount: number): string => {
+    const safePools = Math.max(2, poolCount || 2);
+    const cycle = Math.floor(index / safePools);
+    const rem = index % safePools;
+    const pos = cycle % 2 === 0 ? rem : safePools - 1 - rem;
+    return String.fromCharCode(65 + pos);
   };
 
   // Synchronize actual teams and registrations into Pool Play state
   useEffect(() => {
-    // If tournament already has matches scheduled/running, do not overwrite team pool assignments
-    if (matches.length > 0) return;
+    const showAssignedPools = isPoolsGenerated || backendPoolByTeamId.size > 0;
+    const effectivePoolsCount = backendPools.length >= 2 ? backendPools.length : config.numPools;
 
     if (apiTeams && apiTeams.length > 0) {
-      setTeams((prevTeams) => {
-        const existingPoolMap = new Map<string, string>();
-        prevTeams.forEach((t) => {
-          if (t.id) existingPoolMap.set(t.id, t.pool);
-        });
-
+      setTeams(() => {
         const mapped: Team[] = apiTeams.map((t, idx) => {
           const p1Mem = t.members?.[0];
           const p2Mem = t.members?.[1];
@@ -289,8 +292,9 @@ export default function PoolPlayManagementScreen() {
           const p2Name = p2Mem?.display_name || p2Mem?.user_email || `Player 2`;
           const p1Avatar = p1Name.slice(0, 2).toUpperCase();
           const p2Avatar = p2Name.slice(0, 2).toUpperCase();
-          const defaultPool = isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '';
-          const pool = existingPoolMap.get(t.id) || defaultPool;
+          const pool =
+            backendPoolByTeamId.get(t.id) ||
+            (showAssignedPools ? getSnakePoolLetter(idx, effectivePoolsCount) : '');
           return {
             id: t.id,
             teamNum: idx + 1,
@@ -348,7 +352,7 @@ export default function PoolPlayManagementScreen() {
               avatar: p2Name.slice(0, 2).toUpperCase(),
               color: '#047857',
             },
-            pool: isPoolsGenerated ? (teamIdx % config.numPools === 0 ? 'A' : 'B') : '',
+            pool: showAssignedPools ? getSnakePoolLetter(teamIdx, effectivePoolsCount) : '',
             avgRating: 4.0,
             spread: 0.0,
           });
@@ -374,7 +378,7 @@ export default function PoolPlayManagementScreen() {
               avatar: pName.slice(0, 2).toUpperCase(),
               color: '#1E3A8A',
             },
-            pool: isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '',
+            pool: showAssignedPools ? getSnakePoolLetter(idx, effectivePoolsCount) : '',
             avgRating: 4.0,
             spread: 0.0,
           });
@@ -384,7 +388,7 @@ export default function PoolPlayManagementScreen() {
     } else {
       setTeams([]);
     }
-  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, matches.length, isPoolsGenerated]);
+  }, [apiTeams, backendPools, backendPoolByTeamId, registrations, config.numPools, tournamentConfig.teamSize, matches.length, isPoolsGenerated]);
 
   // Calculated Stats
   const { updatedTeams, pools, poolDiff, isWithinTolerance } = useMemo(() => {
@@ -475,16 +479,15 @@ export default function PoolPlayManagementScreen() {
     setTeams(balanced);
     void persistPoolPlayState({ teams: balanced });
 
-    // Compute preview
+    // Compute preview across all configured pools
     const { pools: newPools, poolDiff: newDiff } = recalculateStats(balanced, config);
-    const pA = newPools.find((p) => p.key === 'A');
-    const pB = newPools.find((p) => p.key === 'B');
+    const summaryLines = newPools
+      .map((p) => `Pool ${p.key}: ${p.teams.length} teams (Avg ${p.avgTeamRating.toFixed(2)})`)
+      .join('\n');
 
     Alert.alert(
       'Pools Balanced!',
-      `Auto-balanced via Snake Draft Seeding.\n` +
-        `Pool A Avg: ${pA?.avgTeamRating.toFixed(2) ?? '—'}\n` +
-        `Pool B Avg: ${pB?.avgTeamRating.toFixed(2) ?? '—'}\n` +
+      `Auto-balanced via Snake Draft Seeding.\n${summaryLines}\n` +
         `Diff: ${newDiff.toFixed(2)} (${newDiff <= config.balanceTolerance ? 'Within' : 'Exceeds'} ±${config.balanceTolerance.toFixed(2)})`
     );
   };
@@ -763,9 +766,11 @@ export default function PoolPlayManagementScreen() {
                 'Registration Closed',
                 'Registration is now closed. Rosters are locked and you can now configure pools and generate matchups.'
               );
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Failed to close registration';
-              Alert.alert('Error', msg);
+            } catch (err: any) {
+              const msg =
+                err?.data?.detail ||
+                (err instanceof Error ? err.message : 'Failed to close registration');
+              Alert.alert('Cannot Close Registration', msg);
             }
           },
         },
@@ -801,18 +806,17 @@ export default function PoolPlayManagementScreen() {
       refetchTournament(),
       refetchRegs(),
       refetchTeams(),
+      refetchPools(),
       (async () => {
         if (clubId && tournamentId) {
           try {
             const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
             const pps = res?.pool_play_state;
             if (pps) {
-              if (Array.isArray(pps.teams) && pps.teams.length > 0) setTeams(pps.teams);
               if (Array.isArray(pps.matches) && pps.matches.length > 0) setMatches(pps.matches);
               if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
                 setChampionshipMatches(pps.championshipMatches);
               }
-              if (pps.config) setConfig((prev) => ({ ...prev, ...pps.config }));
             }
           } catch {
             // ignore
@@ -1035,6 +1039,7 @@ export default function PoolPlayManagementScreen() {
                   teams.length
                 }
                 maxParticipants={effectiveTournament?.max_participants}
+                closureEligibility={effectiveTournament?.closure_eligibility}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}
               />

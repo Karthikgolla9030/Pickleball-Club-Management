@@ -517,6 +517,7 @@ class CompetitionRepository:
             select(Pool)
             .where(Pool.tournament_id == tournament_id)
             .options(_pool_options())
+            .execution_options(populate_existing=True)
             .order_by(Pool.display_order.asc())
         )
         return list(result.scalars().all())

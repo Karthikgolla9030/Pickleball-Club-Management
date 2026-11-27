@@ -4,6 +4,7 @@
 
 export * from './RoundRobinHeader';
 export * from './RoundRobinOverviewTab';
+export * from './RoundRobinSetupCourtsTab';
 export * from './RoundRobinTeamsTab';
 export * from './RoundRobinMatchupsTab';
 export * from './RoundRobinStandingsTab';

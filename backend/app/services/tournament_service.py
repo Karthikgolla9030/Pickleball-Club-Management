@@ -59,6 +59,7 @@ from app.repositories.tournament_repository import TournamentRepository
 from app.schemas.tournament import (
     VALID_COMPETITION_CATEGORIES,
     VALID_SCRAMBLE_DIVISIONS,
+    ClosureEligibilityResponse,
     TournamentCreate,
     TournamentDiscoveryResponse,
     TournamentResponse,
@@ -82,6 +83,11 @@ from app.services.tournament_counting import (
     compute_tournaments_counts,
     resolve_tournament_registration_model,
 )
+from app.services.tournament_workflow import (
+    TournamentWorkflowSnapshot,
+    compute_tournament_workflow_meta,
+    compute_tournaments_workflow_meta,
+)
 
 
 def _build_tournament_response(
@@ -92,6 +98,7 @@ def _build_tournament_response(
     my_registration_status: str | None = None,
     teams_count: int | None = None,
     confirmed_players_count: int | None = None,
+    workflow_meta: TournamentWorkflowSnapshot | None = None,
 ) -> TournamentResponse:
     is_doubles, team_size = resolve_tournament_registration_model(t)
 
@@ -180,6 +187,37 @@ def _build_tournament_response(
         else str(getattr(t.visibility, "value", t.visibility)).replace("_", " ").title()
     )
 
+    cfg_dict = t.format_configuration if isinstance(t.format_configuration, dict) else {}
+    workflow_state = workflow_meta.workflow_state if workflow_meta else None
+    workflow_state_label = workflow_meta.workflow_state_label if workflow_meta else None
+    configuration_saved = (
+        workflow_meta.configuration_saved
+        if workflow_meta
+        else bool(cfg_dict.get("configuration_saved", False))
+    )
+    configuration_saved_at = (
+        workflow_meta.configuration_saved_at
+        if workflow_meta
+        else (
+            cfg_dict.get("configuration_saved_at")
+            if isinstance(cfg_dict.get("configuration_saved_at"), str)
+            else None
+        )
+    )
+    structure_generated = (
+        workflow_meta.structure_generated
+        if workflow_meta
+        else bool(
+            cfg_dict.get("is_format_configured", False)
+            and cfg_dict.get("configuration_stage") in ("ready_to_start", "schedule_generated", "in_progress")
+        )
+    )
+    closure_eligibility_resp = (
+        ClosureEligibilityResponse(**workflow_meta.closure_eligibility.to_dict())
+        if workflow_meta
+        else None
+    )
+
     return TournamentResponse(
         id=t.id,
         club_id=t.club_id,
@@ -192,6 +230,12 @@ def _build_tournament_response(
         resolved_banner_url=resolved_banner,
         status=t.status,
         status_label=status_lbl,
+        workflow_state=workflow_state,
+        workflow_state_label=workflow_state_label,
+        configuration_saved=configuration_saved,
+        configuration_saved_at=configuration_saved_at,
+        structure_generated=structure_generated,
+        closure_eligibility=closure_eligibility_resp,
         format=t.format,
         format_label=format_lbl,
         visibility=t.visibility,
@@ -375,12 +419,14 @@ class TournamentService:
                 pass
 
         counts_map = await compute_tournaments_counts(self.db, updated_tournaments)
+        workflow_map = await compute_tournaments_workflow_meta(self.db, updated_tournaments, counts_map)
         return [
             _build_tournament_response(
                 t,
                 participant_count=counts_map[t.id].participant_count,
                 teams_count=counts_map[t.id].teams_count,
                 confirmed_players_count=counts_map[t.id].confirmed_players_count,
+                workflow_meta=workflow_map[t.id],
             )
             for t in updated_tournaments
         ]
@@ -414,11 +460,13 @@ class TournamentService:
                         pass
 
         counts = await compute_tournament_counts(self.db, tournament)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
         return _build_tournament_response(
             tournament,
             participant_count=counts.participant_count,
             teams_count=counts.teams_count,
             confirmed_players_count=counts.confirmed_players_count,
+            workflow_meta=workflow_meta,
         )
 
     async def get_tournament_by_id(
@@ -472,6 +520,7 @@ class TournamentService:
 
         # Authoritative format-aware counts directly from persisted DB records
         counts = await compute_tournament_counts(self.db, tournament)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
 
         return _build_tournament_response(
             tournament,
@@ -481,6 +530,7 @@ class TournamentService:
             is_registered=is_reg,
             my_registration_id=reg_id,
             my_registration_status=reg_status,
+            workflow_meta=workflow_meta,
         )
 
     async def create_tournament(
@@ -823,27 +873,35 @@ class TournamentService:
                             "Pass reset_schedule=true to confirm schedule reset and reopen registration."
                         ),
                     )
-                # Explicitly invalidate and clear affected schedule
                 await self.competition_repo.delete_pending_matches(tournament_id)
-                if tournament.format == TournamentFormat.POOL_PLAY:
-                    await self.competition_repo.delete_pool_teams_by_tournament(tournament_id)
-                    await self.competition_repo.delete_pools_by_tournament(tournament_id)
-                config = dict(tournament.format_configuration or {})
-                config["configuration_stage"] = "awaiting_format_configuration"
-                config["is_format_configured"] = False
-                await self.tournament_repo.update(tournament, format_configuration=config)
-
+            if tournament.format == TournamentFormat.POOL_PLAY:
+                await self.competition_repo.delete_pool_teams_by_tournament(tournament_id)
+                await self.competition_repo.delete_pools_by_tournament(tournament_id)
+            config = dict(tournament.format_configuration or {})
+            config["configuration_stage"] = "awaiting_format_configuration"
+            config["is_format_configured"] = False
+            config["configuration_saved"] = False
+            config.pop("configuration_saved_at", None)
+            if "pool_play_state" in config and isinstance(config["pool_play_state"], dict):
+                pps = dict(config["pool_play_state"])
+                pps.pop("teams", None)
+                pps.pop("pools", None)
+                pps.pop("matches", None)
+                config["pool_play_state"] = pps
+            await self.tournament_repo.update(tournament, format_configuration=config)
 
         updated = await self.tournament_repo.update(
             tournament, status=TournamentStatus.REGISTRATION_OPEN
         )
         await self.db.commit()
         counts = await compute_tournament_counts(self.db, updated)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, updated, counts)
         resp = _build_tournament_response(
             updated,
             participant_count=counts.participant_count,
             teams_count=counts.teams_count,
             confirmed_players_count=counts.confirmed_players_count,
+            workflow_meta=workflow_meta,
         )
         try:
             await dispatch_event(
@@ -882,11 +940,27 @@ class TournamentService:
                 detail=f"Cannot close registration: tournament is currently '{tournament.status.value}', must be 'registration_open'",
             )
 
+        # Stage 2: Authoritative backend closure validation (minimum, even count, pending & pairs)
+        pre_counts = await compute_tournament_counts(self.db, tournament)
+        pre_meta = await compute_tournament_workflow_meta(self.db, tournament, pre_counts)
+        if not pre_meta.closure_eligibility.can_close:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=pre_meta.closure_eligibility.blocking_reason
+                or "Cannot close registration: registration requirements are not met.",
+            )
+
+        closed_config = dict(tournament.format_configuration or {})
+        closed_config.setdefault("configuration_stage", "awaiting_format_configuration")
+        closed_config.setdefault("configuration_saved", False)
+
         updated = await self.tournament_repo.update(
-            tournament, status=TournamentStatus.REGISTRATION_CLOSED
+            tournament,
+            status=TournamentStatus.REGISTRATION_CLOSED,
+            format_configuration=closed_config,
         )
 
-        # For bracket tournaments (or team-based), finalize teams and seed by skill rating
+        # For team-based / bracket tournaments, finalize teams and seed by skill rating
         if tournament.format in (
             TournamentFormat.BRACKET,
             TournamentFormat.ROUND_ROBIN,
@@ -906,11 +980,13 @@ class TournamentService:
         )
         target_t = refreshed or updated
         counts = await compute_tournament_counts(self.db, target_t)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, target_t, counts)
         resp = _build_tournament_response(
             target_t,
             participant_count=counts.participant_count,
             teams_count=counts.teams_count,
             confirmed_players_count=counts.confirmed_players_count,
+            workflow_meta=workflow_meta,
         )
         try:
             await self._broadcast_tournament_updated(target_t, counts, club_id=club_id)
@@ -1056,11 +1132,13 @@ class TournamentService:
         )
         await self.db.commit()
         counts = await compute_tournament_counts(self.db, updated)
+        workflow_meta = await compute_tournament_workflow_meta(self.db, updated, counts)
         resp = _build_tournament_response(
             updated,
             participant_count=counts.participant_count,
             teams_count=counts.teams_count,
             confirmed_players_count=counts.confirmed_players_count,
+            workflow_meta=workflow_meta,
         )
         try:
             await self._broadcast_tournament_updated(updated, counts, club_id=club_id)
@@ -1624,7 +1702,8 @@ class TournamentService:
         category = format_config.get("category", "")
         gender_eligibility = format_config.get("gender_eligibility", "Any")
         is_scramble = tournament.format == TournamentFormat.SCRAMBLE
-        is_singles = category == "Singles" or "singles" in category.lower()
+        is_doubles_model, resolved_team_size = resolve_tournament_registration_model(tournament)
+        is_singles = (not is_scramble) and (not is_doubles_model)
 
         user = None
         if player_membership:
@@ -2086,55 +2165,6 @@ class TournamentService:
                         player_membership_id=partner_membership.id,
                     )
 
-        elif not is_scramble and not is_singles and target_status == RegistrationStatus.CONFIRMED:
-            # Doubles tournament with unpartnered individual registration:
-            # Pair with another confirmed unpartnered player if available
-            existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
-            team_pm_ids = set()
-            for tm in existing_teams:
-                for member in getattr(tm, "members", []):
-                    team_pm_ids.add(member.player_membership_id)
-
-            all_regs = await self.registration_repo.list_by_tournament(tournament.id)
-            confirmed_unteamed = [
-                r for r in all_regs
-                if r.status == RegistrationStatus.CONFIRMED and r.player_membership_id not in team_pm_ids
-            ]
-            if len(confirmed_unteamed) >= 2:
-                r1 = confirmed_unteamed[0]
-                r2 = confirmed_unteamed[1]
-                p1_name = "Player 1"
-                try:
-                    if r1.player_membership and r1.player_membership.user:
-                        p1_name = r1.player_membership.user.full_name or "Player 1"
-                except Exception:
-                    pass
-                p2_name = "Player 2"
-                try:
-                    if r2.player_membership and r2.player_membership.user:
-                        p2_name = r2.player_membership.user.full_name or "Player 2"
-                except Exception:
-                    pass
-                base_team_name = f"{p1_name} & {p2_name}"
-                existing_names = {t.name.lower() for t in existing_teams}
-                final_team_name = base_team_name
-                counter = 2
-                while final_team_name.lower() in existing_names:
-                    final_team_name = f"{base_team_name} {counter}"
-                    counter += 1
-                created_team = await self.competition_repo.create_team(
-                    tournament_id=tournament.id,
-                    name=final_team_name,
-                )
-                await self.competition_repo.create_team_member(
-                    team_id=created_team.id,
-                    player_membership_id=r1.player_membership_id,
-                )
-                await self.competition_repo.create_team_member(
-                    team_id=created_team.id,
-                    player_membership_id=r2.player_membership_id,
-                )
-
         elif is_singles and target_status == RegistrationStatus.CONFIRMED:
             caller_name = (
                 profile.display_name
@@ -2148,9 +2178,17 @@ class TournamentService:
             if existing_player_team:
                 created_team = existing_player_team
             else:
+                existing_teams = await self.competition_repo.list_teams_by_tournament(tournament.id)
+                existing_names = {t.name.lower() for t in existing_teams}
+                final_team_name = team_name
+                counter = 2
+                while final_team_name.lower() in existing_names:
+                    final_team_name = f"{team_name} {counter}"
+                    counter += 1
+
                 created_team = await self.competition_repo.create_team(
                     tournament_id=tournament.id,
-                    name=team_name,
+                    name=final_team_name,
                 )
                 await self.competition_repo.create_team_member(
                     team_id=created_team.id,

@@ -1,71 +1,51 @@
 /**
  * Aught2 Pickleball — ScrambleSetupRoundsTab
  *
- * Dedicated, consolidated configuration workspace for Scramble Tournaments:
- * - Single source of editable configuration for Scramble.
- * - Simple sections without redundant paragraphs:
- *   - Scramble Setup header
- *   - Participant Capacity
- *   - Rotation Rounds
- *   - Partner Rotation Rules
- *   - Court Allocation & Capacity
- *   - Rotation Preview (collapsible)
- *   - Single clear primary action at bottom
+ * Dedicated Setup & Rounds workspace for Rotating Partner Scramble following the
+ * standardized Stage 4 -> Stage 5 -> Stage 6 workflow:
+ * 1. Confirmed player readiness & court partitioning metrics
+ * 2. Planned rotation rounds & rotation rule configuration
+ * 3. Active club court multi-select & bounded concurrent court capacity
+ * 4. Server-verified Save Configuration -> Saved / Edit Configuration toggle
+ * 5. Gated Generate Rotation Schedule
  */
 
 import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {
-  AlertTriangle,
-  Calendar,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  LayoutGrid,
-  RotateCcw,
-  Sliders,
+  Layers,
+  Repeat,
   SlidersHorizontal,
   Sparkles,
-  Users,
 } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
-import { Button } from '@/components/Button';
-import { Card } from '@/components/Card';
-import { PostRegistrationStepper } from '@/components/post-registration';
+import {
+  PostRegistrationChoiceChips,
+  PostRegistrationCourtSelector,
+  PostRegistrationHeader,
+  PostRegistrationMetrics,
+  PostRegistrationNotice,
+  PostRegistrationSaveActionBar,
+  PostRegistrationStepper,
+} from '@/components/post-registration';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
-import type { Court, Tournament } from '@/types';
-import type { ScrambleState } from '@/types/scramble';
+import type { Court, ScrambleState, SetupCourtItem, Tournament } from '@/types';
 
-const SCRAMBLE_RULE_OPTIONS = [
-  {
-    key: 'Full Rotation (no repeating partners)',
-    label: 'Full Rotation',
-    desc: 'No repeating partners where feasible.',
-  },
-  {
-    key: 'Balanced Pairings (fair partner distribution)',
-    label: 'Balanced Pairings',
-    desc: 'Distribute partners fairly.',
-  },
-  {
-    key: 'Skill-Tiered Rotation (similar rating partners)',
-    label: 'Skill-Tiered Rotation',
-    desc: 'Pair players using compatible skill levels.',
-  },
-];
-
-interface ScrambleSetupRoundsTabProps {
-  clubId?: string;
-  tournamentId?: string;
+export interface ScrambleSetupRoundsTabProps {
+  clubId: string;
+  tournamentId: string;
   tournament?: Tournament | null;
-  state?: ScrambleState | null;
+  state: ScrambleState | null | undefined;
   canManage?: boolean;
   registeredCount?: number;
   clubCourts?: Court[];
@@ -74,9 +54,28 @@ interface ScrambleSetupRoundsTabProps {
   onSetPlannedRounds?: (rounds: number) => Promise<any>;
 }
 
+const ROTATION_RULES = [
+  {
+    value: 'Full Rotation (no repeating partners)',
+    label: 'Full Rotation',
+    subtitle: 'No repeat partners',
+  },
+  {
+    value: 'Balanced Pairings (fair partner distribution)',
+    label: 'Balanced Pairings',
+    subtitle: 'Fair distribution',
+  },
+  {
+    value: 'Skill-Tiered Rotation (similar rating partners)',
+    label: 'Skill-Tiered',
+    subtitle: 'Similar skill',
+  },
+];
+
 export function ScrambleSetupRoundsTab({
   clubId,
   tournamentId,
+  tournament,
   state,
   canManage = true,
   registeredCount = 0,
@@ -86,15 +85,25 @@ export function ScrambleSetupRoundsTab({
   onSetPlannedRounds,
 }: ScrambleSetupRoundsTabProps) {
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [setupData, setSetupData] = useState<any>(null);
   const [showPreview, setShowPreview] = useState(false);
 
-  // Editable configuration state
   const [rounds, setRounds] = useState<number>(state?.planned_rounds ?? 5);
   const [rotationRule, setRotationRule] = useState<string>(
     'Full Rotation (no repeating partners)'
   );
+  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>([]);
+  const [courtsCount, setCourtsCount] = useState<number>(0);
+
+  const [savedSnapshot, setSavedSnapshot] = useState<{
+    rounds: number;
+    rotationRule: string;
+    courtIdsKey: string;
+    courtsCount: number;
+  } | null>(null);
 
   const fetchSetup = async (customRounds?: number, customRule?: string) => {
     if (!clubId || !tournamentId) return;
@@ -105,11 +114,33 @@ export function ScrambleSetupRoundsTab({
         rotation_rule: customRule ?? rotationRule,
       });
       setSetupData(res);
-      if (res.selected_rounds && !customRounds) {
-        setRounds(res.selected_rounds);
-      }
-      if (res.selected_rotation_rule && !customRule) {
-        setRotationRule(res.selected_rotation_rule);
+      if (!customRounds && !customRule) {
+        const nextRounds = res.selected_rounds || state?.planned_rounds || 5;
+        const nextRule = res.selected_rotation_rule || 'Full Rotation (no repeating partners)';
+        const nextCourtIds: string[] = Array.isArray(res.selected_court_ids)
+          ? res.selected_court_ids
+          : clubCourts.filter((c) => c.is_active).map((c) => c.id);
+        const nextCourtsCount =
+          nextCourtIds.length > 0
+            ? Math.max(1, Math.min(res.courts_count || nextCourtIds.length, nextCourtIds.length))
+            : 0;
+
+        setRounds(nextRounds);
+        setRotationRule(nextRule);
+        setSelectedCourtIds(nextCourtIds);
+        setCourtsCount(nextCourtsCount);
+
+        if (res.configuration_saved) {
+          setSavedSnapshot({
+            rounds: nextRounds,
+            rotationRule: nextRule,
+            courtIdsKey: [...nextCourtIds].sort().join(','),
+            courtsCount: nextCourtsCount,
+          });
+          setIsEditing(false);
+        } else {
+          setSavedSnapshot(null);
+        }
       }
     } catch (err) {
       console.warn('Failed to fetch scramble setup data:', err);
@@ -122,18 +153,47 @@ export function ScrambleSetupRoundsTab({
     if (clubId && tournamentId) {
       void fetchSetup();
     }
-  }, [clubId, tournamentId]);
+  }, [clubId, tournamentId, tournament?.status, tournament?.participant_count]);
 
   const playerCount = setupData?.confirmed_player_count ?? registeredCount;
   const hasMinPlayers = playerCount >= 4;
+  const isDraft = tournament?.status === 'draft';
+  const isRegistrationOpen = tournament?.status === 'registration_open';
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const feasiblePairs = setupData?.feasible_doubles_pairs ?? Math.floor(playerCount / 2);
-  const feasibleMatches = setupData?.feasible_matches_per_round ?? Math.floor(playerCount / 4);
-  const recommendedRounds = setupData?.recommended_rounds ?? 5;
+  const configurationSaved = Boolean(setupData?.configuration_saved);
 
-  const activeCourtsList = (clubCourts || []).filter((c) => c.is_active);
-  const courtsAvailable = activeCourtsList.length > 0 ? activeCourtsList.length : 4;
-  const courtsNeeded = Math.max(1, feasibleMatches);
+  const availableCourts: SetupCourtItem[] =
+    setupData?.available_courts && setupData.available_courts.length > 0
+      ? setupData.available_courts
+      : clubCourts
+          .filter((c) => c.is_active)
+          .map((c) => ({
+            id: c.id,
+            name: c.display_name || c.name,
+            court_number: c.court_number,
+            surface_type: c.surface_type,
+            indoor_outdoor: c.indoor_outdoor,
+            is_active: c.is_active,
+          }));
+  const activeCourtsCount = availableCourts.filter((c) => c.is_active).length;
+
+  const isScheduleFeasible = setupData?.is_schedule_feasible ?? (hasMinPlayers && playerCount % 4 === 0);
+  const courtsValid =
+    activeCourtsCount > 0 &&
+    selectedCourtIds.length > 0 &&
+    courtsCount >= 1 &&
+    courtsCount <= selectedCourtIds.length;
+  const isValid = hasMinPlayers && isScheduleFeasible && courtsValid;
+
+  const currentCourtKey = [...selectedCourtIds].sort().join(',');
+  const isDirty = savedSnapshot
+    ? savedSnapshot.rounds !== rounds ||
+      savedSnapshot.rotationRule !== rotationRule ||
+      savedSnapshot.courtIdsKey !== currentCourtKey ||
+      savedSnapshot.courtsCount !== courtsCount
+    : true;
+
+  const disabledControls = !canManage || (configurationSaved && !isEditing);
 
   const handleRoundsChange = (nextRounds: number) => {
     const clamped = Math.max(1, Math.min(20, nextRounds));
@@ -141,269 +201,259 @@ export function ScrambleSetupRoundsTab({
     void fetchSetup(clamped, rotationRule);
   };
 
-  const handleRuleChange = (rule: string) => {
-    setRotationRule(rule);
-    void fetchSetup(rounds, rule);
+  const handleRuleChange = (nextRule: string) => {
+    setRotationRule(nextRule);
+    void fetchSetup(rounds, nextRule);
   };
 
-  const handleConfirmAndGenerate = async () => {
-    if (!clubId || !tournamentId || !canManage) return;
+  const handleToggleCourt = (courtId: string) => {
+    setSelectedCourtIds((prev) => {
+      const exists = prev.includes(courtId);
+      const next = exists ? prev.filter((id) => id !== courtId) : [...prev, courtId];
+      if (next.length > 0) {
+        setCourtsCount((curr) => Math.max(1, Math.min(curr || next.length, next.length)));
+      } else {
+        setCourtsCount(0);
+      }
+      return next;
+    });
+  };
+
+  const handleSave = async () => {
+    if (!clubId || !tournamentId || !canManage || !isValid) return;
     try {
-      setGenerating(true);
-      await competitionApi.confirmAndGenerateScramble(clubId, tournamentId, {
+      setSaving(true);
+      const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
         rounds,
         rotation_rule: rotationRule,
+        selected_court_ids: selectedCourtIds,
+        courts_count: courtsCount,
       });
-      Alert.alert(
-        'Schedule Generated',
-        `Successfully generated rotation schedule for ${rounds} rounds! The tournament is now Ready to Start.`
-      );
+      if (saved.scramble_setup) {
+        setSetupData(saved.scramble_setup);
+      }
       if (onSetPlannedRounds) {
         try {
           await onSetPlannedRounds(rounds);
         } catch {}
       }
-      await fetchSetup();
-      if (onGenerated) {
-        await onGenerated();
-      }
-    } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to generate schedule.');
+      setSavedSnapshot({
+        rounds,
+        rotationRule,
+        courtIdsKey: [...selectedCourtIds].sort().join(','),
+        courtsCount,
+      });
+      setIsEditing(false);
+    } catch (err: any) {
+      const msg = err?.data?.detail || err?.message || 'Unable to save Scramble configuration.';
+      Alert.alert('Save Failed', msg);
     } finally {
-      setGenerating(false);
+      setSaving(false);
     }
   };
 
+  const handleConfirmAndGenerate = async () => {
+    if (!clubId || !tournamentId || !canManage || !configurationSaved || isDirty || !isValid) {
+      return;
+    }
+
+    const execute = async () => {
+      try {
+        setGenerating(true);
+        if (isGenerated) {
+          await competitionApi.regenerateScramble(clubId, tournamentId);
+        } else {
+          await competitionApi.confirmAndGenerateScramble(clubId, tournamentId, {
+            rounds,
+            rotation_rule: rotationRule,
+            selected_court_ids: selectedCourtIds,
+            courts_count: courtsCount,
+            require_saved_config: true,
+          });
+        }
+        await fetchSetup();
+        if (onGenerated) await onGenerated();
+      } catch (err: any) {
+        const msg = err?.data?.detail || err?.message || 'Failed to generate rotation schedule.';
+        Alert.alert('Generation Failed', msg);
+      } finally {
+        setGenerating(false);
+      }
+    };
+
+    if (isGenerated) {
+      Alert.alert(
+        'Regenerate Rotation Schedule?',
+        'This replaces existing unplayed rounds using your saved configuration and courts.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Regenerate', style: 'destructive', onPress: () => void execute() },
+        ]
+      );
+      return;
+    }
+    await execute();
+  };
+
+  if (loading && !setupData) {
+    return (
+      <View style={styles.loadingWrap}>
+        <ActivityIndicator size="large" color="#0F766E" />
+        <AppText style={styles.loadingText}>Loading Scramble setup...</AppText>
+      </View>
+    );
+  }
+
+  const feasiblePairs = setupData?.feasible_doubles_pairs ?? Math.floor(playerCount / 2);
+  const feasibleMatches = setupData?.feasible_matches_per_round ?? Math.floor(playerCount / 4);
+  const recommendedRounds = setupData?.recommended_rounds ?? 5;
+  const previewRounds: any[] = setupData?.preview_rounds ?? [];
+
   return (
     <View style={styles.container}>
-      {/* ─── Header Card ───────────────────────────────────────────────────── */}
-      <Card style={styles.headerCard}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerIconCircle}>
-            <SlidersHorizontal size={18} color="#0F766E" />
-          </View>
-          <View style={styles.headerTextCol}>
-            <AppText style={styles.headerTitle}>Scramble Setup</AppText>
-            <AppText style={styles.headerSubtitle}>
-              Configure rotation rounds, partner rules and courts.
-            </AppText>
-          </View>
-        </View>
-      </Card>
+      <View style={styles.card}>
+        <PostRegistrationHeader
+          icon={<SlidersHorizontal size={18} color="#0F766E" />}
+          title="Scramble Setup & Rounds"
+          subtitle="Configure rotation rounds, partner rules, and active courts. Save before generating."
+          badgeLabel={
+            isGenerated
+              ? 'Generated'
+              : configurationSaved && !isDirty
+              ? 'Saved'
+              : isRegistrationOpen || isDraft
+              ? 'Open'
+              : 'Draft'
+          }
+          badgeVariant={isGenerated || (configurationSaved && !isDirty) ? 'success' : 'warning'}
+        />
 
-      {/* ─── Single Concise Validation Notice (Only shown when < 4 players) ── */}
-      {!hasMinPlayers && (
-        <View style={styles.validationNotice}>
-          <AlertTriangle size={15} color="#D97706" />
-          <AppText style={styles.validationNoticeText}>
-            At least 4 confirmed players are required.
-          </AppText>
-        </View>
-      )}
-
-      {/* ─── Participant Capacity ─────────────────────────────────────────── */}
-      <Card style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Users size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Participant Capacity</AppText>
-        </View>
-
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>CONFIRMED</AppText>
-            <AppText style={styles.metricValue}>{playerCount}</AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>PAIRS / ROUND</AppText>
-            <AppText style={styles.metricValue}>
-              {hasMinPlayers ? feasiblePairs : '—'}
-            </AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>MATCHES / ROUND</AppText>
-            <AppText style={styles.metricValue}>
-              {hasMinPlayers ? feasibleMatches : '—'}
-            </AppText>
-          </View>
-        </View>
-      </Card>
-
-      {/* ─── Rotation Rounds ──────────────────────────────────────────────── */}
-      <Card style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Sparkles size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Rotation Rounds</AppText>
-        </View>
-
-        <View style={styles.stepperWrap}>
-          <PostRegistrationStepper
-            label="Selected Rounds"
-            helperText={`Recommended: ${recommendedRounds} rounds (based on confirmed players and available courts).`}
-            value={rounds}
-            unit="rounds"
-            min={1}
-            max={20}
-            disabled={!hasMinPlayers || isGenerated}
-            onChange={handleRoundsChange}
+        {(isDraft || isRegistrationOpen) && (
+          <PostRegistrationNotice
+            variant="info"
+            title="Close registration to configure Scramble"
+            message={
+              setupData?.closure_eligibility?.blocking_reason ||
+              'Scramble setup unlocks once registration closes with at least 4 confirmed players.'
+            }
           />
-        </View>
-      </Card>
+        )}
 
-      {/* ─── Partner Rotation Rules ───────────────────────────────────────── */}
-      <Card style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <Sliders size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Partner Rotation Rules</AppText>
-        </View>
+        <PostRegistrationMetrics
+          metrics={[
+            { label: 'Confirmed Players', value: playerCount },
+            { label: 'Pairs / Round', value: feasiblePairs },
+            { label: 'Matches / Round', value: feasibleMatches },
+          ]}
+        />
 
-        <View style={styles.rulesList}>
-          {SCRAMBLE_RULE_OPTIONS.map((opt) => {
-            const isSelected = rotationRule === opt.key;
-            return (
+        {hasMinPlayers ? (
+          <PostRegistrationNotice
+            variant="info"
+            message={`Recommended: ${recommendedRounds} rounds · ${feasibleMatches} court(s) per round`}
+          />
+        ) : null}
+      </View>
+
+      {!isDraft && !isRegistrationOpen && (
+        <>
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Repeat size={15} color="#0F766E" />
+              <AppText style={styles.sectionTitle}>A. Rotation Rounds & Rules</AppText>
+            </View>
+
+            <PostRegistrationStepper
+              label="Planned rounds"
+              helperText={`Recommended: ${recommendedRounds} rounds`}
+              value={rounds}
+              unit={rounds === 1 ? 'round' : 'rounds'}
+              min={1}
+              max={20}
+              disabled={disabledControls}
+              onChange={handleRoundsChange}
+            />
+
+            <PostRegistrationChoiceChips
+              label="Partner rotation rule"
+              options={ROTATION_RULES}
+              selectedValue={rotationRule}
+              disabled={disabledControls}
+              onSelect={(val) => handleRuleChange(String(val))}
+            />
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeader}>
+              <Layers size={15} color="#0F766E" />
+              <AppText style={styles.sectionTitle}>B. Court Assignment</AppText>
+            </View>
+            <PostRegistrationCourtSelector
+              availableCourts={availableCourts}
+              selectedCourtIds={selectedCourtIds}
+              courtsCount={courtsCount}
+              disabled={disabledControls}
+              onToggleCourt={handleToggleCourt}
+              onCourtsCountChange={setCourtsCount}
+            />
+          </View>
+
+          {previewRounds.length > 0 && (
+            <View style={styles.card}>
               <TouchableOpacity
-                key={opt.key}
-                style={[styles.ruleCard, isSelected && styles.ruleCardSelected]}
-                onPress={() => !isGenerated && handleRuleChange(opt.key)}
+                style={styles.previewToggle}
+                onPress={() => setShowPreview((p) => !p)}
                 activeOpacity={0.75}
-                disabled={!hasMinPlayers || isGenerated}
               >
-                <View style={styles.ruleCardHeader}>
-                  <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
-                    {isSelected && <View style={styles.radioInner} />}
-                  </View>
-                  <AppText style={[styles.ruleTitle, isSelected && styles.ruleTitleSelected]}>
-                    {opt.label}
+                <View style={styles.sectionHeader}>
+                  <Sparkles size={15} color="#0F766E" />
+                  <AppText style={styles.sectionTitle}>
+                    Rotation Preview ({previewRounds.length} rounds)
                   </AppText>
                 </View>
-                <AppText style={styles.ruleDesc}>{opt.desc}</AppText>
+                {showPreview ? (
+                  <ChevronUp size={16} color="#64748B" />
+                ) : (
+                  <ChevronDown size={16} color="#64748B" />
+                )}
               </TouchableOpacity>
-            );
-          })}
-        </View>
-      </Card>
-
-      {/* ─── Court Allocation & Capacity ──────────────────────────────────── */}
-      <Card style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <LayoutGrid size={16} color="#0F766E" />
-          <AppText style={styles.sectionTitle}>Court Allocation & Capacity</AppText>
-        </View>
-
-        <View style={styles.metricsRow}>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>ACTIVE COURTS</AppText>
-            <AppText style={styles.metricValue}>{courtsAvailable}</AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>COURTS / ROUND</AppText>
-            <AppText style={styles.metricValue}>{courtsNeeded}</AppText>
-          </View>
-          <View style={styles.metricCard}>
-            <AppText style={styles.metricLabel}>PLAYERS / COURT</AppText>
-            <AppText style={styles.metricValue}>4</AppText>
-          </View>
-        </View>
-
-        {courtsAvailable < courtsNeeded && (
-          <View style={styles.constraintNotice}>
-            <AlertTriangle size={14} color="#D97706" />
-            <AppText style={styles.constraintNoticeText}>
-              Available courts ({courtsAvailable}) are fewer than matches needed per round ({courtsNeeded}).
-            </AppText>
-          </View>
-        )}
-      </Card>
-
-      {/* ─── Partner Rotation Preview (Collapsible) ───────────────────────── */}
-      {setupData?.preview_rounds && setupData.preview_rounds.length > 0 && (
-        <Card style={styles.sectionCard}>
-          <TouchableOpacity
-            style={styles.previewHeaderRow}
-            onPress={() => setShowPreview(!showPreview)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sectionHeader}>
-              <Calendar size={16} color="#0F766E" />
-              <AppText style={styles.sectionTitle}>
-                Rotation Preview ({setupData.preview_rounds.length} Rounds)
-              </AppText>
-            </View>
-            {showPreview ? (
-              <ChevronUp size={18} color="#64748B" />
-            ) : (
-              <ChevronDown size={18} color="#64748B" />
-            )}
-          </TouchableOpacity>
-
-          {showPreview && (
-            <View style={styles.previewBody}>
-              {setupData.preview_rounds.map((r: any) => (
-                <View key={r.round_number} style={styles.previewRoundCard}>
-                  <View style={styles.previewRoundHeader}>
-                    <AppText style={styles.previewRoundTitle}>Round {r.round_number}</AppText>
-                    {r.note ? <AppText style={styles.previewNote}>{r.note}</AppText> : null}
-                  </View>
-                  {r.matches &&
-                    r.matches.map((m: any, mIdx: number) => (
-                      <View key={mIdx} style={styles.previewMatchRow}>
-                        <View style={styles.courtPill}>
-                          <AppText style={styles.courtPillText}>Court {m.match_number}</AppText>
-                        </View>
-                        <AppText style={styles.previewPair} numberOfLines={1}>
-                          {m.side_a?.join(' & ')}
+              {showPreview && (
+                <View style={styles.previewBody}>
+                  {previewRounds.slice(0, 4).map((rnd) => (
+                    <View key={rnd.round_number} style={styles.previewRoundBox}>
+                      <AppText style={styles.previewRoundTitle}>Round {rnd.round_number}</AppText>
+                      {(rnd.matches || []).map((m: any) => (
+                        <AppText key={m.match_number} style={styles.previewMatchText}>
+                          Match {m.match_number}: {(m.side_a || []).join(' & ')} vs{' '}
+                          {(m.side_b || []).join(' & ')}
                         </AppText>
-                        <AppText style={styles.previewVs}>vs</AppText>
-                        <AppText style={styles.previewPair} numberOfLines={1}>
-                          {m.side_b?.join(' & ')}
-                        </AppText>
-                      </View>
-                    ))}
+                      ))}
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
             </View>
           )}
-        </Card>
-      )}
 
-      {/* ─── Clear Primary Generation Action ──────────────────────────────── */}
-      <Card style={styles.actionCard}>
-        {isGenerated ? (
-          <View style={styles.generatedStatusBox}>
-            <View style={styles.generatedStatusTop}>
-              <CheckCircle2 size={18} color="#0F766E" />
-              <AppText style={styles.generatedTitle}>Rotation Schedule Generated</AppText>
-            </View>
-            <AppText style={styles.generatedDesc}>
-              Active across {rounds} rounds for {playerCount} confirmed players. View and score matches in the Rounds tab.
-            </AppText>
-            {canManage && (
-              <TouchableOpacity
-                style={styles.regenerateBtn}
-                onPress={handleConfirmAndGenerate}
-                disabled={generating || !hasMinPlayers}
-                activeOpacity={0.8}
-              >
-                <RotateCcw size={14} color="#0F766E" />
-                <AppText style={styles.regenerateBtnText}>
-                  {generating ? 'Regenerating...' : 'Regenerate Schedule'}
-                </AppText>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
-          <Button
-            label={
-              generating
-                ? 'Generating Schedule...'
-                : 'Confirm & Generate Rotation Schedule'
-            }
-            onPress={handleConfirmAndGenerate}
-            disabled={!hasMinPlayers || generating || !canManage}
-            loading={generating}
-            variant="primary"
+          <PostRegistrationSaveActionBar
+            configurationSaved={configurationSaved}
+            savedAt={setupData?.configuration_saved_at}
+            isDirty={isDirty}
+            isEditing={isEditing}
+            isSaving={saving}
+            isGenerating={generating}
+            isGenerated={isGenerated}
+            isValid={isValid}
+            canManage={canManage}
+            generateLabel="Confirm & Generate Rotation Schedule"
+            regenerateLabel="Regenerate Schedule"
+            validationError={setupData?.validation_error}
+            onSave={handleSave}
+            onStartEditing={() => setIsEditing(true)}
+            onGenerate={handleConfirmAndGenerate}
           />
-        )}
-      </Card>
+        </>
+      )}
     </View>
   );
 }
@@ -415,64 +465,22 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing[8],
     gap: Spacing[3],
   },
-  headerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    borderWidth: 1,
-    borderColor: '#DEF2E6',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[3],
-  },
-  headerIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E6F4F1',
+  loadingWrap: {
+    padding: Spacing[8],
     alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing[2.5],
   },
-  headerTextCol: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F2823',
-    lineHeight: 21,
-  },
-  headerSubtitle: {
-    fontSize: 12.5,
+  loadingText: {
+    fontSize: 13,
     color: '#64748B',
-    lineHeight: 17,
-    marginTop: 2,
   },
-  validationNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFBEB',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2.5],
-    paddingHorizontal: Spacing[3],
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  validationNoticeText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#92400E',
-    flex: 1,
-  },
-  sectionCard: {
+  card: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
-    padding: Spacing[4],
     borderWidth: 1,
-    borderColor: '#DEF2E6',
+    borderColor: '#E2E8F0',
+    padding: Spacing[4],
     gap: Spacing[3],
   },
   sectionHeader: {
@@ -481,214 +489,33 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   sectionTitle: {
-    fontSize: 14.5,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#0F2823',
+    color: '#0F172A',
   },
-  metricsRow: {
-    flexDirection: 'row',
-    gap: Spacing[2],
-  },
-  metricCard: {
-    flex: 1,
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[2.5],
-    paddingHorizontal: Spacing[2],
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E8F0EC',
-  },
-  metricLabel: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 0.4,
-    marginBottom: 3,
-    textAlign: 'center',
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#0F766E',
-  },
-  stepperWrap: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    padding: Spacing[2.5],
-    borderWidth: 1,
-    borderColor: '#E8F0EC',
-  },
-  rulesList: {
-    gap: Spacing[2],
-  },
-  ruleCard: {
-    backgroundColor: '#F8FAF9',
-    borderRadius: Radius.md,
-    padding: Spacing[2.5],
-    borderWidth: 1,
-    borderColor: '#E8F0EC',
-    gap: 2,
-  },
-  ruleCardSelected: {
-    backgroundColor: '#F0FDF9',
-    borderColor: '#0F766E',
-    borderWidth: 1.5,
-  },
-  ruleCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  radioCircle: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#94A3B8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  radioCircleSelected: {
-    borderColor: '#0F766E',
-  },
-  radioInner: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#0F766E',
-  },
-  ruleTitle: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  ruleTitleSelected: {
-    color: '#0F766E',
-  },
-  ruleDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-    paddingLeft: 24,
-  },
-  constraintNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFBEB',
-    borderRadius: Radius.sm,
-    padding: Spacing[2],
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  constraintNoticeText: {
-    fontSize: 12,
-    color: '#92400E',
-    flex: 1,
-  },
-  previewHeaderRow: {
+  previewToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   previewBody: {
     gap: Spacing[2],
-    marginTop: 4,
   },
-  previewRoundCard: {
-    backgroundColor: '#F8FAF9',
+  previewRoundBox: {
+    backgroundColor: '#F8FAFC',
     borderRadius: Radius.md,
-    padding: Spacing[3],
+    padding: Spacing[2.5],
     borderWidth: 1,
-    borderColor: '#E8F0EC',
-    gap: Spacing[2],
-  },
-  previewRoundHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderColor: '#E2E8F0',
+    gap: 3,
   },
   previewRoundTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F2823',
-  },
-  previewNote: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  previewMatchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.sm,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: '#E8F0EC',
-  },
-  courtPill: {
-    backgroundColor: '#E6F4F1',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  courtPillText: {
-    fontSize: 10,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0F766E',
   },
-  previewPair: {
+  previewMatchText: {
     fontSize: 11.5,
-    fontWeight: '600',
-    color: '#1E293B',
-    flex: 1,
-  },
-  previewVs: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-  },
-  actionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    borderWidth: 1,
-    borderColor: '#DEF2E6',
-  },
-  generatedStatusBox: {
-    gap: 8,
-  },
-  generatedStatusTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  generatedTitle: {
-    fontSize: 14.5,
-    fontWeight: '700',
-    color: '#0F766E',
-  },
-  generatedDesc: {
-    fontSize: 12.5,
     color: '#475569',
-    lineHeight: 17,
-  },
-  regenerateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#E6F4F1',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.sm,
-    marginTop: 4,
-  },
-  regenerateBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#0F766E',
   },
 });

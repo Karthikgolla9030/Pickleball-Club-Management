@@ -25,6 +25,7 @@ import {
   RoundRobinAddTeamModal,
   RoundRobinMatchupsTab,
   RoundRobinOverviewTab,
+  RoundRobinSetupCourtsTab,
   RoundRobinResultsTab,
   RoundRobinScoreModal,
   RoundRobinStandingsTab,
@@ -318,9 +319,11 @@ export default function RoundRobinWorkspaceScreen() {
                   'Registration Closed',
                   'Registration has been closed. You can now generate the Round Robin matchups.'
                 );
-              } catch (err: unknown) {
-                const msg = err instanceof Error ? err.message : 'Failed to close registration';
-                Alert.alert('Error', msg);
+              } catch (err: any) {
+                const msg =
+                  err?.data?.detail ||
+                  (err instanceof Error ? err.message : 'Failed to close registration');
+                Alert.alert('Cannot Close Registration', msg);
               } finally {
                 resolve();
               }
@@ -468,6 +471,12 @@ export default function RoundRobinWorkspaceScreen() {
     }
     const remaining = Math.max(0, progress.totalMatches - progress.completedMatches);
     if (canGenerate) {
+      if (!tournament?.configuration_saved) {
+        return {
+          label: 'Setup & Courts',
+          onPress: () => setActiveTab('setup_courts'),
+        };
+      }
       return {
         label: 'Generate Matchups',
         onPress: handleGenerateMatchups,
@@ -582,6 +591,7 @@ export default function RoundRobinWorkspaceScreen() {
                     : (tournament?.teams_count ?? tournament?.participant_count ?? teams.length)
                 }
                 maxParticipants={tournament?.max_participants}
+                closureEligibility={tournament?.closure_eligibility}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}
               />
@@ -605,6 +615,23 @@ export default function RoundRobinWorkspaceScreen() {
               onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
               teamSize={teamSize}
               participantsCount={isSingles ? totalRegisteredPlayers : teams.length}
+            />
+          )}
+
+          {activeTab === 'setup_courts' && clubId && tournamentId && (
+            <RoundRobinSetupCourtsTab
+              clubId={clubId}
+              tournamentId={tournamentId}
+              tournament={tournament}
+              canManage={canManage}
+              matchesCount={matches.length}
+              onRefresh={async () => {
+                await Promise.all([refetchTournament(), refetchTeams(), refetchMatches()]);
+              }}
+              onGenerated={async () => {
+                await Promise.all([refetchTournament(), refetchTeams(), refetchMatches()]);
+                setActiveTab('matchups');
+              }}
             />
           )}
 

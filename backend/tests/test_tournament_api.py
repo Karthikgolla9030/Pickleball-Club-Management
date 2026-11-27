@@ -449,7 +449,28 @@ async def test_07_tournament_lifecycle_transitions(
     assert res.status_code == 200
     assert res.json()["status"] == "registration_open"
 
-    # 2. Close registration
+    # 2a. Closing registration with 0 participants is blocked by Stage 2 closure validation
+    res_empty_close = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{tournament.id}/close-registration",
+        headers=headers,
+    )
+    assert res_empty_close.status_code == 400
+
+    # Seed minimum valid even confirmed participants
+    from app.models.tournament_registration import RegistrationStatus, TournamentRegistration
+    for i in range(4):
+        u = await create_user(db_session, full_name=f"Lifecycle Player {i + 1}")
+        pm = await create_player_membership(db_session, u, club)
+        db_session.add(
+            TournamentRegistration(
+                tournament_id=tournament.id,
+                player_membership_id=pm.id,
+                status=RegistrationStatus.CONFIRMED,
+            )
+        )
+    await db_session.commit()
+
+    # 2b. Close registration now succeeds
     res = await async_client.post(
         f"/api/v1/clubs/{club.id}/tournaments/{tournament.id}/close-registration",
         headers=headers,
@@ -969,14 +990,38 @@ async def test_19_get_tournament_auto_closes_expired_registration_without_500(
     db_session.add(reg)
     await db_session.commit()
 
+    # 1 confirmed player (< min 4, odd) must NOT auto-close and must NOT 500
     res = await async_client.get(
         f"/api/v1/tournaments/{tournament.id}",
         headers=make_auth_header(player.id),
     )
     assert res.status_code == 200, res.text
     data = res.json()
-    assert data["status"] == "registration_closed"
+    assert data["status"] == "registration_open"
     assert data["club_name"] == "Deadline Club"
     assert data["is_registered"] is True
+
+    # Add 3 more confirmed active players -> 4 total (even & >= min 4) -> auto-close cleanly
+    for idx in range(3):
+        extra_u = await create_user(db_session, full_name=f"Player Deadline {idx + 2}")
+        extra_pm = await create_player_membership(db_session, extra_u, club)
+        db_session.add(
+            TournamentRegistration(
+                tournament_id=tournament.id,
+                player_membership_id=extra_pm.id,
+                status=RegistrationStatus.CONFIRMED,
+            )
+        )
+    await db_session.commit()
+
+    res_closed = await async_client.get(
+        f"/api/v1/tournaments/{tournament.id}",
+        headers=make_auth_header(player.id),
+    )
+    assert res_closed.status_code == 200, res_closed.text
+    data_closed = res_closed.json()
+    assert data_closed["status"] == "registration_closed"
+    assert data_closed["club_name"] == "Deadline Club"
+    assert data_closed["is_registered"] is True
 
 

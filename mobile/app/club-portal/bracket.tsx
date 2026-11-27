@@ -35,6 +35,7 @@ import {
 } from '@/components';
 import {
   BracketOverviewTab,
+  BracketSetupCourtsTab,
   BracketTeamsTab,
   BracketViewTab,
   BracketMatchesTab,
@@ -212,15 +213,17 @@ export default function BracketWorkspaceScreen() {
   // ─── Handlers ────────────────────────────────────────────────────────────
   const handleGenerateBracket = async () => {
     try {
-      const res = await generateBracket();
+      const res = await generateBracket(true);
       Alert.alert(
         'Bracket Generated!',
         `Created ${res.matches_generated} match slots across ${res.rounds_count} rounds (${res.byes_count} BYEs).`
       );
       setActiveTab('bracket');
       await handleRefreshAll();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to generate bracket';
+    } catch (err: any) {
+      const msg =
+        err?.data?.detail ||
+        (err instanceof Error ? err.message : 'Failed to generate bracket');
       Alert.alert('Generation Error', msg);
     }
   };
@@ -266,9 +269,11 @@ export default function BracketWorkspaceScreen() {
                 'Registration Closed',
                 'Participants finalized and seeded by skill rating! You can now generate the bracket.'
               );
-            } catch (err: unknown) {
-              const msg = err instanceof Error ? err.message : 'Failed to close registration';
-              Alert.alert('Error', msg);
+            } catch (err: any) {
+              const msg =
+                err?.data?.detail ||
+                (err instanceof Error ? err.message : 'Failed to close registration');
+              Alert.alert('Cannot Close Registration', msg);
             }
           },
         },
@@ -489,6 +494,12 @@ export default function BracketWorkspaceScreen() {
       };
     }
     if (canGenerate) {
+      if (!tournament?.configuration_saved) {
+        return {
+          label: 'Setup & Courts',
+          onPress: () => setActiveTab('setup_courts'),
+        };
+      }
       return {
         label: 'Generate Bracket',
         onPress: handleGenerateBracket,
@@ -592,6 +603,7 @@ export default function BracketWorkspaceScreen() {
               tournamentName={tournament.name}
               participantCount={tournament.teams_count ?? tournament.participant_count ?? teams.length}
               maxParticipants={tournament.max_participants}
+              closureEligibility={tournament.closure_eligibility}
               onCloseRegistration={handleCloseRegistration}
               isClosing={isCloseRegistrationPending}
             />
@@ -614,6 +626,21 @@ export default function BracketWorkspaceScreen() {
             matches={matches}
             progress={progress}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
+          />
+        )}
+
+        {activeTab === 'setup_courts' && clubId && tournamentId && (
+          <BracketSetupCourtsTab
+            clubId={clubId}
+            tournamentId={tournamentId}
+            tournament={tournament}
+            canManage={canManage}
+            matchesCount={matches.length}
+            onRefresh={handleRefreshAll}
+            onGenerated={async () => {
+              await handleRefreshAll();
+              setActiveTab('bracket');
+            }}
           />
         )}
 

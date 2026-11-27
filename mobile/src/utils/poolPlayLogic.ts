@@ -24,7 +24,12 @@ import type {
   Team,
 } from '@/types/poolPlay';
 
-const POOL_KEYS = ['A', 'B', 'C', 'D'];
+function getPoolKeys(numPools: number): string[] {
+  const safeCount = Math.max(2, Math.min(26, Math.floor(numPools) || 2));
+  return Array.from({ length: safeCount }, (_, i) => String.fromCharCode(65 + i));
+}
+
+const POOL_KEYS = getPoolKeys(16);
 
 export const DEFAULT_COURTS: CourtConfig[] = [
   { id: 'c1', name: 'Center Court' },
@@ -118,7 +123,8 @@ export function recalculateStats(
 
 export function balancePools(teams: Team[], numPools: number): Team[] {
   if (teams.length === 0) return [];
-  const safePoolCount = Math.max(2, Math.min(numPools, POOL_KEYS.length));
+  const poolKeys = getPoolKeys(Math.min(numPools, Math.max(2, Math.floor(teams.length / 2))));
+  const safePoolCount = poolKeys.length;
 
   // Sort teams descending by avgRating
   const sorted = [...teams].sort((a, b) => b.avgRating - a.avgRating);

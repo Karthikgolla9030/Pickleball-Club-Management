@@ -102,6 +102,11 @@ export function getTournamentNavigationTabs(
       return [
         { id: 'overview', label: 'Overview', iconName: 'LayoutDashboard' },
         {
+          id: 'setup_courts',
+          label: 'Setup & Courts',
+          iconName: 'SlidersHorizontal',
+        },
+        {
           id: 'participants',
           label: isSingles ? 'Players' : 'Teams',
           iconName: 'Users',
@@ -152,6 +157,11 @@ export function getTournamentNavigationTabs(
     case 'round_robin':
       return [
         { id: 'overview', label: 'Overview', iconName: 'LayoutDashboard' },
+        {
+          id: 'setup_courts',
+          label: 'Setup & Courts',
+          iconName: 'SlidersHorizontal',
+        },
         {
           id: 'participants',
           label: isSingles ? 'Players' : 'Teams',
