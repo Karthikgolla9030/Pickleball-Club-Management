@@ -22,7 +22,7 @@ import {
   usePlatformBanner,
   usePlatformBranding,
 } from '@/hooks';
-import { resolveOwnerBanner } from '@/utils';
+import { normalizeAppRoute, resolveOwnerBanner } from '@/utils';
 
 interface ClubHeroCarouselProps {
   clubId?: string | null;
@@ -74,7 +74,7 @@ export function ClubHeroCarousel({
         platformBanner?.subtitle ||
         'Great courts. Active members.\nA healthier, happier community.',
       ctaText: platformBanner?.cta_text || 'Book a Court',
-      route: platformBanner?.cta_destination || '/(club)/bookings',
+      route: normalizeAppRoute(platformBanner?.cta_destination) || '/club-portal/bookings',
       scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
       image: ownerBannerImage,
     };
@@ -119,8 +119,9 @@ export function ClubHeroCarousel({
         ctaText: ad.cta_text || 'View Details',
         imageUrl: ad.image_url,
         onCtaPress: () => {
-          if (ad.cta_route) {
-            router.push(ad.cta_route as any);
+          const normalized = normalizeAppRoute(ad.cta_route);
+          if (normalized) {
+            router.push(normalized as any);
           }
         },
       };

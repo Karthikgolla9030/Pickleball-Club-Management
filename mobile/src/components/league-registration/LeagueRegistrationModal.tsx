@@ -607,7 +607,7 @@ export function LeagueRegistrationModal({
                   onPress={() => {
                     onClose();
                     router.push({
-                      pathname: '/(player)/club-details' as any,
+                      pathname: '/player/club-details' as any,
                       params: { id: league.club_id },
                     });
                   }}

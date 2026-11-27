@@ -437,7 +437,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
       setSlideFormSubtitle('');
       setSlideFormTag('SPECIAL OFFER');
       setSlideFormCtaText('View Details');
-      setSlideFormCtaRoute('/(player)/tournaments');
+      setSlideFormCtaRoute('/player/tournaments');
       setSlideFormImageUrl('');
       setSlideFormIsActive(true);
       setSlideFormStartDate('');
@@ -1234,7 +1234,7 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                 style={styles.textInput}
                 value={slideFormCtaRoute}
                 onChangeText={setSlideFormCtaRoute}
-                placeholder="e.g. /(player)/tournaments or /(player)/bookings"
+                placeholder="e.g. /player/tournaments or /player/bookings"
                 placeholderTextColor="#94A3B8"
               />
 

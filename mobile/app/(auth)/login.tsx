@@ -24,33 +24,14 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Screen, AppText, Input, Button, Card } from '@/components';
 import { useAuth } from '@/hooks';
 import { useAuthStore } from '@/store';
-import { isPlatformAdminEmail } from '@/constants';
+import { getDefaultHomeForRole, isRedirectAllowedForRole, resolveRoleContext } from '@/utils';
 import { Colors, Spacing } from '@/theme';
 
 type AuthPortal = 'club' | 'player';
 
-function getClubRedirectTarget(membership: any): string {
-  if (!membership) return '/(club)';
-  if (membership.role === 'tournament_director' && !membership.custom_role_id) {
-    return '/(club)/tournaments';
-  }
-  if (membership.custom_role_id && membership.permissions && Array.isArray(membership.permissions)) {
-    const perms = new Set(membership.permissions);
-    const hasClubOps =
-      perms.has('manage_club') ||
-      perms.has('manage_bookings') ||
-      perms.has('manage_members') ||
-      perms.has('manage_courts');
-    if (!hasClubOps && perms.has('manage_tournaments')) {
-      return '/(club)/tournaments';
-    }
-  }
-  return '/(club)';
-}
-
 export default function LoginScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ portal?: string }>();
+  const params = useLocalSearchParams<{ portal?: string; redirect?: string }>();
   const { loginClub, loginPlayer, isAuthenticated, isLoading, user, activePortal, memberships, activeMembership, error, clearError } = useAuth();
 
   const [portal, setPortal] = useState<AuthPortal>(
@@ -63,19 +44,21 @@ export default function LoginScreen() {
 
   React.useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      const isPlatformAdmin = Boolean(
-        user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
-      );
-      if (isPlatformAdmin) {
-        router.replace('/platform' as any);
-      } else if (memberships.length > 0 || activePortal === 'club') {
-        const target = getClubRedirectTarget(activeMembership || memberships[0]);
-        router.replace(target as any);
+      const roleCtx = resolveRoleContext({
+        isAuthenticated: true,
+        user,
+        memberships,
+        activeMembership,
+        activePortal,
+      });
+      const redirectParam = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+      if (redirectParam && isRedirectAllowedForRole(redirectParam, roleCtx)) {
+        router.replace(redirectParam as any);
       } else {
-        router.replace('/(player)');
+        router.replace(getDefaultHomeForRole(roleCtx) as any);
       }
     }
-  }, [isAuthenticated, isLoading, user, activePortal, memberships, activeMembership, router]);
+  }, [isAuthenticated, isLoading, user, activePortal, memberships, activeMembership, params.redirect, router]);
 
   React.useEffect(() => {
     if (params.portal === 'player') {
@@ -114,18 +97,22 @@ export default function LoginScreen() {
       const normalizedEmail = email.trim().toLowerCase();
       if (portal === 'club') {
         await loginClub(normalizedEmail, password);
-        const currentMembership = useAuthStore.getState().activeMembership;
-        const target = getClubRedirectTarget(currentMembership);
-        router.replace(target as any);
       } else {
         await loginPlayer(normalizedEmail, password);
-        const state = useAuthStore.getState();
-        if (state.memberships.length > 0) {
-          const target = getClubRedirectTarget(state.activeMembership || state.memberships[0]);
-          router.replace(target as any);
-        } else {
-          router.replace('/(player)');
-        }
+      }
+      const state = useAuthStore.getState();
+      const roleCtx = resolveRoleContext({
+        isAuthenticated: true,
+        user: state.user,
+        memberships: state.memberships,
+        activeMembership: state.activeMembership,
+        activePortal: state.activePortal,
+      });
+      const redirectParam = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+      if (redirectParam && isRedirectAllowedForRole(redirectParam, roleCtx)) {
+        router.replace(redirectParam as any);
+      } else {
+        router.replace(getDefaultHomeForRole(roleCtx) as any);
       }
     } catch {
       // Error is stored in Zustand state and rendered in errorBanner

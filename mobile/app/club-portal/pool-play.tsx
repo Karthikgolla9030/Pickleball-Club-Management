@@ -1,0 +1,1238 @@
+/**
+ * Aught2 Pickleball — Pool Play Tournament Mode Screen
+ *
+ * Full Pool Play Tournament Mode Workspace providing:
+ * - Tab 1: Teams & Pools (Snake-draft auto-balance, rating tolerance checks, partner swap, player edit)
+ * - Tab 2: Matchups (Intra-pool round-robin, court rotation, live playing now, pickleball score entry)
+ * - Tab 3: Standings (Wins -> Diff -> Pts For tiebreakers, qualifiers, completion celebration)
+ * - Tab 4: Championship Bracket (Seeding, automatic BYEs, live winner progression)
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import {
+  ChampionshipBracketTab,
+  MatchupsTab,
+  PoolPlayOverviewTab,
+  PoolPlayPostRegistrationCard,
+  PoolPlayResultsTab,
+  PoolPlaySetupCourtsTab,
+  Screen,
+  SetupCourtsModal,
+  StandingsTab,
+  TeamsPoolsTab,
+  TournamentManagementTopBar,
+  TournamentManagementInfo,
+  TournamentManagementTabs,
+  TournamentSettingsTab,
+  DraftTournamentBanner,
+  RegistrationOpenBanner,
+  LoadingState,
+  ErrorState,
+} from '@/components';
+import {
+  useActiveClub,
+  useClubCourts,
+  usePermission,
+  useTeams,
+  useTournamentDetails,
+  useTournamentRegistrations,
+} from '@/hooks';
+import { competitionApi } from '@/services/api/competition';
+import { tournamentApi } from '@/services/api/tournaments';
+import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation';
+import { Colors, Spacing } from '@/theme';
+import type {
+  BracketType,
+  ChampionshipMatch,
+  Match,
+  PoolPlayConfig,
+  Team,
+} from '@/types/poolPlay';
+import {
+  advanceBracketWinner,
+  balancePools,
+  calculatePoolStandings,
+  createMatchups,
+  DEFAULT_COURTS,
+  generateChampionshipBracket,
+  recalculateStats,
+} from '@/utils/poolPlayLogic';
+import { useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEYS } from '@/constants';
+import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+
+export default function PoolPlayManagementScreen() {
+  const router = useRouter();
+  const { tournamentId, tab } = useLocalSearchParams<{ tournamentId: string; tab?: string }>();
+  const { clubId, clubName } = useActiveClub();
+  const { courts: clubCourts } = useClubCourts(clubId);
+  const activeClubCourts = useMemo(() => (clubCourts || []).filter((c) => c.is_active), [clubCourts]);
+  const { isOwner, isManager, isTournamentDirector, canManageTournaments } = usePermission();
+  const canManage = isOwner || isManager || isTournamentDirector || canManageTournaments;
+  const queryClient = useQueryClient();
+
+  const {
+    tournament,
+    isLoading: isLoadingTournament,
+    error: tournamentError,
+    refetch: refetchTournament,
+    openRegistration,
+    isOpenRegistrationPending,
+    closeRegistration,
+    isCloseRegistrationPending,
+    startTournament,
+    isStartingTournament,
+  } = useTournamentDetails(clubId, tournamentId ?? null);
+
+  const {
+    registrations,
+    refetch: refetchRegs,
+  } = useTournamentRegistrations(clubId, tournamentId ?? null);
+
+  const {
+    teams: apiTeams,
+    refetch: refetchTeams,
+  } = useTeams(clubId, tournamentId ?? null);
+
+  // Active Tab: defaults to 'overview' unless tab param provided
+  const [activeTab, setActiveTab] = useState<TournamentTabKey>((tab as TournamentTabKey) || 'overview');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab as TournamentTabKey);
+    }
+  }, [tab]);
+
+  // Config
+  const [config, setConfig] = useState<PoolPlayConfig>({
+    numPools: 2,
+    numCourts: 3,
+    courts: DEFAULT_COURTS,
+    balanceTolerance: 0.5,
+    qualifierCount: 4,
+    bracketType: 'Single Elimination',
+    poolPlayCompleted: false,
+  });
+
+  // State: Teams, Matches, Championship Bracket (Initialized empty - NO hardcoded demo data)
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [championshipMatches, setChampionshipMatches] = useState<ChampionshipMatch[]>([]);
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const tournamentConfig = useMemo(() => parseTournamentConfig(tournament), [tournament]);
+
+  // Derive whether pools and schedule have actually been generated
+  const isPoolsGenerated = useMemo(() => {
+    return (
+      matches.length > 0 ||
+      Boolean((tournament?.format_configuration as any)?.is_format_configured) ||
+      Boolean((tournament?.format_configuration as any)?.is_generated) ||
+      Boolean((tournament?.format_configuration as any)?.pools_generated) ||
+      tournament?.status === 'in_progress' ||
+      tournament?.status === 'completed'
+    );
+  }, [matches.length, tournament?.format_configuration, tournament?.status]);
+
+  // Synchronize persisted format configuration from backend
+  useEffect(() => {
+    if (tournament?.format_configuration) {
+      const fc = tournament.format_configuration as Record<string, any>;
+      setConfig((prev) => ({
+        ...prev,
+        numPools: typeof fc.pool_count === 'number' && fc.pool_count >= 2 ? fc.pool_count : prev.numPools,
+        numCourts: typeof fc.courts_count === 'number' && fc.courts_count >= 1 ? fc.courts_count : prev.numCourts,
+        qualifierCount: typeof fc.qualifier_count === 'number' && fc.qualifier_count >= 2 ? fc.qualifier_count : prev.qualifierCount,
+        bracketType: (fc.bracket_type as BracketType) || prev.bracketType,
+        balanceTolerance: typeof fc.balance_tolerance === 'number' ? fc.balance_tolerance : prev.balanceTolerance,
+      }));
+
+      const pps = fc.pool_play_state;
+      if (pps) {
+        if (Array.isArray(pps.teams) && pps.teams.length > 0) {
+          setTeams((prev) => (prev.length === 0 ? pps.teams : prev));
+        }
+        if (Array.isArray(pps.matches) && pps.matches.length > 0) {
+          setMatches((prev) => (prev.length === 0 ? pps.matches : prev));
+        }
+        if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+          setChampionshipMatches((prev) => (prev.length === 0 ? pps.championshipMatches : prev));
+        }
+      }
+    }
+  }, [tournament?.format_configuration]);
+
+  // Fetch full runtime pool-play state from server API endpoint to survive browser refreshes
+  useEffect(() => {
+    if (!clubId || !tournamentId) return;
+
+    let isMounted = true;
+    const fetchState = async () => {
+      try {
+        const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
+        if (!isMounted) return;
+        const pps = res?.pool_play_state;
+        if (pps) {
+          if (Array.isArray(pps.teams) && pps.teams.length > 0) {
+            setTeams(pps.teams);
+          }
+          if (Array.isArray(pps.matches) && pps.matches.length > 0) {
+            setMatches(pps.matches);
+          }
+          if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+            setChampionshipMatches(pps.championshipMatches);
+          }
+          if (pps.config) {
+            setConfig((prev) => ({ ...prev, ...pps.config }));
+          }
+        }
+      } catch {
+        // Fallback already populated from format_configuration
+      }
+    };
+
+    void fetchState();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [clubId, tournamentId]);
+
+  // Helper to persist pool-play state back to backend database
+  const persistPoolPlayState = async (updates: {
+    teams?: Team[];
+    matches?: Match[];
+    championshipMatches?: ChampionshipMatch[];
+    config?: PoolPlayConfig;
+    winner?: any;
+    completed?: boolean;
+  }) => {
+    if (!clubId || !tournamentId) return;
+    try {
+      const payload = {
+        teams: updates.teams ?? teams,
+        matches: updates.matches ?? matches,
+        championshipMatches: updates.championshipMatches ?? championshipMatches,
+        config: updates.config ?? config,
+        winner: updates.winner,
+        completed: updates.completed,
+      };
+      await competitionApi.savePoolPlayState(clubId, tournamentId, payload);
+    } catch (err) {
+      console.warn('Failed to save pool play state:', err);
+    }
+  };
+
+  const handleSavePoolConfig = async (updated: Partial<PoolPlayConfig>) => {
+    const nextConfig = { ...config, ...updated };
+    setConfig(nextConfig);
+    if (clubId && tournamentId) {
+      try {
+        const nextPoolCount = updated.numPools ?? config.numPools;
+        const nextCourts = updated.courts ?? config.courts;
+        const nextQualifierCount = updated.qualifierCount ?? config.qualifierCount;
+        const nextBracketType = updated.bracketType ?? config.bracketType;
+        const nextTolerance = updated.balanceTolerance ?? config.balanceTolerance;
+
+        await tournamentApi.updateTournament(clubId, tournamentId, {
+          format_configuration: {
+            ...(tournament?.format_configuration || {}),
+            pool_count: nextPoolCount,
+            courts_count: nextCourts?.length || config.numCourts,
+            qualifier_count: nextQualifierCount,
+            bracket_type: nextBracketType,
+            balance_tolerance: nextTolerance,
+          },
+        });
+
+        void persistPoolPlayState({ config: nextConfig });
+
+        try {
+          await competitionApi.configurePools(clubId, tournamentId, {
+            number_of_pools: nextPoolCount,
+            qualifiers_per_pool: Math.max(1, Math.floor(nextQualifierCount / nextPoolCount)),
+          });
+        } catch {
+          // non-critical if pool stage hasn't reached configuration
+        }
+        void refetchTournament();
+      } catch (err) {
+        console.warn('Failed to persist pool configuration:', err);
+      }
+    }
+  };
+
+  // Synchronize actual teams and registrations into Pool Play state
+  useEffect(() => {
+    // If tournament already has matches scheduled/running, do not overwrite team pool assignments
+    if (matches.length > 0) return;
+
+    if (apiTeams && apiTeams.length > 0) {
+      setTeams((prevTeams) => {
+        const existingPoolMap = new Map<string, string>();
+        prevTeams.forEach((t) => {
+          if (t.id) existingPoolMap.set(t.id, t.pool);
+        });
+
+        const mapped: Team[] = apiTeams.map((t, idx) => {
+          const p1Mem = t.members?.[0];
+          const p2Mem = t.members?.[1];
+          const p1Name = p1Mem?.display_name || p1Mem?.user_email || `Player 1`;
+          const p2Name = p2Mem?.display_name || p2Mem?.user_email || `Player 2`;
+          const p1Avatar = p1Name.slice(0, 2).toUpperCase();
+          const p2Avatar = p2Name.slice(0, 2).toUpperCase();
+          const defaultPool = isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '';
+          const pool = existingPoolMap.get(t.id) || defaultPool;
+          return {
+            id: t.id,
+            teamNum: idx + 1,
+            name: t.name || `Team ${idx + 1}`,
+            p1: {
+              id: p1Mem?.player_membership_id || `p-${idx}-1`,
+              name: p1Name,
+              rating: 4.0,
+              avatar: p1Avatar,
+              color: '#1E3A8A',
+            },
+            p2: {
+              id: p2Mem?.player_membership_id || `p-${idx}-2`,
+              name: p2Name,
+              rating: 4.0,
+              avatar: p2Avatar,
+              color: '#047857',
+            },
+            pool,
+            avgRating: 4.0,
+            spread: 0.0,
+          };
+        });
+        return mapped;
+      });
+    } else if (registrations && registrations.length > 0) {
+      const confirmedRegs = registrations.filter((r) => r.status === 'confirmed');
+      const isDoubles = tournamentConfig.teamSize === 2;
+      const mapped: Team[] = [];
+      if (isDoubles) {
+        for (let i = 0; i < confirmedRegs.length; i += 2) {
+          const r1 = confirmedRegs[i];
+          const r2 = confirmedRegs[i + 1];
+          if (!r1) break;
+          const p1Name = r1.display_name || r1.user_full_name || r1.user_email || `Player ${i + 1}`;
+          const p2Name = r2
+            ? r2.display_name || r2.user_full_name || r2.user_email || `Player ${i + 2}`
+            : 'TBD Partner';
+          const teamIdx = Math.floor(i / 2);
+          mapped.push({
+            id: `team-reg-${teamIdx}`,
+            teamNum: teamIdx + 1,
+            name: `Team ${teamIdx + 1}`,
+            p1: {
+              id: r1.player_membership_id,
+              name: p1Name,
+              rating: 4.0,
+              avatar: p1Name.slice(0, 2).toUpperCase(),
+              color: '#1E3A8A',
+            },
+            p2: {
+              id: r2 ? r2.player_membership_id : `tbd-${teamIdx}`,
+              name: p2Name,
+              rating: 4.0,
+              avatar: p2Name.slice(0, 2).toUpperCase(),
+              color: '#047857',
+            },
+            pool: isPoolsGenerated ? (teamIdx % config.numPools === 0 ? 'A' : 'B') : '',
+            avgRating: 4.0,
+            spread: 0.0,
+          });
+        }
+      } else {
+        confirmedRegs.forEach((r, idx) => {
+          const pName = r.display_name || r.user_full_name || r.user_email || `Player ${idx + 1}`;
+          mapped.push({
+            id: `team-reg-${idx}`,
+            teamNum: idx + 1,
+            name: pName,
+            p1: {
+              id: r.player_membership_id,
+              name: pName,
+              rating: 4.0,
+              avatar: pName.slice(0, 2).toUpperCase(),
+              color: '#1E3A8A',
+            },
+            p2: {
+              id: r.player_membership_id,
+              name: pName,
+              rating: 4.0,
+              avatar: pName.slice(0, 2).toUpperCase(),
+              color: '#1E3A8A',
+            },
+            pool: isPoolsGenerated ? (idx % config.numPools === 0 ? 'A' : 'B') : '',
+            avgRating: 4.0,
+            spread: 0.0,
+          });
+        });
+      }
+      setTeams(mapped);
+    } else {
+      setTeams([]);
+    }
+  }, [apiTeams, registrations, config.numPools, tournamentConfig.teamSize, matches.length, isPoolsGenerated]);
+
+  // Calculated Stats
+  const { updatedTeams, pools, poolDiff, isWithinTolerance } = useMemo(() => {
+    return recalculateStats(teams, config);
+  }, [teams, config]);
+
+  // Standings
+  const standingsByPool = useMemo(() => {
+    const qualPerPool = Math.max(1, Math.floor(config.qualifierCount / config.numPools));
+    return calculatePoolStandings(pools, matches, qualPerPool);
+  }, [pools, matches, config.qualifierCount, config.numPools]);
+
+  const isPoolPlayComplete = useMemo(() => {
+    if (matches.length === 0) return false;
+    return matches.every((m) => m.status === 'completed');
+  }, [matches]);
+
+  const isChampionshipComplete = useMemo(() => {
+    if (championshipMatches.length === 0) return false;
+    const titleMatches = championshipMatches.filter(
+      (m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd')
+    );
+    const finals =
+      titleMatches.find((m) => m.roundName === 'Finals' || m.roundName === 'Final') ||
+      (titleMatches.length > 0
+        ? titleMatches.find(
+            (m) => (m.roundIndex ?? 0) === Math.max(...titleMatches.map((x) => x.roundIndex ?? 0))
+          )
+        : null);
+    if (finals) {
+      return finals.status === 'completed' && Boolean(finals.winner);
+    }
+    return championshipMatches.every((m) => m.status === 'completed');
+  }, [championshipMatches]);
+
+  const isTournamentCompleted = useMemo(() => {
+    if (tournament?.status === 'completed') return true;
+    if (championshipMatches.length > 0) {
+      return isChampionshipComplete;
+    }
+    if (config.qualifierCount === 0 && matches.length > 0) {
+      return matches.every((m) => m.status === 'completed');
+    }
+    return false;
+  }, [tournament?.status, championshipMatches.length, isChampionshipComplete, config.qualifierCount, matches]);
+
+  const isCompleted = isTournamentCompleted || tournament?.status === 'completed';
+
+  // Effective Tournament guarantees COMPLETED badge and status consistency across UI
+  const effectiveTournament = useMemo(() => {
+    if (!tournament) return null;
+    if (isCompleted) {
+      return {
+        ...tournament,
+        status: 'completed' as const,
+        status_label: 'COMPLETED',
+      };
+    }
+    return tournament;
+  }, [tournament, isCompleted]);
+
+  // Auto-complete tournament on backend whenever championship final match concludes
+  useEffect(() => {
+    if (isTournamentCompleted && tournament?.status !== 'completed' && clubId && tournamentId) {
+      void competitionApi
+        .endPoolPlayTournament(clubId, tournamentId)
+        .then(() => {
+          void refetchTournament();
+          if (clubId) {
+            queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+          }
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+        })
+        .catch((err) => {
+          console.warn('Auto end pool play tournament error:', err);
+        });
+    }
+  }, [isTournamentCompleted, tournament?.status, clubId, tournamentId, refetchTournament, queryClient]);
+
+  // ─── Actions ──────────────────────────────────────────────────────────────
+
+  const handleBalancePools = () => {
+    if (teams.length < 2) {
+      Alert.alert('Cannot Balance Pools', 'At least 2 registered teams are required to balance pools.');
+      return;
+    }
+    const balanced = balancePools(teams, config.numPools);
+    setTeams(balanced);
+    void persistPoolPlayState({ teams: balanced });
+
+    // Compute preview
+    const { pools: newPools, poolDiff: newDiff } = recalculateStats(balanced, config);
+    const pA = newPools.find((p) => p.key === 'A');
+    const pB = newPools.find((p) => p.key === 'B');
+
+    Alert.alert(
+      'Pools Balanced!',
+      `Auto-balanced via Snake Draft Seeding.\n` +
+        `Pool A Avg: ${pA?.avgTeamRating.toFixed(2) ?? '—'}\n` +
+        `Pool B Avg: ${pB?.avgTeamRating.toFixed(2) ?? '—'}\n` +
+        `Diff: ${newDiff.toFixed(2)} (${newDiff <= config.balanceTolerance ? 'Within' : 'Exceeds'} ±${config.balanceTolerance.toFixed(2)})`
+    );
+  };
+
+  const handleAddTeam = (newTeam: Team) => {
+    const updated = [...teams, newTeam];
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
+    Alert.alert('Team Added', `${newTeam.name} has been added to Pool ${newTeam.pool}.`);
+  };
+
+  const handleDeleteTeam = (teamId: string) => {
+    const updated = teams.filter((t) => t.id !== teamId);
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
+  };
+
+  const handleMoveTeamPool = (teamId: string, targetPool: string) => {
+    const updated = teams.map((t) => (t.id === teamId ? { ...t, pool: targetPool } : t));
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
+  };
+
+  const handleUpdatePlayerRating = (
+    teamId: string,
+    slot: 'p1' | 'p2',
+    newRating: number
+  ) => {
+    const updated = teams.map((t) => {
+      if (t.id !== teamId) return t;
+      const updatedPlayer = {
+        ...(slot === 'p1' ? t.p1 : t.p2),
+        rating: newRating,
+      };
+      return {
+        ...t,
+        [slot]: updatedPlayer,
+      };
+    });
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
+  };
+
+  const handleSwapPlayers = (
+    sourceTeamId: string,
+    sourceSlot: 'p1' | 'p2',
+    targetTeamId: string,
+    targetSlot: 'p1' | 'p2'
+  ) => {
+    const updated = teams.map((t) => {
+      const sourceTeam = teams.find((item) => item.id === sourceTeamId);
+      const targetTeam = teams.find((item) => item.id === targetTeamId);
+      if (!sourceTeam || !targetTeam) return t;
+
+      const sourcePlayer = sourceSlot === 'p1' ? sourceTeam.p1 : sourceTeam.p2;
+      const targetPlayer = targetSlot === 'p1' ? targetTeam.p1 : targetTeam.p2;
+
+      if (t.id === sourceTeamId) {
+        return {
+          ...t,
+          [sourceSlot]: targetPlayer,
+        };
+      }
+      if (t.id === targetTeamId) {
+        return {
+          ...t,
+          [targetSlot]: sourcePlayer,
+        };
+      }
+      return t;
+    });
+
+    setTeams(updated);
+    void persistPoolPlayState({ teams: updated });
+    Alert.alert('Partner Swapped', 'Players have been swapped and stats recalculated.');
+  };
+
+  const handleCreateMatchups = () => {
+    if (teams.length < 2) {
+      Alert.alert('Cannot Create Matchups', 'At least 2 registered teams are required to generate pool matchups.');
+      return;
+    }
+    const generated = createMatchups(pools, config.courts);
+    setMatches(generated);
+    setActiveTab('matchups');
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches: generated,
+      championshipMatches,
+      config,
+    });
+    Alert.alert(
+      'Matchups Created',
+      `Generated ${generated.length} intra-pool round robin matches across ${config.courts.length} courts.`
+    );
+  };
+
+  const handleStartRound = () => {
+    const maxPlaying = config.courts.length;
+    let count = 0;
+
+    const nextMatches = matches.map((m) => {
+      if (m.status === 'upcoming' && count < maxPlaying) {
+        count++;
+        return { ...m, status: 'playing' as const };
+      }
+      return m;
+    });
+
+    setMatches(nextMatches);
+    void persistPoolPlayState({ matches: nextMatches });
+    Alert.alert('Round Started', `Courts are active! Showing live matches.`);
+  };
+
+  const handleRecordPoolScore = async (matchId: string, score1: number, score2: number) => {
+    const nextMatches = matches.map((m) => {
+      if (m.id !== matchId) return m;
+      const winner = score1 > score2 ? m.t1 : m.t2;
+      return {
+        ...m,
+        score1,
+        score2,
+        status: 'completed' as const,
+        winner,
+      };
+    });
+    setMatches(nextMatches);
+
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches: nextMatches,
+      championshipMatches,
+      config,
+    });
+
+    if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
+      try {
+        await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
+          score_a: score1,
+          score_b: score2,
+        });
+      } catch {
+        try {
+          await competitionApi.correctMatchResult(clubId, tournamentId, matchId, {
+            score_a: score1,
+            score_b: score2,
+          });
+        } catch {
+          // Keep local state update
+        }
+      }
+    }
+  };
+
+  const handleGenerateChampionshipBracket = () => {
+    if (!isPoolPlayComplete) {
+      Alert.alert(
+        'Pool Play Incomplete',
+        'All pool matches must be completed before generating the championship bracket.'
+      );
+      return;
+    }
+    const generated = generateChampionshipBracket(
+      standingsByPool,
+      config.qualifierCount,
+      config.bracketType,
+      config.courts
+    );
+    setChampionshipMatches(generated);
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches,
+      championshipMatches: generated,
+      config,
+    });
+    Alert.alert(
+      'Bracket Generated',
+      `Championship bracket generated with ${generated.length} matches and deterministic cross-pool seeding.`
+    );
+  };
+
+  const handleRecordBracketScore = async (
+    matchId: string,
+    score1: number,
+    score2: number
+  ) => {
+    const nextChampMatches = advanceBracketWinner(championshipMatches, matchId, score1, score2);
+    setChampionshipMatches(nextChampMatches);
+
+    // Identify final match and champion
+    const titleMatches = nextChampMatches.filter(
+      (m) => m.id !== 'CB-3RD' && m.roundName !== '3rd Place' && !m.roundName?.toLowerCase().includes('3rd')
+    );
+    const finals =
+      titleMatches.find((m) => m.roundName === 'Finals' || m.roundName === 'Final') ||
+      (titleMatches.length > 0
+        ? titleMatches.find(
+            (m) => (m.roundIndex ?? 0) === Math.max(...titleMatches.map((x) => x.roundIndex ?? 0))
+          )
+        : null);
+
+    const isFinalCompleted = finals?.status === 'completed' && Boolean(finals?.winner);
+    const winner = finals?.winner;
+
+    void persistPoolPlayState({
+      teams: updatedTeams,
+      matches,
+      championshipMatches: nextChampMatches,
+      config,
+      winner,
+      completed: isFinalCompleted,
+    });
+
+    if (isFinalCompleted && clubId && tournamentId) {
+      try {
+        await competitionApi.endPoolPlayTournament(clubId, tournamentId);
+        void refetchTournament();
+        if (clubId) {
+          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        }
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });
+      } catch (e) {
+        console.warn('Failed to end tournament on backend:', e);
+      }
+    }
+
+    if (clubId && tournamentId && /^[0-9a-fA-F-]{36}$/.test(matchId)) {
+      try {
+        await competitionApi.recordMatchResult(clubId, tournamentId, matchId, {
+          score_a: score1,
+          score_b: score2,
+        });
+      } catch {
+        try {
+          await competitionApi.correctMatchResult(clubId, tournamentId, matchId, {
+            score_a: score1,
+            score_b: score2,
+          });
+        } catch {
+          // Keep local state update
+        }
+      }
+    }
+  };
+
+  const handlePublishTournament = async () => {
+    try {
+      await openRegistration();
+      void refetchTournament();
+      Alert.alert(
+        'Tournament Published!',
+        `"${tournament?.name ?? 'Tournament'}" is now live and open for registration! Players can discover and register for it.`
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to publish tournament';
+      Alert.alert('Error', msg);
+    }
+  };
+
+  const handleCloseRegistration = () => {
+    Alert.alert(
+      'Close Registration?',
+      `Closing registration for "${tournament?.name ?? 'this tournament'}" will:\n\n• Prevent any new player registrations or withdrawals\n• Finalize participant rosters and assign seeds\n• Enable Pool configuration and matchup generation`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Close Registration',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await closeRegistration();
+              void refetchTournament();
+              void refetchRegs();
+              void refetchTeams();
+              Alert.alert(
+                'Registration Closed',
+                'Registration is now closed. Rosters are locked and you can now configure pools and generate matchups.'
+              );
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Failed to close registration';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleStartTournament = () => {
+    Alert.alert(
+      'Start Tournament',
+      'Mark this tournament as live (In Progress)? Players will see live match updates.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start Now',
+          style: 'default',
+          onPress: async () => {
+            try {
+              await startTournament();
+              void refetchTournament();
+              Alert.alert('Tournament Started!', 'The tournament is now live.');
+            } catch (err: unknown) {
+              Alert.alert('Error', err instanceof Error ? err.message : 'Failed to start tournament');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRefresh = async () => {
+    await Promise.all([
+      refetchTournament(),
+      refetchRegs(),
+      refetchTeams(),
+      (async () => {
+        if (clubId && tournamentId) {
+          try {
+            const res = await competitionApi.getPoolPlayState(clubId, tournamentId);
+            const pps = res?.pool_play_state;
+            if (pps) {
+              if (Array.isArray(pps.teams) && pps.teams.length > 0) setTeams(pps.teams);
+              if (Array.isArray(pps.matches) && pps.matches.length > 0) setMatches(pps.matches);
+              if (Array.isArray(pps.championshipMatches) && pps.championshipMatches.length > 0) {
+                setChampionshipMatches(pps.championshipMatches);
+              }
+              if (pps.config) setConfig((prev) => ({ ...prev, ...pps.config }));
+            }
+          } catch {
+            // ignore
+          }
+        }
+      })(),
+    ]);
+  };
+
+  const handleOpenOptionsMenu = () => {
+    const isDraft = tournament?.status === 'draft';
+    const isRegOpen = tournament?.status === 'registration_open';
+    const isRegClosed = tournament?.status === 'registration_closed';
+    const buttons: { text: string; onPress?: () => void; style?: 'default' | 'cancel' | 'destructive' }[] = [];
+
+    if (isDraft) {
+      buttons.push({
+        text: 'Publish & Open Registration',
+        onPress: handlePublishTournament,
+      });
+    }
+
+    if (isRegOpen) {
+      buttons.push({
+        text: 'Close Registration',
+        onPress: handleCloseRegistration,
+      });
+    }
+
+    if (isRegClosed && matches.length === 0) {
+      buttons.push({
+        text: 'Reopen Registration',
+        onPress: handlePublishTournament,
+      });
+    }
+
+    if (isRegClosed && matches.length > 0) {
+      buttons.push({
+        text: 'Start Tournament (Go Live)',
+        onPress: handleStartTournament,
+      });
+    }
+
+    buttons.push(
+      {
+        text: 'Setup & Courts',
+        onPress: () => setActiveTab('setup_courts'),
+      },
+      {
+        text: 'Refresh Data',
+        onPress: () => {
+          void handleRefresh();
+        },
+      },
+      {
+        text: 'Back to Tournaments',
+        onPress: () => router.back(),
+      },
+      { text: 'Cancel', style: 'cancel' }
+    );
+
+    Alert.alert(
+      tournament?.name ?? 'Pool Play Tournament',
+      `Status: ${effectiveTournament?.status_label ?? tournament?.status_label ?? tournament?.status ?? ''}`,
+      buttons
+    );
+  };
+
+  const isSingles = tournamentConfig.teamSize === 1;
+
+  const navTabs = useMemo(() => {
+    return getTournamentNavigationTabs(effectiveTournament, {
+      participantsCount: updatedTeams.length,
+      teamsCount: updatedTeams.length,
+      matchesCount: matches.length,
+      poolsCount: isPoolsGenerated && pools.length > 0 ? pools.length : undefined,
+    });
+  }, [effectiveTournament, updatedTeams.length, matches.length, pools.length, isPoolsGenerated]);
+
+  const primaryAction = useMemo(() => {
+    if (!canManage) return null;
+    if (isCompleted) {
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
+    if (effectiveTournament?.status === 'draft') {
+      return {
+        label: 'Publish Tournament',
+        onPress: handlePublishTournament,
+        isLoading: isOpenRegistrationPending,
+      };
+    }
+    if (effectiveTournament?.status === 'registration_open') {
+      return {
+        label: 'Close Registration',
+        onPress: handleCloseRegistration,
+        isLoading: isCloseRegistrationPending,
+        variant: 'secondary' as const,
+      };
+    }
+    if (matches.length > 0 && !isPoolPlayComplete) {
+      return {
+        label: 'Enter Scores',
+        onPress: () => setActiveTab('matchups'),
+      };
+    }
+    if (isPoolPlayComplete && championshipMatches.length === 0) {
+      return {
+        label: 'Generate Bracket',
+        onPress: () => {
+          handleGenerateChampionshipBracket();
+          setActiveTab('championship');
+        },
+      };
+    }
+    if (championshipMatches.length > 0) {
+      const champRemaining = championshipMatches.filter((m) => m.status !== 'completed').length;
+      if (champRemaining > 0) {
+        return {
+          label: 'Championship Scores',
+          onPress: () => setActiveTab('championship'),
+        };
+      }
+      return {
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
+      };
+    }
+    return null;
+  }, [
+    canManage,
+    isCompleted,
+    effectiveTournament?.status,
+    isOpenRegistrationPending,
+    isCloseRegistrationPending,
+    isStartingTournament,
+    matches.length,
+    isPoolPlayComplete,
+    championshipMatches,
+    handlePublishTournament,
+    handleCloseRegistration,
+    handleStartTournament,
+  ]);
+
+  // ─── Loading & Error Guards (matches Bracket, Round Robin, Scramble pattern) ─
+  if (isLoadingTournament && !tournament) {
+    return (
+      <Screen safeArea={false}>
+        <LoadingState message="Loading Pool Play workspace..." />
+      </Screen>
+    );
+  }
+
+  if (tournamentError && !tournament) {
+    return (
+      <Screen safeArea={false}>
+        <ErrorState
+          title="Failed to load tournament"
+          message={tournamentError.message}
+          onRetry={() => { void refetchTournament(); }}
+        />
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen safeArea={false} style={styles.screen}>
+      <View style={styles.responsiveContainer}>
+        {/* 1. Compact Fixed Navigation Bar */}
+        <TournamentManagementTopBar
+          tournament={effectiveTournament}
+          onBack={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/club-portal/tournaments' as any);
+            }
+          }}
+          onOptionsPress={handleOpenOptionsMenu}
+        />
+
+        {/* 2. Scrollable View: Info section scrolls naturally, Tabs stay sticky */}
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentContainer}
+          stickyHeaderIndices={[1]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoadingTournament}
+              onRefresh={handleRefresh}
+            />
+          }
+        >
+          {/* Child 0: Natural-Scrolling Info & Banners */}
+          <View style={styles.headerInfoWrapper}>
+            <TournamentManagementInfo
+              tournament={effectiveTournament}
+              primaryAction={primaryAction}
+              activeTab={activeTab}
+            />
+
+            {effectiveTournament?.status === 'draft' && (
+              <DraftTournamentBanner
+                tournamentName={effectiveTournament?.name}
+                onPublish={handlePublishTournament}
+                isPublishing={isOpenRegistrationPending}
+              />
+            )}
+
+            {effectiveTournament?.status === 'registration_open' && (
+              <RegistrationOpenBanner
+                tournamentName={effectiveTournament?.name}
+                participantCount={registrations.length}
+                maxParticipants={effectiveTournament?.max_participants}
+                onCloseRegistration={handleCloseRegistration}
+                isClosing={isCloseRegistrationPending}
+              />
+            )}
+          </View>
+
+          {/* Child 1: Sticky Tab Bar */}
+          <TournamentManagementTabs
+            tabs={navTabs}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+          />
+
+          {/* Child 2: Tab Body Content */}
+          <View style={styles.tabBodyWrapper}>
+          {/* ─── Tab 1: Overview ───────────────────────────────────────── */}
+          {activeTab === 'overview' && (
+            <>
+              {canManage && (effectiveTournament ?? tournament) && clubId && tournamentId && (
+                <PoolPlayPostRegistrationCard
+                  clubId={clubId}
+                  tournamentId={tournamentId}
+                  tournament={(effectiveTournament ?? tournament)!}
+                  canManage={canManage}
+                  onNavigateToSetup={() => setActiveTab('setup_courts')}
+                  onGenerated={async () => {
+                    await handleRefresh();
+                  }}
+                  onStartTournament={handleStartTournament}
+                  isStartingTournament={isStartingTournament}
+                />
+              )}
+              <PoolPlayOverviewTab
+                tournament={effectiveTournament ?? tournament!}
+                teams={updatedTeams}
+                matches={matches}
+                championshipMatches={championshipMatches}
+                pools={pools}
+                config={config}
+                isPoolPlayComplete={isPoolPlayComplete}
+                isChampionshipComplete={isChampionshipComplete}
+                isSingles={isSingles}
+                onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
+              />
+            </>
+          )}
+
+          {/* ─── Tab 2: Players & Pools / Teams & Pools ─────────────────── */}
+          {(activeTab === 'participants' || (activeTab as string) === 'teams_pools') && (
+            <TeamsPoolsTab
+              tournament={tournament}
+              teams={updatedTeams}
+              pools={pools}
+              poolDiff={poolDiff}
+              isWithinTolerance={isWithinTolerance}
+              config={config}
+              isSingles={isSingles}
+              onBalancePools={handleBalancePools}
+              onAddTeam={handleAddTeam}
+              onDeleteTeam={handleDeleteTeam}
+              onMoveTeamPool={handleMoveTeamPool}
+              onUpdatePlayerRating={handleUpdatePlayerRating}
+              onSwapPlayers={handleSwapPlayers}
+              onToleranceChange={(tol) =>
+                setConfig((prev) => ({ ...prev, balanceTolerance: tol }))
+              }
+              onCreateMatchups={handleCreateMatchups}
+            />
+          )}
+
+          {/* ─── Tab 3: Matchups ───────────────────────────────────────── */}
+          {activeTab === 'matchups' && (
+            <MatchupsTab
+              matches={matches}
+              pools={pools}
+              onStartRound={handleStartRound}
+              onRecordScore={handleRecordPoolScore}
+              onCreateMatchups={handleCreateMatchups}
+              isTournamentCompleted={isTournamentCompleted}
+            />
+          )}
+
+          {/* ─── Tab 4: Standings ──────────────────────────────────────── */}
+          {activeTab === 'standings' && (
+            <StandingsTab
+              pools={pools}
+              standingsByPool={standingsByPool}
+              isPoolPlayComplete={isPoolPlayComplete}
+              hasMatchups={matches.length > 0}
+              matches={matches}
+              qualifierCountPerPool={Math.max(1, Math.floor(config.qualifierCount / config.numPools))}
+              onGoToMatchups={() => setActiveTab('matchups')}
+              hasChampionshipBracket={championshipMatches.length > 0}
+              isTournamentCompleted={isTournamentCompleted}
+              onNavigateToBracket={() => setActiveTab('championship')}
+              onAdvanceToBracket={() => {
+                handleGenerateChampionshipBracket();
+                setActiveTab('championship');
+              }}
+            />
+          )}
+
+          {/* ─── Tab 5: Championship Bracket ───────────────────────────── */}
+          {activeTab === 'championship' && (
+            <ChampionshipBracketTab
+              standingsByPool={standingsByPool}
+              championshipMatches={championshipMatches}
+              courts={config.courts}
+              bracketType={config.bracketType}
+              qualifierCount={config.qualifierCount}
+              isPoolPlayComplete={isPoolPlayComplete}
+              isTournamentCompleted={isTournamentCompleted}
+              onGenerateBracket={handleGenerateChampionshipBracket}
+              onRecordBracketScore={handleRecordBracketScore}
+            />
+          )}
+
+          {/* ─── Tab 6: Setup & Courts (Dedicated Tab) ─────────────────── */}
+          {activeTab === 'setup_courts' && (
+            <PoolPlaySetupCourtsTab
+              clubId={clubId}
+              tournamentId={tournamentId}
+              tournament={effectiveTournament ?? tournament}
+              config={config}
+              onSaveConfig={handleSavePoolConfig}
+              canManage={canManage}
+              registeredCount={updatedTeams.length}
+              maxParticipants={tournament?.max_participants}
+              clubCourts={activeClubCourts}
+              clubName={clubName ?? undefined}
+              onGenerated={async () => {
+                await handleRefresh();
+              }}
+              matchesCount={matches.length}
+            />
+          )}
+
+          {/* ─── Tab 7: Results ────────────────────────────────────────── */}
+          {activeTab === 'results' && (
+            <PoolPlayResultsTab
+              tournament={effectiveTournament ?? tournament}
+              teams={updatedTeams}
+              matches={matches}
+              championshipMatches={championshipMatches}
+              standingsByPool={standingsByPool}
+              isSingles={isSingles}
+            />
+          )}
+
+          {/* ─── Tab 8: Settings ───────────────────────────────────────── */}
+          {activeTab === 'settings' && (
+            <TournamentSettingsTab
+              tournament={effectiveTournament ?? tournament ?? null}
+              onRefresh={() => void refetchTournament()}
+              canManage={canManage}
+              courtCount={config.courts.length}
+              poolCount={pools.length > 0 ? pools.length : config.numPools}
+            />
+          )}
+          </View>
+        </ScrollView>
+
+        {/* ─── Setup & Courts Modal ──────────────────────────────────── */}
+        <SetupCourtsModal
+          visible={showSetupModal}
+          onClose={() => setShowSetupModal(false)}
+          config={config}
+          onSaveConfig={handleSavePoolConfig}
+          registeredCount={updatedTeams.length}
+          maxParticipants={tournament?.max_participants}
+        />
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  headerInfoWrapper: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBodyWrapper: {
+    flex: 1,
+  },
+  screen: {
+    backgroundColor: '#F1F8F3',
+  },
+  responsiveContainer: {
+    flex: 1,
+    maxWidth: 600,
+    width: '100%',
+    alignSelf: 'center',
+    backgroundColor: '#F1F8F3',
+  },
+  contentScroll: {
+    flex: 1,
+    backgroundColor: '#F1F8F3',
+  },
+  contentContainer: {
+    paddingBottom: Spacing[10],
+  },
+  optionsBtn: {
+    padding: 6,
+    borderRadius: 8,
+  },
+});

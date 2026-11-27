@@ -332,6 +332,7 @@ setTokenRefreshHandler(async () => {
 
 // Logout hook registry for flushing TanStack query caches
 let _onLogoutCallbacks: Array<() => void> = [];
+let _initializeInFlight: Promise<void> | null = null;
 
 export function registerLogoutHandler(cb: () => void): () => void {
   _onLogoutCallbacks.push(cb);
@@ -353,133 +354,26 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
   error: null,
 
   /**
-   * Called once on app launch.
-   * Tries to restore session using stored access token or refresh token.
+   * Called once on app launch / browser reload.
+   * Strict initialization order:
+   *   1. Restore tokens from storage
+   *   2. Refresh access token if expired
+   *   3. Verify authenticated user & resolve authoritative role from backend (/auth/me)
+   *   4. Transition isLoading -> false only after role resolution completes
    */
   initialize: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      let accessToken = await getStoredAccessToken();
-      const refreshToken = await getStoredRefreshToken();
-      const cachedSession = await getStoredUserCache();
-      const storedPortal = await getStoredPortal();
+    if (_initializeInFlight) {
+      return _initializeInFlight;
+    }
 
-      const isTokenExpired = !accessToken || isJwtExpired(accessToken);
-
-      // 1. Fast Session Restoration: hydrate from cache immediately ONLY IF access token is currently valid
-      if (accessToken && !isTokenExpired && cachedSession?.user) {
-        const isPlatformUser = Boolean(
-          cachedSession.user.is_platform_admin || isPlatformAdminEmail(cachedSession.user.email)
-        );
-        const hasClubStaff = Boolean(cachedSession.memberships && cachedSession.memberships.length > 0);
-        let resolvedPortal: AuthPortal = 'player';
-        if (isPlatformUser) {
-          resolvedPortal = 'platform';
-        } else if (hasClubStaff) {
-          resolvedPortal = 'club';
-        } else {
-          resolvedPortal = 'player';
-        }
-
-        set({
-          user: cachedSession.user,
-          memberships: cachedSession.memberships || [],
-          activeMembership: cachedSession.memberships?.[0] ?? null,
-          activePortal: resolvedPortal,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      }
-
-      // 2. Token refresh if access token missing or expired
-      if ((!accessToken || isTokenExpired) && refreshToken) {
-        try {
-          const refreshRes = await authApi.refreshToken(refreshToken);
-          const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
-          await saveTokens(refreshRes.access_token, newRefreshToken);
-          accessToken = refreshRes.access_token;
-        } catch (rErr: any) {
-          const status = rErr?.status ?? rErr?.response?.status;
-          const msg = String(rErr?.message || '').toLowerCase();
-          const isNetworkError = !status && (msg.includes('network') || msg.includes('timeout') || msg.includes('abort') || msg.includes('offline'));
-          if (status === 401 || status === 403 || (status === 400 && !isNetworkError)) {
-            await clearTokens();
-            await clearActivePortal();
-            await clearUserCache();
-            set({ isLoading: false, isAuthenticated: false, user: null, memberships: [], activePortal: null });
-            return;
-          }
-        }
-      }
-
-      if (!accessToken || isJwtExpired(accessToken)) {
-        await clearTokens();
-        await clearActivePortal();
-        await clearUserCache();
-        set({ isLoading: false, isAuthenticated: false, activePortal: null, user: null, memberships: [] });
-        return;
-      }
-
-      // 3. Authoritative server verification
+    const run = async () => {
+      set({ isLoading: true, error: null });
       try {
-        const response = await authApi.getMe();
-        const currentActive = get().activeMembership;
-        const validActive =
-          currentActive && response.memberships.some((m) => m.membership_id === currentActive.membership_id)
-            ? currentActive
-            : response.memberships[0] ?? null;
+        let accessToken = await getStoredAccessToken();
+        const refreshToken = await getStoredRefreshToken();
+        const cachedSession = await getStoredUserCache();
 
-        const isPlatformUser = Boolean(
-          response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
-        );
-        const hasClubStaff = Boolean(response.memberships && response.memberships.length > 0);
-
-        let resolvedPortal: AuthPortal = 'player';
-        if (isPlatformUser) {
-          resolvedPortal = 'platform';
-        } else if (hasClubStaff) {
-          resolvedPortal = 'club';
-        } else {
-          resolvedPortal = 'player';
-        }
-
-        await saveActivePortal(resolvedPortal);
-        await saveUserCache(response.user, response.memberships);
-
-        set({
-          user: response.user,
-          memberships: response.memberships,
-          activeMembership: validActive,
-          activePortal: resolvedPortal,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-      } catch (getMeErr: any) {
-        const status = getMeErr?.status ?? getMeErr?.response?.status;
-        const isAuthError =
-          status === 401 || status === 403 || getMeErr?.type === 'UNAUTHORIZED' || getMeErr?.type === 'FORBIDDEN';
-
-        if (isAuthError) {
-          if (refreshToken) {
-            try {
-              const refreshRes = await authApi.refreshToken(refreshToken);
-              const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
-              await saveTokens(refreshRes.access_token, newRefreshToken);
-              const retryResponse = await authApi.getMe();
-              await saveUserCache(retryResponse.user, retryResponse.memberships);
-              set({
-                user: retryResponse.user,
-                memberships: retryResponse.memberships,
-                isAuthenticated: true,
-                isLoading: false,
-              });
-              return;
-            } catch (refFail: any) {
-              console.warn('[AUTH] Session refresh failed after auth rejection on getMe:', refFail);
-            }
-          }
-          // Auth failed and refresh did not succeed: clear stale credentials cleanly
-          await clearTokens();
+        if (!accessToken && !refreshToken) {
           await clearActivePortal();
           await clearUserCache();
           set({
@@ -493,19 +387,160 @@ export const useAuthStore = create<AuthStoreState>((set, get) => ({
           return;
         }
 
-        // If genuine network glitch or 5xx server error occurred and we already restored from cache, keep session alive
-        if (cachedSession?.user) {
-          console.warn('[AUTH] Offline or server glitch; keeping authenticated cache alive:', getMeErr);
-          set({ isLoading: false, isAuthenticated: true });
+        const isTokenExpired = !accessToken || isJwtExpired(accessToken);
+
+        // Step 2: Token refresh if access token missing or expired
+        if (isTokenExpired && refreshToken) {
+          try {
+            const refreshRes = await authApi.refreshToken(refreshToken);
+            const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
+            await saveTokens(refreshRes.access_token, newRefreshToken);
+            accessToken = refreshRes.access_token;
+          } catch (rErr: any) {
+            const status = rErr?.status ?? rErr?.response?.status;
+            const msg = String(rErr?.message || '').toLowerCase();
+            const isNetworkError =
+              !status &&
+              (msg.includes('network') || msg.includes('timeout') || msg.includes('abort') || msg.includes('offline'));
+            if (status === 401 || status === 403 || (status === 400 && !isNetworkError)) {
+              await clearTokens();
+              await clearActivePortal();
+              await clearUserCache();
+              set({
+                isLoading: false,
+                isAuthenticated: false,
+                user: null,
+                memberships: [],
+                activeMembership: null,
+                activePortal: null,
+              });
+              return;
+            }
+          }
+        }
+
+        if (!accessToken || isJwtExpired(accessToken)) {
+          await clearTokens();
+          await clearActivePortal();
+          await clearUserCache();
+          set({
+            isLoading: false,
+            isAuthenticated: false,
+            activePortal: null,
+            activeMembership: null,
+            user: null,
+            memberships: [],
+          });
           return;
         }
 
+        const applyAuthoritativeSession = async (response: { user: any; memberships: any[] }) => {
+          const currentActive = get().activeMembership;
+          const validActive =
+            currentActive && response.memberships.some((m) => m.membership_id === currentActive.membership_id)
+              ? currentActive
+              : response.memberships[0] ?? null;
+
+          const isPlatformUser = Boolean(
+            response.user.is_platform_admin || isPlatformAdminEmail(response.user.email)
+          );
+          const hasClubStaff = Boolean(response.memberships && response.memberships.length > 0);
+
+          const resolvedPortal: AuthPortal = isPlatformUser
+            ? 'platform'
+            : hasClubStaff
+              ? 'club'
+              : 'player';
+
+          await saveActivePortal(resolvedPortal);
+          await saveUserCache(response.user, response.memberships);
+
+          set({
+            user: response.user,
+            memberships: response.memberships,
+            activeMembership: validActive,
+            activePortal: resolvedPortal,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        };
+
+        // Step 3: Authoritative server verification before rendering any role UI
+        try {
+          const response = await authApi.getMe();
+          await applyAuthoritativeSession(response);
+        } catch (getMeErr: any) {
+          const status = getMeErr?.status ?? getMeErr?.response?.status;
+          const isAuthError =
+            status === 401 ||
+            status === 403 ||
+            getMeErr?.type === 'UNAUTHORIZED' ||
+            getMeErr?.type === 'FORBIDDEN';
+
+          if (isAuthError) {
+            if (refreshToken) {
+              try {
+                const refreshRes = await authApi.refreshToken(refreshToken);
+                const newRefreshToken = (refreshRes as any).refresh_token || refreshToken;
+                await saveTokens(refreshRes.access_token, newRefreshToken);
+                const retryResponse = await authApi.getMe();
+                await applyAuthoritativeSession(retryResponse);
+                return;
+              } catch (refFail: any) {
+                console.warn('[AUTH] Session refresh failed after auth rejection on getMe:', refFail);
+              }
+            }
+            // Auth failed and refresh did not succeed: clear stale credentials cleanly
+            await clearTokens();
+            await clearActivePortal();
+            await clearUserCache();
+            set({
+              user: null,
+              memberships: [],
+              activeMembership: null,
+              activePortal: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+            return;
+          }
+
+          // Transient network/5xx error with a non-expired accessToken and cached user metadata:
+          if (cachedSession?.user && accessToken && !isJwtExpired(accessToken)) {
+            console.warn('[AUTH] Offline or server glitch; restoring from validated cache:', getMeErr);
+            const isPlatformUser = Boolean(
+              cachedSession.user.is_platform_admin || isPlatformAdminEmail(cachedSession.user.email)
+            );
+            const hasClubStaff = Boolean(cachedSession.memberships && cachedSession.memberships.length > 0);
+            const resolvedPortal: AuthPortal = isPlatformUser
+              ? 'platform'
+              : hasClubStaff
+                ? 'club'
+                : 'player';
+
+            set({
+              user: cachedSession.user,
+              memberships: cachedSession.memberships || [],
+              activeMembership: cachedSession.memberships?.[0] ?? null,
+              activePortal: resolvedPortal,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+            return;
+          }
+
+          set({ isLoading: false, isAuthenticated: false });
+        }
+      } catch (globalErr) {
+        console.warn('[AUTH] Initialization error:', globalErr);
         set({ isLoading: false });
       }
-    } catch (globalErr) {
-      console.warn('[AUTH] Initialization error:', globalErr);
-      set({ isLoading: false });
-    }
+    };
+
+    _initializeInFlight = run().finally(() => {
+      _initializeInFlight = null;
+    });
+    return _initializeInFlight;
   },
 
   /**

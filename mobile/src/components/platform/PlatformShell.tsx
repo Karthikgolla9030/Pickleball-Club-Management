@@ -18,7 +18,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, DrawerOverlay, Screen } from '@/components';
@@ -27,6 +27,7 @@ import {
   PlatformOwnerProfile,
 } from '@/services/api/clubApplications';
 import { useAuthStore } from '@/store';
+import { getCurrentRelativeUrl, getDefaultHomeForRole, resolveRoleContext } from '@/utils';
 import { Colors, Spacing } from '@/theme';
 
 import { PlatformBottomNav } from './PlatformBottomNav';
@@ -57,9 +58,24 @@ export function PlatformShell({
   scrollable = false,
 }: PlatformShellProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const logout = useAuthStore((s) => s.logout);
+  const authLoading = useAuthStore((s) => s.isLoading);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const authUser = useAuthStore((s) => s.user);
+  const memberships = useAuthStore((s) => s.memberships);
+  const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
+
+  const roleCtx = resolveRoleContext({
+    isAuthenticated,
+    user: authUser,
+    memberships,
+    activeMembership,
+    activePortal,
+  });
 
   const [adminUser, setAdminUser] = useState<PlatformOwnerProfile | null>(null);
   const [isVerifying, setIsVerifying] = useState(true);
@@ -71,6 +87,11 @@ export function PlatformShell({
   const isDesktop = width >= 800;
 
   useEffect(() => {
+    // Wait for centralized auth initialization and verify user belongs to Platform portal before fetching
+    if (authLoading || !isAuthenticated || !roleCtx.isPlatformAdmin) {
+      return;
+    }
+
     let isMounted = true;
     async function verifyAuthAndFetchBadges() {
       try {
@@ -102,8 +123,17 @@ export function PlatformShell({
             console.warn('[PlatformShell] Transient network/rate-limit error during auth verification:', err);
             return;
           }
+          // Authenticated non-admin visiting platform URL: return to authorized portal without destroying session
+          if (err?.status === 403 && isAuthenticated) {
+            router.replace(getDefaultHomeForRole(roleCtx) as any);
+            return;
+          }
+          const currentUrl = getCurrentRelativeUrl(pathname);
           await logout();
-          router.replace('/platform/login' as any);
+          router.replace({
+            pathname: '/platform/login' as any,
+            params: currentUrl && currentUrl !== '/platform/login' ? { redirect: currentUrl } : undefined,
+          });
         }
       }
     }
@@ -111,7 +141,7 @@ export function PlatformShell({
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [authLoading, isAuthenticated, roleCtx.isPlatformAdmin, pathname, router]);
 
   const handleSignOut = async () => {
     try {

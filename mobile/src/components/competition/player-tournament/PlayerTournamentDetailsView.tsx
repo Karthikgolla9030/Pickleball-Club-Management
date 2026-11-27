@@ -58,6 +58,7 @@ export interface PlayerTournamentDetailsViewProps {
   isRefreshing?: boolean;
   onRegister?: () => void;
   initialTab?: string;
+  onTabChange?: (tabKey: string) => void;
 }
 
 export function PlayerTournamentDetailsView({
@@ -67,6 +68,7 @@ export function PlayerTournamentDetailsView({
   isRefreshing = false,
   onRegister,
   initialTab = 'overview',
+  onTabChange,
 }: PlayerTournamentDetailsViewProps) {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -436,7 +438,10 @@ export function PlayerTournamentDetailsView({
           <PlayerTournamentTabs
             tabs={tabs}
             activeTab={currentTab}
-            onTabChange={setActiveTab}
+            onTabChange={(nextTab) => {
+              setActiveTab(nextTab);
+              onTabChange?.(nextTab);
+            }}
           />
         </View>
 

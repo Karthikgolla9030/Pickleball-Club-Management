@@ -3,7 +3,7 @@
  *
  * Faithfully reproduces the exact visual design, layout, section order, card dimensions,
  * typography, colors, badges, and responsive behavior of the actual Player Side Club Details page
- * (`mobile/app/(player)/club-details.tsx`):
+ * (`mobile/app/player/club-details.tsx`):
  *   1. Compact Mock Player Header with circular back button and dynamic club name
  *   2. Inset photographic Hero Banner with dark-green gradient overlay, real club logo,
  *      club name, capsule "ACTIVE" badge, location with pin, and operating hours with clock

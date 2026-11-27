@@ -10,13 +10,14 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Menu, ArrowLeft } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { useDrawerStore } from '@/navigation';
-import { Colors, Spacing } from '@/theme';
+import { Colors } from '@/theme';
+import { safeGoBack } from '@/utils';
 
 interface AppHeaderProps {
   title?: string;
@@ -26,6 +27,10 @@ interface AppHeaderProps {
   showMenu?: boolean;
   /** Show back arrow instead of hamburger */
   showBack?: boolean;
+  /** Custom back press override */
+  onBack?: () => void;
+  /** Explicit fallback route if browser/stack has no back history */
+  fallbackRoute?: string;
   /** Use clean minimal icon without round border */
   minimalIcon?: boolean;
   /** Optional element rendered on the right side */
@@ -41,6 +46,8 @@ export function AppHeader({
   subtitle,
   showMenu = true,
   showBack = false,
+  onBack,
+  fallbackRoute,
   minimalIcon = false,
   rightElement,
   borderless = false,
@@ -48,8 +55,25 @@ export function AppHeader({
 }: AppHeaderProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const pathname = usePathname();
   const openDrawer = useDrawerStore((s) => s.openDrawer);
   const { width: windowWidth } = useWindowDimensions();
+
+  const resolvedFallback =
+    fallbackRoute ||
+    (pathname.startsWith('/club-portal')
+      ? '/club-portal'
+      : pathname.startsWith('/platform')
+        ? '/platform'
+        : '/player');
+
+  const handleBackPress = () => {
+    if (onBack) {
+      onBack();
+      return;
+    }
+    safeGoBack(router, resolvedFallback);
+  };
 
   // Adapt header font size based on title length and presence of right action
   // (not screen width — ensures identical rendering on all mobile devices)
@@ -72,7 +96,7 @@ export function AppHeader({
         {/* Left button */}
         {showBack ? (
           <Pressable
-            onPress={() => router.back()}
+            onPress={handleBackPress}
             style={minimalIcon ? styles.iconButtonMinimal : styles.iconButton}
             hitSlop={8}
             accessibilityLabel="Go back"

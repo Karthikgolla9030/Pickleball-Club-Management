@@ -32,7 +32,7 @@ import { ArrowRight, MapPin, Sparkles } from 'lucide-react-native';
 import { AppText } from './AppText';
 import { Radius, Shadows, Spacing } from '@/theme';
 import type { ClubCarouselSlide, UniversalPromotionalAd } from '@/types';
-import { resolveMediaUrl } from '@/utils';
+import { normalizeAppRoute, resolveMediaUrl } from '@/utils';
 
 type AdItem = UniversalPromotionalAd | ClubCarouselSlide;
 
@@ -94,11 +94,12 @@ export function PromotionalAdsCarousel({
   };
 
   const handleCtaPress = (ad: AdItem) => {
-    if (ad.cta_route) {
-      router.push(ad.cta_route as any);
+    const normalized = normalizeAppRoute(ad.cta_route);
+    if (normalized) {
+      router.push(normalized as any);
     } else if ('club_id' in ad && ad.club_id) {
       router.push({
-        pathname: '/(player)/club-details',
+        pathname: '/player/club-details',
         params: { clubId: ad.club_id },
       } as any);
     }

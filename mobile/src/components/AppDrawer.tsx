@@ -128,10 +128,15 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   const handleNavigate = (route?: string) => {
     closeDrawer();
-    if (route) {
-      if (normalizedPath === route) return;
-      router.push(route as any);
+    if (!route) return;
+    const [rawPath, rawQuery] = route.split('?');
+    const cleanTargetPath = rawPath.replace(/\/$/, '') || '/';
+    if (normalizedPath === cleanTargetPath) {
+      if (!rawQuery) return;
+      const targetTab = new URLSearchParams(rawQuery).get('tab');
+      if (targetTab && targetTab === globalParams.tab) return;
     }
+    router.push(route as any);
   };
 
   const handleSignOut = async () => {
@@ -209,25 +214,25 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
 
   // ─── 1. PLAYER NAVIGATION ─────────────────────────────────────────────────
   const playerActivities: NavItemConfig[] = [
-    { key: 'player_home', label: 'Home', icon: Home, route: '/(player)/' },
-    { key: 'player_explore', label: 'Explore Clubs', icon: Compass, route: '/(player)/explore-clubs' },
-    { key: 'player_clubs', label: 'My Clubs', icon: Building2, route: '/(player)/clubs' },
-    { key: 'player_bookings', label: 'My Bookings', icon: CalendarDays, route: '/(player)/bookings' },
-    { key: 'player_courts', label: 'Book a Court', icon: LayoutGrid, route: '/(player)/book-court-club' },
-    { key: 'player_membership', label: 'My Memberships', icon: Crown, route: '/(player)/membership' },
-    { key: 'player_payments', label: 'My Payments', icon: CreditCard, route: '/(player)/payments' },
-    { key: 'player_upcoming_activities', label: 'Upcoming Activities', icon: Compass, route: '/(player)/upcoming-activities' },
-    { key: 'player_tournaments', label: 'Tournaments', icon: Trophy, route: '/(player)/tournaments' },
-    { key: 'player_leagues', label: 'Leagues', icon: Medal, route: '/(player)/leagues' },
-    { key: 'player_events', label: 'Events', icon: CalendarHeart, route: '/(player)/events' },
-    { key: 'player_lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(player)/lessons' },
+    { key: 'player_home', label: 'Home', icon: Home, route: '/player/' },
+    { key: 'player_explore', label: 'Explore Clubs', icon: Compass, route: '/player/explore-clubs' },
+    { key: 'player_clubs', label: 'My Clubs', icon: Building2, route: '/player/clubs' },
+    { key: 'player_bookings', label: 'My Bookings', icon: CalendarDays, route: '/player/bookings' },
+    { key: 'player_courts', label: 'Book a Court', icon: LayoutGrid, route: '/player/book-court-club' },
+    { key: 'player_membership', label: 'My Memberships', icon: Crown, route: '/player/membership' },
+    { key: 'player_payments', label: 'My Payments', icon: CreditCard, route: '/player/payments' },
+    { key: 'player_upcoming_activities', label: 'Upcoming Activities', icon: Compass, route: '/player/upcoming-activities' },
+    { key: 'player_tournaments', label: 'Tournaments', icon: Trophy, route: '/player/tournaments' },
+    { key: 'player_leagues', label: 'Leagues', icon: Medal, route: '/player/leagues' },
+    { key: 'player_events', label: 'Events', icon: CalendarHeart, route: '/player/events' },
+    { key: 'player_lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/player/lessons' },
   ];
 
   const playerAccount: NavItemConfig[] = [
-    { key: 'player_profile', label: 'Profile', icon: User, route: '/(player)/profile' },
-    { key: 'player_settings', label: 'Settings', icon: Settings, route: '/(player)/settings' },
-    { key: 'player_notifications', label: 'Notifications', icon: Bell, route: '/(player)/notifications' },
-    { key: 'player_help', label: 'Help & Support', icon: HelpCircle, route: '/(player)/help-support' },
+    { key: 'player_profile', label: 'Profile', icon: User, route: '/player/profile' },
+    { key: 'player_settings', label: 'Settings', icon: Settings, route: '/player/settings' },
+    { key: 'player_notifications', label: 'Notifications', icon: Bell, route: '/player/notifications' },
+    { key: 'player_help', label: 'Help & Support', icon: HelpCircle, route: '/player/help-support' },
   ];
 
   // ─── 2. CLUB NAVIGATION (Role-Specific & Permission-Driven) ───────────────
@@ -239,112 +244,112 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     if (role === 'club_owner') {
       // Club Owner: Full access to all club features & administration
       clubSection1 = [
-        { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
-        { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
-        { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
-        { key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' },
-        { key: 'events', label: 'Events', icon: CalendarHeart, route: '/(club)/events' },
-        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' },
-        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' },
-        { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' },
+        { key: 'home', label: 'Home', icon: Home, route: '/club-portal/' },
+        { key: 'members', label: 'Members', icon: Users, route: '/club-portal/members?tab=players' },
+        { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/club-portal/courts' },
+        { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/club-portal/bookings' },
+        { key: 'memberships', label: 'Memberships', icon: Crown, route: '/club-portal/memberships' },
+        { key: 'events', label: 'Events', icon: CalendarHeart, route: '/club-portal/events' },
+        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' },
+        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' },
+        { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/club-portal/lessons' },
       ];
       clubSection2 = [
-        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' },
-        { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members?tab=staff' },
-        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
-        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' },
+        { key: 'club_details', label: 'Club Details', icon: Building2, route: '/club-portal/club-details' },
+        { key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/club-portal/members?tab=staff' },
+        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/club-portal/payments' },
+        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/club-portal/analytics' },
       ];
       clubSection3 = [
-        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
-        { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
+        { key: 'profile', label: 'Profile', icon: User, route: '/club-portal/profile' },
+        { key: 'settings', label: 'Settings', icon: Settings, route: '/club-portal/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/club-portal/help-support' },
       ];
     } else if (role === 'club_manager' && !activeMembership?.custom_role_id) {
       // Built-in Club Manager: Operational features (no staff/role management or club ownership)
       clubSection1 = [
-        { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' },
-        { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' },
-        { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' },
-        { key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' },
-        { key: 'events', label: 'Events', icon: CalendarHeart, route: '/(club)/events' },
-        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' },
-        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' },
-        { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' },
+        { key: 'home', label: 'Home', icon: Home, route: '/club-portal/' },
+        { key: 'members', label: 'Members', icon: Users, route: '/club-portal/members?tab=players' },
+        { key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/club-portal/courts' },
+        { key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/club-portal/bookings' },
+        { key: 'memberships', label: 'Memberships', icon: Crown, route: '/club-portal/memberships' },
+        { key: 'events', label: 'Events', icon: CalendarHeart, route: '/club-portal/events' },
+        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' },
+        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' },
+        { key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/club-portal/lessons' },
       ];
       clubSection2 = [
-        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' },
-        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' },
+        { key: 'payments', label: 'Payments', icon: CreditCard, route: '/club-portal/payments' },
+        { key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/club-portal/analytics' },
       ];
       clubSection3 = [
-        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
-        { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
+        { key: 'profile', label: 'Profile', icon: User, route: '/club-portal/profile' },
+        { key: 'settings', label: 'Settings', icon: Settings, route: '/club-portal/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/club-portal/help-support' },
       ];
     } else if (role === 'tournament_director' && !activeMembership?.custom_role_id) {
       // Built-in Tournament Director: Competitions only
       clubSection1 = [
-        { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
-        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' },
-        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' },
+        { key: 'home', label: 'Home', icon: Home, route: '/club-portal/' },
+        { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' },
+        { key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' },
       ];
       clubSection2 = [];
       clubSection3 = [
-        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
-        { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
+        { key: 'profile', label: 'Profile', icon: User, route: '/club-portal/profile' },
+        { key: 'settings', label: 'Settings', icon: Settings, route: '/club-portal/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/club-portal/help-support' },
       ];
     } else {
       // Custom Role / Other Staff: Dynamically construct navigation based on backend-authorized permissions
       const section1: NavItemConfig[] = [
-        { key: 'home', label: 'Home', icon: Home, route: '/(club)/' },
+        { key: 'home', label: 'Home', icon: Home, route: '/club-portal/' },
       ];
       if (permissions.canManageMembers) {
-        section1.push({ key: 'members', label: 'Members', icon: Users, route: '/(club)/members?tab=players' });
+        section1.push({ key: 'members', label: 'Members', icon: Users, route: '/club-portal/members?tab=players' });
       }
       if (permissions.canManageCourts) {
-        section1.push({ key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/(club)/courts' });
+        section1.push({ key: 'courts', label: 'Courts', icon: LayoutGrid, route: '/club-portal/courts' });
       }
       if (permissions.canManageBookings) {
-        section1.push({ key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/(club)/bookings' });
+        section1.push({ key: 'bookings', label: 'Bookings', icon: CalendarDays, route: '/club-portal/bookings' });
       }
       if (permissions.canManageMemberships) {
-        section1.push({ key: 'memberships', label: 'Memberships', icon: Crown, route: '/(club)/memberships' });
+        section1.push({ key: 'memberships', label: 'Memberships', icon: Crown, route: '/club-portal/memberships' });
       }
       if (permissions.canManageEvents) {
-        section1.push({ key: 'events', label: 'Events', icon: CalendarHeart, route: '/(club)/events' });
+        section1.push({ key: 'events', label: 'Events', icon: CalendarHeart, route: '/club-portal/events' });
       }
       if (permissions.canManageTournaments) {
-        section1.push({ key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/(club)/tournaments' });
+        section1.push({ key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' });
       }
       if (permissions.canManageLeagues || permissions.canManageTournaments) {
-        section1.push({ key: 'leagues', label: 'Leagues', icon: Medal, route: '/(club)/leagues' });
+        section1.push({ key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' });
       }
       if (permissions.canManageLessons) {
-        section1.push({ key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/(club)/lessons' });
+        section1.push({ key: 'lessons', label: 'Lessons & Coaching', icon: GraduationCap, route: '/club-portal/lessons' });
       }
       clubSection1 = section1;
 
       const section2: NavItemConfig[] = [];
       if (permissions.canManageClub) {
-        section2.push({ key: 'club_details', label: 'Club Details', icon: Building2, route: '/(club)/club-details' });
+        section2.push({ key: 'club_details', label: 'Club Details', icon: Building2, route: '/club-portal/club-details' });
       }
       if (permissions.canManageRoles) {
-        section2.push({ key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/(club)/members?tab=staff' });
+        section2.push({ key: 'staff', label: 'Staff & Permissions', icon: ShieldCheck, route: '/club-portal/members?tab=staff' });
       }
       if (permissions.canManagePayments) {
-        section2.push({ key: 'payments', label: 'Payments', icon: CreditCard, route: '/(club)/payments' });
+        section2.push({ key: 'payments', label: 'Payments', icon: CreditCard, route: '/club-portal/payments' });
       }
       if (permissions.canManageReports) {
-        section2.push({ key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/(club)/analytics' });
+        section2.push({ key: 'analytics', label: 'Analytics & Reports', icon: FileText, route: '/club-portal/analytics' });
       }
       clubSection2 = section2;
 
       clubSection3 = [
-        { key: 'profile', label: 'Profile', icon: User, route: '/(club)/profile' },
-        { key: 'settings', label: 'Settings', icon: Settings, route: '/(club)/settings' },
-        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/(club)/help-support' },
+        { key: 'profile', label: 'Profile', icon: User, route: '/club-portal/profile' },
+        { key: 'settings', label: 'Settings', icon: Settings, route: '/club-portal/settings' },
+        { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/club-portal/help-support' },
       ];
     }
   }
@@ -356,12 +361,12 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
     let isActive = false;
     if (isItemHome) {
       isActive = isPlayer
-        ? normalizedPath === '/(player)' || normalizedPath === '/(player)/index'
-        : normalizedPath === '/(club)' || normalizedPath === '/(club)/index';
+        ? normalizedPath === '/player' || normalizedPath === '/player/index'
+        : normalizedPath === '/club-portal' || normalizedPath === '/club-portal/index';
     } else if (item.key === 'staff') {
-      isActive = normalizedPath === '/(club)/members' && globalParams.tab === 'staff';
+      isActive = normalizedPath === '/club-portal/members' && globalParams.tab === 'staff';
     } else if (item.key === 'members') {
-      isActive = normalizedPath === '/(club)/members' && globalParams.tab !== 'staff';
+      isActive = normalizedPath === '/club-portal/members' && globalParams.tab !== 'staff';
     } else {
       isActive = normalizedPath === itemRouteWithoutQuery;
     }

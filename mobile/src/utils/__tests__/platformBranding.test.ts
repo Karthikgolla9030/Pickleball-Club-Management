@@ -50,7 +50,7 @@ export function runPlatformBrandingTests(): void {
     title: 'Welcome to Picklora',
     subtitle: 'Great courts. Active members.',
     cta_text: 'Book a Court',
-    cta_destination: '/(club)/bookings',
+    cta_destination: '/club-portal/bookings',
     is_active: true,
   };
 

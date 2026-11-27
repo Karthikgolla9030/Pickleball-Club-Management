@@ -82,7 +82,7 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
     return () => sub.remove();
   }, [isOpen, closeDrawer]);
 
-  // Web Escape key listener
+  // Web Escape key and popstate listener
   useEffect(() => {
     if (!isOpen || Platform.OS !== 'web') return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -90,8 +90,15 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
         closeDrawer();
       }
     };
+    const handlePopState = () => {
+      closeDrawer();
+    };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, [isOpen, closeDrawer]);
 
   // Smooth slide animation from LEFT
@@ -110,7 +117,9 @@ export function PlatformDrawer({ adminUser, counts }: PlatformDrawerProps) {
 
   const handleNavigate = (route: string) => {
     closeDrawer();
-    router.replace(route as any);
+    const cleanTarget = route.replace(/\/$/, '') || '/platform';
+    if (normalizedPath === cleanTarget) return;
+    router.push(route as any);
   };
 
   const handleSignOut = async () => {

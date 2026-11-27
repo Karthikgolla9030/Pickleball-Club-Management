@@ -99,7 +99,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Welcome to Pickleball',
     defaultSubtitle: 'Great courts. Active members. A healthier, happier community.',
     defaultCtaText: 'Book a Court',
-    defaultCtaDestination: '/(club)/bookings',
+    defaultCtaDestination: '/club-portal/bookings',
     builtinFallback: null,
   },
   {
@@ -113,7 +113,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Welcome to Pickleball',
     defaultSubtitle: 'Ready to play, compete and make the most of your game?',
     defaultCtaText: 'Find a Court',
-    defaultCtaDestination: '/(player)/book-court-club',
+    defaultCtaDestination: '/player/book-court-club',
     builtinFallback: null,
   },
 
@@ -129,7 +129,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Tournament Competition',
     defaultSubtitle: 'Official Club Tournament',
     defaultCtaText: 'Explore Tournaments',
-    defaultCtaDestination: '/(player)/tournaments',
+    defaultCtaDestination: '/player/tournaments',
     builtinFallback: BUILTIN_FALLBACKS.tournamentGeneric,
   },
   {
@@ -143,7 +143,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Round Robin Tournament',
     defaultSubtitle: 'Official Round Robin Competition',
     defaultCtaText: 'Explore Tournaments',
-    defaultCtaDestination: '/(player)/tournaments',
+    defaultCtaDestination: '/player/tournaments',
     builtinFallback: BUILTIN_FALLBACKS.tournamentRoundRobin,
   },
   {
@@ -157,7 +157,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Pool Play Tournament',
     defaultSubtitle: 'Official Pool Play Competition',
     defaultCtaText: 'Explore Tournaments',
-    defaultCtaDestination: '/(player)/tournaments',
+    defaultCtaDestination: '/player/tournaments',
     builtinFallback: BUILTIN_FALLBACKS.tournamentPoolPlay,
   },
   {
@@ -171,7 +171,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Scramble Tournament',
     defaultSubtitle: 'Official Scramble Competition',
     defaultCtaText: 'Explore Tournaments',
-    defaultCtaDestination: '/(player)/tournaments',
+    defaultCtaDestination: '/player/tournaments',
     builtinFallback: BUILTIN_FALLBACKS.tournamentScramble,
   },
   {
@@ -185,7 +185,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Bracket Tournament',
     defaultSubtitle: 'Single and Double Elimination',
     defaultCtaText: 'Explore Tournaments',
-    defaultCtaDestination: '/(player)/tournaments',
+    defaultCtaDestination: '/player/tournaments',
     builtinFallback: BUILTIN_FALLBACKS.tournamentBracket,
   },
 
@@ -201,7 +201,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Club Event',
     defaultSubtitle: 'Socials, clinics, and community events',
     defaultCtaText: 'View Events',
-    defaultCtaDestination: '/(player)/events',
+    defaultCtaDestination: '/player/events',
     builtinFallback: BUILTIN_FALLBACKS.event,
   },
   {
@@ -215,7 +215,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'Lessons & Coaching',
     defaultSubtitle: 'Group clinics and private coaching sessions',
     defaultCtaText: 'Find Lessons',
-    defaultCtaDestination: '/(player)/lessons',
+    defaultCtaDestination: '/player/lessons',
     builtinFallback: BUILTIN_FALLBACKS.lesson,
   },
   {
@@ -229,7 +229,7 @@ const BANNER_CONFIGS: BannerItemConfig[] = [
     defaultTitle: 'League Competition',
     defaultSubtitle: 'Competitive league seasons and ladders',
     defaultCtaText: 'Join League',
-    defaultCtaDestination: '/(player)/leagues',
+    defaultCtaDestination: '/player/leagues',
     builtinFallback: BUILTIN_FALLBACKS.league,
   },
 ];

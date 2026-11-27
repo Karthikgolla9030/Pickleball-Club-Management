@@ -7,10 +7,16 @@
  */
 
 import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { Stack, usePathname, useRouter } from 'expo-router';
+import { LoadingState } from '@/components';
+import { useDrawerStore } from '@/navigation';
 import { useAuthStore } from '@/store';
-import { isPlatformAdminEmail } from '@/constants';
+import {
+  getCurrentRelativeUrl,
+  getDefaultHomeForRole,
+  resolveRoleContext,
+} from '@/utils';
 
 export default function PlatformLayout() {
   const router = useRouter();
@@ -19,26 +25,58 @@ export default function PlatformLayout() {
   const isLoading = useAuthStore((s) => s.isLoading);
   const user = useAuthStore((s) => s.user);
   const memberships = useAuthStore((s) => s.memberships);
+  const activeMembership = useAuthStore((s) => s.activeMembership);
+  const activePortal = useAuthStore((s) => s.activePortal);
+
+  const isLoginRoute = pathname === '/platform/login';
+  const roleCtx = resolveRoleContext({
+    isAuthenticated,
+    user,
+    memberships,
+    activeMembership,
+    activePortal,
+  });
+  const isAuthorizedPlatform =
+    isLoginRoute || (!isLoading && isAuthenticated && roleCtx.isPlatformAdmin);
 
   useEffect(() => {
-    if (isLoading) return;
-    if (pathname === '/platform/login') return;
+    if (isLoading || isLoginRoute) return;
 
     if (!isAuthenticated) {
-      router.replace('/platform/login' as any);
+      const currentUrl = getCurrentRelativeUrl(pathname);
+      router.replace({
+        pathname: '/platform/login' as any,
+        params: currentUrl && currentUrl !== '/platform/login' ? { redirect: currentUrl } : undefined,
+      });
       return;
     }
 
-    const isPlatformAdmin = Boolean(user?.is_platform_admin || isPlatformAdminEmail(user?.email));
-    if (!isPlatformAdmin) {
-      // Non-platform-administrators cannot access platform portal
-      if (memberships.length > 0) {
-        router.replace('/(club)');
-      } else {
-        router.replace('/(player)');
-      }
+    if (!roleCtx.isPlatformAdmin) {
+      router.replace(getDefaultHomeForRole(roleCtx) as any);
     }
-  }, [isAuthenticated, isLoading, user, memberships, pathname, router]);
+  }, [isAuthenticated, isLoading, isLoginRoute, roleCtx.isPlatformAdmin, roleCtx.hasClubStaff, pathname, router]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || isLoginRoute || !isAuthorizedPlatform) return;
+    const onBackPress = () => {
+      const { isOpen, closeDrawer } = useDrawerStore.getState();
+      if (isOpen) {
+        closeDrawer();
+        return true;
+      }
+      if (router.canGoBack()) {
+        return false;
+      }
+      const cleanPath = pathname.replace(/\/+$/, '') || '/platform';
+      if (cleanPath !== '/platform' && cleanPath !== '/platform/index') {
+        router.replace('/platform' as any);
+        return true;
+      }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [isAuthorizedPlatform, isLoginRoute, pathname, router]);
 
   return (
     <View style={styles.container}>
@@ -60,6 +98,12 @@ export default function PlatformLayout() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="legal" />
       </Stack>
+
+      {!isAuthorizedPlatform && (
+        <View style={styles.guardOverlay} pointerEvents="auto">
+          <LoadingState message="Verifying platform administrative authorization..." />
+        </View>
+      )}
     </View>
   );
 }
@@ -68,5 +112,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8FAF9',
+  },
+  guardOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#F8FAF9',
+    zIndex: 999,
   },
 });

@@ -19,16 +19,18 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, Lock, Mail, ShieldAlert, ShieldCheck } from 'lucide-react-native';
 
 import { AppText, Button, Card, Input, PlatformButton, Screen } from '@/components';
 import { useAuth } from '@/hooks';
+import { isRedirectAllowedForRole } from '@/utils';
 import { Colors, Radius, Spacing } from '@/theme';
 
 export default function PlatformLoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ redirect?: string }>();
   const insets = useSafeAreaInsets();
   const { loginPlatform, isLoading, isAuthenticated, isPlatformAdmin, error, clearError } = useAuth();
 
@@ -39,9 +41,17 @@ export default function PlatformLoginScreen() {
 
   React.useEffect(() => {
     if (isAuthenticated && isPlatformAdmin && !isLoading) {
-      router.replace('/platform' as any);
+      const redirectParam = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+      if (
+        redirectParam &&
+        isRedirectAllowedForRole(redirectParam, { isPlatformAdmin: true, hasClubStaff: false })
+      ) {
+        router.replace(redirectParam as any);
+      } else {
+        router.replace('/platform' as any);
+      }
     }
-  }, [isAuthenticated, isPlatformAdmin, isLoading, router]);
+  }, [isAuthenticated, isPlatformAdmin, isLoading, params.redirect, router]);
 
   const validate = (): boolean => {
     let valid = true;
@@ -68,7 +78,15 @@ export default function PlatformLoginScreen() {
     if (!validate()) return;
     try {
       await loginPlatform(email.trim(), password);
-      router.replace('/platform' as any);
+      const redirectParam = Array.isArray(params.redirect) ? params.redirect[0] : params.redirect;
+      if (
+        redirectParam &&
+        isRedirectAllowedForRole(redirectParam, { isPlatformAdmin: true, hasClubStaff: false })
+      ) {
+        router.replace(redirectParam as any);
+      } else {
+        router.replace('/platform' as any);
+      }
     } catch {
       // error is handled by store and displayed below
     }

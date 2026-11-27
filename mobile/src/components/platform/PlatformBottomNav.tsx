@@ -64,7 +64,9 @@ export function PlatformBottomNav({
     normalizedPath.startsWith('/platform/legal');
 
   const handleNavigate = (route: string) => {
-    router.replace(route as any);
+    const cleanTarget = route.replace(/\/$/, '') || '/platform';
+    if (normalizedPath === cleanTarget) return;
+    router.push(route as any);
   };
 
   return (

@@ -76,7 +76,7 @@ export default function RegisterScreen() {
 
     try {
       await registerPlayer(fullName.trim(), email.trim().toLowerCase(), password);
-      router.replace('/(player)');
+      router.replace('/player' as any);
     } catch {
       // Error handled by store
     }

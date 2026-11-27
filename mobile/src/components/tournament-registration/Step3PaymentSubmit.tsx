@@ -289,7 +289,7 @@ export function Step3PaymentSubmit({
               style={styles.errorClubActionBtn}
               onPress={() => {
                 router.push({
-                  pathname: '/(player)/club-details' as any,
+                  pathname: '/player/club-details' as any,
                   params: { id: (tournament as any).club_id },
                 });
               }}

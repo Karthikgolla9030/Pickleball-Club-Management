@@ -134,9 +134,9 @@ export default function StandalonePublicClubScreen() {
     if (isPlatformAdmin) {
       router.replace('/platform/clubs' as any);
     } else if (memberships.length > 0 || activePortal === 'club') {
-      router.replace('/(club)' as any);
+      router.replace('/club-portal' as any);
     } else if (isAuthenticated) {
-      router.replace('/(player)' as any);
+      router.replace('/player' as any);
     } else {
       router.replace('/(auth)/login' as any);
     }

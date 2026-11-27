@@ -1,0 +1,1292 @@
+/**
+ * Aught2 Pickleball — Player Events Screen
+ *
+ * Implements the exact Player Side "Events" UI matching the reference design:
+ *   - Top header with hamburger menu button, "Events" title, and subtle horizontal divider
+ *   - Hero Banner: Pale mint rounded container with "DISCOVER EVENTS", "Play Together, Get Better",
+ *     supporting text, and pickleball paddle/ball court image
+ *   - Segmented Control: "Discover Events" and "My Registrations"
+ *   - Upcoming Events section with "View All >" header
+ *   - Event Cards with left image, dynamic date badge overlay ("SEP / 27 / SAT"),
+ *     title, calendar date, location pin, pastel category & access badges, registration status,
+ *     entry fee / Free badge, and right chevron
+ *   - Interactive ModalSheet for viewing full event details and registering / cancelling
+ *   - "Host an Event?" card at the bottom
+ *   - Preserves fixed bottom navigation bar and active Events tab
+ *   - Real backend data integration with separate loading, error, and empty states
+ */
+
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import {
+  Calendar,
+  ChevronRight,
+  Clock,
+  MapPin,
+  Menu,
+  Users,
+} from 'lucide-react-native';
+import { useQueryClient } from '@tanstack/react-query';
+
+import { AppHeader, AppText, CheckoutModal, ModalSheet, PlayerHeroBanner, BannerSlide } from '@/components';
+import { eventApi } from '@/services/api';
+import {
+  useActiveClub,
+  useClubBranding,
+  useCancelEventRegistration,
+  useDiscoverClubEvents,
+  useMyEvents,
+  usePlatformBanners,
+  useRegisterForEvent,
+} from '@/hooks';
+import { useDrawerStore } from '@/navigation';
+import { Colors } from '@/theme';
+import { formatCurrency, formatDateTime, resolveMediaUrl } from '@/utils';
+import { resolveEventCover } from '@/utils/imageResolution';
+import type { ClubEvent, EventRegistration } from '@/types';
+
+type MainTab = 'discover' | 'my_registrations';
+
+export default function PlayerEventsScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const openDrawer = useDrawerStore((s) => s.openDrawer);
+  const { clubId, role } = useActiveClub();
+  const { clubId: paramClubId, id: paramEventId } = useLocalSearchParams<{ clubId?: string; id?: string }>();
+  const effectiveClubId = paramClubId || clubId || '';
+  const { data: clubBranding } = useClubBranding(effectiveClubId);
+  const { banners: platformBanners } = usePlatformBanners();
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  const [activeTab, setActiveTab] = useState<MainTab>('discover');
+  const [selectedDetailEvent, setSelectedDetailEvent] = useState<ClubEvent | null>(null);
+  const [checkoutEvent, setCheckoutEvent] = useState<ClubEvent | null>(null);
+
+  const eventBannerSlides: BannerSlide[] = useMemo(
+    () => [
+      {
+        tag: 'CLUB EVENTS',
+        title: 'Play Together, Get Better',
+        description: 'Join socials, clinics and tournaments at your club.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'TOURNAMENTS',
+        title: 'Compete & Win Together',
+        description: 'Challenge your skills in club tournaments and leagues.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+      {
+        tag: 'SOCIAL OPEN PLAY',
+        title: 'Connect With Players',
+        description: 'Weekly open play and social mixers for all levels.',
+        ctaText: 'Explore Events →',
+        onCtaPress: () => {
+          setActiveTab('discover');
+          scrollViewRef.current?.scrollTo({ y: 310, animated: true });
+        },
+      },
+    ],
+    []
+  );
+
+  const handleHostEvent = () => {
+    const isStaff =
+      role === 'club_owner' ||
+      role === 'club_manager' ||
+      role === 'tournament_director';
+    if (isStaff) {
+      Alert.alert(
+        'Host an Event',
+        'As club staff, you can organize, schedule, and publish official events in Club Management.',
+        [
+          { text: 'Dismiss', style: 'cancel' },
+          {
+            text: 'Go to Club Events',
+            onPress: () => router.push('/club-portal/events' as any),
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Host an Event',
+        'Clinics, socials and tournaments bring our community together.\n\nInterested in proposing a club clinic, social mixer, or tournament? Reach out to club organizers or staff to get started!',
+        [{ text: 'Got it', style: 'default' }]
+      );
+    }
+  };
+
+  // Discover Events query
+  const {
+    data: discoverEvents = [],
+    isLoading: isDiscoverLoading,
+    isRefetching: isDiscoverRefetching,
+    isError: isDiscoverError,
+    error: discoverError,
+    refetch: refetchDiscover,
+  } = useDiscoverClubEvents(effectiveClubId || '');
+
+  // Auto-open event detail modal if navigated with ?id=<eventId>
+  React.useEffect(() => {
+    if (!paramEventId) return;
+    const found = discoverEvents.find((e) => e.id === paramEventId);
+    if (found) {
+      setSelectedDetailEvent(found);
+    } else {
+      eventApi
+        .getPlayerEventDetail(paramEventId)
+        .then((detail) => {
+          if (detail) {
+            setSelectedDetailEvent(detail);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [paramEventId, discoverEvents]);
+
+  // My Events query
+  const {
+    data: myRegistrations = [],
+    isLoading: isMyEventsLoading,
+    isRefetching: isMyEventsRefetching,
+    isError: isMyEventsError,
+    error: myEventsError,
+    refetch: refetchMyEvents,
+  } = useMyEvents();
+
+  // Mutations
+  const registerMutation = useRegisterForEvent(
+    selectedDetailEvent?.id || '',
+    effectiveClubId || undefined
+  );
+  const cancelMutation = useCancelEventRegistration(
+    selectedDetailEvent?.id || '',
+    effectiveClubId || undefined
+  );
+
+  // Auto-refresh when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      refetchDiscover();
+      refetchMyEvents();
+    }, [refetchDiscover, refetchMyEvents])
+  );
+
+  // Quick lookup to check if current player is registered for an event
+  const getActiveRegistration = useCallback(
+    (eventId: string): EventRegistration | undefined => {
+      return myRegistrations.find(
+        (r) => r.event_id === eventId && r.status !== 'cancelled'
+      );
+    },
+    [myRegistrations]
+  );
+
+  // Sort upcoming events chronologically
+  const sortedUpcomingEvents = useMemo(() => {
+    return [...discoverEvents].sort(
+      (a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+    );
+  }, [discoverEvents]);
+
+  // ─── Date Parsing Helpers ──────────────────────────────────────────────────
+  const parseEventDate = (isoString: string) => {
+    try {
+      const d = new Date(isoString);
+      const month = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+      const day = d.getDate().toString();
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+      const formattedDate = d.toLocaleDateString('en-US', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+      return { month, day, weekday, formattedDate };
+    } catch {
+      return { month: 'SEP', day: '00', weekday: 'DAY', formattedDate: isoString };
+    }
+  };
+
+  const getEventImage = (event: ClubEvent, _index: number) => {
+    return resolveEventCover(event, clubBranding, platformBanners);
+  };
+
+  // ─── Registration Handlers ─────────────────────────────────────────────────
+  const handleRegister = (event: ClubEvent) => {
+    const isFull = event.capacity !== null && event.registered_count >= event.capacity;
+    if (isFull) {
+      Alert.alert(
+        'Join Waitlist',
+        `This event is currently full (${event.registered_count}/${event.capacity}). You will be placed on the waitlist and automatically promoted if a spot opens up.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Join Waitlist',
+            onPress: async () => {
+              try {
+                await registerMutation.mutateAsync({});
+                refetchDiscover();
+                refetchMyEvents();
+                setSelectedDetailEvent(null);
+                Alert.alert('Success', 'You are on the waitlist!');
+              } catch (err: unknown) {
+                const msg = err instanceof Error ? err.message : 'Registration failed';
+                Alert.alert('Error', msg);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    setCheckoutEvent(event);
+  };
+
+  const handleCancelRegistration = (eventId: string, title: string) => {
+    Alert.alert(
+      'Cancel Registration',
+      `Are you sure you want to cancel your registration for "${title}"? If you cancel a confirmed spot, it will be offered to the waitlist.`,
+      [
+        { text: 'Keep Spot', style: 'cancel' },
+        {
+          text: 'Cancel Registration',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await cancelMutation.mutateAsync();
+              refetchDiscover();
+              refetchMyEvents();
+              setSelectedDetailEvent(null);
+              Alert.alert('Registration Cancelled', 'Your registration has been cancelled.');
+            } catch (err: unknown) {
+              const msg = err instanceof Error ? err.message : 'Cancellation failed';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ─── Render Badges ─────────────────────────────────────────────────────────
+  const renderBadges = (event: ClubEvent) => {
+    const titleLower = event.title?.toLowerCase() || '';
+    const typeLower = event.event_type?.toLowerCase() || '';
+
+    // Category Badge
+    let catBg = '#FEF3C7';
+    let catText = '#92400E';
+    let catLabel = 'Social';
+
+    if (titleLower.includes('open play')) {
+      catBg = '#DCFCE7';
+      catText = '#15803D';
+      catLabel = 'Open Play';
+    } else if (typeLower === 'clinic' || titleLower.includes('clinic')) {
+      catBg = '#E0F2FE';
+      catText = '#0369A1';
+      catLabel = 'Clinic / Coaching';
+    } else if (typeLower === 'special' || typeLower === 'tournament' || titleLower.includes('tournament')) {
+      catBg = '#F3E8FF';
+      catText = '#7E22CE';
+      catLabel = 'Tournament';
+    } else if (typeLower === 'social' || titleLower.includes('social')) {
+      catBg = '#FEF3C7';
+      catText = '#92400E';
+      catLabel = 'Social';
+    }
+
+    // Access Badge
+    const isMembersOnly = event.visibility === 'members_only';
+    const isPublic = event.visibility === 'public';
+    const isTournament = catLabel === 'Tournament';
+
+    // Pricing
+    const feeNum = Number(event.registration_fee);
+    const isFree = isNaN(feeNum) || feeNum <= 0;
+
+    return (
+      <View style={styles.badgesRow}>
+        <View style={styles.badgeLeftGroup}>
+          {/* Category */}
+          <View style={[styles.pillBadge, { backgroundColor: catBg }]}>
+            <AppText style={[styles.pillBadgeText, { color: catText }]}>{catLabel}</AppText>
+          </View>
+
+          {/* Access / All Levels */}
+          {isTournament ? (
+            <View style={[styles.pillBadge, { backgroundColor: '#F3E8FF' }]}>
+              <AppText style={[styles.pillBadgeText, { color: '#7E22CE' }]}>All Levels</AppText>
+            </View>
+          ) : isMembersOnly ? (
+            <View style={[styles.pillBadge, { backgroundColor: '#FEF3C7' }]}>
+              <AppText style={[styles.pillBadgeText, { color: '#92400E' }]}>Members Only</AppText>
+            </View>
+          ) : isPublic ? (
+            <View style={[styles.pillBadge, { backgroundColor: '#E0F2FE' }]}>
+              <AppText style={[styles.pillBadgeText, { color: '#0369A1' }]}>Public</AppText>
+            </View>
+          ) : null}
+
+          {/* Free Badge if applicable */}
+          {isFree && (
+            <View style={[styles.pillBadge, { backgroundColor: '#DCFCE7' }]}>
+              <AppText style={[styles.pillBadgeText, { color: '#15803D' }]}>Free</AppText>
+            </View>
+          )}
+        </View>
+
+        {/* Paid Fee if applicable */}
+        {!isFree && (
+          <AppText style={styles.priceText}>
+            {formatCurrency(feeNum)}
+          </AppText>
+        )}
+      </View>
+    );
+  };
+
+  // ─── Render Discover Event Card ────────────────────────────────────────────
+  const renderDiscoverCard = (item: ClubEvent, index: number) => {
+    const { month, day, weekday, formattedDate } = parseEventDate(item.start_at);
+    const reg = getActiveRegistration(item.id);
+    const imageSource = getEventImage(item, index);
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.eventCard}
+        onPress={() => {
+          setSelectedDetailEvent(item);
+          router.setParams({ id: item.id } as any);
+        }}
+        activeOpacity={0.88}
+      >
+        {/* Left Image with Date Badge Overlay */}
+        <View style={styles.cardImageWrapper}>
+          {imageSource ? (
+            <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.cardImageFallback}>
+              <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
+          <View style={styles.dateBadgeOverlay}>
+            <AppText style={styles.dateBadgeMonth}>{month}</AppText>
+            <AppText style={styles.dateBadgeDay}>{day}</AppText>
+            <AppText style={styles.dateBadgeWeekday}>{weekday}</AppText>
+          </View>
+        </View>
+
+        {/* Middle/Right Details */}
+        <View style={styles.cardDetails}>
+          <View style={styles.cardHeaderRow}>
+            <AppText style={styles.cardTitle} numberOfLines={1}>
+              {item.title}
+            </AppText>
+            {reg && (
+              <View style={styles.registeredBadge}>
+                <AppText style={styles.registeredBadgeText}>
+                  {reg.status === 'waitlisted' ? 'Waitlisted' : 'Registered'}
+                </AppText>
+              </View>
+            )}
+          </View>
+
+          {/* Date Row */}
+          <View style={styles.cardMetaRow}>
+            <Calendar size={13} color="#718279" strokeWidth={2} />
+            <AppText style={styles.cardMetaText}>{formattedDate}</AppText>
+          </View>
+
+          {/* Location Row */}
+          {item.location ? (
+            <View style={styles.cardMetaRow}>
+              <MapPin size={13} color="#718279" strokeWidth={2} />
+              <AppText style={styles.cardMetaText} numberOfLines={1}>
+                {item.location}
+              </AppText>
+            </View>
+          ) : null}
+
+          {/* Badges Row */}
+          {renderBadges(item)}
+        </View>
+
+        {/* Right Chevron */}
+        <View style={styles.chevronWrapper}>
+          <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // ─── Render My Registration Card ───────────────────────────────────────────
+  const renderRegistrationCard = (reg: EventRegistration, index: number) => {
+    const eventDateStr = reg.event_start_at || reg.registered_at;
+    const { month, day, weekday, formattedDate } = parseEventDate(eventDateStr);
+    const matchingEvent = discoverEvents.find((e) => e.id === reg.event_id);
+    const imageSource = resolveEventCover(matchingEvent, clubBranding, platformBanners);
+    const isCancelled = reg.status === 'cancelled';
+    const isWaitlisted = reg.status === 'waitlisted';
+
+    return (
+      <TouchableOpacity
+        key={reg.id}
+        style={styles.eventCard}
+        onPress={() => {
+          // Find matching event from discover list if available
+          const matchingEvent = discoverEvents.find((e) => e.id === reg.event_id);
+          if (matchingEvent) {
+            setSelectedDetailEvent(matchingEvent);
+          } else {
+            Alert.alert(
+              reg.event_title || 'Club Event',
+              `Registration Status: ${reg.status.toUpperCase()}\nRegistered on: ${formattedDate}`
+            );
+          }
+        }}
+        activeOpacity={0.88}
+      >
+        <View style={styles.cardImageWrapper}>
+          {imageSource ? (
+            <Image source={imageSource} style={styles.cardImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.cardImageFallback}>
+              <Calendar size={22} color="#18794E" strokeWidth={1.8} />
+            </View>
+          )}
+          <View style={styles.dateBadgeOverlay}>
+            <AppText style={styles.dateBadgeMonth}>{month}</AppText>
+            <AppText style={styles.dateBadgeDay}>{day}</AppText>
+            <AppText style={styles.dateBadgeWeekday}>{weekday}</AppText>
+          </View>
+        </View>
+
+        <View style={styles.cardDetails}>
+          <View style={styles.cardHeaderRow}>
+            <AppText style={styles.cardTitle} numberOfLines={1}>
+              {reg.event_title || 'Club Event'}
+            </AppText>
+            <View
+              style={[
+                styles.registeredBadge,
+                isCancelled && { backgroundColor: '#FEE2E2' },
+                isWaitlisted && { backgroundColor: '#FEF3C7' },
+              ]}
+            >
+              <AppText
+                style={[
+                  styles.registeredBadgeText,
+                  isCancelled && { color: '#DC2626' },
+                  isWaitlisted && { color: '#B45309' },
+                ]}
+              >
+                {reg.status === 'waitlisted'
+                  ? 'Waitlisted'
+                  : reg.status === 'cancelled'
+                  ? 'Cancelled'
+                  : 'Registered'}
+              </AppText>
+            </View>
+          </View>
+
+          <View style={styles.cardMetaRow}>
+            <Calendar size={13} color="#718279" strokeWidth={2} />
+            <AppText style={styles.cardMetaText}>{formattedDate}</AppText>
+          </View>
+
+          <View style={styles.cardMetaRow}>
+            <Clock size={13} color="#718279" strokeWidth={2} />
+            <AppText style={styles.cardMetaText}>
+              Registered on {new Date(reg.registered_at).toLocaleDateString()}
+            </AppText>
+          </View>
+        </View>
+
+        <View style={styles.chevronWrapper}>
+          <ChevronRight size={18} color="#94A3B8" strokeWidth={2} />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const currentRegistration = selectedDetailEvent
+    ? getActiveRegistration(selectedDetailEvent.id)
+    : undefined;
+
+  return (
+    <View style={styles.container}>
+      {/* ─── Top Header ─── */}
+      <AppHeader
+        title="Events"
+        subtitle="Join events and connect with our community"
+        showMenu
+        borderless
+      />
+
+      {/* ─── Content ScrollView ─── */}
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isDiscoverRefetching || isMyEventsRefetching}
+            onRefresh={() => {
+              refetchDiscover();
+              refetchMyEvents();
+            }}
+            colors={[Colors.brand.primary]}
+            tintColor={Colors.brand.primary}
+          />
+        }
+      >
+        {/* ─── Hero Banner ─── */}
+        <PlayerHeroBanner
+          slides={eventBannerSlides}
+          imageSource={
+            clubBranding?.default_event_banner_url
+              ? { uri: resolveMediaUrl(clubBranding.default_event_banner_url) }
+              : null
+          }
+        />
+
+        {/* ─── Segmented Control (Tabs) ─── */}
+        <View style={styles.segmentedContainer}>
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              activeTab === 'discover' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setActiveTab('discover')}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'discover' }}
+            accessibilityLabel="Discover Events"
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activeTab === 'discover' && styles.segmentTextActive,
+              ]}
+            >
+              Discover Events
+            </AppText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.segmentButton,
+              activeTab === 'my_registrations' && styles.segmentButtonActive,
+            ]}
+            onPress={() => setActiveTab('my_registrations')}
+            activeOpacity={0.85}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'my_registrations' }}
+            accessibilityLabel="My Registrations"
+          >
+            <AppText
+              style={[
+                styles.segmentText,
+                activeTab === 'my_registrations' && styles.segmentTextActive,
+              ]}
+            >
+              My Registrations
+            </AppText>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── TAB 1: DISCOVER EVENTS ─── */}
+        {activeTab === 'discover' && (
+          <>
+            {/* Section Header */}
+            <View style={styles.sectionHeaderRow}>
+              <AppText style={styles.sectionTitle}>Upcoming Events</AppText>
+              <TouchableOpacity
+                style={styles.viewAllRow}
+                onPress={() => {
+                  refetchDiscover();
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="View All Upcoming Events"
+              >
+                <AppText style={styles.viewAllText}>View All</AppText>
+                <ChevronRight
+                  size={14}
+                  color="#0D7A5F"
+                  strokeWidth={2.4}
+                  style={{ marginLeft: 2 }}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* List Content */}
+            {isDiscoverLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0D3E33" />
+                <AppText style={styles.loadingText}>Discovering club events...</AppText>
+              </View>
+            ) : isDiscoverError ? (
+              <View style={styles.errorContainer}>
+                <AppText style={styles.errorText}>
+                  {discoverError?.message || 'Unable to load events. Please try again.'}
+                </AppText>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => refetchDiscover()}
+                >
+                  <AppText style={styles.retryButtonText}>Retry</AppText>
+                </TouchableOpacity>
+              </View>
+            ) : sortedUpcomingEvents.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconContainer}>
+                  <Calendar size={24} color="#0D5C46" strokeWidth={2} />
+                </View>
+                <AppText style={styles.emptyTitle}>No upcoming events</AppText>
+                <AppText style={styles.emptySubtitle}>
+                  There are currently no upcoming events scheduled at your club.
+                </AppText>
+              </View>
+            ) : (
+              sortedUpcomingEvents.map((item, index) => renderDiscoverCard(item, index))
+            )}
+          </>
+        )}
+
+        {/* ─── TAB 2: MY REGISTRATIONS ─── */}
+        {activeTab === 'my_registrations' && (
+          <>
+            {/* Section Header */}
+            <View style={styles.sectionHeaderRow}>
+              <AppText style={styles.sectionTitle}>My Registrations</AppText>
+              {myRegistrations.length > 0 && (
+                <AppText style={styles.sectionCount}>
+                  {myRegistrations.length}{' '}
+                  {myRegistrations.length === 1 ? 'Event' : 'Events'}
+                </AppText>
+              )}
+            </View>
+
+            {/* List Content */}
+            {isMyEventsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#0D3E33" />
+                <AppText style={styles.loadingText}>Loading your registrations...</AppText>
+              </View>
+            ) : isMyEventsError ? (
+              <View style={styles.errorContainer}>
+                <AppText style={styles.errorText}>
+                  {myEventsError?.message ||
+                    'Unable to load your registrations. Please try again.'}
+                </AppText>
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() => refetchMyEvents()}
+                >
+                  <AppText style={styles.retryButtonText}>Retry</AppText>
+                </TouchableOpacity>
+              </View>
+            ) : myRegistrations.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <View style={styles.emptyIconContainer}>
+                  <Calendar size={24} color="#0D5C46" strokeWidth={2} />
+                </View>
+                <AppText style={styles.emptyTitle}>
+                  You haven't registered for any events yet
+                </AppText>
+                <AppText style={styles.emptySubtitle}>
+                  Explore the Discover Events tab to join clinics, socials, and tournaments.
+                </AppText>
+              </View>
+            ) : (
+              myRegistrations.map((reg, index) => renderRegistrationCard(reg, index))
+            )}
+          </>
+        )}
+
+        {/* ─── Host an Event? Card ─── */}
+        <TouchableOpacity
+          style={styles.hostCard}
+          onPress={handleHostEvent}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Host an Event?"
+        >
+          <View style={styles.hostIconContainer}>
+            <Users size={22} color="#0D5C46" strokeWidth={2.2} />
+          </View>
+          <View style={styles.hostTextContainer}>
+            <AppText style={styles.hostTitle}>Host an Event?</AppText>
+            <AppText style={styles.hostSubtitle}>
+              Clinics, socials and tournaments bring our community together.
+            </AppText>
+          </View>
+          <ChevronRight size={18} color="#94A3B8" strokeWidth={2.2} />
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* ─── Event Details & Registration ModalSheet ─── */}
+      <ModalSheet
+        visible={!!selectedDetailEvent}
+        onClose={() => {
+          setSelectedDetailEvent(null);
+          router.setParams({ id: undefined } as any);
+        }}
+        title={selectedDetailEvent?.title || 'Event Details'}
+        subtitle={
+          selectedDetailEvent?.location
+            ? `${selectedDetailEvent.location} • Pickleball`
+            : 'Pickleball Event'
+        }
+        actions={
+          selectedDetailEvent
+            ? [
+                {
+                  label: 'Close',
+                  variant: 'secondary',
+                  onPress: () => {
+                    setSelectedDetailEvent(null);
+                    router.setParams({ id: undefined } as any);
+                  },
+                },
+                currentRegistration
+                  ? {
+                      label: 'Cancel Registration',
+                      variant: 'danger',
+                      loading: cancelMutation.isPending,
+                      onPress: () =>
+                        handleCancelRegistration(
+                          selectedDetailEvent.id,
+                          selectedDetailEvent.title
+                        ),
+                    }
+                  : {
+                      label:
+                        selectedDetailEvent.capacity !== null &&
+                        selectedDetailEvent.registered_count >=
+                          selectedDetailEvent.capacity
+                          ? 'Join Waitlist'
+                          : 'Register Now',
+                      variant: 'primary',
+                      loading: registerMutation.isPending,
+                      onPress: () => handleRegister(selectedDetailEvent),
+                    },
+              ]
+            : undefined
+        }
+      >
+        {selectedDetailEvent && (
+          <View style={styles.modalContent}>
+            {/* Description */}
+            {selectedDetailEvent.description ? (
+              <AppText style={styles.modalDescription}>
+                {selectedDetailEvent.description}
+              </AppText>
+            ) : null}
+
+            {/* Event Info Table */}
+            <View style={styles.modalInfoBox}>
+              <View style={styles.modalInfoRow}>
+                <AppText style={styles.modalLabel}>Date & Time:</AppText>
+                <AppText style={styles.modalValue}>
+                  {formatDateTime(selectedDetailEvent.start_at)}
+                </AppText>
+              </View>
+
+              {selectedDetailEvent.location ? (
+                <View style={styles.modalInfoRow}>
+                  <AppText style={styles.modalLabel}>Location:</AppText>
+                  <AppText style={styles.modalValue}>
+                    {selectedDetailEvent.location}
+                  </AppText>
+                </View>
+              ) : null}
+
+              <View style={styles.modalInfoRow}>
+                <AppText style={styles.modalLabel}>Capacity:</AppText>
+                <AppText style={styles.modalValue}>
+                  {selectedDetailEvent.capacity !== null
+                    ? `${selectedDetailEvent.registered_count} / ${selectedDetailEvent.capacity} spots`
+                    : 'Unlimited'}
+                </AppText>
+              </View>
+
+              <View style={styles.modalInfoRow}>
+                <AppText style={styles.modalLabel}>Entry Fee:</AppText>
+                <AppText style={styles.modalFeeValue}>
+                  {Number(selectedDetailEvent.registration_fee) > 0
+                    ? formatCurrency(selectedDetailEvent.registration_fee)
+                    : 'Free'}
+                </AppText>
+              </View>
+
+              {currentRegistration && (
+                <View style={styles.modalInfoRow}>
+                  <AppText style={styles.modalLabel}>Your Status:</AppText>
+                  <View style={styles.registeredBadge}>
+                    <AppText style={styles.registeredBadgeText}>
+                      {currentRegistration.status === 'waitlisted'
+                        ? 'Waitlisted'
+                        : 'Registered'}
+                    </AppText>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+      </ModalSheet>
+
+      {checkoutEvent && (
+        <CheckoutModal
+          visible={!!checkoutEvent}
+          onClose={() => setCheckoutEvent(null)}
+          showBackButton
+          onBack={() => setCheckoutEvent(null)}
+          clubId={checkoutEvent.club_id}
+          purpose="event"
+          activityId={checkoutEvent.id}
+          activityTitle={checkoutEvent.title}
+          activitySubtitle={checkoutEvent.location || 'Club Event'}
+          startAt={checkoutEvent.start_at}
+          endAt={checkoutEvent.end_at}
+          summaryDetails={[
+            {
+              key: 'date',
+              label: 'Date',
+              value: parseEventDate(checkoutEvent.start_at).formattedDate,
+              icon: 'calendar',
+            },
+            ...(checkoutEvent.location
+              ? [{ key: 'venue', label: 'Venue', value: checkoutEvent.location, icon: 'map' as const }]
+              : []),
+          ]}
+          onSuccess={() => {
+            setSelectedDetailEvent(null);
+            // Immediately invalidate event caches for real-time sync
+            queryClient.invalidateQueries({ queryKey: ['events'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
+            if (checkoutEvent?.club_id) {
+              queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'events'] });
+              queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'analytics'] });
+            }
+            refetchDiscover();
+            refetchMyEvents();
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAF9',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    backgroundColor: '#F8FAF9',
+  },
+  menuButton: {
+    padding: 4,
+    marginRight: 14,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F2922',
+    letterSpacing: -0.3,
+  },
+  headerDivider: {
+    height: 1,
+    backgroundColor: '#E8EDEA',
+    marginHorizontal: 16,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  // ─── Segmented Control ───
+  segmentedContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    padding: 3,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  segmentButton: {
+    flex: 1,
+    height: 34,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentButtonActive: {
+    backgroundColor: Colors.brand.primary,
+    shadowColor: Colors.brand.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#63756E',
+  },
+  segmentTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  // ─── Section Header ───
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#0F2922',
+    letterSpacing: -0.2,
+  },
+  sectionCount: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#135C48',
+  },
+  viewAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  viewAllText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#135C48',
+  },
+  // ─── Event Card ───
+  eventCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EEF3F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cardImageWrapper: {
+    width: 92,
+    height: 84,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#E2E8F0',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImageFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateBadgeOverlay: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    backgroundColor: 'rgba(15, 41, 34, 0.78)',
+    borderRadius: 7,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    alignItems: 'center',
+    minWidth: 38,
+  },
+  dateBadgeMonth: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    letterSpacing: 0.5,
+  },
+  dateBadgeDay: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 18,
+  },
+  dateBadgeWeekday: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#CBD5E1',
+    letterSpacing: 0.5,
+  },
+  cardDetails: {
+    flex: 1,
+    paddingLeft: 12,
+    justifyContent: 'center',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  cardTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F2922',
+    flex: 1,
+    marginRight: 6,
+  },
+  registeredBadge: {
+    backgroundColor: '#E5F5EC',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+  },
+  registeredBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#176B57',
+  },
+  cardMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 3,
+  },
+  cardMetaText: {
+    fontSize: 12,
+    color: '#5E6E66',
+    marginLeft: 5,
+    flexShrink: 1,
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  badgeLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexWrap: 'wrap',
+  },
+  pillBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  pillBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  priceText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#135C48',
+  },
+  chevronWrapper: {
+    paddingLeft: 4,
+  },
+  // ─── Host an Event Card ───
+  hostCard: {
+    backgroundColor: '#F8FAF8',
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+  },
+  hostIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E0F2E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hostTextContainer: {
+    flex: 1,
+  },
+  hostTitle: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#0F2922',
+  },
+  hostSubtitle: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 1.5,
+    lineHeight: 15,
+  },
+  // ─── Empty State ───
+  emptyCard: {
+    backgroundColor: '#F8FAF8',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E2ECE7',
+    paddingVertical: 22,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#E0F2E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontSize: 15.5,
+    fontWeight: '700',
+    color: '#0F2922',
+    letterSpacing: -0.2,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 17,
+    maxWidth: 300,
+  },
+  // ─── Loading & Error ───
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 13.5,
+    color: '#5E6E66',
+  },
+  errorContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 13.5,
+    color: '#DC2626',
+    textAlign: 'center',
+    marginBottom: 14,
+    lineHeight: 19,
+  },
+  retryButton: {
+    backgroundColor: '#114D3F',
+    paddingHorizontal: 22,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13.5,
+  },
+  // ─── Modal Details ───
+  modalContent: {
+    gap: 14,
+  },
+  modalDescription: {
+    fontSize: 13.5,
+    color: '#4A5568',
+    lineHeight: 20,
+  },
+  modalInfoBox: {
+    backgroundColor: '#F8FAF9',
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#E8EDEA',
+  },
+  modalInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalLabel: {
+    fontSize: 13,
+    color: '#718096',
+  },
+  modalValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F2922',
+  },
+  modalFeeValue: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#135C48',
+  },
+});

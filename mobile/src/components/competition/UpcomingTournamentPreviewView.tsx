@@ -320,7 +320,7 @@ export function UpcomingTournamentPreviewView({
                 onClubPress(tournament.club_id);
               } else if (tournament.club_id) {
                 router.push({
-                  pathname: '/(player)/club-details' as any,
+                  pathname: '/player/club-details' as any,
                   params: { id: tournament.club_id },
                 });
               }

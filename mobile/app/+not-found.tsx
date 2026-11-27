@@ -1,42 +1,64 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 
-import { AppText, Button, Card, Screen } from '@/components';
+import { AppText, Button, Card, LoadingState, Screen } from '@/components';
 import { Spacing } from '@/theme';
 import { useAuthStore } from '@/store';
-import { isPlatformAdminEmail } from '@/constants';
+import {
+  getDefaultHomeForRole,
+  resolveLegacyPortalPath,
+  resolveRoleContext,
+} from '@/utils';
 
 export default function NotFoundScreen() {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const activePortal = useAuthStore((s) => s.activePortal);
   const memberships = useAuthStore((s) => s.memberships);
   const activeMembership = useAuthStore((s) => s.activeMembership);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const [checkedLegacy, setCheckedLegacy] = useState(false);
+
+  const roleCtx = resolveRoleContext({
+    isAuthenticated,
+    user,
+    memberships,
+    activeMembership,
+    activePortal,
+  });
+
+  useEffect(() => {
+    if (isLoading) return;
+    const rawSearch = typeof window !== 'undefined' ? window.location.search : '';
+    const resolved = resolveLegacyPortalPath(pathname, rawSearch, roleCtx);
+    if (resolved) {
+      router.replace(resolved as any);
+      return;
+    }
+    setCheckedLegacy(true);
+  }, [isLoading, isAuthenticated, pathname, roleCtx.isPlatformAdmin, roleCtx.hasClubStaff, router]);
 
   const handleGoHome = () => {
     if (!isAuthenticated) {
       router.replace('/(auth)/login' as any);
       return;
     }
-
-    const isPlatformAdmin = Boolean(
-      user?.is_platform_admin || isPlatformAdminEmail(user?.email) || activePortal === 'platform'
-    );
-
-    if (isPlatformAdmin) {
-      router.replace('/platform' as any);
-      return;
-    }
-
-    if (activePortal === 'club' || (memberships.length > 0 && activeMembership)) {
-      router.replace('/(club)' as any);
-      return;
-    }
-
-    router.replace('/(player)' as any);
+    router.replace(getDefaultHomeForRole(roleCtx) as any);
   };
+
+  if (isLoading || !checkedLegacy) {
+    return (
+      <>
+        <Stack.Screen options={{ title: 'Loading...', headerShown: false }} />
+        <Screen>
+          <LoadingState message="Loading..." />
+        </Screen>
+      </>
+    );
+  }
 
   return (
     <>

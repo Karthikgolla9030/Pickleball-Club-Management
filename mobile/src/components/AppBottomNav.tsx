@@ -77,24 +77,25 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
   }
 
   // Active checks for Player
-  const isPlayerHomeActive = normalizedPath === '/(player)' || normalizedPath === '/(player)/index';
-  const isPlayerBookingsActive = normalizedPath === '/(player)/bookings';
+  const isPlayerHomeActive = normalizedPath === '/player' || normalizedPath === '/player/index';
+  const isPlayerBookingsActive = normalizedPath === '/player/bookings';
   const isPlayerCourtsActive =
-    normalizedPath === '/(player)/courts' ||
-    normalizedPath === '/(player)/book-court-club';
-  const isPlayerEventsActive = normalizedPath === '/(player)/events';
-  const isPlayerProfileActive = normalizedPath === '/(player)/profile';
+    normalizedPath === '/player/courts' ||
+    normalizedPath === '/player/book-court-club';
+  const isPlayerEventsActive = normalizedPath === '/player/events';
+  const isPlayerProfileActive = normalizedPath === '/player/profile';
 
   // Active checks for Club
-  const isClubHomeActive = normalizedPath === '/(club)' || normalizedPath === '/(club)/index' || normalizedPath === '/' || normalizedPath === '';
-  const isClubCalendarActive = normalizedPath === '/(club)/bookings';
-  const isClubTournamentsActive = normalizedPath === '/(club)/tournaments';
-  const isClubLeaguesActive = normalizedPath === '/(club)/leagues';
-  const isClubEventsActive = normalizedPath === '/(club)/events';
-  const isClubProfileActive = normalizedPath === '/(club)/profile';
+  const isClubHomeActive = normalizedPath === '/club-portal' || normalizedPath === '/club-portal/index';
+  const isClubCalendarActive = normalizedPath === '/club-portal/bookings';
+  const isClubTournamentsActive = normalizedPath === '/club-portal/tournaments';
+  const isClubLeaguesActive = normalizedPath === '/club-portal/leagues';
+  const isClubEventsActive = normalizedPath === '/club-portal/events';
+  const isClubProfileActive = normalizedPath === '/club-portal/profile';
 
   const handleNavigate = (route: string) => {
-    if (normalizedPath === route) return;
+    const cleanTarget = route.replace(/\/$/, '') || '/';
+    if (normalizedPath === cleanTarget) return;
     router.push(route as any);
   };
 
@@ -120,7 +121,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
         <View style={styles.navRow}>
           {/* 1. Home */}
           <Pressable
-            onPress={() => handleNavigate('/(player)/')}
+            onPress={() => handleNavigate('/player/')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Home"
@@ -148,7 +149,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
           {/* 2. My Bookings */}
           <Pressable
-            onPress={() => handleNavigate('/(player)/bookings')}
+            onPress={() => handleNavigate('/player/bookings')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="My Bookings"
@@ -177,7 +178,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
           {/* 3. Center Floating Book Button → Club Selection first */}
           <View style={styles.centerFabSlot}>
             <TouchableOpacity
-              onPress={() => handleNavigate('/(player)/book-court-club')}
+              onPress={() => handleNavigate('/player/book-court-club')}
               style={styles.centerFabButton}
               activeOpacity={0.88}
               accessibilityLabel="Book Court"
@@ -191,7 +192,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
           {/* 4. Events */}
           <Pressable
-            onPress={() => handleNavigate('/(player)/events')}
+            onPress={() => handleNavigate('/player/events')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Events"
@@ -219,7 +220,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
           {/* 5. Profile */}
           <Pressable
-            onPress={() => handleNavigate('/(player)/profile')}
+            onPress={() => handleNavigate('/player/profile')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Profile"
@@ -264,7 +265,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
         <View style={styles.navRow}>
           {/* 1. Home */}
           <Pressable
-            onPress={() => handleNavigate('/(club)/')}
+            onPress={() => handleNavigate('/club-portal/')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Home"
@@ -290,7 +291,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
           {/* 2. Tab 2: Tournaments (if Tournament Director) OR Bookings (if Owner/Manager) */}
           {isTournamentDirector ? (
             <Pressable
-              onPress={() => handleNavigate('/(club)/tournaments')}
+              onPress={() => handleNavigate('/club-portal/tournaments')}
               style={styles.navItem}
               hitSlop={8}
               accessibilityLabel="Tournaments"
@@ -314,7 +315,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
             </Pressable>
           ) : (
             <Pressable
-              onPress={() => handleNavigate('/(club)/bookings')}
+              onPress={() => handleNavigate('/club-portal/bookings')}
               style={styles.navItem}
               hitSlop={8}
               accessibilityLabel="Bookings"
@@ -355,7 +356,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
           {/* 4. Tab 4: Leagues (if Tournament Director) OR Events (if Owner/Manager) */}
           {isTournamentDirector ? (
             <Pressable
-              onPress={() => handleNavigate('/(club)/leagues')}
+              onPress={() => handleNavigate('/club-portal/leagues')}
               style={styles.navItem}
               hitSlop={8}
               accessibilityLabel="Leagues"
@@ -379,7 +380,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
             </Pressable>
           ) : (
             <Pressable
-              onPress={() => handleNavigate('/(club)/events')}
+              onPress={() => handleNavigate('/club-portal/events')}
               style={styles.navItem}
               hitSlop={8}
               accessibilityLabel="Events"
@@ -405,7 +406,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
 
           {/* 5. Profile */}
           <Pressable
-            onPress={() => handleNavigate('/(club)/profile')}
+            onPress={() => handleNavigate('/club-portal/profile')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Profile"
@@ -474,7 +475,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
                   {permissions.canManageBookings && (
                     <TouchableOpacity
                       style={styles.optionRow}
-                      onPress={() => handleQuickAction('/(club)/bookings?create=true')}
+                      onPress={() => handleQuickAction('/club-portal/bookings?create=true')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.optionIconContainer, { backgroundColor: '#EBF7EE' }]}>
@@ -494,7 +495,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
                   {permissions.canManageEvents && (
                     <TouchableOpacity
                       style={styles.optionRow}
-                      onPress={() => handleQuickAction('/(club)/events?create=true')}
+                      onPress={() => handleQuickAction('/club-portal/events?create=true')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.optionIconContainer, { backgroundColor: '#FBEBEB' }]}>
@@ -514,7 +515,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
                   {permissions.canManageLessons && (
                     <TouchableOpacity
                       style={styles.optionRow}
-                      onPress={() => handleQuickAction('/(club)/lessons?create=true')}
+                      onPress={() => handleQuickAction('/club-portal/lessons?create=true')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.optionIconContainer, { backgroundColor: '#F0EBFB' }]}>
@@ -534,7 +535,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
                   {permissions.canManageTournaments && (
                     <TouchableOpacity
                       style={styles.optionRow}
-                      onPress={() => handleQuickAction('/(club)/tournaments?create=true')}
+                      onPress={() => handleQuickAction('/club-portal/tournaments?create=true')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.optionIconContainer, { backgroundColor: '#E6F4F1' }]}>
@@ -554,7 +555,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
                   {permissions.canManageTournaments && (
                     <TouchableOpacity
                       style={styles.optionRow}
-                      onPress={() => handleQuickAction('/(club)/leagues?create=true')}
+                      onPress={() => handleQuickAction('/club-portal/leagues?create=true')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.optionIconContainer, { backgroundColor: '#FFF5E5' }]}>

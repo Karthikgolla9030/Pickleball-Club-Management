@@ -283,9 +283,9 @@ export default function LegalDocumentScreen() {
     if (router.canGoBack()) {
       router.back();
     } else if (activePortal === 'club' || activeMembership) {
-      router.replace('/(club)/profile' as any);
+      router.replace('/club-portal/profile' as any);
     } else {
-      router.replace('/(player)/profile' as any);
+      router.replace('/player/profile' as any);
     }
   };
 
