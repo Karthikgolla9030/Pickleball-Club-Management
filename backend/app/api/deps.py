@@ -159,6 +159,25 @@ def require_permission(permission: Permission):
     return _check
 
 
+def require_any_permission(*permissions: Permission):
+    """
+    Factory dependency: requires the current user's active membership in the target
+    club to possess at least one of the listed permissions.
+    """
+    async def _check(
+        membership: ClubMembership = Depends(get_club_membership),
+    ) -> ClubMembership:
+        if not any(membership_has_permission(membership, p) for p in permissions):
+            names = ", ".join(p.value for p in permissions)
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: one of [{names}] required",
+            )
+        return membership
+
+    return _check
+
+
 async def get_current_platform_owner(
     current_user: User = Depends(get_current_active_user),
 ) -> User:

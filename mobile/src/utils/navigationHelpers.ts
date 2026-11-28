@@ -34,22 +34,7 @@ export function resolveRoleContext(params: {
   };
 }
 
-export function getClubRedirectTarget(membership?: MembershipInfo | null): string {
-  if (!membership) return '/club-portal';
-  if (membership.role === 'tournament_director' && !membership.custom_role_id) {
-    return '/club-portal/tournaments';
-  }
-  if (membership.custom_role_id && Array.isArray(membership.permissions)) {
-    const perms = new Set(membership.permissions);
-    const hasClubOps =
-      perms.has('manage_club') ||
-      perms.has('manage_bookings') ||
-      perms.has('manage_members') ||
-      perms.has('manage_courts');
-    if (!hasClubOps && perms.has('manage_tournaments')) {
-      return '/club-portal/tournaments';
-    }
-  }
+export function getClubRedirectTarget(_membership?: MembershipInfo | null): string {
   return '/club-portal';
 }
 

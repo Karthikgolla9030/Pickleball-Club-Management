@@ -75,7 +75,7 @@ export default function ClubLayout() {
       return;
     }
 
-    // Tournament Director: Competitions only
+    // Tournament Director: Competitions Home & competition workspaces only
     if (permissions.isTournamentDirector) {
       const tdRestricted = [
         '/club-portal/members',
@@ -85,22 +85,21 @@ export default function ClubLayout() {
         '/club-portal/memberships',
         '/club-portal/payments',
         '/club-portal/analytics',
+        '/club-portal/events',
+        '/club-portal/event-details',
         '/club-portal/lessons',
+        '/club-portal/lesson-details',
         '/club-portal/club-details',
       ];
       if (tdRestricted.some((r) => pathname.startsWith(r))) {
-        router.replace('/club-portal/tournaments' as any);
-        return;
-      }
-      if (pathname === '/club-portal' || pathname === '/club-portal/' || pathname === '/club-portal/index') {
-        router.replace('/club-portal/tournaments' as any);
+        router.replace('/club-portal' as any);
         return;
       }
       return;
     }
 
     // Permission-driven route enforcement for managers, custom roles, and staff
-    const fallbackRoute = permissions.canManageTournaments ? '/club-portal/tournaments' : '/club-portal';
+    const fallbackRoute = '/club-portal';
 
     if (pathname.startsWith('/club-portal/payments') && !permissions.canManagePayments) {
       router.replace(fallbackRoute as any);

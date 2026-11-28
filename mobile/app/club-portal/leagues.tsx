@@ -22,7 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Menu } from 'lucide-react-native';
 
@@ -54,10 +54,19 @@ export default function ClubLeaguesScreen() {
   const { branding } = useClubBranding(clubId);
   const { canManageTournaments, canManageLeagues } = usePermission();
   const canManage = canManageTournaments || canManageLeagues;
+  const searchParams = useLocalSearchParams<{ create?: string }>();
 
-  // Filter state
+  // Modals / filter state
   const [activeTab, setActiveTab] = useState<FilterTabKey>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    if (searchParams.create === 'true') {
+      setEditingLeague(null);
+      setIsCreateModalOpen(true);
+      router.setParams({ create: undefined });
+    }
+  }, [searchParams.create]);
   const [editingLeague, setEditingLeague] = useState<LeagueSummary | null>(null);
   const [optionsMenuLeague, setOptionsMenuLeague] = useState<LeagueSummary | null>(null);
   const [isActionProcessing, setIsActionProcessing] = useState(false);

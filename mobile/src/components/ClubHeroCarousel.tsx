@@ -19,10 +19,26 @@ import { BannerSlide, PlayerHeroBanner } from './PlayerHeroBanner';
 import {
   useActiveClub,
   useClubCarouselSlides,
+  usePermission,
   usePlatformBanner,
   usePlatformBranding,
 } from '@/hooks';
 import { normalizeAppRoute, resolveOwnerBanner } from '@/utils';
+
+const TD_RESTRICTED_ROUTES = [
+  '/club-portal/members',
+  '/club-portal/membership-requests',
+  '/club-portal/courts',
+  '/club-portal/bookings',
+  '/club-portal/memberships',
+  '/club-portal/payments',
+  '/club-portal/analytics',
+  '/club-portal/events',
+  '/club-portal/event-details',
+  '/club-portal/lessons',
+  '/club-portal/lesson-details',
+  '/club-portal/club-details',
+];
 
 interface ClubHeroCarouselProps {
   clubId?: string | null;
@@ -36,9 +52,16 @@ export function ClubHeroCarousel({
 }: ClubHeroCarouselProps = {}) {
   const router = useRouter();
   const { clubId: activeClubId, clubName: activeClubName } = useActiveClub();
+  const permissions = usePermission();
   const { platformName } = usePlatformBranding();
   const effectiveClubId = propClubId ?? activeClubId;
   const effectiveClubName = fallbackClubName ?? activeClubName;
+  const isTournamentDirectorHome =
+    permissions.isTournamentDirector ||
+    (!permissions.canManageBookings &&
+      !permissions.canManageMembers &&
+      !permissions.canManageClub &&
+      (permissions.canManageTournaments || permissions.canManageLeagues));
 
   // Platform Admin Global Banner for owner home fallback
   const { banner: platformBanner } = usePlatformBanner('owner_home');
@@ -67,18 +90,25 @@ export function ClubHeroCarousel({
       }
     }
 
+    const rawBannerRoute = normalizeAppRoute(platformBanner?.cta_destination) || '/club-portal/bookings';
+    const isRestrictedForTd =
+      isTournamentDirectorHome && TD_RESTRICTED_ROUTES.some((r) => rawBannerRoute.startsWith(r));
+
     return {
-      tag: resolvedTag,
+      tag: isTournamentDirectorHome ? 'COMPETITION HUB' : resolvedTag,
       title: resolvedTitle,
-      supportingText:
-        platformBanner?.subtitle ||
-        'Great courts. Active members.\nA healthier, happier community.',
-      ctaText: platformBanner?.cta_text || 'Book a Court',
-      route: normalizeAppRoute(platformBanner?.cta_destination) || '/club-portal/bookings',
+      supportingText: isTournamentDirectorHome
+        ? 'Manage tournaments, brackets,\nleagues & match schedules.'
+        : platformBanner?.subtitle ||
+          'Great courts. Active members.\nA healthier, happier community.',
+      ctaText: isTournamentDirectorHome
+        ? 'Manage Tournaments'
+        : platformBanner?.cta_text || 'Book a Court',
+      route: isRestrictedForTd ? '/club-portal/tournaments' : rawBannerRoute,
       scriptLines: ['Play', 'Grow', 'Excel', 'Together'],
       image: ownerBannerImage,
     };
-  }, [platformBanner, platformName, effectiveClubName]);
+  }, [platformBanner, platformName, effectiveClubName, isTournamentDirectorHome]);
 
   // Construct Slides: Slide 1 is ALWAYS the Club Welcome banner!
   const clubHeroSlides = useMemo<BannerSlide[]>(() => {
@@ -121,14 +151,16 @@ export function ClubHeroCarousel({
         onCtaPress: () => {
           const normalized = normalizeAppRoute(ad.cta_route);
           if (normalized) {
-            router.push(normalized as any);
+            const blocked =
+              isTournamentDirectorHome && TD_RESTRICTED_ROUTES.some((r) => normalized.startsWith(r));
+            router.push((blocked ? '/club-portal/tournaments' : normalized) as any);
           }
         },
       };
     });
 
     return [welcomeSlide, ...adSlides];
-  }, [effectiveClubId, welcomeData, clubAds, router]);
+  }, [effectiveClubId, welcomeData, clubAds, router, isTournamentDirectorHome]);
 
   return (
     <View style={styles.heroWrapper}>

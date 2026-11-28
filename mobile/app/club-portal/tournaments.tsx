@@ -27,7 +27,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import {
   AlertTriangle,
   Check,
@@ -140,6 +140,7 @@ export default function ClubTournamentsScreen() {
   const { clubId, clubName } = useActiveClub();
   const { canManageTournaments } = usePermission();
   const { branding } = useClubBranding(clubId);
+  const searchParams = useLocalSearchParams<{ create?: string }>();
 
   // Local filter states
   const [statusTab, setStatusTab] = useState<StatusTab>('all');
@@ -182,6 +183,14 @@ export default function ClubTournamentsScreen() {
     cancelTournament: cancelClubTournament,
     isCancelTournamentPending: isClubCancelPending,
   } = useClubTournaments(clubId, statusFilter);
+
+  // Auto-open create wizard when navigated via Quick Create (?create=true)
+  React.useEffect(() => {
+    if (searchParams.create === 'true') {
+      setShowCreateModal(true);
+      router.setParams({ create: undefined });
+    }
+  }, [searchParams.create]);
 
   // Auto-refresh tournaments whenever this screen gains focus (e.g. returning from tournament workspace)
   useFocusEffect(

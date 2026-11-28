@@ -337,15 +337,27 @@ async def test_club_manager_cannot_create_staff(
 async def test_tournament_director_cannot_manage_courts(
     async_client: AsyncClient, db_session: AsyncSession
 ):
-    """Tournament Director cannot access court management endpoints."""
+    """Tournament Director can read courts in their assigned club for competitions,
+    cannot read courts of another club, and cannot create/modify courts."""
     td = await _user(db_session, email="td_courts@rbac.local")
     club = await _club(db_session)
+    other_club = await _club(db_session, "Other Court Club")
     await _membership(db_session, td, club, role=ClubRole.TOURNAMENT_DIRECTOR)
     await db_session.commit()
 
     headers = make_auth_header(td)
-    resp = await async_client.get(f"/api/v1/clubs/{club.id}/courts", headers=headers)
-    assert resp.status_code == 403
+    read_own = await async_client.get(f"/api/v1/clubs/{club.id}/courts?status=active", headers=headers)
+    assert read_own.status_code == 200
+
+    read_other = await async_client.get(f"/api/v1/clubs/{other_club.id}/courts?status=active", headers=headers)
+    assert read_other.status_code == 403
+
+    create_resp = await async_client.post(
+        f"/api/v1/clubs/{club.id}/courts",
+        headers=headers,
+        json={"name": "Unauthorized TD Court"},
+    )
+    assert create_resp.status_code == 403
 
 
 @pytest.mark.asyncio

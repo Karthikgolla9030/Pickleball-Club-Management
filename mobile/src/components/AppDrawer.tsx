@@ -288,11 +288,12 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'help', label: 'Help & Support', icon: HelpCircle, route: '/club-portal/help-support' },
       ];
     } else if (role === 'tournament_director' && !activeMembership?.custom_role_id) {
-      // Built-in Tournament Director: Competitions only
+      // Built-in Tournament Director: Competition Home & competition workflows only
       clubSection1 = [
-        { key: 'home', label: 'Home', icon: Home, route: '/club-portal/' },
+        { key: 'home', label: 'Home', icon: Home, route: '/club-portal' },
         { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' },
         { key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' },
+        { key: 'schedule', label: 'Match Schedule', icon: CalendarDays, route: '/club-portal/competition-schedule' },
       ];
       clubSection2 = [];
       clubSection3 = [

@@ -11,7 +11,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_optional_current_user, require_permission
+from app.api.deps import (
+    get_current_user,
+    get_optional_current_user,
+    require_any_permission,
+    require_permission,
+)
 from app.core.database import get_db
 from app.models.club_membership import ClubMembership
 from app.models.user import User
@@ -78,12 +83,22 @@ async def create_court(
     "",
     response_model=list[CourtResponse],
     summary="List all club courts (Staff)",
-    description="Returns club courts. Supports filtering by status ('all', 'active', 'inactive'). Requires MANAGE_COURTS permission.",
+    description="Returns club courts. Supports filtering by status ('all', 'active', 'inactive'). Requires court or competition/operations read permission in the assigned club.",
 )
 async def list_courts(
     club_id: UUID,
     status_filter: str = Query("all", alias="status", pattern="^(all|active|inactive)$"),
-    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    _: ClubMembership = Depends(
+        require_any_permission(
+            Permission.MANAGE_COURTS,
+            Permission.MANAGE_TOURNAMENTS,
+            Permission.MANAGE_LEAGUES,
+            Permission.MANAGE_SCHEDULES,
+            Permission.MANAGE_BOOKINGS,
+            Permission.MANAGE_LESSONS,
+            Permission.MANAGE_EVENTS,
+        )
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> list[CourtResponse]:
     return await CourtService(db).list_courts(club_id=club_id, status_filter=status_filter)
@@ -108,12 +123,22 @@ async def reorder_courts(
     "/{court_id}",
     response_model=CourtResponse,
     summary="Get court details",
-    description="Returns full court details. Requires MANAGE_COURTS permission.",
+    description="Returns full court details. Requires court or competition/operations read permission in the assigned club.",
 )
 async def get_court(
     club_id: UUID,
     court_id: UUID,
-    _: ClubMembership = Depends(require_permission(Permission.MANAGE_COURTS)),
+    _: ClubMembership = Depends(
+        require_any_permission(
+            Permission.MANAGE_COURTS,
+            Permission.MANAGE_TOURNAMENTS,
+            Permission.MANAGE_LEAGUES,
+            Permission.MANAGE_SCHEDULES,
+            Permission.MANAGE_BOOKINGS,
+            Permission.MANAGE_LESSONS,
+            Permission.MANAGE_EVENTS,
+        )
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> CourtResponse:
     return await CourtService(db).get_court(club_id=club_id, court_id=court_id)

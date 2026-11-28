@@ -28,6 +28,7 @@ from app.api.deps import (
     get_current_active_user,
     get_current_platform_owner,
     get_current_user,
+    require_any_permission,
     require_permission,
 )
 from app.core.database import get_db
@@ -653,15 +654,22 @@ async def delete_custom_role(
     "/{club_id}/player-memberships",
     response_model=list[ClubPlayerMembershipResponse],
     summary="List club player members",
-    description="Lists all player memberships registered with this club. Club staff with MANAGE_MEMBERS permission only.",
+    description="Lists player memberships registered with this club. Requires MANAGE_MEMBERS or competition team management permissions.",
     responses={
         401: {"description": "Not authenticated"},
-        403: {"description": "Insufficient permissions (manage_members required)"},
+        403: {"description": "Insufficient permissions (manage_members or manage_teams required)"},
     },
 )
 async def list_club_player_memberships(
     club_id: UUID,
-    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MEMBERS)),
+    _: ClubMembership = Depends(
+        require_any_permission(
+            Permission.MANAGE_MEMBERS,
+            Permission.MANAGE_TEAMS,
+            Permission.MANAGE_LEAGUES,
+            Permission.MANAGE_TOURNAMENTS,
+        )
+    ),
     db: AsyncSession = Depends(get_db),
 ) -> list[ClubPlayerMembershipResponse]:
     """Retrieve player memberships registered for this club."""

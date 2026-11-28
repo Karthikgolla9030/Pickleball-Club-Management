@@ -55,17 +55,23 @@ import {
   Crown,
   LayoutGrid,
   MapPin,
+  Medal,
   Menu,
+  Plus,
   ShieldCheck,
   Star,
   Trophy,
+  User,
   Users,
 } from 'lucide-react-native';
 
 import { AppText, ClubHeroCarousel } from '@/components';
 import {
   useActiveClub,
+  useClubCourts,
   useClubDashboard,
+  useClubLeagues,
+  useClubTournaments,
   usePermission,
   usePlatformBranding,
   useUnreadNotificationCount,
@@ -80,19 +86,92 @@ export default function ClubHomeScreen() {
 
   const { clubId, clubName } = useActiveClub();
   const { platformName, maintenanceMode } = usePlatformBranding();
-  const { canManagePayments } = usePermission();
+  const permissions = usePermission();
+  const { canManagePayments } = permissions;
+  const isTournamentDirector =
+    permissions.isTournamentDirector ||
+    (!permissions.canManageBookings &&
+      !permissions.canManageMembers &&
+      !permissions.canManageClub &&
+      (permissions.canManageTournaments || permissions.canManageLeagues));
   const { data: unreadNotifsCount } = useUnreadNotificationCount();
 
   // Real server-aggregated dashboard query
   const { dashboard, refetch: refetchDashboard } = useClubDashboard(clubId);
+  const { tournaments: tdTournaments = [], refetch: refetchTdTournaments } = useClubTournaments(
+    isTournamentDirector ? clubId : null
+  );
+  const { data: tdLeagues = [], refetch: refetchTdLeagues } = useClubLeagues(
+    isTournamentDirector ? clubId : null
+  );
+  const { data: tdActiveCourts = [], refetch: refetchTdCourts } = useClubCourts(
+    isTournamentDirector ? clubId : null,
+    'active'
+  );
 
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await refetchDashboard();
+    const tasks: Promise<unknown>[] = [refetchDashboard()];
+    if (isTournamentDirector) {
+      tasks.push(refetchTdTournaments(), refetchTdLeagues(), refetchTdCourts());
+    }
+    await Promise.all(tasks);
     setRefreshing(false);
   };
+
+  // TD-specific featured competition & metrics
+  const featuredCompetition = useMemo(() => {
+    if (!isTournamentDirector) return null;
+    const priorityStatuses = ['in_progress', 'registration_open', 'registration_closed', 'draft'];
+    const sorted = [...tdTournaments].sort((a, b) => {
+      const aRank = priorityStatuses.indexOf(a.status);
+      const bRank = priorityStatuses.indexOf(b.status);
+      return (aRank === -1 ? 99 : aRank) - (bRank === -1 ? 99 : bRank);
+    });
+    const first = sorted[0];
+    if (!first) return null;
+
+    let route = '/club-portal/tournaments';
+    if (first.format === 'scramble') route = `/club-portal/scramble?tournamentId=${first.id}`;
+    else if (first.format === 'bracket') route = `/club-portal/bracket?tournamentId=${first.id}`;
+    else if (first.format === 'pool_play') route = `/club-portal/pool-play?tournamentId=${first.id}`;
+    else if (first.format === 'round_robin') route = `/club-portal/round-robin?tournamentId=${first.id}`;
+    else route = `/club-portal/tournament-details?tournamentId=${first.id}`;
+
+    const statusLabel =
+      first.status === 'in_progress'
+        ? 'In Progress'
+        : first.status === 'registration_open'
+          ? 'Registration Open'
+          : first.status === 'registration_closed'
+            ? 'Registration Closed'
+            : first.status === 'completed'
+              ? 'Completed'
+              : 'Draft';
+
+    return {
+      title: first.name,
+      statusLabel,
+      formatLabel: first.format_label || first.format.replace(/_/g, ' '),
+      dateLabel: first.start_date
+        ? new Date(first.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        : 'TBD',
+      participantsLabel: first.max_participants
+        ? `${first.confirmed_players_count ?? first.participant_count ?? 0} / ${first.max_participants}`
+        : `${first.confirmed_players_count ?? first.participant_count ?? 0} entered`,
+      route,
+    };
+  }, [isTournamentDirector, tdTournaments]);
+
+  const tdLiveTournamentsCount = tdTournaments.filter((t) => t.status === 'in_progress').length;
+  const tdOpenRegCount =
+    tdTournaments.filter((t) => t.status === 'registration_open').length +
+    tdLeagues.filter((l) => l.status === 'registration_open').length;
+  const tdLiveLeaguesCount = tdLeagues.filter(
+    (l) => l.status === 'in_progress' || l.status === 'playoffs'
+  ).length;
 
   // Compute counts directly from server-aggregated dashboard data
   const totalPlayers = dashboard?.memberships?.total_players ?? 0;
@@ -224,8 +303,12 @@ export default function ClubHomeScreen() {
           <View style={styles.locationPill}>
             <MapPin size={13} color="#18794E" strokeWidth={2.4} />
             <View style={styles.locationTextStack}>
-              <AppText style={styles.locationTitle}>Good People</AppText>
-              <AppText style={styles.locationSubtitle}>Great Games</AppText>
+              <AppText style={styles.locationTitle}>
+                {isTournamentDirector ? clubName || 'Competition' : 'Good People'}
+              </AppText>
+              <AppText style={styles.locationSubtitle}>
+                {isTournamentDirector ? 'Tournament Director' : 'Great Games'}
+              </AppText>
             </View>
           </View>
         </View>
@@ -233,6 +316,250 @@ export default function ClubHomeScreen() {
         {/* 3. HERO BANNER CAROUSEL (3 Banners, Touch Swiping, Interactive Dots) */}
         <ClubHeroCarousel />
 
+        {isTournamentDirector ? (
+          <>
+            {/* TD 4. QUICK ACTIONS SECTION */}
+            <View style={styles.sectionHeaderRow}>
+              <AppText style={styles.sectionTitle}>Quick Actions</AppText>
+              <TouchableOpacity
+                onPress={() => router.push('/club-portal/tournaments' as any)}
+                hitSlop={8}
+              >
+                <AppText style={styles.viewAllLink}>View All →</AppText>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.quickGrid}>
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/tournaments' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Tournaments"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#E6F7F5' }]}>
+                  <Trophy size={18} color="#0D9488" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>Tournaments</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/leagues' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Leagues"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#FEF3EB' }]}>
+                  <Medal size={18} color="#D97706" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>Leagues</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/competition-schedule' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Match Schedule"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#E7F0FB' }]}>
+                  <CalendarDays size={18} color="#1E40AF" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>Schedule</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/tournaments?create=true' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="New Tournament"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#E8F5EE' }]}>
+                  <Plus size={18} color="#18794E" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>New Tourney</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/leagues?create=true' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="New League"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#F3EFFB' }]}>
+                  <LayoutGrid size={18} color="#7C3AED" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>New League</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickCard}
+                onPress={() => router.push('/club-portal/profile' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Profile"
+              >
+                <View style={[styles.quickIconBox, { backgroundColor: '#FCE7F3' }]}>
+                  <User size={18} color="#DB2777" strokeWidth={2.2} />
+                </View>
+                <View style={styles.quickLabelRow}>
+                  <AppText style={styles.quickLabel}>Profile</AppText>
+                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* TD 5. FEATURED / NEXT COMPETITION */}
+            <View style={styles.sectionHeaderRow}>
+              <AppText style={styles.sectionTitle}>Active Competition</AppText>
+              <TouchableOpacity
+                onPress={() => router.push('/club-portal/tournaments' as any)}
+                hitSlop={8}
+              >
+                <AppText style={styles.viewAllLink}>View All →</AppText>
+              </TouchableOpacity>
+            </View>
+
+            {featuredCompetition ? (
+              <TouchableOpacity
+                style={styles.scheduleCard}
+                onPress={() => router.push(featuredCompetition.route as any)}
+                activeOpacity={0.85}
+                accessibilityLabel={`Competition: ${featuredCompetition.title}`}
+              >
+                <View style={styles.scheduleThumbFallback}>
+                  <Trophy size={22} color="#18794E" strokeWidth={1.8} />
+                </View>
+                <View style={styles.scheduleContent}>
+                  <AppText style={styles.scheduleTitle} numberOfLines={2}>
+                    {featuredCompetition.title}
+                  </AppText>
+                  <View style={styles.scheduleBadgePill}>
+                    <View style={styles.scheduleBadgeDot} />
+                    <AppText style={styles.scheduleBadgeText}>{featuredCompetition.statusLabel}</AppText>
+                  </View>
+                  <View style={styles.scheduleMetaRow}>
+                    <View style={styles.scheduleMetaItem}>
+                      <Clock size={11} color="#667773" />
+                      <AppText style={styles.scheduleMetaText}>{featuredCompetition.dateLabel}</AppText>
+                    </View>
+                    <View style={styles.scheduleMetaItem}>
+                      <Trophy size={11} color="#667773" />
+                      <AppText style={styles.scheduleMetaText}>{featuredCompetition.formatLabel}</AppText>
+                    </View>
+                    <View style={styles.scheduleMetaItem}>
+                      <Users size={11} color="#667773" />
+                      <AppText style={styles.scheduleMetaText}>{featuredCompetition.participantsLabel}</AppText>
+                    </View>
+                  </View>
+                </View>
+                <ChevronRight size={16} color="#9CAAA5" strokeWidth={2} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.emptyScheduleCard}>
+                <View style={styles.emptyScheduleIconBox}>
+                  <Trophy size={18} color="#667773" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText style={styles.emptyScheduleTitle}>No upcoming tournaments yet</AppText>
+                  <AppText style={styles.emptyScheduleSubtitle}>
+                    Launch a Round Robin, Bracket, Pool Play, or Scramble event
+                  </AppText>
+                </View>
+                <TouchableOpacity
+                  style={styles.emptyScheduleBtn}
+                  onPress={() => router.push('/club-portal/tournaments?create=true' as any)}
+                  activeOpacity={0.8}
+                >
+                  <AppText style={styles.emptyScheduleBtnText}>Create +</AppText>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* TD 6. COMPETITION OVERVIEW */}
+            <View style={styles.sectionHeaderRow}>
+              <AppText style={styles.sectionTitle}>Competition Overview</AppText>
+              <View style={styles.monthSelectorPill}>
+                <AppText style={styles.monthSelectorText}>Real-Time Metrics</AppText>
+              </View>
+            </View>
+
+            <View style={styles.statsRow}>
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/club-portal/tournaments' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Club Tournaments"
+              >
+                <View style={[styles.statIconSlot, { backgroundColor: '#E6F7F5' }]}>
+                  <Trophy size={15} color="#0D9488" strokeWidth={2.2} />
+                </View>
+                <AppText style={styles.statNumber}>{upcomingTournaments}</AppText>
+                <AppText style={styles.statLabel} numberOfLines={2}>
+                  {tdLiveTournamentsCount > 0 ? `${tdLiveTournamentsCount} Live Now` : `${tdTournaments.length} Total`}
+                </AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/club-portal/leagues' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Club Leagues"
+              >
+                <View style={[styles.statIconSlot, { backgroundColor: '#FEF3EB' }]}>
+                  <Medal size={15} color="#D97706" strokeWidth={2.2} />
+                </View>
+                <AppText style={styles.statNumber}>{upcomingLeagues}</AppText>
+                <AppText style={styles.statLabel} numberOfLines={2}>
+                  {tdLiveLeaguesCount > 0 ? `${tdLiveLeaguesCount} Live Leagues` : `${tdLeagues.length} Total`}
+                </AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/club-portal/tournaments' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Open Registrations"
+              >
+                <View style={[styles.statIconSlot, { backgroundColor: '#E8F5EE' }]}>
+                  <Users size={15} color="#18794E" strokeWidth={2.2} />
+                </View>
+                <AppText style={styles.statNumber}>{tdOpenRegCount}</AppText>
+                <AppText style={styles.statLabel} numberOfLines={2}>
+                  Open Registrations
+                </AppText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.statCard}
+                onPress={() => router.push('/club-portal/competition-schedule' as any)}
+                activeOpacity={0.8}
+                accessibilityLabel="Available Courts"
+              >
+                <View style={[styles.statIconSlot, { backgroundColor: '#E7F0FB' }]}>
+                  <LayoutGrid size={15} color="#1E40AF" strokeWidth={2.2} />
+                </View>
+                <AppText style={styles.statNumber}>{tdActiveCourts.length}</AppText>
+                <AppText style={styles.statLabel} numberOfLines={2}>
+                  Active Courts
+                </AppText>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
         {/* 4. QUICK ACTIONS SECTION (2 Rows × 3 Columns) */}
         <View style={styles.sectionHeaderRow}>
           <AppText style={styles.sectionTitle}>Quick Actions</AppText>
@@ -541,6 +868,8 @@ export default function ClubHomeScreen() {
               </AppText>
             </TouchableOpacity>
           </View>
+        )}
+          </>
         )}
       </ScrollView>
     </View>

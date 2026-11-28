@@ -265,7 +265,7 @@ export function AppBottomNav({ mode = 'club' }: AppBottomNavProps) {
         <View style={styles.navRow}>
           {/* 1. Home */}
           <Pressable
-            onPress={() => handleNavigate('/club-portal/')}
+            onPress={() => handleNavigate('/club-portal')}
             style={styles.navItem}
             hitSlop={8}
             accessibilityLabel="Home"
