@@ -27,37 +27,29 @@ import {
   Switch,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
 import {
   ArrowDown,
   ArrowUp,
-  Award,
   Building2,
   Calendar,
   Camera,
   CheckCircle2,
-  ChevronRight,
   Eye,
-  GraduationCap,
   Image as ImageIcon,
   Info,
-  LayoutGrid,
-  Layers,
   Plus,
-  RotateCcw,
   Sliders,
   Trash2,
-  Trophy,
   X,
 } from 'lucide-react-native';
 
 import { AppText } from './AppText';
 import { Badge } from './Badge';
-import { Button } from './Button';
-import { Card } from './Card';
+import { ClubResponsiveContainer, ClubSectionCard } from './club-details/ClubDetailsUI';
 import {
   useClubBranding,
   useClubCarouselSlides,
@@ -66,9 +58,9 @@ import {
   usePlatformBanners,
 } from '@/hooks';
 import { clubAssetsApi } from '@/services/api';
-import { Colors, Radius, Shadows, Spacing } from '@/theme';
+import { Radius, Shadows, Spacing } from '@/theme';
 import type { ClubCarouselSlide, UpdateClubBrandingPayload } from '@/types';
-import { BUILTIN_FALLBACKS, resolveMediaUrl } from '@/utils';
+import { resolveMediaUrl } from '@/utils';
 import {
   resolveTournamentFormatDefault,
   resolveLeaguePicture,
@@ -83,110 +75,132 @@ interface ClubBrandingSectionProps {
 
 interface BrandingAssetCardProps {
   title: string;
-  categoryTag: string;
-  description: string;
-  recommendedSize?: string;
   currentUrl?: string | null;
   fallbackImage?: ImageSourcePropType | null;
   uploading: boolean;
   isOwner: boolean;
   assetKind?: 'banner' | 'picture' | 'logo';
+  compactWidth?: boolean;
   onUpload: () => void;
   onReset: () => void;
 }
 
 function BrandingAssetCard({
   title,
-  categoryTag,
-  description,
-  recommendedSize,
   currentUrl,
   fallbackImage,
   uploading,
   isOwner,
   assetKind = 'banner',
+  compactWidth = false,
   onUpload,
   onReset,
 }: BrandingAssetCardProps) {
   const isCustom = Boolean(currentUrl);
   const isLogo = assetKind === 'logo';
-  const noun = isLogo ? 'Logo' : assetKind === 'picture' ? 'Picture' : 'Banner';
+  const noun = isLogo ? 'Logo' : assetKind === 'picture' ? 'Image' : 'Banner';
   const hasFallback = !isCustom && Boolean(fallbackImage);
 
-  return (
-    <Card style={styles.assetCard}>
-      {/* Top Header Row */}
-      <View style={styles.assetCardHeader}>
-        <View style={styles.assetCardHeaderLeft}>
-          <View style={styles.tagBadge}>
-            <AppText style={styles.tagBadgeText}>{categoryTag}</AppText>
+  if (isLogo) {
+    return (
+      <View style={styles.assetCard}>
+        <View style={styles.logoCardRow}>
+          <View style={styles.assetLogoPreviewWrapper}>
+            {currentUrl ? (
+              <Image
+                source={{ uri: resolveMediaUrl(currentUrl) }}
+                style={styles.assetLogoPreviewImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <View style={styles.assetLogoFallback}>
+                <Building2 size={28} color="#94A3B8" />
+              </View>
+            )}
+            {uploading && (
+              <View style={styles.assetUploadOverlay}>
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              </View>
+            )}
           </View>
-          <AppText style={styles.assetCardTitle}>{title}</AppText>
+
+          <View style={styles.logoCardRight}>
+            <View style={styles.assetCardHeader}>
+              <AppText style={styles.assetCardTitle}>{title}</AppText>
+              <Badge
+                label={isCustom ? 'Custom' : 'Optional'}
+                variant={isCustom ? 'success' : 'default'}
+              />
+            </View>
+            <AppText style={styles.assetCardMeta}>1:1 square • PNG or JPG</AppText>
+            {isOwner && (
+              <View style={styles.assetActionsRow}>
+                <TouchableOpacity
+                  style={styles.assetBtnPrimary}
+                  onPress={onUpload}
+                  disabled={uploading}
+                  activeOpacity={0.8}
+                >
+                  <Camera size={13} color="#FFFFFF" />
+                  <AppText style={styles.assetBtnPrimaryText}>
+                    {isCustom ? 'Replace' : 'Upload'}
+                  </AppText>
+                </TouchableOpacity>
+                {isCustom && (
+                  <TouchableOpacity
+                    style={styles.assetBtnReset}
+                    onPress={onReset}
+                    disabled={uploading}
+                    activeOpacity={0.8}
+                  >
+                    <Trash2 size={13} color="#DC2626" />
+                    <AppText style={styles.assetBtnResetText}>Remove</AppText>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
         </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.assetCard, compactWidth && styles.assetCardHalf]}>
+      <View style={styles.assetCardHeader}>
+        <AppText style={styles.assetCardTitle}>{title}</AppText>
         <Badge
-          label={
-            isCustom
-              ? 'Configured'
-              : hasFallback
-              ? 'Default'
-              : 'Optional'
-          }
+          label={isCustom ? 'Custom' : hasFallback ? 'Platform Default' : 'Optional'}
           variant={isCustom ? 'success' : hasFallback ? 'info' : 'default'}
         />
       </View>
 
-      <AppText style={styles.assetCardDesc}>{description}</AppText>
-
-      {/* Recommended Size Note */}
-      {recommendedSize ? (
-        <View style={styles.recommendedSizeRow}>
-          <ImageIcon size={12} color="#64748B" />
-          <AppText style={styles.recommendedSizeText}>
-            Recommended: {recommendedSize}
-          </AppText>
-        </View>
-      ) : null}
-
-      {/* Image Preview Box */}
-      <View style={isLogo ? styles.assetLogoPreviewWrapper : styles.assetPreviewWrapper}>
+      <View style={styles.assetPreviewWrapper}>
         {currentUrl ? (
           <Image
             source={{ uri: resolveMediaUrl(currentUrl) }}
-            style={isLogo ? styles.assetLogoPreviewImage : styles.assetPreviewImage}
-            resizeMode={isLogo ? 'contain' : 'cover'}
+            style={styles.assetPreviewImage}
+            resizeMode="cover"
           />
         ) : hasFallback ? (
-          <>
-            <Image
-              source={fallbackImage!}
-              style={styles.assetPreviewImage}
-              resizeMode="cover"
-            />
-            <View style={styles.inheritingBadgeOverlay}>
-              <Info size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
-              <AppText style={styles.inheritingBadgeText}>Platform Default</AppText>
-            </View>
-          </>
-        ) : isLogo ? (
-          <View style={styles.assetLogoFallback}>
-            <Building2 size={32} color="#94A3B8" />
-            <AppText style={styles.assetEmptySubtext}>No logo configured</AppText>
-          </View>
+          <Image
+            source={fallbackImage!}
+            style={styles.assetPreviewImage}
+            resizeMode="cover"
+          />
         ) : (
           <View style={styles.assetEmptyPlaceholder}>
-            <ImageIcon size={26} color="#94A3B8" />
-            <AppText style={styles.assetEmptyText}>No {noun.toLowerCase()} configured (optional)</AppText>
+            <ImageIcon size={22} color="#94A3B8" />
+            <AppText style={styles.assetEmptyText}>No {noun.toLowerCase()} uploaded</AppText>
           </View>
         )}
         {uploading && (
           <View style={styles.assetUploadOverlay}>
             <ActivityIndicator size="small" color="#FFFFFF" />
-            <AppText style={styles.assetUploadOverlayText}>Saving image reference...</AppText>
           </View>
         )}
       </View>
 
-      {/* Controls Row */}
       {isOwner && (
         <View style={styles.assetActionsRow}>
           <TouchableOpacity
@@ -195,7 +209,7 @@ function BrandingAssetCard({
             disabled={uploading}
             activeOpacity={0.8}
           >
-            <Camera size={14} color="#FFFFFF" />
+            <Camera size={13} color="#FFFFFF" />
             <AppText style={styles.assetBtnPrimaryText}>
               {isCustom ? `Replace ${noun}` : `Upload ${noun}`}
             </AppText>
@@ -208,13 +222,15 @@ function BrandingAssetCard({
               disabled={uploading}
               activeOpacity={0.8}
             >
-              <Trash2 size={14} color="#DC2626" />
-              <AppText style={styles.assetBtnResetText}>Remove {noun}</AppText>
+              <Trash2 size={13} color="#DC2626" />
+              <AppText style={styles.assetBtnResetText}>
+                {hasFallback ? 'Reset' : 'Remove'}
+              </AppText>
             </TouchableOpacity>
           )}
         </View>
       )}
-    </Card>
+    </View>
   );
 }
 
@@ -249,12 +265,12 @@ function AdThumbnail({ imageUrl }: { imageUrl?: string | null }) {
 }
 
 export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProps) {
-  const router = useRouter();
+  const { width: windowWidth } = useWindowDimensions();
+  const isTwoColGrid = windowWidth >= 600;
 
   // Queries
   const {
     branding,
-    isLoading: isLoadingBranding,
     refetch: refetchBranding,
   } = useClubBranding(clubId);
   const { banners: platformBanners } = usePlatformBanners();
@@ -589,349 +605,245 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      {/* ── Status Banner ── */}
-      {statusMessage && (
-        <View
-          style={[
-            styles.statusBanner,
-            statusMessage.type === 'success' ? styles.statusBannerSuccess : styles.statusBannerError,
-          ]}
-        >
-          {statusMessage.type === 'success' ? (
-            <CheckCircle2 size={16} color="#15803D" />
-          ) : (
-            <Info size={16} color="#B91C1C" />
-          )}
-          <AppText
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      <ClubResponsiveContainer style={styles.responsiveStack}>
+        {/* Status Banner */}
+        {statusMessage && (
+          <View
             style={[
-              styles.statusBannerText,
-              statusMessage.type === 'success' ? styles.statusTextSuccess : styles.statusTextError,
+              styles.statusBanner,
+              statusMessage.type === 'success' ? styles.statusBannerSuccess : styles.statusBannerError,
             ]}
           >
-            {statusMessage.text}
-          </AppText>
-        </View>
-      )}
+            {statusMessage.type === 'success' ? (
+              <CheckCircle2 size={16} color="#15803D" />
+            ) : (
+              <Info size={16} color="#B91C1C" />
+            )}
+            <AppText
+              style={[
+                styles.statusBannerText,
+                statusMessage.type === 'success' ? styles.statusTextSuccess : styles.statusTextError,
+              ]}
+            >
+              {statusMessage.text}
+            </AppText>
+          </View>
+        )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 1: CLUB IDENTITY & CORE BANNERS
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={styles.groupHeader}>
-        <View style={styles.groupIconWrapper}>
-          <Building2 size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 1: Club Identity & Core Banners</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Core club branding assets displayed across platform navigation and the player mobile app.
-          </AppText>
-        </View>
-      </View>
+        {/* 1. CLUB IDENTITY ASSETS */}
+        <ClubSectionCard title="Club Identity Assets">
+          <View style={styles.sectionCardsStack}>
+            <BrandingAssetCard
+              title="Official Club Logo"
+              assetKind="logo"
+              currentUrl={branding?.logo_url}
+              uploading={uploadingField === 'logo_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset('logo_url', 'club_logo', 'Club Logo', [1, 1])
+              }
+              onReset={() => handleResetAsset('logo_url', 'Club Logo')}
+            />
 
-      {/* Official Club Logo */}
-      <BrandingAssetCard
-        title="Official Club Logo"
-        categoryTag="PRIMARY LOGO"
-        assetKind="logo"
-        recommendedSize="512 × 512 px (1:1) • PNG or JPG"
-        description="Official club logo displayed on your profile card, headers, player search, and booking confirmations."
-        currentUrl={branding?.logo_url}
-        uploading={uploadingField === 'logo_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('logo_url', 'club_logo', 'Club Logo', [1, 1])
-        }
-        onReset={() => handleResetAsset('logo_url', 'Club Logo')}
-      />
+            <BrandingAssetCard
+              title="Player-Facing Cover Banner"
+              assetKind="banner"
+              currentUrl={branding?.cover_image_url}
+              uploading={uploadingField === 'cover_image_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset('cover_image_url', 'club_cover', 'Player-Facing Cover Banner', [16, 9])
+              }
+              onReset={() => handleResetAsset('cover_image_url', 'Player-Facing Cover Banner')}
+            />
+          </View>
+        </ClubSectionCard>
 
-      {/* Player-Facing Club Cover Banner */}
-      <BrandingAssetCard
-        title="Player-Facing Cover Banner"
-        categoryTag="PUBLIC COVER"
-        assetKind="banner"
-        recommendedSize="1920 × 1080 px (16:9) • JPG or PNG"
-        description="Prominent hero banner displayed at the top of your club details in the Player App and discover directories."
-        currentUrl={branding?.cover_image_url}
-        uploading={uploadingField === 'cover_image_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('cover_image_url', 'club_cover', 'Player-Facing Cover Banner', [16, 9])
-        }
-        onReset={() => handleResetAsset('cover_image_url', 'Player-Facing Cover Banner')}
-      />
+        {/* 2. TOURNAMENT DEFAULT BANNERS */}
+        <ClubSectionCard
+          title="Tournament Default Banners"
+          subtitle="Fallback banners inherited by tournaments without a custom image."
+        >
+          <View style={[styles.assetsGrid, isTwoColGrid && styles.assetsGridTwoCol]}>
+            <BrandingAssetCard
+              title="General Tournament Default"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_tournament_banner_url}
+              fallbackImage={resolveTournamentFormatDefault('general', null, platformBanners)}
+              uploading={uploadingField === 'default_tournament_banner_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset(
+                  'default_tournament_banner_url',
+                  'default_tournament_banner',
+                  'General Tournament Default Banner'
+                )
+              }
+              onReset={() =>
+                handleResetAsset('default_tournament_banner_url', 'General Tournament Default Banner')
+              }
+            />
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 2: TOURNAMENT DEFAULT BANNERS (FORMAT-SPECIFIC)
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 28 }]}>
-        <View style={styles.groupIconWrapper}>
-          <Trophy size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 2: Tournament Default Banners</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Reusable default banners for each supported tournament format. Tournaments without a custom banner automatically inherit their format default or general tournament default.
-          </AppText>
-        </View>
-      </View>
+            <BrandingAssetCard
+              title="Round Robin"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_tournament_round_robin_url}
+              fallbackImage={resolveTournamentFormatDefault('round_robin', null, platformBanners)}
+              uploading={uploadingField === 'default_tournament_round_robin_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset(
+                  'default_tournament_round_robin_url',
+                  'default_tournament_round_robin',
+                  'Round Robin Default Banner'
+                )
+              }
+              onReset={() =>
+                handleResetAsset('default_tournament_round_robin_url', 'Round Robin Default Banner')
+              }
+            />
 
-      {/* General Tournament Default */}
-      <BrandingAssetCard
-        title="General Tournament Default Banner"
-        categoryTag="ALL TOURNAMENTS"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Used as the fallback hero graphic for tournaments in this club when neither a custom tournament banner nor a format-specific default is uploaded."
-        currentUrl={branding?.default_tournament_banner_url}
-        fallbackImage={resolveTournamentFormatDefault('general', null, platformBanners)}
-        uploading={uploadingField === 'default_tournament_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset(
-            'default_tournament_banner_url',
-            'default_tournament_banner',
-            'General Tournament Default Banner'
-          )
-        }
-        onReset={() =>
-          handleResetAsset('default_tournament_banner_url', 'General Tournament Default Banner')
-        }
-      />
+            <BrandingAssetCard
+              title="Bracket Play"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_tournament_bracket_url}
+              fallbackImage={resolveTournamentFormatDefault('bracket', null, platformBanners)}
+              uploading={uploadingField === 'default_tournament_bracket_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset(
+                  'default_tournament_bracket_url',
+                  'default_tournament_bracket',
+                  'Bracket Play Default Banner'
+                )
+              }
+              onReset={() =>
+                handleResetAsset('default_tournament_bracket_url', 'Bracket Play Default Banner')
+              }
+            />
 
-      {/* Round Robin Default */}
-      <BrandingAssetCard
-        title="Round Robin Default Banner"
-        categoryTag="ROUND ROBIN"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Used as the default hero graphic for all Round Robin tournaments in this club unless a tournament-specific banner is uploaded."
-        currentUrl={branding?.default_tournament_round_robin_url}
-        fallbackImage={resolveTournamentFormatDefault('round_robin', null, platformBanners)}
-        uploading={uploadingField === 'default_tournament_round_robin_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset(
-            'default_tournament_round_robin_url',
-            'default_tournament_round_robin',
-            'Round Robin Default Banner'
-          )
-        }
-        onReset={() =>
-          handleResetAsset('default_tournament_round_robin_url', 'Round Robin Default Banner')
-        }
-      />
+            <BrandingAssetCard
+              title="Pool Play"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_tournament_pool_play_url}
+              fallbackImage={resolveTournamentFormatDefault('pool_play', null, platformBanners)}
+              uploading={uploadingField === 'default_tournament_pool_play_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset(
+                  'default_tournament_pool_play_url',
+                  'default_tournament_pool_play',
+                  'Pool Play Default Banner'
+                )
+              }
+              onReset={() =>
+                handleResetAsset('default_tournament_pool_play_url', 'Pool Play Default Banner')
+              }
+            />
 
-      {/* Scramble Default */}
-      <BrandingAssetCard
-        title="Scramble Default Banner"
-        categoryTag="SCRAMBLE"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Used as the default hero graphic for all Scramble tournaments in this club unless a tournament-specific banner is uploaded."
-        currentUrl={branding?.default_tournament_scramble_url}
-        fallbackImage={resolveTournamentFormatDefault('scramble', null, platformBanners)}
-        uploading={uploadingField === 'default_tournament_scramble_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset(
-            'default_tournament_scramble_url',
-            'default_tournament_scramble',
-            'Scramble Default Banner'
-          )
-        }
-        onReset={() =>
-          handleResetAsset('default_tournament_scramble_url', 'Scramble Default Banner')
-        }
-      />
+            <BrandingAssetCard
+              title="Scramble"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_tournament_scramble_url}
+              fallbackImage={resolveTournamentFormatDefault('scramble', null, platformBanners)}
+              uploading={uploadingField === 'default_tournament_scramble_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset(
+                  'default_tournament_scramble_url',
+                  'default_tournament_scramble',
+                  'Scramble Default Banner'
+                )
+              }
+              onReset={() =>
+                handleResetAsset('default_tournament_scramble_url', 'Scramble Default Banner')
+              }
+            />
+          </View>
+        </ClubSectionCard>
 
-      {/* Pool Play Default */}
-      <BrandingAssetCard
-        title="Pool Play Default Banner"
-        categoryTag="POOL PLAY"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Used as the default hero graphic for all Pool Play tournaments in this club unless a tournament-specific banner is uploaded."
-        currentUrl={branding?.default_tournament_pool_play_url}
-        fallbackImage={resolveTournamentFormatDefault('pool_play', null, platformBanners)}
-        uploading={uploadingField === 'default_tournament_pool_play_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset(
-            'default_tournament_pool_play_url',
-            'default_tournament_pool_play',
-            'Pool Play Default Banner'
-          )
-        }
-        onReset={() =>
-          handleResetAsset('default_tournament_pool_play_url', 'Pool Play Default Banner')
-        }
-      />
+        {/* 3. OTHER ACTIVITY BRANDING ASSETS */}
+        <ClubSectionCard
+          title="Leagues, Events & Coaching Defaults"
+          subtitle="Fallback images when an activity has no custom cover."
+        >
+          <View style={[styles.assetsGrid, isTwoColGrid && styles.assetsGridTwoCol]}>
+            <BrandingAssetCard
+              title="Leagues"
+              assetKind="picture"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_league_banner_url}
+              fallbackImage={resolveLeaguePicture(null, null, platformBanners)}
+              uploading={uploadingField === 'default_league_banner_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset('default_league_banner_url', 'default_league_banner', 'League Default Picture')
+              }
+              onReset={() => handleResetAsset('default_league_banner_url', 'League Default Picture')}
+            />
 
-      {/* Bracket Play Default */}
-      <BrandingAssetCard
-        title="Bracket Play / Championship Bracket Default"
-        categoryTag="BRACKET PLAY"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Used as the default hero graphic for all single/double elimination bracket tournaments in this club."
-        currentUrl={branding?.default_tournament_bracket_url}
-        fallbackImage={resolveTournamentFormatDefault('bracket', null, platformBanners)}
-        uploading={uploadingField === 'default_tournament_bracket_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset(
-            'default_tournament_bracket_url',
-            'default_tournament_bracket',
-            'Bracket Play Default Banner'
-          )
-        }
-        onReset={() =>
-          handleResetAsset('default_tournament_bracket_url', 'Bracket Play Default Banner')
-        }
-      />
+            <BrandingAssetCard
+              title="Events"
+              assetKind="picture"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_event_banner_url}
+              fallbackImage={resolveEventPicture(null, null, platformBanners)}
+              uploading={uploadingField === 'default_event_banner_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset('default_event_banner_url', 'default_event_banner', 'Event Default Picture')
+              }
+              onReset={() => handleResetAsset('default_event_banner_url', 'Event Default Picture')}
+            />
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 3: LEAGUE DEFAULT PICTURES
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 28 }]}>
-        <View style={styles.groupIconWrapper}>
-          <Award size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 3: League Default Pictures</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Default picture displayed on league cards and league details when no custom picture is provided.
-          </AppText>
-        </View>
-      </View>
+            <BrandingAssetCard
+              title="Lessons & Coaching"
+              assetKind="picture"
+              compactWidth={isTwoColGrid}
+              currentUrl={branding?.default_lesson_banner_url}
+              fallbackImage={resolveLessonPicture(null, null, platformBanners)}
+              uploading={uploadingField === 'default_lesson_banner_url'}
+              isOwner={isOwner}
+              onUpload={() =>
+                handleUploadAsset('default_lesson_banner_url', 'default_lesson_banner', 'Lesson & Coaching Default Picture')
+              }
+              onReset={() => handleResetAsset('default_lesson_banner_url', 'Lesson & Coaching Default Picture')}
+            />
+          </View>
+        </ClubSectionCard>
 
-      <BrandingAssetCard
-        title="League Default Picture"
-        categoryTag="LEAGUES"
-        assetKind="picture"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Default picture displayed on league cards and league details when no custom picture is provided."
-        currentUrl={branding?.default_league_banner_url}
-        fallbackImage={resolveLeaguePicture(null, null, platformBanners)}
-        uploading={uploadingField === 'default_league_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('default_league_banner_url', 'default_league_banner', 'League Default Picture')
-        }
-        onReset={() => handleResetAsset('default_league_banner_url', 'League Default Picture')}
-      />
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 4: EVENT DEFAULT PICTURES
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 28 }]}>
-        <View style={styles.groupIconWrapper}>
-          <Calendar size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 4: Event Default Pictures</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Default picture displayed on event cards and event details when no custom picture is provided.
-          </AppText>
-        </View>
-      </View>
-
-      <BrandingAssetCard
-        title="Event Default Picture"
-        categoryTag="EVENTS"
-        assetKind="picture"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Default picture displayed on event cards and event details when no custom picture is provided."
-        currentUrl={branding?.default_event_banner_url}
-        fallbackImage={resolveEventPicture(null, null, platformBanners)}
-        uploading={uploadingField === 'default_event_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('default_event_banner_url', 'default_event_banner', 'Event Default Picture')
-        }
-        onReset={() => handleResetAsset('default_event_banner_url', 'Event Default Picture')}
-      />
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 5: LESSON & COACHING DEFAULT PICTURES
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 28 }]}>
-        <View style={styles.groupIconWrapper}>
-          <GraduationCap size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <AppText style={styles.groupTitle}>Group 5: Lesson & Coaching Default Pictures</AppText>
-          <AppText style={styles.groupSubtitle}>
-            Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided.
-          </AppText>
-        </View>
-      </View>
-
-      <BrandingAssetCard
-        title="Lesson & Coaching Default Picture"
-        categoryTag="COACHING"
-        assetKind="picture"
-        recommendedSize="1200 × 675 px (16:9) • JPG or PNG"
-        description="Default picture displayed on lesson, coaching, and related booking cards when no custom picture is provided."
-        currentUrl={branding?.default_lesson_banner_url}
-        fallbackImage={resolveLessonPicture(null, null, platformBanners)}
-        uploading={uploadingField === 'default_lesson_banner_url'}
-        isOwner={isOwner}
-        onUpload={() =>
-          handleUploadAsset('default_lesson_banner_url', 'default_lesson_banner', 'Lesson & Coaching Default Picture')
-        }
-        onReset={() => handleResetAsset('default_lesson_banner_url', 'Lesson & Coaching Default Picture')}
-      />
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          GROUP 6: CLUB PROMOTIONAL ADS
-          ══════════════════════════════════════════════════════════════════════ */}
-      <View style={[styles.groupHeader, { marginTop: 32 }]}>
-        <View style={styles.groupIconWrapper}>
-          <Layers size={18} color="#176B57" />
-        </View>
-        <View style={styles.groupHeaderTextCol}>
-          <View style={styles.headerWithAction}>
-            <View style={styles.headerTextWrapper}>
-              <AppText style={styles.groupTitle}>Club Promotional Ads</AppText>
-              <AppText style={styles.groupSubtitle}>
-                Manage promotional advertisements displayed for your club in the Player App. Eligible active ads appear in the relevant home-page carousel.
-              </AppText>
-            </View>
-            {isOwner && (
+        {/* 4. CLUB PROMOTIONAL ADS */}
+        <ClubSectionCard
+          title="Promotional Ads"
+          action={
+            isOwner ? (
               <TouchableOpacity
                 style={styles.addSlideBtn}
                 onPress={() => openSlideModal()}
                 activeOpacity={0.85}
               >
-                <Plus size={15} color="#FFFFFF" />
+                <Plus size={14} color="#FFFFFF" />
                 <AppText style={styles.addSlideBtnText}>Create Ad</AppText>
               </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </View>
-
-      <Card style={styles.carouselContainerCard}>
-        {isLoadingSlides ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="small" color="#176B57" />
-            <AppText style={styles.loadingText}>Loading promotional ads...</AppText>
-          </View>
-        ) : slides.length === 0 ? (
-          <View style={styles.emptySlidesBox}>
-            <ImageIcon size={32} color="#94A3B8" />
-            <AppText style={styles.emptySlidesTitle}>No Promotional Ads</AppText>
-            <AppText style={styles.emptySlidesDesc}>
-              Create promotional advertisements to showcase club tournaments, special clinic discounts, and membership offers to players.
-            </AppText>
-            {isOwner && (
-              <TouchableOpacity
-                style={[styles.assetBtnPrimary, { marginTop: 14, alignSelf: 'center' }]}
-                onPress={() => openSlideModal()}
-              >
-                <Plus size={14} color="#FFFFFF" />
-                <AppText style={styles.assetBtnPrimaryText}>Create Promotional Ad</AppText>
-              </TouchableOpacity>
-            )}
-          </View>
-        ) : (
+            ) : undefined
+          }
+        >
+          {isLoadingSlides ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="small" color="#176B57" />
+              <AppText style={styles.loadingText}>Loading promotional ads...</AppText>
+            </View>
+          ) : slides.length === 0 ? (
+            <View style={styles.emptySlidesBox}>
+              <ImageIcon size={24} color="#94A3B8" />
+              <AppText style={styles.emptySlidesTitle}>No promotional ads created</AppText>
+            </View>
+          ) : (
           <View style={styles.slidesList}>
             {slides.map((slide: ClubCarouselSlide, index: number) => {
               const scheduleStatus = getAdScheduleStatus(slide.start_date, slide.end_date, slide.is_active);
@@ -988,12 +900,12 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                     <AdThumbnail imageUrl={slide.image_url} />
 
                     <View style={styles.slideInfoCol}>
-                      <AppText style={styles.slideTitle} numberOfLines={2}>
+                      <AppText style={styles.slideTitle}>
                         {slide.title || 'Untitled Promotional Ad'}
                       </AppText>
 
                       {isDistinctSubtitle ? (
-                        <AppText style={styles.slideSubtitle} numberOfLines={2}>
+                        <AppText style={styles.slideSubtitle}>
                           {slide.subtitle}
                         </AppText>
                       ) : null}
@@ -1081,7 +993,8 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
             })}
           </View>
         )}
-      </Card>
+        </ClubSectionCard>
+      </ClubResponsiveContainer>
 
       {/* ── Add / Edit Promotional Ad Modal ── */}
       <Modal
@@ -1136,11 +1049,11 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
                         <AppText style={styles.playerPreviewBadgeText}>{slideFormTag.toUpperCase()}</AppText>
                       </View>
                     ) : null}
-                    <AppText style={styles.playerPreviewTitle} numberOfLines={2}>
+                    <AppText style={styles.playerPreviewTitle}>
                       {slideFormTitle || 'Promotional Ad Headline'}
                     </AppText>
                     {slideFormSubtitle ? (
-                      <AppText style={styles.playerPreviewSubtitle} numberOfLines={2}>
+                      <AppText style={styles.playerPreviewSubtitle}>
                         {slideFormSubtitle}
                       </AppText>
                     ) : null}
@@ -1296,18 +1209,31 @@ export function ClubBrandingSection({ clubId, isOwner }: ClubBrandingSectionProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAF9',
+    backgroundColor: '#F4F8F5',
   },
   contentContainer: {
-    padding: Spacing[4],
-    paddingBottom: Spacing[12],
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[1],
+    paddingBottom: 96,
+  },
+  responsiveStack: {
+    gap: Spacing[3],
+  },
+  sectionCardsStack: {
+    gap: Spacing[3],
+  },
+  assetsGrid: {
+    gap: Spacing[3],
+  },
+  assetsGridTwoCol: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
   },
   statusBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing[3],
     borderRadius: Radius.md,
-    marginBottom: Spacing[4],
     gap: Spacing[2],
   },
   statusBannerSuccess: {
@@ -1331,104 +1257,56 @@ const styles = StyleSheet.create({
   statusTextError: {
     color: '#B91C1C',
   },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: Spacing[3],
-    marginBottom: Spacing[3],
-  },
-  groupIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: '#E5F6EC',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  groupHeaderTextCol: {
-    flex: 1,
-  },
-  groupTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#102B2A',
-    letterSpacing: -0.2,
-  },
-  groupSubtitle: {
-    fontSize: 12,
-    color: '#49635E',
-    marginTop: 2,
-    lineHeight: 17,
-  },
   assetCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    padding: Spacing[4],
-    marginBottom: Spacing[3.5],
+    backgroundColor: '#F9FBFA',
+    borderRadius: Radius.md,
+    padding: Spacing[3],
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    ...Shadows.sm,
+    borderColor: '#E2EAE6',
+    gap: Spacing[2.5],
+  },
+  assetCardHalf: {
+    width: '48.5%',
+    flexGrow: 1,
+  },
+  logoCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[3],
+  },
+  logoCardRight: {
+    flex: 1,
+    minWidth: 0,
+    gap: Spacing[1.5],
   },
   assetCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[1.5],
     gap: Spacing[2],
-  },
-  assetCardHeaderLeft: {
-    flex: 1,
-    flexDirection: 'column',
-    gap: 3,
-  },
-  tagBadge: {
-    backgroundColor: '#F0F5F2',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-    alignSelf: 'flex-start',
-  },
-  tagBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#176B57',
-    letterSpacing: 0.5,
   },
   assetCardTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#102B2A',
-    flexShrink: 1,
+    flex: 1,
   },
-  assetCardDesc: {
+  assetCardMeta: {
     fontSize: 12,
     color: '#64748B',
-    lineHeight: 17,
-    marginBottom: Spacing[2],
-  },
-  recommendedSizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: Spacing[2.5],
-  },
-  recommendedSizeText: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '500',
   },
   assetLogoPreviewWrapper: {
     position: 'relative',
-    width: 96,
-    height: 96,
-    borderRadius: Radius.lg,
+    width: 72,
+    height: 72,
+    borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DCE7E1',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   assetLogoPreviewImage: {
     width: '100%',
@@ -1437,10 +1315,9 @@ const styles = StyleSheet.create({
   assetLogoFallback: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F0F5F2',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: Spacing[2],
   },
   assetEmptyPlaceholder: {
     width: '100%',
@@ -1448,23 +1325,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing[1.5],
+    gap: Spacing[1],
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderStyle: 'dashed',
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
   },
   assetEmptyText: {
     fontSize: 12,
     fontWeight: '500',
     color: '#64748B',
-  },
-  assetEmptySubtext: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#94A3B8',
-    marginTop: 4,
-    textAlign: 'center',
   },
   playerPreviewEmpty: {
     width: '100%',
@@ -1482,8 +1352,9 @@ const styles = StyleSheet.create({
   assetPreviewWrapper: {
     position: 'relative',
     width: '100%',
-    height: 160,
-    borderRadius: Radius.md,
+    aspectRatio: 16 / 9,
+    maxHeight: 160,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
@@ -1493,53 +1364,30 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  inheritingBadgeOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
-  },
-  inheritingBadgeText: {
-    fontSize: 11,
-    fontFamily: 'Inter-Medium',
-    color: '#FFFFFF',
-  },
   assetUploadOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: Spacing[2],
-  },
-  assetUploadOverlayText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '600',
   },
   assetActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2.5],
-    marginTop: Spacing[3],
+    gap: Spacing[2],
     flexWrap: 'wrap',
   },
   assetBtnPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#176B57',
-    paddingHorizontal: Spacing[3.5],
-    paddingVertical: Spacing[2],
-    borderRadius: Radius.md,
-    gap: Spacing[1.5],
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+    gap: 5,
   },
   assetBtnPrimaryText: {
     fontSize: 12,
@@ -1550,10 +1398,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEE2E2',
-    paddingHorizontal: Spacing[3],
-    paddingVertical: Spacing[2],
-    borderRadius: Radius.md,
-    gap: Spacing[1.5],
+    paddingHorizontal: Spacing[2.5],
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+    gap: 5,
   },
   assetBtnResetText: {
     fontSize: 12,

@@ -42,6 +42,12 @@ export * from './tournament-management';
 export { ClubHeroCarousel } from './ClubHeroCarousel';
 export { ClubBrandingSection } from './ClubBrandingSection';
 export { ClubTournamentConfigTab } from './club-details/ClubTournamentConfigTab';
+export {
+  CLUB_DETAILS_MAX_WIDTH,
+  ClubInfoRow,
+  ClubResponsiveContainer,
+  ClubSectionCard,
+} from './club-details/ClubDetailsUI';
 export { PlayerHeroBanner } from './PlayerHeroBanner';
 export type { BannerSlide } from './PlayerHeroBanner';
 export * from './platform';

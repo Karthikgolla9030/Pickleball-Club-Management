@@ -23,7 +23,7 @@
  * Player Side Club Details page can be inspected at all viewport widths.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Image,
   Linking,
@@ -152,22 +152,30 @@ export function PlayerClubDetailsPreview({
   // 3. Fetch club-specific promotional ads (only ads belonging strictly to this club)
   const { slides: promotionalSlides = [] } = useClubCarouselSlides(effectiveClubId, true);
 
-  // Dynamic values with clean fallback priority
+  // Dynamic values strictly from saved club data (never fake placeholders)
   const displayName = (name || club?.name || 'Club').trim();
   const displayCity = city || club?.city || '';
   const displayState = state || club?.state || '';
-  const locationText = [displayCity, displayState].filter(Boolean).join(', ') || 'Austin, TX';
+  const displayCountry = club?.country || '';
+  const locationText =
+    [displayCity, displayState].filter(Boolean).join(', ') ||
+    displayCountry ||
+    'Location not set';
 
   const effOpeningTime = openingTime || club?.opening_time || '06:00';
   const effClosingTime = closingTime || club?.closing_time || '22:00';
   const hoursText = formatOperatingHours(effOpeningTime, effClosingTime);
 
-  const daysList = selectedDays && selectedDays.length > 0
-    ? (selectedDays.length === 7 ? 'Mon - Sun' : selectedDays.join(', '))
-    : (club?.operating_days || 'Mon - Sun');
+  const daysList =
+    selectedDays && selectedDays.length > 0
+      ? selectedDays.length === 7
+        ? 'Mon - Sun'
+        : selectedDays.join(', ')
+      : club?.operating_days || 'Mon - Sun';
 
   const effLogoUri = logoUri || club?.logo_url ? resolveMediaUrl(logoUri || club?.logo_url) : null;
-  const effCoverUri = coverUri || club?.cover_image_url ? resolveMediaUrl(coverUri || club?.cover_image_url) : null;
+  const effCoverUri =
+    coverUri || club?.cover_image_url ? resolveMediaUrl(coverUri || club?.cover_image_url) : null;
   const bannerSource = effCoverUri && !bannerError ? { uri: effCoverUri } : null;
 
   const fullAddress = [
@@ -180,7 +188,14 @@ export function PlayerClubDetailsPreview({
     .filter(Boolean)
     .join(', ');
 
-  const effDescription = (description || club?.description || shortDescription || club?.short_description || '').trim();
+  const effDescription = (
+    description ||
+    club?.description ||
+    shortDescription ||
+    club?.short_description ||
+    ''
+  ).trim();
+  const effFacilities = (facilitiesSummary || club?.facilities_summary || '').trim();
   const effContactEmail = (contactEmail || club?.contact_email || '').trim();
   const effContactPhone = (contactPhone || club?.contact_phone || '').trim();
   const effWebsite = (website || club?.website || '').trim();
@@ -201,23 +216,18 @@ export function PlayerClubDetailsPreview({
       {/* Phone Notch / Speaker */}
       <View style={styles.phoneSpeaker} />
 
-      {/* ─── A. Compact Header (Matches Player View Exactly) ───────────────── */}
+      {/* ─── A. Compact Header (Matches Player View) ─────────────────────── */}
       <View style={styles.headerContainer}>
         <View style={styles.backButton}>
           <ArrowLeft size={18} color="#102B2A" strokeWidth={2.4} />
         </View>
-        <AppText style={styles.headerTitle} numberOfLines={2}>
+        <AppText style={styles.headerTitle}>
           {displayName}
         </AppText>
       </View>
 
-      {/* ─── Scrollable Player Content ────────────────────────────────────── */}
-      <ScrollView
-        style={styles.innerScroll}
-        contentContainerStyle={styles.innerScrollContent}
-        nestedScrollEnabled={true}
-        showsVerticalScrollIndicator={true}
-      >
+      {/* ─── Player Content (Natural Height Flow) ───────────────────────── */}
+      <View style={styles.innerScrollContent}>
         <View style={styles.contentContainer}>
           {/* ─── B. Club Hero Banner ───────────────────────────────────────── */}
           <View style={styles.heroBanner}>
@@ -246,7 +256,7 @@ export function PlayerClubDetailsPreview({
                   />
                 ) : (
                   <View style={styles.logoFallbackWrapper}>
-                    <Building2 size={32} color="#FFFFFF" strokeWidth={1.8} />
+                    <Building2 size={30} color="#FFFFFF" strokeWidth={1.8} />
                   </View>
                 )}
               </View>
@@ -254,7 +264,7 @@ export function PlayerClubDetailsPreview({
               {/* Title, Badge, Location, and Hours */}
               <View style={styles.heroDetailsCol}>
                 <View style={styles.nameRow}>
-                  <AppText style={styles.clubNameText} numberOfLines={2}>
+                  <AppText style={styles.clubNameText}>
                     {displayName}
                   </AppText>
                   {club?.is_active !== false && (
@@ -266,15 +276,15 @@ export function PlayerClubDetailsPreview({
 
                 <View style={styles.metaRow}>
                   <MapPin size={12} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={2}>
+                  <AppText style={styles.metaText}>
                     {locationText}
                   </AppText>
                 </View>
 
                 <View style={styles.metaRow}>
                   <Clock size={12} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={2}>
-                    {daysList}  |  {hoursText}
+                  <AppText style={styles.metaText}>
+                    {daysList} • {hoursText}
                   </AppText>
                 </View>
               </View>
@@ -380,10 +390,10 @@ export function PlayerClubDetailsPreview({
 
                       {/* Court Info */}
                       <View style={styles.courtInfoCol}>
-                        <AppText style={styles.courtNameText} numberOfLines={2}>
+                        <AppText style={styles.courtNameText}>
                           {court.display_name || court.name}
                         </AppText>
-                        <AppText style={styles.courtSurfaceText} numberOfLines={2}>
+                        <AppText style={styles.courtSurfaceText}>
                           {envLabel} • {surfaceLabel}
                         </AppText>
                       </View>
@@ -414,11 +424,11 @@ export function PlayerClubDetailsPreview({
                 <Calendar size={16} color="#18794E" strokeWidth={2.2} />
               </View>
               <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={2}>
+                <AppText style={styles.shortcutHeading}>
                   Upcoming Events
                 </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={2}>
-                  View socials and tournaments
+                <AppText style={styles.shortcutSubtext}>
+                  Socials & tournaments
                 </AppText>
               </View>
               <ChevronRight size={14} color="#6B7E76" />
@@ -430,11 +440,11 @@ export function PlayerClubDetailsPreview({
                 <UserCheck size={16} color="#18794E" strokeWidth={2.2} />
               </View>
               <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={2}>
+                <AppText style={styles.shortcutHeading}>
                   Lessons & Coaching
                 </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={2}>
-                  Book a session with our coaches
+                <AppText style={styles.shortcutSubtext}>
+                  Sessions with coaches
                 </AppText>
               </View>
               <ChevronRight size={14} color="#6B7E76" />
@@ -487,7 +497,7 @@ export function PlayerClubDetailsPreview({
                         {plan.benefits.slice(0, 3).map((b, idx) => (
                           <View key={idx} style={styles.benefitItemRow}>
                             <CheckCircle2 size={11} color="#18794E" />
-                            <AppText style={styles.benefitItemText} numberOfLines={2}>
+                            <AppText style={styles.benefitItemText}>
                               {b}
                             </AppText>
                           </View>
@@ -516,16 +526,15 @@ export function PlayerClubDetailsPreview({
               </View>
               <View style={styles.aboutTextCol}>
                 <AppText style={styles.aboutHeading}>About This Club</AppText>
-                <AppText style={styles.aboutDescription} numberOfLines={3}>
-                  {effDescription ||
-                    'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
+                <AppText style={styles.aboutDescription}>
+                  {effDescription || 'No club description added yet.'}
                 </AppText>
               </View>
               <ChevronRight size={14} color="#6B7E76" style={styles.aboutChevron} />
             </View>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </View>
 
       {/* ─── Modal: About This Club Details ─────────────────────────────────── */}
       <Modal
@@ -553,10 +562,9 @@ export function PlayerClubDetailsPreview({
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 300 }}>
-              <AppText variant="bodySmall" color="primary" style={{ lineHeight: 22 }}>
-                {effDescription ||
-                  'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
+            <ScrollView style={{ maxHeight: 340 }}>
+              <AppText variant="bodySmall" color="primary" style={{ lineHeight: 21 }}>
+                {effDescription || 'No club description added yet.'}
               </AppText>
 
               {fullAddress ? (
@@ -586,13 +594,13 @@ export function PlayerClubDetailsPreview({
                 </View>
               </View>
 
-              {facilitiesSummary ? (
+              {effFacilities ? (
                 <View style={{ marginTop: 14 }}>
                   <AppText variant="label" color="primary" style={{ marginBottom: 4 }}>
                     Facilities & Amenities
                   </AppText>
                   <AppText variant="bodySmall" color="secondary">
-                    {facilitiesSummary}
+                    {effFacilities}
                   </AppText>
                 </View>
               ) : null}
@@ -655,22 +663,21 @@ export function PlayerClubDetailsPreview({
 // ─── Styles matching (player)/club-details.tsx exactly ────────────────────────
 
 const styles = StyleSheet.create({
-  // Phone Bezel Frame
+  // Phone Bezel Frame (Natural height avoids nested scrolling inside Club Details)
   phoneMockupFrame: {
     maxWidth: 420,
     width: '100%',
     alignSelf: 'center',
     backgroundColor: '#F4F8F6',
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: '#CBD5E1',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#D6E2DC',
     overflow: 'hidden',
-    height: 660,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   phoneSpeaker: {
     width: 60,
@@ -724,32 +731,30 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
 
-  // Inner Scroll Container
-  innerScroll: {
-    flex: 1,
-  },
+  // Content Padding
   innerScrollContent: {
     paddingHorizontal: 12,
     paddingTop: 2,
-    paddingBottom: 24,
+    paddingBottom: 18,
   },
   contentContainer: {
     width: '100%',
     gap: 12,
   },
 
-  // B. Hero Banner
+  // B. Hero Banner (Natural minHeight so multi-line club names never clip)
   heroBanner: {
     width: '100%',
-    height: 195,
-    borderRadius: 18,
+    minHeight: 190,
+    borderRadius: 16,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#0E3628',
+    justifyContent: 'flex-end',
     shadowColor: '#0A261D',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
     elevation: 3,
   },
   heroBackgroundImage: {
@@ -768,18 +773,16 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web'
       ? ({
           backgroundImage:
-            'linear-gradient(180deg, rgba(8, 28, 22, 0.08) 0%, rgba(8, 28, 22, 0.42) 42%, rgba(6, 22, 17, 0.94) 100%)',
+            'linear-gradient(180deg, rgba(8, 28, 22, 0.1) 0%, rgba(8, 28, 22, 0.45) 42%, rgba(6, 22, 17, 0.94) 100%)',
         } as any)
       : {
           backgroundColor: 'rgba(7, 24, 18, 0.58)',
         }),
   },
   heroContentRow: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 12,
+    paddingTop: 54,
+    paddingBottom: 14,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
