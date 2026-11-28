@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { CheckCircle2 } from 'lucide-react-native';
+import { CheckCircle2, Lock } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
@@ -26,6 +26,9 @@ export interface PostRegistrationSaveActionBarProps {
   isGenerated: boolean;
   isValid: boolean;
   canManage: boolean;
+  isLocked?: boolean;
+  isCompleted?: boolean;
+  lockedMessage?: string;
   generateLabel: string;
   regenerateLabel?: string;
   validationError?: string | null;
@@ -44,6 +47,9 @@ export function PostRegistrationSaveActionBar({
   isGenerated,
   isValid,
   canManage,
+  isLocked = false,
+  isCompleted = false,
+  lockedMessage,
   generateLabel,
   regenerateLabel,
   validationError,
@@ -51,18 +57,24 @@ export function PostRegistrationSaveActionBar({
   onStartEditing,
   onGenerate,
 }: PostRegistrationSaveActionBarProps) {
-  const showSavedState = configurationSaved && !isDirty && !isEditing;
-  const canSaveNow = canManage && isValid && (!showSavedState || isDirty) && !isSaving;
-  const canGenerateNow = canManage && configurationSaved && !isDirty && isValid && !isGenerating;
+  const showSavedState = isLocked || (configurationSaved && !isDirty && !isEditing);
+  const canSaveNow = !isLocked && canManage && isValid && (!showSavedState || isDirty) && !isSaving;
+  const canGenerateNow = !isLocked && canManage && configurationSaved && !isDirty && isValid && !isGenerating;
 
-  const badgeLabel = showSavedState
+  const badgeLabel = isCompleted
+    ? 'Completed'
+    : isLocked
+    ? 'Locked'
+    : showSavedState
     ? 'Saved'
     : isDirty && configurationSaved
     ? 'Unsaved changes'
     : 'Unsaved';
 
-  const badgeVariant: 'success' | 'warning' | 'default' = showSavedState
+  const badgeVariant: 'success' | 'warning' | 'default' = isCompleted || showSavedState
     ? 'success'
+    : isLocked
+    ? 'default'
     : isDirty
     ? 'warning'
     : 'default';
@@ -77,6 +89,31 @@ export function PostRegistrationSaveActionBar({
       return null;
     }
   }, [savedAt]);
+
+  if (isLocked) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.statusHeader}>
+          <View style={styles.statusLeft}>
+            <Lock size={15} color="#0F766E" />
+            <AppText style={styles.statusTitle}>
+              {isCompleted ? 'Tournament Completed' : 'Configuration Locked'}
+            </AppText>
+          </View>
+          <Badge label={badgeLabel} variant={badgeVariant} size="sm" />
+        </View>
+        <AppText style={styles.metaText}>
+          {lockedMessage ||
+            (isCompleted
+              ? 'Final configuration and schedule are archived read-only.'
+              : 'Schedule configuration is locked while matches are underway.')}
+        </AppText>
+        {formattedSavedAt ? (
+          <AppText style={styles.metaText}>Saved configuration archived ({formattedSavedAt})</AppText>
+        ) : null}
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

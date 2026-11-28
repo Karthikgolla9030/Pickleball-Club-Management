@@ -12,6 +12,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { Layers, Scale, SlidersHorizontal, Trophy } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -24,6 +25,7 @@ import {
   PostRegistrationSaveActionBar,
   PostRegistrationStepper,
 } from '@/components/post-registration';
+import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Court, SetupCourtItem, Tournament } from '@/types';
@@ -66,6 +68,7 @@ export function PoolPlaySetupCourtsTab({
   onGenerated,
   matchesCount = 0,
 }: PoolPlaySetupCourtsTabProps) {
+  const queryClient = useQueryClient();
   const [setupData, setSetupData] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -123,7 +126,7 @@ export function PoolPlaySetupCourtsTab({
         setSelectedCourtIds(nextCourtIds);
         setNumCourts(nextCourtsCount);
 
-        if (res.configuration_saved) {
+        if (res.configuration_saved || res.is_completed || res.is_generated) {
           setSavedSnapshot({
             numPools: nextPools,
             qualifiersPerPool: nextQuals,
@@ -152,10 +155,18 @@ export function PoolPlaySetupCourtsTab({
 
   const confirmedTeams: number = setupData?.confirmed_teams_count ?? registeredCount;
   const hasMinTeams = confirmedTeams >= 4;
-  const isDraft = tournament?.status === 'draft';
-  const isRegistrationOpen = tournament?.status === 'registration_open';
+  const statusLower = String(tournament?.status || setupData?.tournament_status || '').toLowerCase();
+  const isDraft = statusLower === 'draft';
+  const isRegistrationOpen = statusLower === 'registration_open';
+  const isCompleted =
+    Boolean(setupData?.is_completed) ||
+    statusLower === 'completed' ||
+    String(tournament?.workflow_state || '').toLowerCase() === 'completed';
+  const isCancelled = statusLower === 'cancelled';
+  const isInProgress = !isCompleted && !isCancelled && statusLower === 'in_progress';
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const configurationSaved = Boolean(setupData?.configuration_saved);
+  const isLocked = Boolean(setupData?.is_locked) || isCompleted || isCancelled || (isInProgress && isGenerated);
+  const configurationSaved = Boolean(setupData?.configuration_saved) || isCompleted || isGenerated;
 
   const availableCourts: SetupCourtItem[] =
     setupData?.available_courts && setupData.available_courts.length > 0
@@ -180,7 +191,9 @@ export function PoolPlaySetupCourtsTab({
   const totalQualifiers = safeNumPools * safeQualifiers;
 
   const currentCourtKey = [...selectedCourtIds].sort().join(',');
-  const isDirty = savedSnapshot
+  const isDirty = isLocked
+    ? false
+    : savedSnapshot
     ? savedSnapshot.numPools !== safeNumPools ||
       savedSnapshot.qualifiersPerPool !== safeQualifiers ||
       savedSnapshot.bracketType !== bracketType ||
@@ -197,7 +210,7 @@ export function PoolPlaySetupCourtsTab({
     numCourts <= selectedCourtIds.length;
   const isValid = hasMinTeams && configValid && courtsValid;
 
-  const disabledControls = !canManage || (configurationSaved && !isEditing);
+  const disabledControls = isLocked || !canManage || (configurationSaved && !isEditing);
 
   const handlePoolsChange = (nextPools: number) => {
     setNumPools(nextPools);
@@ -233,7 +246,7 @@ export function PoolPlaySetupCourtsTab({
   };
 
   const handleSave = async () => {
-    if (!canManage || !clubId || !tournamentId || !isValid) return;
+    if (!canManage || !clubId || !tournamentId || !isValid || isLocked) return;
     try {
       setSaving(true);
       const res = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
@@ -247,12 +260,6 @@ export function PoolPlaySetupCourtsTab({
       if (res.pool_play_setup) {
         setSetupData(res.pool_play_setup);
       }
-      await onSaveConfig({
-        numPools: safeNumPools,
-        balanceTolerance: tolerance,
-        qualifierCount: totalQualifiers,
-        bracketType,
-      });
       setSavedSnapshot({
         numPools: safeNumPools,
         qualifiersPerPool: safeQualifiers,
@@ -262,6 +269,20 @@ export function PoolPlaySetupCourtsTab({
         numCourts,
       });
       setIsEditing(false);
+      syncTournamentCountInCaches(queryClient, tournamentId, {
+        status: res.tournament_status,
+        workflow_state: res.workflow_state,
+        configuration_saved: res.configuration_saved,
+        configuration_saved_at: res.configuration_saved_at,
+        structure_generated: res.is_generated,
+      });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
+      await onSaveConfig({
+        numPools: safeNumPools,
+        balanceTolerance: tolerance,
+        qualifierCount: totalQualifiers,
+        bracketType,
+      });
     } catch (err: any) {
       const msg = err?.data?.detail || err?.message || 'Unable to save Pool Play configuration.';
       Alert.alert('Save Failed', msg);
@@ -271,7 +292,7 @@ export function PoolPlaySetupCourtsTab({
   };
 
   const handleConfirmAndGenerate = async () => {
-    if (!canManage || !clubId || !tournamentId || !configurationSaved || isDirty || !isValid) {
+    if (!canManage || !clubId || !tournamentId || !configurationSaved || isDirty || !isValid || isLocked) {
       return;
     }
 
@@ -291,6 +312,7 @@ export function PoolPlaySetupCourtsTab({
             require_saved_config: true,
           });
         }
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await fetchSetup();
         if (onGenerated) await onGenerated();
       } catch (err: any) {
@@ -348,9 +370,19 @@ export function PoolPlaySetupCourtsTab({
         <PostRegistrationHeader
           icon={<SlidersHorizontal size={18} color="#0F766E" />}
           title="Pool Play Setup & Courts"
-          subtitle="Configure pools, qualifiers, and active courts. Save before generating matches."
+          subtitle={
+            isCompleted
+              ? 'Archived final pool configuration and court assignment.'
+              : 'Configure pools, qualifiers, and active courts. Save before generating matches.'
+          }
           badgeLabel={
-            isGenerated
+            isCompleted
+              ? 'Completed'
+              : isCancelled
+              ? 'Cancelled'
+              : isInProgress
+              ? 'In Progress'
+              : isGenerated
               ? 'Generated'
               : configurationSaved && !isDirty
               ? 'Saved'
@@ -358,7 +390,13 @@ export function PoolPlaySetupCourtsTab({
               ? 'Open'
               : 'Draft'
           }
-          badgeVariant={isGenerated || (configurationSaved && !isDirty) ? 'success' : 'warning'}
+          badgeVariant={
+            isCompleted || isGenerated || (configurationSaved && !isDirty)
+              ? 'success'
+              : isCancelled
+              ? 'default'
+              : 'warning'
+          }
         />
 
         {(isDraft || isRegistrationOpen) && (
@@ -510,6 +548,8 @@ export function PoolPlaySetupCourtsTab({
             isGenerated={isGenerated}
             isValid={isValid}
             canManage={canManage}
+            isLocked={isLocked}
+            isCompleted={isCompleted}
             generateLabel="Confirm & Generate Pools & Matches"
             regenerateLabel="Regenerate Pools & Matches"
             validationError={setupData?.validation_error}

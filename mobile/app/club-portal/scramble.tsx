@@ -657,6 +657,7 @@ export default function ScrambleWorkspaceScreen() {
                 canManage={canManage}
                 registeredCount={state?.registered_players_count ?? registrations.length}
                 clubCourts={clubCourts}
+                onRefresh={handleRefresh}
                 onGenerated={async () => {
                   await handleRefresh();
                 }}

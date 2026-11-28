@@ -60,7 +60,14 @@ export function ScramblePostRegistrationCard({
     if (tournament?.status === 'registration_closed') {
       void fetchSetup();
     }
-  }, [clubId, tournamentId, tournament?.status]);
+  }, [
+    clubId,
+    tournamentId,
+    tournament?.status,
+    tournament?.workflow_state,
+    tournament?.configuration_saved,
+    tournament?.configuration_saved_at,
+  ]);
 
   if (tournament?.status !== 'registration_closed') {
     return null;
@@ -78,14 +85,16 @@ export function ScramblePostRegistrationCard({
   }
 
   const isGenerated = setupData?.is_generated ?? false;
+  const isSaved = Boolean(setupData?.configuration_saved || tournament?.configuration_saved);
   const playerCount = setupData?.confirmed_player_count ?? tournament?.participant_count ?? 0;
-  const stage = setupData?.configuration_stage ?? 'awaiting_format_configuration';
-  const isReadyToStart = isGenerated && stage === 'ready_to_start';
+  const stage = setupData?.configuration_stage ?? tournament?.workflow_state ?? 'awaiting_format_configuration';
+  const isReadyToStart = isGenerated && (stage === 'ready_to_start' || stage === 'structure_generated');
   const hasMinPlayers = playerCount >= 4;
 
   const getBadgeInfo = (): { label: string; variant: 'success' | 'info' | 'warning' } => {
     if (isReadyToStart) return { label: 'READY TO START', variant: 'success' };
     if (isGenerated) return { label: 'CONFIGURED', variant: 'info' };
+    if (isSaved) return { label: 'CONFIGURATION SAVED', variant: 'success' };
     if (!hasMinPlayers) return { label: 'WAITING FOR PLAYERS', variant: 'warning' };
     return { label: 'AWAITING CONFIGURATION', variant: 'warning' };
   };
@@ -101,6 +110,12 @@ export function ScramblePostRegistrationCard({
       return {
         title: 'Schedule generated',
         desc: `Rotation schedule is active across ${setupData?.selected_rounds ?? 5} rounds.`,
+      };
+    }
+    if (isSaved) {
+      return {
+        title: 'Configuration saved',
+        desc: 'Open Setup & Rounds to generate rotation matchups.',
       };
     }
     if (!hasMinPlayers) {

@@ -34,6 +34,11 @@ export function syncTournamentCountInCaches(
     teams_count?: number | null;
     confirmed_players_count?: number | null;
     status?: TournamentStatus | string | null;
+    workflow_state?: string | null;
+    workflow_state_label?: string | null;
+    configuration_saved?: boolean;
+    configuration_saved_at?: string | null;
+    structure_generated?: boolean;
     is_registered?: boolean;
     my_registration_id?: string | null;
     my_registration_status?: string | null;
@@ -53,6 +58,21 @@ export function syncTournamentCountInCaches(
     }
     if (patch.status) {
       next.status = patch.status;
+    }
+    if (patch.workflow_state !== undefined) {
+      next.workflow_state = patch.workflow_state;
+    }
+    if (patch.workflow_state_label !== undefined) {
+      next.workflow_state_label = patch.workflow_state_label;
+    }
+    if (patch.configuration_saved !== undefined) {
+      next.configuration_saved = patch.configuration_saved;
+    }
+    if (patch.configuration_saved_at !== undefined) {
+      next.configuration_saved_at = patch.configuration_saved_at;
+    }
+    if (patch.structure_generated !== undefined) {
+      next.structure_generated = patch.structure_generated;
     }
     if (patch.is_registered !== undefined) {
       next.is_registered = patch.is_registered;

@@ -448,9 +448,11 @@ class ScramblePostRegistrationSetupResponse(BaseModel):
     tournament_id: uuid.UUID
     tournament_status: str
     workflow_state: str = "configuration_required"
-    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress'
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress' | 'completed' | 'cancelled'
     configuration_saved: bool = False
     configuration_saved_at: str | None = None
+    is_completed: bool = False
+    is_locked: bool = False
     closure_eligibility: dict[str, Any] | None = None
     confirmed_player_count: int
     eligible_players: list[dict[str, Any]]
@@ -488,9 +490,11 @@ class PoolPlayPostRegistrationSetupResponse(BaseModel):
     tournament_id: uuid.UUID
     tournament_status: str
     workflow_state: str = "configuration_required"
-    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress'
+    configuration_stage: str  # 'awaiting_format_configuration' | 'configuration_saved' | 'ready_to_start' | 'in_progress' | 'completed' | 'cancelled'
     configuration_saved: bool = False
     configuration_saved_at: str | None = None
+    is_completed: bool = False
+    is_locked: bool = False
     closure_eligibility: dict[str, Any] | None = None
     confirmed_teams_count: int
     confirmed_teams: list[dict[str, Any]]
@@ -536,6 +540,8 @@ class TournamentSetupResponse(BaseModel):
     configuration_saved: bool = False
     configuration_saved_at: str | None = None
     is_generated: bool = False
+    is_completed: bool = False
+    is_locked: bool = False
     can_start: bool = False
     is_valid: bool = True
     validation_error: str | None = None

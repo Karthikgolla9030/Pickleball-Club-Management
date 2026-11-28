@@ -59,7 +59,14 @@ export function PoolPlayPostRegistrationCard({
     if (tournament?.status === 'registration_closed') {
       void fetchSetup();
     }
-  }, [clubId, tournamentId, tournament?.status]);
+  }, [
+    clubId,
+    tournamentId,
+    tournament?.status,
+    tournament?.workflow_state,
+    tournament?.configuration_saved,
+    tournament?.configuration_saved_at,
+  ]);
 
   if (tournament?.status !== 'registration_closed') {
     return null;
@@ -77,14 +84,16 @@ export function PoolPlayPostRegistrationCard({
   }
 
   const isGenerated = setupData?.is_generated ?? false;
+  const isSaved = Boolean(setupData?.configuration_saved || tournament?.configuration_saved);
   const teamsCount = setupData?.confirmed_teams_count ?? 0;
-  const stage = setupData?.configuration_stage ?? 'awaiting_format_configuration';
-  const isReadyToStart = isGenerated && stage === 'ready_to_start';
+  const stage = setupData?.configuration_stage ?? tournament?.workflow_state ?? 'awaiting_format_configuration';
+  const isReadyToStart = isGenerated && (stage === 'ready_to_start' || stage === 'structure_generated');
   const hasMinTeams = teamsCount >= 4;
 
   const getBadgeInfo = (): { label: string; variant: 'success' | 'info' | 'warning' } => {
     if (isReadyToStart) return { label: 'Ready to Start', variant: 'success' };
     if (isGenerated) return { label: 'Configured', variant: 'info' };
+    if (isSaved) return { label: 'Configuration Saved', variant: 'success' };
     if (!hasMinTeams) return { label: 'Waiting for Teams', variant: 'warning' };
     return { label: 'Awaiting Configuration', variant: 'warning' };
   };
@@ -100,6 +109,12 @@ export function PoolPlayPostRegistrationCard({
       return {
         title: 'Schedule generated',
         desc: 'Pool matches and championship bracket are active.',
+      };
+    }
+    if (isSaved) {
+      return {
+        title: 'Configuration saved',
+        desc: 'Open Setup & Courts to generate pool assignments and matches.',
       };
     }
     if (!hasMinTeams) {

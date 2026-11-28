@@ -47,6 +47,11 @@ export interface TournamentCardData {
   format_label: string;
   status: TournamentStatus | string;
   status_label: string;
+  workflow_state?: string | null;
+  workflow_state_label?: string | null;
+  configuration_saved?: boolean;
+  configuration_saved_at?: string | null;
+  structure_generated?: boolean;
   visibility?: string;
   start_date: string;
   end_date: string;
@@ -146,25 +151,51 @@ export function TournamentCard({
   const dateRange = formatTournamentDateRange(tournament.start_date, tournament.end_date);
 
   const statusLower = String(tournament.status).toLowerCase();
+  const workflowLower = String(tournament.workflow_state || '').toLowerCase();
   const isDraft = statusLower === 'draft';
   const isRegistrationOpen = statusLower === 'registration_open' || statusLower === 'open';
   const fc = (tournament.format_configuration as Record<string, any>) || {};
   const isCompleted =
     statusLower === 'completed' ||
+    workflowLower === 'completed' ||
     Boolean(fc.winner) ||
     Boolean(fc.pool_play_state?.completed) ||
     Boolean(fc.pool_play_state?.winner);
+  const isCancelled = statusLower === 'cancelled' || workflowLower === 'cancelled';
+  const isInProgress = !isCompleted && !isCancelled && (statusLower === 'in_progress' || workflowLower === 'in_progress');
+  const isClosed = !isCompleted && !isCancelled && !isInProgress && statusLower === 'registration_closed';
 
-  const isAwaitingFormatConfig =
-    statusLower === 'registration_closed' &&
-    (tournament.format === 'scramble' || tournament.format === 'pool_play') &&
-    !fc.is_format_configured;
+  const isStructureGenerated =
+    isClosed &&
+    (workflowLower === 'structure_generated' ||
+      Boolean(tournament.structure_generated) ||
+      Boolean(fc.is_format_configured));
+  const isConfigSaved =
+    isClosed &&
+    !isStructureGenerated &&
+    (workflowLower === 'configuration_saved' ||
+      Boolean(tournament.configuration_saved) ||
+      Boolean(fc.configuration_saved) ||
+      fc.configuration_stage === 'configuration_saved');
+  const isAwaitingFormatConfig = isClosed && !isStructureGenerated && !isConfigSaved;
 
   const baseStatusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const statusBadge = isAwaitingFormatConfig
     ? {
-        label: 'Registration Closed – Awaiting Format Configuration',
+        label: 'Registration Closed – Awaiting Configuration',
         bg: 'rgba(217, 119, 6, 0.92)',
+        text: '#FFFFFF',
+      }
+    : isConfigSaved
+    ? {
+        label: 'Configuration Saved',
+        bg: 'rgba(15, 118, 110, 0.94)',
+        text: '#FFFFFF',
+      }
+    : isStructureGenerated
+    ? {
+        label: 'Ready to Start',
+        bg: 'rgba(21, 128, 61, 0.94)',
         text: '#FFFFFF',
       }
     : baseStatusBadge;
@@ -338,6 +369,34 @@ export function TournamentCard({
               accessibilityLabel={`Configure format for ${tournament.name}`}
             >
               <AppText style={styles.bottomPublishBtnText}>Configure Format →</AppText>
+            </TouchableOpacity>
+          )}
+
+          {isConfigSaved && (
+            <TouchableOpacity
+              style={styles.bottomPublishBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPress();
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel={`Generate schedule for ${tournament.name}`}
+            >
+              <AppText style={styles.bottomPublishBtnText}>Generate Schedule →</AppText>
+            </TouchableOpacity>
+          )}
+
+          {isStructureGenerated && (
+            <TouchableOpacity
+              style={styles.bottomPublishBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPress();
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel={`Start ${tournament.name}`}
+            >
+              <AppText style={styles.bottomPublishBtnText}>Ready to Start →</AppText>
             </TouchableOpacity>
           )}
         </View>

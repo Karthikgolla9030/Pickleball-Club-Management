@@ -11,6 +11,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { Layers, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -21,6 +22,7 @@ import {
   PostRegistrationNotice,
   PostRegistrationSaveActionBar,
 } from '@/components/post-registration';
+import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Spacing, Radius } from '@/theme';
 import type { Tournament, TournamentSetupResponse } from '@/types';
@@ -44,6 +46,7 @@ export function RoundRobinSetupCourtsTab({
   onRefresh,
   onGenerated,
 }: RoundRobinSetupCourtsTabProps) {
+  const queryClient = useQueryClient();
   const [setupData, setSetupData] = useState<TournamentSetupResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -70,7 +73,7 @@ export function RoundRobinSetupCourtsTab({
           : 0;
       setSelectedCourtIds(nextCourtIds);
       setCourtsCount(nextCourtsCount);
-      if (res.configuration_saved) {
+      if (res.configuration_saved || res.is_completed || res.is_generated) {
         setSavedSnapshot({
           courtIdsKey: [...nextCourtIds].sort().join(','),
           courtsCount: nextCourtsCount,
@@ -90,14 +93,25 @@ export function RoundRobinSetupCourtsTab({
     void loadSetup();
   }, [clubId, tournamentId, tournament?.status, tournament?.participant_count]);
 
-  const isRegistrationOpen = tournament?.status === 'registration_open';
-  const isDraft = tournament?.status === 'draft';
-  const isClosed = tournament?.status === 'registration_closed';
+  const statusLower = String(tournament?.status || setupData?.tournament_status || '').toLowerCase();
+  const isRegistrationOpen = statusLower === 'registration_open';
+  const isDraft = statusLower === 'draft';
+  const isClosed = statusLower === 'registration_closed';
+  const isCompleted =
+    Boolean(setupData?.is_completed) ||
+    statusLower === 'completed' ||
+    String(tournament?.workflow_state || '').toLowerCase() === 'completed';
+  const isCancelled = statusLower === 'cancelled';
+  const isInProgress = !isCompleted && !isCancelled && statusLower === 'in_progress';
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const configurationSaved = Boolean(setupData?.configuration_saved);
+  const isLocked = Boolean(setupData?.is_locked) || isCompleted || isCancelled || (isInProgress && isGenerated);
+  const configurationSaved = Boolean(setupData?.configuration_saved) || isCompleted || isGenerated;
+  const disabledControls = isLocked || !canManage || (configurationSaved && !isEditing);
 
   const currentKey = [...selectedCourtIds].sort().join(',');
-  const isDirty = savedSnapshot
+  const isDirty = isLocked
+    ? false
+    : savedSnapshot
     ? savedSnapshot.courtIdsKey !== currentKey || savedSnapshot.courtsCount !== courtsCount
     : true;
 
@@ -124,7 +138,7 @@ export function RoundRobinSetupCourtsTab({
   };
 
   const handleSave = async () => {
-    if (!canManage || !isValid) return;
+    if (!canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
@@ -141,6 +155,14 @@ export function RoundRobinSetupCourtsTab({
         courtsCount: nextCount,
       });
       setIsEditing(false);
+      syncTournamentCountInCaches(queryClient, tournamentId, {
+        status: saved.tournament_status,
+        workflow_state: saved.workflow_state,
+        configuration_saved: saved.configuration_saved,
+        configuration_saved_at: saved.configuration_saved_at,
+        structure_generated: saved.is_generated,
+      });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       await onRefresh();
     } catch (err: any) {
       const msg = err?.data?.detail || err?.message || 'Unable to save Round Robin configuration.';
@@ -151,7 +173,7 @@ export function RoundRobinSetupCourtsTab({
   };
 
   const handleGenerate = async () => {
-    if (!canManage || !configurationSaved || isDirty || !isValid) return;
+    if (!canManage || !configurationSaved || isDirty || !isValid || isLocked) return;
     const execute = async () => {
       try {
         setGenerating(true);
@@ -160,6 +182,7 @@ export function RoundRobinSetupCourtsTab({
         } else {
           await competitionApi.generateRoundRobin(clubId, tournamentId, true);
         }
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await loadSetup();
         await (onGenerated ? onGenerated() : onRefresh());
       } catch (err: any) {
@@ -199,9 +222,19 @@ export function RoundRobinSetupCourtsTab({
         <PostRegistrationHeader
           icon={<SlidersHorizontal size={18} color="#0F766E" />}
           title="Round Robin Setup & Courts"
-          subtitle="Review schedule summary, assign active club courts, save settings, and generate matchups."
+          subtitle={
+            isCompleted
+              ? 'Archived final schedule summary and court assignment.'
+              : 'Review schedule summary, assign active club courts, save settings, and generate matchups.'
+          }
           badgeLabel={
-            isGenerated
+            isCompleted
+              ? 'Completed'
+              : isCancelled
+              ? 'Cancelled'
+              : isInProgress
+              ? 'In Progress'
+              : isGenerated
               ? 'Generated'
               : configurationSaved && !isDirty
               ? 'Saved'
@@ -210,7 +243,11 @@ export function RoundRobinSetupCourtsTab({
               : 'Open'
           }
           badgeVariant={
-            isGenerated || (configurationSaved && !isDirty) ? 'success' : 'warning'
+            isCompleted || isGenerated || (configurationSaved && !isDirty)
+              ? 'success'
+              : isCancelled
+              ? 'default'
+              : 'warning'
           }
         />
 
@@ -252,7 +289,7 @@ export function RoundRobinSetupCourtsTab({
               availableCourts={setupData?.available_courts ?? []}
               selectedCourtIds={selectedCourtIds}
               courtsCount={courtsCount}
-              disabled={!canManage || (configurationSaved && !isEditing)}
+              disabled={disabledControls}
               onToggleCourt={handleToggleCourt}
               onCourtsCountChange={setCourtsCount}
             />
@@ -268,6 +305,8 @@ export function RoundRobinSetupCourtsTab({
             isGenerated={isGenerated}
             isValid={isValid}
             canManage={canManage}
+            isLocked={isLocked}
+            isCompleted={isCompleted}
             generateLabel="Generate Round Robin Matchups"
             regenerateLabel="Regenerate Matchups"
             validationError={setupData?.validation_error}

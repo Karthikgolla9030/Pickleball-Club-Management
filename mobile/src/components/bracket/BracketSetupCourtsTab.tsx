@@ -11,6 +11,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { GitFork, Layers, SlidersHorizontal } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
@@ -22,6 +23,7 @@ import {
   PostRegistrationNotice,
   PostRegistrationSaveActionBar,
 } from '@/components/post-registration';
+import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, TournamentSetupResponse } from '@/types';
@@ -47,6 +49,7 @@ export function BracketSetupCourtsTab({
   onRefresh,
   onGenerated,
 }: BracketSetupCourtsTabProps) {
+  const queryClient = useQueryClient();
   const [setupData, setSetupData] = useState<TournamentSetupResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,7 +80,7 @@ export function BracketSetupCourtsTab({
       setBracketType(nextType);
       setSelectedCourtIds(nextCourtIds);
       setCourtsCount(nextCourtsCount);
-      if (res.configuration_saved) {
+      if (res.configuration_saved || res.is_completed || res.is_generated) {
         setSavedSnapshot({
           bracketType: nextType,
           courtIdsKey: [...nextCourtIds].sort().join(','),
@@ -98,14 +101,25 @@ export function BracketSetupCourtsTab({
     void loadSetup();
   }, [clubId, tournamentId, tournament?.status, tournament?.participant_count]);
 
-  const isRegistrationOpen = tournament?.status === 'registration_open';
-  const isDraft = tournament?.status === 'draft';
-  const isClosed = tournament?.status === 'registration_closed';
+  const statusLower = String(tournament?.status || setupData?.tournament_status || '').toLowerCase();
+  const isRegistrationOpen = statusLower === 'registration_open';
+  const isDraft = statusLower === 'draft';
+  const isClosed = statusLower === 'registration_closed';
+  const isCompleted =
+    Boolean(setupData?.is_completed) ||
+    statusLower === 'completed' ||
+    String(tournament?.workflow_state || '').toLowerCase() === 'completed';
+  const isCancelled = statusLower === 'cancelled';
+  const isInProgress = !isCompleted && !isCancelled && statusLower === 'in_progress';
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const configurationSaved = Boolean(setupData?.configuration_saved);
+  const isLocked = Boolean(setupData?.is_locked) || isCompleted || isCancelled || (isInProgress && isGenerated);
+  const configurationSaved = Boolean(setupData?.configuration_saved) || isCompleted || isGenerated;
+  const disabledControls = isLocked || !canManage || (configurationSaved && !isEditing);
 
   const currentKey = [...selectedCourtIds].sort().join(',');
-  const isDirty = savedSnapshot
+  const isDirty = isLocked
+    ? false
+    : savedSnapshot
     ? savedSnapshot.bracketType !== bracketType ||
       savedSnapshot.courtIdsKey !== currentKey ||
       savedSnapshot.courtsCount !== courtsCount
@@ -134,7 +148,7 @@ export function BracketSetupCourtsTab({
   };
 
   const handleSave = async () => {
-    if (!canManage || !isValid) return;
+    if (!canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
@@ -155,6 +169,14 @@ export function BracketSetupCourtsTab({
         courtsCount: nextCount,
       });
       setIsEditing(false);
+      syncTournamentCountInCaches(queryClient, tournamentId, {
+        status: saved.tournament_status,
+        workflow_state: saved.workflow_state,
+        configuration_saved: saved.configuration_saved,
+        configuration_saved_at: saved.configuration_saved_at,
+        structure_generated: saved.is_generated,
+      });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       await onRefresh();
     } catch (err: any) {
       const msg = err?.data?.detail || err?.message || 'Unable to save Bracket configuration.';
@@ -165,7 +187,7 @@ export function BracketSetupCourtsTab({
   };
 
   const handleGenerate = async () => {
-    if (!canManage || !configurationSaved || isDirty || !isValid) return;
+    if (!canManage || !configurationSaved || isDirty || !isValid || isLocked) return;
     const execute = async () => {
       try {
         setGenerating(true);
@@ -174,6 +196,7 @@ export function BracketSetupCourtsTab({
         } else {
           await competitionApi.generateBracket(clubId, tournamentId, true);
         }
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await loadSetup();
         await (onGenerated ? onGenerated() : onRefresh());
       } catch (err: any) {
@@ -213,9 +236,19 @@ export function BracketSetupCourtsTab({
         <PostRegistrationHeader
           icon={<SlidersHorizontal size={18} color="#0F766E" />}
           title="Bracket Setup & Courts"
-          subtitle="Select elimination structure, assign active club courts, save settings, and generate bracket."
+          subtitle={
+            isCompleted
+              ? 'Archived final elimination bracket format and court assignment.'
+              : 'Select elimination structure, assign active club courts, save settings, and generate bracket.'
+          }
           badgeLabel={
-            isGenerated
+            isCompleted
+              ? 'Completed'
+              : isCancelled
+              ? 'Cancelled'
+              : isInProgress
+              ? 'In Progress'
+              : isGenerated
               ? 'Generated'
               : configurationSaved && !isDirty
               ? 'Saved'
@@ -224,7 +257,11 @@ export function BracketSetupCourtsTab({
               : 'Open'
           }
           badgeVariant={
-            isGenerated || (configurationSaved && !isDirty) ? 'success' : 'warning'
+            isCompleted || isGenerated || (configurationSaved && !isDirty)
+              ? 'success'
+              : isCancelled
+              ? 'default'
+              : 'warning'
           }
         />
 
@@ -269,7 +306,7 @@ export function BracketSetupCourtsTab({
                 label,
               }))}
               selectedValue={bracketType}
-              disabled={!canManage || (configurationSaved && !isEditing)}
+              disabled={disabledControls}
               onSelect={setBracketType}
             />
           </View>
@@ -283,7 +320,7 @@ export function BracketSetupCourtsTab({
               availableCourts={setupData?.available_courts ?? []}
               selectedCourtIds={selectedCourtIds}
               courtsCount={courtsCount}
-              disabled={!canManage || (configurationSaved && !isEditing)}
+              disabled={disabledControls}
               onToggleCourt={handleToggleCourt}
               onCourtsCountChange={setCourtsCount}
             />
@@ -299,6 +336,8 @@ export function BracketSetupCourtsTab({
             isGenerated={isGenerated}
             isValid={isValid}
             canManage={canManage}
+            isLocked={isLocked}
+            isCompleted={isCompleted}
             generateLabel="Generate Bracket"
             regenerateLabel="Regenerate Bracket"
             validationError={setupData?.validation_error}

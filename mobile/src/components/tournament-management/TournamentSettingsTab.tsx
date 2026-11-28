@@ -284,16 +284,28 @@ export function TournamentSettingsTab({
 
   // ─── 8. Registration Status Badge ─────────────────────────────────────────
   const regStatus = tournament?.status?.toLowerCase();
+  const workflowState = tournament?.workflow_state?.toLowerCase();
+  const isStructureReady =
+    workflowState === 'structure_generated' ||
+    Boolean(tournament?.structure_generated) ||
+    Boolean(formatConfig.is_format_configured);
+  const isConfigSaved =
+    !isStructureReady &&
+    (workflowState === 'configuration_saved' ||
+      Boolean(tournament?.configuration_saved) ||
+      Boolean(formatConfig.configuration_saved));
   const isAwaitingFormatConfig =
-    regStatus === 'registration_closed' &&
-    (format === 'scramble' || format === 'pool_play') &&
-    !formatConfig.is_format_configured;
+    regStatus === 'registration_closed' && !isStructureReady && !isConfigSaved;
 
   const regStatusLabel =
     regStatus === 'registration_open' || regStatus === 'open'
       ? 'Registration Open'
       : isAwaitingFormatConfig
-      ? 'Registration Closed – Awaiting Format Configuration'
+      ? 'Registration Closed – Awaiting Configuration'
+      : isConfigSaved
+      ? 'Configuration Saved'
+      : isStructureReady
+      ? 'Ready to Start'
       : regStatus === 'registration_closed'
       ? 'Registration Closed'
       : regStatus === 'in_progress'
@@ -644,7 +656,7 @@ export function TournamentSettingsTab({
           <View style={styles.rowsList}>
             <InfoRow
               label="Preliminary Pools"
-              value={formatConfig.is_format_configured
+              value={isStructureReady || isConfigSaved
                 ? `${poolCount ?? formatConfig.pool_count ?? 2} Pools`
                 : `Configured post-registration based on confirmed teams (Baseline: ${poolCount ?? formatConfig.pool_count ?? 2} Pools)`
               }
@@ -652,7 +664,7 @@ export function TournamentSettingsTab({
             />
             <InfoRow
               label="Advancement Rule"
-              value={formatConfig.is_format_configured
+              value={isStructureReady || isConfigSaved
                 ? `Top ${formatConfig.advancement_count || formatConfig.qualifiers_per_pool || 2} per pool advance to Championship Bracket`
                 : `Selected post-registration (Baseline: Top ${formatConfig.qualifiers_per_pool || 2} per pool)`
               }
@@ -734,7 +746,7 @@ export function TournamentSettingsTab({
             />
             <InfoRow
               label="Planned Rotation Rounds"
-              value={formatConfig.is_format_configured
+              value={isStructureReady || isConfigSaved
                 ? `${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds`
                 : `Configured post-registration based on confirmed players (Baseline: ${plannedRounds ?? formatConfig.planned_rounds ?? 5} Rounds)`
               }

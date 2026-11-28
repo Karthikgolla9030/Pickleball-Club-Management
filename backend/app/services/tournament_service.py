@@ -323,10 +323,16 @@ class TournamentService:
             if hasattr(tournament.status, "value")
             else str(tournament.status)
         )
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
         updated_payload = {
             "tournament_id": str(tournament.id),
             "name": tournament.name,
             "status": status_val,
+            "workflow_state": workflow_meta.workflow_state,
+            "workflow_state_label": workflow_meta.workflow_state_label,
+            "configuration_saved": workflow_meta.configuration_saved,
+            "configuration_saved_at": workflow_meta.configuration_saved_at,
+            "structure_generated": workflow_meta.structure_generated,
             "participant_count": counts.participant_count,
             "teams_count": counts.teams_count,
             "confirmed_players_count": counts.confirmed_players_count,

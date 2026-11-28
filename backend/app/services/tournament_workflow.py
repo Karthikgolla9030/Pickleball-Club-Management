@@ -228,6 +228,7 @@ async def compute_tournaments_workflow_meta(
     snapshots: dict[UUID, TournamentWorkflowSnapshot] = {}
     for t in tournaments:
         cfg = t.format_configuration if isinstance(t.format_configuration, dict) else {}
+        pps = cfg.get("pool_play_state") if isinstance(cfg.get("pool_play_state"), dict) else {}
         config_saved = bool(cfg.get("configuration_saved", False))
         config_saved_at = cfg.get("configuration_saved_at")
         matches_count = matches_by_tid.get(t.id, 0)
@@ -235,13 +236,26 @@ async def compute_tournaments_workflow_meta(
             cfg.get("is_format_configured", False)
             and cfg.get("configuration_stage") in ("ready_to_start", "schedule_generated", "in_progress")
         )
+        is_effectively_completed = (
+            t.status == TournamentStatus.COMPLETED
+            or bool(cfg.get("winner"))
+            or bool(pps.get("completed"))
+            or bool(pps.get("is_completed"))
+            or bool(pps.get("winner"))
+        )
+        effective_config_saved = (
+            config_saved
+            or structure_generated
+            or is_effectively_completed
+            or t.status == TournamentStatus.IN_PROGRESS
+        )
         eligibility = eligibility_map[t.id]
 
         if t.status == TournamentStatus.DRAFT:
             state = "draft"
         elif t.status == TournamentStatus.CANCELLED:
             state = "cancelled"
-        elif t.status == TournamentStatus.COMPLETED:
+        elif is_effectively_completed:
             state = "completed"
         elif t.status == TournamentStatus.IN_PROGRESS:
             state = "in_progress"
@@ -249,7 +263,7 @@ async def compute_tournaments_workflow_meta(
             state = "registration_open" if eligibility.can_close else "registration_closure_blocked"
         elif structure_generated:
             state = "structure_generated"
-        elif config_saved:
+        elif effective_config_saved:
             state = "configuration_saved"
         else:
             state = "configuration_required"
@@ -257,7 +271,7 @@ async def compute_tournaments_workflow_meta(
         snapshots[t.id] = TournamentWorkflowSnapshot(
             workflow_state=state,
             workflow_state_label=WORKFLOW_STATE_LABELS.get(state, state),
-            configuration_saved=config_saved,
+            configuration_saved=effective_config_saved,
             configuration_saved_at=config_saved_at if isinstance(config_saved_at, str) else None,
             structure_generated=structure_generated,
             matches_count=matches_count,

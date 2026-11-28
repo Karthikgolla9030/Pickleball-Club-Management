@@ -93,13 +93,21 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
             eventData.participant_count !== undefined ||
             eventData.teams_count !== undefined ||
             eventData.confirmed_players_count !== undefined ||
-            eventData.status !== undefined
+            eventData.status !== undefined ||
+            eventData.workflow_state !== undefined ||
+            eventData.configuration_saved !== undefined ||
+            eventData.structure_generated !== undefined
           ) {
             syncTournamentCountInCaches(queryClient, tId, {
               participant_count: eventData.participant_count,
               teams_count: eventData.teams_count,
               confirmed_players_count: eventData.confirmed_players_count,
               status: eventData.status,
+              workflow_state: eventData.workflow_state,
+              workflow_state_label: eventData.workflow_state_label,
+              configuration_saved: eventData.configuration_saved,
+              configuration_saved_at: eventData.configuration_saved_at,
+              structure_generated: eventData.structure_generated,
             });
           }
           invalidateAllTournamentQueries(

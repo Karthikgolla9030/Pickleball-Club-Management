@@ -402,9 +402,17 @@ class CompetitionService:
             )
 
     def _get_tournament_team_size(self, tournament) -> int:
-        """Return expected team size (1 for Singles, 2 for Doubles) via authoritative resolver."""
-        _, team_size = resolve_tournament_registration_model(tournament)
-        return team_size
+        """Return expected team size (1 for Singles, 2 for Doubles)."""
+        config = tournament.format_configuration or {}
+        if "team_size" in config and config["team_size"] is not None:
+            return int(config["team_size"])
+        category = str(config.get("category", "")).lower()
+        if "singles" in category:
+            return 1
+        desc = (tournament.description or "").lower()
+        if "singles" in desc:
+            return 1
+        return 2
 
     def _assert_supports_match_scoring(self, tournament) -> None:
         if tournament.format not in (
@@ -461,6 +469,14 @@ class CompetitionService:
         if not teams:
             return []
         expected_size = self._get_tournament_team_size(tournament)
+        _, model_size = resolve_tournament_registration_model(tournament)
+        cfg = tournament.format_configuration or {}
+        has_explicit_cfg = bool(
+            cfg.get("team_size") is not None
+            or cfg.get("category")
+            or cfg.get("competition_category")
+            or cfg.get("registration_type")
+        )
         regs = await self.registration_repo.list_by_tournament(tournament.id)
         confirmed_pm_ids = {
             r.player_membership_id
@@ -472,7 +488,11 @@ class CompetitionService:
         }
         return [
             t for t in teams
-            if len(t.members or []) == expected_size
+            if len(t.members or []) > 0
+            and (
+                len(t.members or []) == expected_size
+                or (not has_explicit_cfg and len(t.members or []) == model_size)
+            )
             and all(m.player_membership_id in confirmed_pm_ids for m in (t.members or []))
         ]
 
@@ -829,6 +849,7 @@ class CompetitionService:
     ) -> GenerationResponse:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_round_robin(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
             raise HTTPException(
@@ -899,6 +920,10 @@ class CompetitionService:
         await self.db.commit()
 
         rounds_count = max(s.round_number for s in slots) if slots else 0
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
         return GenerationResponse(
             tournament_id=tournament_id,
             teams_count=len(teams),
@@ -917,6 +942,7 @@ class CompetitionService:
     ) -> GenerationResponse:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_round_robin(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if tournament.status not in (
             TournamentStatus.REGISTRATION_CLOSED,
@@ -983,6 +1009,10 @@ class CompetitionService:
         await self.db.commit()
 
         rounds_count = max(s.round_number for s in slots) if slots else 0
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
         return GenerationResponse(
             tournament_id=tournament_id,
             teams_count=len(teams),
@@ -1272,6 +1302,7 @@ class CompetitionService:
         """Generate isolated Round Robin matches for all pools."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         existing_matches = await self.competition_repo.count_all_matches(tournament_id)
         if existing_matches > 0:
@@ -1350,6 +1381,11 @@ class CompetitionService:
         )
         await self.db.commit()
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
         return PoolPlayGenerationResponse(
             tournament_id=tournament_id,
             pools_count=len(pools),
@@ -1366,6 +1402,7 @@ class CompetitionService:
         """Regenerate pool stage matches — only allowed before any pool results entered."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if tournament.status not in (
             TournamentStatus.REGISTRATION_CLOSED,
@@ -1450,6 +1487,11 @@ class CompetitionService:
         else:
             await self.tournament_repo.update(tournament, format_configuration=updated_cfg)
         await self.db.commit()
+
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
 
         return PoolPlayGenerationResponse(
             tournament_id=tournament_id,
@@ -1553,6 +1595,7 @@ class CompetitionService:
         """Generate single-elimination knockout bracket from completed pool standings."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if tournament.status != TournamentStatus.IN_PROGRESS:
             raise HTTPException(
@@ -1681,6 +1724,7 @@ class CompetitionService:
         """Persist client Pool Play workspace state to tournament format_configuration."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         config = dict(tournament.format_configuration or {})
         config["pool_play_state"] = payload
@@ -4317,6 +4361,7 @@ class CompetitionService:
         """
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_bracket(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if require_saved_config and not bool((tournament.format_configuration or {}).get("configuration_saved", False)):
             raise HTTPException(
@@ -4448,6 +4493,11 @@ class CompetitionService:
         byes_count = sum(1 for s in slots if s.is_bye)
         played_count = len(slots) - byes_count
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
         return BracketGenerationResponse(
             tournament_id=tournament_id,
             teams_count=n,
@@ -4475,6 +4525,7 @@ class CompetitionService:
         """
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_bracket(tournament)
+        self._assert_not_completed_or_cancelled(tournament)
 
         if tournament.status not in (
             TournamentStatus.REGISTRATION_CLOSED,
@@ -4607,6 +4658,11 @@ class CompetitionService:
         byes_count = sum(1 for s in slots if s.is_bye)
         played_count = len(slots) - byes_count
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
         return BracketGenerationResponse(
             tournament_id=tournament_id,
             teams_count=n,
@@ -4736,6 +4792,7 @@ class CompetitionService:
 
     async def customize_teams(self, club_id: uuid.UUID, tournament_id: uuid.UUID, payload: "CustomizeTeamsRequest") -> None:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
         if tournament.is_competition_locked:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is locked")
         for t in payload.teams:
@@ -4750,6 +4807,7 @@ class CompetitionService:
 
     async def customize_pools(self, club_id: uuid.UUID, tournament_id: uuid.UUID, payload: "CustomizePoolsRequest") -> None:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
         if tournament.is_competition_locked:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is locked")
         for p in payload.pools:
@@ -4760,6 +4818,7 @@ class CompetitionService:
 
     async def customize_matchups(self, club_id: uuid.UUID, tournament_id: uuid.UUID, payload: "CustomizeMatchupsRequest") -> None:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
         if tournament.is_competition_locked:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is locked")
         for m in payload.matchups:
@@ -4776,6 +4835,7 @@ class CompetitionService:
 
     async def customize_seeding(self, club_id: uuid.UUID, tournament_id: uuid.UUID, payload: "CustomizeSeedingRequest") -> None:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
         if tournament.is_competition_locked:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is locked")
         for s in payload.seeds:
@@ -4786,6 +4846,7 @@ class CompetitionService:
 
     async def lock_competition(self, club_id: uuid.UUID, tournament_id: uuid.UUID) -> None:
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
+        self._assert_not_completed_or_cancelled(tournament)
         if tournament.is_competition_locked:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Competition is already locked")
         await self.tournament_repo.update(tournament, is_competition_locked=True, status=TournamentStatus.IN_PROGRESS)
@@ -4806,7 +4867,6 @@ class CompetitionService:
         """
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_scramble(tournament)
-        self._assert_not_completed_or_cancelled(tournament)
 
         # 1. Fetch confirmed active players
         regs = await self.registration_repo.list_by_tournament(tournament_id)
@@ -4905,9 +4965,17 @@ class CompetitionService:
             self.court_repo, club_id, tournament
         )
 
-        # Determine stage
+        # Determine stage cleanly from authoritative workflow state
+        is_completed = workflow_meta.workflow_state == "completed" or tournament.status == TournamentStatus.COMPLETED
+        is_locked = is_completed or tournament.status == TournamentStatus.CANCELLED
         stage = workflow_meta.workflow_state
-        if is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+        if is_completed:
+            stage = "completed"
+        elif tournament.status == TournamentStatus.CANCELLED:
+            stage = "cancelled"
+        elif tournament.status == TournamentStatus.IN_PROGRESS:
+            stage = "in_progress"
+        elif is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
             stage = "ready_to_start"
         elif workflow_meta.configuration_saved:
             stage = "configuration_saved"
@@ -4925,6 +4993,8 @@ class CompetitionService:
             configuration_stage=stage,
             configuration_saved=workflow_meta.configuration_saved,
             configuration_saved_at=workflow_meta.configuration_saved_at,
+            is_completed=is_completed,
+            is_locked=is_locked,
             closure_eligibility=workflow_meta.closure_eligibility.to_dict(),
             confirmed_player_count=player_count,
             eligible_players=eligible_players,
@@ -5096,6 +5166,11 @@ class CompetitionService:
         await self.competition_repo.create_match_participants_bulk(participant_dicts)
         await self.db.commit()
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
         return ScrambleGenerationResponse(
             tournament_id=tournament_id,
             participants_count=len(eligible_players),
@@ -5122,10 +5197,12 @@ class CompetitionService:
         import math
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_pool_play(tournament)
-        self._assert_not_completed_or_cancelled(tournament)
 
         teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
-        if not teams:
+        if not teams and tournament.status not in (
+            TournamentStatus.COMPLETED,
+            TournamentStatus.CANCELLED,
+        ):
             regs = await self.registration_repo.list_by_tournament(tournament_id)
             confirmed_regs = [r for r in regs if r.status == RegistrationStatus.CONFIRMED]
             if confirmed_regs:
@@ -5202,8 +5279,16 @@ class CompetitionService:
         except (TypeError, ValueError):
             balance_tolerance = 0.5
 
+        is_completed = workflow_meta.workflow_state == "completed" or tournament.status == TournamentStatus.COMPLETED
+        is_locked = is_completed or tournament.status == TournamentStatus.CANCELLED
         stage = workflow_meta.workflow_state
-        if is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+        if is_completed:
+            stage = "completed"
+        elif tournament.status == TournamentStatus.CANCELLED:
+            stage = "cancelled"
+        elif tournament.status == TournamentStatus.IN_PROGRESS:
+            stage = "in_progress"
+        elif is_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED:
             stage = "ready_to_start"
         elif workflow_meta.configuration_saved:
             stage = "configuration_saved"
@@ -5219,6 +5304,8 @@ class CompetitionService:
             configuration_stage=stage,
             configuration_saved=workflow_meta.configuration_saved,
             configuration_saved_at=workflow_meta.configuration_saved_at,
+            is_completed=is_completed,
+            is_locked=is_locked,
             closure_eligibility=workflow_meta.closure_eligibility.to_dict(),
             confirmed_teams_count=teams_count,
             confirmed_teams=confirmed_teams_data,
@@ -5423,7 +5510,10 @@ class CompetitionService:
             "name": tournament.name,
             "status": tournament.status.value,
             "workflow_state": workflow_meta.workflow_state,
+            "workflow_state_label": workflow_meta.workflow_state_label,
             "configuration_saved": workflow_meta.configuration_saved,
+            "configuration_saved_at": workflow_meta.configuration_saved_at,
+            "structure_generated": workflow_meta.structure_generated,
             "participant_count": counts.participant_count,
             "teams_count": counts.teams_count,
             "confirmed_players_count": counts.confirmed_players_count,
@@ -5447,7 +5537,6 @@ class CompetitionService:
     ) -> TournamentSetupResponse:
         """Return unified setup diagnostics and persisted config across all 4 tournament formats."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
-        self._assert_not_completed_or_cancelled(tournament)
 
         counts = await compute_tournament_counts(self.db, tournament)
         workflow_meta = await compute_tournament_workflow_meta(self.db, tournament, counts)
@@ -5457,6 +5546,8 @@ class CompetitionService:
         cfg = dict(tournament.format_configuration or {})
         unit_label = "team" if counts.is_doubles else "player"
         unit_plural = "teams" if counts.is_doubles else "players"
+        is_completed = workflow_meta.workflow_state == "completed" or tournament.status == TournamentStatus.COMPLETED
+        is_locked = is_completed or tournament.status == TournamentStatus.CANCELLED
 
         base_kwargs: dict[str, Any] = {
             "tournament_id": tournament_id,
@@ -5467,6 +5558,8 @@ class CompetitionService:
             "configuration_saved": workflow_meta.configuration_saved,
             "configuration_saved_at": workflow_meta.configuration_saved_at,
             "is_generated": workflow_meta.structure_generated,
+            "is_completed": is_completed,
+            "is_locked": is_locked,
             "can_start": workflow_meta.structure_generated and tournament.status == TournamentStatus.REGISTRATION_CLOSED,
             "closure_eligibility": workflow_meta.closure_eligibility.to_dict(),
             "confirmed_count": counts.participant_count,

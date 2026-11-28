@@ -27,6 +27,7 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { AppText } from '@/components/AppText';
 import {
   PostRegistrationChoiceChips,
@@ -37,6 +38,7 @@ import {
   PostRegistrationSaveActionBar,
   PostRegistrationStepper,
 } from '@/components/post-registration';
+import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Court, ScrambleState, SetupCourtItem, Tournament } from '@/types';
@@ -49,6 +51,7 @@ export interface ScrambleSetupRoundsTabProps {
   canManage?: boolean;
   registeredCount?: number;
   clubCourts?: Court[];
+  onRefresh?: () => void | Promise<void>;
   onGenerated?: () => void | Promise<void>;
   matchesCount?: number;
   onSetPlannedRounds?: (rounds: number) => Promise<any>;
@@ -80,10 +83,12 @@ export function ScrambleSetupRoundsTab({
   canManage = true,
   registeredCount = 0,
   clubCourts = [],
+  onRefresh,
   onGenerated,
   matchesCount = 0,
   onSetPlannedRounds,
 }: ScrambleSetupRoundsTabProps) {
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -130,7 +135,7 @@ export function ScrambleSetupRoundsTab({
         setSelectedCourtIds(nextCourtIds);
         setCourtsCount(nextCourtsCount);
 
-        if (res.configuration_saved) {
+        if (res.configuration_saved || res.is_completed || res.is_generated) {
           setSavedSnapshot({
             rounds: nextRounds,
             rotationRule: nextRule,
@@ -157,10 +162,18 @@ export function ScrambleSetupRoundsTab({
 
   const playerCount = setupData?.confirmed_player_count ?? registeredCount;
   const hasMinPlayers = playerCount >= 4;
-  const isDraft = tournament?.status === 'draft';
-  const isRegistrationOpen = tournament?.status === 'registration_open';
+  const statusLower = String(tournament?.status || setupData?.tournament_status || '').toLowerCase();
+  const isDraft = statusLower === 'draft';
+  const isRegistrationOpen = statusLower === 'registration_open';
+  const isCompleted =
+    Boolean(setupData?.is_completed) ||
+    statusLower === 'completed' ||
+    String(tournament?.workflow_state || '').toLowerCase() === 'completed';
+  const isCancelled = statusLower === 'cancelled';
+  const isInProgress = !isCompleted && !isCancelled && statusLower === 'in_progress';
   const isGenerated = (setupData?.is_generated ?? false) || matchesCount > 0;
-  const configurationSaved = Boolean(setupData?.configuration_saved);
+  const isLocked = Boolean(setupData?.is_locked) || isCompleted || isCancelled || (isInProgress && isGenerated);
+  const configurationSaved = Boolean(setupData?.configuration_saved) || isCompleted || isGenerated;
 
   const availableCourts: SetupCourtItem[] =
     setupData?.available_courts && setupData.available_courts.length > 0
@@ -186,14 +199,16 @@ export function ScrambleSetupRoundsTab({
   const isValid = hasMinPlayers && isScheduleFeasible && courtsValid;
 
   const currentCourtKey = [...selectedCourtIds].sort().join(',');
-  const isDirty = savedSnapshot
+  const isDirty = isLocked
+    ? false
+    : savedSnapshot
     ? savedSnapshot.rounds !== rounds ||
       savedSnapshot.rotationRule !== rotationRule ||
       savedSnapshot.courtIdsKey !== currentCourtKey ||
       savedSnapshot.courtsCount !== courtsCount
     : true;
 
-  const disabledControls = !canManage || (configurationSaved && !isEditing);
+  const disabledControls = isLocked || !canManage || (configurationSaved && !isEditing);
 
   const handleRoundsChange = (nextRounds: number) => {
     const clamped = Math.max(1, Math.min(20, nextRounds));
@@ -220,7 +235,7 @@ export function ScrambleSetupRoundsTab({
   };
 
   const handleSave = async () => {
-    if (!clubId || !tournamentId || !canManage || !isValid) return;
+    if (!clubId || !tournamentId || !canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
@@ -232,7 +247,7 @@ export function ScrambleSetupRoundsTab({
       if (saved.scramble_setup) {
         setSetupData(saved.scramble_setup);
       }
-      if (onSetPlannedRounds) {
+      if (onSetPlannedRounds && !isGenerated) {
         try {
           await onSetPlannedRounds(rounds);
         } catch {}
@@ -244,6 +259,15 @@ export function ScrambleSetupRoundsTab({
         courtsCount,
       });
       setIsEditing(false);
+      syncTournamentCountInCaches(queryClient, tournamentId, {
+        status: saved.tournament_status,
+        workflow_state: saved.workflow_state,
+        configuration_saved: saved.configuration_saved,
+        configuration_saved_at: saved.configuration_saved_at,
+        structure_generated: saved.is_generated,
+      });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
+      if (onRefresh) await onRefresh();
     } catch (err: any) {
       const msg = err?.data?.detail || err?.message || 'Unable to save Scramble configuration.';
       Alert.alert('Save Failed', msg);
@@ -253,7 +277,7 @@ export function ScrambleSetupRoundsTab({
   };
 
   const handleConfirmAndGenerate = async () => {
-    if (!clubId || !tournamentId || !canManage || !configurationSaved || isDirty || !isValid) {
+    if (!clubId || !tournamentId || !canManage || !configurationSaved || isDirty || !isValid || isLocked) {
       return;
     }
 
@@ -271,6 +295,7 @@ export function ScrambleSetupRoundsTab({
             require_saved_config: true,
           });
         }
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await fetchSetup();
         if (onGenerated) await onGenerated();
       } catch (err: any) {
@@ -315,9 +340,19 @@ export function ScrambleSetupRoundsTab({
         <PostRegistrationHeader
           icon={<SlidersHorizontal size={18} color="#0F766E" />}
           title="Scramble Setup & Rounds"
-          subtitle="Configure rotation rounds, partner rules, and active courts. Save before generating."
+          subtitle={
+            isCompleted
+              ? 'Archived final rotation rules and court assignment.'
+              : 'Configure rotation rounds, partner rules, and courts.'
+          }
           badgeLabel={
-            isGenerated
+            isCompleted
+              ? 'Completed'
+              : isCancelled
+              ? 'Cancelled'
+              : isInProgress
+              ? 'In Progress'
+              : isGenerated
               ? 'Generated'
               : configurationSaved && !isDirty
               ? 'Saved'
@@ -325,7 +360,13 @@ export function ScrambleSetupRoundsTab({
               ? 'Open'
               : 'Draft'
           }
-          badgeVariant={isGenerated || (configurationSaved && !isDirty) ? 'success' : 'warning'}
+          badgeVariant={
+            isCompleted || isGenerated || (configurationSaved && !isDirty)
+              ? 'success'
+              : isCancelled
+              ? 'default'
+              : 'warning'
+          }
         />
 
         {(isDraft || isRegistrationOpen) && (
@@ -445,7 +486,9 @@ export function ScrambleSetupRoundsTab({
             isGenerated={isGenerated}
             isValid={isValid}
             canManage={canManage}
-            generateLabel="Confirm & Generate Rotation Schedule"
+            isLocked={isLocked}
+            isCompleted={isCompleted}
+            generateLabel="Generate Rotation Schedule"
             regenerateLabel="Regenerate Schedule"
             validationError={setupData?.validation_error}
             onSave={handleSave}

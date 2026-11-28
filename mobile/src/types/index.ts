@@ -868,6 +868,8 @@ export interface TournamentSetupResponse {
   configuration_saved: boolean;
   configuration_saved_at?: string | null;
   is_generated: boolean;
+  is_completed?: boolean;
+  is_locked?: boolean;
   can_start: boolean;
   is_valid: boolean;
   validation_error?: string | null;
