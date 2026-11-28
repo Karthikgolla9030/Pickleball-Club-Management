@@ -79,13 +79,18 @@ export function BracketTeamsTab({
     maxPlayersCount = rawMax;
   }
 
-  const registeredPlayersCount = isDoubles
+  const fallbackPlayersCount = isDoubles
     ? teams.reduce(
         (sum, t) => sum + (t.members && t.members.length > 0 ? t.members.length : effectiveTeamSize),
         0
       )
     : teams.length;
-  const registeredTeamsCount = teams.length;
+  const registeredTeamsCount = isDoubles
+    ? (tournament?.teams_count ?? tournament?.participant_count ?? teams.length)
+    : teams.length;
+  const registeredPlayersCount = isDoubles
+    ? (tournament?.confirmed_players_count ?? fallbackPlayersCount)
+    : (tournament?.participant_count ?? tournament?.confirmed_players_count ?? teams.length);
 
   const categoryLabel =
     config.category || (isDoubles ? "Men's Doubles" : 'Singles');

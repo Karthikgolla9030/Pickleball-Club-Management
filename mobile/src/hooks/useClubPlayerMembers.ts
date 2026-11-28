@@ -10,7 +10,7 @@ import type {
   UpdateClubPlayerMemberPayload,
 } from '@/types';
 
-export function useClubPlayerMembers(clubId: string | null) {
+export function useClubPlayerMembers(clubId: string | null, enabled = true) {
   const queryClient = useQueryClient();
 
   const playerMembersQuery = useQuery<ClubPlayerMember[], Error>({
@@ -19,7 +19,7 @@ export function useClubPlayerMembers(clubId: string | null) {
       if (!clubId) throw new Error('Club ID required');
       return clubsApi.getClubPlayerMembers(clubId);
     },
-    enabled: Boolean(clubId),
+    enabled: Boolean(clubId) && enabled,
     staleTime: 60 * 1000,
   });
 

@@ -68,6 +68,14 @@ def resolve_tournament_registration_model(tournament: Tournament) -> tuple[bool,
     if "scramble" in category:
         return (False, 1)
 
+    if "doubles" in category and reg_type != "individual":
+        raw_team_size = cfg.get("team_size")
+        try:
+            ts = int(raw_team_size) if raw_team_size is not None else 2
+        except (TypeError, ValueError):
+            ts = 2
+        return (True, max(2, ts))
+
     raw_team_size = cfg.get("team_size")
     if raw_team_size is not None:
         try:
@@ -75,13 +83,11 @@ def resolve_tournament_registration_model(tournament: Tournament) -> tuple[bool,
             if ts >= 2:
                 return (True, ts)
             if ts == 1:
-                if "doubles" in category and reg_type == "team":
-                    return (True, 2)
                 return (False, 1)
         except (TypeError, ValueError):
             pass
 
-    if "doubles" in category or reg_type == "team":
+    if reg_type == "team":
         return (True, 2)
     if "singles" in category or reg_type == "individual":
         return (False, 1)

@@ -33,7 +33,7 @@ import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export interface ExtraConfigField {
   label: string;
@@ -150,16 +150,15 @@ export function TournamentConfigurationCard({
   const deadlineDisplay = formatTournamentDeadline(tournament.registration_close_at);
 
   // ─── 4. Capacity ────────────────────────────────────────────────────────────
-  const count = tournament.teams_count ?? tournament.participant_count ?? 0;
+  const regMetrics = getTournamentRegistrationMetrics(tournament);
+  const count = regMetrics.registeredCount;
   let capacityDisplay = '';
   if (tournament.max_participants) {
-    const entrySingular = parsed.capacity?.entrySingularLabel || 'Entry';
-    const entryPlural = parsed.capacity?.entryLabel || 'Entries';
-    const label = tournament.max_participants === 1 ? entrySingular : entryPlural;
     const minStr = tournament.min_participants ? ` (Min: ${tournament.min_participants})` : '';
-    capacityDisplay = `${count} / ${tournament.max_participants} ${label.toLowerCase()} registered${minStr}`;
+    const extraPlayers = regMetrics.playersBreakdownText ? ` • ${regMetrics.playersBreakdownText}` : '';
+    capacityDisplay = `${count} / ${tournament.max_participants} ${regMetrics.registeredLabel}${extraPlayers}${minStr}`;
   } else if (tournament.min_participants) {
-    capacityDisplay = `Minimum ${tournament.min_participants} ${parsed.capacity?.entryLabel?.toLowerCase() || 'participants'}`;
+    capacityDisplay = `Minimum ${tournament.min_participants} ${regMetrics.unitLabel}`;
   }
 
   // ─── 5. Scoring Format ──────────────────────────────────────────────────────

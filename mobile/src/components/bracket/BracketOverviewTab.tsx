@@ -49,7 +49,9 @@ export function BracketOverviewTab({
   onNavigateTab,
   teamSize = 2,
 }: BracketOverviewTabProps) {
-  const teamsCount = summary?.teams_count ?? tournament.participant_count ?? 0;
+  const isSingles = teamSize === 1;
+  const teamsCount =
+    tournament.teams_count ?? tournament.participant_count ?? summary?.teams_count ?? 0;
   const bracketSize = summary?.bracket_size ?? (teamsCount > 0 ? Math.pow(2, Math.ceil(Math.log2(Math.max(2, teamsCount)))) : 2);
   const byesCount = summary?.byes_count ?? Math.max(0, bracketSize - teamsCount);
 
@@ -97,7 +99,7 @@ export function BracketOverviewTab({
         {/* 4-Stat Metric Tiles */}
         <View style={styles.statsGrid}>
           <View style={styles.statTile}>
-            <AppText style={styles.statTileLabel}>TEAMS</AppText>
+            <AppText style={styles.statTileLabel}>{isSingles ? 'PLAYERS' : 'TEAMS'}</AppText>
             <Users size={15} color="#64748B" style={styles.statTileIcon} />
             <AppText style={styles.statTileNum}>{teamsCount}</AppText>
           </View>

@@ -206,7 +206,7 @@ export default function ClubLeagueDetailsScreen() {
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const leagueId = id || null;
   const { clubId } = useActiveClub();
-  const { canManageTournaments, canManageLeagues } = usePermission();
+  const { canManageTournaments, canManageLeagues, canManageMembers } = usePermission();
   const canManageLeague = canManageTournaments || canManageLeagues;
 
   // Active navigation tab (Exact required order: Overview & Rules, Players/Teams, Schedule, Standings, Playoffs, Results)
@@ -387,7 +387,7 @@ export default function ClubLeagueDetailsScreen() {
     isCreatingTeam,
   } = useLeagueTeams(clubId, leagueId);
 
-  const { data: clubPlayers } = useClubPlayerMembers(clubId);
+  const { data: clubPlayers } = useClubPlayerMembers(clubId, canManageMembers);
   const { data: clubCourts } = useClubCourts(clubId);
 
   const handleRefreshAll = () => {

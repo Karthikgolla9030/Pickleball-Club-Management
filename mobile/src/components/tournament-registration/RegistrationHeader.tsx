@@ -36,7 +36,7 @@ import { AppText } from '../AppText';
 import { formatDate } from '@/utils';
 import type { Tournament, TournamentDiscoveryItem, TournamentFormat } from '@/types';
 import type { RegistrationStep } from './types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 interface RegistrationHeaderProps {
   tournament: TournamentDiscoveryItem | Tournament;
@@ -104,7 +104,8 @@ export function RegistrationHeader({
     : `$${feeNumber} per player`;
 
   // Capacity calculation
-  const registeredCount = tournament.teams_count ?? tournament.participant_count ?? 0;
+  const regMetrics = getTournamentRegistrationMetrics(tournament);
+  const registeredCount = regMetrics.registeredCount;
   const maxCap = tournament.max_participants ?? 16;
   const spotsLeft = Math.max(0, maxCap - registeredCount);
 
@@ -278,7 +279,9 @@ export function RegistrationHeader({
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
               <Users size={15} color="#064E3B" style={styles.summaryIcon} strokeWidth={2} />
-              <AppText style={styles.summaryText}>{spotsLeft} spots left</AppText>
+              <AppText style={styles.summaryText}>
+                {spotsLeft} {isDoubles ? (spotsLeft === 1 ? 'team spot left' : 'team spots left') : (spotsLeft === 1 ? 'player spot left' : 'player spots left')}
+              </AppText>
             </View>
           </View>
 

@@ -197,10 +197,31 @@ class PlayerService:
                 await self.db.commit()
                 await self.db.refresh(profile)
             else:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Player profile not found",
+                from app.models.club_membership import ClubMembership
+
+                staff_stmt = select(ClubMembership).where(
+                    ClubMembership.user_id == user_id,
+                    ClubMembership.is_active == True,
                 )
+                staff_mem = (await self.db.execute(staff_stmt)).scalars().first()
+                if staff_mem and user:
+                    clean_name = (user.full_name or "").strip()
+                    parts = clean_name.split(None, 1) if clean_name else []
+                    first_name = parts[0] if parts else None
+                    last_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+                    profile = await self.profile_repo.create(
+                        user_id=user_id,
+                        display_name=clean_name or "Club Staff",
+                        first_name=first_name,
+                        last_name=last_name,
+                    )
+                    await self.db.commit()
+                    await self.db.refresh(profile)
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Player profile not found",
+                    )
         return PlayerProfileResponse.model_validate(profile)
 
     async def create_profile(

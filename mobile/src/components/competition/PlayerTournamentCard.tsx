@@ -44,7 +44,7 @@ import {
 import { AppText } from '@/components/AppText';
 import { Shadows } from '@/theme';
 import type { ClubBranding, TournamentDiscoveryItem, TournamentFormat } from '@/types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
 import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
@@ -152,8 +152,9 @@ export function PlayerTournamentCard({
     (status === 'registration_open' || tournament.is_registration_open) &&
     (regCloseAt ? regCloseAt >= now : true);
 
+  const regMetrics = getTournamentRegistrationMetrics(tournament);
   const maxCap = tournament.max_participants || 16;
-  const currentCount = tournament.teams_count ?? tournament.participant_count ?? 0;
+  const currentCount = regMetrics.registeredCount;
   const isFull = maxCap > 0 && currentCount >= maxCap;
 
   const { branding: fetchedClubBranding } = useClubBranding(clubBranding ? null : tournament.club_id);
@@ -479,7 +480,8 @@ export function PlayerTournamentCard({
         <View style={[styles.metaRow, { marginTop: 4, marginBottom: 14 }]}>
           <Users size={14} color="#64748B" strokeWidth={2} style={styles.metaIcon} />
           <AppText style={styles.metaText}>
-            {currentCount} / {maxCap} {entryLabel}registered
+            {currentCount} / {maxCap} {regMetrics.registeredLabel}
+            {regMetrics.playersBreakdownText ? ` • ${regMetrics.playersBreakdownText}` : ''}
           </AppText>
         </View>
 

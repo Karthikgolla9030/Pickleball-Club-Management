@@ -50,7 +50,7 @@ import type {
   TournamentRegistrationItem,
   TournamentRegistrationStatus,
 } from '@/types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 interface TournamentSettingsRosterModalProps {
   visible: boolean;
@@ -151,9 +151,8 @@ export function TournamentSettingsRosterModal({
 
   const targetScore = tournament.scoring_rules?.target_score ?? 11;
   const winBy = tournament.scoring_rules?.win_by ?? 2;
-  const isDoubles = !parsedConfig.isSingles;
-  const fallbackCount = isDoubles ? Math.floor(registrations.length / 2) : registrations.length;
-  const participantCount = tournament.teams_count ?? tournament.participant_count ?? fallbackCount;
+  const regMetrics = getTournamentRegistrationMetrics(tournament);
+  const participantCount = regMetrics.registeredCount;
   const maxCapacity = tournament.max_participants ?? 16;
   const capacityPercent = Math.min(100, Math.round((participantCount / maxCapacity) * 100));
 

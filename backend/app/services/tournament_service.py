@@ -826,11 +826,11 @@ class TournamentService:
                     fc["planned_rounds"] = max(1, min(20, p_rounds))
                     fc["rounds"] = fc["planned_rounds"]
             elif fc.get("category") == "Singles":
-                fc.setdefault("registration_type", "individual")
-                fc.setdefault("team_size", 1)
+                fc["registration_type"] = "individual"
+                fc["team_size"] = 1
             elif fc.get("category"):
-                fc.setdefault("registration_type", "team")
-                fc.setdefault("team_size", 2)
+                fc["registration_type"] = "team"
+                fc["team_size"] = 2
             update_data["format_configuration"] = fc
 
         updated = await self.tournament_repo.update(tournament, **update_data)
@@ -1273,7 +1273,7 @@ class TournamentService:
             if pre_counts.is_doubles:
                 if (
                     pre_counts.participant_count >= max_p
-                    and pre_counts.confirmed_players_count + 1 > max_p * pre_counts.team_size
+                    or (pre_counts.confirmed_players_count + 1) > (max_p * pre_counts.team_size)
                 ):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -1852,6 +1852,21 @@ class TournamentService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="This tournament division is restricted to female players",
                 )
+
+        # Check existing registration for caller BEFORE any partner user/membership provisioning
+        existing = await self.registration_repo.get_by_tournament_and_player(
+            tournament_id=tournament.id,
+            player_membership_id=player_membership.id,
+        )
+        if existing and existing.status in (
+            RegistrationStatus.CONFIRMED,
+            RegistrationStatus.PENDING,
+            RegistrationStatus.WAITLISTED,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Player is already registered for this tournament",
+            )
 
         # 3. Doubles partner validation
         partner_membership = None

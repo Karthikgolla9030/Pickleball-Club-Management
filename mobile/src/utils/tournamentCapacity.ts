@@ -262,22 +262,21 @@ export function parseTournamentConfig(
   }
 
   const formatConfig = (tournament.format_configuration || {}) as Record<string, unknown>;
+  const rawRegType = typeof formatConfig.registration_type === 'string'
+    ? formatConfig.registration_type.trim().toLowerCase()
+    : '';
+  const rawTeamSize = formatConfig.team_size !== undefined && formatConfig.team_size !== null
+    ? Number(formatConfig.team_size)
+    : NaN;
+  const hasTeamsCountFromBackend =
+    tournament.teams_count !== undefined && tournament.teams_count !== null;
 
-  // Extract category: prioritize competition_category, then format_configuration, then name, then description
+  // Extract category: prioritize saved division/configuration fields (never infer from tournament name)
   let category = (
     tournament.competition_category ||
     formatConfig.category ||
     formatConfig.competition_category
   ) as string | undefined;
-
-  if (!category && tournament.name) {
-    for (const cat of [...SCRAMBLE_DIVISIONS, ...COMPETITION_CATEGORIES]) {
-      if (tournament.name.toLowerCase().includes(cat.toLowerCase())) {
-        category = cat;
-        break;
-      }
-    }
-  }
 
   if (!category && tournament.description) {
     for (const cat of [...SCRAMBLE_DIVISIONS, ...COMPETITION_CATEGORIES]) {
@@ -288,13 +287,41 @@ export function parseTournamentConfig(
     }
   }
 
+  const isScramble = tournament.format === 'scramble' || isScrambleDivision(category);
   if (!category) {
-    category = tournament.format === 'scramble' ? 'Open Scramble' : 'Singles';
+    if (isScramble) {
+      category = 'Open Scramble';
+    } else if (
+      rawRegType === 'team' ||
+      (!Number.isNaN(rawTeamSize) && rawTeamSize >= 2) ||
+      hasTeamsCountFromBackend
+    ) {
+      category = "Men's Doubles";
+    } else {
+      category = 'Singles';
+    }
   }
 
-  const isScramble = tournament.format === 'scramble' || isScrambleDivision(category);
-  const isSingles = isSinglesCategory(category) || isScramble;
-  const teamSize = isScramble ? 1 : formatConfig.team_size ? Number(formatConfig.team_size) : isSingles ? 1 : 2;
+  const isSingles = isScramble
+    ? true
+    : rawRegType === 'individual'
+      ? true
+      : rawRegType === 'team'
+        ? false
+        : isSinglesCategory(category)
+          ? true
+          : !Number.isNaN(rawTeamSize) && rawTeamSize >= 2
+            ? false
+            : hasTeamsCountFromBackend
+              ? false
+              : isSinglesCategory(category);
+  const teamSize = isScramble
+    ? 1
+    : isSingles
+      ? 1
+      : !Number.isNaN(rawTeamSize) && rawTeamSize >= 2
+        ? rawTeamSize
+        : 2;
 
   // Extract skill level and range
   const rawMode = formatConfig.skill_level_mode as string | undefined;
@@ -449,5 +476,77 @@ export function parseTournamentConfig(
     rulesSummary,
     entryFee,
     entryFeeDisplay,
+  };
+}
+
+export interface TournamentRegistrationMetrics {
+  isSingles: boolean;
+  isDoubles: boolean;
+  teamSize: number;
+  registeredCount: number;
+  confirmedPlayersCount: number;
+  maxCount: number | null;
+  spotsRemaining: number | null;
+  unitSingularLabel: string;
+  unitLabel: string;
+  registeredLabel: string;
+  shortRatioText: string;
+  playersBreakdownText: string | null;
+}
+
+/**
+ * Authoritative frontend registration count and unit resolver.
+ * Never mixes individual doubles players against team capacity (`max_participants`),
+ * and always matches the backend `TournamentCounts` contract.
+ */
+export function getTournamentRegistrationMetrics(
+  tournament?: Partial<Tournament> | null,
+  fallbackEntryCount = 0,
+  fallbackPlayersCount = 0
+): TournamentRegistrationMetrics {
+  const parsed = parseTournamentConfig(tournament);
+  const isScramble = tournament?.format === 'scramble' || isScrambleDivision(parsed.category);
+  const hasBackendTeamsCount =
+    tournament?.teams_count !== undefined && tournament?.teams_count !== null;
+  const isDoubles = !isScramble && (hasBackendTeamsCount || !parsed.isSingles || parsed.teamSize >= 2);
+  const isSingles = !isDoubles;
+  const teamSize = isDoubles ? Math.max(2, parsed.teamSize || 2) : 1;
+
+  const registeredCount = isDoubles
+    ? (tournament?.teams_count ?? tournament?.participant_count ?? fallbackEntryCount)
+    : (tournament?.participant_count ?? tournament?.confirmed_players_count ?? fallbackEntryCount);
+
+  const confirmedPlayersCount =
+    tournament?.confirmed_players_count ??
+    (isDoubles
+      ? (fallbackPlayersCount > 0 ? fallbackPlayersCount : registeredCount * teamSize)
+      : registeredCount);
+
+  const maxCount = tournament?.max_participants ?? null;
+  const spotsRemaining = maxCount != null ? Math.max(0, maxCount - registeredCount) : null;
+  const unitSingularLabel = isSingles ? 'Player' : 'Team';
+  const unitLabel = isSingles ? 'Players' : 'Teams';
+  const registeredLabel = isSingles ? 'Players Registered' : 'Teams Registered';
+  const shortRatioText =
+    maxCount != null
+      ? `${registeredCount} / ${maxCount} ${registeredLabel}`
+      : `${registeredCount} ${registeredLabel}`;
+  const playersBreakdownText = isDoubles
+    ? `${confirmedPlayersCount} ${confirmedPlayersCount === 1 ? 'Player' : 'Players'}`
+    : null;
+
+  return {
+    isSingles,
+    isDoubles,
+    teamSize,
+    registeredCount,
+    confirmedPlayersCount,
+    maxCount,
+    spotsRemaining,
+    unitSingularLabel,
+    unitLabel,
+    registeredLabel,
+    shortRatioText,
+    playersBreakdownText,
   };
 }

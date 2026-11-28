@@ -58,6 +58,7 @@ import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation
 
 import { Colors, Spacing } from '@/theme';
 import type { Match } from '@/types';
+import { getTournamentRegistrationMetrics } from '@/utils/tournamentCapacity';
 
 export default function ScrambleWorkspaceScreen() {
   const router = useRouter();
@@ -619,16 +620,20 @@ export default function ScrambleWorkspaceScreen() {
               />
             )}
 
-            {tournament?.status === 'registration_open' && (
-              <RegistrationOpenBanner
-                tournamentName={tournament?.name}
-                participantCount={state?.registered_players_count ?? registrations.length}
-                maxParticipants={tournament?.max_participants}
-                closureEligibility={tournament?.closure_eligibility}
-                onCloseRegistration={handleCloseRegistration}
-                isClosing={isCloseRegistrationPending}
-              />
-            )}
+            {tournament?.status === 'registration_open' && (() => {
+              const regMetrics = getTournamentRegistrationMetrics(tournament);
+              return (
+                <RegistrationOpenBanner
+                  tournamentName={tournament?.name}
+                  participantCount={state?.registered_players_count ?? regMetrics.registeredCount}
+                  maxParticipants={tournament?.max_participants}
+                  unitLabel="Players Registered"
+                  closureEligibility={tournament?.closure_eligibility}
+                  onCloseRegistration={handleCloseRegistration}
+                  isClosing={isCloseRegistrationPending}
+                />
+              );
+            })()}
           </View>
 
           {/* Child 1: Sticky Tab Bar */}

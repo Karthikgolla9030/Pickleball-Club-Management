@@ -98,7 +98,7 @@ export function ClubHeroCarousel({
       tag: isTournamentDirectorHome ? 'COMPETITION HUB' : resolvedTag,
       title: resolvedTitle,
       supportingText: isTournamentDirectorHome
-        ? 'Manage tournaments, brackets,\nleagues & match schedules.'
+        ? 'Manage tournaments, brackets,\npool play & multi-week leagues.'
         : platformBanner?.subtitle ||
           'Great courts. Active members.\nA healthier, happier community.',
       ctaText: isTournamentDirectorHome

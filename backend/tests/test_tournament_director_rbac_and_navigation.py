@@ -194,9 +194,10 @@ async def test_tournament_director_login_and_scoped_access(
         )
     ).status_code == 403
 
-    # Read-only player-memberships (needed for League team creation) succeeds for TD in own club, 403 cross-club
-    pm_resp = await async_client.get(f"/api/v1/clubs/{club_a.id}/player-memberships", headers=td_headers)
-    assert pm_resp.status_code == 200
+    # Player-memberships listing & mutations require MANAGE_MEMBERS -> 403 for TD
+    assert (
+        await async_client.get(f"/api/v1/clubs/{club_a.id}/player-memberships", headers=td_headers)
+    ).status_code == 403
     assert (
         await async_client.get(f"/api/v1/clubs/{club_b.id}/player-memberships", headers=td_headers)
     ).status_code == 403

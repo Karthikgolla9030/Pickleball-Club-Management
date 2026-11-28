@@ -49,7 +49,7 @@ import {
 
 import { AppText } from '../AppText';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import type { Tournament, TournamentFormat } from '@/types';
 
@@ -379,9 +379,12 @@ export function UpcomingTournamentPreviewView({
               <View style={styles.noticeDateRow}>
                 <Calendar size={14} color="#065F46" strokeWidth={2} style={{ marginRight: 6 }} />
                 <AppText variant="caption" style={[styles.noticeDateText, { color: '#065F46' }]}>
-                  {tournament.max_participants && (tournament.teams_count != null || tournament.participant_count != null)
-                    ? `${Math.max(0, tournament.max_participants - (tournament.teams_count ?? tournament.participant_count ?? 0))} ${parsedConfig.capacity.entryLabel.toLowerCase()} spots remaining`
-                    : 'Spots available'}
+                  {(() => {
+                    const regMetrics = getTournamentRegistrationMetrics(tournament);
+                    if (regMetrics.maxCount == null) return 'Spots available';
+                    const spots = regMetrics.spotsRemaining ?? 0;
+                    return `${regMetrics.shortRatioText} • ${spots} ${regMetrics.unitSingularLabel.toLowerCase()} ${spots === 1 ? 'spot' : 'spots'} left`;
+                  })()}
                 </AppText>
               </View>
               <AppText variant="caption" style={styles.noticeSubtext}>

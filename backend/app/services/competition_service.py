@@ -536,6 +536,14 @@ class CompetitionService:
         for pm_id in payload.player_membership_ids:
             await self._validate_team_member(tournament_id, club_id, pm_id)
 
+        # Enforce tournament team/entry capacity on manual team creation
+        existing_teams = await self.competition_repo.list_teams_by_tournament(tournament_id)
+        if tournament.max_participants is not None and len(existing_teams) >= tournament.max_participants:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot create team: tournament has reached maximum capacity",
+            )
+
         # Create team
         team = await self.competition_repo.create_team(
             tournament_id=tournament_id,
@@ -552,6 +560,10 @@ class CompetitionService:
 
         team_id = team.id
         await self.db.commit()
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
         refreshed = await self.competition_repo.get_team(team_id)
         return _build_team_response(refreshed)  # type: ignore
 
@@ -626,6 +638,10 @@ class CompetitionService:
 
         await self.competition_repo.delete_team(team)
         await self.db.commit()
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
 
     async def _validate_team_member(
         self,

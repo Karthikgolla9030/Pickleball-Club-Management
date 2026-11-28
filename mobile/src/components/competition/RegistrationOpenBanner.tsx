@@ -25,6 +25,8 @@ interface RegistrationOpenBannerProps {
   tournamentName?: string;
   participantCount?: number;
   maxParticipants?: number | null;
+  unitLabel?: string;
+  confirmedPlayersCount?: number | null;
   closureEligibility?: ClosureEligibility | null;
   onCloseRegistration?: () => void | Promise<void>;
   isClosing?: boolean;
@@ -35,10 +37,17 @@ export function RegistrationOpenBanner({
   tournamentName,
   participantCount = 0,
   maxParticipants,
+  unitLabel,
+  confirmedPlayersCount,
   closureEligibility,
   style,
 }: RegistrationOpenBannerProps) {
-  const countText = maxParticipants ? `${participantCount} / ${maxParticipants}` : `${participantCount}`;
+  const ratio = maxParticipants ? `${participantCount} / ${maxParticipants}` : `${participantCount}`;
+  const labelSuffix = unitLabel ? ` ${unitLabel}` : ' registered';
+  const countText =
+    confirmedPlayersCount != null && unitLabel && unitLabel.toLowerCase().includes('team')
+      ? `${ratio}${labelSuffix} (${confirmedPlayersCount} Players)`
+      : `${ratio}${labelSuffix}`;
   const isClosureBlocked = Boolean(closureEligibility && !closureEligibility.can_close);
 
   return (
@@ -62,7 +71,7 @@ export function RegistrationOpenBanner({
             </View>
             <View style={styles.countPill}>
               <AppText variant="caption" style={styles.countText}>
-                {countText} registered
+                {countText}
               </AppText>
             </View>
           </View>

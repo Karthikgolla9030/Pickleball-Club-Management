@@ -47,7 +47,7 @@ import {
 } from '@/navigation';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament } from '@/types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export interface TournamentPrimaryAction {
   label: string;
@@ -260,16 +260,20 @@ export function TournamentManagementInfo({
             </View>
           )}
 
-          <View style={styles.metaItem}>
-            <View style={styles.metaIconWrap}>
-              <Users size={13} color="#64748B" />
-            </View>
-            <AppText style={styles.metaText} numberOfLines={1}>
-              {tournament?.teams_count ?? tournament?.participant_count ?? 0}
-              {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
-              {parsedConfig.isSingles ? 'Players' : 'Teams'}
-            </AppText>
-          </View>
+          {(() => {
+            const regMetrics = getTournamentRegistrationMetrics(tournament);
+            return (
+              <View style={styles.metaItem}>
+                <View style={styles.metaIconWrap}>
+                  <Users size={13} color="#64748B" />
+                </View>
+                <AppText style={styles.metaText} numberOfLines={2}>
+                  {regMetrics.shortRatioText}
+                  {regMetrics.playersBreakdownText ? ` • ${regMetrics.playersBreakdownText}` : ''}
+                </AppText>
+              </View>
+            );
+          })()}
         </View>
 
         {!isRedundant && primaryAction && (

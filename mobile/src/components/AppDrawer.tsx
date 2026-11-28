@@ -293,7 +293,6 @@ export function AppDrawer({ mode = 'club' }: { mode?: 'player' | 'club' }) {
         { key: 'home', label: 'Home', icon: Home, route: '/club-portal' },
         { key: 'tournaments', label: 'Tournaments', icon: Trophy, route: '/club-portal/tournaments' },
         { key: 'leagues', label: 'Leagues', icon: Medal, route: '/club-portal/leagues' },
-        { key: 'schedule', label: 'Match Schedule', icon: CalendarDays, route: '/club-portal/competition-schedule' },
       ];
       clubSection2 = [];
       clubSection3 = [

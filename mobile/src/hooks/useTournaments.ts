@@ -154,10 +154,14 @@ export function invalidateAllTournamentQueries(
     queryClient.invalidateQueries({ queryKey: ['matches', tournamentId] });
     queryClient.invalidateQueries({ queryKey: ['standings', tournamentId] });
     queryClient.invalidateQueries({ queryKey: ['bracket', tournamentId] });
+    queryClient.invalidateQueries({ queryKey: ['tournament-setup'] });
+    queryClient.invalidateQueries({ queryKey: ['pool-play-post-registration'] });
+    queryClient.invalidateQueries({ queryKey: ['scramble-post-registration'] });
   }
   if (clubId) {
     queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
     queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'tournaments'] });
+    queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'dashboard'] });
     queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
   }
   queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS });

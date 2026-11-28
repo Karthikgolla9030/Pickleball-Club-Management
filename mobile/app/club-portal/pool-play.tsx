@@ -74,7 +74,7 @@ import {
 } from '@/utils/poolPlayLogic';
 import { useQueryClient } from '@tanstack/react-query';
 import { QUERY_KEYS } from '@/constants';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function PoolPlayManagementScreen() {
   const router = useRouter();
@@ -1065,20 +1065,21 @@ export default function PoolPlayManagementScreen() {
               />
             )}
 
-            {effectiveTournament?.status === 'registration_open' && (
-              <RegistrationOpenBanner
-                tournamentName={effectiveTournament?.name}
-                participantCount={
-                  effectiveTournament?.teams_count ??
-                  effectiveTournament?.participant_count ??
-                  teams.length
-                }
-                maxParticipants={effectiveTournament?.max_participants}
-                closureEligibility={effectiveTournament?.closure_eligibility}
-                onCloseRegistration={handleCloseRegistration}
-                isClosing={isCloseRegistrationPending}
-              />
-            )}
+            {effectiveTournament?.status === 'registration_open' && (() => {
+              const regMetrics = getTournamentRegistrationMetrics(effectiveTournament, teams.length);
+              return (
+                <RegistrationOpenBanner
+                  tournamentName={effectiveTournament?.name}
+                  participantCount={regMetrics.registeredCount}
+                  maxParticipants={effectiveTournament?.max_participants}
+                  unitLabel={regMetrics.registeredLabel}
+                  confirmedPlayersCount={regMetrics.isDoubles ? regMetrics.confirmedPlayersCount : null}
+                  closureEligibility={effectiveTournament?.closure_eligibility}
+                  onCloseRegistration={handleCloseRegistration}
+                  isClosing={isCloseRegistrationPending}
+                />
+              );
+            })()}
           </View>
 
           {/* Child 1: Sticky Tab Bar */}

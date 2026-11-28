@@ -66,7 +66,7 @@ import { Badge } from '../Badge';
 import { Card } from '../Card';
 import { Colors, Radius, Shadows, Spacing, Typography } from '@/theme';
 import { formatDate, getCourtDisplayLabel } from '@/utils';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 import {
   usePlayerPools,
   usePlayerPoolMatches,
@@ -444,7 +444,10 @@ export function CompletedPoolPlayView({
                 <View style={styles.heroMetaItem}>
                   <Users size={13} color="#CBD5E1" style={{ marginRight: 4 }} />
                   <AppText variant="caption" style={styles.heroMetaText}>
-                    {tournament.teams_count ?? tournament.participant_count ?? 0}{tournament.max_participants ? ` / ${tournament.max_participants}` : ''} {parsedConfig.capacity.entryLabel.toLowerCase()}
+                    {(() => {
+                      const regMetrics = getTournamentRegistrationMetrics(tournament);
+                      return `${regMetrics.shortRatioText}${regMetrics.playersBreakdownText ? ` • ${regMetrics.playersBreakdownText}` : ''}`;
+                    })()}
                   </AppText>
                 </View>
               </View>

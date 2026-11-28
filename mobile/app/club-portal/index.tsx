@@ -78,6 +78,7 @@ import {
 } from '@/hooks';
 import { useDrawerStore } from '@/navigation';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
+import { getTournamentRegistrationMetrics } from '@/utils/tournamentCapacity';
 
 export default function ClubHomeScreen() {
   const router = useRouter();
@@ -151,6 +152,11 @@ export default function ClubHomeScreen() {
               ? 'Completed'
               : 'Draft';
 
+    const regMetrics = getTournamentRegistrationMetrics(first);
+    const participantsLabel = regMetrics.maxCount != null
+      ? `${regMetrics.registeredCount} / ${regMetrics.maxCount} ${regMetrics.registeredLabel}`
+      : `${regMetrics.registeredCount} ${regMetrics.registeredLabel}`;
+
     return {
       title: first.name,
       statusLabel,
@@ -158,9 +164,8 @@ export default function ClubHomeScreen() {
       dateLabel: first.start_date
         ? new Date(first.start_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
         : 'TBD',
-      participantsLabel: first.max_participants
-        ? `${first.confirmed_players_count ?? first.participant_count ?? 0} / ${first.max_participants}`
-        : `${first.confirmed_players_count ?? first.participant_count ?? 0} entered`,
+      participantsLabel,
+      playersBreakdownLabel: regMetrics.playersBreakdownText,
       route,
     };
   }, [isTournamentDirector, tdTournaments]);
@@ -362,21 +367,6 @@ export default function ClubHomeScreen() {
 
               <TouchableOpacity
                 style={styles.quickCard}
-                onPress={() => router.push('/club-portal/competition-schedule' as any)}
-                activeOpacity={0.8}
-                accessibilityLabel="Match Schedule"
-              >
-                <View style={[styles.quickIconBox, { backgroundColor: '#E7F0FB' }]}>
-                  <CalendarDays size={18} color="#1E40AF" strokeWidth={2.2} />
-                </View>
-                <View style={styles.quickLabelRow}>
-                  <AppText style={styles.quickLabel}>Schedule</AppText>
-                  <ChevronRight size={13} color="#9CAAA5" strokeWidth={2} />
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickCard}
                 onPress={() => router.push('/club-portal/tournaments?create=true' as any)}
                 activeOpacity={0.8}
                 accessibilityLabel="New Tournament"
@@ -450,7 +440,7 @@ export default function ClubHomeScreen() {
                     <View style={styles.scheduleBadgeDot} />
                     <AppText style={styles.scheduleBadgeText}>{featuredCompetition.statusLabel}</AppText>
                   </View>
-                  <View style={styles.scheduleMetaRow}>
+                  <View style={[styles.scheduleMetaRow, { flexWrap: 'wrap' }]}>
                     <View style={styles.scheduleMetaItem}>
                       <Clock size={11} color="#667773" />
                       <AppText style={styles.scheduleMetaText}>{featuredCompetition.dateLabel}</AppText>
@@ -461,7 +451,12 @@ export default function ClubHomeScreen() {
                     </View>
                     <View style={styles.scheduleMetaItem}>
                       <Users size={11} color="#667773" />
-                      <AppText style={styles.scheduleMetaText}>{featuredCompetition.participantsLabel}</AppText>
+                      <AppText style={styles.scheduleMetaText}>
+                        {featuredCompetition.participantsLabel}
+                        {featuredCompetition.playersBreakdownLabel
+                          ? ` • ${featuredCompetition.playersBreakdownLabel}`
+                          : ''}
+                      </AppText>
                     </View>
                   </View>
                 </View>
@@ -544,7 +539,7 @@ export default function ClubHomeScreen() {
 
               <TouchableOpacity
                 style={styles.statCard}
-                onPress={() => router.push('/club-portal/competition-schedule' as any)}
+                onPress={() => router.push('/club-portal/tournaments' as any)}
                 activeOpacity={0.8}
                 accessibilityLabel="Available Courts"
               >

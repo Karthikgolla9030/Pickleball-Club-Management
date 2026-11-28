@@ -59,7 +59,7 @@ import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation
 
 import type { CreateTeamPayload, Match } from '@/types';
 import { calculateBracketProgress } from '@/utils/bracketLogic';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function BracketWorkspaceScreen() {
   const router = useRouter();
@@ -446,17 +446,17 @@ export default function BracketWorkspaceScreen() {
     );
   };
 
-  const tournamentConfig = parseTournamentConfig(tournament);
-  const isSingles = tournamentConfig.isSingles || tournamentConfig.teamSize === 1;
-  const teamSize = isSingles ? 1 : 2;
+  const regMetrics = getTournamentRegistrationMetrics(tournament, teams.length);
+  const isSingles = regMetrics.isSingles;
+  const teamSize = regMetrics.teamSize;
 
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {
-      participantsCount: isSingles ? tournament?.participant_count ?? teams.length : teams.length,
-      teamsCount: teams.length,
+      participantsCount: regMetrics.registeredCount,
+      teamsCount: regMetrics.isDoubles ? regMetrics.registeredCount : teams.length,
       matchesCount: matches.length,
     });
-  }, [tournament, isSingles, teams.length, matches.length]);
+  }, [tournament, regMetrics.registeredCount, regMetrics.isDoubles, teams.length, matches.length]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
@@ -584,8 +584,10 @@ export default function BracketWorkspaceScreen() {
           {tournament.status === 'registration_open' && (
             <RegistrationOpenBanner
               tournamentName={tournament.name}
-              participantCount={tournament.teams_count ?? tournament.participant_count ?? teams.length}
+              participantCount={regMetrics.registeredCount}
               maxParticipants={tournament.max_participants}
+              unitLabel={regMetrics.registeredLabel}
+              confirmedPlayersCount={regMetrics.isDoubles ? regMetrics.confirmedPlayersCount : null}
               closureEligibility={tournament.closure_eligibility}
               onCloseRegistration={handleCloseRegistration}
               isClosing={isCloseRegistrationPending}
@@ -608,6 +610,7 @@ export default function BracketWorkspaceScreen() {
             summary={summary}
             matches={matches}
             progress={progress}
+            teamSize={teamSize}
             onNavigateTab={(tab) => setActiveTab(tab as any)}
           />
         )}

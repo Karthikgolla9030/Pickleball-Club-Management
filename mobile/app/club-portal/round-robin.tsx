@@ -57,7 +57,7 @@ import {
   calculateExpectedRoundRobinSchedule,
   calculateRoundRobinProgress,
 } from '@/utils/roundRobinLogic';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export default function RoundRobinWorkspaceScreen() {
   const router = useRouter();
@@ -420,20 +420,19 @@ export default function RoundRobinWorkspaceScreen() {
   };
 
   const tournamentConfig = parseTournamentConfig(tournament);
-  const isSingles = tournamentConfig.isSingles || tournamentConfig.teamSize === 1;
-  const teamSize = isSingles ? 1 : 2;
-  const totalRegisteredPlayers = teamSize > 1
-    ? (teams.reduce((sum, t) => sum + (t.members?.length || teamSize), 0) || (teams.length * teamSize))
-    : (tournament?.participant_count ?? teams.length);
+  const regMetrics = getTournamentRegistrationMetrics(tournament, teams.length);
+  const isSingles = regMetrics.isSingles;
+  const teamSize = regMetrics.teamSize;
+  const totalRegisteredPlayers = regMetrics.confirmedPlayersCount;
 
   const navTabs = useMemo(() => {
     return getTournamentNavigationTabs(tournament, {
-      participantsCount: isSingles ? totalRegisteredPlayers : teams.length,
-      teamsCount: teams.length,
+      participantsCount: regMetrics.registeredCount,
+      teamsCount: regMetrics.isDoubles ? regMetrics.registeredCount : teams.length,
       matchesCount: matches.length,
       roundsCount: totalRounds,
     });
-  }, [tournament, isSingles, totalRegisteredPlayers, teams.length, matches.length, totalRounds]);
+  }, [tournament, regMetrics.registeredCount, regMetrics.isDoubles, teams.length, matches.length, totalRounds]);
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
@@ -569,12 +568,10 @@ export default function RoundRobinWorkspaceScreen() {
             {tournament?.status === 'registration_open' && (
               <RegistrationOpenBanner
                 tournamentName={tournament?.name}
-                participantCount={
-                  isSingles
-                    ? (tournament?.participant_count ?? totalRegisteredPlayers)
-                    : (tournament?.teams_count ?? tournament?.participant_count ?? teams.length)
-                }
+                participantCount={regMetrics.registeredCount}
                 maxParticipants={tournament?.max_participants}
+                unitLabel={regMetrics.registeredLabel}
+                confirmedPlayersCount={regMetrics.isDoubles ? regMetrics.confirmedPlayersCount : null}
                 closureEligibility={tournament?.closure_eligibility}
                 onCloseRegistration={handleCloseRegistration}
                 isClosing={isCloseRegistrationPending}
@@ -598,7 +595,7 @@ export default function RoundRobinWorkspaceScreen() {
               progress={progress}
               onNavigateTab={(tab) => setActiveTab(tab as TournamentTabKey)}
               teamSize={teamSize}
-              participantsCount={isSingles ? totalRegisteredPlayers : teams.length}
+              participantsCount={regMetrics.registeredCount}
             />
           )}
 

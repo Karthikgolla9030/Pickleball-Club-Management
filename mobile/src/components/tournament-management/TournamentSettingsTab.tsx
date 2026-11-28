@@ -51,7 +51,7 @@ import { queryClient } from '@/services/queryClient';
 import { QUERY_KEYS } from '@/constants';
 import type { ClubBranding, Tournament } from '@/types';
 import { resolveTournamentBanner, resolveTournamentBannerDetails } from '@/utils/imageResolution';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 
 export interface TournamentSettingsTabProps {
   tournament: Tournament | null;
@@ -275,10 +275,11 @@ export function TournamentSettingsTab({
   }, [format, plannedRounds, parsed, tournament, formatConfig, poolCount]);
 
   // ─── 7. Capacity Numbers ──────────────────────────────────────────────────
-  const registeredCount = tournament?.teams_count ?? tournament?.participant_count ?? 0;
+  const regMetrics = getTournamentRegistrationMetrics(tournament);
+  const registeredCount = regMetrics.registeredCount;
   const maxCount = tournament?.max_participants ?? 8;
   const minCount = tournament?.min_participants ?? 4;
-  const entryUnit = parsed.isSingles ? 'players' : 'teams';
+  const entryUnit = regMetrics.registeredLabel;
   const isCapacityFull = registeredCount >= maxCount;
   const spotsAvailable = Math.max(0, maxCount - registeredCount);
 

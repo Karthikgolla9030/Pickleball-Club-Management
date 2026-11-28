@@ -31,7 +31,7 @@ import {
 
 import { AppText } from '@/components/AppText';
 import type { ClubBranding, TournamentStatus } from '@/types';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 import { resolveMediaUrl } from '@/utils';
 import { resolveTournamentBanner, getTournamentBuiltinFallback } from '@/utils/imageResolution';
 import { useClubBranding, usePlatformBanners } from '@/hooks';
@@ -221,7 +221,8 @@ export function TournamentCard({
   }, [banner]);
 
   const parsed = parseTournamentConfig(tournament as any);
-  const entryLabel = parsed?.capacity?.entryLabel ? `${parsed.capacity.entryLabel.toLowerCase()} ` : '';
+  const regMetrics = getTournamentRegistrationMetrics(tournament as any);
+  const entryLabel = `${regMetrics.registeredLabel} `;
 
   return (
     <TouchableOpacity
@@ -324,7 +325,8 @@ export function TournamentCard({
         <View style={styles.infoRow}>
           <Users size={15} color="#657776" style={styles.infoIcon} />
           <AppText style={styles.infoText}>
-            {tournament.teams_count ?? tournament.participant_count ?? 0} / {tournament.max_participants ?? '∞'} {entryLabel}registered
+            {regMetrics.shortRatioText}
+            {regMetrics.playersBreakdownText ? ` • ${regMetrics.playersBreakdownText}` : ''}
           </AppText>
         </View>
 

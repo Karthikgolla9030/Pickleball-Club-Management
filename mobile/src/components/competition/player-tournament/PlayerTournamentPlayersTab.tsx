@@ -15,7 +15,7 @@ import { Lock, Search, Star, UserCheck, Users } from 'lucide-react-native';
 
 import { AppText } from '@/components/AppText';
 import { Card } from '@/components/Card';
-import { parseTournamentConfig } from '@/utils/tournamentCapacity';
+import { getTournamentRegistrationMetrics, parseTournamentConfig } from '@/utils/tournamentCapacity';
 import type { Team, Tournament, TournamentRegistrationItem } from '@/types';
 
 export interface PlayerTournamentPlayersTabProps {
@@ -104,9 +104,10 @@ export function PlayerTournamentPlayersTab({
     );
   }, [entries, searchQuery]);
 
-  const totalCount = entries.length;
+  const regMetrics = getTournamentRegistrationMetrics(tournament, entries.length);
+  const totalCount = regMetrics.registeredCount;
   const capacity =
-    tournament.max_participants ||
+    regMetrics.maxCount ||
     parsedConfig.capacity?.entryCount ||
     totalCount ||
     8;
@@ -119,12 +120,22 @@ export function PlayerTournamentPlayersTab({
       <Card style={styles.summaryCard}>
         <View style={styles.summaryRow}>
           <AppText variant="caption" style={styles.summaryLabel}>
-            Registered {isSingles ? 'players' : 'teams'}:
+            {isSingles ? 'Players Registered:' : 'Teams Registered:'}
           </AppText>
           <AppText variant="bodySmall" bold style={styles.summaryValue}>
             {totalCount} / {capacity}
           </AppText>
         </View>
+        {!isSingles && (
+          <View style={styles.summaryRow}>
+            <AppText variant="caption" style={styles.summaryLabel}>
+              Registered players:
+            </AppText>
+            <AppText variant="bodySmall" bold style={styles.summaryValue}>
+              {regMetrics.confirmedPlayersCount} / {capacity * regMetrics.teamSize}
+            </AppText>
+          </View>
+        )}
 
         <View style={styles.summaryRow}>
           <AppText variant="caption" style={styles.summaryLabel}>
