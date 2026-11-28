@@ -80,6 +80,40 @@ class PaymentRefundRequest(BaseModel):
 
 # ─── Response Payloads ────────────────────────────────────────────────────────
 
+def _resolve_payment_labels(payment) -> tuple[str, str, str]:
+    """Safely compute human-readable status, payment_method, and purpose labels."""
+    raw_status = payment.status.value if hasattr(payment.status, "value") else str(payment.status)
+    is_free_tx = (
+        raw_status.lower() == "succeeded"
+        and payment.amount is not None
+        and Decimal(str(payment.amount)) == Decimal("0.00")
+    )
+    status_label = (
+        "Free"
+        if is_free_tx
+        else (
+            payment.status.display_label
+            if hasattr(payment.status, "display_label")
+            else raw_status.replace("_", " ").title()
+        )
+    )
+    method_label = (
+        "Free"
+        if is_free_tx
+        else (
+            payment.payment_method.display_label
+            if hasattr(payment.payment_method, "display_label")
+            else str(payment.payment_method).replace("_", " ").title()
+        )
+    )
+    purpose_label = (
+        payment.purpose.display_label
+        if hasattr(payment.purpose, "display_label")
+        else str(payment.purpose).replace("_", " ").title()
+    )
+    return status_label, method_label, purpose_label
+
+
 def resolve_payment_display_data(payment) -> dict[str, Any]:
     """
     Safely resolves display fields from a payment record without exposing raw metadata or internal fields.
@@ -339,13 +373,7 @@ class PaymentResponse(BaseModel):
                 sub_info = None
 
         display_data = resolve_payment_display_data(payment)
-        is_free_tx = (
-            payment.status == PaymentStatus.SUCCEEDED
-            and payment.amount is not None
-            and Decimal(str(payment.amount)) == Decimal("0.00")
-        )
-        resolved_status_label = "Free" if is_free_tx else payment.status.display_label
-        resolved_method_label = "Free" if is_free_tx else payment.payment_method.display_label
+        resolved_status_label, resolved_method_label, resolved_purpose_label = _resolve_payment_labels(payment)
 
         return cls(
             id=payment.id,
@@ -366,7 +394,7 @@ class PaymentResponse(BaseModel):
             status=payment.status,
             status_label=resolved_status_label,
             purpose=payment.purpose,
-            purpose_label=payment.purpose.display_label,
+            purpose_label=resolved_purpose_label,
             payment_method=payment.payment_method,
             payment_method_label=resolved_method_label,
             provider=payment.provider,
@@ -431,13 +459,7 @@ class PlayerPaymentResponse(BaseModel):
             club_name = None
 
         display_data = resolve_payment_display_data(payment)
-        is_free_tx = (
-            payment.status == PaymentStatus.SUCCEEDED
-            and payment.amount is not None
-            and Decimal(str(payment.amount)) == Decimal("0.00")
-        )
-        resolved_status_label = "Free" if is_free_tx else payment.status.display_label
-        resolved_method_label = "Free" if is_free_tx else payment.payment_method.display_label
+        resolved_status_label, resolved_method_label, resolved_purpose_label = _resolve_payment_labels(payment)
 
         return cls(
             id=payment.id,
@@ -458,7 +480,7 @@ class PlayerPaymentResponse(BaseModel):
             status=payment.status,
             status_label=resolved_status_label,
             purpose=payment.purpose,
-            purpose_label=payment.purpose.display_label,
+            purpose_label=resolved_purpose_label,
             payment_method=payment.payment_method,
             payment_method_label=resolved_method_label,
             refunded_amount=payment.refunded_amount,

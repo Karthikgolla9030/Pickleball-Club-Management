@@ -673,7 +673,7 @@ class PaymentService:
         Safely and idempotently create missing Payment records for existing confirmed/cancelled
         player bookings and registrations without duplicating records or fabricating paid successes.
         """
-        from sqlalchemy import select
+        from sqlalchemy import and_, or_, select
         from app.models.club_player_membership import ClubPlayerMembership
         from app.models.competition import Team, TeamMember
         from app.models.court import Court
@@ -682,6 +682,25 @@ class PaymentService:
         from app.models.lesson import Lesson, LessonRegistration, LessonRegistrationStatus
         from app.models.tournament import Tournament
         from app.models.tournament_registration import RegistrationStatus, TournamentRegistration
+
+        def _safe_decimal(val: Any) -> Decimal:
+            try:
+                return Decimal(str(_first_non_none(val, "0.00"))).quantize(Decimal("0.01"))
+            except Exception:
+                return Decimal("0.00")
+
+        async def _persist_reconciled_payment(pmt_obj: Payment) -> bool:
+            """Insert reconciled payment inside a savepoint and flush so next reference increments cleanly."""
+            nonlocal created_count
+            try:
+                async with self.db.begin_nested():
+                    self.db.add(pmt_obj)
+                    await self.db.flush()
+                created_count += 1
+                return True
+            except Exception as item_err:
+                logger.warning(f"Skipping reconciled payment item for user {user_id}: {item_err}")
+                return False
 
         created_count = 0
 
@@ -699,14 +718,20 @@ class PaymentService:
             select(Booking, Court)
             .join(Court, Booking.court_id == Court.id)
             .where(
-                Booking.player_id == user_id,
                 Booking.booking_type.in_([BookingType.PLAYER, BookingType.STAFF]),
+                or_(
+                    Booking.player_id == user_id,
+                    and_(
+                        Booking.player_id.is_(None),
+                        Booking.booked_by_user_id == user_id,
+                    ),
+                ),
             )
         )
         for b, court in (await self.db.execute(b_stmt)).all():
             if b.id in paid_booking_ids:
                 continue
-            amt = Decimal(str(b.total_price or "0.00")).quantize(Decimal("0.01"))
+            amt = _safe_decimal(b.total_price)
             is_free = amt <= Decimal("0.00")
             if b.status == BookingStatus.CANCELLED:
                 pmt_status = PaymentStatus.CANCELLED
@@ -728,7 +753,7 @@ class PaymentService:
                 player_id=user_id,
                 booking_id=b.id,
                 amount=amt,
-                currency=getattr(b, "currency", None) or "USD",
+                currency=str(getattr(b, "currency", None) or "USD")[:3].upper(),
                 status=pmt_status,
                 purpose=PaymentPurpose.COURT_BOOKING,
                 payment_method=PaymentMethod.OTHER,
@@ -739,9 +764,8 @@ class PaymentService:
                 created_at=b.created_at,
                 updated_at=b.updated_at or b.created_at,
             )
-            self.db.add(pmt)
+            await _persist_reconciled_payment(pmt)
             paid_booking_ids.add(b.id)
-            created_count += 1
 
         # 2. Tournament Registrations missing payment rows
         tr_stmt = (
@@ -758,7 +782,7 @@ class PaymentService:
                 continue
             cfg = t.format_configuration or {}
             raw_fee = _first_non_none(cfg.get("entry_fee"), cfg.get("registration_fee"), "0.00")
-            amt = Decimal(str(raw_fee)).quantize(Decimal("0.01"))
+            amt = _safe_decimal(raw_fee)
             if reg.status == RegistrationStatus.WAITLISTED and amt > Decimal("0.00"):
                 continue
             is_free = amt <= Decimal("0.00")
@@ -794,9 +818,8 @@ class PaymentService:
                 created_at=reg_ts,
                 updated_at=reg.updated_at or reg_ts,
             )
-            self.db.add(pmt)
+            await _persist_reconciled_payment(pmt)
             paid_tournament_ids.add(t.id)
-            created_count += 1
 
         # 3. Event Registrations missing payment rows
         er_stmt = (
@@ -812,7 +835,7 @@ class PaymentService:
         for reg, ev in (await self.db.execute(er_stmt)).all():
             if ev.id in paid_event_ids:
                 continue
-            amt = Decimal(str(ev.registration_fee or "0.00")).quantize(Decimal("0.01"))
+            amt = _safe_decimal(ev.registration_fee)
             is_free = amt <= Decimal("0.00")
             pmt_status = PaymentStatus.SUCCEEDED if is_free else PaymentStatus.PENDING
             reg_ts = reg.registered_at or reg.created_at or datetime.now(timezone.utc)
@@ -823,7 +846,7 @@ class PaymentService:
                 player_id=user_id,
                 event_id=ev.id,
                 amount=amt,
-                currency=ev.currency or "USD",
+                currency=str(ev.currency or "USD")[:3].upper(),
                 status=pmt_status,
                 purpose=PaymentPurpose.EVENT,
                 payment_method=PaymentMethod.OTHER,
@@ -833,9 +856,8 @@ class PaymentService:
                 created_at=reg_ts,
                 updated_at=reg.updated_at or reg_ts,
             )
-            self.db.add(pmt)
+            await _persist_reconciled_payment(pmt)
             paid_event_ids.add(ev.id)
-            created_count += 1
 
         # 4. Lesson Registrations missing payment rows
         lsr_stmt = (
@@ -851,7 +873,7 @@ class PaymentService:
         for reg, ls in (await self.db.execute(lsr_stmt)).all():
             if ls.id in paid_lesson_ids:
                 continue
-            amt = Decimal(str(ls.price or "0.00")).quantize(Decimal("0.01"))
+            amt = _safe_decimal(ls.price)
             is_free = amt <= Decimal("0.00")
             pmt_status = PaymentStatus.SUCCEEDED if is_free else PaymentStatus.PENDING
             reg_ts = reg.created_at or datetime.now(timezone.utc)
@@ -862,7 +884,7 @@ class PaymentService:
                 player_id=user_id,
                 lesson_id=ls.id,
                 amount=amt,
-                currency=ls.currency or "USD",
+                currency=str(ls.currency or "USD")[:3].upper(),
                 status=pmt_status,
                 purpose=PaymentPurpose.LESSON,
                 payment_method=PaymentMethod.OTHER,
@@ -872,9 +894,8 @@ class PaymentService:
                 created_at=reg_ts,
                 updated_at=reg.updated_at or reg_ts,
             )
-            self.db.add(pmt)
+            await _persist_reconciled_payment(pmt)
             paid_lesson_ids.add(ls.id)
-            created_count += 1
 
         # 5. League Registrations missing payment rows (avoid duplicate if teammate already paid)
         lr_stmt = (
@@ -906,7 +927,7 @@ class PaymentService:
                 if any_team_pmt is not None:
                     continue
 
-            amt = Decimal(str(lg.registration_fee or "0.00")).quantize(Decimal("0.01"))
+            amt = _safe_decimal(lg.registration_fee)
             is_free = amt <= Decimal("0.00")
             if lg.status == LeagueStatus.CANCELLED:
                 pmt_status = PaymentStatus.CANCELLED
@@ -939,9 +960,8 @@ class PaymentService:
                 created_at=tm.created_at,
                 updated_at=tm.created_at,
             )
-            self.db.add(pmt)
+            await _persist_reconciled_payment(pmt)
             paid_league_ids.add(lg.id)
-            created_count += 1
 
         if created_count > 0:
             await self.db.commit()
@@ -963,6 +983,10 @@ class PaymentService:
             await self.reconcile_player_payments(user_id)
         except Exception as rec_err:
             logger.warning(f"Non-blocking payment reconciliation warning for user {user_id}: {rec_err}")
+            try:
+                await self.db.rollback()
+            except Exception:
+                pass
         payments = await self.payment_repo.list_by_player(
             player_id=user_id,
             status=status,

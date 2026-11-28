@@ -13,7 +13,7 @@ from app.models.court import Court, CourtEnvironment, CourtStatus
 from app.models.event import Event, EventStatus, EventType, EventVisibility
 from app.models.league import League, LeagueStatus
 from app.models.lesson import Coach, Lesson, LessonStatus, LessonType
-from app.models.payment import Payment, PaymentPurpose, PaymentStatus
+from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
 from app.models.tournament import Tournament, TournamentFormat, TournamentStatus
 from app.models.tournament_registration import RegistrationStatus, TournamentRegistration
 from app.models.user import User
@@ -475,3 +475,33 @@ async def test_e2e_all_services_bookings_payments_sync_and_reconciliation(async_
     # Calling /payments again creates zero duplicates
     p2_reconciled_again = (await async_client.get("/api/v1/payments", headers=h2)).json()
     assert len(p2_reconciled_again) == 2
+
+    # Edge case: legacy non-numeric reference + 2nd legacy booking must generate monotonic numeric refs cleanly
+    non_num_pmt = Payment(
+        reference=f"A2P-{now.year}-ZZZ999",
+        club_id=club1.id,
+        player_id=p2.id,
+        amount=Decimal("10.00"),
+        currency="USD",
+        status=PaymentStatus.SUCCEEDED,
+        purpose=PaymentPurpose.MEMBERSHIP,
+        payment_method=PaymentMethod.OTHER,
+    )
+    second_legacy_booking = Booking(
+        id=uuid.uuid4(),
+        club_id=club1.id,
+        court_id=court_paid.id,
+        booked_by_user_id=p2.id,
+        player_id=p2.id,
+        start_at=now + timedelta(days=10),
+        end_at=now + timedelta(days=10, hours=1),
+        booking_type=BookingType.PLAYER,
+        status=BookingStatus.CONFIRMED,
+        total_price=Decimal("40.00"),
+    )
+    db_session.add_all([non_num_pmt, second_legacy_booking])
+    await db_session.commit()
+
+    p2_after_non_num = await async_client.get("/api/v1/payments", headers=h2)
+    assert p2_after_non_num.status_code == 200
+    assert len(p2_after_non_num.json()) == 4

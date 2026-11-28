@@ -305,19 +305,14 @@ class PaymentRepository:
         stmt = (
             select(Payment.reference)
             .where(Payment.reference.like(f"{prefix}%"))
-            .order_by(Payment.reference.desc())
-            .limit(1)
         )
         res = await self.db.execute(stmt)
-        last_ref = res.scalar_one_or_none()
+        max_seq = 0
+        for ref in res.scalars().all():
+            parts = str(ref).split("-")
+            if len(parts) == 3 and parts[2].isdigit():
+                seq = int(parts[2])
+                if seq > max_seq:
+                    max_seq = seq
 
-        next_seq = 1
-        if last_ref:
-            try:
-                parts = last_ref.split("-")
-                if len(parts) == 3:
-                    next_seq = int(parts[2]) + 1
-            except (ValueError, IndexError):
-                next_seq = 1
-
-        return f"A2P-{year}-{next_seq:06d}"
+        return f"A2P-{year}-{max_seq + 1:06d}"
