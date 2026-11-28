@@ -110,17 +110,7 @@ function renderTabIcon(iconName: string, color: string, size = 16) {
   }
 }
 
-function getStatusBadgeConfig(status?: string, workflowState?: string) {
-  const wf = workflowState?.toLowerCase();
-  if (status?.toLowerCase() === 'registration_closed') {
-    if (wf === 'structure_generated') {
-      return { bg: '#DCFCE7', text: '#15803D', label: 'SCHEDULE GENERATED' };
-    }
-    if (wf === 'configuration_saved') {
-      return { bg: '#CCFBF1', text: '#0F766E', label: 'CONFIGURATION SAVED' };
-    }
-    return { bg: '#FEF3C7', text: '#B45309', label: 'AWAITING CONFIGURATION' };
-  }
+function getStatusBadgeConfig(status?: string) {
   switch (status?.toLowerCase()) {
     case 'in_progress':
       return { bg: '#E0F2FE', text: '#0369A1', label: 'IN PROGRESS' };
@@ -131,6 +121,8 @@ function getStatusBadgeConfig(status?: string, workflowState?: string) {
     case 'registration_open':
     case 'open':
       return { bg: '#DCFCE7', text: '#15803D', label: 'REGISTRATION OPEN' };
+    case 'registration_closed':
+      return { bg: '#F1F5F9', text: '#475569', label: 'REGISTRATION CLOSED' };
     case 'draft':
     default:
       return { bg: '#FEF3C7', text: '#B45309', label: 'DRAFT' };
@@ -185,7 +177,7 @@ export function TournamentManagementInfo({
   activeTab,
 }: TournamentManagementInfoProps) {
   const parsedConfig = parseTournamentConfig(tournament);
-  const statusConfig = getStatusBadgeConfig(tournament?.status, tournament?.workflow_state ?? undefined);
+  const statusConfig = getStatusBadgeConfig(tournament?.status);
   const formatLabel = tournament?.format_label || getFormatDisplayLabel(tournament?.format);
   const categoryLabel = parsedConfig.category || (parsedConfig.isSingles ? 'Singles' : 'Doubles');
 
@@ -243,60 +235,64 @@ export function TournamentManagementInfo({
         </View>
       </View>
 
-      {/* Meta Details Row */}
-      <View style={styles.metaRow}>
-        {formattedDate && (
-          <View style={styles.metaItem}>
-            <Calendar size={13} color="#64748B" />
-            <AppText style={styles.metaText}>{formattedDate}</AppText>
-          </View>
-        )}
+      {/* Vertical Meta Stack (left) + Current Lifecycle Action Button (right) */}
+      <View style={styles.metaAndActionRow}>
+        <View style={styles.metaColumn}>
+          {formattedDate && (
+            <View style={styles.metaItem}>
+              <Calendar size={13} color="#64748B" />
+              <AppText style={styles.metaText} numberOfLines={1}>
+                {formattedDate}
+              </AppText>
+            </View>
+          )}
 
-        {clubOnlyName && (
+          {clubOnlyName && (
+            <View style={styles.metaItem}>
+              <MapPin size={13} color="#64748B" />
+              <AppText style={styles.metaText} numberOfLines={1}>
+                {clubOnlyName}
+              </AppText>
+            </View>
+          )}
+
           <View style={styles.metaItem}>
-            <MapPin size={13} color="#64748B" />
+            <Users size={13} color="#64748B" />
             <AppText style={styles.metaText} numberOfLines={1}>
-              {clubOnlyName}
+              {tournament?.teams_count ?? tournament?.participant_count ?? 0}
+              {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
+              {parsedConfig.isSingles ? 'Players' : 'Teams'}
             </AppText>
           </View>
-        )}
-
-        <View style={styles.metaItem}>
-          <Users size={13} color="#64748B" />
-          <AppText style={styles.metaText}>
-            {tournament?.teams_count ?? tournament?.participant_count ?? 0}
-            {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
-            {parsedConfig.isSingles ? 'Players' : 'Teams'}
-          </AppText>
         </View>
-      </View>
 
-      {/* Dedicated Lifecycle Action Row: Positioned cleanly below info & above tabs */}
-      {!isRedundant && primaryAction && (
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={[
-              styles.compactBtn,
-              primaryAction.variant === 'danger' && styles.compactBtnDanger,
-              primaryAction.variant === 'secondary' && styles.compactBtnSecondary,
-            ]}
-            onPress={primaryAction.onPress}
-            disabled={primaryAction.isLoading}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={primaryAction.label}
-          >
-            <AppText
+        {!isRedundant && primaryAction && (
+          <View style={styles.actionSlot}>
+            <TouchableOpacity
               style={[
-                styles.compactBtnText,
-                primaryAction.variant === 'secondary' && styles.compactBtnSecondaryText,
+                styles.compactBtn,
+                primaryAction.variant === 'danger' && styles.compactBtnDanger,
+                primaryAction.variant === 'secondary' && styles.compactBtnSecondary,
               ]}
+              onPress={primaryAction.onPress}
+              disabled={primaryAction.isLoading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={primaryAction.label}
             >
-              {primaryAction.isLoading ? 'Processing...' : primaryAction.label}
-            </AppText>
-          </TouchableOpacity>
-        </View>
-      )}
+              <AppText
+                style={[
+                  styles.compactBtnText,
+                  primaryAction.variant === 'secondary' && styles.compactBtnSecondaryText,
+                ]}
+                numberOfLines={1}
+              >
+                {primaryAction.isLoading ? 'Processing...' : primaryAction.label}
+              </AppText>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -521,36 +517,36 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#065F46',
   },
-  metaRow: {
+  metaAndActionRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: 14,
-    rowGap: 6,
+    justifyContent: 'space-between',
+    gap: 12,
     width: '100%',
+  },
+  metaColumn: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'column',
+    gap: 5,
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    maxWidth: '100%',
-    flexShrink: 1,
+    gap: 6,
+    minWidth: 0,
   },
   metaText: {
     fontSize: 12,
+    lineHeight: 16,
     color: '#64748B',
     fontWeight: '500',
     flexShrink: 1,
   },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingTop: 4,
-    marginTop: 2,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#F1F5F9',
+  actionSlot: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   compactBtn: {
     backgroundColor: '#0F766E',
