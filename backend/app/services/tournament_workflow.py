@@ -323,7 +323,10 @@ async def resolve_and_validate_courts(
     active_by_id = {str(c.id): c for c in active_courts}
 
     cfg = tournament.format_configuration if isinstance(tournament.format_configuration, dict) else {}
-    saved_ids = cfg.get("selected_court_ids")
+    raw_selected_ids = cfg.get("selected_court_ids")
+    raw_assigned_ids = cfg.get("assigned_courts")
+    saved_ids = raw_selected_ids if isinstance(raw_selected_ids, list) and raw_selected_ids else raw_assigned_ids
+    has_saved_config = bool(cfg.get("configuration_saved", False))
 
     selected_courts: list[Court] = []
     if requested_court_ids is not None:
@@ -385,7 +388,8 @@ async def resolve_and_validate_courts(
         effective_count = requested_courts_count
     else:
         saved_count = cfg.get("courts_count")
-        if isinstance(saved_count, int) and saved_count >= 1:
+        has_explicit_court_selection = isinstance(raw_selected_ids, list) and len(raw_selected_ids) > 0
+        if (has_saved_config or has_explicit_court_selection) and isinstance(saved_count, int) and saved_count >= 1:
             effective_count = min(saved_count, len(selected_courts)) if selected_courts else saved_count
         else:
             effective_count = len(selected_courts)

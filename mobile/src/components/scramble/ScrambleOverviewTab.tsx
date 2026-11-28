@@ -255,36 +255,61 @@ export function ScrambleOverviewTab({
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
             <Sparkles size={18} color="#0F766E" />
-            <AppText style={styles.cardHeaderTitle}>Partner Coverage & Rotation</AppText>
+            <View style={styles.headerTitleWrap}>
+              <AppText style={styles.cardHeaderTitle}>Partner Coverage & Rotation</AppText>
+              {(state.coverage_summary.matches_analyzed ?? 0) > 0 && (
+                <View style={styles.stagePill}>
+                  <AppText style={styles.stagePillText}>
+                    {state.coverage_summary.matches_analyzed}{' '}
+                    {state.coverage_summary.coverage_scope === 'generated_schedule' ? 'Scheduled' : 'Played'}
+                  </AppText>
+                </View>
+              )}
+            </View>
           </View>
 
           <View style={styles.statsGrid}>
             <View style={styles.statTile}>
-              <AppText style={styles.statTileLabel}>AVG PARTNERS</AppText>
+              <AppText style={styles.statTileLabel}>UNIQUE PARTNER PAIRINGS</AppText>
               <AppText style={styles.statTileNum}>
-                {state.coverage_summary.avg_unique_partners} / {state.coverage_summary.total_possible_partners_per_player}
+                {state.coverage_summary.unique_partner_pairings ?? 0}
               </AppText>
-              <AppText style={styles.statTileSub}>per player</AppText>
+              <AppText style={styles.statTileSub}>distinct teams</AppText>
             </View>
 
             <View style={styles.statTile}>
-              <AppText style={styles.statTileLabel}>REPEAT PARTNERS</AppText>
-              <AppText style={[styles.statTileNum, state.coverage_summary.total_repeat_partner_pairs > 0 && { color: '#B45309' }]}>
-                {state.coverage_summary.total_repeat_partner_pairs}
+              <AppText style={styles.statTileLabel}>REPEATED PARTNER PAIRINGS</AppText>
+              <AppText
+                style={[
+                  styles.statTileNum,
+                  (state.coverage_summary.repeated_partner_pairings ??
+                    state.coverage_summary.total_repeat_partner_pairs ??
+                    0) > 0 && { color: '#B45309' },
+                ]}
+              >
+                {state.coverage_summary.repeated_partner_pairings ??
+                  state.coverage_summary.total_repeat_partner_pairs ??
+                  0}
               </AppText>
-              <AppText style={styles.statTileSub}>repeat pairs</AppText>
+              <AppText style={styles.statTileSub}>repeat pairings</AppText>
             </View>
 
             <View style={styles.statTile}>
-              <AppText style={styles.statTileLabel}>AVG OPPONENTS</AppText>
-              <AppText style={styles.statTileNum}>{state.coverage_summary.avg_unique_opponents}</AppText>
-              <AppText style={styles.statTileSub}>per player</AppText>
+              <AppText style={styles.statTileLabel}>UNIQUE OPPONENT PAIRINGS</AppText>
+              <AppText style={styles.statTileNum}>
+                {state.coverage_summary.unique_opponent_pairings ?? 0}
+              </AppText>
+              <AppText style={styles.statTileSub}>distinct matchups</AppText>
             </View>
 
             <View style={styles.statTile}>
-              <AppText style={styles.statTileLabel}>REPEAT OPPONENTS</AppText>
-              <AppText style={styles.statTileNum}>{state.coverage_summary.total_repeat_opponent_pairs}</AppText>
-              <AppText style={styles.statTileSub}>repeat pairs</AppText>
+              <AppText style={styles.statTileLabel}>REPEATED OPPONENT PAIRINGS</AppText>
+              <AppText style={styles.statTileNum}>
+                {state.coverage_summary.repeated_opponent_pairings ??
+                  state.coverage_summary.total_repeat_opponent_pairs ??
+                  0}
+              </AppText>
+              <AppText style={styles.statTileSub}>repeat matchups</AppText>
             </View>
           </View>
 

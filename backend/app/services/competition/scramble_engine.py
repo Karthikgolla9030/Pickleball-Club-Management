@@ -214,134 +214,6 @@ class ScrambleEngine:
             "odd_player_handling_message": odd_handling_message,
         }
 
-    @staticmethod
-    def calculate_overall_coverage(
-        players: list[dict[str, Any]],
-        matches: list[dict[str, Any]],
-        division: str = "Open Scramble",
-    ) -> dict[str, Any]:
-        """
-        Measure actual schedule partner and opponent coverage from persisted/generated matches.
-        Never promises full coverage unless every player's actual assigned partners verify that claim.
-        """
-        is_mixed = division == "Mixed Scramble"
-        p_ids = [str(p.get("id") or p.get("player_membership_id")) for p in players]
-        p_map = {str(p.get("id") or p.get("player_membership_id")): p for p in players}
-
-        partners_by_player: dict[str, list[str]] = {pid: [] for pid in p_ids}
-        opponents_by_player: dict[str, list[str]] = {pid: [] for pid in p_ids}
-        games_by_player: dict[str, int] = {pid: 0 for pid in p_ids}
-
-        for m in matches:
-            if m.get("status") == "cancelled":
-                continue
-            sa = [str(p.get("id") or p.get("player_membership_id")) for p in (m.get("side_a") or m.get("side_a_participants") or [])]
-            sb = [str(p.get("id") or p.get("player_membership_id")) for p in (m.get("side_b") or m.get("side_b_participants") or [])]
-
-            if len(sa) == 2:
-                p1, p2 = sa
-                if p1 in partners_by_player:
-                    partners_by_player[p1].append(p2)
-                    games_by_player[p1] += 1
-                if p2 in partners_by_player:
-                    partners_by_player[p2].append(p1)
-                    games_by_player[p2] += 1
-
-            if len(sb) == 2:
-                p1, p2 = sb
-                if p1 in partners_by_player:
-                    partners_by_player[p1].append(p2)
-                    games_by_player[p1] += 1
-                if p2 in partners_by_player:
-                    partners_by_player[p2].append(p1)
-                    games_by_player[p2] += 1
-
-            for a in sa:
-                for b in sb:
-                    if a in opponents_by_player:
-                        opponents_by_player[a].append(b)
-                    if b in opponents_by_player:
-                        opponents_by_player[b].append(a)
-
-        # Per player statistics
-        males = {pid for pid, p in p_map.items() if (p.get("gender") or "").strip().capitalize() == "Male"}
-        females = {pid for pid, p in p_map.items() if (p.get("gender") or "").strip().capitalize() == "Female"}
-
-        player_stats = []
-        all_possible_partner_counts = []
-        coverage_percentages = []
-
-        total_partner_repeats = 0
-        total_opponent_repeats = 0
-
-        for pid in p_ids:
-            p_obj = p_map[pid]
-            dname = p_obj.get("display_name") or p_obj.get("name") or "Player"
-            partner_list = partners_by_player[pid]
-            unique_partners = set(partner_list)
-            opp_list = opponents_by_player[pid]
-            unique_opps = set(opp_list)
-
-            if is_mixed:
-                possible_partners_set = females if pid in males else males
-            else:
-                possible_partners_set = {other_id for other_id in p_ids if other_id != pid}
-
-            possible_partners_count = len(possible_partners_set)
-            possible_opponents_count = len(p_ids) - 1
-
-            missing_partners = [
-                p_map[mid].get("display_name") or p_map[mid].get("name") or "Player"
-                for mid in (possible_partners_set - unique_partners)
-                if mid in p_map
-            ]
-
-            p_repeats = max(0, len(partner_list) - len(unique_partners))
-            o_repeats = max(0, len(opp_list) - len(unique_opps))
-            total_partner_repeats += p_repeats
-            total_opponent_repeats += o_repeats
-
-            cov_pct = (len(unique_partners) / possible_partners_count * 100.0) if possible_partners_count > 0 else 100.0
-            coverage_percentages.append(cov_pct)
-            all_possible_partner_counts.append(possible_partners_count)
-
-            player_stats.append({
-                "player_membership_id": pid,
-                "display_name": dname,
-                "games_played": games_by_player[pid],
-                "unique_partners_count": len(unique_partners),
-                "possible_partners_count": possible_partners_count,
-                "partner_coverage_pct": round(cov_pct, 1),
-                "repeat_partners_count": p_repeats,
-                "missing_partners_count": len(missing_partners),
-                "unique_opponents_count": len(unique_opps),
-                "possible_opponents_count": possible_opponents_count,
-                "repeat_opponents_count": o_repeats,
-            })
-
-        min_cov = min(coverage_percentages) if coverage_percentages else 100.0
-        max_cov = max(coverage_percentages) if coverage_percentages else 100.0
-        avg_cov = sum(coverage_percentages) / len(coverage_percentages) if coverage_percentages else 100.0
-        all_covered = len(player_stats) > 0 and all(p["unique_partners_count"] >= p["possible_partners_count"] for p in player_stats)
-
-        if all_covered:
-            quality_claim = "Full unique-partner coverage verified (every player partners with every possible partner)"
-        elif min_cov == max_cov:
-            quality_claim = f"Partner rotation active: {round(avg_cov)}% unique partner coverage across all players"
-        else:
-            quality_claim = f"Partner rotation active: {round(min_cov)}%–{round(max_cov)}% unique partner coverage achieved"
-
-        return {
-            "all_partners_covered": all_covered,
-            "min_partner_coverage_pct": round(min_cov, 1),
-            "avg_partner_coverage_pct": round(avg_cov, 1),
-            "max_partner_coverage_pct": round(max_cov, 1),
-            "total_partner_repeats": total_partner_repeats // 2,
-            "total_opponent_repeats": total_opponent_repeats // 2,
-            "quality_claim": quality_claim,
-            "players_coverage": player_stats,
-        }
-
     def sort_players_deterministically(
         self, players: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
@@ -369,6 +241,7 @@ class ScrambleEngine:
         num_rounds: int,
         matches_per_player: int | None = None,
         division: str | None = None,
+        rotation_rule: str = "Full Rotation (no repeating partners)",
     ) -> list[dict[str, Any]]:
         """
         Generate deterministic Scramble doubles matchups across rounds.
@@ -414,6 +287,10 @@ class ScrambleEngine:
         partner_counts = {p: {q: 0 for q in p_ids} for p in p_ids}
         opponent_counts = {p: {q: 0 for q in p_ids} for p in p_ids}
 
+        rule_lower = (rotation_rule or "full rotation").lower()
+        is_balanced_rule = "balanced" in rule_lower
+        is_skill_rule = "skill" in rule_lower or "tier" in rule_lower
+
         all_matches: list[dict[str, Any]] = []
         global_match_number = 1
 
@@ -446,29 +323,40 @@ class ScrambleEngine:
                             if g_a1 == g_a2 or g_b1 == g_b2:
                                 continue
 
-                        # Partner repeat penalty (heaviest weight)
+                        # Partner repeat penalty
                         partner_cost = (
                             (partner_counts[a1][a2] ** 2) * 1_000_000 +
                             (partner_counts[b1][b2] ** 2) * 1_000_000
                         )
 
-                        # Seed balance penalty (medium weight)
+                        # Seed / skill penalty
                         seed_a1 = p_map[a1].get("seed") or 50
                         seed_a2 = p_map[a2].get("seed") or 50
                         seed_b1 = p_map[b1].get("seed") or 50
                         seed_b2 = p_map[b2].get("seed") or 50
                         seed_diff = abs((seed_a1 + seed_a2) - (seed_b1 + seed_b2))
-                        seed_cost = seed_diff * 100
 
-                        # Opponent repeat penalty (light weight)
-                        opp_cost = (
+                        # Opponent repeat penalty
+                        opp_repeats_sum = (
                             opponent_counts[a1][b1] +
                             opponent_counts[a1][b2] +
                             opponent_counts[a2][b1] +
                             opponent_counts[a2][b2]
                         )
 
-                        total_cost = partner_cost + seed_cost + opp_cost
+                        if is_skill_rule:
+                            r_a1 = float(p_map[a1].get("skill_rating") or p_map[a1].get("rating") or 3.5)
+                            r_a2 = float(p_map[a2].get("skill_rating") or p_map[a2].get("rating") or 3.5)
+                            r_b1 = float(p_map[b1].get("skill_rating") or p_map[b1].get("rating") or 3.5)
+                            r_b2 = float(p_map[b2].get("skill_rating") or p_map[b2].get("rating") or 3.5)
+                            tier_spread = (
+                                abs(r_a1 - r_a2) + abs(r_b1 - r_b2) + abs((r_a1 + r_a2) - (r_b1 + r_b2))
+                            )
+                            total_cost = partner_cost + (tier_spread * 25_000) + (opp_repeats_sum * 50) + (seed_diff * 50)
+                        elif is_balanced_rule:
+                            total_cost = partner_cost + (opp_repeats_sum * 5_000) + (seed_diff * 500)
+                        else:
+                            total_cost = partner_cost + (seed_diff * 100) + opp_repeats_sum
                         if total_cost < best_cost:
                             best_cost = total_cost
                             best_match = (side_a, side_b)
@@ -966,9 +854,10 @@ class ScrambleEngine:
         players: list[dict[str, Any]],
         matches: list[dict[str, Any]],
         division: str | None = None,
+        tournament_status: str | None = None,
     ) -> dict[str, Any]:
         """Instance method calculating overall tournament partner and opponent coverage."""
-        return calculate_overall_coverage(players, matches, division)
+        return calculate_overall_coverage(players, matches, division, tournament_status)
 
 
 def calculate_recommended_rounds(
@@ -1048,18 +937,32 @@ def calculate_overall_coverage(
     players: list[dict[str, Any]],
     matches: list[dict[str, Any]],
     division: str | None = None,
+    tournament_status: str | None = None,
 ) -> dict[str, Any]:
     """
-    Measure actual partner and opponent coverage across all generated/played matches.
-    Never claims everyone played with or faced everyone unless verified from actual matchups.
-    """
-    import math
+    Measure actual partner and opponent coverage from valid Scramble doubles matches.
 
+    Counting rules:
+    - Excludes cancelled, invalid, or incomplete matches (must have 4 distinct valid players).
+    - Excludes unplayed planned/pending matches once play has begun (`in_progress` / `completed`)
+      or completed matches exist (`coverage_scope = 'actual_played'`).
+    - Normalizes unordered pairings `{min(a, b), max(a, b)}` so reversed order is never
+      double-counted and self-pairings are impossible.
+    - Reports clear whole-number pairing totals alongside repeated occurrences.
+    """
     if not players:
         return {
+            "unique_partner_pairings": 0,
+            "repeated_partner_pairings": 0,
+            "unique_opponent_pairings": 0,
+            "repeated_opponent_pairings": 0,
+            "repeated_partner_pair_count": 0,
+            "repeated_opponent_pair_count": 0,
+            "matches_analyzed": 0,
+            "coverage_scope": "none",
             "avg_unique_partners": 0.0,
-            "total_repeat_partner_pairs": 0,
             "avg_unique_opponents": 0.0,
+            "total_repeat_partner_pairs": 0,
             "total_repeat_opponent_pairs": 0,
             "all_partners_covered": False,
             "quality_claim": "No players registered",
@@ -1068,87 +971,127 @@ def calculate_overall_coverage(
 
     is_mixed = division == "Mixed Scramble"
     player_ids = [str(p.get("id") or p.get("player_membership_id")) for p in players]
+    valid_player_set = set(player_ids)
 
-    # Map player to gender if mixed
-    gender_map = {
-        str(p.get("id") or p.get("player_membership_id")): (p.get("gender") or "Any").lower()
-        for p in players
-    }
+    def _extract_ids(raw: Any) -> list[str]:
+        out: list[str] = []
+        for item in raw or []:
+            if isinstance(item, dict):
+                pid = item.get("id") or item.get("player_membership_id")
+            else:
+                pid = item
+            if pid is not None:
+                out.append(str(pid))
+        return out
 
-    # Tracking actual partner pairings and opponent encounters
+    # Step 1: validate match structure (exclude cancelled & invalid/incomplete matches)
+    structural_matches: list[tuple[str, list[str], list[str]]] = []
+    for m in matches or []:
+        m_status = str(m.get("status") or "").strip().lower()
+        if m_status == "cancelled":
+            continue
+        sa_ids = _extract_ids(m.get("side_a") or m.get("side_a_player_ids") or m.get("side_a_participants"))
+        sb_ids = _extract_ids(m.get("side_b") or m.get("side_b_player_ids") or m.get("side_b_participants"))
+        if len(sa_ids) != 2 or len(sb_ids) != 2:
+            continue
+        all_four = sa_ids + sb_ids
+        if len(set(all_four)) != 4:
+            continue
+        if not all(pid in valid_player_set for pid in all_four):
+            continue
+        structural_matches.append((m_status, sa_ids, sb_ids))
+
+    t_status_lower = str(tournament_status or "").strip().lower()
+    has_completed = any(st == "completed" for st, _, _ in structural_matches)
+
+    if t_status_lower in ("in_progress", "completed") or has_completed:
+        included_matches = [(st, sa, sb) for st, sa, sb in structural_matches if st == "completed"]
+        coverage_scope = "actual_played" if included_matches else "none"
+    elif structural_matches:
+        included_matches = structural_matches
+        coverage_scope = "generated_schedule"
+    else:
+        included_matches = []
+        coverage_scope = "none"
+
+    # Tracking normalized unordered partner pairings and opponent encounters
     partner_pair_counts: dict[tuple[str, str], int] = {}
     opponent_pair_counts: dict[tuple[str, str], int] = {}
     player_partner_sets: dict[str, set[str]] = {pid: set() for pid in player_ids}
     player_opponent_sets: dict[str, set[str]] = {pid: set() for pid in player_ids}
 
-    for m in matches:
-        sa_raw = m.get("side_a") or m.get("side_a_player_ids") or []
-        sb_raw = m.get("side_b") or m.get("side_b_player_ids") or []
-
-        sa_ids = [str(p["id"]) if isinstance(p, dict) and "id" in p else str(p) for p in sa_raw]
-        sb_ids = [str(p["id"]) if isinstance(p, dict) and "id" in p else str(p) for p in sb_raw]
-
-        # Partner on Side A
-        if len(sa_ids) == 2:
-            p1, p2 = sa_ids[0], sa_ids[1]
-            if p1 in player_partner_sets and p2 in player_partner_sets:
-                pair = tuple(sorted([p1, p2]))
+    for _, sa_ids, sb_ids in included_matches:
+        for side_ids in (sa_ids, sb_ids):
+            p1, p2 = side_ids[0], side_ids[1]
+            if p1 != p2:
+                pair = (p1, p2) if p1 < p2 else (p2, p1)
                 partner_pair_counts[pair] = partner_pair_counts.get(pair, 0) + 1
                 player_partner_sets[p1].add(p2)
                 player_partner_sets[p2].add(p1)
 
-        # Partner on Side B
-        if len(sb_ids) == 2:
-            p1, p2 = sb_ids[0], sb_ids[1]
-            if p1 in player_partner_sets and p2 in player_partner_sets:
-                pair = tuple(sorted([p1, p2]))
-                partner_pair_counts[pair] = partner_pair_counts.get(pair, 0) + 1
-                player_partner_sets[p1].add(p2)
-                player_partner_sets[p2].add(p1)
-
-        # Opponents across Side A and Side B
         for a in sa_ids:
             for b in sb_ids:
-                if a in player_opponent_sets and b in player_opponent_sets:
-                    opair = tuple(sorted([a, b]))
+                if a != b:
+                    opair = (a, b) if a < b else (b, a)
                     opponent_pair_counts[opair] = opponent_pair_counts.get(opair, 0) + 1
                     player_opponent_sets[a].add(b)
                     player_opponent_sets[b].add(a)
 
-    repeat_partner_pairs = sum(1 for count in partner_pair_counts.values() if count > 1)
-    repeat_opponent_pairs = sum(1 for count in opponent_pair_counts.values() if count > 1)
+    unique_partner_pairings = len(partner_pair_counts)
+    repeated_partner_pairings = sum(c - 1 for c in partner_pair_counts.values() if c > 1)
+    repeated_partner_pair_count = sum(1 for c in partner_pair_counts.values() if c > 1)
+
+    unique_opponent_pairings = len(opponent_pair_counts)
+    repeated_opponent_pairings = sum(c - 1 for c in opponent_pair_counts.values() if c > 1)
+    repeated_opponent_pair_count = sum(1 for c in opponent_pair_counts.values() if c > 1)
 
     unique_partner_counts = [len(partners) for partners in player_partner_sets.values()]
     unique_opponent_counts = [len(opps) for opps in player_opponent_sets.values()]
-
     avg_partners = round(sum(unique_partner_counts) / len(player_ids), 1) if player_ids else 0.0
     avg_opponents = round(sum(unique_opponent_counts) / len(player_ids), 1) if player_ids else 0.0
 
-    # Possible partners definition
     if is_mixed:
         total_possible = max(1, len(player_ids) // 2)
     else:
         total_possible = max(1, len(player_ids) - 1)
 
-    all_covered = len(matches) > 0 and all(len(s) >= total_possible for s in player_partner_sets.values())
+    matches_analyzed = len(included_matches)
+    all_covered = matches_analyzed > 0 and all(len(s) >= total_possible for s in player_partner_sets.values())
 
-    if len(matches) == 0:
-        quality_claim = "Matchups not yet generated"
-    elif all_covered and repeat_partner_pairs == 0:
-        quality_claim = "Full unique-partner coverage verified (0 repeats)"
-    elif all_covered:
-        quality_claim = f"Full unique-partner coverage achieved ({repeat_partner_pairs} repeat partner pair(s))"
-    elif repeat_partner_pairs == 0:
-        quality_claim = "Partner rotation active (0 partner repeats so far)"
+    if matches_analyzed == 0:
+        if t_status_lower in ("in_progress", "completed"):
+            quality_claim = "No completed matches recorded yet"
+        else:
+            quality_claim = "Matchups not yet generated"
+    elif coverage_scope == "generated_schedule":
+        quality_claim = (
+            f"Partner rotation active ({matches_analyzed} scheduled matches): "
+            f"{unique_partner_pairings} unique partner pairs • {repeated_partner_pairings} repeat(s)"
+        )
+    elif all_covered and repeated_partner_pairings == 0:
+        quality_claim = (
+            f"{matches_analyzed} played matches • {unique_partner_pairings} unique partner pairs • 0 partner repeats"
+        )
     else:
-        quality_claim = f"Partner rotation active ({repeat_partner_pairs} repeat partner pair(s))"
+        quality_claim = (
+            f"{matches_analyzed} played matches • {unique_partner_pairings} unique partner pairs • "
+            f"{repeated_partner_pairings} repeat(s)"
+        )
 
     return {
+        "unique_partner_pairings": unique_partner_pairings,
+        "repeated_partner_pairings": repeated_partner_pairings,
+        "unique_opponent_pairings": unique_opponent_pairings,
+        "repeated_opponent_pairings": repeated_opponent_pairings,
+        "repeated_partner_pair_count": repeated_partner_pair_count,
+        "repeated_opponent_pair_count": repeated_opponent_pair_count,
+        "matches_analyzed": matches_analyzed,
+        "coverage_scope": coverage_scope,
         "avg_unique_partners": avg_partners,
         "total_possible_partners_per_player": total_possible,
-        "total_repeat_partner_pairs": repeat_partner_pairs,
+        "total_repeat_partner_pairs": repeated_partner_pairings,
         "avg_unique_opponents": avg_opponents,
-        "total_repeat_opponent_pairs": repeat_opponent_pairs,
+        "total_repeat_opponent_pairs": repeated_opponent_pairings,
         "all_partners_covered": all_covered,
         "quality_claim": quality_claim,
     }

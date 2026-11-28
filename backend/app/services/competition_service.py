@@ -3079,14 +3079,32 @@ class CompetitionService:
                     "registered_at": r.registered_at.isoformat() if r.registered_at else "",
                 })
 
+        config = dict(tournament.format_configuration or {})
+        rotation_rule = config.get("rotation_rule") or "Full Rotation (no repeating partners)"
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            require_at_least_one_when_courts_exist=False,
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         engine = ScrambleEngine()
-        division = (tournament.format_configuration or {}).get("category")
+        division = config.get("category")
         try:
             engine.validate_scramble_configuration(
                 len(eligible_players), payload.rounds, payload.matches_per_player
             )
             matchups = engine.generate_matchups(
-                eligible_players, payload.rounds, payload.matches_per_player, division=division
+                eligible_players,
+                payload.rounds,
+                payload.matches_per_player,
+                division=division,
+                rotation_rule=rotation_rule,
             )
         except ScrambleConfigurationError as e:
             raise HTTPException(
@@ -3094,21 +3112,30 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
-        # Save configuration to tournament preserving existing category
-        config = dict(tournament.format_configuration or {})
+        # Save configuration to tournament preserving existing category & court settings
         config.update({
             "rounds": payload.rounds,
+            "planned_rounds": payload.rounds,
             "matches_per_player": payload.matches_per_player or payload.rounds,
             "partner_rotation": payload.partner_rotation,
+            "rotation_rule": rotation_rule,
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "assigned_courts": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
         })
         await self.tournament_repo.update(tournament, format_configuration=config)
 
-        # Create Match and MatchParticipant records
+        # Create Match and MatchParticipant records adhering strictly to usable concurrent courts
         match_dicts = [
             {
                 "tournament_id": tournament_id,
                 "round_number": m["round_number"],
                 "match_number": m["match_number"],
+                "court_id": (
+                    usable_courts[(m["match_number"] - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
                 "stage": None,
                 "status": MatchStatus.PENDING,
             }
@@ -3207,14 +3234,32 @@ class CompetitionService:
                     "registered_at": r.registered_at.isoformat() if r.registered_at else "",
                 })
 
+        config = dict(tournament.format_configuration or {})
+        rotation_rule = config.get("rotation_rule") or "Full Rotation (no repeating partners)"
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            require_at_least_one_when_courts_exist=False,
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+
         engine = ScrambleEngine()
-        division = (tournament.format_configuration or {}).get("category")
+        division = config.get("category")
         try:
             engine.validate_scramble_configuration(
                 len(eligible_players), payload.rounds, payload.matches_per_player
             )
             matchups = engine.generate_matchups(
-                eligible_players, payload.rounds, payload.matches_per_player, division=division
+                eligible_players,
+                payload.rounds,
+                payload.matches_per_player,
+                division=division,
+                rotation_rule=rotation_rule,
             )
         except ScrambleConfigurationError as e:
             raise HTTPException(
@@ -3222,11 +3267,15 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
-        config = dict(tournament.format_configuration or {})
         config.update({
             "rounds": payload.rounds,
+            "planned_rounds": payload.rounds,
             "matches_per_player": payload.matches_per_player or payload.rounds,
             "partner_rotation": payload.partner_rotation,
+            "rotation_rule": rotation_rule,
+            "selected_court_ids": [str(c.id) for c in selected_courts],
+            "assigned_courts": [str(c.id) for c in selected_courts],
+            "courts_count": effective_courts,
         })
         await self.tournament_repo.update(tournament, format_configuration=config)
 
@@ -3235,6 +3284,11 @@ class CompetitionService:
                 "tournament_id": tournament_id,
                 "round_number": m["round_number"],
                 "match_number": m["match_number"],
+                "court_id": (
+                    usable_courts[(m["match_number"] - 1) % len(usable_courts)].id
+                    if usable_courts
+                    else None
+                ),
                 "stage": None,
                 "status": MatchStatus.PENDING,
             }
@@ -3681,7 +3735,10 @@ class CompetitionService:
         elif round_games_total > 0 and round_status == "setup":
             reconciled_status = "matchups_created"
 
-        if reconciled_status != round_status:
+        if (
+            reconciled_status != round_status
+            and tournament.status not in (TournamentStatus.COMPLETED, TournamentStatus.CANCELLED)
+        ):
             round_status = reconciled_status
             config["round_status"] = round_status
             rounds_store = dict(config.get("rounds_data") or {})
@@ -3843,6 +3900,7 @@ class CompetitionService:
             players=coverage_players,
             matches=coverage_matches,
             division=division,
+            tournament_status=tournament.status.value,
         )
 
         return ScrambleStateResponse(
@@ -4085,16 +4143,23 @@ class CompetitionService:
                         opponent_history.setdefault(a, {})[b] = opponent_history.setdefault(a, {}).get(b, 0) + 1
                         opponent_history.setdefault(b, {})[a] = opponent_history.setdefault(b, {}).get(a, 0) + 1
 
-        active_courts = await self.court_repo.list_by_club(club_id, is_active=True)
-        courts_info = []
-        if payload.court_ids:
-            court_map = {c.id: c for c in active_courts}
-            for cid in payload.court_ids:
-                if cid in court_map:
-                    courts_info.append({"id": str(cid), "court_id": str(cid), "name": court_map[cid].name})
-        else:
-            for c in active_courts:
-                courts_info.append({"id": str(c.id), "court_id": str(c.id), "name": c.name})
+        requested_cids = [str(cid) for cid in payload.court_ids] if payload.court_ids else None
+        _, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo,
+            club_id,
+            tournament,
+            requested_court_ids=requested_cids,
+            require_at_least_one_when_courts_exist=False,
+        )
+        usable_courts = (
+            selected_courts[:effective_courts]
+            if (selected_courts and effective_courts > 0)
+            else selected_courts
+        )
+        courts_info = [
+            {"id": str(c.id), "court_id": str(c.id), "name": c.name}
+            for c in usable_courts
+        ]
 
         prior_matches = [m for m in all_matches if m.round_number and m.round_number < current_round]
         start_match_num = max([m.match_number or 0 for m in prior_matches], default=0) + 1
@@ -4903,14 +4968,16 @@ class CompetitionService:
             })
 
         division = (tournament.format_configuration or {}).get("category", "Open Scramble")
-        courts_count = (tournament.format_configuration or {}).get("courts_count")
+        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
+            self.court_repo, club_id, tournament
+        )
 
         # 2. Recommendations & Feasibility
         engine = ScrambleEngine()
         diag = engine.calculate_post_registration_recommendation(
             player_count=player_count,
             division=division,
-            courts_count=courts_count,
+            courts_count=effective_courts or None,
         )
 
         config = dict(tournament.format_configuration or {})
@@ -4933,6 +5000,7 @@ class CompetitionService:
                     num_rounds=min(int(selected_rounds), 10),
                     matches_per_player=min(int(selected_rounds), 10),
                     division=division,
+                    rotation_rule=selected_rotation,
                 )
                 rounds_map = {}
                 for m in simulated_matchups:
@@ -4961,9 +5029,6 @@ class CompetitionService:
         matches_count = await self.competition_repo.count_all_matches(tournament_id)
         is_generated = matches_count > 0
         workflow_meta = await compute_tournament_workflow_meta(self.db, tournament)
-        all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
-            self.court_repo, club_id, tournament
-        )
 
         # Determine stage cleanly from authoritative workflow state
         is_completed = workflow_meta.workflow_state == "completed" or tournament.status == TournamentStatus.COMPLETED
@@ -5081,7 +5146,11 @@ class CompetitionService:
                 len(eligible_players), payload.rounds, payload.matches_per_player or payload.rounds
             )
             matchups = engine.generate_matchups(
-                eligible_players, payload.rounds, payload.matches_per_player or payload.rounds, division=division
+                eligible_players,
+                payload.rounds,
+                payload.matches_per_player or payload.rounds,
+                division=division,
+                rotation_rule=payload.rotation_rule,
             )
         except ScrambleConfigurationError as e:
             raise HTTPException(
@@ -5118,6 +5187,7 @@ class CompetitionService:
             "rotation_rule": payload.rotation_rule,
             "matches_per_player": payload.matches_per_player or payload.rounds,
             "selected_court_ids": [str(c.id) for c in selected_courts],
+            "assigned_courts": [str(c.id) for c in selected_courts],
             "courts_count": effective_courts,
             "configuration_saved": True,
             "configuration_saved_at": config.get("configuration_saved_at") or now_iso,
@@ -5827,6 +5897,7 @@ class CompetitionService:
 
         config.update({
             "selected_court_ids": [str(c.id) for c in selected_courts],
+            "assigned_courts": [str(c.id) for c in selected_courts],
             "courts_count": effective_courts,
             "configuration_saved": True,
             "configuration_saved_at": now_iso,

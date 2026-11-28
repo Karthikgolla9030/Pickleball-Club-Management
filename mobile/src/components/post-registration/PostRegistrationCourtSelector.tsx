@@ -53,7 +53,7 @@ export function PostRegistrationCourtSelector({
           <View style={styles.sectionLabelRow}>
             <LayoutGrid size={14} color="#0F766E" />
             <AppText style={styles.sectionLabel}>
-              Select active courts ({selectedActiveCount} of {activeCourts.length} selected)
+              Selected courts ({selectedActiveCount} of {activeCourts.length} selected)
             </AppText>
           </View>
 
@@ -109,16 +109,28 @@ export function PostRegistrationCourtSelector({
               </AppText>
             </View>
           ) : (
-            <PostRegistrationStepper
-              label="Concurrent court capacity"
-              helperText={`Max ${selectedActiveCount} court${selectedActiveCount === 1 ? '' : 's'} based on your selection`}
-              value={clampedCount}
-              unit={clampedCount === 1 ? 'court' : 'courts'}
-              min={1}
-              max={maxCapacity}
-              disabled={disabled}
-              onChange={onCourtsCountChange}
-            />
+            <>
+              <PostRegistrationStepper
+                label="Concurrent court capacity"
+                helperText={`Up to ${selectedActiveCount} simultaneous match${selectedActiveCount === 1 ? '' : 'es'} from selected courts`}
+                value={clampedCount}
+                unit={clampedCount === 1 ? 'court' : 'courts'}
+                min={1}
+                max={maxCapacity}
+                disabled={disabled}
+                onChange={onCourtsCountChange}
+              />
+              {selectedActiveCount > clampedCount && (
+                <View style={styles.warningBox}>
+                  <AlertCircle size={14} color="#B45309" />
+                  <AppText style={styles.warningText}>
+                    {selectedActiveCount - clampedCount} selected court
+                    {selectedActiveCount - clampedCount === 1 ? ' will remain' : 's will remain'}{' '}
+                    unused concurrently (capacity {clampedCount} of {selectedActiveCount}).
+                  </AppText>
+                </View>
+              )}
+            </>
           )}
         </>
       )}

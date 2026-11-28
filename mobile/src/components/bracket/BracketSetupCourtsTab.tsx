@@ -138,11 +138,13 @@ export function BracketSetupCourtsTab({
     setSelectedCourtIds((prev) => {
       const exists = prev.includes(courtId);
       const next = exists ? prev.filter((id) => id !== courtId) : [...prev, courtId];
-      if (next.length > 0) {
-        setCourtsCount((curr) => Math.max(1, Math.min(curr || next.length, next.length)));
-      } else {
-        setCourtsCount(0);
-      }
+      setCourtsCount((curr) => {
+        if (next.length === 0) return 0;
+        if (!exists && (curr === 0 || curr === prev.length)) {
+          return next.length;
+        }
+        return Math.max(1, Math.min(curr || next.length, next.length));
+      });
       return next;
     });
   };

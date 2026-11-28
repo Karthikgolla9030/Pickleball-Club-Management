@@ -56,7 +56,21 @@ export interface ScrambleState {
   rounds_data?: Record<string, any>;
   valid_actions: string[];
   quality_summary?: any;
-  coverage_summary?: any;
+  coverage_summary?: {
+    unique_partner_pairings?: number;
+    repeated_partner_pairings?: number;
+    unique_opponent_pairings?: number;
+    repeated_opponent_pairings?: number;
+    matches_analyzed?: number;
+    coverage_scope?: 'actual_played' | 'generated_schedule' | 'none' | string;
+    avg_unique_partners?: number;
+    total_possible_partners_per_player?: number;
+    total_repeat_partner_pairs?: number;
+    avg_unique_opponents?: number;
+    total_repeat_opponent_pairs?: number;
+    all_partners_covered?: boolean;
+    quality_claim?: string | null;
+  } | null;
 }
 
 export interface ScrambleAvailabilityPayload {
