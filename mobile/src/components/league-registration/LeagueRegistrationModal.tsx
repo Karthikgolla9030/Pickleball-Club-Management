@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -74,6 +75,7 @@ export function LeagueRegistrationModal({
   onSuccess,
 }: LeagueRegistrationModalProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user } = useAuth();
   const { profile } = usePlayerProfile();
 
@@ -229,6 +231,10 @@ export function LeagueRegistrationModal({
     try {
       const team = await registerTeam(payload);
       setConfirmedTeam(team);
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       return {
         reference: `LG-${String(team.id || '').slice(0, 8).toUpperCase()}`,
         status: 'confirmed',

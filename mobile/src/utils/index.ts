@@ -9,3 +9,4 @@ export * from './timeUtils';
 export * from './imageResolution';
 export * from './paymentFormatters';
 export * from './navigationHelpers';
+export * from './operatingHoursFormat';

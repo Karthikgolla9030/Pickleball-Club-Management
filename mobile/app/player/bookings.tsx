@@ -46,7 +46,7 @@ import {
 import { AppHeader, AppText, BookingDetailsModal } from '@/components';
 import { RegistrationDetailsModal } from '@/components/tournament-registration';
 import { LeagueRegistrationDetailsModal } from '@/components/league-registration';
-import { useActiveClub, useClubBranding, usePlayerAllBookings, usePlayerBookings } from '@/hooks';
+import { useActiveClub, usePlayerAllBookings, usePlayerBookings } from '@/hooks';
 import { Colors } from '@/theme';
 import { formatCurrency, resolveMediaUrl } from '@/utils';
 import type { Booking, PlayerBookingActivityType, PlayerBookingItem } from '@/types';
@@ -78,7 +78,6 @@ export default function PlayerBookingsScreen() {
     detailType?: string;
   }>();
   const { clubId: selectedClubId } = useActiveClub();
-  const { data: clubBranding } = useClubBranding(selectedClubId ?? '');
 
   const resolveValidTab = (v?: string): FilterTab =>
     v === 'past' || v === 'cancelled' || v === 'upcoming' ? v : 'upcoming';
@@ -92,12 +91,16 @@ export default function PlayerBookingsScreen() {
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [draftActivity, setDraftActivity] = useState<ActivityCategory>('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [selectedBookingMeta, setSelectedBookingMeta] = useState<{
+    paymentStatusLabel?: string;
+    paymentReference?: string;
+  } | null>(null);
   const [detailsModalVisible, setDetailsModalVisible] = useState(false);
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string | null>(null);
   const [courtImageErrors, setCourtImageErrors] = useState<Record<string, boolean>>({});
 
-  // Unified personal records across court bookings, tournaments, leagues, events, lessons
+  // Unified personal records across ALL clubs for the authenticated player
   const {
     bookings,
     isLoading: isLoadingBookings,
@@ -106,15 +109,12 @@ export default function PlayerBookingsScreen() {
     error,
     refetchBookings,
   } = usePlayerAllBookings({
-    clubId: selectedClubId ?? undefined,
     status: activeTab,
     activityType: selectedActivity !== 'all' ? selectedActivity : undefined,
   });
 
   // Keep player court bookings hook for modal cancellation handler
-  const { refetch: refetchCourtBookings } = usePlayerBookings({
-    clubId: selectedClubId ?? undefined,
-  });
+  const { refetch: refetchCourtBookings } = usePlayerBookings({});
 
   // Re-fetch bookings whenever player navigates to this screen
   useFocusEffect(
@@ -215,36 +215,74 @@ export default function PlayerBookingsScreen() {
     }
   };
 
+  const getDurationMinutes = (item: PlayerBookingItem): number | null => {
+    if (typeof item.details?.duration_minutes === 'number' && item.details.duration_minutes > 0) {
+      return item.details.duration_minutes;
+    }
+    if (item.start_at && item.end_at) {
+      const diffMins = Math.round(
+        (new Date(item.end_at).getTime() - new Date(item.start_at).getTime()) / 60000
+      );
+      if (diffMins > 0) return diffMins;
+    }
+    return null;
+  };
+
+  const getSecondaryInfoLine = (item: PlayerBookingItem): string | null => {
+    if (item.activity_type === 'court') {
+      const mins = getDurationMinutes(item);
+      const timeRange = formatTimeRange(item.start_at, item.end_at);
+      return mins ? `${timeRange} • ${mins} mins` : timeRange;
+    }
+    if (item.activity_type === 'tournament') {
+      const fmtLabel = item.details?.format_label || item.details?.format;
+      const category = item.details?.category;
+      const parts = [fmtLabel, category].filter(Boolean);
+      return parts.length > 0 ? parts.join(' • ') : formatTimeRange(item.start_at, item.end_at);
+    }
+    if (item.activity_type === 'league') {
+      const weeks = item.details?.number_of_weeks;
+      const endDateStr = item.end_at ? `Ends ${formatPastDate(item.end_at)}` : null;
+      const parts = [weeks ? `${weeks} Weeks` : null, endDateStr].filter(Boolean);
+      return parts.length > 0 ? parts.join(' • ') : formatTimeRange(item.start_at, item.end_at);
+    }
+    return formatTimeRange(item.start_at, item.end_at);
+  };
+
   // ─── Navigation & Action Handling ──────────────────────────────────────────
-  const buildCourtBooking = (item: PlayerBookingItem): Booking => ({
-    id: item.record_id,
-    court_id: item.activity_id || item.record_id,
-    player_id: '',
-    created_by_user_id: '',
-    duration_minutes: 60,
-    cancelled_at: null,
-    cancelled_by_user_id: null,
-    cancellation_reason: null,
-    club_id: item.club_id,
-    club_name: item.club_name,
-    court: {
-      id: item.activity_id || item.record_id,
+  const buildCourtBooking = (item: PlayerBookingItem): Booking => {
+    const durMins = getDurationMinutes(item) ?? 60;
+    return {
+      id: item.record_id,
+      court_id: item.activity_id || item.record_id,
+      player_id: '',
+      created_by_user_id: '',
+      duration_minutes: durMins,
+      cancelled_at: null,
+      cancelled_by_user_id: null,
+      cancellation_reason: null,
       club_id: item.club_id,
-      name: item.title.replace(' Reservation', ''),
-      surface_type: (item.details?.court_type as any) || 'hard',
-      court_type: (item.details?.court_type as any) || 'indoor',
-      is_active: true,
-      photo_url: item.image_url || null,
-    } as any,
-    start_at: item.start_at,
-    end_at: item.end_at || item.start_at,
-    status: (item.status as any) || 'confirmed',
-    booking_type: (item.details?.booking_type as any) || 'casual',
-    total_price: item.price,
-    notes: item.details?.notes || null,
-    created_at: item.created_at,
-    updated_at: item.created_at,
-  });
+      club_name: item.club_name,
+      court: {
+        id: item.activity_id || item.record_id,
+        club_id: item.club_id,
+        name: item.title.replace(' Reservation', ''),
+        surface_type: (item.details?.court_type as any) || 'hard',
+        court_type: (item.details?.court_type as any) || 'indoor',
+        is_active: true,
+        photo_url: item.image_url || null,
+      } as any,
+      start_at: item.start_at,
+      end_at: item.end_at || item.start_at,
+      status: (item.status as any) || 'confirmed',
+      booking_type: (item.details?.booking_type as any) || 'player',
+      total_price: item.price,
+      notes: item.details?.notes || null,
+      player_count: item.details?.player_count ?? null,
+      created_at: item.created_at,
+      updated_at: item.created_at,
+    };
+  };
 
   // Restore detail modal after reload when detailId + detailType exist in URL
   useEffect(() => {
@@ -255,6 +293,10 @@ export default function PlayerBookingsScreen() {
       );
       if (match) {
         setSelectedBooking(buildCourtBooking(match));
+        setSelectedBookingMeta({
+          paymentStatusLabel: match.details?.payment_status_label,
+          paymentReference: match.details?.payment_reference,
+        });
         setDetailsModalVisible(true);
       }
     } else if (paramDetailType === 'tournament') {
@@ -267,6 +309,10 @@ export default function PlayerBookingsScreen() {
   const handleItemPress = (item: PlayerBookingItem) => {
     if (item.activity_type === 'court') {
       setSelectedBooking(buildCourtBooking(item));
+      setSelectedBookingMeta({
+        paymentStatusLabel: item.details?.payment_status_label,
+        paymentReference: item.details?.payment_reference,
+      });
       setDetailsModalVisible(true);
       router.setParams({ detailId: item.record_id, detailType: 'court' } as any);
     } else if (item.activity_type === 'tournament' && item.activity_id) {
@@ -336,8 +382,11 @@ export default function PlayerBookingsScreen() {
   // ─── Render Cards ──────────────────────────────────────────────────────────
   const renderUpcomingCard = (item: PlayerBookingItem) => {
     const { weekday, day, monthYear } = parseDateBox(item.start_at);
-    const timeRange = formatTimeRange(item.start_at, item.end_at);
-    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
+    const secondaryLine = getSecondaryInfoLine(item);
+    const venueText = item.location && item.location !== item.club_name
+      ? `${item.location} • ${item.club_name}`
+      : item.club_name;
+    const pmtStatusLabel = item.details?.payment_status_label as string | undefined;
 
     return (
       <TouchableOpacity
@@ -362,18 +411,20 @@ export default function PlayerBookingsScreen() {
             </View>
           </View>
 
-          <AppText style={styles.cardTitle} numberOfLines={1}>
+          <AppText style={styles.cardTitle}>
             {item.title}
           </AppText>
 
-          <View style={styles.cardMetaRow}>
-            <Clock size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText}>{timeRange}</AppText>
-          </View>
+          {secondaryLine ? (
+            <View style={styles.cardMetaRow}>
+              <Clock size={13} color="#718279" strokeWidth={2} />
+              <AppText style={styles.cardMetaText}>{secondaryLine}</AppText>
+            </View>
+          ) : null}
 
           <View style={styles.cardMetaRow}>
             <MapPin size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText} numberOfLines={1}>
+            <AppText style={styles.cardMetaText}>
               {venueText}
             </AppText>
           </View>
@@ -381,9 +432,14 @@ export default function PlayerBookingsScreen() {
           <View style={styles.badgeRow}>
             <View style={styles.playerPriceBadge}>
               <AppText style={styles.playerPriceBadgeText}>
-                {item.price > 0 ? formatCurrency(item.price) : 'Free'}
+                {item.price > 0 ? formatCurrency(item.price, item.currency || 'USD') : 'Free'}
               </AppText>
             </View>
+            {pmtStatusLabel && pmtStatusLabel.toLowerCase() === 'pending' && (
+              <View style={styles.pendingPmtBadge}>
+                <AppText style={styles.pendingPmtBadgeText}>Payment Pending</AppText>
+              </View>
+            )}
           </View>
         </View>
 
@@ -397,8 +453,10 @@ export default function PlayerBookingsScreen() {
 
   const renderPastCard = (item: PlayerBookingItem) => {
     const dateFormatted = formatPastDate(item.start_at);
-    const timeRange = formatTimeRange(item.start_at, item.end_at);
-    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
+    const secondaryLine = getSecondaryInfoLine(item);
+    const venueText = item.location && item.location !== item.club_name
+      ? `${item.location} • ${item.club_name}`
+      : item.club_name;
 
     return (
       <TouchableOpacity
@@ -437,14 +495,14 @@ export default function PlayerBookingsScreen() {
           <View style={styles.pastTitleRow}>
             <View style={styles.pastTitleBlock}>
               {renderActivityBadge(item.activity_type)}
-              <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
+              <AppText style={[styles.cardTitle, { marginTop: 4 }]}>
                 {item.title}
               </AppText>
             </View>
             <View style={styles.pastBadgesGroup}>
               <View style={styles.playerPriceBadge}>
                 <AppText style={styles.playerPriceBadgeText}>
-                  {item.price > 0 ? formatCurrency(item.price) : 'Free'}
+                  {item.price > 0 ? formatCurrency(item.price, item.currency || 'USD') : 'Free'}
                 </AppText>
               </View>
               <View style={styles.completedBadge}>
@@ -458,14 +516,16 @@ export default function PlayerBookingsScreen() {
             <AppText style={styles.cardMetaText}>{dateFormatted}</AppText>
           </View>
 
-          <View style={styles.cardMetaRow}>
-            <Clock size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText}>{timeRange}</AppText>
-          </View>
+          {secondaryLine ? (
+            <View style={styles.cardMetaRow}>
+              <Clock size={13} color="#718279" strokeWidth={2} />
+              <AppText style={styles.cardMetaText}>{secondaryLine}</AppText>
+            </View>
+          ) : null}
 
           <View style={styles.cardMetaRow}>
             <MapPin size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText} numberOfLines={1}>
+            <AppText style={styles.cardMetaText}>
               {venueText}
             </AppText>
           </View>
@@ -480,8 +540,10 @@ export default function PlayerBookingsScreen() {
 
   const renderCancelledCard = (item: PlayerBookingItem) => {
     const dateFormatted = formatPastDate(item.start_at);
-    const timeRange = formatTimeRange(item.start_at, item.end_at);
-    const venueText = item.location ? `${item.location} • ${item.club_name}` : item.club_name;
+    const secondaryLine = getSecondaryInfoLine(item);
+    const venueText = item.location && item.location !== item.club_name
+      ? `${item.location} • ${item.club_name}`
+      : item.club_name;
 
     return (
       <TouchableOpacity
@@ -504,11 +566,16 @@ export default function PlayerBookingsScreen() {
           <View style={styles.pastTitleRow}>
             <View style={styles.pastTitleBlock}>
               {renderActivityBadge(item.activity_type)}
-              <AppText style={[styles.cardTitle, { marginTop: 4 }]} numberOfLines={1}>
+              <AppText style={[styles.cardTitle, { marginTop: 4 }]}>
                 {item.title}
               </AppText>
             </View>
             <View style={styles.pastBadgesGroup}>
+              <View style={styles.playerPriceBadge}>
+                <AppText style={styles.playerPriceBadgeText}>
+                  {item.price > 0 ? formatCurrency(item.price, item.currency || 'USD') : 'Free'}
+                </AppText>
+              </View>
               <View style={styles.cancelledBadge}>
                 <AppText style={styles.cancelledBadgeText}>Cancelled</AppText>
               </View>
@@ -520,14 +587,16 @@ export default function PlayerBookingsScreen() {
             <AppText style={styles.cardMetaText}>{dateFormatted}</AppText>
           </View>
 
-          <View style={styles.cardMetaRow}>
-            <Clock size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText}>{timeRange}</AppText>
-          </View>
+          {secondaryLine ? (
+            <View style={styles.cardMetaRow}>
+              <Clock size={13} color="#718279" strokeWidth={2} />
+              <AppText style={styles.cardMetaText}>{secondaryLine}</AppText>
+            </View>
+          ) : null}
 
           <View style={styles.cardMetaRow}>
             <MapPin size={13} color="#718279" strokeWidth={2} />
-            <AppText style={styles.cardMetaText} numberOfLines={1}>
+            <AppText style={styles.cardMetaText}>
               {venueText}
             </AppText>
           </View>
@@ -711,19 +780,6 @@ export default function PlayerBookingsScreen() {
                     </View>
                   </View>
                 )}
-
-                {/* Secondary: Show past records if they exist in upcoming tab */}
-                {pastBookings.length > 0 && (
-                  <>
-                    <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-                      <AppText style={styles.sectionTitle}>Past Records</AppText>
-                      <AppText style={styles.sectionCount}>
-                        {pastBookings.length} {pastBookings.length === 1 ? 'Record' : 'Records'}
-                      </AppText>
-                    </View>
-                    {pastBookings.map((b) => renderPastCard(b))}
-                  </>
-                )}
               </>
             )}
 
@@ -798,11 +854,14 @@ export default function PlayerBookingsScreen() {
         onClose={() => {
           setDetailsModalVisible(false);
           setSelectedBooking(null);
+          setSelectedBookingMeta(null);
           router.setParams({ detailId: undefined, detailType: undefined } as any);
         }}
         booking={selectedBooking}
         mode="player"
         clubId={selectedBooking?.club_id || selectedClubId || ''}
+        paymentStatusLabel={selectedBookingMeta?.paymentStatusLabel}
+        paymentReference={selectedBookingMeta?.paymentReference}
       />
 
       {/* ─── Tournament Registration Details Modal ─── */}
@@ -1372,6 +1431,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#114D3F',
+  },
+  pendingPmtBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: '#FEF3C7',
+  },
+  pendingPmtBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B45309',
   },
   completedBadge: {
     paddingHorizontal: 8,

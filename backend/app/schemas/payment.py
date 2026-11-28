@@ -155,8 +155,19 @@ def resolve_payment_display_data(payment) -> dict[str, Any]:
                 court = getattr(payment.booking, "court", None)
                 if court and getattr(court, "name", None):
                     activity_title = court.name
-                    if getattr(court, "court_type", None):
-                        activity_subtitle = f"{str(court.court_type).capitalize()} Court"
+                    env = getattr(court, "indoor_outdoor", None) or getattr(court, "court_type", None)
+                    env_val = env.value if hasattr(env, "value") else (str(env) if env else None)
+                    b_start = getattr(payment.booking, "start_at", None)
+                    b_end = getattr(payment.booking, "end_at", None)
+                    sub_parts: list[str] = []
+                    if env_val:
+                        sub_parts.append(f"{env_val.capitalize()} Court")
+                    if b_start and b_end:
+                        mins = int((b_end - b_start).total_seconds() // 60)
+                        if mins > 0:
+                            sub_parts.append(f"{mins} mins")
+                    if sub_parts:
+                        activity_subtitle = " · ".join(sub_parts)
             except Exception:
                 pass
         if not activity_title and meta:
@@ -328,6 +339,13 @@ class PaymentResponse(BaseModel):
                 sub_info = None
 
         display_data = resolve_payment_display_data(payment)
+        is_free_tx = (
+            payment.status == PaymentStatus.SUCCEEDED
+            and payment.amount is not None
+            and Decimal(str(payment.amount)) == Decimal("0.00")
+        )
+        resolved_status_label = "Free" if is_free_tx else payment.status.display_label
+        resolved_method_label = "Free" if is_free_tx else payment.payment_method.display_label
 
         return cls(
             id=payment.id,
@@ -346,11 +364,11 @@ class PaymentResponse(BaseModel):
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,
-            status_label=payment.status.display_label,
+            status_label=resolved_status_label,
             purpose=payment.purpose,
             purpose_label=payment.purpose.display_label,
             payment_method=payment.payment_method,
-            payment_method_label=payment.payment_method.display_label,
+            payment_method_label=resolved_method_label,
             provider=payment.provider,
             provider_payment_id=payment.provider_payment_id,
             provider_order_id=payment.provider_order_id,
@@ -413,6 +431,13 @@ class PlayerPaymentResponse(BaseModel):
             club_name = None
 
         display_data = resolve_payment_display_data(payment)
+        is_free_tx = (
+            payment.status == PaymentStatus.SUCCEEDED
+            and payment.amount is not None
+            and Decimal(str(payment.amount)) == Decimal("0.00")
+        )
+        resolved_status_label = "Free" if is_free_tx else payment.status.display_label
+        resolved_method_label = "Free" if is_free_tx else payment.payment_method.display_label
 
         return cls(
             id=payment.id,
@@ -431,11 +456,11 @@ class PlayerPaymentResponse(BaseModel):
             amount=payment.amount,
             currency=payment.currency,
             status=payment.status,
-            status_label=payment.status.display_label,
+            status_label=resolved_status_label,
             purpose=payment.purpose,
             purpose_label=payment.purpose.display_label,
             payment_method=payment.payment_method,
-            payment_method_label=payment.payment_method.display_label,
+            payment_method_label=resolved_method_label,
             refunded_amount=payment.refunded_amount,
             refund_reason=payment.refund_reason,
             refunded_at=payment.refunded_at,
@@ -475,6 +500,7 @@ class CheckoutInitiateRequest(BaseModel):
     end_at: datetime | None = Field(default=None, description="End time for court booking or lesson")
     payment_method: PaymentMethod = Field(default=PaymentMethod.ONLINE, description="Requested payment method")
     selected_method: str | None = Field(default=None, description="Requested checkout payment method: upi, card, netbanking")
+    provider: str | None = Field(default=None, description="Optional payment provider override (e.g. direct, razorpay, cashfree, stripe)")
     currency: str = Field(default="USD", min_length=3, max_length=3)
     notes: str | None = Field(default=None, max_length=1000)
     preview_only: bool = Field(default=False, description="Validate & compute server pricing without creating a transaction or fulfilling free registration")

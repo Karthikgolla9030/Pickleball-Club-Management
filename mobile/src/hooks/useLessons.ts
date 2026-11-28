@@ -432,6 +432,10 @@ export function usePlayerRegisterLesson(defaultLessonId?: string, defaultClubId?
         (variables as any)?.clubId || defaultClubId;
 
       queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       if (targetLessonId) {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(targetLessonId),
@@ -471,6 +475,10 @@ export function usePlayerCancelLessonRegistration(defaultLessonId?: string, defa
     onSuccess: (_, overrideLessonId) => {
       const targetLessonId = overrideLessonId || defaultLessonId;
       queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       if (targetLessonId) {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.PLAYER_LESSON_DETAIL(targetLessonId),

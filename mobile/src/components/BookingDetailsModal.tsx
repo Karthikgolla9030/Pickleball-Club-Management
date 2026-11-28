@@ -15,6 +15,8 @@ export interface BookingDetailsModalProps {
   booking: Booking | null;
   mode: 'staff' | 'player';
   clubId: string;
+  paymentStatusLabel?: string;
+  paymentReference?: string;
 }
 
 export function BookingDetailsModal({
@@ -23,6 +25,8 @@ export function BookingDetailsModal({
   booking,
   mode,
   clubId,
+  paymentStatusLabel,
+  paymentReference,
 }: BookingDetailsModalProps) {
   const staffClubId = mode === 'staff' ? clubId : null;
   const { cancelStaffBooking, isCancelling: isStaffCancelling } = useClubStaffBookings(staffClubId);
@@ -88,18 +92,33 @@ export function BookingDetailsModal({
           <DetailRow label="Date" value={dateStr} />
           <DetailRow label="Time" value={timeStr} />
           <DetailRow 
+            label="Duration" 
+            value={`${booking.duration_minutes || Math.max(15, Math.round((new Date(booking.end_at).getTime() - d.getTime()) / 60000))} mins`} 
+          />
+          <DetailRow 
             label="Expected Players" 
             value={booking.player_count != null ? `${booking.player_count} player${booking.player_count === 1 ? '' : 's'}` : 'Not specified'} 
           />
           <DetailRow 
             label="Rate" 
-            value={booking.price_per_hour != null ? `${formatCurrency(booking.price_per_hour)}/hr` : 'Unpriced / Free'} 
+            value={booking.price_per_hour != null ? `${formatCurrency(booking.price_per_hour)}/hr` : 'Free / Included'} 
           />
           <DetailRow 
             label="Total Price" 
-            value={booking.total_price != null ? formatCurrency(booking.total_price) : '$0.00 (Included)'} 
+            value={
+              booking.total_price != null && Number(booking.total_price) > 0
+                ? formatCurrency(booking.total_price)
+                : 'Free ($0.00)'
+            } 
           />
-          <DetailRow label="Payment" value="Settled" />
+          <DetailRow
+            label="Payment"
+            value={
+              paymentStatusLabel ||
+              (booking.total_price != null && Number(booking.total_price) > 0 ? 'Recorded' : 'Free')
+            }
+          />
+          {paymentReference ? <DetailRow label="Reference" value={paymentReference} /> : null}
         </View>
 
         {booking.notes && (

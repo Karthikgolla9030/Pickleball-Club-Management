@@ -16,8 +16,9 @@
  *   - Preserves player bottom navigation with generous safe area scroll padding
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Linking,
@@ -38,6 +39,7 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  CalendarHeart,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -45,12 +47,16 @@ import {
   Crown,
   ExternalLink,
   Globe,
+  GraduationCap,
   Info,
   LayoutGrid,
   Mail,
   MapPin,
+  Medal,
   Phone,
-  UserCheck,
+  Sparkles,
+  Tag,
+  Trophy,
   X,
 } from 'lucide-react-native';
 
@@ -63,28 +69,107 @@ import {
   usePlayerMembership,
   usePlayerMembershipRequests,
   usePlayerSubscribe,
+  useUpcomingActivities,
 } from '@/hooks';
 import { clubsApi, courtApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import { Colors, Radius, Spacing } from '@/theme';
-import { formatCurrency, resolveMediaUrl, safeGoBack } from '@/utils';
-import type { Club, MembershipPlan, PlayerCourt } from '@/types';
+import { formatClubOperatingSchedule, formatCurrency, resolveMediaUrl, safeGoBack } from '@/utils';
+import type { Club, MembershipPlan, PlayerCourt, UpcomingActivityItem, UpcomingActivityType } from '@/types';
 
-// ─── Operating Hours Helper ─────────────────────────────────────────────────
+// ─── Activity Presentation Helpers ──────────────────────────────────────────
 
-function formatOperatingHours(openingTime?: string | null, closingTime?: string | null): string {
-  if (!openingTime || !closingTime) return '6:00 AM - 10:00 PM';
-  const formatTime = (t: string) => {
-    const parts = String(t).split(':');
-    if (parts.length < 2) return String(t);
-    let hour = parseInt(parts[0], 10);
-    const minute = parts[1];
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    hour = hour % 12;
-    if (hour === 0) hour = 12;
-    return `${hour}:${minute} ${ampm}`;
-  };
-  return `${formatTime(String(openingTime))} - ${formatTime(String(closingTime))}`;
+function getClubActivityBadgeInfo(type: UpcomingActivityType) {
+  switch (type) {
+    case 'tournament':
+      return {
+        label: 'Tournament',
+        icon: Trophy,
+        bg: '#FEF3C7',
+        color: '#B45309',
+        border: '#FDE68A',
+      };
+    case 'league':
+      return {
+        label: 'League',
+        icon: Medal,
+        bg: '#E0E7FF',
+        color: '#4338CA',
+        border: '#C7D2FE',
+      };
+    case 'event':
+      return {
+        label: 'Event',
+        icon: CalendarHeart,
+        bg: '#DCFCE7',
+        color: '#15803D',
+        border: '#BBF7D0',
+      };
+    case 'lesson':
+      return {
+        label: 'Lesson',
+        icon: GraduationCap,
+        bg: '#F3E8FF',
+        color: '#7E22CE',
+        border: '#E9D5FF',
+      };
+    default:
+      return {
+        label: 'Activity',
+        icon: Sparkles,
+        bg: '#E2ECE6',
+        color: '#176B57',
+        border: '#CBD5E1',
+      };
+  }
+}
+
+function formatActivityDateTime(startIso: string, endIso?: string | null): string {
+  try {
+    const s = new Date(startIso);
+    if (isNaN(s.getTime())) return startIso;
+
+    const dateStr = s.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const timeStr = s.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+
+    if (endIso) {
+      const e = new Date(endIso);
+      if (!isNaN(e.getTime())) {
+        const sameDay =
+          s.getFullYear() === e.getFullYear() &&
+          s.getMonth() === e.getMonth() &&
+          s.getDate() === e.getDate();
+
+        if (sameDay) {
+          const endTimeStr = e.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          return `${dateStr} • ${timeStr} – ${endTimeStr}`;
+        }
+
+        const endDateStr = e.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: s.getFullYear() === e.getFullYear() ? undefined : 'numeric',
+        });
+        return `${dateStr} – ${endDateStr}`;
+      }
+    }
+
+    return `${dateStr} • ${timeStr}`;
+  } catch {
+    return startIso;
+  }
 }
 
 export default function PublicClubDetailScreen() {
@@ -152,6 +237,61 @@ export default function PublicClubDetailScreen() {
     isLoading: isLoadingAds,
     refetch: refetchAds,
   } = useClubCarouselSlides(clubId, true);
+  // 6. Fetch club-specific upcoming activities (strictly scoped to this club_id)
+  const [activityImageErrors, setActivityImageErrors] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setActivityImageErrors({});
+  }, [clubId]);
+
+  const {
+    activities: upcomingActivities,
+    isLoading: isLoadingActivities,
+    refetch: refetchUpcomingActivities,
+  } = useUpcomingActivities({
+    club_id: clubId || undefined,
+    limit: 50,
+    enabled: Boolean(clubId),
+  });
+
+  const clubUpcomingActivities = useMemo(() => {
+    if (!clubId) return [];
+    return upcomingActivities.filter((item) => item.club_id === clubId);
+  }, [upcomingActivities, clubId]);
+
+  const handleActivityPress = useCallback(
+    (activity: UpcomingActivityItem) => {
+      switch (activity.activity_type) {
+        case 'tournament':
+          router.push({
+            pathname: '/player/tournament-details',
+            params: { id: activity.id },
+          } as any);
+          break;
+        case 'league':
+          router.push({
+            pathname: '/player/league-details',
+            params: { id: activity.id },
+          } as any);
+          break;
+        case 'event':
+          router.push({
+            pathname: '/player/events',
+            params: { id: activity.id, clubId: activity.club_id },
+          } as any);
+          break;
+        case 'lesson':
+          router.push({
+            pathname: '/player/lessons',
+            params: { id: activity.id, clubId: activity.club_id },
+          } as any);
+          break;
+        default:
+          break;
+      }
+    },
+    [router],
+  );
+
   const isEnrolled = useMemo(() => {
     return myClubs.some((c) => c.club_id === clubId && c.status === 'active');
   }, [myClubs, clubId]);
@@ -189,9 +329,12 @@ export default function PublicClubDetailScreen() {
     if (!clubId || isJoiningClub) return;
     try {
       await joinClub(clubId);
-      await refetchMyClubs();
-      await refetchClub();
-      await refetchPlayerMembership();
+      await Promise.all([
+        refetchMyClubs(),
+        refetchClub(),
+        refetchPlayerMembership(),
+        refetchUpcomingActivities(),
+      ]);
       setJoinChoiceModalVisible(false);
       Alert.alert(
         'Welcome!',
@@ -273,7 +416,7 @@ export default function PublicClubDetailScreen() {
   const bannerSource = bannerUri && !bannerError ? { uri: bannerUri } : null;
 
   const locationText = [club.city, club.state].filter(Boolean).join(', ') || 'Location not specified';
-  const hoursText = formatOperatingHours(club.opening_time, club.closing_time);
+  const operatingScheduleLines = formatClubOperatingSchedule(club);
 
   const fullAddress = [
     club.address_line1,
@@ -310,7 +453,7 @@ export default function PublicClubDetailScreen() {
         >
           <ArrowLeft size={20} color="#102B2A" strokeWidth={2.4} />
         </TouchableOpacity>
-        <AppText style={styles.headerTitle} numberOfLines={1}>
+        <AppText style={styles.headerTitle} numberOfLines={2}>
           {club.name}
         </AppText>
       </View>
@@ -328,12 +471,14 @@ export default function PublicClubDetailScreen() {
               setLogoError(false);
               setBannerError(false);
               setCourtImageErrors({});
+              setActivityImageErrors({});
               refetchClub();
               refetchCourts();
               refetchPlans();
               refetchRequest();
               refetchMyClubs();
               refetchAds();
+              refetchUpcomingActivities();
             }}
             tintColor="#18794E"
           />
@@ -355,7 +500,7 @@ export default function PublicClubDetailScreen() {
 
             {/* Hero Information Row positioned at bottom */}
             <View style={styles.heroContentRow}>
-              {/* Club Logo */}
+              {/* Club Logo (transparent background preserving original proportions) */}
               <View style={styles.logoContainer}>
                 {logoUri && !logoError ? (
                   <Image
@@ -367,15 +512,15 @@ export default function PublicClubDetailScreen() {
                   />
                 ) : (
                   <View style={styles.logoFallbackWrapper}>
-                    <Building2 size={34} color="#FFFFFF" strokeWidth={1.8} />
+                    <Building2 size={32} color="#D1FAE5" strokeWidth={1.8} />
                   </View>
                 )}
               </View>
 
-              {/* Title, Badge, Location, and Hours */}
+              {/* Title, Badge, Location, and Operating Schedule */}
               <View style={styles.heroDetailsCol}>
                 <View style={styles.nameRow}>
-                  <AppText style={styles.clubNameText} numberOfLines={1}>
+                  <AppText style={styles.clubNameText}>
                     {club.name}
                   </AppText>
                   {club.is_active !== false && (
@@ -386,17 +531,22 @@ export default function PublicClubDetailScreen() {
                 </View>
 
                 <View style={styles.metaRow}>
-                  <MapPin size={13} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={1}>
+                  <MapPin size={13} color="#D1FAE5" style={styles.heroMetaIcon} />
+                  <AppText style={styles.metaText}>
                     {locationText}
                   </AppText>
                 </View>
 
                 <View style={styles.metaRow}>
-                  <Clock size={13} color="#D1FAE5" />
-                  <AppText style={styles.metaText} numberOfLines={1}>
-                    {club.operating_days || 'Mon - Sun'}  |  {hoursText}
-                  </AppText>
+                  <Clock size={13} color="#D1FAE5" style={styles.heroMetaIcon} />
+                  <View style={styles.scheduleList}>
+                    {operatingScheduleLines.map((line, idx) => (
+                      <View key={`${line.daysLabel}-${idx}`} style={styles.scheduleItem}>
+                        <AppText style={styles.scheduleDaysText}>{line.daysLabel}</AppText>
+                        <AppText style={styles.scheduleHoursText}>{line.hoursLabel}</AppText>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </View>
             </View>
@@ -421,8 +571,8 @@ export default function PublicClubDetailScreen() {
                           ? 'Paid Club Member'
                           : 'Free Club Member'
                         : isPending
-                        ? 'Application Pending'
-                        : 'Club Membership'}
+                          ? 'Application Pending'
+                          : 'Club Membership'}
                     </AppText>
                     {isEnrolled && (
                       <View style={hasActivePaidSubscription ? styles.paidBadge : styles.freeBadge}>
@@ -438,8 +588,8 @@ export default function PublicClubDetailScreen() {
                         ? `Enrolled in ${playerMembership?.plan_name}. Full membership privileges active.`
                         : 'Joined for free. Eligible for pay-as-you-go court reservations and open club events.'
                       : isPending
-                      ? 'Your membership request is currently awaiting club review.'
-                      : 'Join for free or choose a membership plan to reserve courts and access events.'}
+                        ? 'Your membership request is currently awaiting club review.'
+                        : 'Join for free or choose a membership plan to reserve courts and access events.'}
                   </AppText>
                 </View>
               </View>
@@ -564,10 +714,10 @@ export default function PublicClubDetailScreen() {
 
                       {/* Court Info */}
                       <View style={styles.courtInfoCol}>
-                        <AppText style={styles.courtNameText} numberOfLines={1}>
+                        <AppText style={styles.courtNameText}>
                           {court.display_name || court.name}
                         </AppText>
-                        <AppText style={styles.courtSurfaceText} numberOfLines={1}>
+                        <AppText style={styles.courtSurfaceText}>
                           {envLabel} • {surfaceLabel}
                         </AppText>
                       </View>
@@ -599,57 +749,172 @@ export default function PublicClubDetailScreen() {
             )}
           </View>
 
-          {/* ─── E & F. Shortcut Cards: Side by Side ───────────────────────── */}
-          <View style={styles.shortcutsRow}>
-            {/* Upcoming Events */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() =>
-                router.push({
-                  pathname: '/player/events',
-                  params: { clubId: club.id },
-                } as any)
-              }
-              activeOpacity={0.85}
-            >
-              <View style={styles.shortcutIconCircle}>
-                <Calendar size={18} color="#18794E" strokeWidth={2.2} />
+          {/* ─── E & F. Unified Club-Specific Upcoming Activities ───────────── */}
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderBetween}>
+              <View style={styles.sectionHeaderLeft}>
+                <Calendar size={19} color="#18794E" strokeWidth={2.2} />
+                <AppText style={styles.sectionCardTitle}>Upcoming Activities</AppText>
               </View>
-              <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={1}>
-                  Upcoming Events
-                </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
-                  View socials and tournaments
+              <View style={styles.courtsCountBadge}>
+                <AppText style={styles.courtsCountBadgeText}>
+                  {clubUpcomingActivities.length}{' '}
+                  {clubUpcomingActivities.length === 1 ? 'Activity' : 'Activities'}
                 </AppText>
               </View>
-              <ChevronRight size={16} color="#6B7E76" />
-            </TouchableOpacity>
+            </View>
 
-            {/* Lessons & Coaching */}
-            <TouchableOpacity
-              style={styles.shortcutCard}
-              onPress={() =>
-                router.push({
-                  pathname: '/player/lessons',
-                  params: { clubId: club.id },
-                } as any)
-              }
-              activeOpacity={0.85}
-            >
-              <View style={styles.shortcutIconCircle}>
-                <UserCheck size={18} color="#18794E" strokeWidth={2.2} />
+            {isLoadingActivities && clubUpcomingActivities.length === 0 ? (
+              <View style={styles.upcomingLoadingBox}>
+                <ActivityIndicator size="small" color="#18794E" />
+                <AppText style={styles.upcomingLoadingText}>Loading activities...</AppText>
               </View>
-              <View style={styles.shortcutTextCol}>
-                <AppText style={styles.shortcutHeading} numberOfLines={1}>
-                  Lessons & Coaching
-                </AppText>
-                <AppText style={styles.shortcutSubtext} numberOfLines={1}>
-                  Book a session with our coaches
+            ) : clubUpcomingActivities.length === 0 ? (
+              <View style={styles.upcomingEmptyBox}>
+                <View style={styles.upcomingEmptyIconCircle}>
+                  <Calendar size={20} color="#18794E" strokeWidth={1.9} />
+                </View>
+                <AppText style={styles.upcomingEmptyTitle}>No upcoming activities</AppText>
+                <AppText style={styles.upcomingEmptySubtext}>
+                  Check back soon for upcoming tournaments, leagues, events, or lessons at this club.
                 </AppText>
               </View>
-              <ChevronRight size={16} color="#6B7E76" />
-            </TouchableOpacity>
+            ) : (
+              <View style={styles.upcomingList}>
+                {clubUpcomingActivities.map((item, index) => {
+                  const badgeInfo = getClubActivityBadgeInfo(item.activity_type);
+                  const BadgeIcon = badgeInfo.icon;
+                  const imgKey = `${item.activity_type}-${item.id}`;
+                  const thumbUri =
+                    item.image_url && !activityImageErrors[imgKey]
+                      ? resolveMediaUrl(item.image_url)
+                      : null;
+                  const priceDisplay =
+                    item.price != null
+                      ? Number(item.price) === 0
+                        ? 'Free'
+                        : formatCurrency(item.price)
+                      : null;
+                  const spotsText =
+                    item.available_spots !== null && item.available_spots !== undefined
+                      ? item.available_spots > 0
+                        ? `${item.available_spots} spot${item.available_spots === 1 ? '' : 's'} left`
+                        : 'Full / Waitlist'
+                      : null;
+
+                  return (
+                    <TouchableOpacity
+                      key={imgKey}
+                      style={[
+                        styles.activityRow,
+                        index === 0 && { borderTopWidth: 0, paddingTop: 6 },
+                      ]}
+                      onPress={() => handleActivityPress(item)}
+                      activeOpacity={0.82}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${item.title}, ${badgeInfo.label}`}
+                    >
+                      {/* Thumbnail / Activity Icon */}
+                      <View style={styles.activityThumbWrapper}>
+                        {thumbUri ? (
+                          <Image
+                            source={{ uri: thumbUri }}
+                            style={styles.activityThumbImage}
+                            resizeMode="cover"
+                            onError={() =>
+                              setActivityImageErrors((prev) => ({ ...prev, [imgKey]: true }))
+                            }
+                          />
+                        ) : (
+                          <View
+                            style={[
+                              styles.activityThumbFallback,
+                              { backgroundColor: badgeInfo.bg },
+                            ]}
+                          >
+                            <BadgeIcon size={24} color={badgeInfo.color} strokeWidth={1.9} />
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Activity Details */}
+                      <View style={styles.activityContentCol}>
+                        <View style={styles.activityBadgesRow}>
+                          <View
+                            style={[
+                              styles.activityTypeBadge,
+                              { backgroundColor: badgeInfo.bg, borderColor: badgeInfo.border },
+                            ]}
+                          >
+                            <BadgeIcon
+                              size={10.5}
+                              color={badgeInfo.color}
+                              strokeWidth={2.2}
+                              style={{ marginRight: 3 }}
+                            />
+                            <AppText style={[styles.activityTypeBadgeText, { color: badgeInfo.color }]}>
+                              {badgeInfo.label}
+                            </AppText>
+                          </View>
+
+                          <View
+                            style={[
+                              styles.activityStatusBadge,
+                              item.is_registered
+                                ? styles.activityStatusRegistered
+                                : styles.activityStatusOpen,
+                            ]}
+                          >
+                            <AppText
+                              style={[
+                                styles.activityStatusBadgeText,
+                                item.is_registered
+                                  ? styles.activityStatusTextRegistered
+                                  : styles.activityStatusTextOpen,
+                              ]}
+                            >
+                              {item.is_registered ? 'Registered' : item.status_label}
+                            </AppText>
+                          </View>
+                        </View>
+
+                        <AppText style={styles.activityTitleText}>{item.title}</AppText>
+
+                        <View style={styles.activityDateRow}>
+                          <Calendar size={12.5} color="#527068" strokeWidth={2} />
+                          <AppText style={styles.activityDateText}>
+                            {formatActivityDateTime(item.start_date, item.end_date)}
+                          </AppText>
+                        </View>
+
+                        {(priceDisplay || spotsText) && (
+                          <View style={styles.activityMetaFooter}>
+                            {priceDisplay ? (
+                              <View style={styles.activityPricePill}>
+                                <Tag size={10.5} color="#0E5E4C" strokeWidth={2.1} />
+                                <AppText style={styles.activityPriceText}>{priceDisplay}</AppText>
+                              </View>
+                            ) : null}
+                            {spotsText ? (
+                              <AppText
+                                style={[
+                                  styles.activitySpotsText,
+                                  item.available_spots === 0 && styles.activitySpotsFullText,
+                                ]}
+                              >
+                                {spotsText}
+                              </AppText>
+                            ) : null}
+                          </View>
+                        )}
+                      </View>
+
+                      <ChevronRight size={17} color="#6B7E76" />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           {/* ─── Membership Plans Section ─────────────────────────────────── */}
@@ -710,7 +975,7 @@ export default function PublicClubDetailScreen() {
                           {plan.benefits.slice(0, 3).map((b, idx) => (
                             <View key={idx} style={styles.benefitItemRow}>
                               <CheckCircle2 size={13} color="#18794E" />
-                              <AppText style={styles.benefitItemText} numberOfLines={1}>
+                              <AppText style={styles.benefitItemText}>
                                 {b}
                               </AppText>
                             </View>
@@ -748,9 +1013,10 @@ export default function PublicClubDetailScreen() {
               </View>
               <View style={styles.aboutTextCol}>
                 <AppText style={styles.aboutHeading}>About This Club</AppText>
-                <AppText style={styles.aboutDescription} numberOfLines={3}>
-                  {club.description ||
-                    'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
+                <AppText style={styles.aboutDescription}>
+                  {club.description?.trim()
+                    ? club.description.trim()
+                    : 'View club address, operating hours, and contact information.'}
                 </AppText>
               </View>
               <ChevronRight size={16} color="#6B7E76" style={styles.aboutChevron} />
@@ -786,13 +1052,14 @@ export default function PublicClubDetailScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: 300 }}>
-              <AppText variant="bodySmall" color="primary" style={{ lineHeight: 22 }}>
-                {club.description ||
-                  'A welcoming pickleball community for players of all levels. Join our socials, clinics and tournaments and be part of a growing community.'}
-              </AppText>
+              {club.description?.trim() ? (
+                <AppText variant="bodySmall" color="primary" style={{ lineHeight: 22 }}>
+                  {club.description.trim()}
+                </AppText>
+              ) : null}
 
               {fullAddress ? (
-                <View style={{ marginTop: 14 }}>
+                <View style={{ marginTop: club.description?.trim() ? 14 : 0 }}>
                   <AppText variant="label" color="primary" style={{ marginBottom: 4 }}>
                     Address
                   </AppText>
@@ -807,14 +1074,23 @@ export default function PublicClubDetailScreen() {
 
               {/* Operating Hours Summary */}
               <View style={{ marginTop: 14 }}>
-                <AppText variant="label" color="primary" style={{ marginBottom: 4 }}>
+                <AppText variant="label" color="primary" style={{ marginBottom: 6 }}>
                   Operating Hours
                 </AppText>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Clock size={14} color="#667776" />
-                  <AppText variant="bodySmall" color="secondary">
-                    {club.operating_days || 'Mon - Sun'}: {hoursText}
-                  </AppText>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
+                  <Clock size={14} color="#667776" style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1, gap: 4 }}>
+                    {operatingScheduleLines.map((line, idx) => (
+                      <View key={`modal-hours-${idx}`}>
+                        <AppText variant="bodySmall" color="primary" style={{ fontWeight: '600' }}>
+                          {line.daysLabel}
+                        </AppText>
+                        <AppText variant="bodySmall" color="secondary">
+                          {line.hoursLabel}
+                        </AppText>
+                      </View>
+                    ))}
+                  </View>
                 </View>
               </View>
 
@@ -981,8 +1257,8 @@ export default function PublicClubDetailScreen() {
               paymentStatus: isFree
                 ? 'free'
                 : gatewayReady
-                ? 'succeeded'
-                : 'pending',
+                  ? 'succeeded'
+                  : 'pending',
               title: isFree ? 'Subscription Activated' : 'Subscription Recorded',
               subtitle: isFree
                 ? `You are enrolled in ${selectedPlanForSubscribe.name}. Your privileges are now active.`
@@ -1206,11 +1482,12 @@ const styles = StyleSheet.create({
   // B. Hero Banner
   heroBanner: {
     width: '100%',
-    height: 205,
+    minHeight: 196,
     borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#0E3628',
+    justifyContent: 'flex-end',
     shadowColor: '#0A261D',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.12,
@@ -1218,11 +1495,13 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   heroBackgroundImage: {
-    width: '100%',
-    height: '100%',
     position: 'absolute',
     top: 0,
     left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   heroOverlay: {
     position: 'absolute',
@@ -1232,39 +1511,30 @@ const styles = StyleSheet.create({
     bottom: 0,
     ...(Platform.OS === 'web'
       ? ({
-          backgroundImage:
-            'linear-gradient(180deg, rgba(8, 28, 22, 0.08) 0%, rgba(8, 28, 22, 0.42) 42%, rgba(6, 22, 17, 0.94) 100%)',
-        } as any)
+        backgroundImage:
+          'linear-gradient(180deg, rgba(8, 28, 22, 0.14) 0%, rgba(8, 28, 22, 0.48) 42%, rgba(6, 22, 17, 0.94) 100%)',
+      } as any)
       : {
-          backgroundColor: 'rgba(7, 24, 18, 0.58)',
-        }),
+        backgroundColor: 'rgba(7, 24, 18, 0.58)',
+      }),
   },
   heroContentRow: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 14,
+    position: 'relative',
+    zIndex: 1,
+    paddingHorizontal: 14,
+    paddingTop: 48,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
   },
   logoContainer: {
-    width: 74,
-    height: 74,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-    overflow: 'hidden',
+    width: 72,
+    height: 72,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-    padding: 4,
+    flexShrink: 0,
   },
   logoImage: {
     width: '100%',
@@ -1273,17 +1543,22 @@ const styles = StyleSheet.create({
   logoFallbackWrapper: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#176B57',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroDetailsCol: {
     flex: 1,
+    minWidth: 0,
     justifyContent: 'center',
-    gap: 3,
+    gap: 5,
   },
   nameRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     gap: 8,
   },
@@ -1308,13 +1583,38 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  heroMetaIcon: {
+    marginTop: 2.5,
+    flexShrink: 0,
   },
   metaText: {
+    flex: 1,
     fontSize: 12.5,
     fontWeight: '500',
     color: '#E2E8F0',
+    lineHeight: 17,
+  },
+  scheduleList: {
+    flex: 1,
+    gap: 4,
+  },
+  scheduleItem: {
+    gap: 1,
+  },
+  scheduleDaysText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 17,
+  },
+  scheduleHoursText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#D1FAE5',
+    lineHeight: 16.5,
   },
 
   // Generic Card Style
@@ -1513,50 +1813,164 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // E & F. Shortcuts
-  shortcutsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',  // auto-stacks on narrow screens without needing device-width detection
-    gap: 12,
-  },
-  shortcutCard: {
-    flex: 1,
-    minWidth: 140,  // cards stack when container is narrower than 2 * 140 + gap
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E5ECE8',
-    padding: 13,
+  // E & F. Unified Club-Specific Upcoming Activities
+  upcomingLoadingBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    paddingVertical: 18,
   },
-  shortcutIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  upcomingLoadingText: {
+    fontSize: 13,
+    color: '#667776',
+    fontWeight: '500',
+  },
+  upcomingEmptyBox: {
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    gap: 6,
+  },
+  upcomingEmptyIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#E4F4EC',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 2,
   },
-  shortcutTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  shortcutHeading: {
-    fontSize: 13.5,
+  upcomingEmptyTitle: {
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#102B2A',
-    letterSpacing: -0.1,
   },
-  shortcutSubtext: {
-    fontSize: 11.5,
+  upcomingEmptySubtext: {
+    fontSize: 12.5,
     color: '#667776',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  upcomingList: {
+    gap: 0,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F4F2',
+    gap: 12,
+  },
+  activityThumbWrapper: {
+    width: 58,
+    height: 58,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#E8EFEA',
+    flexShrink: 0,
+  },
+  activityThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  activityThumbFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activityContentCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  activityBadgesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  activityTypeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  activityTypeBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  activityStatusBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  activityStatusOpen: {
+    backgroundColor: '#E4F4EC',
+  },
+  activityStatusRegistered: {
+    backgroundColor: '#DBEAFE',
+  },
+  activityStatusBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  activityStatusTextOpen: {
+    color: '#18794E',
+  },
+  activityStatusTextRegistered: {
+    color: '#1D4ED8',
+  },
+  activityTitleText: {
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#102B2A',
+    lineHeight: 19.5,
+  },
+  activityDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  activityDateText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#527068',
+    lineHeight: 16.5,
+  },
+  activityMetaFooter: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 1,
+  },
+  activityPricePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EBF5F0',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  activityPriceText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0E5E4C',
+  },
+  activitySpotsText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#527068',
+  },
+  activitySpotsFullText: {
+    color: '#B45309',
   },
 
   // G. About This Club

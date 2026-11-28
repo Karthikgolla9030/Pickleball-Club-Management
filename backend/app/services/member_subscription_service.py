@@ -459,10 +459,11 @@ class MemberSubscriptionService:
             notes=payload.notes,
         )
 
-        # 8. Create pending payment for paid plan
+        # 8. Create payment record for plan subscription (pending for paid plan, $0.00 free for free plan)
+        pay_repo = PaymentRepository(self.db)
+        reference = await pay_repo.generate_reference()
+        now_dt = datetime.now(timezone.utc)
         if not is_free:
-            pay_repo = PaymentRepository(self.db)
-            reference = await pay_repo.generate_reference()
             try:
                 p_method = PaymentMethod(payload.payment_method.lower())
             except ValueError:
@@ -481,16 +482,30 @@ class MemberSubscriptionService:
                 notes=payload.notes or f"Enrollment in {plan.name}",
                 created_by_user_id=user_id,
             )
-            await pay_repo.create(payment)
-            sub.payments = [payment]
+        else:
+            payment = Payment(
+                reference=reference,
+                club_id=club_id,
+                player_id=user_id,
+                subscription_id=sub.id,
+                amount=Decimal("0.00"),
+                currency=plan.currency,
+                status=PaymentStatus.SUCCEEDED,
+                purpose=PaymentPurpose.MEMBERSHIP,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=now_dt,
+                notes=payload.notes or f"Free membership enrollment: {plan.name}",
+                created_by_user_id=user_id,
+            )
+        await pay_repo.create(payment)
+        sub.payments = [payment]
 
         await self.db.commit()
 
         # Build response with eager relationships
         resp = MemberSubscriptionResponse.from_orm(sub)
-        if not is_free:
-            resp.payment_id = payment.id
-            resp.payment_status = "pending"
+        resp.payment_id = payment.id
+        resp.payment_status = "free" if is_free else "pending"
 
         try:
             await dispatch_event(
@@ -606,9 +621,10 @@ class MemberSubscriptionService:
             notes=None,
         )
 
+        pay_repo = PaymentRepository(self.db)
+        reference = await pay_repo.generate_reference()
+        now_dt = datetime.now(timezone.utc)
         if not is_free:
-            pay_repo = PaymentRepository(self.db)
-            reference = await pay_repo.generate_reference()
             payment = Payment(
                 reference=reference,
                 club_id=sub.club_id,
@@ -622,15 +638,29 @@ class MemberSubscriptionService:
                 notes=f"Renewal of {plan.name}",
                 created_by_user_id=user_id,
             )
-            await pay_repo.create(payment)
-            new_sub.payments = [payment]
+        else:
+            payment = Payment(
+                reference=reference,
+                club_id=sub.club_id,
+                player_id=user_id,
+                subscription_id=new_sub.id,
+                amount=Decimal("0.00"),
+                currency=plan.currency,
+                status=PaymentStatus.SUCCEEDED,
+                purpose=PaymentPurpose.MEMBERSHIP,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=now_dt,
+                notes=f"Free renewal of {plan.name}",
+                created_by_user_id=user_id,
+            )
+        await pay_repo.create(payment)
+        new_sub.payments = [payment]
 
         await self.db.commit()
 
         resp = MemberSubscriptionResponse.from_orm(new_sub)
-        if not is_free:
-            resp.payment_id = payment.id
-            resp.payment_status = "pending"
+        resp.payment_id = payment.id
+        resp.payment_status = "free" if is_free else "pending"
 
         try:
             await dispatch_event(

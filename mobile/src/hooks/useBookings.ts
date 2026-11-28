@@ -39,6 +39,8 @@ export function usePlayerAllBookings(params?: {
         limit: 100,
       }),
     staleTime: 10 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   return {
@@ -85,6 +87,8 @@ export function usePlayerBookings(params?: {
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
     },
   });
 
@@ -133,6 +137,7 @@ export function useClubCourtAvailability(
       }
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
     },

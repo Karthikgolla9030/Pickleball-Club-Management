@@ -903,7 +903,10 @@ export default function PlayerLessonsScreen() {
             refetchDiscover();
             refetchMyLessons();
             queryClient.invalidateQueries({ queryKey: ['player', 'lessons'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
             queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
             if (effectiveClubId) {
               queryClient.invalidateQueries({
                 queryKey: ['clubs', effectiveClubId, 'lessons'],

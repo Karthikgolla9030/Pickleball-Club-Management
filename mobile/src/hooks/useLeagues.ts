@@ -724,6 +724,10 @@ export function usePlayerRegisterLeague(leagueId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUE_DETAIL(leagueId) });
       }
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
     },
   });
 }
@@ -756,6 +760,10 @@ export function usePlayerCancelLeagueRegistration(leagueId: string | null) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUES });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_LEAGUE_DETAIL(leagueId) });
       }
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
     },
   });
 }

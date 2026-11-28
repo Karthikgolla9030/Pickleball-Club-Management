@@ -336,6 +336,8 @@ class EventService:
         user_id: UUID,
         notes: str | None = None,
         is_staff: bool = False,
+        skip_payment_creation: bool = False,
+        payment_collected: bool | None = None,
     ) -> EventRegistrationResponse:
         """
         Register a player for an event.
@@ -431,30 +433,42 @@ class EventService:
         full_reg = await self.event_repo.get_registration(registration.id)
         resp = self._to_registration_response(full_reg or registration)
 
-        # Record payment if event has fee and player was registered
-        if initial_status == EventRegistrationStatus.REGISTERED and event.registration_fee and event.registration_fee > Decimal("0"):
+        # Record canonical payment for registered players (paid or $0.00 free) when not handled by checkout
+        created_payment = None
+        if not skip_payment_creation and initial_status == EventRegistrationStatus.REGISTERED:
+            from sqlalchemy import select
             from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
             from app.repositories.payment_repository import PaymentRepository
             try:
-                pay_repo = PaymentRepository(self.db)
-                reference = await pay_repo.generate_reference()
-                payment = Payment(
-                    reference=reference,
-                    club_id=event.club_id,
-                    player_id=user_id,
-                    event_id=event.id,
-                    amount=event.registration_fee,
-                    currency=event.currency or "USD",
-                    status=PaymentStatus.SUCCEEDED,
-                    purpose=PaymentPurpose.EVENT,
-                    payment_method=PaymentMethod.ONLINE,
-                    paid_at=now,
-                    notes=f"Event registration: {event.title}",
-                    created_by_user_id=user_id,
+                existing_pmt_stmt = select(Payment).where(
+                    Payment.event_id == event.id,
+                    Payment.player_id == user_id,
+                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
                 )
-                await pay_repo.create(payment)
+                created_payment = (await self.db.execute(existing_pmt_stmt)).scalars().first()
+                if not created_payment:
+                    pay_repo = PaymentRepository(self.db)
+                    reference = await pay_repo.generate_reference()
+                    fee_amount = Decimal(str(event.registration_fee or "0.00"))
+                    is_free_ev = fee_amount <= Decimal("0.00")
+                    is_collected = True if is_free_ev else (payment_collected is not False)
+                    created_payment = Payment(
+                        reference=reference,
+                        club_id=event.club_id,
+                        player_id=user_id,
+                        event_id=event.id,
+                        amount=fee_amount,
+                        currency=event.currency or "USD",
+                        status=PaymentStatus.SUCCEEDED if is_collected else PaymentStatus.PENDING,
+                        purpose=PaymentPurpose.EVENT,
+                        payment_method=PaymentMethod.OTHER if (is_free_ev or not is_collected) else PaymentMethod.ONLINE,
+                        paid_at=now if is_collected else None,
+                        notes=f"{'Free event registration' if is_free_ev else 'Event registration'}: {event.title}",
+                        created_by_user_id=user_id,
+                    )
+                    await pay_repo.create(created_payment)
             except Exception:
-                pass
+                created_payment = None
 
         try:
             event = await self.event_repo.get_by_id(event_id)
@@ -473,6 +487,22 @@ class EventService:
                     club_id=event.club_id,
                     user_id=user_id,
                 )
+                if created_payment is not None:
+                    await dispatch_event(
+                        event_type="payment.confirmed" if created_payment.status.value == "succeeded" else "payment.created",
+                        data={
+                            "payment_id": str(created_payment.id),
+                            "event_id": str(event.id),
+                            "purpose": created_payment.purpose.value,
+                            "amount": float(created_payment.amount),
+                            "status": created_payment.status.value,
+                            "club_id": str(event.club_id),
+                            "player_id": str(user_id),
+                            "reference": created_payment.reference,
+                        },
+                        club_id=event.club_id,
+                        user_id=user_id,
+                    )
                 title = "Event Registration Confirmed" if initial_status == EventRegistrationStatus.REGISTERED else "Event Waitlist Confirmed"
                 body = f"You are registered for '{event.title}'." if initial_status == EventRegistrationStatus.REGISTERED else f"You are waitlisted for '{event.title}'."
                 notif_svc = NotificationService(self.db)
@@ -559,7 +589,7 @@ class EventService:
         pmt = (await self.db.execute(stmt)).scalars().first()
         if pmt:
             now_dt = datetime.now(timezone.utc)
-            if pmt.status == PaymentStatus.SUCCEEDED:
+            if pmt.status == PaymentStatus.SUCCEEDED and pmt.amount > Decimal("0"):
                 pmt.status = PaymentStatus.REFUNDED
                 pmt.refunded_amount = pmt.amount
                 pmt.refund_reason = "Event registration cancelled by player"
@@ -590,6 +620,19 @@ class EventService:
                     club_id=event.club_id,
                     user_id=actor_user_id,
                 )
+                if pmt:
+                    await dispatch_event(
+                        event_type="payment.updated",
+                        data={
+                            "payment_id": str(pmt.id),
+                            "event_id": str(event.id),
+                            "status": pmt.status.value,
+                            "club_id": str(event.club_id),
+                            "player_id": str(registration.user_id),
+                        },
+                        club_id=event.club_id,
+                        user_id=registration.user_id,
+                    )
                 await NotificationService(self.db).create_notification(
                     user_id=actor_user_id,
                     club_id=event.club_id,

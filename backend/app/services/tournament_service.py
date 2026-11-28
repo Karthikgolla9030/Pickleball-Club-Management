@@ -1680,16 +1680,20 @@ class TournamentService:
         tournament_id: UUID,
         user_id: UUID,
         payload: PlayerSelfRegistrationRequest | None = None,
+        skip_payment_creation: bool = False,
     ) -> PlayerSelfRegistrationResponse:
         """Register the authenticated user (and optional partner for doubles) in a tournament."""
         async with _get_tournament_lock(tournament_id):
-            return await self._register_player_locked(tournament_id, user_id, payload)
+            return await self._register_player_locked(
+                tournament_id, user_id, payload, skip_payment_creation=skip_payment_creation
+            )
 
     async def _register_player_locked(
         self,
         tournament_id: UUID,
         user_id: UUID,
         payload: PlayerSelfRegistrationRequest | None = None,
+        skip_payment_creation: bool = False,
     ) -> PlayerSelfRegistrationResponse:
         tournament = await self.tournament_repo.get_by_id_for_update(tournament_id)
         if not tournament:
@@ -2265,7 +2269,6 @@ class TournamentService:
             if target_status == RegistrationStatus.WAITLISTED
             else "Successfully registered for tournament"
         )
-        calc_payment_status = "FREE" if calc_fee == 0 else "NOT_COLLECTED"
         pref_method = payload.payment_method if payload and payload.payment_method else ("free" if calc_fee == 0 else "upi")
 
         # Record preferred payment method in registration notes if provided
@@ -2275,6 +2278,69 @@ class TournamentService:
             if pref_tag not in reg_notes:
                 reg_notes = f"{pref_tag} {reg_notes}".strip()
         reg.notes = reg_notes if reg_notes else None
+
+        # Record canonical payment record (including $0.00 free entry transactions)
+        from decimal import Decimal
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+        from app.repositories.payment_repository import PaymentRepository
+
+        created_payment: Payment | None = None
+        if not skip_payment_creation and (target_status != RegistrationStatus.WAITLISTED or calc_fee == 0):
+            existing_pmt_stmt = (
+                select(Payment)
+                .where(
+                    Payment.tournament_id == tournament.id,
+                    Payment.player_id == user_id,
+                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
+                )
+                .order_by(Payment.created_at.desc())
+            )
+            created_payment = (await self.db.execute(existing_pmt_stmt)).scalars().first()
+            if not created_payment:
+                pay_repo = PaymentRepository(self.db)
+                pay_ref = await pay_repo.generate_reference()
+                pay_amount = Decimal(str(round(calc_fee, 2)))
+                is_free_entry = pay_amount <= Decimal("0.00")
+                is_collected = True if is_free_entry else (payload.payment_collected is not False if payload else True)
+                created_payment = Payment(
+                    reference=pay_ref,
+                    club_id=tournament.club_id,
+                    player_id=user_id,
+                    tournament_id=tournament.id,
+                    amount=pay_amount,
+                    currency="USD",
+                    status=PaymentStatus.SUCCEEDED if (is_free_entry or is_collected) else PaymentStatus.PENDING,
+                    purpose=PaymentPurpose.TOURNAMENT,
+                    payment_method=PaymentMethod.OTHER if (is_free_entry or not is_collected) else PaymentMethod.ONLINE,
+                    paid_at=now if (is_free_entry or is_collected) else None,
+                    notes=f"{'Free tournament registration' if is_free_entry else 'Tournament registration'}: {tournament.name}",
+                    created_by_user_id=user_id,
+                )
+                await pay_repo.create(created_payment)
+        elif skip_payment_creation:
+            existing_pmt_stmt = (
+                select(Payment)
+                .where(
+                    Payment.tournament_id == tournament.id,
+                    Payment.player_id == user_id,
+                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
+                )
+                .order_by(Payment.created_at.desc())
+            )
+            created_payment = (await self.db.execute(existing_pmt_stmt)).scalars().first()
+
+        if target_status == RegistrationStatus.WAITLISTED and calc_fee > 0:
+            calc_payment_status = "WAITLISTED"
+        elif calc_fee == 0:
+            calc_payment_status = "FREE"
+        elif created_payment and created_payment.status == PaymentStatus.SUCCEEDED:
+            calc_payment_status = "SUCCEEDED"
+        elif created_payment and created_payment.status == PaymentStatus.PENDING:
+            calc_payment_status = "PENDING"
+        else:
+            calc_payment_status = "NOT_COLLECTED"
+
         await self.db.commit()
 
         counts = await compute_tournament_counts(self.db, tournament)
@@ -2308,6 +2374,7 @@ class TournamentService:
             partner_membership_id=partner_membership.id if partner_membership else None,
             partner_name=partner_user.full_name if partner_user else None,
             fee_amount=calc_fee,
+            payment_id=created_payment.id if created_payment else None,
             payment_status=calc_payment_status,
             payment_method=pref_method,
             notes=reg.notes,
@@ -2345,6 +2412,22 @@ class TournamentService:
                 extra_payload=event_payload,
                 user_id=user_id,
             )
+            if created_payment:
+                await dispatch_event(
+                    event_type="payment.confirmed" if created_payment.status == PaymentStatus.SUCCEEDED else "payment.created",
+                    data={
+                        "payment_id": str(created_payment.id),
+                        "tournament_id": str(tournament.id),
+                        "purpose": created_payment.purpose.value,
+                        "amount": float(created_payment.amount),
+                        "status": created_payment.status.value,
+                        "club_id": str(tournament.club_id),
+                        "player_id": str(user_id),
+                        "reference": created_payment.reference,
+                    },
+                    club_id=tournament.club_id,
+                    user_id=user_id,
+                )
             title = "Tournament Registration Confirmed" if target_status == RegistrationStatus.CONFIRMED else "Tournament Registration Waitlisted"
             body = f"You are registered for '{tournament.name}'. Ref: {ref_no}" if target_status == RegistrationStatus.CONFIRMED else f"You are waitlisted for '{tournament.name}'."
             notif_svc = NotificationService(self.db)
@@ -2451,6 +2534,34 @@ class TournamentService:
                 tournament.id, player_membership.id
             )
 
+        # Refund paid payment or cancel free/pending payment on cancellation
+        from decimal import Decimal
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        pmt_stmt = (
+            select(Payment)
+            .where(
+                Payment.tournament_id == tournament.id,
+                Payment.player_id == user_id,
+                Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
+            )
+            .order_by(Payment.created_at.desc())
+        )
+        cancelled_pmt = (await self.db.execute(pmt_stmt)).scalars().first()
+        if cancelled_pmt:
+            now_dt = datetime.now(timezone.utc)
+            if cancelled_pmt.status == PaymentStatus.SUCCEEDED and cancelled_pmt.amount > Decimal("0"):
+                cancelled_pmt.status = PaymentStatus.REFUNDED
+                cancelled_pmt.refunded_amount = cancelled_pmt.amount
+                cancelled_pmt.refund_reason = "Tournament registration cancelled by player"
+                cancelled_pmt.refunded_at = now_dt
+            else:
+                cancelled_pmt.status = PaymentStatus.CANCELLED
+                cancelled_pmt.cancelled_at = now_dt
+            cancelled_pmt.status_changed_by_user_id = user_id
+            cancelled_pmt.updated_at = now_dt
+            await self.db.flush()
+
         await self.db.commit()
         counts = await compute_tournament_counts(self.db, tournament)
 
@@ -2484,6 +2595,19 @@ class TournamentService:
                 extra_payload=event_payload,
                 user_id=user_id,
             )
+            if cancelled_pmt:
+                await dispatch_event(
+                    event_type="payment.updated",
+                    data={
+                        "payment_id": str(cancelled_pmt.id),
+                        "tournament_id": str(tournament.id),
+                        "status": cancelled_pmt.status.value,
+                        "club_id": str(tournament.club_id),
+                        "player_id": str(user_id),
+                    },
+                    club_id=tournament.club_id,
+                    user_id=user_id,
+                )
             await NotificationService(self.db).create_notification(
                 user_id=user_id,
                 club_id=tournament.club_id,

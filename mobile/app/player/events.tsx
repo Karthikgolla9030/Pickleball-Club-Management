@@ -890,13 +890,16 @@ export default function PlayerEventsScreen() {
           ]}
           onSuccess={() => {
             setSelectedDetailEvent(null);
-            // Immediately invalidate event caches for real-time sync
+            // Immediately invalidate event, booking, and payment caches for real-time sync
             queryClient.invalidateQueries({ queryKey: ['events'] });
             queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+            queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
             queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
             queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
             if (checkoutEvent?.club_id) {
               queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'events'] });
+              queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'payments'] });
               queryClient.invalidateQueries({ queryKey: ['clubs', checkoutEvent.club_id, 'analytics'] });
             }
             refetchDiscover();

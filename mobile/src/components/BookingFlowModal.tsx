@@ -904,23 +904,26 @@ export function BookingFlowModal({
               // 3. Direct Cache Update: Court Availability Slots
               if (clubId) {
                 queryClient.setQueriesData(
-                  { queryKey: ['clubs', clubId, 'court-availability'] },
+                  { queryKey: ['clubs', clubId, 'availability'] },
                   (old: any) => {
-                    if (!old || !Array.isArray(old)) return old;
-                    return old.map((court: any) => {
-                      if (court.court_id === courtId || court.id === courtId) {
-                        return {
-                          ...court,
-                          slots: court.slots?.map((s: any) => {
-                            if (s.start_at === resolvedStartAt) {
-                              return { ...s, is_available: false, status: 'BOOKED' };
-                            }
-                            return s;
-                          }),
-                        };
-                      }
-                      return court;
-                    });
+                    if (!old || !Array.isArray(old?.courts)) return old;
+                    return {
+                      ...old,
+                      courts: old.courts.map((court: any) => {
+                        if (court.court_id === courtId || court.id === courtId) {
+                          return {
+                            ...court,
+                            slots: court.slots?.map((s: any) => {
+                              if (s.start_at === resolvedStartAt) {
+                                return { ...s, is_available: false, status: 'BOOKED' };
+                              }
+                              return s;
+                            }),
+                          };
+                        }
+                        return court;
+                      }),
+                    };
                   }
                 );
               }
@@ -928,11 +931,14 @@ export function BookingFlowModal({
               // Background query invalidations for eventual server consistency
               queryClient.invalidateQueries({ queryKey: ['bookings'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+              queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
               queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
               if (clubId) {
+                queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'availability'] });
                 queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'court-availability'] });
                 queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'staff-bookings'] });
+                queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'payments'] });
                 queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
               }
             }}

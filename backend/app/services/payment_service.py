@@ -668,6 +668,286 @@ class PaymentService:
             )
         return PlayerPaymentResponse.from_orm_model(payment)
 
+    async def reconcile_player_payments(self, user_id: UUID) -> int:
+        """
+        Safely and idempotently create missing Payment records for existing confirmed/cancelled
+        player bookings and registrations without duplicating records or fabricating paid successes.
+        """
+        from sqlalchemy import select
+        from app.models.club_player_membership import ClubPlayerMembership
+        from app.models.competition import Team, TeamMember
+        from app.models.court import Court
+        from app.models.event import Event, EventRegistration, EventRegistrationStatus
+        from app.models.league import League, LeagueStatus
+        from app.models.lesson import Lesson, LessonRegistration, LessonRegistrationStatus
+        from app.models.tournament import Tournament
+        from app.models.tournament_registration import RegistrationStatus, TournamentRegistration
+
+        created_count = 0
+
+        # Load existing player payments once for fast O(1) duplicate prevention
+        existing_stmt = select(Payment).where(Payment.player_id == user_id)
+        existing_payments = list((await self.db.execute(existing_stmt)).scalars().all())
+        paid_booking_ids = {p.booking_id for p in existing_payments if p.booking_id}
+        paid_tournament_ids = {p.tournament_id for p in existing_payments if p.tournament_id}
+        paid_event_ids = {p.event_id for p in existing_payments if p.event_id}
+        paid_lesson_ids = {p.lesson_id for p in existing_payments if p.lesson_id}
+        paid_league_ids = {p.league_id for p in existing_payments if p.league_id}
+
+        # 1. Court Bookings missing payment rows
+        b_stmt = (
+            select(Booking, Court)
+            .join(Court, Booking.court_id == Court.id)
+            .where(
+                Booking.player_id == user_id,
+                Booking.booking_type.in_([BookingType.PLAYER, BookingType.STAFF]),
+            )
+        )
+        for b, court in (await self.db.execute(b_stmt)).all():
+            if b.id in paid_booking_ids:
+                continue
+            amt = Decimal(str(b.total_price or "0.00")).quantize(Decimal("0.01"))
+            is_free = amt <= Decimal("0.00")
+            if b.status == BookingStatus.CANCELLED:
+                pmt_status = PaymentStatus.CANCELLED
+                paid_at = None
+                cancelled_at = b.cancelled_at or b.updated_at or b.created_at
+            elif is_free:
+                pmt_status = PaymentStatus.SUCCEEDED
+                paid_at = b.created_at
+                cancelled_at = None
+            else:
+                pmt_status = PaymentStatus.PENDING
+                paid_at = None
+                cancelled_at = None
+
+            ref = await self.payment_repo.generate_reference()
+            pmt = Payment(
+                reference=ref,
+                club_id=b.club_id,
+                player_id=user_id,
+                booking_id=b.id,
+                amount=amt,
+                currency=getattr(b, "currency", None) or "USD",
+                status=pmt_status,
+                purpose=PaymentPurpose.COURT_BOOKING,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=paid_at,
+                cancelled_at=cancelled_at,
+                notes=f"{'Free court reservation' if is_free else 'Court reservation'}: {court.name}",
+                created_by_user_id=user_id,
+                created_at=b.created_at,
+                updated_at=b.updated_at or b.created_at,
+            )
+            self.db.add(pmt)
+            paid_booking_ids.add(b.id)
+            created_count += 1
+
+        # 2. Tournament Registrations missing payment rows
+        tr_stmt = (
+            select(TournamentRegistration, Tournament)
+            .join(Tournament, TournamentRegistration.tournament_id == Tournament.id)
+            .join(
+                ClubPlayerMembership,
+                TournamentRegistration.player_membership_id == ClubPlayerMembership.id,
+            )
+            .where(ClubPlayerMembership.user_id == user_id)
+        )
+        for reg, t in (await self.db.execute(tr_stmt)).all():
+            if t.id in paid_tournament_ids:
+                continue
+            cfg = t.format_configuration or {}
+            raw_fee = _first_non_none(cfg.get("entry_fee"), cfg.get("registration_fee"), "0.00")
+            amt = Decimal(str(raw_fee)).quantize(Decimal("0.01"))
+            if reg.status == RegistrationStatus.WAITLISTED and amt > Decimal("0.00"):
+                continue
+            is_free = amt <= Decimal("0.00")
+            if reg.status == RegistrationStatus.CANCELLED:
+                pmt_status = PaymentStatus.CANCELLED
+                paid_at = None
+                cancelled_at = reg.cancelled_at or reg.updated_at or reg.registered_at
+            elif is_free:
+                pmt_status = PaymentStatus.SUCCEEDED
+                paid_at = reg.registered_at or reg.created_at
+                cancelled_at = None
+            else:
+                pmt_status = PaymentStatus.PENDING
+                paid_at = None
+                cancelled_at = None
+
+            ref = await self.payment_repo.generate_reference()
+            reg_ts = reg.registered_at or reg.created_at or datetime.now(timezone.utc)
+            pmt = Payment(
+                reference=ref,
+                club_id=t.club_id,
+                player_id=user_id,
+                tournament_id=t.id,
+                amount=amt,
+                currency="USD",
+                status=pmt_status,
+                purpose=PaymentPurpose.TOURNAMENT,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=paid_at,
+                cancelled_at=cancelled_at,
+                notes=f"{'Free tournament registration' if is_free else 'Tournament registration'}: {t.name}",
+                created_by_user_id=user_id,
+                created_at=reg_ts,
+                updated_at=reg.updated_at or reg_ts,
+            )
+            self.db.add(pmt)
+            paid_tournament_ids.add(t.id)
+            created_count += 1
+
+        # 3. Event Registrations missing payment rows
+        er_stmt = (
+            select(EventRegistration, Event)
+            .join(Event, EventRegistration.event_id == Event.id)
+            .where(
+                EventRegistration.user_id == user_id,
+                EventRegistration.status.in_(
+                    [EventRegistrationStatus.REGISTERED, EventRegistrationStatus.ATTENDED, EventRegistrationStatus.NO_SHOW]
+                ),
+            )
+        )
+        for reg, ev in (await self.db.execute(er_stmt)).all():
+            if ev.id in paid_event_ids:
+                continue
+            amt = Decimal(str(ev.registration_fee or "0.00")).quantize(Decimal("0.01"))
+            is_free = amt <= Decimal("0.00")
+            pmt_status = PaymentStatus.SUCCEEDED if is_free else PaymentStatus.PENDING
+            reg_ts = reg.registered_at or reg.created_at or datetime.now(timezone.utc)
+            ref = await self.payment_repo.generate_reference()
+            pmt = Payment(
+                reference=ref,
+                club_id=ev.club_id,
+                player_id=user_id,
+                event_id=ev.id,
+                amount=amt,
+                currency=ev.currency or "USD",
+                status=pmt_status,
+                purpose=PaymentPurpose.EVENT,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=reg_ts if is_free else None,
+                notes=f"{'Free event registration' if is_free else 'Event registration'}: {ev.title}",
+                created_by_user_id=user_id,
+                created_at=reg_ts,
+                updated_at=reg.updated_at or reg_ts,
+            )
+            self.db.add(pmt)
+            paid_event_ids.add(ev.id)
+            created_count += 1
+
+        # 4. Lesson Registrations missing payment rows
+        lsr_stmt = (
+            select(LessonRegistration, Lesson)
+            .join(Lesson, LessonRegistration.lesson_id == Lesson.id)
+            .where(
+                LessonRegistration.user_id == user_id,
+                LessonRegistration.status.in_(
+                    [LessonRegistrationStatus.REGISTERED, LessonRegistrationStatus.ATTENDED, LessonRegistrationStatus.NO_SHOW]
+                ),
+            )
+        )
+        for reg, ls in (await self.db.execute(lsr_stmt)).all():
+            if ls.id in paid_lesson_ids:
+                continue
+            amt = Decimal(str(ls.price or "0.00")).quantize(Decimal("0.01"))
+            is_free = amt <= Decimal("0.00")
+            pmt_status = PaymentStatus.SUCCEEDED if is_free else PaymentStatus.PENDING
+            reg_ts = reg.created_at or datetime.now(timezone.utc)
+            ref = await self.payment_repo.generate_reference()
+            pmt = Payment(
+                reference=ref,
+                club_id=ls.club_id,
+                player_id=user_id,
+                lesson_id=ls.id,
+                amount=amt,
+                currency=ls.currency or "USD",
+                status=pmt_status,
+                purpose=PaymentPurpose.LESSON,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=reg_ts if is_free else None,
+                notes=f"{'Free lesson registration' if is_free else 'Lesson registration'}: {ls.title}",
+                created_by_user_id=user_id,
+                created_at=reg_ts,
+                updated_at=reg.updated_at or reg_ts,
+            )
+            self.db.add(pmt)
+            paid_lesson_ids.add(ls.id)
+            created_count += 1
+
+        # 5. League Registrations missing payment rows (avoid duplicate if teammate already paid)
+        lr_stmt = (
+            select(TeamMember, Team, League)
+            .join(Team, TeamMember.team_id == Team.id)
+            .join(League, Team.league_id == League.id)
+            .join(ClubPlayerMembership, TeamMember.player_membership_id == ClubPlayerMembership.id)
+            .where(ClubPlayerMembership.user_id == user_id)
+        )
+        for tm, team, lg in (await self.db.execute(lr_stmt)).all():
+            if lg.id in paid_league_ids:
+                continue
+            # Check if any teammate on this team already has a payment for this league
+            teammates_stmt = (
+                select(ClubPlayerMembership.user_id)
+                .join(TeamMember, TeamMember.player_membership_id == ClubPlayerMembership.id)
+                .where(TeamMember.team_id == team.id)
+            )
+            teammate_user_ids = list((await self.db.execute(teammates_stmt)).scalars().all())
+            if teammate_user_ids:
+                any_team_pmt = (
+                    await self.db.execute(
+                        select(Payment.id).where(
+                            Payment.league_id == lg.id,
+                            Payment.player_id.in_(teammate_user_ids),
+                        )
+                    )
+                ).scalars().first()
+                if any_team_pmt is not None:
+                    continue
+
+            amt = Decimal(str(lg.registration_fee or "0.00")).quantize(Decimal("0.01"))
+            is_free = amt <= Decimal("0.00")
+            if lg.status == LeagueStatus.CANCELLED:
+                pmt_status = PaymentStatus.CANCELLED
+                paid_at = None
+                cancelled_at = lg.updated_at or tm.created_at
+            elif is_free:
+                pmt_status = PaymentStatus.SUCCEEDED
+                paid_at = tm.created_at
+                cancelled_at = None
+            else:
+                pmt_status = PaymentStatus.PENDING
+                paid_at = None
+                cancelled_at = None
+
+            ref = await self.payment_repo.generate_reference()
+            pmt = Payment(
+                reference=ref,
+                club_id=lg.club_id,
+                player_id=user_id,
+                league_id=lg.id,
+                amount=amt,
+                currency="USD",
+                status=pmt_status,
+                purpose=PaymentPurpose.LEAGUE,
+                payment_method=PaymentMethod.OTHER,
+                paid_at=paid_at,
+                cancelled_at=cancelled_at,
+                notes=f"{'Free league registration' if is_free else 'League registration'}: {lg.name} (Team: {team.name})",
+                created_by_user_id=user_id,
+                created_at=tm.created_at,
+                updated_at=tm.created_at,
+            )
+            self.db.add(pmt)
+            paid_league_ids.add(lg.id)
+            created_count += 1
+
+        if created_count > 0:
+            await self.db.commit()
+
+        return created_count
+
     async def list_player_payments(
         self,
         user_id: UUID,
@@ -679,6 +959,10 @@ class PaymentService:
         offset: int = 0,
     ) -> list[PlayerPaymentResponse]:
         """List authenticated player's own payment history."""
+        try:
+            await self.reconcile_player_payments(user_id)
+        except Exception as rec_err:
+            logger.warning(f"Non-blocking payment reconciliation warning for user {user_id}: {rec_err}")
         payments = await self.payment_repo.list_by_player(
             player_id=user_id,
             status=status,
@@ -1019,6 +1303,17 @@ class PaymentService:
                 notes=f"[META]{json.dumps(meta_dict)}",
                 created_by_user_id=user_id,
             )
+            if payload.purpose == PaymentPurpose.TOURNAMENT:
+                payment.tournament_id = payload.activity_id
+            elif payload.purpose == PaymentPurpose.EVENT:
+                payment.event_id = payload.activity_id
+            elif payload.purpose == PaymentPurpose.LESSON:
+                payment.lesson_id = payload.activity_id
+            elif payload.purpose == PaymentPurpose.LEAGUE:
+                payment.league_id = payload.activity_id
+            elif payload.purpose == PaymentPurpose.MEMBERSHIP and "subscription_id" in meta_dict:
+                payment.subscription_id = UUID(meta_dict["subscription_id"])
+
             created_pay = await self.payment_repo.create(payment)
             await self.db.flush()
 
@@ -1047,7 +1342,7 @@ class PaymentService:
             )
 
         # Get configured payment gateway (Cashfree, Razorpay, or Stripe)
-        prov_request = payload.metadata.get("provider") if payload.metadata else None
+        prov_request = payload.provider or (payload.metadata.get("provider") if payload.metadata else None)
         gateway = get_payment_gateway(prov_request)
 
         # Selected payment method from payload or metadata (defaults to upi)
@@ -1148,51 +1443,95 @@ class PaymentService:
         if payment.player_id != user_id:
             raise HTTPException(status_code=403, detail="Unauthorized: Payment belongs to another player")
 
-        # Idempotent response if already confirmed
+        # Idempotent checks for already-fulfilled payments (covers both SUCCEEDED and fulfilled PENDING)
+        already_fulfilled_info: dict[str, Any] | None = None
+        if payment.purpose == PaymentPurpose.COURT_BOOKING and payment.booking_id:
+            existing_b = await self.booking_repo.get_by_id(payment.booking_id)
+            if existing_b:
+                already_fulfilled_info = {
+                    "reference": payment.reference,
+                    "booking_id": str(existing_b.id),
+                    "court_id": str(existing_b.court_id),
+                    "court_name": existing_b.court.name if existing_b.court else "Court",
+                    "club_id": str(existing_b.club_id),
+                    "start_at": existing_b.start_at.isoformat(),
+                    "end_at": existing_b.end_at.isoformat(),
+                    "total_price": float(payment.amount),
+                    "currency": payment.currency,
+                    "status": existing_b.status.value,
+                }
+        elif payment.purpose == PaymentPurpose.MEMBERSHIP and payment.subscription_id:
+            already_fulfilled_info = {
+                "reference": payment.reference,
+                "subscription_id": str(payment.subscription_id),
+                "status": "active",
+            }
+        elif payment.purpose == PaymentPurpose.LESSON and payment.lesson_id:
+            existing_reg = await self.lesson_reg_repo.get_active_registration_for_user(
+                payment.lesson_id, payment.player_id
+            )
+            if existing_reg:
+                already_fulfilled_info = {
+                    "reference": payment.reference,
+                    "lesson_id": str(payment.lesson_id),
+                    "registration_id": str(existing_reg.id),
+                    "status": existing_reg.status.value,
+                }
+        elif payment.purpose == PaymentPurpose.EVENT and payment.event_id:
+            existing_reg = await self.event_repo.get_active_registration_for_user(
+                payment.event_id, payment.player_id
+            )
+            if existing_reg:
+                already_fulfilled_info = {
+                    "reference": payment.reference,
+                    "event_id": str(payment.event_id),
+                    "registration_id": str(existing_reg.id),
+                    "status": existing_reg.status.value,
+                }
+
         if payment.status == PaymentStatus.SUCCEEDED:
             full = await self.payment_repo.get_by_id(payment.id)
-            booking_or_reg: dict[str, Any] = {"reference": payment.reference, "status": "confirmed"}
-            if payment.purpose == PaymentPurpose.LESSON and payment.lesson_id:
-                existing_reg = await self.lesson_reg_repo.get_active_registration_for_user(
-                    payment.lesson_id, payment.player_id
-                )
-                if existing_reg:
+            booking_or_reg: dict[str, Any] = already_fulfilled_info or {"reference": payment.reference, "status": "confirmed"}
+            if payment.purpose == PaymentPurpose.LESSON and payment.lesson_id and not already_fulfilled_info:
+                # Reconciliation: fulfill missing registration for verified payment
+                try:
+                    from app.services.lesson_service import LessonService
+                    meta_reconcile = {}
+                    if payment.notes and "[META]" in payment.notes:
+                        try:
+                            meta_reconcile = json.loads(payment.notes.split("[META]", 1)[1])
+                        except Exception:
+                            meta_reconcile = {}
+                    l_res = await LessonService(self.db).register_player(
+                        lesson_id=payment.lesson_id,
+                        user_id=payment.player_id,
+                        notes=meta_reconcile.get("notes"),
+                        skip_payment_creation=True,
+                    )
+                    await self.db.commit()
                     booking_or_reg.update({
                         "lesson_id": str(payment.lesson_id),
-                        "registration_id": str(existing_reg.id),
-                        "status": existing_reg.status.value,
+                        "registration_id": str(l_res.id),
+                        "status": l_res.status.value,
                     })
-                else:
-                    # Reconciliation: fulfill missing registration for verified payment
-                    try:
-                        from app.services.lesson_service import LessonService
-                        meta_reconcile = {}
-                        if payment.notes and "[META]" in payment.notes:
-                            try:
-                                meta_reconcile = json.loads(payment.notes.split("[META]", 1)[1])
-                            except Exception:
-                                meta_reconcile = {}
-                        l_res = await LessonService(self.db).register_player(
-                            lesson_id=payment.lesson_id,
-                            user_id=payment.player_id,
-                            notes=meta_reconcile.get("notes"),
-                            skip_payment_creation=True,
-                        )
-                        await self.db.commit()
-                        booking_or_reg.update({
-                            "lesson_id": str(payment.lesson_id),
-                            "registration_id": str(l_res.id),
-                            "status": l_res.status.value,
-                        })
-                    except Exception as err:
-                        logger.error(f"Failed to reconcile lesson registration for succeeded payment {payment.id}: {err}")
-                        booking_or_reg["lesson_id"] = str(payment.lesson_id)
+                except Exception as err:
+                    logger.error(f"Failed to reconcile lesson registration for succeeded payment {payment.id}: {err}")
+                    booking_or_reg["lesson_id"] = str(payment.lesson_id)
 
             return CheckoutVerifyResponse(
                 success=True,
                 payment=PlayerPaymentResponse.from_orm_model(full),
                 message="Payment already verified and confirmed.",
                 booking_or_registration=booking_or_reg,
+            )
+
+        if payment.status == PaymentStatus.PENDING and not payload.collect_payment and already_fulfilled_info is not None:
+            full = await self.payment_repo.get_by_id(payment.id)
+            return CheckoutVerifyResponse(
+                success=True,
+                payment=PlayerPaymentResponse.from_orm_model(full),
+                message="Confirmed. Payment is pending collection.",
+                booking_or_registration=already_fulfilled_info,
             )
 
         now = datetime.now(timezone.utc)
@@ -1286,8 +1625,8 @@ class PaymentService:
             "paid_at": now.isoformat(),
         }
 
-        # Activity Fulfillment
-        if payment.purpose == PaymentPurpose.COURT_BOOKING:
+        # Activity Fulfillment (skip if already fulfilled on prior call)
+        if payment.purpose == PaymentPurpose.COURT_BOOKING and not payment.booking_id:
             court_id = UUID(meta["court_id"]) if "court_id" in meta else None
             start_dt = datetime.fromisoformat(meta["start_at"]) if "start_at" in meta else None
             end_dt = datetime.fromisoformat(meta["end_at"]) if "end_at" in meta else None
@@ -1396,6 +1735,7 @@ class PaymentService:
                         tournament_id=tournament_id,
                         user_id=payment.player_id,
                         payload=t_payload,
+                        skip_payment_creation=True,
                     )
                     booking_or_reg.update({
                         "id": str(t_res.id),
@@ -1434,6 +1774,7 @@ class PaymentService:
                         event_id=event_id,
                         user_id=payment.player_id,
                         notes=meta.get("notes"),
+                        skip_payment_creation=True,
                     )
                     booking_or_reg.update({
                         "event_id": str(event_id),

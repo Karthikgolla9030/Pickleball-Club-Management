@@ -292,6 +292,10 @@ export function useRegisterForEvent(eventId: string, clubId?: string) {
       eventApi.registerForEvent(eventId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.PLAYER_EVENT_DETAIL(eventId),
       });
@@ -313,6 +317,10 @@ export function useCancelEventRegistration(eventId: string, clubId?: string) {
     mutationFn: () => eventApi.cancelEventRegistration(eventId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['player', 'events'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.PLAYER_EVENT_DETAIL(eventId),
       });

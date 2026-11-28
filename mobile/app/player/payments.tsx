@@ -16,7 +16,7 @@
  *   - Fixed bottom navigation preserved with proper scroll clearance
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -28,6 +28,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import {
   Calendar,
   CheckCircle2,
@@ -62,11 +63,12 @@ import type { PaymentPurpose, PaymentStatus, PlayerPayment } from '@/types';
 
 // ─── Filter Types & Constants ────────────────────────────────────────────────
 
-type StatusFilterTab = 'all' | 'succeeded' | 'pending' | 'failed' | 'refunded';
+type StatusFilterTab = 'all' | 'succeeded' | 'free' | 'pending' | 'failed' | 'refunded';
 
 const STATUS_OPTIONS: { key: StatusFilterTab; label: string }[] = [
   { key: 'all', label: 'All Status' },
   { key: 'succeeded', label: 'Successful' },
+  { key: 'free', label: 'Free' },
   { key: 'pending', label: 'Pending' },
   { key: 'failed', label: 'Failed' },
   { key: 'refunded', label: 'Refunded' },
@@ -118,7 +120,19 @@ function getCategoryConfig(purpose: PaymentPurpose | string) {
 
 // ─── Status Badge Variant Helper ─────────────────────────────────────────────
 
-function getStatusBadgeConfig(status: PaymentStatus | string) {
+function isFreePayment(payment: Pick<PlayerPayment, 'amount' | 'status' | 'status_label'>): boolean {
+  if (payment.status_label?.toLowerCase() === 'free') return true;
+  return payment.status === 'succeeded' && Number(payment.amount || 0) === 0;
+}
+
+function getStatusBadgeConfig(
+  status: PaymentStatus | string,
+  amount?: number | string | null,
+  statusLabel?: string | null,
+) {
+  if (statusLabel?.toLowerCase() === 'free' || (status === 'succeeded' && Number(amount ?? 1) === 0)) {
+    return { label: 'Free', color: '#15803D', bg: '#DCFCE7' };
+  }
   switch (status) {
     case 'succeeded':
       return { label: 'Successful', color: '#15803D', bg: '#DCFCE7' };
@@ -210,7 +224,8 @@ function PlayerPaymentCard({
 }) {
   const cat = getCategoryConfig(payment.purpose);
   const CategoryIcon = cat.Icon;
-  const statusCfg = getStatusBadgeConfig(payment.status);
+  const freeTx = isFreePayment(payment);
+  const statusCfg = getStatusBadgeConfig(payment.status, payment.amount, payment.status_label);
 
   const isRefunded = payment.status === 'refunded' || payment.status === 'partially_refunded';
   const hasRefundAmount = payment.refunded_amount != null && Number(payment.refunded_amount) > 0;
@@ -228,10 +243,10 @@ function PlayerPaymentCard({
               <CategoryIcon size={18} color={cat.color} strokeWidth={2.2} />
             </View>
             <View style={styles.serviceTextCol}>
-              <AppText style={styles.serviceTitle} numberOfLines={1}>
+              <AppText style={styles.serviceTitle}>
                 {serviceTitle}
               </AppText>
-              <AppText style={styles.clubName} numberOfLines={1}>
+              <AppText style={styles.clubName}>
                 {clubName}
               </AppText>
             </View>
@@ -266,7 +281,7 @@ function PlayerPaymentCard({
           <View style={styles.methodBadge}>
             <CreditCard size={13} color="#64748B" strokeWidth={1.8} />
             <AppText style={styles.methodBadgeText}>
-              {formatMethodDisplay(payment.payment_method_label || payment.payment_method)}
+              {freeTx ? 'Free' : formatMethodDisplay(payment.payment_method_label || payment.payment_method)}
             </AppText>
           </View>
         </View>
@@ -293,18 +308,15 @@ function PlayerPaymentCard({
 export default function PlayerPaymentsScreen() {
   const insets = useSafeAreaInsets();
 
-  // Initial filter state matching reference design: All Services + Pending
-  const [statusFilter, setStatusFilter] = useState<StatusFilterTab>('pending');
+  // Default to All Services + All Status so paid, free, and pending transactions appear immediately
+  const [statusFilter, setStatusFilter] = useState<StatusFilterTab>('all');
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilterTab>('all');
-  const [activeChips, setActiveChips] = useState<FilterChip[]>([
-    { id: 'category', label: 'All Services' },
-    { id: 'status', label: 'Pending' },
-  ]);
+  const [activeChips, setActiveChips] = useState<FilterChip[]>([]);
 
   // Bottom Sheet Filter Modal State
   const [isFilterSheetVisible, setIsFilterSheetVisible] = useState(false);
   const [draftCategory, setDraftCategory] = useState<CategoryFilterTab>('all');
-  const [draftStatus, setDraftStatus] = useState<StatusFilterTab>('pending');
+  const [draftStatus, setDraftStatus] = useState<StatusFilterTab>('all');
 
   // Selected payment for read-only receipt view
   const [selectedPayment, setSelectedPayment] = useState<PlayerPayment | null>(null);
@@ -317,14 +329,23 @@ export default function PlayerPaymentsScreen() {
     refetch,
   } = usePlayerPayments();
 
+  // Re-fetch payments whenever player navigates back to this screen
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
   // Filter payments by active category and status filters
   const filteredPayments = useMemo(() => {
     return allPayments.filter((p) => {
       // 1. Status Filter
       if (statusFilter === 'pending') {
         if (p.status !== 'pending' && p.status !== 'processing') return false;
+      } else if (statusFilter === 'free') {
+        if (!isFreePayment(p)) return false;
       } else if (statusFilter === 'succeeded') {
-        if (p.status !== 'succeeded') return false;
+        if (p.status !== 'succeeded' || isFreePayment(p)) return false;
       } else if (statusFilter === 'failed') {
         if (p.status !== 'failed' && p.status !== 'cancelled') return false;
       } else if (statusFilter === 'refunded') {
@@ -340,13 +361,13 @@ export default function PlayerPaymentsScreen() {
     });
   }, [allPayments, statusFilter, categoryFilter]);
 
-  // Summary counts computed from filtered transactions
+  // Summary counts computed from all persisted transactions
   const summaryCounts = useMemo(() => {
-    let total = filteredPayments.length;
+    const total = allPayments.length;
     let successful = 0;
     let pending = 0;
 
-    for (const p of filteredPayments) {
+    for (const p of allPayments) {
       if (p.status === 'succeeded') {
         successful += 1;
       } else if (p.status === 'pending' || p.status === 'processing') {
@@ -355,7 +376,7 @@ export default function PlayerPaymentsScreen() {
     }
 
     return { total, successful, pending };
-  }, [filteredPayments]);
+  }, [allPayments]);
 
   const activeFilterCount = activeChips.length;
 
@@ -371,13 +392,17 @@ export default function PlayerPaymentsScreen() {
     setStatusFilter(draftStatus);
 
     const newChips: FilterChip[] = [];
-    const catOpt = SERVICE_OPTIONS.find((o) => o.key === draftCategory);
-    if (catOpt) {
-      newChips.push({ id: 'category', label: catOpt.label });
+    if (draftCategory !== 'all') {
+      const catOpt = SERVICE_OPTIONS.find((o) => o.key === draftCategory);
+      if (catOpt) {
+        newChips.push({ id: 'category', label: catOpt.label });
+      }
     }
-    const statOpt = STATUS_OPTIONS.find((o) => o.key === draftStatus);
-    if (statOpt) {
-      newChips.push({ id: 'status', label: statOpt.label });
+    if (draftStatus !== 'all') {
+      const statOpt = STATUS_OPTIONS.find((o) => o.key === draftStatus);
+      if (statOpt) {
+        newChips.push({ id: 'status', label: statOpt.label });
+      }
     }
 
     setActiveChips(newChips);
@@ -732,7 +757,11 @@ export default function PlayerPaymentsScreen() {
                   <View style={styles.receiptRow}>
                     <AppText style={styles.receiptLabel}>Status</AppText>
                     {(() => {
-                      const cfg = getStatusBadgeConfig(selectedPayment.status);
+                      const cfg = getStatusBadgeConfig(
+                        selectedPayment.status,
+                        selectedPayment.amount,
+                        selectedPayment.status_label,
+                      );
                       return (
                         <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
                           <AppText style={[styles.statusBadgeText, { color: cfg.color }]}>
@@ -776,9 +805,11 @@ export default function PlayerPaymentsScreen() {
                   <View style={styles.receiptRow}>
                     <AppText style={styles.receiptLabel}>Payment Method</AppText>
                     <AppText style={styles.receiptValue}>
-                      {formatMethodDisplay(
-                        selectedPayment.payment_method_label || selectedPayment.payment_method
-                      )}
+                      {isFreePayment(selectedPayment)
+                        ? 'Free'
+                        : formatMethodDisplay(
+                            selectedPayment.payment_method_label || selectedPayment.payment_method
+                          )}
                     </AppText>
                   </View>
 

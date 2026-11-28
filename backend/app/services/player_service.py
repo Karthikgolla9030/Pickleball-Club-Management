@@ -10,18 +10,19 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import selectinload
 
 from app.models.club import Club
 
-from app.models.booking import Booking, BookingStatus
+from app.models.booking import Booking, BookingStatus, BookingType
 from app.models.club_membership import ClubMembership
 from app.models.club_player_membership import (
     ClubPlayerMembership,
     PlayerMembershipStatus,
 )
 from app.models.membership import MemberSubscription, SubscriptionStatus
+from app.models.payment import Payment, PaymentStatus
 from app.models.user import User
 from app.models.event import Event, EventRegistration, EventRegistrationStatus, EventStatus, EventVisibility
 from app.models.player_profile import PlayerProfile
@@ -827,6 +828,13 @@ class PlayerService:
         now = datetime.now(timezone.utc)
         all_activities: list[UpcomingActivityItem] = []
 
+        def to_utc(dt: datetime | None) -> datetime:
+            if dt is None:
+                return now
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
         # 1. Fetch user's registered activity IDs to populate is_registered (if caller is authenticated)
         user_tourney_ids: set[UUID] = set()
         user_league_ids: set[UUID] = set()
@@ -934,16 +942,10 @@ class PlayerService:
                 tourney_objs = [tourney for tourney, _ in tourney_rows]
                 counts_map = await compute_tournaments_counts(self.db, tourney_objs)
                 for tourney, club in tourney_rows:
-                    t_open_at = (
-                        tourney.registration_open_at.replace(tzinfo=timezone.utc)
-                        if tourney.registration_open_at and tourney.registration_open_at.tzinfo is None
-                        else tourney.registration_open_at
-                    )
-                    t_close_at = (
-                        tourney.registration_close_at.replace(tzinfo=timezone.utc)
-                        if tourney.registration_close_at and tourney.registration_close_at.tzinfo is None
-                        else tourney.registration_close_at
-                    )
+                    if tourney.end_date and to_utc(tourney.end_date) < now:
+                        continue
+                    t_open_at = to_utc(tourney.registration_open_at) if tourney.registration_open_at else None
+                    t_close_at = to_utc(tourney.registration_close_at) if tourney.registration_close_at else None
                     reg_open = (
                         tourney.status == TournamentStatus.REGISTRATION_OPEN
                         and (t_open_at is None or t_open_at <= now)
@@ -1018,8 +1020,20 @@ class PlayerService:
                 if club_id:
                     l_query = l_query.where(League.club_id == club_id)
                 l_res = await self.db.execute(l_query)
-                for lg, club in l_res.all():
-                    if lg.end_date and lg.end_date < now:
+                league_rows = l_res.all()
+                league_ids = [lg.id for lg, _ in league_rows]
+                league_team_counts: dict[UUID, int] = {}
+                if league_ids:
+                    lt_stmt = (
+                        select(Team.league_id, func.count(Team.id))
+                        .where(Team.league_id.in_(league_ids))
+                        .group_by(Team.league_id)
+                    )
+                    lt_res = await self.db.execute(lt_stmt)
+                    league_team_counts = {lid: int(cnt) for lid, cnt in lt_res.all() if lid is not None}
+
+                for lg, club in league_rows:
+                    if lg.end_date and to_utc(lg.end_date) < now:
                         continue
 
                     if lg.status == LeagueStatus.REGISTRATION_OPEN:
@@ -1033,14 +1047,23 @@ class PlayerService:
                     else:
                         st_label = "Upcoming"
 
+                    l_open_at = to_utc(lg.registration_open_at) if lg.registration_open_at else None
+                    l_close_at = to_utc(lg.registration_close_at) if lg.registration_close_at else None
                     reg_open = (
                         lg.status == LeagueStatus.REGISTRATION_OPEN
-                        and (lg.registration_open_at is None or lg.registration_open_at <= now)
-                        and (lg.registration_close_at is None or now <= lg.registration_close_at)
+                        and (l_open_at is None or l_open_at <= now)
+                        and (l_close_at is None or now <= l_close_at)
                     )
                     fee = float(lg.registration_fee or 0)
                     fmt_lbl = f"{lg.number_of_weeks} Weeks League"
                     img = lg.banner_image_url or club.default_league_banner_url or club.cover_image_url
+                    team_size = lg.team_size or 1
+                    used_teams = league_team_counts.get(lg.id, 0)
+                    avail_spots = (
+                        max(0, (lg.max_teams - used_teams) * team_size)
+                        if lg.max_teams is not None
+                        else None
+                    )
 
                     all_activities.append(
                         UpcomingActivityItem(
@@ -1061,8 +1084,8 @@ class PlayerService:
                             format_label=fmt_lbl,
                             is_registration_open=reg_open,
                             is_registered=lg.id in user_league_ids,
-                            available_spots=None,
-                            max_participants=lg.max_teams * lg.team_size if lg.max_teams else None,
+                            available_spots=avail_spots,
+                            max_participants=lg.max_teams * team_size if lg.max_teams else None,
                         )
                     )
 
@@ -1083,14 +1106,33 @@ class PlayerService:
                 if club_id:
                     e_query = e_query.where(Event.club_id == club_id)
                 e_res = await self.db.execute(e_query)
-                for ev, club in e_res.all():
+                event_rows = e_res.all()
+                event_ids = [ev.id for ev, _ in event_rows]
+                event_reg_counts: dict[UUID, int] = {}
+                if event_ids:
+                    er_cnt_stmt = (
+                        select(EventRegistration.event_id, func.count(EventRegistration.id))
+                        .where(
+                            EventRegistration.event_id.in_(event_ids),
+                            EventRegistration.status == EventRegistrationStatus.REGISTERED,
+                        )
+                        .group_by(EventRegistration.event_id)
+                    )
+                    er_cnt_res = await self.db.execute(er_cnt_stmt)
+                    event_reg_counts = {eid: int(cnt) for eid, cnt in er_cnt_res.all()}
+
+                for ev, club in event_rows:
+                    if ev.end_at and to_utc(ev.end_at) < now:
+                        continue
                     # Private events are visible only to players who are registered for them
                     if ev.visibility == EventVisibility.PRIVATE and ev.id not in user_event_ids:
                         continue
 
+                    e_open_at = to_utc(ev.registration_opens_at) if ev.registration_opens_at else None
+                    e_close_at = to_utc(ev.registration_closes_at) if ev.registration_closes_at else None
                     reg_open = (
-                        (ev.registration_opens_at is None or ev.registration_opens_at <= now)
-                        and (ev.registration_closes_at is None or now <= ev.registration_closes_at)
+                        (e_open_at is None or e_open_at <= now)
+                        and (e_close_at is None or now <= e_close_at)
                     )
                     st_label = "Registration Open" if reg_open else "Upcoming"
                     fee = float(ev.registration_fee or 0)
@@ -1101,6 +1143,12 @@ class PlayerService:
                     )
                     fmt_lbl = ev_type_val.replace("_", " ").title()
                     img = ev.cover_image_url or club.default_event_banner_url or club.cover_image_url
+                    used_ev = event_reg_counts.get(ev.id, 0)
+                    avail_spots = (
+                        max(0, ev.capacity - used_ev)
+                        if ev.capacity is not None
+                        else None
+                    )
 
                     all_activities.append(
                         UpcomingActivityItem(
@@ -1121,7 +1169,7 @@ class PlayerService:
                             format_label=fmt_lbl,
                             is_registration_open=reg_open,
                             is_registered=ev.id in user_event_ids,
-                            available_spots=ev.capacity,
+                            available_spots=avail_spots,
                             max_participants=ev.capacity,
                         )
                     )
@@ -1144,15 +1192,40 @@ class PlayerService:
                 if club_id:
                     ls_query = ls_query.where(Lesson.club_id == club_id)
                 ls_res = await self.db.execute(ls_query)
-                for ls, club, lt in ls_res.all():
+                lesson_rows = ls_res.all()
+                lesson_ids = [ls.id for ls, _, _ in lesson_rows]
+                lesson_reg_counts: dict[UUID, int] = {}
+                if lesson_ids:
+                    ls_cnt_stmt = (
+                        select(LessonRegistration.lesson_id, func.count(LessonRegistration.id))
+                        .where(
+                            LessonRegistration.lesson_id.in_(lesson_ids),
+                            LessonRegistration.status == LessonRegistrationStatus.REGISTERED,
+                        )
+                        .group_by(LessonRegistration.lesson_id)
+                    )
+                    ls_cnt_res = await self.db.execute(ls_cnt_stmt)
+                    lesson_reg_counts = {lid: int(cnt) for lid, cnt in ls_cnt_res.all()}
+
+                for ls, club, lt in lesson_rows:
+                    if ls.end_at and to_utc(ls.end_at) < now:
+                        continue
+                    ls_open_at = to_utc(ls.registration_opens_at) if ls.registration_opens_at else None
+                    ls_close_at = to_utc(ls.registration_closes_at) if ls.registration_closes_at else None
                     reg_open = (
-                        (ls.registration_opens_at is None or ls.registration_opens_at <= now)
-                        and (ls.registration_closes_at is None or now <= ls.registration_closes_at)
+                        (ls_open_at is None or ls_open_at <= now)
+                        and (ls_close_at is None or now <= ls_close_at)
                     )
                     st_label = "Registration Open" if reg_open else "Upcoming"
                     fee = float(ls.price or 0)
                     fmt_lbl = "Private Lesson" if lt.is_private else (lt.name or "Group Clinic")
                     img = ls.image_url or lt.image_url or club.default_lesson_banner_url or club.cover_image_url
+                    used_ls = lesson_reg_counts.get(ls.id, 0)
+                    avail_spots = (
+                        max(0, ls.capacity - used_ls)
+                        if ls.capacity is not None
+                        else None
+                    )
 
                     all_activities.append(
                         UpcomingActivityItem(
@@ -1173,7 +1246,7 @@ class PlayerService:
                             format_label=fmt_lbl,
                             is_registration_open=reg_open,
                             is_registered=ls.id in user_lesson_ids,
-                            available_spots=ls.capacity,
+                            available_spots=avail_spots,
                             max_participants=ls.capacity,
                         )
                     )
@@ -1186,13 +1259,6 @@ class PlayerService:
             if item_key not in seen:
                 seen.add(item_key)
                 unique_activities.append(item)
-
-        def to_utc(dt: datetime | None) -> datetime:
-            if dt is None:
-                return datetime.now(timezone.utc)
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
 
         unique_activities.sort(key=lambda x: to_utc(x.start_date))
 
@@ -1235,19 +1301,78 @@ class PlayerService:
                 return dt.replace(tzinfo=timezone.utc)
             return dt.astimezone(timezone.utc)
 
+        # Pre-load caller's payments to enrich each booking/registration with authoritative financial status
+        pay_stmt = (
+            select(Payment)
+            .where(Payment.player_id == user_id)
+            .order_by(Payment.created_at.desc())
+        )
+        user_payments = list((await self.db.execute(pay_stmt)).scalars().all())
+        pay_by_booking: dict[UUID, Payment] = {}
+        pay_by_tourney: dict[UUID, Payment] = {}
+        pay_by_league: dict[UUID, Payment] = {}
+        pay_by_event: dict[UUID, Payment] = {}
+        pay_by_lesson: dict[UUID, Payment] = {}
+        for p in user_payments:
+            if p.booking_id and p.booking_id not in pay_by_booking:
+                pay_by_booking[p.booking_id] = p
+            if p.tournament_id and p.tournament_id not in pay_by_tourney:
+                pay_by_tourney[p.tournament_id] = p
+            if p.league_id and p.league_id not in pay_by_league:
+                pay_by_league[p.league_id] = p
+            if p.event_id and p.event_id not in pay_by_event:
+                pay_by_event[p.event_id] = p
+            if p.lesson_id and p.lesson_id not in pay_by_lesson:
+                pay_by_lesson[p.lesson_id] = p
+
+        def payment_meta(pmt: Payment | None) -> dict:
+            if not pmt:
+                return {}
+            st = pmt.status.value if hasattr(pmt.status, "value") else str(pmt.status)
+            is_free_pmt = st == "succeeded" and float(pmt.amount or 0) == 0.0
+            lbl = "Free" if is_free_pmt else (
+                pmt.status.display_label if hasattr(pmt.status, "display_label") else st.replace("_", " ").title()
+            )
+            return {
+                "payment_id": str(pmt.id),
+                "payment_reference": pmt.reference,
+                "payment_status": st,
+                "payment_status_label": lbl,
+                "payment_amount": float(pmt.amount or 0),
+            }
+
         # ─── 1. COURT BOOKINGS ────────────────────────────────────────────────
         if norm_type in ("all", "court", "courts"):
             b_query = (
                 select(Booking, Court, Club)
                 .join(Court, Booking.court_id == Court.id)
                 .join(Club, Booking.club_id == Club.id)
-                .where(or_(Booking.player_id == user_id, Booking.booked_by_user_id == user_id))
+                .where(
+                    Booking.booking_type.notin_([BookingType.MAINTENANCE, BookingType.BLOCKED]),
+                    or_(
+                        Booking.player_id == user_id,
+                        and_(
+                            Booking.player_id.is_(None),
+                            Booking.booked_by_user_id == user_id,
+                        ),
+                    ),
+                )
             )
             if club_id:
                 b_query = b_query.where(Booking.club_id == club_id)
             b_res = await self.db.execute(b_query)
             for b, court, club in b_res.all():
                 st_val = b.status.value if hasattr(b.status, "value") else str(b.status)
+                pmt = pay_by_booking.get(b.id)
+                dur_mins = max(
+                    15,
+                    int((to_utc(b.end_at) - to_utc(b.start_at)).total_seconds() // 60),
+                )
+                court_env = (
+                    court.indoor_outdoor.value
+                    if hasattr(court, "indoor_outdoor") and court.indoor_outdoor
+                    else getattr(court, "court_type", "indoor")
+                )
                 items.append(
                     PlayerBookingItem(
                         id=f"court_{b.id}",
@@ -1263,15 +1388,17 @@ class PlayerService:
                         start_at=b.start_at,
                         end_at=b.end_at,
                         location=court.name,
-                        price=float(b.total_price or 0.0),
-                        currency="USD",
+                        price=float(pmt.amount) if pmt is not None else float(b.total_price or 0.0),
+                        currency=(pmt.currency if pmt else None) or getattr(b, "currency", "USD") or "USD",
                         image_url=court.photo_url or club.cover_image_url,
                         details={
                             "court_name": court.name,
-                            "court_type": court.indoor_outdoor.value if hasattr(court, "indoor_outdoor") and court.indoor_outdoor else getattr(court, "court_type", "indoor"),
+                            "court_type": court_env,
                             "booking_type": b.booking_type.value if hasattr(b.booking_type, "value") else str(b.booking_type),
+                            "duration_minutes": dur_mins,
                             "notes": b.notes,
                             "player_count": b.player_count,
+                            **payment_meta(pmt),
                         },
                         created_at=b.created_at,
                     )
@@ -1291,8 +1418,13 @@ class PlayerService:
             t_res = await self.db.execute(t_query)
             for reg, t, club in t_res.all():
                 st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                st_label = reg.status.display_label if hasattr(reg.status, "display_label") else st_val.title()
+                if t.status == TournamentStatus.CANCELLED:
+                    st_val = "cancelled"
+                    st_label = "Cancelled"
                 cfg = t.format_configuration or {}
-                fee = float(cfg.get("registration_fee", 0.0) or 0.0)
+                fee = float(cfg.get("entry_fee", cfg.get("registration_fee", 0.0)) or 0.0)
+                pmt = pay_by_tourney.get(t.id)
                 img = t.banner_image_url or club.default_tournament_banner_url or club.cover_image_url
                 items.append(
                     PlayerBookingItem(
@@ -1305,12 +1437,12 @@ class PlayerService:
                         club_id=club.id,
                         club_name=club.name,
                         status=st_val,
-                        status_label=reg.status.display_label if hasattr(reg.status, "display_label") else st_val.title(),
+                        status_label=st_label,
                         start_at=t.start_date,
                         end_at=t.end_date,
                         location=t.location_name or club.name,
-                        price=fee,
-                        currency="USD",
+                        price=float(pmt.amount) if pmt is not None else fee,
+                        currency=(pmt.currency if pmt else None) or "USD",
                         image_url=img,
                         details={
                             "format": t.format.value if hasattr(t.format, "value") else str(t.format),
@@ -1318,6 +1450,7 @@ class PlayerService:
                             "category": cfg.get("category"),
                             "seed": reg.seed,
                             "notes": reg.notes,
+                            **payment_meta(pmt),
                         },
                         created_at=reg.created_at or reg.registered_at,
                     )
@@ -1337,8 +1470,15 @@ class PlayerService:
                 l_query = l_query.where(League.club_id == club_id)
             l_res = await self.db.execute(l_query)
             for tm, team, lg, club in l_res.all():
-                st_val = lg.status.value if hasattr(lg.status, "value") else str(lg.status)
+                raw_lg_status = lg.status.value if hasattr(lg.status, "value") else str(lg.status)
+                if lg.status == LeagueStatus.CANCELLED:
+                    st_val = "cancelled"
+                    st_label = "Cancelled"
+                else:
+                    st_val = "confirmed"
+                    st_label = "Confirmed"
                 fee = float(lg.registration_fee or 0.0)
+                pmt = pay_by_league.get(lg.id)
                 img = lg.banner_image_url or club.default_league_banner_url or club.cover_image_url
                 items.append(
                     PlayerBookingItem(
@@ -1351,17 +1491,19 @@ class PlayerService:
                         club_id=club.id,
                         club_name=club.name,
                         status=st_val,
-                        status_label=st_val.replace("_", " ").title(),
+                        status_label=st_label,
                         start_at=lg.start_date or tm.created_at,
                         end_at=lg.end_date,
                         location=club.name,
-                        price=fee,
-                        currency="USD",
+                        price=float(pmt.amount) if pmt is not None else fee,
+                        currency=(pmt.currency if pmt else None) or "USD",
                         image_url=img,
                         details={
                             "team_name": team.name,
                             "team_id": str(team.id),
                             "number_of_weeks": lg.number_of_weeks,
+                            "league_status": raw_lg_status,
+                            **payment_meta(pmt),
                         },
                         created_at=tm.created_at,
                     )
@@ -1380,7 +1522,14 @@ class PlayerService:
             e_res = await self.db.execute(e_query)
             for reg, ev, club in e_res.all():
                 st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                st_label = st_val.replace("_", " ").title()
+                if ev.status == EventStatus.CANCELLED:
+                    st_val = "cancelled"
+                    st_label = "Cancelled"
+                elif st_val == "registered":
+                    st_label = "Confirmed"
                 fee = float(ev.registration_fee or 0.0)
+                pmt = pay_by_event.get(ev.id)
                 img = ev.cover_image_url or club.default_event_banner_url or club.cover_image_url
                 items.append(
                     PlayerBookingItem(
@@ -1393,15 +1542,16 @@ class PlayerService:
                         club_id=club.id,
                         club_name=club.name,
                         status=st_val,
-                        status_label=st_val.title(),
+                        status_label=st_label,
                         start_at=ev.start_at,
                         end_at=ev.end_at,
                         location=ev.location or club.name,
-                        price=fee,
-                        currency=ev.currency or "USD",
+                        price=float(pmt.amount) if pmt is not None else fee,
+                        currency=(pmt.currency if pmt else None) or ev.currency or "USD",
                         image_url=img,
                         details={
                             "event_type": ev.event_type.value if hasattr(ev.event_type, "value") else str(ev.event_type),
+                            **payment_meta(pmt),
                         },
                         created_at=reg.created_at or reg.registered_at,
                     )
@@ -1421,7 +1571,14 @@ class PlayerService:
             ls_res = await self.db.execute(ls_query)
             for reg, ls, club, lt in ls_res.all():
                 st_val = reg.status.value if hasattr(reg.status, "value") else str(reg.status)
+                st_label = st_val.replace("_", " ").title()
+                if ls.status == LessonStatus.CANCELLED:
+                    st_val = "cancelled"
+                    st_label = "Cancelled"
+                elif st_val == "registered":
+                    st_label = "Confirmed"
                 fee = float(ls.price or 0.0)
+                pmt = pay_by_lesson.get(ls.id)
                 img = ls.image_url or lt.image_url or club.default_lesson_banner_url or club.cover_image_url
                 items.append(
                     PlayerBookingItem(
@@ -1434,16 +1591,17 @@ class PlayerService:
                         club_id=club.id,
                         club_name=club.name,
                         status=st_val,
-                        status_label=st_val.title(),
+                        status_label=st_label,
                         start_at=ls.start_at,
                         end_at=ls.end_at,
                         location=club.name,
-                        price=fee,
-                        currency="USD",
+                        price=float(pmt.amount) if pmt is not None else fee,
+                        currency=(pmt.currency if pmt else None) or ls.currency or "USD",
                         image_url=img,
                         details={
                             "lesson_type": lt.name,
                             "is_private": lt.is_private,
+                            **payment_meta(pmt),
                         },
                         created_at=reg.created_at or reg.registered_at,
                     )

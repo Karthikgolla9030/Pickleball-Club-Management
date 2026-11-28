@@ -12,14 +12,17 @@ export interface UseUpcomingActivitiesParams {
   club_id?: string;
   limit?: number;
   offset?: number;
+  enabled?: boolean;
 }
 
 export function useUpcomingActivities(params?: UseUpcomingActivitiesParams) {
+  const { enabled = true, ...apiParams } = params ?? {};
+
   const query = useQuery<UpcomingActivitiesResponse, Error>({
-    queryKey: QUERY_KEYS.PLAYER_UPCOMING_ACTIVITIES(params),
+    queryKey: QUERY_KEYS.PLAYER_UPCOMING_ACTIVITIES(apiParams),
     queryFn: async () => {
       try {
-        return await playerApi.getUpcomingActivities(params);
+        return await playerApi.getUpcomingActivities(apiParams);
       } catch (err: any) {
         if (
           err?.status === 401 ||
@@ -47,7 +50,10 @@ export function useUpcomingActivities(params?: UseUpcomingActivitiesParams) {
         };
       }
     },
+    enabled,
     staleTime: 30 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   return {

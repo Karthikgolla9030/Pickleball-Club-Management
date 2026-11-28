@@ -917,30 +917,32 @@ class LessonService:
         )
 
         pmt = None
-        # Record canonical payment if lesson has a price and payment creation is not skipped
-        if not skip_payment_creation and lesson.price and lesson.price > Decimal("0"):
+        # Record canonical payment (paid or $0.00 free) when payment creation is not skipped
+        if not skip_payment_creation:
             try:
                 stmt = select(Payment).where(
                     Payment.lesson_id == lesson_id,
                     Payment.player_id == user_id,
-                    Payment.status == PaymentStatus.SUCCEEDED,
+                    Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
                 )
                 existing_pmt = (await self.db.execute(stmt)).scalars().first()
                 if not existing_pmt:
                     reference = await self.payment_repo.generate_reference()
                     now_dt = datetime.now(timezone.utc)
+                    fee_amount = Decimal(str(lesson.price or "0.00"))
+                    is_free_lesson = fee_amount <= Decimal("0.00")
                     payment = Payment(
                         reference=reference,
                         club_id=lesson.club_id,
                         player_id=user_id,
                         lesson_id=lesson.id,
-                        amount=Decimal(str(lesson.price)),
+                        amount=fee_amount,
                         currency=lesson.currency or "USD",
                         status=PaymentStatus.SUCCEEDED,
                         purpose=PaymentPurpose.LESSON,
-                        payment_method=PaymentMethod.ONLINE,
+                        payment_method=PaymentMethod.OTHER if is_free_lesson else PaymentMethod.ONLINE,
                         paid_at=now_dt,
-                        notes=f"Lesson registration: {lesson.title}",
+                        notes=f"{'Free lesson registration' if is_free_lesson else 'Lesson registration'}: {lesson.title}",
                         created_by_user_id=user_id,
                     )
                     pmt = await self.payment_repo.create(payment)
@@ -973,6 +975,22 @@ class LessonService:
                 club_id=lesson.club_id,
                 user_id=user_id,
             )
+            if pmt is not None and not skip_payment_creation:
+                await dispatch_event(
+                    event_type="payment.confirmed" if pmt.status == PaymentStatus.SUCCEEDED else "payment.created",
+                    data={
+                        "payment_id": str(pmt.id),
+                        "lesson_id": str(lesson.id),
+                        "purpose": pmt.purpose.value,
+                        "amount": float(pmt.amount),
+                        "status": pmt.status.value,
+                        "club_id": str(lesson.club_id),
+                        "player_id": str(user_id),
+                        "reference": pmt.reference,
+                    },
+                    club_id=lesson.club_id,
+                    user_id=user_id,
+                )
             start_str = lesson.start_at.strftime("%b %d at %I:%M %p") if lesson.start_at else ""
             notif_svc = NotificationService(self.db)
             await notif_svc.create_notification(
@@ -1050,7 +1068,7 @@ class LessonService:
         pmt = (await self.db.execute(stmt)).scalars().first()
         if pmt:
             now_dt = datetime.now(timezone.utc)
-            if pmt.status == PaymentStatus.SUCCEEDED:
+            if pmt.status == PaymentStatus.SUCCEEDED and pmt.amount > Decimal("0"):
                 pmt.status = PaymentStatus.REFUNDED
                 pmt.refunded_amount = pmt.amount
                 pmt.refund_reason = "Lesson registration cancelled by player"
@@ -1080,6 +1098,19 @@ class LessonService:
                 club_id=lesson.club_id,
                 user_id=target_user,
             )
+            if pmt:
+                await dispatch_event(
+                    event_type="payment.updated",
+                    data={
+                        "payment_id": str(pmt.id),
+                        "lesson_id": str(lesson.id),
+                        "status": pmt.status.value,
+                        "club_id": str(lesson.club_id),
+                        "player_id": str(target_user),
+                    },
+                    club_id=lesson.club_id,
+                    user_id=target_user,
+                )
             await NotificationService(self.db).create_notification(
                 user_id=target_user,
                 club_id=lesson.club_id,

@@ -191,7 +191,9 @@ export function usePlayerPayments(filters?: {
   return useQuery({
     queryKey: QUERY_KEYS.PLAYER_PAYMENTS(filterKey),
     queryFn: () => paymentApi.listPlayerPayments(filters),
-    staleTime: 60 * 1000,
+    staleTime: 15 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 }
 

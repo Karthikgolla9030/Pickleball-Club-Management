@@ -1694,6 +1694,7 @@ class LeagueService:
         league_id: uuid.UUID,
         user: User,
         payload: PlayerLeagueRegisterRequest,
+        skip_payment_creation: bool = False,
     ) -> LeagueTeamResponse:
         """Allow an authenticated active club member to register a doubles team with a partner."""
         league = await self._get_league_or_404(league_id)
@@ -1809,32 +1810,35 @@ class LeagueService:
         if payload.skill_rating is not None and getattr(user, "player_profile", None):
             user.player_profile.skill_rating = payload.skill_rating
 
-        # Record canonical payment if league has registration fee
-        if league.registration_fee and league.registration_fee > Decimal("0"):
+        # Always record canonical payment (paid or $0.00 free) when not handled by checkout
+        created_payment = None
+        if not skip_payment_creation:
             from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
             from app.repositories.payment_repository import PaymentRepository
             try:
                 pay_repo = PaymentRepository(self.db)
                 reference = await pay_repo.generate_reference()
                 now_dt = datetime.now(timezone.utc)
-                is_collected = payload.payment_collected is not False
-                payment = Payment(
+                fee_amount = Decimal(str(league.registration_fee or "0.00"))
+                is_free_entry = fee_amount <= Decimal("0.00")
+                is_collected = True if is_free_entry else (payload.payment_collected is not False)
+                created_payment = Payment(
                     reference=reference,
                     club_id=league.club_id,
                     player_id=user.id,
                     league_id=league.id,
-                    amount=Decimal(str(league.registration_fee)),
+                    amount=fee_amount,
                     currency="USD",
                     status=PaymentStatus.SUCCEEDED if is_collected else PaymentStatus.PENDING,
                     purpose=PaymentPurpose.LEAGUE,
-                    payment_method=PaymentMethod.ONLINE if is_collected else PaymentMethod.OTHER,
+                    payment_method=PaymentMethod.OTHER if (is_free_entry or not is_collected) else PaymentMethod.ONLINE,
                     paid_at=now_dt if is_collected else None,
-                    notes=f"League registration: {league.name} (Team: {clean_name})",
+                    notes=f"{'Free league registration' if is_free_entry else 'League registration'}: {league.name} (Team: {clean_name})",
                     created_by_user_id=user.id,
                 )
-                await pay_repo.create(payment)
+                await pay_repo.create(created_payment)
             except Exception:
-                pass
+                created_payment = None
 
         await self.db.commit()
         try:
@@ -1885,6 +1889,22 @@ class LeagueService:
                 club_id=league.club_id,
                 user_id=user.id,
             )
+            if created_payment is not None:
+                await dispatch_event(
+                    "payment.confirmed" if created_payment.status.value == "succeeded" else "payment.created",
+                    data=serialize_for_event({
+                        "payment_id": str(created_payment.id),
+                        "league_id": str(league.id),
+                        "purpose": created_payment.purpose.value,
+                        "amount": float(created_payment.amount),
+                        "status": created_payment.status.value,
+                        "club_id": str(league.club_id),
+                        "player_id": str(user.id),
+                        "reference": created_payment.reference,
+                    }),
+                    club_id=league.club_id,
+                    user_id=user.id,
+                )
         except Exception:
             pass
 
@@ -1911,6 +1931,34 @@ class LeagueService:
             raise HTTPException(status_code=404, detail="You are not registered in this league.")
 
         await self.league_repo.delete_team(team)
+
+        # Refund paid payment or cancel free/pending payment on cancellation
+        from sqlalchemy import select
+        from app.models.payment import Payment, PaymentStatus
+        pmt_stmt = (
+            select(Payment)
+            .where(
+                Payment.league_id == league_id,
+                Payment.player_id == user.id,
+                Payment.status.in_([PaymentStatus.SUCCEEDED, PaymentStatus.PENDING]),
+            )
+            .order_by(Payment.created_at.desc())
+        )
+        cancelled_pmt = (await self.db.execute(pmt_stmt)).scalars().first()
+        if cancelled_pmt:
+            now_dt = datetime.now(timezone.utc)
+            if cancelled_pmt.status == PaymentStatus.SUCCEEDED and cancelled_pmt.amount > Decimal("0"):
+                cancelled_pmt.status = PaymentStatus.REFUNDED
+                cancelled_pmt.refunded_amount = cancelled_pmt.amount
+                cancelled_pmt.refund_reason = "League registration cancelled by player"
+                cancelled_pmt.refunded_at = now_dt
+            else:
+                cancelled_pmt.status = PaymentStatus.CANCELLED
+                cancelled_pmt.cancelled_at = now_dt
+            cancelled_pmt.status_changed_by_user_id = user.id
+            cancelled_pmt.updated_at = now_dt
+            await self.db.flush()
+
         await self.db.commit()
 
         try:
@@ -1943,6 +1991,19 @@ class LeagueService:
                 club_id=league.club_id,
                 user_id=user.id,
             )
+            if cancelled_pmt:
+                await dispatch_event(
+                    "payment.updated",
+                    data=serialize_for_event({
+                        "payment_id": str(cancelled_pmt.id),
+                        "league_id": str(league.id),
+                        "status": cancelled_pmt.status.value,
+                        "club_id": str(league.club_id),
+                        "player_id": str(user.id),
+                    }),
+                    club_id=league.club_id,
+                    user_id=user.id,
+                )
         except Exception:
             pass
 

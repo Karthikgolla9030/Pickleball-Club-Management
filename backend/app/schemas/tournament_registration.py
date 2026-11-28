@@ -61,6 +61,7 @@ class PlayerSelfRegistrationRequest(BaseModel):
     gender: str | None = Field(default=None, max_length=20)
     age: int | None = Field(default=None, ge=1, le=120)
     payment_method: str | None = Field(default=None, max_length=50)
+    payment_collected: bool | None = None
     notes: str | None = Field(default=None, max_length=1000)
 
     @field_validator("team_name", "partner_email", "partner_name", "partner_gender", "skill_level", "partner_skill_level", "gender", "notes", mode="before")
@@ -98,6 +99,7 @@ class PlayerSelfRegistrationResponse(BaseModel):
     partner_name: str | None = None
     partner_email: str | None = None
     fee_amount: float | None = None
+    payment_id: UUID | None = None
     payment_status: str | None = None
     payment_method: str | None = None
     notes: str | None = None

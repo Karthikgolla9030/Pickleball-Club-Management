@@ -166,6 +166,7 @@ export function invalidateAllTournamentQueries(
   queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
   queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
   queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
+  queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
 }
 
 /**

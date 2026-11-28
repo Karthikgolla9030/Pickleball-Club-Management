@@ -541,28 +541,29 @@ class BookingService:
                 detail="Court is already booked for this time slot",
             )
 
-        # If booking has a price, record canonical payment
-        if total_price_snapshot and total_price_snapshot > Decimal("0"):
-            from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
-            from app.repositories.payment_repository import PaymentRepository
-            pay_repo = PaymentRepository(self.db)
-            reference = await pay_repo.generate_reference()
-            now_dt = datetime.now(timezone.utc)
-            payment = Payment(
-                reference=reference,
-                club_id=club_id,
-                player_id=user_id,
-                booking_id=booking.id,
-                amount=total_price_snapshot,
-                currency="USD",
-                status=PaymentStatus.SUCCEEDED,
-                purpose=PaymentPurpose.COURT_BOOKING,
-                payment_method=PaymentMethod.ONLINE,
-                paid_at=now_dt,
-                notes=f"Court reservation: {locked_court.name}",
-                created_by_user_id=user_id,
-            )
-            await pay_repo.create(payment)
+        # Always record canonical payment (including $0.00 free/included bookings)
+        from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
+        from app.repositories.payment_repository import PaymentRepository
+        pay_repo = PaymentRepository(self.db)
+        reference = await pay_repo.generate_reference()
+        now_dt = datetime.now(timezone.utc)
+        pay_amount = total_price_snapshot if total_price_snapshot is not None else Decimal("0.00")
+        is_free_booking = pay_amount <= Decimal("0.00")
+        payment = Payment(
+            reference=reference,
+            club_id=club_id,
+            player_id=user_id,
+            booking_id=booking.id,
+            amount=pay_amount,
+            currency="USD",
+            status=PaymentStatus.SUCCEEDED,
+            purpose=PaymentPurpose.COURT_BOOKING,
+            payment_method=PaymentMethod.OTHER if is_free_booking else PaymentMethod.ONLINE,
+            paid_at=now_dt,
+            notes=f"{'Free court reservation' if is_free_booking else 'Court reservation'}: {locked_court.name}",
+            created_by_user_id=user_id,
+        )
+        await pay_repo.create(payment)
 
         resp = self._serialize_booking(booking)
         await self.db.commit()
@@ -582,6 +583,19 @@ class BookingService:
         await dispatch_event(
             event_type=EventType.BOOKING_CREATED,
             data=event_payload,
+            club_id=club_id,
+            user_id=user_id,
+        )
+        await dispatch_event(
+            event_type="payment.confirmed",
+            data={
+                "payment_id": str(payment.id),
+                "purpose": PaymentPurpose.COURT_BOOKING.value,
+                "amount": float(payment.amount),
+                "club_id": str(club_id),
+                "player_id": str(user_id),
+                "reference": payment.reference,
+            },
             club_id=club_id,
             user_id=user_id,
         )
@@ -747,28 +761,31 @@ class BookingService:
                 detail="Court is already booked for this time slot",
             )
 
-        # If staff booking has a price and player, record canonical payment
-        if total_price_snapshot and total_price_snapshot > Decimal("0") and target_user_id:
+        # Record canonical payment for player-linked staff booking (paid or free)
+        created_payment = None
+        if target_user_id:
             from app.models.payment import Payment, PaymentMethod, PaymentPurpose, PaymentStatus
             from app.repositories.payment_repository import PaymentRepository
             pay_repo = PaymentRepository(self.db)
             reference = await pay_repo.generate_reference()
             now_dt = datetime.now(timezone.utc)
-            payment = Payment(
+            pay_amount = total_price_snapshot if total_price_snapshot is not None else Decimal("0.00")
+            is_free_booking = pay_amount <= Decimal("0.00")
+            created_payment = Payment(
                 reference=reference,
                 club_id=club_id,
                 player_id=target_user_id,
                 booking_id=booking.id,
-                amount=total_price_snapshot,
+                amount=pay_amount,
                 currency="USD",
                 status=PaymentStatus.SUCCEEDED,
                 purpose=PaymentPurpose.COURT_BOOKING,
-                payment_method=PaymentMethod.CASH,
+                payment_method=PaymentMethod.OTHER if is_free_booking else PaymentMethod.CASH,
                 paid_at=now_dt,
-                notes=f"Staff court reservation: {locked_court.name}",
+                notes=f"{'Free staff court reservation' if is_free_booking else 'Staff court reservation'}: {locked_court.name}",
                 created_by_user_id=staff_user_id,
             )
-            await pay_repo.create(payment)
+            await pay_repo.create(created_payment)
 
         resp = self._serialize_booking(booking)
         await self.db.commit()
@@ -791,6 +808,20 @@ class BookingService:
             club_id=club_id,
             user_id=target_user_id,
         )
+        if created_payment is not None and target_user_id:
+            await dispatch_event(
+                event_type="payment.confirmed",
+                data={
+                    "payment_id": str(created_payment.id),
+                    "purpose": created_payment.purpose.value,
+                    "amount": float(created_payment.amount),
+                    "club_id": str(club_id),
+                    "player_id": str(target_user_id),
+                    "reference": created_payment.reference,
+                },
+                club_id=club_id,
+                user_id=target_user_id,
+            )
         await dispatch_event(
             event_type=EventType.COURT_AVAILABILITY_CHANGED,
             data={
@@ -956,12 +987,12 @@ class BookingService:
             cancelled_by_user_id=user_id,
             cancellation_reason=payload.cancellation_reason,
         )
-        # If booking had a paid transaction, mark it refunded; if pending, cancel it
+        # If booking had a paid transaction, mark it refunded; if free or pending, cancel it
         from sqlalchemy import select
         from app.models.payment import Payment, PaymentStatus
         stmt = select(Payment).where(Payment.booking_id == booking.id)
         pmt = (await self.db.execute(stmt)).scalar_one_or_none()
-        if pmt and pmt.status == PaymentStatus.SUCCEEDED:
+        if pmt and pmt.status == PaymentStatus.SUCCEEDED and pmt.amount > Decimal("0"):
             pmt.status = PaymentStatus.REFUNDED
             pmt.refunded_amount = pmt.amount
             pmt.refund_reason = payload.cancellation_reason or "Booking cancelled by player"
@@ -969,7 +1000,7 @@ class BookingService:
             pmt.status_changed_by_user_id = user_id
             pmt.updated_at = now
             await self.db.flush()
-        elif pmt and pmt.status == PaymentStatus.PENDING:
+        elif pmt and pmt.status in (PaymentStatus.PENDING, PaymentStatus.SUCCEEDED):
             pmt.status = PaymentStatus.CANCELLED
             pmt.cancelled_at = now
             pmt.status_changed_by_user_id = user_id
@@ -996,6 +1027,19 @@ class BookingService:
             club_id=updated.club_id,
             user_id=user_id,
         )
+        if pmt:
+            await dispatch_event(
+                event_type="payment.updated",
+                data={
+                    "payment_id": str(pmt.id),
+                    "booking_id": str(updated.id),
+                    "status": pmt.status.value,
+                    "club_id": str(updated.club_id),
+                    "player_id": str(user_id),
+                },
+                club_id=updated.club_id,
+                user_id=user_id,
+            )
         await dispatch_event(
             event_type=EventType.COURT_AVAILABILITY_CHANGED,
             data={
@@ -1061,16 +1105,22 @@ class BookingService:
             cancellation_reason=payload.cancellation_reason,
         )
 
-        # If booking had a paid transaction, mark it refunded
+        # If booking had a paid transaction, mark it refunded; if free or pending, cancel it
         from sqlalchemy import select
         from app.models.payment import Payment, PaymentStatus
         stmt = select(Payment).where(Payment.booking_id == booking.id)
         pmt = (await self.db.execute(stmt)).scalar_one_or_none()
-        if pmt and pmt.status == PaymentStatus.SUCCEEDED:
+        if pmt and pmt.status == PaymentStatus.SUCCEEDED and pmt.amount > Decimal("0"):
             pmt.status = PaymentStatus.REFUNDED
             pmt.refunded_amount = pmt.amount
             pmt.refund_reason = payload.cancellation_reason or "Booking cancelled by club staff"
             pmt.refunded_at = now
+            pmt.status_changed_by_user_id = staff_user_id
+            pmt.updated_at = now
+            await self.db.flush()
+        elif pmt and pmt.status in (PaymentStatus.PENDING, PaymentStatus.SUCCEEDED):
+            pmt.status = PaymentStatus.CANCELLED
+            pmt.cancelled_at = now
             pmt.status_changed_by_user_id = staff_user_id
             pmt.updated_at = now
             await self.db.flush()
@@ -1097,6 +1147,19 @@ class BookingService:
             club_id=club_id,
             user_id=target_player_id,
         )
+        if pmt and target_player_id:
+            await dispatch_event(
+                event_type="payment.updated",
+                data={
+                    "payment_id": str(pmt.id),
+                    "booking_id": str(updated.id),
+                    "status": pmt.status.value,
+                    "club_id": str(club_id),
+                    "player_id": str(target_player_id),
+                },
+                club_id=club_id,
+                user_id=target_player_id,
+            )
         await dispatch_event(
             event_type=EventType.COURT_AVAILABILITY_CHANGED,
             data={

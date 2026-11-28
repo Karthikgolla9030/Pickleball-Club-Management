@@ -584,6 +584,7 @@ export function TournamentRegistrationModal({
         gender: formState.gender,
         age: formState.age ? parseInt(formState.age, 10) : null,
         payment_method: isFree ? 'free' : 'other',
+        payment_collected: isFree || gatewayReady,
         notes: [formState.notes.trim(), partnerNotes].filter(Boolean).join(' | ') || null,
       };
 
@@ -602,6 +603,8 @@ export function TournamentRegistrationModal({
       queryClient.invalidateQueries({ queryKey: ['clubs'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'my-bookings'] });
       queryClient.invalidateQueries({ queryKey: ['player', 'payments'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+      queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
       setConfirmedRegResult(res);
 
       const isWaitlisted = String(res.status || '').toLowerCase() === 'waitlisted';
