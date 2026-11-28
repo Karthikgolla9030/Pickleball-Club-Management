@@ -563,13 +563,25 @@ class TournamentService:
                     format_config[k] = v
 
         # Resolve scoring rules and tiebreakers with club configuration precedence
-        resolved_scoring_rules = payload.scoring_rules.model_dump() if payload.scoring_rules else None
-        if not resolved_scoring_rules and club_tourn_cfg.get("match_scoring"):
+        # Use club-level default when scoring_rules/tiebreaker_rules were not explicitly overridden in payload
+        fields_set = getattr(payload, "model_fields_set", set())
+        if "scoring_rules" not in fields_set and club_tourn_cfg.get("match_scoring"):
             resolved_scoring_rules = dict(club_tourn_cfg["match_scoring"])
+        elif payload.scoring_rules:
+            resolved_scoring_rules = payload.scoring_rules.model_dump()
+        else:
+            resolved_scoring_rules = dict(club_tourn_cfg["match_scoring"]) if club_tourn_cfg.get("match_scoring") else None
 
-        resolved_tiebreaker_rules = payload.tiebreaker_rules
-        if not resolved_tiebreaker_rules and club_tourn_cfg.get("tiebreaker_rules"):
+        if "tiebreaker_rules" not in fields_set and club_tourn_cfg.get("tiebreaker_rules"):
             resolved_tiebreaker_rules = list(club_tourn_cfg["tiebreaker_rules"])
+        elif payload.tiebreaker_rules:
+            resolved_tiebreaker_rules = list(payload.tiebreaker_rules)
+        else:
+            resolved_tiebreaker_rules = (
+                list(club_tourn_cfg["tiebreaker_rules"])
+                if club_tourn_cfg.get("tiebreaker_rules")
+                else None
+            )
 
         # Resolve venue / location from club profile if not provided
         resolved_location = payload.location_name

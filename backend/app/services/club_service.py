@@ -294,8 +294,25 @@ class ClubService:
             if hasattr(val, "to_dict"):
                 update_data["operating_hours"] = val.to_dict()
 
+        if "tournament_configuration" in update_data and update_data["tournament_configuration"] is not None:
+            incoming_tc = update_data["tournament_configuration"]
+            if isinstance(incoming_tc, dict):
+                existing_tc = dict(club.tournament_configuration or {})
+                merged_tc = {**existing_tc}
+                for fmt_key, fmt_val in incoming_tc.items():
+                    if fmt_val is None:
+                        merged_tc.pop(fmt_key, None)
+                    elif isinstance(fmt_val, dict):
+                        merged_tc[fmt_key] = dict(fmt_val)
+                update_data["tournament_configuration"] = merged_tc
+
         updated = await self.club_repo.update(club, **update_data)
+        if "tournament_configuration" in update_data:
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(updated, "tournament_configuration")
+            await self.db.flush()
         await self.db.commit()
+        await self.db.refresh(updated)
         try:
             from app.core.events import EventType, dispatch_event
             await dispatch_event(

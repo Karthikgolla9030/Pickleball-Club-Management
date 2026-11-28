@@ -557,7 +557,14 @@ export default function ClubDetailsScreen() {
         <ClubBrandingSection clubId={clubId || ''} isOwner={isOwner} />
       ) : activeTab === 'tournament_config' ? (
         club ? (
-          <ClubTournamentConfigTab club={club} isOwner={isOwner} onSaved={() => { refetch(); }} />
+          <ClubTournamentConfigTab
+            key={club.id}
+            club={club}
+            isOwner={isOwner}
+            onSaved={async () => {
+              await refetch();
+            }}
+          />
         ) : null
       ) : (
         <KeyboardAvoidingView

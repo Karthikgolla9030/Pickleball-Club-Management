@@ -22,6 +22,8 @@ export function useClubDetails(overrideClubId?: string | null) {
     },
     enabled: Boolean(clubId),
     staleTime: 30 * 1000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const updateMutation = useMutation({
