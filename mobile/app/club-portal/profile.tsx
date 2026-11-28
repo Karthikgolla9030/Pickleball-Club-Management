@@ -49,6 +49,7 @@ import {
   Button,
   Card,
   Input,
+  InternationalPhoneInput,
   ModalSheet,
   Screen,
 } from '@/components';
@@ -229,11 +230,11 @@ export default function ClubProfileScreen() {
     try {
       await updateProfile({
         display_name: editDisplayName.trim(),
-        first_name: editFirstName.trim() || undefined,
-        last_name: editLastName.trim() || undefined,
-        phone: editPhone.trim() || undefined,
-        gender: editGender.trim() || undefined,
-        bio: editBio.trim() || undefined,
+        first_name: editFirstName.trim() || null,
+        last_name: editLastName.trim() || null,
+        phone: editPhone.trim() || null,
+        gender: editGender.trim() || null,
+        bio: editBio.trim() || null,
       });
       setIsEditModalVisible(false);
       Alert.alert('Success', 'Profile information updated successfully.');
@@ -536,20 +537,32 @@ export default function ClubProfileScreen() {
             </View>
           </View>
 
-          <Input
+          <InternationalPhoneInput
             label="Phone Number"
             value={editPhone}
             onChangeText={setEditPhone}
-            placeholder="+1 (555) 000-0000"
-            keyboardType="phone-pad"
           />
 
-          <Input
-            label="Gender"
-            value={editGender}
-            onChangeText={setEditGender}
-            placeholder="e.g. Male, Female, Other"
-          />
+          <View style={styles.genderFieldGroup}>
+            <AppText style={styles.genderFieldLabel}>Gender</AppText>
+            <View style={styles.genderChipsRow}>
+              {['Male', 'Female', 'Other', 'Prefer not to say'].map((opt) => {
+                const isSelected = editGender.trim().toLowerCase() === opt.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    style={[styles.genderChip, isSelected && styles.genderChipSelected]}
+                    onPress={() => setEditGender(isSelected ? '' : opt)}
+                    activeOpacity={0.75}
+                  >
+                    <AppText style={[styles.genderChipText, isSelected && styles.genderChipTextSelected]}>
+                      {opt}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
           <Input
             label="Short Bio"
@@ -898,6 +911,41 @@ const styles = StyleSheet.create({
   },
   formCol: {
     flex: 1,
+  },
+  genderFieldGroup: {
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  genderFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  genderChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  genderChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: Colors.background.primary,
+  },
+  genderChipSelected: {
+    borderColor: Colors.brand.primary,
+    backgroundColor: '#EAF5EF',
+  },
+  genderChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: Colors.text.secondary,
+  },
+  genderChipTextSelected: {
+    color: Colors.brand.primary,
+    fontWeight: '700',
   },
   modalSaveBtn: {
     marginTop: Spacing.xs,

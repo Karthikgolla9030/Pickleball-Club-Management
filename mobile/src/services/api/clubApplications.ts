@@ -10,6 +10,7 @@ export interface SubmitClubApplicationPayload {
   applicant_name: string;
   applicant_email: string;
   applicant_phone?: string;
+  applicant_gender?: string;
   applicant_password: string;
   club_name: string;
   slug?: string;
@@ -38,6 +39,7 @@ export interface ClubApplicationResponse {
   applicant_name: string;
   applicant_email: string;
   applicant_phone?: string;
+  applicant_gender?: string;
   user_id?: string;
   club_name: string;
   slug: string;

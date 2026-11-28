@@ -21,6 +21,9 @@ class EventType(str, Enum):
     PLAYER_PROFILE_UPDATED = "player.profile.updated"
     PLAYER_MEMBERSHIP_UPDATED = "player.membership.updated"
 
+    # Clubs
+    CLUB_UPDATED = "club.updated"
+
     # Court Bookings & Availability
     BOOKING_CREATED = "booking.created"
     BOOKING_UPDATED = "booking.updated"

@@ -189,10 +189,21 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       else if (eventType === 'player.profile.updated') {
         queryClient.invalidateQueries({ queryKey: ['player', 'profile'] });
         queryClient.invalidateQueries({ queryKey: ['player', 'activity'] });
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
         if (clubId) {
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'members'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'player-memberships'] });
           queryClient.invalidateQueries({ queryKey: ['clubs', clubId, 'analytics'] });
+        }
+      }
+
+      // ─── Clubs ─────────────────────────────────────────────────────────────
+      else if (eventType === 'club.updated') {
+        const eventClubId = (event as any)?.club_id || (event.data as any)?.club_id || clubId;
+        queryClient.invalidateQueries({ queryKey: ['clubs'] });
+        queryClient.invalidateQueries({ queryKey: ['player', 'clubs'] });
+        if (eventClubId) {
+          queryClient.invalidateQueries({ queryKey: ['clubs', String(eventClubId)] });
         }
       }
 

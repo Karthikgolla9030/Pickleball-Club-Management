@@ -296,6 +296,20 @@ class ClubService:
 
         updated = await self.club_repo.update(club, **update_data)
         await self.db.commit()
+        try:
+            from app.core.events import EventType, dispatch_event
+            await dispatch_event(
+                event_type=EventType.CLUB_UPDATED,
+                data={
+                    "club_id": str(updated.id),
+                    "name": updated.name,
+                    "slug": updated.slug,
+                    "timezone": updated.timezone,
+                },
+                club_id=updated.id,
+            )
+        except Exception:
+            pass
         return ClubResponse.model_validate(updated)
 
     async def get_operating_hours(self, club_id: UUID) -> ClubOperatingHoursResponse:

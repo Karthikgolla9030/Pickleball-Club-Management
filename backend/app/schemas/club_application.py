@@ -22,6 +22,7 @@ class ClubApplicationSubmitRequest(BaseModel):
     applicant_name: str = Field(..., min_length=2, max_length=255, description="Full name of applicant")
     applicant_email: EmailStr = Field(..., description="Email address for notifications and account access")
     applicant_phone: str | None = Field(default=None, max_length=50, description="Phone number of applicant")
+    applicant_gender: str | None = Field(default=None, max_length=30, description="Gender of applicant")
     applicant_password: str = Field(..., min_length=8, max_length=128, description="Password to create or verify account")
 
     club_name: str = Field(..., min_length=2, max_length=255, description="Official club facility name")
@@ -51,6 +52,14 @@ class ClubApplicationSubmitRequest(BaseModel):
     def validate_phones(cls, v: str | None) -> str | None:
         return normalize_phone_number(v)
 
+    @field_validator("applicant_gender", mode="before")
+    @classmethod
+    def clean_applicant_gender(cls, v: str | None) -> str | None:
+        if v is not None and isinstance(v, str):
+            cleaned = v.strip()
+            return cleaned if cleaned else None
+        return v
+
     @field_validator("slug", mode="before")
     @classmethod
     def normalize_slug(cls, v: str | None) -> str | None:
@@ -76,6 +85,7 @@ class ClubApplicationResponse(BaseModel):
     applicant_name: str
     applicant_email: str
     applicant_phone: str | None
+    applicant_gender: str | None = None
     user_id: UUID | None
     club_name: str
     slug: str

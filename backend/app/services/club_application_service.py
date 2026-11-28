@@ -20,6 +20,7 @@ from app.models.user import User
 from app.repositories.club_application_repository import ClubApplicationRepository
 from app.repositories.club_membership_repository import ClubMembershipRepository
 from app.repositories.club_repository import ClubRepository
+from app.repositories.player_profile_repository import PlayerProfileRepository
 from app.repositories.user_repository import UserRepository
 from app.services.platform_audit_service import record_platform_audit_event
 from app.schemas.club_application import (
@@ -36,6 +37,7 @@ def _build_application_response(app: ClubApplication) -> ClubApplicationResponse
         applicant_name=app.applicant_name,
         applicant_email=app.applicant_email,
         applicant_phone=app.applicant_phone,
+        applicant_gender=getattr(app, "applicant_gender", None),
         user_id=app.user_id,
         club_name=app.club_name,
         slug=app.slug,
@@ -84,6 +86,56 @@ class ClubApplicationService:
         self.club_repo = ClubRepository(db)
         self.user_repo = UserRepository(db)
         self.membership_repo = ClubMembershipRepository(db)
+        self.player_profile_repo = PlayerProfileRepository(db)
+
+    async def _sync_owner_player_profile(
+        self,
+        user: User | None,
+        full_name: str | None = None,
+        phone: str | None = None,
+        gender: str | None = None,
+    ) -> None:
+        """
+        Ensure the club applicant/owner has a PlayerProfile populated with
+        their registration details without overwriting any existing saved values.
+        """
+        if not user:
+            return
+
+        clean_name = (full_name or user.full_name or "").strip()
+        if clean_name and not (user.full_name and user.full_name.strip()):
+            user.full_name = clean_name
+
+        name_parts = clean_name.split(None, 1) if clean_name else []
+        first_name = name_parts[0] if name_parts else None
+        last_name = name_parts[1].strip() if len(name_parts) > 1 and name_parts[1].strip() else None
+
+        clean_phone = phone.strip() if phone and phone.strip() else None
+        clean_gender = gender.strip().capitalize() if gender and gender.strip() else None
+
+        profile = await self.player_profile_repo.get_by_user_id(user.id)
+        if profile is None:
+            await self.player_profile_repo.create(
+                user_id=user.id,
+                display_name=clean_name or "Club Owner",
+                first_name=first_name,
+                last_name=last_name,
+                phone=clean_phone,
+                gender=clean_gender,
+            )
+            return
+
+        if (not profile.display_name or profile.display_name == "Player") and clean_name:
+            profile.display_name = clean_name
+        if not profile.first_name and first_name:
+            profile.first_name = first_name
+        if not profile.last_name and last_name:
+            profile.last_name = last_name
+        if not profile.phone and clean_phone:
+            profile.phone = clean_phone
+        if not profile.gender and clean_gender:
+            profile.gender = clean_gender
+        await self.db.flush()
 
     async def submit_application(
         self,
@@ -127,8 +179,10 @@ class ClubApplicationService:
 
         # 3. Applicant user identity management
         user_id: UUID | None = None
+        applicant_user: User | None = None
         if current_user_id:
             user_id = current_user_id
+            applicant_user = await self.user_repo.get_by_id(current_user_id)
         else:
             existing_user = await self.user_repo.get_by_email(email)
             if existing_user:
@@ -138,6 +192,7 @@ class ClubApplicationService:
                         detail="An account with this email already exists. Please verify your password.",
                     )
                 user_id = existing_user.id
+                applicant_user = existing_user
             else:
                 new_user = User(
                     email=email,
@@ -149,6 +204,14 @@ class ClubApplicationService:
                 self.db.add(new_user)
                 await self.db.flush()
                 user_id = new_user.id
+                applicant_user = new_user
+
+        await self._sync_owner_player_profile(
+            user=applicant_user,
+            full_name=payload.applicant_name,
+            phone=payload.applicant_phone,
+            gender=payload.applicant_gender,
+        )
 
         # 4. Generate unique reference number
         ref_number = f"APP-{uuid.uuid4().hex[:8].upper()}"
@@ -161,13 +224,14 @@ class ClubApplicationService:
             applicant_name=payload.applicant_name.strip(),
             applicant_email=email,
             applicant_phone=payload.applicant_phone.strip() if payload.applicant_phone else None,
+            applicant_gender=payload.applicant_gender.strip() if payload.applicant_gender else None,
             user_id=user_id,
             club_name=payload.club_name.strip(),
             slug=slug,
             short_description=payload.short_description.strip() if payload.short_description else None,
             description=payload.description.strip() if payload.description else None,
             contact_email=str(payload.contact_email).strip().lower() if payload.contact_email else email,
-            contact_phone=payload.contact_phone.strip() if payload.contact_phone else payload.applicant_phone,
+            contact_phone=payload.contact_phone.strip() if payload.contact_phone else None,
             website=payload.website.strip() if payload.website else None,
             established_year=payload.established_year,
             address_line1=payload.address_line1.strip() if payload.address_line1 else None,
@@ -323,19 +387,30 @@ class ClubApplicationService:
 
         # Ensure user identity exists
         user_id = app.user_id
+        owner_user: User | None = None
         if not user_id:
-            user = await self.user_repo.get_by_email(app.applicant_email)
-            if not user:
-                user = User(
+            owner_user = await self.user_repo.get_by_email(app.applicant_email)
+            if not owner_user:
+                owner_user = User(
                     email=app.applicant_email,
                     hashed_password=hash_password("TemporaryPass123!"),
                     full_name=app.applicant_name,
                     is_active=True,
                     is_verified=True,
                 )
-                self.db.add(user)
+                self.db.add(owner_user)
                 await self.db.flush()
-            user_id = user.id
+            user_id = owner_user.id
+            app.user_id = user_id
+        else:
+            owner_user = await self.user_repo.get_by_id(user_id)
+
+        await self._sync_owner_player_profile(
+            user=owner_user,
+            full_name=app.applicant_name,
+            phone=app.applicant_phone,
+            gender=getattr(app, "applicant_gender", None),
+        )
 
         try:
             # 1. Create Club entity

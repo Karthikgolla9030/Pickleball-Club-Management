@@ -65,6 +65,7 @@ export default function PublicRegisterClubScreen() {
   const [applicantName, setApplicantName] = useState('');
   const [applicantEmail, setApplicantEmail] = useState('');
   const [applicantPhone, setApplicantPhone] = useState('');
+  const [applicantGender, setApplicantGender] = useState('');
   const [applicantPassword, setApplicantPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -88,7 +89,7 @@ export default function PublicRegisterClubScreen() {
   const [country, setCountry] = useState('United States');
 
   // Operating info
-  const [operatingDays, setOperatingDays] = useState('Monday - Sunday');
+  const [operatingDays, setOperatingDays] = useState('Mon,Tue,Wed,Thu,Fri,Sat,Sun');
   const [openingTime, setOpeningTime] = useState('06:00:00');
   const [closingTime, setClosingTime] = useState('22:00:00');
   const [timezone, setTimezone] = useState('UTC');
@@ -170,6 +171,7 @@ export default function PublicRegisterClubScreen() {
         applicant_name: applicantName.trim(),
         applicant_email: applicantEmail.trim().toLowerCase(),
         applicant_phone: applicantPhone.trim() || undefined,
+        applicant_gender: applicantGender.trim() || undefined,
         applicant_password: applicantPassword,
 
         club_name: name.trim(),
@@ -188,7 +190,7 @@ export default function PublicRegisterClubScreen() {
         postal_code: postalCode.trim() || undefined,
         country: country.trim() || 'United States',
 
-        operating_days: operatingDays.trim() || 'Monday - Sunday',
+        operating_days: operatingDays.trim() || 'Mon,Tue,Wed,Thu,Fri,Sat,Sun',
         opening_time: openingTime.trim() || '06:00:00',
         closing_time: closingTime.trim() || '22:00:00',
         timezone: timezone.trim() || 'UTC',
@@ -291,6 +293,27 @@ export default function PublicRegisterClubScreen() {
               error={errors.applicantPhone}
               hint="For account verification & application status notifications"
             />
+
+            <View style={styles.genderSection}>
+              <AppText style={styles.genderLabel}>Gender</AppText>
+              <View style={styles.genderChipsRow}>
+                {['Male', 'Female', 'Other', 'Prefer not to say'].map((opt) => {
+                  const isSelected = applicantGender === opt;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      style={[styles.genderChip, isSelected && styles.genderChipSelected]}
+                      onPress={() => setApplicantGender(isSelected ? '' : opt)}
+                      activeOpacity={0.75}
+                    >
+                      <AppText style={[styles.genderChipText, isSelected && styles.genderChipTextSelected]}>
+                        {opt}
+                      </AppText>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
 
             <View style={styles.passwordContainer}>
               <FormField
@@ -629,6 +652,40 @@ const styles = StyleSheet.create({
   },
   passwordContainer: {
     position: 'relative',
+  },
+  genderSection: {
+    gap: Spacing[2],
+  },
+  genderLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  genderChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing[2],
+  },
+  genderChip: {
+    paddingHorizontal: Spacing[3],
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  genderChipSelected: {
+    borderColor: '#18794E',
+    backgroundColor: '#EAF5EF',
+  },
+  genderChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#475569',
+  },
+  genderChipTextSelected: {
+    color: '#18794E',
+    fontWeight: '700',
   },
   eyeButton: {
     position: 'absolute',

@@ -5,11 +5,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError, playerApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
+import { useAuthStore } from '@/store';
 import type {
   CreatePlayerProfilePayload,
   PlayerProfile,
   UpdatePlayerProfilePayload,
 } from '@/types';
+
+function syncAuthUserFromProfile(profile: PlayerProfile) {
+  const state = useAuthStore.getState();
+  if (!state.user) return;
+  const fullName =
+    [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() ||
+    profile.display_name ||
+    state.user.full_name;
+  if (fullName !== state.user.full_name) {
+    useAuthStore.setState({
+      user: {
+        ...state.user,
+        full_name: fullName,
+      },
+    });
+  }
+}
 
 export function usePlayerProfile() {
   const queryClient = useQueryClient();
@@ -33,9 +51,11 @@ export function usePlayerProfile() {
   const createProfileMutation = useMutation({
     mutationFn: (payload: CreatePlayerProfilePayload) => playerApi.createProfile(payload),
     onSuccess: (newProfile) => {
+      syncAuthUserFromProfile(newProfile);
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, newProfile);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
       queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 
@@ -45,8 +65,9 @@ export function usePlayerProfile() {
         return await playerApi.updateProfile(payload);
       } catch (err) {
         if (err instanceof ApiClientError && err.status === 404) {
+          const authUser = useAuthStore.getState().user;
           return await playerApi.createProfile({
-            display_name: payload.display_name || 'Player',
+            display_name: payload.display_name || authUser?.full_name || 'Club Owner',
             first_name: payload.first_name ?? undefined,
             last_name: payload.last_name ?? undefined,
             phone: payload.phone ?? undefined,
@@ -60,25 +81,33 @@ export function usePlayerProfile() {
       }
     },
     onSuccess: (updatedProfile) => {
+      syncAuthUserFromProfile(updatedProfile);
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, updatedProfile);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
       queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 
   const uploadPhotoMutation = useMutation({
     mutationFn: (imageData: string) => playerApi.uploadPhoto(imageData),
     onSuccess: (updatedProfile) => {
+      syncAuthUserFromProfile(updatedProfile);
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, updatedProfile);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
       queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 
   const deletePhotoMutation = useMutation({
     mutationFn: () => playerApi.deletePhoto(),
     onSuccess: (updatedProfile) => {
+      syncAuthUserFromProfile(updatedProfile);
       queryClient.setQueryData(QUERY_KEYS.PLAYER_PROFILE, updatedProfile);
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_PROFILE });
       queryClient.invalidateQueries({ queryKey: ['club-player-members'] });
+      queryClient.invalidateQueries({ queryKey: ['clubs'] });
     },
   });
 

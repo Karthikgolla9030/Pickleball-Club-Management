@@ -42,7 +42,7 @@ import {
   Screen,
 } from '@/components';
 import { clubsApi, clubApplicationsApi } from '@/services/api';
-import { useActiveClub } from '@/hooks';
+import { useActiveClub, usePlayerProfile } from '@/hooks';
 import { useAuthStore } from '@/store';
 import { Colors, Radius, Spacing } from '@/theme';
 import type { CreateClubPayload, MembershipInfo } from '@/types';
@@ -60,6 +60,7 @@ export default function RegisterClubScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { switchClub } = useActiveClub();
+  const { profile: ownerProfile } = usePlayerProfile();
   const refreshMemberships = useAuthStore((s) => s.refreshMemberships);
 
   const [name, setName] = useState('');
@@ -79,7 +80,7 @@ export default function RegisterClubScreen() {
   const [postalCode, setPostalCode] = useState('');
   const [country, setCountry] = useState('United States');
 
-  const [operatingDays, setOperatingDays] = useState('Monday - Sunday');
+  const [operatingDays, setOperatingDays] = useState('Mon,Tue,Wed,Thu,Fri,Sat,Sun');
   const [openingTime, setOpeningTime] = useState('06:00:00');
   const [closingTime, setClosingTime] = useState('22:00:00');
   const [timezone, setTimezone] = useState('UTC');
@@ -145,9 +146,10 @@ export default function RegisterClubScreen() {
     try {
       const user = useAuthStore.getState().user;
       const result = await clubApplicationsApi.submit({
-        applicant_name: user?.full_name || 'Club Owner',
+        applicant_name: user?.full_name || ownerProfile?.display_name || 'Club Owner',
         applicant_email: user?.email || contactEmail.trim().toLowerCase() || 'owner@pickleball.com',
-        applicant_phone: contactPhone.trim() || undefined,
+        applicant_phone: ownerProfile?.phone || undefined,
+        applicant_gender: ownerProfile?.gender || undefined,
         applicant_password: 'AuthenticatedOwnerSession2026!',
         club_name: name.trim(),
         slug: slug.trim(),
@@ -163,7 +165,7 @@ export default function RegisterClubScreen() {
         state: state.trim() || undefined,
         postal_code: postalCode.trim() || undefined,
         country: country.trim() || 'United States',
-        operating_days: operatingDays.trim() || 'Monday - Sunday',
+        operating_days: operatingDays.trim() || 'Mon,Tue,Wed,Thu,Fri,Sat,Sun',
         opening_time: openingTime.trim() || '06:00:00',
         closing_time: closingTime.trim() || '22:00:00',
         timezone: timezone.trim() || 'UTC',

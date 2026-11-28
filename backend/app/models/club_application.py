@@ -73,6 +73,7 @@ class ClubApplication(Base):
         index=True,
     )
     applicant_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    applicant_gender: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # Associated user identity (created or linked upon application submission)
     user_id: Mapped[uuid.UUID | None] = mapped_column(

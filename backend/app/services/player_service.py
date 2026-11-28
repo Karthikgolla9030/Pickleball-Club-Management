@@ -159,13 +159,47 @@ class PlayerService:
     # ─── Player Profile ──────────────────────────────────────────────────────────
 
     async def get_profile(self, user_id: UUID) -> PlayerProfileResponse:
-        """Return the authenticated user's player profile or raise 404."""
+        """
+        Return the authenticated user's profile.
+        If no PlayerProfile row exists yet for a user who submitted a club application
+        (e.g. a club owner whose personal details were captured during club registration),
+        create and return the hydrated PlayerProfile without duplicating owner records.
+        """
         profile = await self.profile_repo.get_by_user_id(user_id)
         if not profile:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Player profile not found",
-            )
+            from app.repositories.club_application_repository import ClubApplicationRepository
+
+            app_repo = ClubApplicationRepository(self.db)
+            user = await self.user_repo.get_by_id(user_id)
+            apps = await app_repo.get_by_user_id(user_id)
+            if not apps and user and user.email:
+                apps = await app_repo.get_by_email(user.email)
+
+            if apps:
+                app = apps[0]
+                clean_name = (
+                    app.applicant_name
+                    or (user.full_name if user else None)
+                    or ""
+                ).strip()
+                parts = clean_name.split(None, 1) if clean_name else []
+                first_name = parts[0] if parts else None
+                last_name = parts[1].strip() if len(parts) > 1 and parts[1].strip() else None
+                profile = await self.profile_repo.create(
+                    user_id=user_id,
+                    display_name=clean_name or "Club Owner",
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone=app.applicant_phone,
+                    gender=getattr(app, "applicant_gender", None),
+                )
+                await self.db.commit()
+                await self.db.refresh(profile)
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Player profile not found",
+                )
         return PlayerProfileResponse.model_validate(profile)
 
     async def create_profile(
@@ -242,22 +276,28 @@ class PlayerService:
             await self.db.refresh(updated)
             resp = PlayerProfileResponse.model_validate(updated)
 
-        # Synchronize User.full_name if name fields were updated
-        try:
-            user = await self.user_repo.get_by_id(user_id)
-            if user:
-                name_parts = [p for p in (updated.first_name, updated.last_name) if p]
-                if name_parts:
-                    user.full_name = " ".join(name_parts)
-                elif updated.display_name:
-                    user.full_name = updated.display_name
-                await self.db.commit()
-        except Exception:
-            pass
+        # Synchronize User.full_name only when name fields were modified
+        if fields_set & {"display_name", "first_name", "last_name"}:
+            try:
+                user = await self.user_repo.get_by_id(user_id)
+                if user:
+                    name_parts = [p for p in (updated.first_name, updated.last_name) if p]
+                    if name_parts:
+                        user.full_name = " ".join(name_parts)
+                    elif updated.display_name:
+                        user.full_name = updated.display_name
+                    await self.db.commit()
+            except Exception:
+                pass
 
-        # Dispatch real-time profile update to user and their clubs
+        # Dispatch real-time profile update to user and all associated clubs (staff & player)
         try:
-            memberships = await self.player_membership_repo.get_user_player_memberships(user_id)
+            from app.repositories.club_membership_repository import ClubMembershipRepository
+
+            player_memberships = await self.player_membership_repo.get_user_player_memberships(user_id)
+            staff_memberships = await ClubMembershipRepository(self.db).get_user_memberships(user_id)
+            club_ids = {m.club_id for m in player_memberships} | {m.club_id for m in staff_memberships}
+
             profile_data = {
                 "user_id": str(user_id),
                 "display_name": updated.display_name,
@@ -272,11 +312,11 @@ class PlayerService:
                 data=profile_data,
                 user_id=user_id,
             )
-            for m in memberships:
+            for cid in club_ids:
                 await dispatch_event(
                     event_type=EventType.PLAYER_PROFILE_UPDATED,
                     data=profile_data,
-                    club_id=m.club_id,
+                    club_id=cid,
                 )
         except Exception:
             pass
