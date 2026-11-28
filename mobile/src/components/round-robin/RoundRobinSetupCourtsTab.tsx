@@ -22,7 +22,11 @@ import {
   PostRegistrationNotice,
   PostRegistrationSaveActionBar,
 } from '@/components/post-registration';
-import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Spacing, Radius } from '@/theme';
 import type { Tournament, TournamentSetupResponse } from '@/types';
@@ -143,6 +147,7 @@ export function RoundRobinSetupCourtsTab({
     if (!canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
         selected_court_ids: selectedCourtIds,
         courts_count: courtsCount,
@@ -179,11 +184,18 @@ export function RoundRobinSetupCourtsTab({
     const execute = async () => {
       try {
         setGenerating(true);
+        await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
         if (isGenerated) {
           await competitionApi.regenerateRoundRobin(clubId, tournamentId);
         } else {
           await competitionApi.generateRoundRobin(clubId, tournamentId, true);
         }
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: 'in_progress',
+          workflow_state: 'in_progress',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await loadSetup();
         await (onGenerated ? onGenerated() : onRefresh());

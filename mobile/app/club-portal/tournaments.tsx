@@ -722,13 +722,19 @@ export default function ClubTournamentsScreen() {
             const fc = (item.format_configuration as Record<string, any>) || {};
             const isItemCompleted =
               item.status === 'completed' ||
+              item.workflow_state === 'completed' ||
               Boolean(fc.winner) ||
               Boolean(fc.pool_play_state?.completed) ||
+              Boolean(fc.pool_play_state?.is_completed) ||
               Boolean(fc.pool_play_state?.winner);
 
             return (
               <TournamentCard
-                tournament={isItemCompleted && item.status !== 'completed' ? { ...item, status: 'completed', status_label: 'COMPLETED' } : item}
+                tournament={
+                  isItemCompleted && item.status !== 'completed'
+                    ? { ...item, status: 'completed', status_label: 'COMPLETED', workflow_state: 'completed' }
+                    : item
+                }
                 index={index}
                 clubBranding={branding}
                 actionLabel={isItemCompleted ? 'View Results' : 'Manage'}

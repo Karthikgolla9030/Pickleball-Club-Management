@@ -47,6 +47,11 @@ import {
   useTournamentDetails,
   useTournamentRegistrations,
 } from '@/hooks';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { tournamentApi } from '@/services/api/tournaments';
 import { getTournamentNavigationTabs, type TournamentTabKey } from '@/navigation';
@@ -203,6 +208,7 @@ export default function PoolPlayManagementScreen() {
   }) => {
     if (!clubId || !tournamentId) return;
     try {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
       const payload = {
         teams: updates.teams ?? teams,
         matches: updates.matches ?? matches,
@@ -211,7 +217,17 @@ export default function PoolPlayManagementScreen() {
         winner: updates.winner,
         completed: updates.completed,
       };
-      await competitionApi.savePoolPlayState(clubId, tournamentId, payload);
+      const res = await competitionApi.savePoolPlayState(clubId, tournamentId, payload);
+      if (res && typeof res === 'object') {
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: res.status,
+          workflow_state: res.workflow_state,
+          workflow_state_label: res.workflow_state_label,
+          configuration_saved: res.configuration_saved,
+          structure_generated: res.structure_generated,
+        });
+      }
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
     } catch (err) {
       console.warn('Failed to save pool play state:', err);
     }
@@ -905,11 +921,7 @@ export default function PoolPlayManagementScreen() {
       };
     }
     if (effectiveTournament?.status === 'draft') {
-      return {
-        label: 'Publish Tournament',
-        onPress: handlePublishTournament,
-        isLoading: isOpenRegistrationPending,
-      };
+      return null;
     }
     if (effectiveTournament?.status === 'registration_open') {
       return {
@@ -918,6 +930,25 @@ export default function PoolPlayManagementScreen() {
         isLoading: isCloseRegistrationPending,
         variant: 'secondary' as const,
       };
+    }
+    const hasGeneratedStructure = Boolean(
+      effectiveTournament?.structure_generated || isPoolsGenerated || matches.length > 0
+    );
+    if (effectiveTournament?.status === 'registration_closed') {
+      if (hasGeneratedStructure) {
+        return {
+          label: 'Start Tournament',
+          onPress: handleStartTournament,
+          isLoading: isStartingTournament,
+        };
+      }
+      if (!effectiveTournament?.configuration_saved) {
+        return {
+          label: 'Configure Format',
+          onPress: () => setActiveTab('setup_courts'),
+        };
+      }
+      return null;
     }
     if (matches.length > 0 && !isPoolPlayComplete) {
       return {
@@ -952,6 +983,10 @@ export default function PoolPlayManagementScreen() {
     canManage,
     isCompleted,
     effectiveTournament?.status,
+    effectiveTournament?.workflow_state,
+    effectiveTournament?.configuration_saved,
+    effectiveTournament?.structure_generated,
+    isPoolsGenerated,
     isOpenRegistrationPending,
     isCloseRegistrationPending,
     isStartingTournament,

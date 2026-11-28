@@ -920,3 +920,320 @@ async def test_completed_tournament_readonly_setup_and_permanent_locks_all_forma
         res = await async_client.request(method, url, headers=owner_h, json=body)
         assert res.status_code == 400, f"Expected 400 on {method} {url} (COMPLETED), got {res.status_code}: {res.text}"
 
+
+@pytest.mark.asyncio
+async def test_pool_play_state_persistence_transitions_listing_to_structure_generated(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+):
+    """
+    Reproduces and verifies fix for Pool Play client-persisted matchups bug:
+    - Saving Pool Play configuration sets `workflow_state == 'configuration_saved'` and `structure_generated == False`.
+    - Persisting non-empty generated matches via POST .../pool-play/state immediately marks
+      `structure_generated == True` and `workflow_state == 'structure_generated'` in listing,
+      detail, and setup responses (never staying stuck at 'configuration_saved' or showing 'Generate Schedule').
+    - Subsequent Start Tournament succeeds and moves the tournament to 'in_progress'.
+    """
+    club, owner, active_courts, _, players = await _setup_club_with_players_and_courts(
+        db_session, num_players=12, num_active_courts=2, num_inactive_courts=0
+    )
+    owner_h = make_auth_header(owner.id)
+    t = await _create_tournament(
+        db_session, club, owner, TournamentFormat.POOL_PLAY, is_doubles=False, min_participants=4, max_participants=12
+    )
+    for idx in range(8):
+        r = await async_client.post(
+            f"/api/v1/tournaments/{t.id}/register",
+            headers=make_auth_header(players[idx][0].id),
+        )
+        assert r.status_code == 201
+
+    assert (
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/close-registration",
+            headers=owner_h,
+        )
+    ).status_code == 200
+
+    court_ids = [str(c.id) for c in active_courts]
+    save_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/configuration",
+        headers=owner_h,
+        json={
+            "number_of_pools": 2,
+            "qualifiers_per_pool": 1,
+            "bracket_type": "Single Elimination",
+            "selected_court_ids": court_ids,
+            "courts_count": 2,
+        },
+    )
+    assert save_res.status_code == 200
+    assert save_res.json()["workflow_state"] == "configuration_saved"
+    assert save_res.json()["is_generated"] is False
+
+    # Simulate client Pool Play Matchups generation persisted via /pool-play/state
+    state_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/pool-play/state",
+        headers=owner_h,
+        json={
+            "teams": [{"id": f"T{i}", "name": f"Team {i}", "pool": "Pool A" if i < 4 else "Pool B"} for i in range(8)],
+            "matches": [
+                {"id": "M1", "pool": "Pool A", "status": "scheduled", "round": 1},
+                {"id": "M2", "pool": "Pool B", "status": "scheduled", "round": 1},
+            ],
+            "championshipMatches": [],
+            "config": {"numPools": 2, "qualifierCount": 1, "bracketType": "Single Elimination"},
+        },
+    )
+    assert state_res.status_code == 200, state_res.text
+    assert state_res.json()["workflow_state"] == "structure_generated"
+    assert state_res.json()["structure_generated"] is True
+
+    listing = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments", headers=owner_h)
+    assert listing.status_code == 200
+    card = next(item for item in listing.json() if item["id"] == str(t.id))
+    assert card["workflow_state"] == "structure_generated"
+    assert card["structure_generated"] is True
+    assert card["configuration_saved"] is True
+    assert card["club_name"] == club.name
+
+    setup_pp = await async_client.get(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/pool-play/post-registration-setup",
+        headers=owner_h,
+    )
+    assert setup_pp.status_code == 200
+    assert setup_pp.json()["is_generated"] is True
+    assert setup_pp.json()["workflow_state"] == "structure_generated"
+
+    start_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+        headers=owner_h,
+    )
+    assert start_res.status_code == 200, start_res.text
+    assert start_res.json()["status"] == "in_progress"
+    assert start_res.json()["workflow_state"] == "in_progress"
+    assert start_res.json()["structure_generated"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "fmt",
+    [
+        TournamentFormat.ROUND_ROBIN,
+        TournamentFormat.BRACKET,
+        TournamentFormat.POOL_PLAY,
+        TournamentFormat.SCRAMBLE,
+    ],
+)
+async def test_full_e2e_lifecycle_synchronization_all_four_formats(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+    fmt: TournamentFormat,
+):
+    """
+    Full E2E verification across Round Robin, Bracket Play, Pool Play, and Scramble:
+    - Registration Open -> Registration Closed (configuration_required) -> Configuration Saved
+      (configuration_saved) -> Structure Generated (structure_generated / in_progress) ->
+      Start Tournament -> Score All Matches -> Completed (completed).
+    - Verifies listing, detail, setup endpoints and club_name stay consistent at every stage.
+    """
+    club, owner, active_courts, _, players = await _setup_club_with_players_and_courts(
+        db_session, num_players=8, num_active_courts=2, num_inactive_courts=0
+    )
+    owner_h = make_auth_header(owner.id)
+    t = await _create_tournament(
+        db_session, club, owner, fmt, is_doubles=False, min_participants=4, max_participants=8
+    )
+
+    player_count = 4 if fmt != TournamentFormat.POOL_PLAY else 8
+    for idx in range(player_count):
+        reg = await async_client.post(
+            f"/api/v1/tournaments/{t.id}/register",
+            headers=make_auth_header(players[idx][0].id),
+        )
+        assert reg.status_code == 201
+
+    # Stage 2: Close registration -> configuration_required
+    close_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/close-registration",
+        headers=owner_h,
+    )
+    assert close_res.status_code == 200
+    assert close_res.json()["workflow_state"] == "configuration_required"
+    assert close_res.json()["structure_generated"] is False
+    assert close_res.json()["club_name"] == club.name
+
+    # Stage 4/5: Save valid configuration -> configuration_saved (not yet generated)
+    court_ids = [str(c.id) for c in active_courts]
+    save_payload: dict = {"selected_court_ids": court_ids, "courts_count": 2}
+    if fmt == TournamentFormat.BRACKET:
+        save_payload["bracket_type"] = "Single Elimination"
+    elif fmt == TournamentFormat.POOL_PLAY:
+        save_payload.update({"number_of_pools": 2, "qualifiers_per_pool": 1, "bracket_type": "Single Elimination"})
+    elif fmt == TournamentFormat.SCRAMBLE:
+        save_payload.update({"rounds": 1, "rotation_rule": "Balanced Pairings (fair partner distribution)"})
+
+    save_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/configuration",
+        headers=owner_h,
+        json=save_payload,
+    )
+    assert save_res.status_code == 200, save_res.text
+    assert save_res.json()["workflow_state"] == "configuration_saved"
+    assert save_res.json()["configuration_saved"] is True
+    assert save_res.json()["is_generated"] is False
+
+    # Listing reflects configuration_saved immediately
+    listing_saved = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments", headers=owner_h)
+    card_saved = next(item for item in listing_saved.json() if item["id"] == str(t.id))
+    assert card_saved["workflow_state"] == "configuration_saved"
+    assert card_saved["configuration_saved"] is True
+    assert card_saved["structure_generated"] is False
+
+    # Stage 6: Generate structure
+    if fmt == TournamentFormat.ROUND_ROBIN:
+        g = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-round-robin?require_saved_config=true",
+            headers=owner_h,
+        )
+        assert g.status_code == 201
+        expected_post_gen_states = {"in_progress", "structure_generated"}
+    elif fmt == TournamentFormat.BRACKET:
+        g = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-bracket?require_saved_config=true",
+            headers=owner_h,
+        )
+        assert g.status_code == 201
+        expected_post_gen_states = {"in_progress", "structure_generated"}
+    elif fmt == TournamentFormat.POOL_PLAY:
+        g = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/pool-play/confirm-and-generate",
+            headers=owner_h,
+            json={
+                "number_of_pools": 2,
+                "qualifiers_per_pool": 1,
+                "bracket_type": "Single Elimination",
+                "selected_court_ids": court_ids,
+                "courts_count": 2,
+                "require_saved_config": True,
+            },
+        )
+        assert g.status_code == 201
+        expected_post_gen_states = {"structure_generated"}
+    else:
+        g = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/confirm-and-generate",
+            headers=owner_h,
+            json={
+                "rounds": 1,
+                "rotation_rule": "Balanced Pairings (fair partner distribution)",
+                "selected_court_ids": court_ids,
+                "courts_count": 2,
+                "require_saved_config": True,
+            },
+        )
+        assert g.status_code == 201
+        expected_post_gen_states = {"structure_generated"}
+
+    listing_gen = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments", headers=owner_h)
+    card_gen = next(item for item in listing_gen.json() if item["id"] == str(t.id))
+    assert card_gen["workflow_state"] in expected_post_gen_states
+    assert card_gen["structure_generated"] is True
+    assert card_gen["configuration_saved"] is True
+
+    # Stage 7: Start tournament (if still registration_closed)
+    if card_gen["status"] == "registration_closed":
+        start_res = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=owner_h,
+        )
+        assert start_res.status_code == 200
+        assert start_res.json()["workflow_state"] == "in_progress"
+        assert start_res.json()["structure_generated"] is True
+
+    # Stage 8: Complete all matches / conclude tournament
+    if fmt == TournamentFormat.ROUND_ROBIN:
+        rr_matches = (await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches", headers=owner_h)).json()
+        for m in rr_matches:
+            if m["status"] != "completed":
+                r = await async_client.post(
+                    f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                    headers=owner_h,
+                    json={"score_a": 11, "score_b": 4},
+                )
+                assert r.status_code == 200
+    elif fmt == TournamentFormat.BRACKET:
+        for _ in range(3):
+            br_matches = (await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}/bracket/matches", headers=owner_h)).json()
+            progressed = False
+            for m in br_matches:
+                if m["status"] != "completed" and m.get("team_a_id") and m.get("team_b_id"):
+                    r = await async_client.post(
+                        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                        headers=owner_h,
+                        json={"score_a": 11, "score_b": 5},
+                    )
+                    assert r.status_code == 200
+                    progressed = True
+            if not progressed:
+                break
+    elif fmt == TournamentFormat.POOL_PLAY:
+        pm_res = await async_client.get(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/pools/matches", headers=owner_h
+        )
+        assert pm_res.status_code == 200, pm_res.text
+        pool_matches = pm_res.json()
+        for m in pool_matches:
+            if m["status"] != "completed":
+                r = await async_client.post(
+                    f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                    headers=owner_h,
+                    json={"score_a": 11, "score_b": 6},
+                )
+                assert r.status_code == 200
+        champ = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-championship",
+            headers=owner_h,
+        )
+        assert champ.status_code == 201
+        champ_matches = (await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}/championship/matches", headers=owner_h)).json()
+        for m in champ_matches:
+            if m["status"] != "completed" and m.get("team_a_id") and m.get("team_b_id"):
+                r = await async_client.post(
+                    f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                    headers=owner_h,
+                    json={"score_a": 11, "score_b": 7},
+                )
+                assert r.status_code == 200
+    else:
+        sc_matches = (await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches", headers=owner_h)).json()
+        for m in sc_matches:
+            if m["status"] != "completed":
+                r = await async_client.post(
+                    f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{m['id']}/result",
+                    headers=owner_h,
+                    json={"score_a": 11, "score_b": 5},
+                )
+                assert r.status_code == 200
+        end_res = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/end-tournament",
+            headers=owner_h,
+        )
+        assert end_res.status_code == 200
+
+    # Reload listing & detail -> Completed, club_name intact, configuration stays locked
+    detail_done = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}", headers=owner_h)
+    assert detail_done.status_code == 200
+    dj = detail_done.json()
+    assert dj["status"] == "completed"
+    assert dj["workflow_state"] == "completed"
+    assert dj["structure_generated"] is True
+    assert dj["club_name"] == club.name
+
+    listing_done = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments", headers=owner_h)
+    card_done = next(item for item in listing_done.json() if item["id"] == str(t.id))
+    assert card_done["status"] == "completed"
+    assert card_done["workflow_state"] == "completed"
+    assert card_done["structure_generated"] is True
+
+

@@ -38,7 +38,11 @@ import {
   PostRegistrationSaveActionBar,
   PostRegistrationStepper,
 } from '@/components/post-registration';
-import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Court, ScrambleState, SetupCourtItem, Tournament } from '@/types';
@@ -240,6 +244,7 @@ export function ScrambleSetupRoundsTab({
     if (!clubId || !tournamentId || !canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
         rounds,
         rotation_rule: rotationRule,
@@ -286,6 +291,7 @@ export function ScrambleSetupRoundsTab({
     const execute = async () => {
       try {
         setGenerating(true);
+        await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
         if (isGenerated) {
           await competitionApi.regenerateScramble(clubId, tournamentId);
         } else {
@@ -297,6 +303,12 @@ export function ScrambleSetupRoundsTab({
             require_saved_config: true,
           });
         }
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          workflow_state:
+            tournament?.status === 'in_progress' ? 'in_progress' : 'structure_generated',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await fetchSetup();
         if (onGenerated) await onGenerated();

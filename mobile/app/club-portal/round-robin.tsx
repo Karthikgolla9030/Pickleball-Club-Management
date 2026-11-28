@@ -448,12 +448,14 @@ export default function RoundRobinWorkspaceScreen() {
 
   const primaryAction = useMemo(() => {
     if (!canManage) return null;
-    if (tournament?.status === 'draft') {
+    if (tournament?.status === 'completed' || tournament?.workflow_state === 'completed') {
       return {
-        label: 'Publish Tournament',
-        onPress: handlePublishTournament,
-        isLoading: isOpenRegistrationPending,
+        label: 'View Results',
+        onPress: () => setActiveTab('results'),
       };
+    }
+    if (tournament?.status === 'draft') {
+      return null;
     }
     if (tournament?.status === 'registration_open') {
       return {
@@ -463,46 +465,39 @@ export default function RoundRobinWorkspaceScreen() {
         variant: 'secondary' as const,
       };
     }
-    if (tournament?.status === 'completed') {
-      return {
-        label: 'View Results',
-        onPress: () => setActiveTab('results'),
-      };
-    }
-    const remaining = Math.max(0, progress.totalMatches - progress.completedMatches);
-    if (canGenerate) {
+    const hasGeneratedStructure = Boolean(tournament?.structure_generated || matches.length > 0);
+    if (tournament?.status === 'registration_closed') {
+      if (hasGeneratedStructure) {
+        return {
+          label: 'Start Tournament',
+          onPress: handleStartTournament,
+          isLoading: isStartingTournament,
+        };
+      }
       if (!tournament?.configuration_saved) {
         return {
-          label: 'Setup & Courts',
+          label: 'Configure Format',
           onPress: () => setActiveTab('setup_courts'),
         };
       }
-      return {
-        label: 'Generate Matchups',
-        onPress: handleGenerateMatchups,
-        isLoading: isGenerating,
-      };
+      return null;
     }
+    const remaining = Math.max(0, progress.totalMatches - progress.completedMatches);
     if (matches.length > 0 && remaining > 0) {
       return {
         label: 'Enter Scores',
         onPress: () => setActiveTab('matchups'),
       };
     }
-    if (matches.length > 0 && remaining === 0) {
-      return {
-        label: 'View Results',
-        onPress: () => setActiveTab('results'),
-      };
-    }
     return null;
   }, [
     canManage,
     tournament?.status,
+    tournament?.workflow_state,
+    tournament?.configuration_saved,
+    tournament?.structure_generated,
     isOpenRegistrationPending,
     isCloseRegistrationPending,
-    canGenerate,
-    isGenerating,
     isStartingTournament,
     matches.length,
     progress.totalMatches,

@@ -1728,6 +1728,20 @@ class CompetitionService:
 
         config = dict(tournament.format_configuration or {})
         config["pool_play_state"] = payload
+        pps_matches = payload.get("matches")
+        if isinstance(pps_matches, list) and len(pps_matches) > 0:
+            config["is_format_configured"] = True
+            config["configuration_saved"] = True
+            config["configuration_saved_at"] = (
+                config.get("configuration_saved_at")
+                or datetime.now(timezone.utc).isoformat()
+            )
+            if (
+                tournament.status == TournamentStatus.REGISTRATION_CLOSED
+                and config.get("configuration_stage")
+                in (None, "awaiting_format_configuration", "configuration_saved")
+            ):
+                config["configuration_stage"] = "ready_to_start"
         tournament.format_configuration = config
         flag_modified(tournament, "format_configuration")
 
@@ -1743,9 +1757,19 @@ class CompetitionService:
         await self.db.commit()
         await self.db.refresh(tournament)
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
+        workflow_meta = await compute_tournament_workflow_meta(self.db, tournament)
         return {
             "tournament_id": str(tournament.id),
             "status": tournament.status.value,
+            "workflow_state": workflow_meta.workflow_state,
+            "workflow_state_label": workflow_meta.workflow_state_label,
+            "configuration_saved": workflow_meta.configuration_saved,
+            "structure_generated": workflow_meta.structure_generated,
             "pool_play_state": tournament.format_configuration.get("pool_play_state", {}),
             "winner": (tournament.format_configuration or {}).get("winner"),
             "podium": (tournament.format_configuration or {}).get("podium", []),
@@ -4406,6 +4430,11 @@ class CompetitionService:
         await self._evaluate_and_persist_tournament_completion(tournament, force_scramble_end=True)
         await self.db.commit()
 
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
+
         return await self.get_scramble_state(club_id, tournament_id)
 
 
@@ -5338,8 +5367,8 @@ class CompetitionService:
         )
 
         existing_matches = await self.competition_repo.count_all_matches(tournament_id)
-        is_generated = existing_matches > 0
         workflow_meta = await compute_tournament_workflow_meta(self.db, tournament)
+        is_generated = existing_matches > 0 or workflow_meta.structure_generated
         all_active_courts, selected_courts, effective_courts = await resolve_and_validate_courts(
             self.court_repo, club_id, tournament
         )

@@ -23,7 +23,11 @@ import {
   PostRegistrationNotice,
   PostRegistrationSaveActionBar,
 } from '@/components/post-registration';
-import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Tournament, TournamentSetupResponse } from '@/types';
@@ -153,6 +157,7 @@ export function BracketSetupCourtsTab({
     if (!canManage || !isValid || isLocked) return;
     try {
       setSaving(true);
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
       const saved = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
         bracket_type: bracketType,
         selected_court_ids: selectedCourtIds,
@@ -193,11 +198,18 @@ export function BracketSetupCourtsTab({
     const execute = async () => {
       try {
         setGenerating(true);
+        await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
         if (isGenerated) {
           await competitionApi.regenerateBracket(clubId, tournamentId);
         } else {
           await competitionApi.generateBracket(clubId, tournamentId, true);
         }
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: 'in_progress',
+          workflow_state: 'in_progress',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await loadSetup();
         await (onGenerated ? onGenerated() : onRefresh());

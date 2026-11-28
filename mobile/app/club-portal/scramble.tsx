@@ -403,11 +403,7 @@ export default function ScrambleWorkspaceScreen() {
       };
     }
     if (tournament?.status === 'draft') {
-      return {
-        label: 'Publish Tournament',
-        onPress: handlePublishTournament,
-        isLoading: isOpenRegistrationPending,
-      };
+      return null;
     }
     if (tournament?.status === 'registration_open') {
       return {
@@ -416,6 +412,26 @@ export default function ScrambleWorkspaceScreen() {
         isLoading: isCloseRegistrationPending,
         variant: 'secondary' as const,
       };
+    }
+
+    const hasGeneratedStructure = Boolean(
+      tournament?.structure_generated || isScheduleGenerated || validMatches.length > 0
+    );
+    if (tournament?.status === 'registration_closed') {
+      if (hasGeneratedStructure) {
+        return {
+          label: 'Start Tournament',
+          onPress: handleStartTournament,
+          isLoading: isStartingTournament,
+        };
+      }
+      if (!tournament?.configuration_saved) {
+        return {
+          label: 'Configure Format',
+          onPress: () => setActiveTab('setup_rounds'),
+        };
+      }
+      return null;
     }
 
     const currentRound = state?.current_round ?? 1;
@@ -496,6 +512,9 @@ export default function ScrambleWorkspaceScreen() {
   }, [
     canManage,
     tournament?.status,
+    tournament?.configuration_saved,
+    tournament?.structure_generated,
+    isScheduleGenerated,
     state?.tournament_status,
     state?.round_status,
     state?.available_players_count,

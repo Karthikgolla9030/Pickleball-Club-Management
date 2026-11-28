@@ -110,7 +110,17 @@ function renderTabIcon(iconName: string, color: string, size = 16) {
   }
 }
 
-function getStatusBadgeConfig(status?: string) {
+function getStatusBadgeConfig(status?: string, workflowState?: string) {
+  const wf = workflowState?.toLowerCase();
+  if (status?.toLowerCase() === 'registration_closed') {
+    if (wf === 'structure_generated') {
+      return { bg: '#DCFCE7', text: '#15803D', label: 'SCHEDULE GENERATED' };
+    }
+    if (wf === 'configuration_saved') {
+      return { bg: '#CCFBF1', text: '#0F766E', label: 'CONFIGURATION SAVED' };
+    }
+    return { bg: '#FEF3C7', text: '#B45309', label: 'AWAITING CONFIGURATION' };
+  }
   switch (status?.toLowerCase()) {
     case 'in_progress':
       return { bg: '#E0F2FE', text: '#0369A1', label: 'IN PROGRESS' };
@@ -121,8 +131,6 @@ function getStatusBadgeConfig(status?: string) {
     case 'registration_open':
     case 'open':
       return { bg: '#DCFCE7', text: '#15803D', label: 'REGISTRATION OPEN' };
-    case 'registration_closed':
-      return { bg: '#F1F5F9', text: '#475569', label: 'REGISTRATION CLOSED' };
     case 'draft':
     default:
       return { bg: '#FEF3C7', text: '#B45309', label: 'DRAFT' };
@@ -177,9 +185,17 @@ export function TournamentManagementInfo({
   activeTab,
 }: TournamentManagementInfoProps) {
   const parsedConfig = parseTournamentConfig(tournament);
-  const statusConfig = getStatusBadgeConfig(tournament?.status);
+  const statusConfig = getStatusBadgeConfig(tournament?.status, tournament?.workflow_state ?? undefined);
   const formatLabel = tournament?.format_label || getFormatDisplayLabel(tournament?.format);
   const categoryLabel = parsedConfig.category || (parsedConfig.isSingles ? 'Singles' : 'Doubles');
+
+  // Display only the host club name in the header (keep full venue address out of header clutter).
+  const clubOnlyName = React.useMemo(() => {
+    if (tournament?.club_name?.trim()) return tournament.club_name.trim();
+    const raw = tournament?.location_name?.trim();
+    if (!raw) return null;
+    return raw.split(' — ')[0].split(' - ')[0].trim() || raw;
+  }, [tournament?.club_name, tournament?.location_name]);
 
   const formattedDate = React.useMemo(() => {
     if (!tournament?.start_date) return null;
@@ -195,15 +211,14 @@ export function TournamentManagementInfo({
     }
   }, [tournament?.start_date]);
 
-  // Redundant action filter: Do not show action if user is already on that tab,
-  // and completely omit prominent "Start Tournament" header buttons across all tournament formats.
+  // Redundant action filter: omit action if the user is already on the destination tab.
   const isRedundant = React.useMemo(() => {
     if (!primaryAction) return true;
     const label = primaryAction.label.toLowerCase();
-    if (label.includes('start tournament') || label.includes('start now')) return true;
+    if ((activeTab === 'setup_courts' || activeTab === 'setup_rounds') && label.includes('configure')) return true;
     if (activeTab === 'results' && label.includes('result')) return true;
     if ((activeTab === 'matches' || activeTab === 'matchups' || activeTab === 'rounds') && (label.includes('score') || label.includes('match') || label.includes('round'))) return true;
-    if (activeTab === 'bracket' && label.includes('bracket')) return true;
+    if ((activeTab === 'bracket' || activeTab === 'championship') && (label.includes('bracket') || label.includes('championship'))) return true;
     if (activeTab === 'standings' && label.includes('standing')) return true;
     return false;
   }, [primaryAction, activeTab]);
@@ -228,37 +243,37 @@ export function TournamentManagementInfo({
         </View>
       </View>
 
-      {/* Meta Details & Compact Action Row */}
-      <View style={styles.metaAndActionRow}>
-        <View style={styles.metaRow}>
-          {formattedDate && (
-            <View style={styles.metaItem}>
-              <Calendar size={13} color="#64748B" />
-              <AppText style={styles.metaText}>{formattedDate}</AppText>
-            </View>
-          )}
-
-          {tournament?.location_name && (
-            <View style={styles.metaItem}>
-              <MapPin size={13} color="#64748B" />
-              <AppText style={styles.metaText} numberOfLines={1}>
-                {tournament.location_name}
-              </AppText>
-            </View>
-          )}
-
+      {/* Meta Details Row */}
+      <View style={styles.metaRow}>
+        {formattedDate && (
           <View style={styles.metaItem}>
-            <Users size={13} color="#64748B" />
-            <AppText style={styles.metaText}>
-              {tournament?.teams_count ?? tournament?.participant_count ?? 0}
-              {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
-              {parsedConfig.isSingles ? 'Players' : 'Teams'}
+            <Calendar size={13} color="#64748B" />
+            <AppText style={styles.metaText}>{formattedDate}</AppText>
+          </View>
+        )}
+
+        {clubOnlyName && (
+          <View style={styles.metaItem}>
+            <MapPin size={13} color="#64748B" />
+            <AppText style={styles.metaText} numberOfLines={1}>
+              {clubOnlyName}
             </AppText>
           </View>
-        </View>
+        )}
 
-        {/* Compact, appropriately positioned action button */}
-        {!isRedundant && primaryAction && (
+        <View style={styles.metaItem}>
+          <Users size={13} color="#64748B" />
+          <AppText style={styles.metaText}>
+            {tournament?.teams_count ?? tournament?.participant_count ?? 0}
+            {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
+            {parsedConfig.isSingles ? 'Players' : 'Teams'}
+          </AppText>
+        </View>
+      </View>
+
+      {/* Dedicated Lifecycle Action Row: Positioned cleanly below info & above tabs */}
+      {!isRedundant && primaryAction && (
+        <View style={styles.actionRow}>
           <TouchableOpacity
             style={[
               styles.compactBtn,
@@ -280,8 +295,8 @@ export function TournamentManagementInfo({
               {primaryAction.isLoading ? 'Processing...' : primaryAction.label}
             </AppText>
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -506,36 +521,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#065F46',
   },
-  metaAndActionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 200,
+    columnGap: 14,
+    rowGap: 6,
+    width: '100%',
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   metaText: {
-    fontSize: 11.5,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '500',
+    flexShrink: 1,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingTop: 4,
+    marginTop: 2,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F1F5F9',
   },
   compactBtn: {
     backgroundColor: '#0F766E',
     borderRadius: Radius.full,
-    paddingVertical: 6,
-    paddingHorizontal: 13,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#0F766E',
@@ -543,7 +564,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 3,
     elevation: 2,
-    alignSelf: 'flex-start',
   },
   compactBtnDanger: {
     backgroundColor: '#DC2626',

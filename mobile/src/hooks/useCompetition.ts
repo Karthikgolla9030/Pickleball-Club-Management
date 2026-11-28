@@ -5,6 +5,11 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from './useTournaments';
 import { competitionApi } from '@/services/api';
 import { QUERY_KEYS } from '@/constants';
 import type {
@@ -125,20 +130,24 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.generateRoundRobin(clubId, tournamentId, Boolean(requireSavedConfig));
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: 'in_progress',
+          workflow_state: 'in_progress',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
         });
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_STANDINGS(clubId, tournamentId),
         });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId),
-        });
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId),
-        });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });
@@ -148,6 +157,9 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.regenerateRoundRobin(clubId, tournamentId);
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
         queryClient.invalidateQueries({
@@ -156,6 +168,7 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
         queryClient.invalidateQueries({
           queryKey: QUERY_KEYS.CLUB_STANDINGS(clubId, tournamentId),
         });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });
@@ -387,12 +400,20 @@ export function usePools(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.generatePoolPlay(clubId, tournamentId);
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: 'in_progress',
+          workflow_state: 'in_progress',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_POOL_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_POOL_STANDINGS(clubId, tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });
@@ -402,10 +423,14 @@ export function usePools(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.regeneratePoolPlay(clubId, tournamentId);
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_POOL_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_POOL_STANDINGS(clubId, tournamentId) });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });
@@ -720,12 +745,6 @@ export function useScramble(clubId: string | null, tournamentId: string | null) 
         queryKey: QUERY_KEYS.CLUB_SCRAMBLE_STANDINGS(clubId, tournamentId),
       });
       queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId),
-      });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId),
-      });
-      queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.PLAYER_SCRAMBLE_STATE(tournamentId),
       });
       queryClient.invalidateQueries({
@@ -734,9 +753,7 @@ export function useScramble(clubId: string | null, tournamentId: string | null) 
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.PLAYER_SCRAMBLE_STANDINGS(tournamentId),
       });
-      queryClient.invalidateQueries({
-        queryKey: QUERY_KEYS.PLAYER_TOURNAMENTS,
-      });
+      invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
     }
   };
 
@@ -1008,12 +1025,20 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.generateBracket(clubId, tournamentId, Boolean(requireSavedConfig));
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          status: 'in_progress',
+          workflow_state: 'in_progress',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_SUMMARY(clubId, tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });
@@ -1023,12 +1048,14 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
       if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
       return competitionApi.regenerateBracket(clubId, tournamentId);
     },
+    onMutate: async () => {
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
+    },
     onSuccess: () => {
       if (clubId && tournamentId) {
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId) });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_SUMMARY(clubId, tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_TOURNAMENTS(clubId) });
+        invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
       }
     },
   });

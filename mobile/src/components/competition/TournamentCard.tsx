@@ -165,11 +165,18 @@ export function TournamentCard({
   const isInProgress = !isCompleted && !isCancelled && (statusLower === 'in_progress' || workflowLower === 'in_progress');
   const isClosed = !isCompleted && !isCancelled && !isInProgress && statusLower === 'registration_closed';
 
+  const ppsMatchesCount = Array.isArray(fc.pool_play_state?.matches)
+    ? fc.pool_play_state.matches.length
+    : 0;
   const isStructureGenerated =
     isClosed &&
     (workflowLower === 'structure_generated' ||
       Boolean(tournament.structure_generated) ||
-      Boolean(fc.is_format_configured));
+      ppsMatchesCount > 0 ||
+      (Boolean(fc.is_format_configured) &&
+        ['ready_to_start', 'schedule_generated', 'in_progress'].includes(
+          String(fc.configuration_stage || '')
+        )));
   const isConfigSaved =
     isClosed &&
     !isStructureGenerated &&
@@ -182,7 +189,7 @@ export function TournamentCard({
   const baseStatusBadge = isCompleted ? getStatusBadgeStyle('completed') : getStatusBadgeStyle(tournament.status);
   const statusBadge = isAwaitingFormatConfig
     ? {
-        label: 'Registration Closed – Awaiting Configuration',
+        label: 'Awaiting Configuration',
         bg: 'rgba(217, 119, 6, 0.92)',
         text: '#FFFFFF',
       }
@@ -194,7 +201,7 @@ export function TournamentCard({
       }
     : isStructureGenerated
     ? {
-        label: 'Ready to Start',
+        label: 'Schedule Generated',
         bg: 'rgba(21, 128, 61, 0.94)',
         text: '#FFFFFF',
       }
@@ -394,9 +401,23 @@ export function TournamentCard({
                 onPress();
               }}
               activeOpacity={0.8}
-              accessibilityLabel={`Start ${tournament.name}`}
+              accessibilityLabel={`View tournament for ${tournament.name}`}
             >
-              <AppText style={styles.bottomPublishBtnText}>Ready to Start →</AppText>
+              <AppText style={styles.bottomPublishBtnText}>View Tournament →</AppText>
+            </TouchableOpacity>
+          )}
+
+          {isInProgress && (
+            <TouchableOpacity
+              style={styles.bottomPublishBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                onPress();
+              }}
+              activeOpacity={0.8}
+              accessibilityLabel={`Manage and enter scores for ${tournament.name}`}
+            >
+              <AppText style={styles.bottomPublishBtnText}>Enter Scores →</AppText>
             </TouchableOpacity>
           )}
         </View>

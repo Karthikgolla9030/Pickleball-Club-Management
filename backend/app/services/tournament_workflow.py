@@ -232,9 +232,18 @@ async def compute_tournaments_workflow_meta(
         config_saved = bool(cfg.get("configuration_saved", False))
         config_saved_at = cfg.get("configuration_saved_at")
         matches_count = matches_by_tid.get(t.id, 0)
-        structure_generated = matches_count > 0 or bool(
-            cfg.get("is_format_configured", False)
-            and cfg.get("configuration_stage") in ("ready_to_start", "schedule_generated", "in_progress")
+        pps_matches_count = (
+            len(pps.get("matches", []))
+            if isinstance(pps.get("matches"), list)
+            else 0
+        )
+        structure_generated = (
+            matches_count > 0
+            or pps_matches_count > 0
+            or bool(
+                cfg.get("is_format_configured", False)
+                and cfg.get("configuration_stage") in ("ready_to_start", "schedule_generated", "in_progress")
+            )
         )
         is_effectively_completed = (
             t.status == TournamentStatus.COMPLETED

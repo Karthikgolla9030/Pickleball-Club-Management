@@ -1125,7 +1125,13 @@ class TournamentService:
         elif tournament.format == TournamentFormat.POOL_PLAY:
             pools = await self.competition_repo.list_pools_by_tournament(tournament_id)
             matches_count = await self.competition_repo.count_all_matches(tournament_id)
-            if not pools or matches_count == 0:
+            pps = (tournament.format_configuration or {}).get("pool_play_state") or {}
+            pps_matches_count = (
+                len(pps.get("matches", []))
+                if isinstance(pps.get("matches"), list)
+                else 0
+            )
+            if not pools or (matches_count == 0 and pps_matches_count == 0):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot start Pool Play tournament: pools and match schedule must be configured and generated first.",

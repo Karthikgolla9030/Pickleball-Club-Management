@@ -25,7 +25,11 @@ import {
   PostRegistrationSaveActionBar,
   PostRegistrationStepper,
 } from '@/components/post-registration';
-import { invalidateAllTournamentQueries, syncTournamentCountInCaches } from '@/hooks/useTournaments';
+import {
+  cancelTournamentDetailAndListQueries,
+  invalidateAllTournamentQueries,
+  syncTournamentCountInCaches,
+} from '@/hooks/useTournaments';
 import { competitionApi } from '@/services/api/competition';
 import { Radius, Spacing } from '@/theme';
 import type { Court, SetupCourtItem, Tournament } from '@/types';
@@ -251,6 +255,7 @@ export function PoolPlaySetupCourtsTab({
     if (!canManage || !clubId || !tournamentId || !isValid || isLocked) return;
     try {
       setSaving(true);
+      await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
       const res = await competitionApi.saveTournamentConfiguration(clubId, tournamentId, {
         number_of_pools: safeNumPools,
         qualifiers_per_pool: safeQualifiers,
@@ -301,6 +306,7 @@ export function PoolPlaySetupCourtsTab({
     const executeGeneration = async () => {
       try {
         setGenerating(true);
+        await cancelTournamentDetailAndListQueries(queryClient, tournamentId, clubId);
         if (isGenerated) {
           await competitionApi.regeneratePoolPlay(clubId, tournamentId);
         } else {
@@ -314,6 +320,12 @@ export function PoolPlaySetupCourtsTab({
             require_saved_config: true,
           });
         }
+        syncTournamentCountInCaches(queryClient, tournamentId, {
+          workflow_state:
+            tournament?.status === 'in_progress' ? 'in_progress' : 'structure_generated',
+          configuration_saved: true,
+          structure_generated: true,
+        });
         invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
         await fetchSetup();
         if (onGenerated) await onGenerated();
