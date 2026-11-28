@@ -168,8 +168,13 @@ export default function ClubDetailsScreen() {
   const [activeTab, setActiveTab] = useState<'edit' | 'branding' | 'tournament_config' | 'preview'>(
     () => resolveClubTab(Array.isArray(paramTab) ? paramTab[0] : paramTab)
   );
+  const [previewRefreshSignal, setPreviewRefreshSignal] = useState(0);
   const handleTabChange = (nextTab: 'edit' | 'branding' | 'tournament_config' | 'preview') => {
     setActiveTab(nextTab);
+    if (nextTab === 'preview') {
+      setPreviewRefreshSignal((s) => s + 1);
+      refetch();
+    }
     router.setParams({ tab: nextTab } as any);
   };
   const [isEditing, setIsEditing] = useState(false);
@@ -242,6 +247,7 @@ export default function ClubDetailsScreen() {
   // Pull-to-refresh
   const onRefresh = async () => {
     setRefreshing(true);
+    setPreviewRefreshSignal((s) => s + 1);
     await refetch();
     setRefreshing(false);
   };
@@ -380,7 +386,55 @@ export default function ClubDetailsScreen() {
   };
 
   const currentLogoUri = getFullImageUrl(club?.logo_url || branding?.logo_url);
-  const currentCoverUri = getFullImageUrl(club?.cover_image_url || branding?.cover_image_url);
+
+  const hasUnsavedEdits = useMemo(() => {
+    if (!club) return false;
+    const norm = (val?: string | null) => (val ?? '').trim();
+    const savedDays = parseDaysList(club.operating_days).slice().sort().join(',');
+    const draftDays = selectedDays.slice().sort().join(',');
+    return (
+      norm(name) !== norm(club.name) ||
+      norm(shortDescription) !== norm(club.short_description) ||
+      norm(description) !== norm(club.description) ||
+      norm(contactEmail) !== norm(club.contact_email) ||
+      norm(contactPhone) !== norm(club.contact_phone) ||
+      norm(website) !== norm(club.website) ||
+      norm(establishedYear) !== (club.established_year ? String(club.established_year) : '') ||
+      norm(addressLine1) !== norm(club.address_line1) ||
+      norm(addressLine2) !== norm(club.address_line2) ||
+      norm(city) !== norm(club.city) ||
+      norm(state) !== norm(club.state) ||
+      norm(postalCode) !== norm(club.postal_code) ||
+      norm(country) !== norm(club.country || 'United States') ||
+      draftDays !== savedDays ||
+      norm(openingTime) !== (club.opening_time ? club.opening_time.slice(0, 5) : '06:00') ||
+      norm(closingTime) !== (club.closing_time ? club.closing_time.slice(0, 5) : '22:00') ||
+      norm(timezone) !== norm(club.timezone || 'America/New_York') ||
+      norm(facilitiesSummary) !== norm(club.facilities_summary) ||
+      norm(holidayClosureNotes) !== norm(club.holiday_closure_notes)
+    );
+  }, [
+    club,
+    name,
+    shortDescription,
+    description,
+    contactEmail,
+    contactPhone,
+    website,
+    establishedYear,
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    postalCode,
+    country,
+    selectedDays,
+    openingTime,
+    closingTime,
+    timezone,
+    facilitiesSummary,
+    holidayClosureNotes,
+  ]);
 
   const formattedAddress = useMemo(() => {
     const parts = [
@@ -1079,39 +1133,42 @@ export default function ClubDetailsScreen() {
                 )
               ) : (
                 /* ═══════════════════════════════════════════════════════════
-                   PREVIEW TAB
+                   PREVIEW TAB — Uses exact Player Side View Club component
                    ═══════════════════════════════════════════════════════════ */
                 <View style={styles.previewWrapper}>
-                  <View style={styles.previewModeBanner}>
-                    <Eye size={15} color="#176B57" />
-                    <AppText style={styles.previewModeText}>
-                      Live preview using saved club details and branding.
-                    </AppText>
-                  </View>
+                  {hasUnsavedEdits ? (
+                    <View style={styles.previewUnsavedBanner}>
+                      <View style={styles.previewBannerRow}>
+                        <Eye size={15} color="#B45309" />
+                        <AppText style={styles.previewUnsavedText}>
+                          You have unsaved edits in Profile. Preview displays your last saved club data until you save.
+                        </AppText>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.previewBackToEditBtn}
+                        onPress={() => {
+                          handleTabChange('edit');
+                          setIsEditing(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <AppText style={styles.previewBackToEditText}>Review & Save in Profile</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.previewModeBanner}>
+                      <Eye size={15} color="#176B57" />
+                      <AppText style={styles.previewModeText}>
+                        Player view preview using your club&apos;s current saved details and branding.
+                      </AppText>
+                    </View>
+                  )}
 
                   <PlayerClubDetailsPreview
                     clubId={clubId}
                     club={club}
-                    name={name}
-                    shortDescription={shortDescription}
-                    description={description}
-                    contactEmail={contactEmail}
-                    contactPhone={contactPhone}
-                    website={website}
-                    establishedYear={establishedYear}
-                    addressLine1={addressLine1}
-                    addressLine2={addressLine2}
-                    city={city}
-                    state={state}
-                    postalCode={postalCode}
-                    country={country}
-                    selectedDays={selectedDays}
-                    openingTime={openingTime}
-                    closingTime={closingTime}
-                    timezone={timezone}
-                    facilitiesSummary={facilitiesSummary}
-                    logoUri={currentLogoUri}
-                    coverUri={currentCoverUri}
+                    branding={branding}
+                    refreshSignal={previewRefreshSignal}
                   />
                 </View>
               )}
@@ -1496,6 +1553,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#176B57',
+  },
+  previewUnsavedBanner: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[2.5],
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    gap: Spacing[2],
+  },
+  previewBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
+  previewUnsavedText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 17,
+  },
+  previewBackToEditBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  previewBackToEditText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B45309',
   },
   previewHeroCard: {
     backgroundColor: '#FFFFFF',

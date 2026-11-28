@@ -84,7 +84,9 @@ export function useUpdateClubBranding(clubIdParam?: string | null) {
         queryClient.invalidateQueries({ queryKey: ['club-branding', targetClubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(targetClubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', targetClubId] });
+        queryClient.invalidateQueries({ queryKey: ['club-carousel-slides', targetClubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(targetClubId) });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         queryClient.invalidateQueries({ queryKey: ['club-tournaments', targetClubId] });
         queryClient.invalidateQueries({ queryKey: ['tournaments'] });
         queryClient.invalidateQueries({ queryKey: ['club-leagues', targetClubId] });

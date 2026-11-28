@@ -53,10 +53,12 @@ export function useClubDetails(overrideClubId?: string | null) {
       }
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
+        queryClient.setQueryData(['public-club', clubId], updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         queryClient.invalidateQueries({ queryKey: ['club-dashboard', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-tournaments', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-events', clubId] });
@@ -103,10 +105,12 @@ export function useClubDetails(overrideClubId?: string | null) {
       }
       if (clubId) {
         queryClient.setQueryData(QUERY_KEYS.CLUB_DETAIL(clubId), updatedClub);
+        queryClient.setQueryData(['public-club', clubId], updatedClub);
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_DETAIL(clubId) });
         queryClient.invalidateQueries({ queryKey: ['public-club', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-branding', clubId] });
         queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PLAYER_CLUB_DETAIL(clubId) });
+        queryClient.invalidateQueries({ queryKey: ['player', 'upcoming-activities'] });
         queryClient.invalidateQueries({ queryKey: ['club-dashboard', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-tournaments', clubId] });
         queryClient.invalidateQueries({ queryKey: ['club-events', clubId] });
