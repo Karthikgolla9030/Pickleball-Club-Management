@@ -240,7 +240,9 @@ export function TournamentManagementInfo({
         <View style={styles.metaColumn}>
           {formattedDate && (
             <View style={styles.metaItem}>
-              <Calendar size={13} color="#64748B" />
+              <View style={styles.metaIconWrap}>
+                <Calendar size={13} color="#64748B" />
+              </View>
               <AppText style={styles.metaText} numberOfLines={1}>
                 {formattedDate}
               </AppText>
@@ -249,7 +251,9 @@ export function TournamentManagementInfo({
 
           {clubOnlyName && (
             <View style={styles.metaItem}>
-              <MapPin size={13} color="#64748B" />
+              <View style={styles.metaIconWrap}>
+                <MapPin size={13} color="#64748B" />
+              </View>
               <AppText style={styles.metaText} numberOfLines={1}>
                 {clubOnlyName}
               </AppText>
@@ -257,7 +261,9 @@ export function TournamentManagementInfo({
           )}
 
           <View style={styles.metaItem}>
-            <Users size={13} color="#64748B" />
+            <View style={styles.metaIconWrap}>
+              <Users size={13} color="#64748B" />
+            </View>
             <AppText style={styles.metaText} numberOfLines={1}>
               {tournament?.teams_count ?? tournament?.participant_count ?? 0}
               {tournament?.max_participants ? ` / ${tournament.max_participants}` : ''}{' '}
@@ -460,10 +466,9 @@ const styles = StyleSheet.create({
   },
   infoSection: {
     paddingHorizontal: Spacing[4],
-    paddingTop: Spacing[2.5],
-    paddingBottom: Spacing[2.5],
+    paddingTop: Spacing[3],
+    paddingBottom: Spacing[3],
     backgroundColor: '#FFFFFF',
-    gap: Spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: '#F8FAFC',
   },
@@ -472,6 +477,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
+    marginBottom: Spacing[3],
   },
   statusBadge: {
     flexDirection: 'row',
@@ -528,13 +534,20 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     flexDirection: 'column',
-    gap: 5,
+    gap: Spacing[2],
   },
   metaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     minWidth: 0,
+    minHeight: 18,
+  },
+  metaIconWrap: {
+    width: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   metaText: {
     fontSize: 12,
