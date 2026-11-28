@@ -1348,7 +1348,7 @@ class PlayerService:
                 .join(Court, Booking.court_id == Court.id)
                 .join(Club, Booking.club_id == Club.id)
                 .where(
-                    Booking.booking_type.notin_([BookingType.MAINTENANCE, BookingType.BLOCKED]),
+                    Booking.booking_type.in_([BookingType.PLAYER, BookingType.STAFF]),
                     or_(
                         Booking.player_id == user_id,
                         and_(
