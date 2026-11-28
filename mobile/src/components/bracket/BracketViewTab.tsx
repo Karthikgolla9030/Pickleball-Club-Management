@@ -50,8 +50,6 @@ interface BracketViewTabProps {
   onPublishTournament?: () => void;
   isPublishPending?: boolean;
   onOpenScoreModal: (match: Match) => void;
-  onStartMatch?: (matchId: string) => Promise<void>;
-  isStartingMatch?: boolean;
   isTournamentCompleted?: boolean;
 }
 
@@ -91,8 +89,6 @@ export function BracketViewTab({
   onPublishTournament,
   isPublishPending = false,
   onOpenScoreModal,
-  onStartMatch,
-  isStartingMatch = false,
   isTournamentCompleted = false,
 }: BracketViewTabProps) {
   // Detect if tournament has double elimination sections
@@ -301,23 +297,25 @@ export function BracketViewTab({
     const isGrandFinal = match.bracket_section === 'grand_final';
     const advancement = getAdvancementRoute(match);
 
+    const isTournamentInProgress = status === 'in_progress';
+
     const canEnterScore =
       canManage &&
+      isTournamentInProgress &&
       isReady &&
       !isCompleted &&
       !isBye &&
       !isCancelled &&
       Boolean(match.team_a_id && match.team_b_id) &&
-      !isTournamentCompleted &&
-      status !== 'completed';
+      !isTournamentCompleted;
 
     const canEditScore =
       canManage &&
+      isTournamentInProgress &&
       isCompleted &&
       !isBye &&
       !isCancelled &&
-      !isTournamentCompleted &&
-      status !== 'completed';
+      !isTournamentCompleted;
 
     return (
       <Card
@@ -549,17 +547,6 @@ export function BracketViewTab({
         {/* Action Bar for Staff */}
         {canManage && (
           <View style={styles.cardActionsRow}>
-            {isReady && match.status === 'pending' && onStartMatch && (
-              <Button
-                label="Start Match"
-                variant="outline"
-                size="sm"
-                onPress={() => void onStartMatch(match.id)}
-                disabled={isStartingMatch}
-                style={{ flex: 1, marginRight: canEnterScore ? 6 : 0 }}
-              />
-            )}
-
             {canEnterScore && (
               <Button
                 label="Enter Score"
@@ -586,10 +573,12 @@ export function BracketViewTab({
               </AppText>
             )}
 
-            {!canEnterScore && !canEditScore && !isCancelled && !isCompleted && !isBye && !onStartMatch && (
+            {!canEnterScore && !canEditScore && !isCancelled && !isCompleted && !isBye && (
               <AppText variant="caption" color="tertiary" style={styles.mutedActionNote}>
                 {resetInfo.isResetFinal && resetInfo.status === 'conditional'
                   ? 'Played only if LB champion wins Grand Final'
+                  : status !== 'in_progress' && isReady
+                  ? 'Start tournament to enable score entry'
                   : 'Awaiting prior match results'}
               </AppText>
             )}

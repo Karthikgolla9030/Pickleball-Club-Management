@@ -121,8 +121,6 @@ export default function RoundRobinWorkspaceScreen() {
     isGenerating,
     regenerateRoundRobin,
     isRegenerating,
-    startMatch,
-    isStartingMatch,
     recordResult,
     isRecordingResult,
     correctResult,
@@ -355,15 +353,6 @@ export default function RoundRobinWorkspaceScreen() {
         },
       ]
     );
-  };
-
-  const handleStartMatch = async (matchId: string) => {
-    try {
-      await startMatch(matchId);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to start match';
-      Alert.alert('Error', msg);
-    }
   };
 
   const handleOpenOptionsMenu = () => {
@@ -657,8 +646,6 @@ export default function RoundRobinWorkspaceScreen() {
               isRegenerating={isRegenerating}
               onCloseRegistration={handleCloseRegistration}
               isClosingRegistration={isCloseRegistrationPending}
-              onStartMatch={handleStartMatch}
-              isStartingMatch={isStartingMatch}
               teamSize={teamSize}
             />
           )}

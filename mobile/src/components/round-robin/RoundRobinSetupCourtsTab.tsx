@@ -191,8 +191,10 @@ export function RoundRobinSetupCourtsTab({
           await competitionApi.generateRoundRobin(clubId, tournamentId, true);
         }
         syncTournamentCountInCaches(queryClient, tournamentId, {
-          status: 'in_progress',
-          workflow_state: 'in_progress',
+          status:
+            tournament?.status === 'in_progress' ? 'in_progress' : 'registration_closed',
+          workflow_state:
+            tournament?.status === 'in_progress' ? 'in_progress' : 'structure_generated',
           configuration_saved: true,
           structure_generated: true,
         });

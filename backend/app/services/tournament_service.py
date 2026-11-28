@@ -1114,14 +1114,45 @@ class TournamentService:
                 ),
             )
 
-        # Validate that post-registration schedule generation has completed for formats requiring it
-        if tournament.format == TournamentFormat.SCRAMBLE:
+        # Validate that configuration and generated structure prerequisites are met across ALL 4 formats
+        config = dict(tournament.format_configuration or {})
+        if not bool(config.get("configuration_saved") or config.get("is_format_configured")):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot start tournament: format must be configured and generated first.",
+            )
+
+        if tournament.format == TournamentFormat.ROUND_ROBIN:
+            matches_count = await self.competition_repo.count_all_matches(tournament_id)
+            if matches_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot start Round Robin tournament: match schedule must be configured and generated first.",
+                )
+        elif tournament.format == TournamentFormat.BRACKET:
+            matches_count = await self.competition_repo.count_all_matches(tournament_id)
+            if matches_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot start Bracket tournament: bracket and matches must be configured and generated first.",
+                )
+        elif tournament.format == TournamentFormat.SCRAMBLE:
             matches_count = await self.competition_repo.count_all_matches(tournament_id)
             if matches_count == 0:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot start Scramble tournament: rotation schedule must be configured and generated first.",
                 )
+            if config.get("round_status") in (None, "setup", "matchups_created"):
+                config["round_status"] = "in_progress"
+                current_round = config.get("current_round", 1)
+                rounds_store = dict(config.get("rounds_data") or {})
+                if str(current_round) in rounds_store and isinstance(rounds_store[str(current_round)], dict):
+                    rounds_store[str(current_round)] = {
+                        **rounds_store[str(current_round)],
+                        "status": "in_progress",
+                    }
+                    config["rounds_data"] = rounds_store
         elif tournament.format == TournamentFormat.POOL_PLAY:
             pools = await self.competition_repo.list_pools_by_tournament(tournament_id)
             matches_count = await self.competition_repo.count_all_matches(tournament_id)
@@ -1137,7 +1168,6 @@ class TournamentService:
                     detail="Cannot start Pool Play tournament: pools and match schedule must be configured and generated first.",
                 )
 
-        config = dict(tournament.format_configuration or {})
         config["configuration_stage"] = "in_progress"
         updated = await self.tournament_repo.update(
             tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=config

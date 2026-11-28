@@ -94,13 +94,6 @@ export const competitionApi = {
     return apiClient.get<Match>(`${competitionBase(clubId, tournamentId)}/matches/${matchId}`);
   },
 
-  startMatch(clubId: string, tournamentId: string, matchId: string): Promise<Match> {
-    return apiClient.post<Match>(
-      `${competitionBase(clubId, tournamentId)}/matches/${matchId}/start`,
-      {}
-    );
-  },
-
   recordMatchResult(
     clubId: string,
     tournamentId: string,

@@ -1090,21 +1090,26 @@ async def test_full_e2e_lifecycle_synchronization_all_four_formats(
     assert card_saved["configuration_saved"] is True
     assert card_saved["structure_generated"] is False
 
-    # Stage 6: Generate structure
+    # Stage 4/5: Attempting Start Tournament before generating structure must fail (400)
+    premature_start = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+        headers=owner_h,
+    )
+    assert premature_start.status_code == 400
+
+    # Stage 6: Generate structure (ALL 4 formats persist structure_generated at registration_closed)
     if fmt == TournamentFormat.ROUND_ROBIN:
         g = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-round-robin?require_saved_config=true",
             headers=owner_h,
         )
         assert g.status_code == 201
-        expected_post_gen_states = {"in_progress", "structure_generated"}
     elif fmt == TournamentFormat.BRACKET:
         g = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-bracket?require_saved_config=true",
             headers=owner_h,
         )
         assert g.status_code == 201
-        expected_post_gen_states = {"in_progress", "structure_generated"}
     elif fmt == TournamentFormat.POOL_PLAY:
         g = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/pool-play/confirm-and-generate",
@@ -1119,7 +1124,6 @@ async def test_full_e2e_lifecycle_synchronization_all_four_formats(
             },
         )
         assert g.status_code == 201
-        expected_post_gen_states = {"structure_generated"}
     else:
         g = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/confirm-and-generate",
@@ -1133,23 +1137,42 @@ async def test_full_e2e_lifecycle_synchronization_all_four_formats(
             },
         )
         assert g.status_code == 201
-        expected_post_gen_states = {"structure_generated"}
 
     listing_gen = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments", headers=owner_h)
     card_gen = next(item for item in listing_gen.json() if item["id"] == str(t.id))
-    assert card_gen["workflow_state"] in expected_post_gen_states
+    assert card_gen["status"] == "registration_closed"
+    assert card_gen["workflow_state"] == "structure_generated"
     assert card_gen["structure_generated"] is True
     assert card_gen["configuration_saved"] is True
 
-    # Stage 7: Start tournament (if still registration_closed)
-    if card_gen["status"] == "registration_closed":
-        start_res = await async_client.post(
-            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
-            headers=owner_h,
-        )
-        assert start_res.status_code == 200
-        assert start_res.json()["workflow_state"] == "in_progress"
-        assert start_res.json()["structure_generated"] is True
+    # Scoring BEFORE Start Tournament must be rejected (400) across ALL 4 formats
+    all_matches_pre = (
+        await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches", headers=owner_h)
+    ).json()
+    assert len(all_matches_pre) > 0
+    pre_score = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/matches/{all_matches_pre[0]['id']}/result",
+        headers=owner_h,
+        json={"score_a": 11, "score_b": 4},
+    )
+    assert pre_score.status_code == 400
+    assert "before the tournament has started" in pre_score.json()["detail"].lower()
+
+    # Stage 7: Start tournament ONCE (succeeds once, second Start Tournament call fails)
+    start_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+        headers=owner_h,
+    )
+    assert start_res.status_code == 200
+    assert start_res.json()["status"] == "in_progress"
+    assert start_res.json()["workflow_state"] == "in_progress"
+    assert start_res.json()["structure_generated"] is True
+
+    dup_start = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+        headers=owner_h,
+    )
+    assert dup_start.status_code == 400
 
     # Stage 8: Complete all matches / conclude tournament
     if fmt == TournamentFormat.ROUND_ROBIN:

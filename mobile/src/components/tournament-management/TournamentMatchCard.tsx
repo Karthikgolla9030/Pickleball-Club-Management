@@ -11,7 +11,7 @@
  * - White card with subtle border (#DDE8E2) and 14px radius
  * - Meta header with match number, court label, and status badge (Scheduled / In Progress / Completed)
  * - Dual-row scoreboard with winning side highlight
- * - Bottom action row for staff lifecycle actions (Start Match, Enter Score, Edit Score)
+ * - Bottom action row for staff lifecycle actions (Enter Score, Edit Score)
  */
 
 import React from 'react';
@@ -37,8 +37,6 @@ export interface TournamentMatchCardProps {
   winnerName?: string | null;
   isCompleted?: boolean;
   canManage?: boolean;
-  onStartMatch?: () => void;
-  isStartingMatch?: boolean;
   onOpenScoreModal?: () => void;
   onEditScore?: () => void;
   customActions?: React.ReactNode;
@@ -59,8 +57,6 @@ export function TournamentMatchCard({
   winnerName,
   isCompleted = false,
   canManage = false,
-  onStartMatch,
-  isStartingMatch = false,
   onOpenScoreModal,
   onEditScore,
   customActions,
@@ -144,18 +140,6 @@ export function TournamentMatchCard({
             customActions
           ) : (
             <>
-              {onStartMatch && (
-                <Button
-                  label={isStartingMatch ? 'Starting...' : 'Start Match'}
-                  variant="outline"
-                  size="sm"
-                  onPress={onStartMatch}
-                  disabled={isStartingMatch}
-                  loading={isStartingMatch}
-                  style={styles.actionBtn}
-                />
-              )}
-
               {onOpenScoreModal && !isCompleted && (
                 <Button
                   label="Enter Score"

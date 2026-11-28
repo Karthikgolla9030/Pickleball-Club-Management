@@ -1153,6 +1153,8 @@ export default function PoolPlayManagementScreen() {
               onStartRound={handleStartRound}
               onRecordScore={handleRecordPoolScore}
               onCreateMatchups={handleCreateMatchups}
+              tournamentStatus={effectiveTournament?.status}
+              canManage={canManage}
               isTournamentCompleted={isTournamentCompleted}
             />
           )}
@@ -1186,6 +1188,8 @@ export default function PoolPlayManagementScreen() {
               bracketType={config.bracketType}
               qualifierCount={config.qualifierCount}
               isPoolPlayComplete={isPoolPlayComplete}
+              tournamentStatus={effectiveTournament?.status}
+              canManage={canManage}
               isTournamentCompleted={isTournamentCompleted}
               onGenerateBracket={handleGenerateChampionshipBracket}
               onRecordBracketScore={handleRecordBracketScore}

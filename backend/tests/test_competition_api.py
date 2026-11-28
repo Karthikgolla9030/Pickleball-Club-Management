@@ -670,7 +670,7 @@ class TestMatchGeneration:
         assert data["teams_count"] == 4
 
     @pytest.mark.asyncio
-    async def test_generate_transitions_to_in_progress(self, rr_setup, async_client):
+    async def test_generate_transitions_to_structure_generated_then_start(self, rr_setup, async_client):
         d = rr_setup
         await self._create_teams(rr_setup, async_client, 4)
         await async_client.post(
@@ -681,7 +681,14 @@ class TestMatchGeneration:
             f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}",
             headers=d["td_header"],
         )
-        assert resp.json()["status"] == "in_progress"
+        assert resp.json()["status"] == "registration_closed"
+        assert resp.json()["workflow_state"] == "structure_generated"
+        start_resp = await async_client.post(
+            f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/start",
+            headers=d["td_header"],
+        )
+        assert start_resp.status_code == 200
+        assert start_resp.json()["status"] == "in_progress"
 
     @pytest.mark.asyncio
     async def test_generate_blocked_if_already_generated(self, rr_setup, async_client):
@@ -719,6 +726,10 @@ class TestMatchGeneration:
         await self._create_teams(rr_setup, async_client, 4)
         await async_client.post(
             f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/generate-round-robin",
+            headers=d["td_header"],
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/start",
             headers=d["td_header"],
         )
         # Get first match
@@ -817,6 +828,10 @@ class TestScoreRecording:
             )
         await async_client.post(
             f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/generate-round-robin",
+            headers=d["td_header"],
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/start",
             headers=d["td_header"],
         )
         matches_resp = await async_client.get(
@@ -950,6 +965,10 @@ class TestStandings:
             )
         await async_client.post(
             f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/generate-round-robin",
+            headers=d["td_header"],
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{d['club'].id}/tournaments/{d['tournament'].id}/start",
             headers=d["td_header"],
         )
         matches_resp = await async_client.get(

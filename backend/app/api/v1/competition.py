@@ -540,23 +540,6 @@ async def get_match(
 
 
 @club_competition_router.post(
-    "/matches/{match_id}/start",
-    response_model=MatchResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Start a scheduled match",
-    description="Transitions match status from pending (Scheduled) to in_progress.",
-)
-async def start_match(
-    club_id: UUID,
-    tournament_id: UUID,
-    match_id: UUID,
-    _: ClubMembership = Depends(require_permission(Permission.MANAGE_MATCHES)),
-    db: AsyncSession = Depends(get_db),
-) -> MatchResponse:
-    return await CompetitionService(db).start_match(club_id, tournament_id, match_id)
-
-
-@club_competition_router.post(
     "/matches/{match_id}/result",
     response_model=MatchResponse,
     status_code=status.HTTP_200_OK,

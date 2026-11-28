@@ -124,8 +124,6 @@ export default function BracketWorkspaceScreen() {
     generateBracket,
     isGenerating,
     regenerateBracket,
-    startMatch,
-    isStartingMatch,
     recordResult,
     isRecordingResult,
     correctResult,
@@ -326,16 +324,6 @@ export default function BracketWorkspaceScreen() {
         },
       ]
     );
-  };
-
-  const handleStartMatch = async (matchId: string) => {
-    try {
-      await startMatch(matchId);
-      await refetchMatches();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to start match';
-      Alert.alert('Error', msg);
-    }
   };
 
   const handleCreateTeam = async (payload: CreateTeamPayload) => {
@@ -668,8 +656,6 @@ export default function BracketWorkspaceScreen() {
             onPublishTournament={handlePublishTournament}
             isPublishPending={isOpenRegistrationPending}
             onOpenScoreModal={handleOpenScoreModal}
-            onStartMatch={handleStartMatch}
-            isStartingMatch={isStartingMatch}
             isTournamentCompleted={isTournamentCompleted}
           />
         )}
@@ -680,8 +666,7 @@ export default function BracketWorkspaceScreen() {
             courts={courts}
             canManage={canManage}
             onOpenScoreModal={handleOpenScoreModal}
-            onStartMatch={handleStartMatch}
-            isStartingMatch={isStartingMatch}
+            status={tournament.status}
             isTournamentCompleted={isTournamentCompleted}
           />
         )}

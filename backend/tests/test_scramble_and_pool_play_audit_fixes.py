@@ -458,6 +458,10 @@ class TestScrambleAuditFixes:
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/start-round",
             headers=headers,
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
 
         matches_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
@@ -745,12 +749,17 @@ async def test_scramble_rounds_advance_to_planned_limit_and_blocks_further(
                 headers=headers,
             )
 
-        # 2. Start round
+        # 2. Start round (and start tournament on round 1)
         start_res = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/start-round",
             headers=headers,
         )
         assert start_res.status_code == 200
+        if round_num == 1:
+            await async_client.post(
+                f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+                headers=headers,
+            )
 
         # 3. Get round matches and score them
         m_res = await async_client.get(

@@ -271,8 +271,10 @@ class TestFiniteScrambleLifecycle:
         plan_r1 = await comp_svc.create_scramble_round_matchups(club.id, tournament.id)
         assert plan_r1.round_games_total == 6 # 2 courts of 4 players = 3 games * 2 courts = 6 games
 
-        # Start Round 1
+        # Start Round 1 & Start Tournament
         await comp_svc.start_scramble_round(club.id, tournament.id)
+        from app.services.tournament_service import TournamentService
+        await TournamentService(db_session).start_tournament(club.id, tournament.id)
 
         # Record scores for all 6 games in Round 1
         matches_r1 = await comp_svc.list_scramble_matches(club.id, tournament.id)

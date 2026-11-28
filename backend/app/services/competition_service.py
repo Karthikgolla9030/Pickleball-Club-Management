@@ -912,10 +912,13 @@ class CompetitionService:
         await self.competition_repo.create_matches_bulk(match_dicts)
 
         updated_cfg = dict(tournament.format_configuration or {})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updated_cfg["configuration_saved"] = True
+        updated_cfg["configuration_saved_at"] = updated_cfg.get("configuration_saved_at") or now_iso
         updated_cfg["is_format_configured"] = True
-        updated_cfg["configuration_stage"] = "in_progress"
+        updated_cfg["configuration_stage"] = "ready_to_start"
         await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
+            tournament, format_configuration=updated_cfg
         )
         await self.db.commit()
 
@@ -1374,10 +1377,13 @@ class CompetitionService:
         await self.competition_repo.create_matches_bulk(match_dicts)
 
         updated_cfg = dict(tournament.format_configuration or {})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updated_cfg["configuration_saved"] = True
+        updated_cfg["configuration_saved_at"] = updated_cfg.get("configuration_saved_at") or now_iso
         updated_cfg["is_format_configured"] = True
-        updated_cfg["configuration_stage"] = "in_progress"
+        updated_cfg["configuration_stage"] = "ready_to_start"
         await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS, format_configuration=updated_cfg
+            tournament, format_configuration=updated_cfg
         )
         await self.db.commit()
 
@@ -1903,63 +1909,6 @@ class CompetitionService:
             )
         return _build_match_response(match)
 
-    async def start_match(
-        self, club_id: uuid.UUID, tournament_id: uuid.UUID, match_id: uuid.UUID
-    ) -> MatchResponse:
-        """Start a match, advancing its status to in_progress."""
-        tournament = await self._get_tournament_or_404(tournament_id, club_id)
-        if tournament.status not in (
-            TournamentStatus.IN_PROGRESS,
-            TournamentStatus.REGISTRATION_CLOSED,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot start match: tournament status is '{tournament.status.value}'.",
-            )
-        match = await self.competition_repo.get_match(match_id, tournament_id)
-        if not match:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Match not found in this tournament",
-            )
-        if match.status == MatchStatus.COMPLETED:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot start an already completed match",
-            )
-        if match.status == MatchStatus.CANCELLED:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot start a cancelled match",
-            )
-        if match.status == MatchStatus.IN_PROGRESS:
-            return _build_match_response(match)
-
-        # Scramble format check
-        if tournament.format == TournamentFormat.SCRAMBLE:
-            if not match.participants or len(match.participants) < 4:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot start Scramble match: must have all 4 participants assigned",
-                )
-        else:
-            # Fixed-team or player formats (Bracket, Round Robin, Pool Play)
-            if not match.team_a_id or not match.team_b_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot start match: both competitors must be determined first",
-                )
-
-        now = datetime.now(timezone.utc)
-        await self.competition_repo.update_match(
-            match,
-            status=MatchStatus.IN_PROGRESS,
-            scheduled_start_at=match.scheduled_start_at or now,
-        )
-        await self.db.commit()
-        refreshed = await self.competition_repo.get_match(match_id, tournament_id)
-        return _build_match_response(refreshed)  # type: ignore
-
     async def _handle_bye_auto_advancement(
         self,
         tournament_id: uuid.UUID,
@@ -2036,6 +1985,12 @@ class CompetitionService:
                 detail="Cannot record match result: tournament is already completed.",
             )
 
+        if tournament.status != TournamentStatus.IN_PROGRESS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot record match result before the tournament has started. Start the tournament first.",
+            )
+
         match = await self.competition_repo.get_match(match_id, tournament_id)
         if not match:
             raise HTTPException(
@@ -2057,6 +2012,15 @@ class CompetitionService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Cannot record result for a cancelled match",
             )
+
+        if tournament.format == TournamentFormat.BRACKET:
+            format_cfg = tournament.format_configuration or {}
+            match_meta = format_cfg.get("bracket_data", {}).get("matches", {}).get(str(match.id), {})
+            if match_meta.get("is_bye") is True:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot record result for an automatic BYE match.",
+                )
 
         if tournament.format == TournamentFormat.SCRAMBLE:
             if not match.participants or len(match.participants) != 4:
@@ -2229,6 +2193,15 @@ class CompetitionService:
         """Correct an already-completed match result (authorized operation)."""
         tournament = await self._get_tournament_or_404(tournament_id, club_id)
         self._assert_supports_match_scoring(tournament)
+
+        if tournament.status not in (
+            TournamentStatus.IN_PROGRESS,
+            TournamentStatus.COMPLETED,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot correct match result before the tournament has started.",
+            )
 
         match = await self.competition_repo.get_match(match_id, tournament_id)
         if not match:
@@ -3136,6 +3109,7 @@ class CompetitionService:
                 detail=str(e),
             ) from e
 
+        now_iso = datetime.now(timezone.utc).isoformat()
         # Save configuration to tournament preserving existing category & court settings
         config.update({
             "rounds": payload.rounds,
@@ -3146,6 +3120,10 @@ class CompetitionService:
             "selected_court_ids": [str(c.id) for c in selected_courts],
             "assigned_courts": [str(c.id) for c in selected_courts],
             "courts_count": effective_courts,
+            "configuration_saved": True,
+            "configuration_saved_at": config.get("configuration_saved_at") or now_iso,
+            "is_format_configured": True,
+            "configuration_stage": "ready_to_start",
         })
         await self.tournament_repo.update(tournament, format_configuration=config)
 
@@ -3187,12 +3165,12 @@ class CompetitionService:
                 })
 
         await self.competition_repo.create_match_participants_bulk(participant_dicts)
-
-        # Advance tournament status to in_progress
-        await self.tournament_repo.update(
-            tournament, status=TournamentStatus.IN_PROGRESS
-        )
         await self.db.commit()
+
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
 
         return ScrambleGenerationResponse(
             tournament_id=tournament_id,
@@ -4247,15 +4225,22 @@ class CompetitionService:
             "quality_summary": plan.get("quality_summary"),
         }
         config["rounds_data"] = rounds_store
+        now_iso = datetime.now(timezone.utc).isoformat()
         config["round_status"] = "matchups_created"
         config["current_round"] = current_round
+        config["configuration_saved"] = True
+        config["configuration_saved_at"] = config.get("configuration_saved_at") or now_iso
+        config["is_format_configured"] = True
+        if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
+            config["configuration_stage"] = "ready_to_start"
         flag_modified(tournament, "format_configuration")
         await self.tournament_repo.update(tournament, format_configuration=config)
 
-        if tournament.status == TournamentStatus.REGISTRATION_CLOSED:
-            await self.tournament_repo.update(tournament, status=TournamentStatus.IN_PROGRESS)
-
         await self.db.commit()
+        try:
+            await self._broadcast_competition_state(tournament, club_id)
+        except Exception:
+            pass
         return await self.get_scramble_state(club_id, tournament_id)
 
     async def start_scramble_round(
@@ -4566,9 +4551,12 @@ class CompetitionService:
             }
             for s in slots
         }
+        now_iso = datetime.now(timezone.utc).isoformat()
         updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["configuration_saved"] = True
+        updated_cfg["configuration_saved_at"] = updated_cfg.get("configuration_saved_at") or now_iso
         updated_cfg["is_format_configured"] = True
-        updated_cfg["configuration_stage"] = "in_progress"
+        updated_cfg["configuration_stage"] = "ready_to_start"
         updated_cfg["bracket_data"] = {
             "format": bracket_type,
             "matches": bracket_matches_meta,
@@ -4577,7 +4565,6 @@ class CompetitionService:
         await self.tournament_repo.update(
             tournament,
             format_configuration=updated_cfg,
-            status=TournamentStatus.IN_PROGRESS,
         )
         await self.db.commit()
 
@@ -4731,9 +4718,12 @@ class CompetitionService:
             }
             for s in slots
         }
+        now_iso = datetime.now(timezone.utc).isoformat()
         updated_cfg = dict(tournament.format_configuration or {})
+        updated_cfg["configuration_saved"] = True
+        updated_cfg["configuration_saved_at"] = updated_cfg.get("configuration_saved_at") or now_iso
         updated_cfg["is_format_configured"] = True
-        updated_cfg["configuration_stage"] = "in_progress"
+        updated_cfg["configuration_stage"] = "ready_to_start"
         updated_cfg["bracket_data"] = {
             "format": bracket_type,
             "matches": bracket_matches_meta,
@@ -4742,7 +4732,6 @@ class CompetitionService:
         await self.tournament_repo.update(
             tournament,
             format_configuration=updated_cfg,
-            status=TournamentStatus.IN_PROGRESS,
         )
         await self.db.commit()
 

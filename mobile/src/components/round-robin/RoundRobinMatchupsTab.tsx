@@ -9,8 +9,7 @@
  *   - When registration_closed: "Ready to Generate Matchups", shows Generate matchups button
  *   - When < 2 teams: Explains minimum participant requirement
  * - Populated state: Grouped schedule by round with court assignments, status, team/player names, and lifecycle actions:
- *   - Scheduled: [Start Match] and [Enter Score]
- *   - In Progress: [Enter Score]
+ *   - Scheduled / In Progress (once tournament started): [Enter Score]
  *   - Completed: Score display and [Edit Score]
  */
 
@@ -58,8 +57,6 @@ interface RoundRobinMatchupsTabProps {
   isRegenerating?: boolean;
   onCloseRegistration?: () => Promise<void>;
   isClosingRegistration?: boolean;
-  onStartMatch?: (matchId: string) => Promise<void>;
-  isStartingMatch?: boolean;
   teamSize?: number;
 }
 
@@ -77,12 +74,9 @@ export function RoundRobinMatchupsTab({
   isRegenerating = false,
   onCloseRegistration,
   isClosingRegistration = false,
-  onStartMatch,
-  isStartingMatch = false,
   teamSize = 1,
 }: RoundRobinMatchupsTabProps) {
   const [selectedRound, setSelectedRound] = useState<number | 'all'>('all');
-  const [startingMatchId, setStartingMatchId] = useState<string | null>(null);
 
   // Pre-generation schedule preview
   const schedulePreview = useMemo(
@@ -158,18 +152,9 @@ export function RoundRobinMatchupsTab({
     return `${n1} & ${n2}`;
   };
 
-  const handleStartMatchPress = async (matchId: string) => {
-    if (!onStartMatch) return;
-    try {
-      setStartingMatchId(matchId);
-      await onStartMatch(matchId);
-    } finally {
-      setStartingMatchId(null);
-    }
-  };
-
   const isRegistrationOpen = tournament?.status === 'registration_open';
   const isRegistrationClosed = tournament?.status === 'registration_closed';
+  const isTournamentInProgress = tournament?.status === 'in_progress';
 
   return (
     <View style={styles.container}>
@@ -313,11 +298,9 @@ export function RoundRobinMatchupsTab({
                   const courtLabel = getCourtName(match, mIdx);
 
                   const statusLabel =
-                    isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Scheduled';
+                    isCompleted ? 'Completed' : isInProgress ? 'In Progress' : isTournamentInProgress ? 'Ready to Play' : 'Scheduled';
                   const statusVariant =
                     isCompleted ? 'success' : isInProgress ? 'warning' : 'default';
-
-                  const isThisStarting = startingMatchId === match.id;
 
                   return (
                     <TournamentMatchCard
@@ -336,10 +319,16 @@ export function RoundRobinMatchupsTab({
                       winnerName={aWon ? teamAName : bWon ? teamBName : null}
                       isCompleted={isCompleted}
                       canManage={canManage}
-                      onStartMatch={isPending && onStartMatch ? () => { void handleStartMatchPress(match.id); } : undefined}
-                      isStartingMatch={isThisStarting}
-                      onOpenScoreModal={(isPending || isInProgress) ? () => onOpenScoreModal(match) : undefined}
-                      onEditScore={(isCompleted && !isTournamentCompleted) ? () => onOpenScoreModal(match) : undefined}
+                      onOpenScoreModal={
+                        isTournamentInProgress && (isPending || isInProgress)
+                          ? () => onOpenScoreModal(match)
+                          : undefined
+                      }
+                      onEditScore={
+                        isTournamentInProgress && isCompleted && !isTournamentCompleted
+                          ? () => onOpenScoreModal(match)
+                          : undefined
+                      }
                     />
                   );
                 })}

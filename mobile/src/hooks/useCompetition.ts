@@ -136,8 +136,8 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
     onSuccess: () => {
       if (clubId && tournamentId) {
         syncTournamentCountInCaches(queryClient, tournamentId, {
-          status: 'in_progress',
-          workflow_state: 'in_progress',
+          status: 'registration_closed',
+          workflow_state: 'structure_generated',
           configuration_saved: true,
           structure_generated: true,
         });
@@ -169,20 +169,6 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
           queryKey: QUERY_KEYS.CLUB_STANDINGS(clubId, tournamentId),
         });
         invalidateAllTournamentQueries(queryClient, tournamentId, clubId);
-      }
-    },
-  });
-
-  const startMatchMutation = useMutation({
-    mutationFn: (matchId: string) => {
-      if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
-      return competitionApi.startMatch(clubId, tournamentId, matchId);
-    },
-    onSuccess: () => {
-      if (clubId && tournamentId) {
-        queryClient.invalidateQueries({
-          queryKey: QUERY_KEYS.CLUB_MATCHES(clubId, tournamentId),
-        });
       }
     },
   });
@@ -262,8 +248,6 @@ export function useMatches(clubId: string | null, tournamentId: string | null) {
     regenerateRoundRobin: regenerateMutation.mutateAsync,
     isRegenerating: regenerateMutation.isPending,
     regenerateError: regenerateMutation.error,
-    startMatch: startMatchMutation.mutateAsync,
-    isStartingMatch: startMatchMutation.isPending,
     recordResult: recordResultMutation.mutateAsync,
     isRecordingResult: recordResultMutation.isPending,
     recordResultError: recordResultMutation.error,
@@ -406,8 +390,8 @@ export function usePools(clubId: string | null, tournamentId: string | null) {
     onSuccess: () => {
       if (clubId && tournamentId) {
         syncTournamentCountInCaches(queryClient, tournamentId, {
-          status: 'in_progress',
-          workflow_state: 'in_progress',
+          status: 'registration_closed',
+          workflow_state: 'structure_generated',
           configuration_saved: true,
           structure_generated: true,
         });
@@ -1031,8 +1015,8 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
     onSuccess: () => {
       if (clubId && tournamentId) {
         syncTournamentCountInCaches(queryClient, tournamentId, {
-          status: 'in_progress',
-          workflow_state: 'in_progress',
+          status: 'registration_closed',
+          workflow_state: 'structure_generated',
           configuration_saved: true,
           structure_generated: true,
         });
@@ -1104,20 +1088,6 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
     },
   });
 
-  const startMatchMutation = useMutation({
-    mutationFn: (matchId: string) => {
-      if (!clubId || !tournamentId) throw new Error('Club ID and Tournament ID required');
-      return competitionApi.startMatch(clubId, tournamentId, matchId);
-    },
-    onSuccess: () => {
-      if (clubId && tournamentId) {
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_MATCHES(clubId, tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.CLUB_BRACKET_SUMMARY(clubId, tournamentId) });
-        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.TOURNAMENT_DETAIL(tournamentId) });
-      }
-    },
-  });
-
   return {
     // Matches
     matches: matchesQuery.data ?? [],
@@ -1140,10 +1110,6 @@ export function useBracket(clubId: string | null, tournamentId: string | null) {
     regenerateBracket: regenerateBracketMutation.mutateAsync,
     isRegenerating: regenerateBracketMutation.isPending,
     regenerateError: regenerateBracketMutation.error,
-
-    // Match Start
-    startMatch: startMatchMutation.mutateAsync,
-    isStartingMatch: startMatchMutation.isPending,
 
     // Score Recording & Correction
     recordResult: recordResultMutation.mutateAsync,

@@ -1602,13 +1602,15 @@ export default function TournamentDetailsScreen() {
                           </View>
                         </View>
 
-                        <Button
-                          label={isCompleted ? 'Edit Score' : 'Enter Score'}
-                          variant={isCompleted ? 'secondary' : 'primary'}
-                          size="sm"
-                          onPress={() => openScoreModal(m)}
-                          style={styles.scoreBtn}
-                        />
+                        {tournament?.status === 'in_progress' && (
+                          <Button
+                            label={isCompleted ? 'Edit Score' : 'Enter Score'}
+                            variant={isCompleted ? 'secondary' : 'primary'}
+                            size="sm"
+                            onPress={() => openScoreModal(m)}
+                            style={styles.scoreBtn}
+                          />
+                        )}
                       </Card>
                     );
                   })
@@ -1743,13 +1745,15 @@ export default function TournamentDetailsScreen() {
                           </View>
                         </View>
 
-                        <Button
-                          label={isCompleted ? 'Edit Score' : 'Enter Score'}
-                          variant={isCompleted ? 'secondary' : 'primary'}
-                          size="sm"
-                          onPress={() => openScoreModal(m)}
-                          style={styles.scoreBtn}
-                        />
+                        {tournament?.status === 'in_progress' && (
+                          <Button
+                            label={isCompleted ? 'Edit Score' : 'Enter Score'}
+                            variant={isCompleted ? 'secondary' : 'primary'}
+                            size="sm"
+                            onPress={() => openScoreModal(m)}
+                            style={styles.scoreBtn}
+                          />
+                        )}
                       </Card>
                     );
                   })
@@ -1957,13 +1961,15 @@ export default function TournamentDetailsScreen() {
                           </View>
                         </View>
 
-                        <Button
-                          label={isCompleted ? 'Edit Score' : 'Enter Score'}
-                          variant={isCompleted ? 'secondary' : 'primary'}
-                          size="sm"
-                          onPress={() => openScoreModal(m)}
-                          style={styles.scoreBtn}
-                        />
+                        {tournament?.status === 'in_progress' && (
+                          <Button
+                            label={isCompleted ? 'Edit Score' : 'Enter Score'}
+                            variant={isCompleted ? 'secondary' : 'primary'}
+                            size="sm"
+                            onPress={() => openScoreModal(m)}
+                            style={styles.scoreBtn}
+                          />
+                        )}
                       </Card>
                     );
                   })

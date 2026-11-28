@@ -705,6 +705,7 @@ export default function ScrambleWorkspaceScreen() {
                 state={state}
                 matches={validMatches}
                 canManage={canManage}
+                tournamentStatus={tournament?.status}
                 onOpenScoreModal={handleOpenScoreModal}
                 onStartRound={handleStartRound}
                 onFinishRound={handleFinishRound}

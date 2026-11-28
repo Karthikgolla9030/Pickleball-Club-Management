@@ -176,13 +176,20 @@ async def test_round_robin_lifecycle_and_automatic_completion(
     assert teams_res.status_code == 200
     assert len(teams_res.json()) == 4
 
-    # 6. Generate Round Robin matches
+    # 6. Generate Round Robin matches (Stage 3: structure_generated)
     gen_res = await async_client.post(
         f"/api/v1/clubs/{club.id}/tournaments/{tid}/generate-round-robin",
         headers=td_header,
     )
     assert gen_res.status_code == 201
     assert gen_res.json()["matches_generated"] == 6
+
+    # Stage 4: Start Tournament -> transitions to in_progress
+    start_t_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{tid}/start",
+        headers=td_header,
+    )
+    assert start_t_res.status_code == 200, start_t_res.text
 
     # 7. Check status is now in_progress for both club and player
     club_t = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{tid}", headers=td_header)
@@ -313,12 +320,17 @@ async def test_bracket_lifecycle_and_championship_completion(
     assert close_res.status_code == 200
     assert close_res.json()["status"] == "registration_closed"
 
-    # 5. Generate Bracket -> transitions to in_progress
+    # 5. Generate Bracket (Stage 3) -> Start Tournament (Stage 4: in_progress)
     gen_res = await async_client.post(
         f"/api/v1/clubs/{club.id}/tournaments/{tid}/generate-bracket",
         headers=td_header,
     )
     assert gen_res.status_code == 201
+    start_t_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{tid}/start",
+        headers=td_header,
+    )
+    assert start_t_res.status_code == 200, start_t_res.text
 
     # 6. Fetch championship match
     bracket_matches = await async_client.get(
@@ -409,12 +421,12 @@ async def test_scramble_lifecycle_and_end_tournament_completion(
     )
     assert m_res.status_code == 200
 
-    # 5. Start Round 1
-    start_res = await async_client.post(
-        f"/api/v1/clubs/{club.id}/tournaments/{tid}/scramble/start-round",
+    # Stage 4: Start Tournament -> transitions to in_progress & starts round 1
+    start_t_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{tid}/start",
         headers=td_header,
     )
-    assert start_res.status_code == 200
+    assert start_t_res.status_code == 200, start_t_res.text
 
     # 6. Fetch matches and record scores
     matches_res = await async_client.get(
@@ -513,13 +525,19 @@ async def test_pool_play_lifecycle_and_completion(
     )
     assert cfg_res.status_code == 200
 
-    # 5. Generate pool play matches
+    # 5. Generate pool play matches (Stage 3) -> Start Tournament (Stage 4)
     gen_res = await async_client.post(
         f"/api/v1/clubs/{club.id}/tournaments/{tid}/generate-pool-play",
         headers=td_header,
     )
     assert gen_res.status_code == 201
     assert gen_res.json()["matches_generated"] == 2
+
+    start_t_res = await async_client.post(
+        f"/api/v1/clubs/{club.id}/tournaments/{tid}/start",
+        headers=td_header,
+    )
+    assert start_t_res.status_code == 200, start_t_res.text
 
     # 6. Check status in_progress
     club_t = await async_client.get(f"/api/v1/clubs/{club.id}/tournaments/{tid}", headers=td_header)

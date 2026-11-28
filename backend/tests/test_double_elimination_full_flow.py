@@ -216,46 +216,64 @@ class TestDoubleEliminationServiceWorkflow:
 
         return owner, club, tournament, teams
 
-    async def test_start_match_blocks_unpopulated_slots(self, db_session: AsyncSession):
+    async def test_scoring_blocks_before_start_and_unpopulated_slots(self, db_session: AsyncSession):
         owner, club, tournament, teams = await self._setup_tournament(db_session, 8)
         comp_service = CompetitionService(db_session)
+        from app.services.tournament_service import TournamentService
 
-        # Generate bracket
+        # Generate bracket (stays at registration_closed / ready_to_start until Start Tournament)
         await comp_service.generate_bracket(club.id, tournament.id)
 
         matches_res = await comp_service.get_bracket_matches(club.id, tournament.id)
         slot_map = {m.match_number: m for m in matches_res}
-
-        # Match 5 (WB Round 2) is waiting for Match 1 & Match 2 winners -> unpopulated!
+        m1 = slot_map[1]
         m5 = slot_map[5]
+        assert m1.team_a_id is not None and m1.team_b_id is not None
         assert m5.team_a_id is None or m5.team_b_id is None
 
-        # Attempt to start match 5 must be rejected with 400
-        with pytest.raises(HTTPException) as exc_info:
-            await comp_service.start_match(club.id, tournament.id, uuid.UUID(str(m5.id)))
-        assert exc_info.value.status_code == 400
-        assert "both competitors must be determined" in exc_info.value.detail
+        # Scoring before Start Tournament must be rejected with 400
+        with pytest.raises(HTTPException) as pre_exc:
+            await comp_service.record_match_result(
+                club.id, tournament.id, uuid.UUID(str(m1.id)), 11, 5
+            )
+        assert pre_exc.value.status_code == 400
+        assert "before the tournament has started" in pre_exc.value.detail
 
-    async def test_start_match_succeeds_when_populated(self, db_session: AsyncSession):
+        # Start Tournament once
+        await TournamentService(db_session).start_tournament(club.id, tournament.id)
+
+        # Scoring Match 5 (unpopulated downstream slot) must still be rejected with 400
+        with pytest.raises(HTTPException) as exc_info:
+            await comp_service.record_match_result(
+                club.id, tournament.id, uuid.UUID(str(m5.id)), 11, 5
+            )
+        assert exc_info.value.status_code == 400
+        assert "both teams determined" in exc_info.value.detail
+
+    async def test_scoring_succeeds_when_started_and_populated(self, db_session: AsyncSession):
         owner, club, tournament, teams = await self._setup_tournament(db_session, 8)
         comp_service = CompetitionService(db_session)
+        from app.services.tournament_service import TournamentService
 
-        # Generate bracket
         await comp_service.generate_bracket(club.id, tournament.id)
+        await TournamentService(db_session).start_tournament(club.id, tournament.id)
 
         matches_res = await comp_service.get_bracket_matches(club.id, tournament.id)
         m1 = next(m for m in matches_res if m.match_number == 1)
         assert m1.team_a_id is not None and m1.team_b_id is not None
 
-        # Start match 1
-        updated = await comp_service.start_match(club.id, tournament.id, uuid.UUID(str(m1.id)))
-        assert updated.status == "in_progress"
+        updated = await comp_service.record_match_result(
+            club.id, tournament.id, uuid.UUID(str(m1.id)), 11, 5
+        )
+        assert updated.status == "completed"
 
     async def test_full_de_flow_wb_wins_14_matches(self, db_session: AsyncSession):
         owner, club, tournament, teams = await self._setup_tournament(db_session, 8)
         comp_service = CompetitionService(db_session)
+        from app.services.tournament_service import TournamentService
 
         await comp_service.generate_bracket(club.id, tournament.id)
+        await TournamentService(db_session).start_tournament(club.id, tournament.id)
 
         # Helper to play a match by match_number
         async def play_m(m_num: int, score_a: int, score_b: int):
@@ -312,7 +330,9 @@ class TestDoubleEliminationServiceWorkflow:
     async def test_score_correction_on_completed_tournament_reopens_reset_final(self, db_session: AsyncSession):
         owner, club, tournament, teams = await self._setup_tournament(db_session, 8)
         comp_service = CompetitionService(db_session)
+        from app.services.tournament_service import TournamentService
         await comp_service.generate_bracket(club.id, tournament.id)
+        await TournamentService(db_session).start_tournament(club.id, tournament.id)
 
         async def play_m(m_num: int, score_a: int, score_b: int):
             m_list = await comp_service.get_bracket_matches(club.id, tournament.id)

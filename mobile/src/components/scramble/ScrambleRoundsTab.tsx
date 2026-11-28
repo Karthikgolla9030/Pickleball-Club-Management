@@ -54,6 +54,7 @@ interface ScrambleRoundsTabProps {
   state: ScrambleState | null;
   matches: Match[];
   canManage: boolean;
+  tournamentStatus?: string;
   onOpenScoreModal: (match: Match) => void;
   onStartRound: () => Promise<void>;
   onFinishRound: () => Promise<void>;
@@ -70,6 +71,7 @@ export function ScrambleRoundsTab({
   state,
   matches,
   canManage,
+  tournamentStatus,
   onOpenScoreModal,
   onStartRound,
   onFinishRound,
@@ -84,7 +86,9 @@ export function ScrambleRoundsTab({
   const currentRound = state?.current_round ?? 1;
   const plannedRounds = Math.max(1, state?.planned_rounds ?? 3);
   const isFinalRound = state?.is_final_round ?? (currentRound >= plannedRounds);
-  const isTournamentCompleted = state?.tournament_status === 'completed';
+  const resolvedTournamentStatus = tournamentStatus ?? state?.tournament_status ?? 'in_progress';
+  const isTournamentInProgress = resolvedTournamentStatus === 'in_progress';
+  const isTournamentCompleted = resolvedTournamentStatus === 'completed';
   const [selectedRound, setSelectedRound] = useState<number>(() => Math.min(currentRound, plannedRounds));
   const [isRoundPickerOpen, setIsRoundPickerOpen] = useState(false);
 
@@ -361,8 +365,16 @@ export function ScrambleRoundsTab({
                           winnerName={isCompleted ? (aWon ? sideANames : bWon ? sideBNames : undefined) : undefined}
                           isCompleted={isCompleted}
                           canManage={canManage}
-                          onOpenScoreModal={!isCompleted && !isTournamentCompleted ? () => onOpenScoreModal(match) : undefined}
-                          onEditScore={isCompleted && !isTournamentCompleted ? () => onOpenScoreModal(match) : undefined}
+                          onOpenScoreModal={
+                            isTournamentInProgress && !isCompleted && !isTournamentCompleted
+                              ? () => onOpenScoreModal(match)
+                              : undefined
+                          }
+                          onEditScore={
+                            isTournamentInProgress && isCompleted && !isTournamentCompleted
+                              ? () => onOpenScoreModal(match)
+                              : undefined
+                          }
                         />
                       );
                     })
@@ -373,7 +385,7 @@ export function ScrambleRoundsTab({
           })}
 
           {/* Lifecycle Actions Banner when matches exist */}
-          {canManage && isCurrentRound && (
+          {canManage && isCurrentRound && isTournamentInProgress && (
             <View style={styles.lifecycleBanner}>
               {state?.round_status === 'matchups_created' && (
                 <TouchableOpacity

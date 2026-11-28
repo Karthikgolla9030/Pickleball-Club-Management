@@ -36,6 +36,8 @@ interface MatchupsTabProps {
   onStartRound: () => void;
   onRecordScore: (matchId: string, score1: number, score2: number) => void;
   onCreateMatchups: () => void;
+  tournamentStatus?: string;
+  canManage?: boolean;
   isTournamentCompleted?: boolean;
 }
 
@@ -45,8 +47,11 @@ export function MatchupsTab({
   onStartRound,
   onRecordScore,
   onCreateMatchups,
+  tournamentStatus = 'in_progress',
+  canManage = true,
   isTournamentCompleted = false,
 }: MatchupsTabProps) {
+  const isTournamentInProgress = tournamentStatus === 'in_progress';
   const [selectedPool, setSelectedPool] = useState<PoolFilter>('all');
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('all');
   const [activeMatchForScore, setActiveMatchForScore] = useState<Match | null>(null);
@@ -96,10 +101,10 @@ export function MatchupsTab({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. Heading Row with Start Round Action ────────────────────────── */}
+      {/* ─── 1. Heading Row ────────────────────────────────────────────────── */}
       <View style={styles.topControlRow}>
         <AppText style={styles.headingTitle}>Matchups</AppText>
-        {upcomingCount > 0 && (
+        {canManage && isTournamentInProgress && upcomingCount > 0 && (
           <Button
             label="Start Round"
             variant="primary"
@@ -108,6 +113,11 @@ export function MatchupsTab({
           />
         )}
       </View>
+      {!isTournamentInProgress && !isTournamentCompleted && (
+        <AppText style={{ fontSize: 12.5, color: '#64748B' }}>
+          Schedule ready. Tap Start Tournament above to begin scoring matches.
+        </AppText>
+      )}
 
       {/* ─── 2. Standardized 3-Column Match Summary Card ───────────────────── */}
       <TournamentMatchSummaryCard
@@ -173,12 +183,14 @@ export function MatchupsTab({
                 </View>
               </View>
 
-              <Button
-                label="Enter Score"
-                variant="primary"
-                size="sm"
-                onPress={() => setActiveMatchForScore(match)}
-              />
+              {canManage && isTournamentInProgress && (
+                <Button
+                  label="Enter Score"
+                  variant="primary"
+                  size="sm"
+                  onPress={() => setActiveMatchForScore(match)}
+                />
+              )}
             </Card>
           ))}
         </View>
@@ -210,9 +222,17 @@ export function MatchupsTab({
               isWinnerB={bWon}
               winnerName={isCompleted ? match.winner?.name : null}
               isCompleted={isCompleted}
-              canManage={true}
-              onOpenScoreModal={!isCompleted ? () => setActiveMatchForScore(match) : undefined}
-              onEditScore={isCompleted && !isTournamentCompleted ? () => setActiveMatchForScore(match) : undefined}
+              canManage={canManage}
+              onOpenScoreModal={
+                canManage && isTournamentInProgress && !isCompleted
+                  ? () => setActiveMatchForScore(match)
+                  : undefined
+              }
+              onEditScore={
+                canManage && isTournamentInProgress && isCompleted && !isTournamentCompleted
+                  ? () => setActiveMatchForScore(match)
+                  : undefined
+              }
             />
           );
         })}

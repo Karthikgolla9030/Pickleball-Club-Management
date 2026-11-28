@@ -40,8 +40,7 @@ interface BracketMatchesTabProps {
   courts: Court[];
   canManage: boolean;
   onOpenScoreModal: (match: Match) => void;
-  onStartMatch?: (matchId: string) => Promise<void>;
-  isStartingMatch?: boolean;
+  status?: string;
   isTournamentCompleted?: boolean;
 }
 
@@ -53,10 +52,10 @@ export function BracketMatchesTab({
   courts,
   canManage,
   onOpenScoreModal,
-  onStartMatch,
-  isStartingMatch = false,
+  status = 'in_progress',
   isTournamentCompleted = false,
 }: BracketMatchesTabProps) {
+  const isTournamentInProgress = status === 'in_progress';
   const [statusFilter, setStatusFilter] = useState<MatchStatusFilter>('all');
   const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all');
 
@@ -203,7 +202,9 @@ export function BracketMatchesTab({
                   </AppText>
                 </View>
                 <AppText style={styles.readyQueueSubtitle}>
-                  Both teams determined • Ready for court assignment & score entry
+                  {isTournamentInProgress
+                    ? 'Both teams determined • Ready for score entry'
+                    : 'Both teams determined • Start the tournament above to enable scoring'}
                 </AppText>
               </View>
 
@@ -226,18 +227,9 @@ export function BracketMatchesTab({
                     </View>
 
                     <View style={styles.readyQueueActions}>
-                      {canManage && rm.status === 'pending' && onStartMatch && (
+                      {canManage && isTournamentInProgress && (
                         <Button
-                          label="Start"
-                          variant="outline"
-                          size="sm"
-                          onPress={() => void onStartMatch(rm.id)}
-                          disabled={isStartingMatch}
-                        />
-                      )}
-                      {canManage && (
-                        <Button
-                          label="Score"
+                          label="Enter Score"
                           variant="primary"
                           size="sm"
                           onPress={() => onOpenScoreModal(rm)}
@@ -286,6 +278,7 @@ export function BracketMatchesTab({
               const courtLabel = getCourtName(match);
 
               const canEnterScore =
+                isTournamentInProgress &&
                 isReady &&
                 !isCompleted &&
                 !isBye &&
@@ -294,7 +287,11 @@ export function BracketMatchesTab({
                 !isTournamentCompleted;
 
               const canEditScore =
-                isCompleted && !isBye && !isCancelled && !isTournamentCompleted;
+                isTournamentInProgress &&
+                isCompleted &&
+                !isBye &&
+                !isCancelled &&
+                !isTournamentCompleted;
 
               const statusLabel = resetInfo.isResetFinal
                 ? resetInfo.badgeLabel
@@ -304,8 +301,10 @@ export function BracketMatchesTab({
                 ? 'Not Required'
                 : isCompleted
                 ? 'Completed'
-                : isReady
+                : isReady && isTournamentInProgress
                 ? 'Ready to Play'
+                : isReady
+                ? 'Scheduled'
                 : 'Waiting';
 
               const statusVariant: 'success' | 'warning' | 'info' | 'default' | 'error' = resetInfo.isResetFinal
@@ -340,8 +339,6 @@ export function BracketMatchesTab({
                   winnerName={isCompleted ? (winnerIsA ? teamAName : winnerIsB ? teamBName : undefined) : undefined}
                   isCompleted={isCompleted}
                   canManage={canManage}
-                  onStartMatch={isReady && match.status === 'pending' && onStartMatch ? () => void onStartMatch(match.id) : undefined}
-                  isStartingMatch={isStartingMatch}
                   onOpenScoreModal={canEnterScore ? () => onOpenScoreModal(match) : undefined}
                   onEditScore={canEditScore ? () => onOpenScoreModal(match) : undefined}
                   customActions={

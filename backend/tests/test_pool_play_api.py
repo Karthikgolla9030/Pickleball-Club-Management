@@ -803,7 +803,7 @@ class TestPoolPlayGenerationAPI:
         assert data["matches_generated"] == 4
 
     @pytest.mark.asyncio
-    async def test_generate_pool_play_transitions_to_in_progress(self, pp_setup, db_session):
+    async def test_generate_pool_play_transitions_to_structure_generated_then_start(self, pp_setup, db_session):
         client = pp_setup["client"]
         club_id = pp_setup["club"].id
         t_id = pp_setup["tournament"].id
@@ -814,13 +814,21 @@ class TestPoolPlayGenerationAPI:
             headers=headers,
             json={"number_of_pools": 4, "qualifiers_per_pool": 1},
         )
-        await client.post(
+        gen = await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
             headers=headers,
         )
+        assert gen.status_code == 201
 
         t_db = await db_session.get(Tournament, t_id)
-        assert t_db.status == TournamentStatus.IN_PROGRESS
+        assert t_db.status == TournamentStatus.REGISTRATION_CLOSED
+
+        start_res = await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
+            headers=headers,
+        )
+        assert start_res.status_code == 200
+        assert start_res.json()["status"] == "in_progress"
 
     @pytest.mark.asyncio
     async def test_generate_pool_play_already_generated_blocked(self, pp_setup):
@@ -862,6 +870,10 @@ class TestPoolPlayGenerationAPI:
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
             headers=headers,
         )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
+            headers=headers,
+        )
 
         regen_res = await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/regenerate-pool-play",
@@ -884,6 +896,10 @@ class TestPoolPlayGenerationAPI:
         )
         await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
+            headers=headers,
+        )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
             headers=headers,
         )
 
@@ -927,6 +943,10 @@ class TestPoolPlayGenerationAPI:
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
             headers=headers,
         )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
+            headers=headers,
+        )
 
         res = await client.get(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/matches?pool_id={target_pool['id']}",
@@ -953,6 +973,10 @@ class TestPoolStandingsAPI:
         )
         await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
+            headers=headers,
+        )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
             headers=headers,
         )
 
@@ -1058,9 +1082,17 @@ class TestChampionshipBracketAPI:
             json={"number_of_pools": 4, "qualifiers_per_pool": 1},
         )
 
-        # 2. Generate pool play
+        # 2. Generate pool play and start tournament
         await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
+            headers=headers,
+        )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
+            headers=headers,
+        )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
             headers=headers,
         )
 
@@ -1090,6 +1122,10 @@ class TestChampionshipBracketAPI:
         )
         await client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play",
+            headers=headers,
+        )
+        await client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
             headers=headers,
         )
 
@@ -1329,6 +1365,7 @@ class TestPoolPlayPermissionsAndIsolation:
 
         await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/configure", headers=td_headers, json={"number_of_pools": 4, "qualifiers_per_pool": 1})
         await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play", headers=td_headers)
+        await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start", headers=td_headers)
 
         matches = (await client.get(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/matches", headers=td_headers)).json()
         m1 = matches[0]
@@ -1349,6 +1386,7 @@ class TestPoolPlayPermissionsAndIsolation:
 
         await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/configure", headers=td_headers, json={"number_of_pools": 4, "qualifiers_per_pool": 1})
         await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/generate-pool-play", headers=td_headers)
+        await client.post(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start", headers=td_headers)
 
         matches = (await client.get(f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/matches", headers=td_headers)).json()
         m1 = matches[0]

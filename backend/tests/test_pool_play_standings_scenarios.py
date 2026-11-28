@@ -116,6 +116,11 @@ async def test_complete_scenarios_a_through_g(pool_play_env):
         headers=td_header,
     )
     assert gen_res.status_code == 201
+    start_res = await client.post(
+        f"/api/v1/clubs/{club_id}/tournaments/{t_id}/start",
+        headers=td_header,
+    )
+    assert start_res.status_code == 200
 
     standings_b = await client.get(
         f"/api/v1/clubs/{club_id}/tournaments/{t_id}/pools/standings",

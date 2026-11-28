@@ -731,7 +731,7 @@ class TestBracketGenerateAPI:
         )
         assert r.status_code == 401, r.text
 
-    async def test_generate_bracket_transitions_to_in_progress(
+    async def test_generate_bracket_transitions_to_structure_generated_then_start(
         self, async_client: AsyncClient, bracket_env
     ):
         club_id = bracket_env["club"].id
@@ -746,7 +746,14 @@ class TestBracketGenerateAPI:
             headers=headers,
         )
         assert r.status_code == 200
-        assert r.json()["status"] == "in_progress"
+        assert r.json()["status"] == "registration_closed"
+        assert r.json()["workflow_state"] == "structure_generated"
+        s = await async_client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{tid}/start",
+            headers=headers,
+        )
+        assert s.status_code == 200
+        assert s.json()["status"] == "in_progress"
 
     async def test_generate_bracket_twice_rejected(
         self, async_client: AsyncClient, bracket_env
@@ -856,6 +863,10 @@ class TestBracketMatchesAPI:
             f"/api/v1/clubs/{club_id}/tournaments/{tid}/generate-bracket",
             headers=headers,
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{tid}/start",
+            headers=headers,
+        )
         r = await async_client.get(
             f"/api/v1/clubs/{club_id}/tournaments/{tid}/bracket/matches",
             headers=headers,
@@ -952,6 +963,10 @@ class TestBracketScoring:
         headers = make_auth_header(bracket_env["director"].id)
         await async_client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{tid}/generate-bracket",
+            headers=headers,
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{tid}/start",
             headers=headers,
         )
         r = await async_client.get(
@@ -1115,12 +1130,16 @@ class TestBracket2TeamsCompletion:
         tid = bracket_2teams["tournament"].id
         headers = make_auth_header(bracket_2teams["owner"].id)
 
-        # Generate
+        # Generate & Start
         r = await async_client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{tid}/generate-bracket",
             headers=headers,
         )
         assert r.status_code == 201
+        await async_client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{tid}/start",
+            headers=headers,
+        )
 
         # List matches — should be 1 final match
         r = await async_client.get(
@@ -1187,6 +1206,10 @@ class TestBracketRegenerateAPI:
 
         await async_client.post(
             f"/api/v1/clubs/{club_id}/tournaments/{tid}/generate-bracket",
+            headers=headers,
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club_id}/tournaments/{tid}/start",
             headers=headers,
         )
         # Get matches and record one result

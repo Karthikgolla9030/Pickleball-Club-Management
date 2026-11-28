@@ -766,6 +766,10 @@ class TestScrambleGenerationAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
 
         # Get matches
         m_res = await async_client.get(
@@ -835,6 +839,10 @@ class TestScrambleMatchAndScoreAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
             headers=headers,
@@ -888,6 +896,10 @@ class TestScrambleMatchAndScoreAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
             headers=headers,
@@ -920,6 +932,10 @@ class TestScrambleMatchAndScoreAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
             headers=headers,
@@ -947,6 +963,10 @@ class TestScrambleMatchAndScoreAPI:
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-scramble",
             headers=headers,
             json={"rounds": 3},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
         )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
@@ -984,6 +1004,10 @@ class TestScrambleMatchAndScoreAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
             headers=headers,
@@ -1018,6 +1042,10 @@ class TestScrambleMatchAndScoreAPI:
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-scramble",
             headers=headers,
             json={"rounds": 3},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
         )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
@@ -1058,6 +1086,10 @@ class TestScrambleMatchAndScoreAPI:
             headers=headers,
             json={"rounds": 3},
         )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
             headers=headers,
@@ -1082,11 +1114,15 @@ class TestScrambleMatchAndScoreAPI:
         t = data["tournament"]
         headers = make_auth_header(data["director"])
 
-        # Generate 1 round (2 matches)
+        # Generate 1 round (2 matches) & Start Tournament
         await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-scramble",
             headers=headers,
             json={"rounds": 1},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
         )
         list_res = await async_client.get(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/matches",
@@ -1132,6 +1168,10 @@ class TestScrambleStandingsAPI:
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/generate-scramble",
             headers=headers,
             json={"rounds": 3},
+        )
+        await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
         )
 
         # Complete 1 match
@@ -1415,13 +1455,19 @@ class TestScrambleWorkspaceAPI:
         assert matchup_state["total_games"] == 3
         assert "start_round" in matchup_state["valid_actions"]
 
-        # 5. Start round
+        # 5. Start round & Start Tournament
         start_res = await async_client.post(
             f"/api/v1/clubs/{club.id}/tournaments/{t.id}/scramble/start-round",
             headers=headers,
         )
         assert start_res.status_code == 200
         assert start_res.json()["round_status"] == "in_progress"
+
+        start_t_res = await async_client.post(
+            f"/api/v1/clubs/{club.id}/tournaments/{t.id}/start",
+            headers=headers,
+        )
+        assert start_t_res.status_code == 200
 
         # 6. List matches to record scores
         matches_res = await async_client.get(

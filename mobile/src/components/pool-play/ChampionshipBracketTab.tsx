@@ -33,6 +33,8 @@ interface ChampionshipBracketTabProps {
   bracketType: BracketType;
   qualifierCount: number;
   isPoolPlayComplete?: boolean;
+  tournamentStatus?: string;
+  canManage?: boolean;
   isTournamentCompleted?: boolean;
   onGenerateBracket: () => void;
   onRecordBracketScore: (matchId: string, score1: number, score2: number) => void;
@@ -42,10 +44,13 @@ export function ChampionshipBracketTab({
   standingsByPool: _standingsByPool,
   championshipMatches,
   isPoolPlayComplete,
+  tournamentStatus = 'in_progress',
+  canManage = true,
   isTournamentCompleted = false,
   onGenerateBracket,
   onRecordBracketScore,
 }: ChampionshipBracketTabProps) {
+  const isTournamentInProgress = tournamentStatus === 'in_progress';
   const [activeMatchForScore, setActiveMatchForScore] =
     useState<ChampionshipMatch | null>(null);
 
@@ -242,7 +247,14 @@ export function ChampionshipBracketTab({
                       </View>
 
                       {/* Match Action Button */}
-                      {m.t1 && m.t2 && !m.isT1Bye && !m.isT2Bye && (!isBracketComplete || !isCompleted) && (
+                      {canManage &&
+                        isTournamentInProgress &&
+                        isPoolPlayComplete &&
+                        m.t1 &&
+                        m.t2 &&
+                        !m.isT1Bye &&
+                        !m.isT2Bye &&
+                        !isBracketComplete && (
                         <TouchableOpacity
                           onPress={() => setActiveMatchForScore(m)}
                           style={styles.bracketScoreBtn}
